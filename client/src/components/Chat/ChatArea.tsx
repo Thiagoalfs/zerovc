@@ -269,6 +269,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   message={message}
                   isCompact={isCompact}
                   onOpenUserProfile={onOpenUserProfile}
+                  onOpenDM={onOpenDM}
                   onPreviewImage={onPreviewImage}
                   onReply={(msg) => setReplyingTo(msg)}
                 />

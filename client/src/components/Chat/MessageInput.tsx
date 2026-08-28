@@ -77,6 +77,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   }, [mentionQuery, activeGuild?.members]);
 
   useEffect(() => {
+    if (channel?.id && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [channel?.id]);
+
+  useEffect(() => {
     if (replyingTo && textareaRef.current) {
       textareaRef.current.focus();
     }

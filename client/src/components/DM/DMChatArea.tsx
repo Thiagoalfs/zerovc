@@ -91,6 +91,12 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   };
 
   useEffect(() => {
+    if (activeRoom?.id && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [activeRoom?.id]);
+
+  useEffect(() => {
     if (replyingTo && textareaRef.current) {
       textareaRef.current.focus();
     }
