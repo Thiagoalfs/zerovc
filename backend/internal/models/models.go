@@ -101,19 +101,33 @@ type Attachment struct {
 	Type     string `json:"type"`
 }
 
+type MessageReaction struct {
+	Emoji   string      `json:"emoji"`
+	Count   int         `json:"count"`
+	UserIDs []uuid.UUID `json:"user_ids"`
+}
+
+type MessageReplyInfo struct {
+	ID      uuid.UUID  `json:"id"`
+	Author  UserPublic `json:"author"`
+	Content string     `json:"content"`
+}
+
 type Message struct {
-	ID          uuid.UUID    `json:"id"`
-	ChannelID   uuid.UUID    `json:"channel_id"`
-	AuthorID    uuid.UUID    `json:"author_id"`
-	Author      UserPublic   `json:"author"`
-	Content     string       `json:"content"`
-	Attachments []Attachment `json:"attachments"`
-	ReplyToID   *uuid.UUID   `json:"reply_to_id,omitempty"`
-	IsPinned    bool         `json:"is_pinned"`
-	IsEdited    bool         `json:"is_edited"`
-	EditedAt    *time.Time   `json:"edited_at,omitempty"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	ID          uuid.UUID         `json:"id"`
+	ChannelID   uuid.UUID         `json:"channel_id"`
+	AuthorID    uuid.UUID         `json:"author_id"`
+	Author      UserPublic        `json:"author"`
+	Content     string            `json:"content"`
+	Attachments []Attachment      `json:"attachments"`
+	ReplyToID   *uuid.UUID        `json:"reply_to_id,omitempty"`
+	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
+	Reactions   []MessageReaction `json:"reactions,omitempty"`
+	IsPinned    bool              `json:"is_pinned"`
+	IsEdited    bool              `json:"is_edited"`
+	EditedAt    *time.Time        `json:"edited_at,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
 type VoiceSession struct {
@@ -160,41 +174,54 @@ type DMRoom struct {
 
 // Direct Message
 type DMMessage struct {
-	ID          uuid.UUID    `json:"id"`
-	DMRoomID    uuid.UUID    `json:"dm_room_id"`
-	AuthorID    uuid.UUID    `json:"author_id"`
-	Author      UserPublic   `json:"author"`
-	Content     string       `json:"content"`
-	Attachments []Attachment `json:"attachments"`
-	IsEdited    bool         `json:"is_edited"`
-	EditedAt    *time.Time   `json:"edited_at,omitempty"`
-	CreatedAt   time.Time    `json:"created_at"`
+	ID          uuid.UUID         `json:"id"`
+	DMRoomID    uuid.UUID         `json:"dm_room_id"`
+	AuthorID    uuid.UUID         `json:"author_id"`
+	Author      UserPublic        `json:"author"`
+	Content     string            `json:"content"`
+	Attachments []Attachment      `json:"attachments"`
+	ReplyToID   *uuid.UUID        `json:"reply_to_id,omitempty"`
+	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
+	Reactions   []MessageReaction `json:"reactions,omitempty"`
+	IsPinned    bool              `json:"is_pinned"`
+	IsEdited    bool              `json:"is_edited"`
+	EditedAt    *time.Time        `json:"edited_at,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 // WebSocket Event Types
 type WSEventType string
 
 const (
-	EventReady               WSEventType = "READY"
-	EventMessageCreate       WSEventType = "MESSAGE_CREATE"
-	EventMessageUpdate       WSEventType = "MESSAGE_UPDATE"
-	EventMessageDelete       WSEventType = "MESSAGE_DELETE"
-	EventTypingStart         WSEventType = "TYPING_START"
-	EventPresenceUpdate      WSEventType = "PRESENCE_UPDATE"
-	EventVoiceStateUpdate    WSEventType = "VOICE_STATE_UPDATE"
-	EventGuildCreate         WSEventType = "GUILD_CREATE"
-	EventChannelCreate       WSEventType = "CHANNEL_CREATE"
-	EventChannelUpdate       WSEventType = "CHANNEL_UPDATE"
-	EventChannelDelete       WSEventType = "CHANNEL_DELETE"
-	EventFriendRequestCreate WSEventType = "FRIEND_REQUEST_CREATE"
-	EventFriendRequestUpdate WSEventType = "FRIEND_REQUEST_UPDATE"
-	EventDMMessageCreate     WSEventType = "DM_MESSAGE_CREATE"
-	EventDMMessageUpdate     WSEventType = "DM_MESSAGE_UPDATE"
-	EventDMMessageDelete     WSEventType = "DM_MESSAGE_DELETE"
-	EventRoleCreate          WSEventType = "ROLE_CREATE"
-	EventRoleUpdate          WSEventType = "ROLE_UPDATE"
-	EventRoleDelete          WSEventType = "ROLE_DELETE"
-	EventUserUpdate          WSEventType = "USER_UPDATE"
+	EventReady                  WSEventType = "READY"
+	EventMessageCreate          WSEventType = "MESSAGE_CREATE"
+	EventMessageUpdate          WSEventType = "MESSAGE_UPDATE"
+	EventMessageDelete          WSEventType = "MESSAGE_DELETE"
+	EventMessageReactionAdd     WSEventType = "MESSAGE_REACTION_ADD"
+	EventMessageReactionRemove  WSEventType = "MESSAGE_REACTION_REMOVE"
+	EventMessagePin             WSEventType = "MESSAGE_PIN"
+	EventMessageUnpin           WSEventType = "MESSAGE_UNPIN"
+	EventTypingStart            WSEventType = "TYPING_START"
+	EventPresenceUpdate         WSEventType = "PRESENCE_UPDATE"
+	EventVoiceStateUpdate       WSEventType = "VOICE_STATE_UPDATE"
+	EventGuildCreate            WSEventType = "GUILD_CREATE"
+	EventChannelCreate          WSEventType = "CHANNEL_CREATE"
+	EventChannelUpdate          WSEventType = "CHANNEL_UPDATE"
+	EventChannelDelete          WSEventType = "CHANNEL_DELETE"
+	EventFriendRequestCreate    WSEventType = "FRIEND_REQUEST_CREATE"
+	EventFriendRequestUpdate    WSEventType = "FRIEND_REQUEST_UPDATE"
+	EventDMMessageCreate        WSEventType = "DM_MESSAGE_CREATE"
+	EventDMMessageUpdate        WSEventType = "DM_MESSAGE_UPDATE"
+	EventDMMessageDelete        WSEventType = "DM_MESSAGE_DELETE"
+	EventDMReactionAdd          WSEventType = "DM_REACTION_ADD"
+	EventDMReactionRemove       WSEventType = "DM_REACTION_REMOVE"
+	EventRoleCreate             WSEventType = "ROLE_CREATE"
+	EventRoleUpdate             WSEventType = "ROLE_UPDATE"
+	EventRoleDelete             WSEventType = "ROLE_DELETE"
+	EventUserUpdate             WSEventType = "USER_UPDATE"
+	EventCallIncoming           WSEventType = "CALL_INCOMING"
+	EventCallAccept             WSEventType = "CALL_ACCEPT"
+	EventCallReject             WSEventType = "CALL_REJECT"
 )
 
 type WSEvent struct {

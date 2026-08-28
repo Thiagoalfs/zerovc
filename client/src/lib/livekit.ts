@@ -157,6 +157,23 @@ class LiveKitManager {
     }
   }
 
+  async setMuted(muted: boolean) {
+    if (this.room) {
+      await this.room.localParticipant.setMicrophoneEnabled(!muted);
+    }
+  }
+
+  async setDeafened(deafened: boolean) {
+    if (this.room) {
+      this.attachedAudioElements.forEach((el) => {
+        el.muted = deafened;
+      });
+      if (deafened) {
+        await this.room.localParticipant.setMicrophoneEnabled(false);
+      }
+    }
+  }
+
   async setScreenShareEnabled(
     enabled: boolean,
     sourceId?: string,
@@ -259,6 +276,36 @@ class LiveKitManager {
     }
 
     this.onTrackUpdated?.();
+  }
+
+  async setCameraEnabled(enabled: boolean) {
+    if (!this.room) return;
+    await this.room.localParticipant.setCameraEnabled(enabled);
+    this.onTrackUpdated?.();
+  }
+
+  async setAudioInputDevice(deviceId: string) {
+    if (!this.room) return;
+    await this.room.switchActiveDevice('audioinput', deviceId);
+  }
+
+  async setAudioOutputDevice(deviceId: string) {
+    if (!this.room) return;
+    await this.room.switchActiveDevice('audiooutput', deviceId);
+  }
+
+  setParticipantVolume(participantIdentity: string, volume: number) {
+    if (!this.room) return;
+    const remote = this.room.remoteParticipants.get(participantIdentity);
+    if (remote) {
+      remote.setVolume(volume);
+    }
+    // Also adjust HTMLMediaElement if exists
+    this.attachedAudioElements.forEach((el, key) => {
+      if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
+        el.volume = Math.min(Math.max(volume, 0), 1);
+      }
+    });
   }
 
   async disconnect() {

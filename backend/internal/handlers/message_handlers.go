@@ -36,6 +36,10 @@ type UpdateMessageRequest struct {
 	Content string `json:"content"`
 }
 
+type ReactionRequest struct {
+	Emoji string `json:"emoji"`
+}
+
 func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -51,8 +55,18 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req SendMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Content == "" {
-		http.Error(w, `{"error":"message content cannot be empty"}`, http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Content) == 0 && len(req.Attachments) == 0 {
+		http.Error(w, `{"error":"message content or attachment is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Content) > 2000 {
+		http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -98,6 +112,26 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 	msg.Author = author
 	msg.Attachments = req.Attachments
+	msg.Reactions = make([]models.MessageReaction, 0)
+
+	// Fetch reply preview if exists
+	if msg.ReplyToID != nil {
+		var replyAuthor models.UserPublic
+		var replyContent string
+		err := h.db.Pool.QueryRow(r.Context(), `
+			SELECT m.id, m.content, u.id, u.username, u.display_name, u.avatar_url
+			FROM messages m
+			JOIN users u ON u.id = m.author_id
+			WHERE m.id = $1
+		`, *msg.ReplyToID).Scan(&replyAuthor.ID, &replyContent, &replyAuthor.ID, &replyAuthor.Username, &replyAuthor.DisplayName, &replyAuthor.AvatarURL)
+		if err == nil {
+			msg.ReplyTo = &models.MessageReplyInfo{
+				ID:      *msg.ReplyToID,
+				Author:  replyAuthor,
+				Content: replyContent,
+			}
+		}
+	}
 
 	// 4. Broadcast via WebSocket
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
@@ -125,66 +159,52 @@ func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Content == "" {
-		http.Error(w, `{"error":"content cannot be empty"}`, http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Content) == 0 {
+		http.Error(w, `{"error":"content is required"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Fetch message and verify author
-	var msg models.Message
-	var guildID uuid.UUID
-	var attachmentsJSON []byte
-	checkQuery := `
-		SELECT m.id, m.channel_id, m.author_id, m.reply_to_id, m.is_pinned, m.created_at, c.guild_id, m.attachments
-		FROM messages m
-		INNER JOIN channels c ON c.id = m.channel_id
-		WHERE m.id = $1
-	`
-	err = h.db.Pool.QueryRow(r.Context(), checkQuery, messageID).Scan(
-		&msg.ID, &msg.ChannelID, &msg.AuthorID, &msg.ReplyToID, &msg.IsPinned, &msg.CreatedAt, &guildID, &attachmentsJSON,
-	)
-	if err != nil {
-		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+	if len(req.Content) > 2000 {
+		http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
 		return
 	}
 
-	if msg.AuthorID != userID {
-		http.Error(w, `{"error":"forbidden: only the author can edit this message"}`, http.StatusForbidden)
-		return
-	}
-
-	// Update message
+	// Check author & update
+	var channelID, guildID uuid.UUID
 	now := time.Now().UTC()
-	updateQuery := `
-		UPDATE messages
-		SET content = $1, is_edited = TRUE, edited_at = $2, updated_at = $2
-		WHERE id = $3
-		RETURNING content, is_edited, edited_at, updated_at
+	query := `
+		UPDATE messages m
+		SET content = $1, is_edited = true, edited_at = $2, updated_at = $2
+		FROM channels c
+		WHERE m.id = $3 AND m.author_id = $4 AND c.id = m.channel_id
+		RETURNING m.channel_id, c.guild_id
 	`
-	err = h.db.Pool.QueryRow(r.Context(), updateQuery, req.Content, now, messageID).Scan(
-		&msg.Content, &msg.IsEdited, &msg.EditedAt, &msg.UpdatedAt,
-	)
+	err = h.db.Pool.QueryRow(r.Context(), query, req.Content, now, messageID, userID).Scan(&channelID, &guildID)
 	if err != nil {
-		http.Error(w, `{"error":"failed to update message"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"message not found or you are not the author"}`, http.StatusForbidden)
 		return
 	}
 
-	// Author info
-	var author models.UserPublic
-	h.db.Pool.QueryRow(r.Context(), "SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1", userID).Scan(
-		&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
-	)
-	msg.Author = author
-	json.Unmarshal(attachmentsJSON, &msg.Attachments)
-
-	// Broadcast update
+	// Broadcast update event
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: models.EventMessageUpdate,
-		Data: msg,
+		Data: map[string]any{
+			"id":         messageID,
+			"channel_id": channelID,
+			"content":    req.Content,
+			"is_edited":  true,
+			"edited_at":  now,
+		},
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(msg)
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":         messageID,
+		"channel_id": channelID,
+		"content":    req.Content,
+		"is_edited":  true,
+		"edited_at":  now,
+	})
 }
 
 func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -201,7 +221,6 @@ func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check author or guild owner
 	var authorID, guildID, channelID uuid.UUID
 	var ownerID uuid.UUID
 	query := `
@@ -255,7 +274,6 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify channel & membership
 	var guildID uuid.UUID
 	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
 	if err != nil {
@@ -277,41 +295,20 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var beforeTime time.Time
-	if b := r.URL.Query().Get("before"); b != "" {
-		if parsedTime, err := time.Parse(time.RFC3339, b); err == nil {
-			beforeTime = parsedTime
-		}
-	}
+	query := `
+		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
+		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
+		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url
+		FROM messages m
+		INNER JOIN users u ON u.id = m.author_id
+		LEFT JOIN messages rm ON rm.id = m.reply_to_id
+		LEFT JOIN users ru ON ru.id = rm.author_id
+		WHERE m.channel_id = $1
+		ORDER BY m.created_at DESC
+		LIMIT $2
+	`
 
-	var query string
-	var rowsArgs []any
-
-	if !beforeTime.IsZero() {
-		query = `
-			SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
-			       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
-			FROM messages m
-			INNER JOIN users u ON u.id = m.author_id
-			WHERE m.channel_id = $1 AND m.created_at < $2
-			ORDER BY m.created_at DESC
-			LIMIT $3
-		`
-		rowsArgs = []any{channelID, beforeTime, limit}
-	} else {
-		query = `
-			SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
-			       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
-			FROM messages m
-			INNER JOIN users u ON u.id = m.author_id
-			WHERE m.channel_id = $1
-			ORDER BY m.created_at DESC
-			LIMIT $2
-		`
-		rowsArgs = []any{channelID, limit}
-	}
-
-	rows, err := h.db.Pool.Query(r.Context(), query, rowsArgs...)
+	rows, err := h.db.Pool.Query(r.Context(), query, channelID, limit)
 	if err != nil {
 		http.Error(w, `{"error":"failed to query messages"}`, http.StatusInternalServerError)
 		return
@@ -319,21 +316,93 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	messages := make([]models.Message, 0)
+	msgIDs := make([]uuid.UUID, 0)
+
 	for rows.Next() {
 		var m models.Message
 		var attachmentsJSON []byte
 		var author models.UserPublic
+		var rID, ruID *uuid.UUID
+		var rContent, ruUsername, ruDisplayName, ruAvatar *string
 
 		if err := rows.Scan(
 			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
+			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
 		); err != nil {
 			continue
 		}
 		author.ID = m.AuthorID
 		m.Author = author
 		json.Unmarshal(attachmentsJSON, &m.Attachments)
+
+		if rID != nil && ruID != nil {
+			var dName, aUrl string
+			if ruDisplayName != nil {
+				dName = *ruDisplayName
+			}
+			if ruAvatar != nil {
+				aUrl = *ruAvatar
+			}
+			var uName string
+			if ruUsername != nil {
+				uName = *ruUsername
+			}
+			var cnt string
+			if rContent != nil {
+				cnt = *rContent
+			}
+			m.ReplyTo = &models.MessageReplyInfo{
+				ID: *rID,
+				Author: models.UserPublic{
+					ID:          *ruID,
+					Username:    uName,
+					DisplayName: dName,
+					AvatarURL:   aUrl,
+				},
+				Content: cnt,
+			}
+		}
+
+		m.Reactions = make([]models.MessageReaction, 0)
 		messages = append(messages, m)
+		msgIDs = append(msgIDs, m.ID)
+	}
+
+	// Fetch reactions for messages
+	if len(msgIDs) > 0 {
+		reactionsQuery := `
+			SELECT message_id, emoji, user_id
+			FROM message_reactions
+			WHERE message_id = ANY($1)
+		`
+		rxRows, err := h.db.Pool.Query(r.Context(), reactionsQuery, msgIDs)
+		if err == nil {
+			defer rxRows.Close()
+			rxMap := make(map[uuid.UUID]map[string][]uuid.UUID)
+			for rxRows.Next() {
+				var mID, uID uuid.UUID
+				var emoji string
+				if err := rxRows.Scan(&mID, &emoji, &uID); err == nil {
+					if rxMap[mID] == nil {
+						rxMap[mID] = make(map[string][]uuid.UUID)
+					}
+					rxMap[mID][emoji] = append(rxMap[mID][emoji], uID)
+				}
+			}
+
+			for i := range messages {
+				if emojis, ok := rxMap[messages[i].ID]; ok {
+					for em, uids := range emojis {
+						messages[i].Reactions = append(messages[i].Reactions, models.MessageReaction{
+							Emoji:   em,
+							Count:   len(uids),
+							UserIDs: uids,
+						})
+					}
+				}
+			}
+		}
 	}
 
 	// Chronological order
@@ -343,4 +412,157 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(messages)
+}
+
+func (h *MessageHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	messageIDStr := chi.URLParam(r, "messageID")
+	messageID, err := uuid.Parse(messageIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req ReactionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Emoji) == 0 {
+		http.Error(w, `{"error":"emoji is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	var channelID, guildID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT m.channel_id, c.guild_id
+		FROM messages m
+		JOIN channels c ON c.id = m.channel_id
+		WHERE m.id = $1
+	`, messageID).Scan(&channelID, &guildID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	_, err = h.db.Pool.Exec(r.Context(), `
+		INSERT INTO message_reactions (message_id, user_id, emoji)
+		VALUES ($1, $2, $3)
+		ON CONFLICT DO NOTHING
+	`, messageID, userID, req.Emoji)
+	if err != nil {
+		http.Error(w, `{"error":"failed to add reaction"}`, http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: models.EventMessageReactionAdd,
+		Data: map[string]any{
+			"message_id": messageID,
+			"channel_id": channelID,
+			"user_id":    userID,
+			"emoji":      req.Emoji,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "emoji": req.Emoji})
+}
+
+func (h *MessageHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	messageIDStr := chi.URLParam(r, "messageID")
+	messageID, err := uuid.Parse(messageIDStr)
+	emoji := chi.URLParam(r, "emoji")
+	if err != nil || emoji == "" {
+		http.Error(w, `{"error":"invalid message id or emoji"}`, http.StatusBadRequest)
+		return
+	}
+
+	var channelID, guildID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT m.channel_id, c.guild_id
+		FROM messages m
+		JOIN channels c ON c.id = m.channel_id
+		WHERE m.id = $1
+	`, messageID).Scan(&channelID, &guildID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	_, err = h.db.Pool.Exec(r.Context(), `
+		DELETE FROM message_reactions
+		WHERE message_id = $1 AND user_id = $2 AND emoji = $3
+	`, messageID, userID, emoji)
+	if err != nil {
+		http.Error(w, `{"error":"failed to remove reaction"}`, http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: models.EventMessageReactionRemove,
+		Data: map[string]any{
+			"message_id": messageID,
+			"channel_id": channelID,
+			"user_id":    userID,
+			"emoji":      emoji,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true})
+}
+
+func (h *MessageHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	messageIDStr := chi.URLParam(r, "messageID")
+	messageID, err := uuid.Parse(messageIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var channelID, guildID uuid.UUID
+	var isPinned bool
+	err = h.db.Pool.QueryRow(r.Context(), `
+		UPDATE messages
+		SET is_pinned = NOT is_pinned
+		FROM channels
+		WHERE messages.id = $1 AND channels.id = messages.channel_id
+		RETURNING messages.is_pinned, messages.channel_id, channels.guild_id
+	`, messageID).Scan(&isPinned, &channelID, &guildID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	eventType := models.EventMessagePin
+	if !isPinned {
+		eventType = models.EventMessageUnpin
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: eventType,
+		Data: map[string]any{
+			"message_id": messageID,
+			"channel_id": channelID,
+			"user_id":    userID,
+			"is_pinned":  isPinned,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "is_pinned": isPinned})
 }

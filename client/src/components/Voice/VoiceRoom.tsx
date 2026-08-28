@@ -1,5 +1,4 @@
-import React from 'react';
-import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu } from 'lucide-react';
+import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff } from 'lucide-react';
 import { Channel } from '../../types';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { ParticipantCard } from './ParticipantCard';
@@ -17,9 +16,11 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({ channel, onOpenScreenShare
     isMuted,
     isDeafened,
     isScreensharing,
+    isCameraOn,
     participants,
     toggleMute,
     toggleDeafen,
+    toggleCamera,
     leaveVoice,
     startScreenShare,
     stopScreenShare,
@@ -110,6 +111,19 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({ channel, onOpenScreenShare
             title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
           >
             <Headphones className="w-5 h-5" />
+          </button>
+
+          {/* Camera WebCam */}
+          <button
+            onClick={toggleCamera}
+            className={`p-2.5 md:p-3 rounded-full transition-all ${
+              isCameraOn
+                ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
+                : 'bg-background-light text-gray-200 hover:bg-white/20'
+            }`}
+            title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
+          >
+            {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
           </button>
 
           {/* Screen Share */}

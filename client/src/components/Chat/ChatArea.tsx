@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Hash, Users, Menu } from 'lucide-react';
+import { Hash, Users, Menu, Pin, Search, X } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
 import { MemberList } from '../Sidebar/MemberList';
-import { User } from '../../types';
+import { User, Message } from '../../types';
 
 interface ChatAreaProps {
   onOpenMobileDrawer?: () => void;
@@ -21,6 +21,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 }) => {
   const { activeChannel, messages, isLoadingMessages, sendMessage, typingUsers } = useGuildStore();
   const [localShowMemberList, setLocalShowMemberList] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const showMembers = isMemberListOpen !== undefined ? isMemberListOpen : localShowMemberList;
@@ -33,7 +37,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!showPinnedOnly && !searchQuery) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
@@ -60,6 +66,18 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const typingForThisChannel = activeChannel ? typingUsers.get(activeChannel.id) : null;
   const isSomeoneTyping = typingForThisChannel && typingForThisChannel.size > 0;
 
+  // Filter messages based on search & pinned filter
+  const displayedMessages = messages.filter((msg) => {
+    if (showPinnedOnly && !msg.is_pinned) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchContent = msg.content.toLowerCase().includes(q);
+      const matchAuthor = (msg.author?.display_name || msg.author?.username || '').toLowerCase().includes(q);
+      if (!matchContent && !matchAuthor) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="flex-1 bg-background-dark flex flex-row h-full overflow-hidden relative">
       {/* Center Chat View */}
@@ -83,6 +101,51 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-1 md:gap-2">
+            {/* Search Input / Toggle */}
+            {isSearchOpen ? (
+              <div className="flex items-center gap-1 bg-background-darkest px-2 py-1 rounded-xl border border-white/10 text-xs">
+                <Search className="w-3.5 h-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar mensagens..."
+                  autoFocus
+                  className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-32 md:w-48"
+                />
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setIsSearchOpen(false);
+                  }}
+                  className="p-0.5 text-gray-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsSearchOpen(true)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+                title="Buscar no canal"
+              >
+                <Search className="w-5 h-5" />
+              </button>
+            )}
+
+            {/* Pinned Messages Filter Toggle */}
+            <button
+              onClick={() => setShowPinnedOnly(!showPinnedOnly)}
+              className={`p-1.5 rounded-lg transition-colors ${
+                showPinnedOnly
+                  ? 'text-amber-400 bg-amber-400/15'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              }`}
+              title={showPinnedOnly ? 'Mostrar todas as mensagens' : 'Mensagens Fixadas'}
+            >
+              <Pin className="w-5 h-5" />
+            </button>
+
             {/* Member List Toggle */}
             <button
               onClick={toggleMembers}
@@ -98,25 +161,50 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         </div>
 
+        {/* Pinned or Search Active Notice Banner */}
+        {(showPinnedOnly || searchQuery) && (
+          <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
+            <span>
+              {showPinnedOnly
+                ? `Exibindo apenas mensagens fixadas (${displayedMessages.length})`
+                : `Resultados da busca para "${searchQuery}" (${displayedMessages.length})`}
+            </span>
+            <button
+              onClick={() => {
+                setShowPinnedOnly(false);
+                setSearchQuery('');
+              }}
+              className="text-brand-400 hover:underline font-semibold"
+            >
+              Limpar filtro
+            </button>
+          </div>
+        )}
+
         {/* Messages Scroll Area */}
         <div className="flex-1 overflow-y-auto px-2 md:px-4 py-4 space-y-1">
           {/* Welcome Header */}
-          <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
-            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-background-light flex items-center justify-center mb-3">
-              <Hash className="w-6 h-6 md:w-10 md:h-10 text-white" />
+          {!showPinnedOnly && !searchQuery && (
+            <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
+              <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-background-light flex items-center justify-center mb-3">
+                <Hash className="w-6 h-6 md:w-10 md:h-10 text-white" />
+              </div>
+              <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Bem-vindo a #{activeChannel.name}!</h2>
+              <p className="text-xs md:text-sm text-gray-400">Este é o início do canal #{activeChannel.name}.</p>
             </div>
-            <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Bem-vindo a #{activeChannel.name}!</h2>
-            <p className="text-xs md:text-sm text-gray-400">Este é o início do canal #{activeChannel.name}.</p>
-          </div>
+          )}
 
           {isLoadingMessages ? (
             <div className="flex justify-center py-6 text-sm text-gray-500">Carregando mensagens...</div>
+          ) : displayedMessages.length === 0 ? (
+            <div className="flex justify-center py-10 text-sm text-gray-500">Nenhuma mensagem encontrada.</div>
           ) : (
-            messages.map((message, index) => {
-              const prevMessage = index > 0 ? messages[index - 1] : null;
+            displayedMessages.map((message, index) => {
+              const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
               const isCompact = (() => {
                 if (!prevMessage) return false;
                 if (prevMessage.author_id !== message.author_id) return false;
+                if (message.reply_to) return false;
                 const prevTime = new Date(prevMessage.created_at).getTime();
                 const currTime = new Date(message.created_at).getTime();
                 if (isNaN(prevTime) || isNaN(currTime)) return false;
@@ -130,6 +218,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   message={message}
                   isCompact={isCompact}
                   onOpenUserProfile={onOpenUserProfile}
+                  onReply={(msg) => setReplyingTo(msg)}
                 />
               );
             })
@@ -149,7 +238,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
 
         {/* Message Input */}
-        <MessageInput channel={activeChannel} onSendMessage={sendMessage} />
+        <MessageInput
+          channel={activeChannel}
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
+          onSendMessage={sendMessage}
+        />
       </div>
 
       {/* Right-side Member List Sidebar */}
