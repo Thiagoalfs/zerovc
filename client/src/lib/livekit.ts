@@ -14,6 +14,7 @@ class LiveKitManager {
   private onParticipantsChanged?: (participants: Participant[]) => void;
   private onSpeakingChanged?: (speakingUserIds: string[]) => void;
   private onTrackUpdated?: () => void;
+  private attachedAudioElements: Map<string, HTMLMediaElement> = new Map();
 
   getRoom(): Room | null {
     return this.room;
@@ -57,9 +58,20 @@ class LiveKitManager {
       this.onParticipantsChanged?.(all);
     };
 
-    room.on(RoomEvent.Connected, () => {
+    room.on(RoomEvent.Connected, async () => {
       console.log('[LiveKit] Connected to room:', room.name);
+      try {
+        await room.startAudio();
+      } catch (err) {
+        console.warn('[LiveKit] startAudio error:', err);
+      }
       updateParticipants();
+    });
+
+    room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+      if (!room.canPlaybackAudio) {
+        room.startAudio().catch(() => {});
+      }
     });
 
     room.on(RoomEvent.ParticipantConnected, () => {
@@ -77,14 +89,28 @@ class LiveKitManager {
 
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
       if (track.kind === Track.Kind.Audio) {
-        track.attach();
+        const audioEl = track.attach();
+        audioEl.id = `audio-${participant.identity}-${track.sid || 'audio'}`;
+        audioEl.style.display = 'none';
+        document.body.appendChild(audioEl);
+        audioEl.play().catch((err) => console.log('[LiveKit] Audio play blocked:', err));
+        if (track.sid) {
+          this.attachedAudioElements.set(track.sid, audioEl);
+        }
       }
       this.onTrackUpdated?.();
       updateParticipants();
     });
 
     room.on(RoomEvent.TrackUnsubscribed, (track) => {
-      track.detach();
+      if (track.sid) {
+        const audioEl = this.attachedAudioElements.get(track.sid);
+        if (audioEl) {
+          audioEl.remove();
+          this.attachedAudioElements.delete(track.sid);
+        }
+      }
+      track.detach().forEach((el) => el.remove());
       this.onTrackUpdated?.();
       updateParticipants();
     });
@@ -101,7 +127,7 @@ class LiveKitManager {
 
     await room.connect(url, token);
 
-    // Auto-enable microphone track on connect
+    // Auto-enable and publish microphone track on connect
     try {
       await room.localParticipant.setMicrophoneEnabled(true);
     } catch (err) {
@@ -115,6 +141,9 @@ class LiveKitManager {
   async setMicrophoneEnabled(enabled: boolean) {
     if (this.room) {
       await this.room.localParticipant.setMicrophoneEnabled(enabled);
+      if (enabled) {
+        this.room.startAudio().catch(() => {});
+      }
     }
   }
 
@@ -122,7 +151,6 @@ class LiveKitManager {
     if (!this.room) return;
 
     if (enabled && sourceId) {
-      // Use specific Electron screen capture source constraints
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
@@ -151,6 +179,9 @@ class LiveKitManager {
   }
 
   async disconnect() {
+    this.attachedAudioElements.forEach((el) => el.remove());
+    this.attachedAudioElements.clear();
+
     if (this.room) {
       await this.room.disconnect();
       this.room = null;

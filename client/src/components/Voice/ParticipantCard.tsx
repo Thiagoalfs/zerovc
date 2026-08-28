@@ -12,14 +12,19 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const isSpeaking = speakingUserIds.includes(participant.identity);
-  const isMuted = !participant.isMicrophoneEnabled;
+  
+  // Check if mic is enabled
+  const hasUnmutedAudioTrack = Array.from(participant.audioTrackPublications.values()).some(
+    (pub) => !pub.isMuted && pub.track
+  );
+  const isMuted = !participant.isMicrophoneEnabled && !hasUnmutedAudioTrack;
   const isScreenSharing = participant.isScreenShareEnabled;
 
   // Handle Video / Screen Share Track attachment
   useEffect(() => {
     const videoPublication = Array.from(participant.videoTrackPublications.values()).find(
-      (pub) => pub.isSubscribed && pub.track
-    );
+      (pub) => isScreenSharing ? pub.source === Track.Source.ScreenShare : pub.track
+    ) || Array.from(participant.videoTrackPublications.values())[0];
 
     if (videoPublication && videoPublication.track && videoRef.current) {
       videoPublication.track.attach(videoRef.current);
@@ -33,7 +38,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
   }, [participant, isScreenSharing]);
 
   const hasVideoTrack = Array.from(participant.videoTrackPublications.values()).some(
-    (pub) => pub.isSubscribed && pub.track && !pub.isMuted
+    (pub) => pub.track && !pub.isMuted
   );
 
   return (
