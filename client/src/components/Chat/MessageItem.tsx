@@ -149,12 +149,36 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         );
       }
       if (part.match(mentionRegex)) {
-        const isSelfMention = user && (part === `@${user.username}` || part === `@${user.display_name}` || part === '@everyone');
+        const isGlobal = part === '@everyone' || part === '@here';
+        const targetName = part.slice(1).toLowerCase();
+
+        // Check if mentioned user actually belongs to this server
+        const memberExists =
+          isGlobal ||
+          activeGuild?.members?.some(
+            (m) =>
+              m.username.toLowerCase() === targetName ||
+              (m.display_name && m.display_name.toLowerCase() === targetName)
+          );
+
+        // If not in server, render as plain unhighlighted text
+        if (!memberExists) {
+          return part;
+        }
+
+        const isSelfMention =
+          user &&
+          (part === `@${user.username}` ||
+            (user.display_name && part === `@${user.display_name}`) ||
+            part === '@everyone');
+
         return (
           <span
             key={i}
             className={`font-semibold px-1 py-0.5 rounded text-xs inline-block mx-0.5 ${
-              isSelfMention ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-brand-500/20 text-brand-300'
+              isSelfMention
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                : 'bg-brand-500/20 text-brand-300'
             }`}
           >
             {part}

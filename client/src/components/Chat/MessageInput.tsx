@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PlusCircle, SendHorizontal, Smile, X, Reply } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
+import { useGuildStore } from '../../stores/guildStore';
 
 interface MessageInputProps {
   channel: Channel;
@@ -21,19 +22,86 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onCancelReply,
   onSendMessage,
 }) => {
+  const { activeGuild } = useGuildStore();
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionCursorPos, setMentionCursorPos] = useState<number>(0);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState<number>(0);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingTime = useRef<number>(0);
+
+  // Compute filtered mention suggestions
+  const mentionSuggestions = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    const list: Array<{
+      id: string;
+      name: string;
+      username: string;
+      avatar_url?: string;
+      isSpecial?: boolean;
+      roleColor?: string;
+    }> = [];
+
+    // Special global tags
+    if ('everyone'.startsWith(q) || 'todos'.startsWith(q)) {
+      list.push({ id: 'everyone', name: 'everyone', username: 'everyone', isSpecial: true });
+    }
+    if ('here'.startsWith(q) || 'aqui'.startsWith(q)) {
+      list.push({ id: 'here', name: 'here', username: 'here', isSpecial: true });
+    }
+
+    if (activeGuild?.members) {
+      for (const m of activeGuild.members) {
+        const uName = m.username.toLowerCase();
+        const dName = (m.display_name || '').toLowerCase();
+        if (uName.includes(q) || dName.includes(q)) {
+          const topRole = m.roles && m.roles.length > 0 ? m.roles[0] : null;
+          list.push({
+            id: m.id,
+            name: m.display_name || m.username,
+            username: m.username,
+            avatar_url: m.avatar_url,
+            roleColor: topRole?.color,
+          });
+        }
+      }
+    }
+
+    return list.slice(0, 8);
+  }, [mentionQuery, activeGuild?.members]);
 
   useEffect(() => {
     if (replyingTo && textareaRef.current) {
       textareaRef.current.focus();
     }
   }, [replyingTo]);
+
+  const insertMention = (item: { username: string }) => {
+    if (!textareaRef.current) return;
+    const text = content;
+    const textBefore = text.slice(0, mentionCursorPos);
+    const textAfter = text.slice(mentionCursorPos);
+
+    // Replace the trailing @query with @username
+    const newTextBefore = textBefore.replace(/@([a-zA-Z0-9_.-]*)$/, `@${item.username} `);
+    const newContent = newTextBefore + textAfter;
+    setContent(newContent);
+    setMentionQuery(null);
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPos = newTextBefore.length;
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
+  };
 
   const handleSend = async () => {
     let finalContent = content.trim();
@@ -59,6 +127,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setContent('');
     setSelectedImage(null);
     setShowEmojiPicker(false);
+    setMentionQuery(null);
     onCancelReply?.();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -68,6 +137,29 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedMentionIndex((prev) => (prev + 1) % mentionSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedMentionIndex((prev) => (prev - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(mentionSuggestions[selectedMentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       await handleSend();
@@ -78,9 +170,23 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
+    const val = e.target.value;
+    setContent(val);
     e.target.style.height = 'auto';
     e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+
+    // Detect @ mention query at cursor
+    const cursor = e.target.selectionStart || val.length;
+    const textBefore = val.slice(0, cursor);
+    const match = textBefore.match(/@([a-zA-Z0-9_.-]*)$/);
+
+    if (match) {
+      setMentionQuery(match[1]);
+      setMentionCursorPos(cursor);
+      setSelectedMentionIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
 
     const now = Date.now();
     if (now - lastTypingTime.current > 2000) {
@@ -121,12 +227,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
         if (width > height) {
           if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
+            height = Math.round((height * MAX_WIDTH) / width);
             width = MAX_WIDTH;
           }
         } else {
           if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
+            width = Math.round((width * MAX_HEIGHT) / height);
             height = MAX_HEIGHT;
           }
         }
@@ -134,13 +240,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL('image/jpeg', 0.85);
-          setSelectedImage(compressed);
-        } else {
-          setSelectedImage(result);
-        }
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL('image/jpeg', 0.85);
+        setSelectedImage(compressed);
       };
       img.src = result;
     };
@@ -155,23 +258,67 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <div className="px-3 md:px-4 pb-4 md:pb-6 relative select-none">
-      {/* Replying Banner */}
+    <div className="p-3 md:p-4 bg-background-dark relative">
+      {/* Mention Autocomplete Suggestions Popup */}
+      {mentionSuggestions.length > 0 && (
+        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
+          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+            <span>Membros ({mentionSuggestions.length})</span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter para selecionar</span>
+          </div>
+          <div className="space-y-0.5">
+            {mentionSuggestions.map((item, idx) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => insertMention(item)}
+                onMouseEnter={() => setSelectedMentionIndex(idx)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors ${
+                  selectedMentionIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                {item.isSpecial ? (
+                  <div className="w-6 h-6 rounded-full bg-brand-500/30 flex items-center justify-center text-xs font-bold text-brand-300">
+                    @
+                  </div>
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden flex-shrink-0">
+                    {item.avatar_url ? (
+                      <img src={item.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      item.name[0]?.toUpperCase()
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span
+                    className="font-semibold text-xs truncate"
+                    style={item.roleColor ? { color: item.roleColor } : {}}
+                  >
+                    {item.name}
+                  </span>
+                  {!item.isSpecial && (
+                    <span className="text-[10px] text-gray-400 font-mono">@{item.username}</span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Replying Bar */}
       {replyingTo && (
-        <div className="flex items-center justify-between px-4 py-2 bg-background-darkest border border-b-0 border-white/10 rounded-t-2xl text-xs text-gray-300 animate-in fade-in slide-in-from-bottom-1">
+        <div className="bg-background-darkest/90 border border-b-0 border-white/5 rounded-t-2xl px-3 py-1.5 flex items-center justify-between text-xs text-gray-300 animate-in fade-in slide-in-from-bottom-1">
           <div className="flex items-center gap-2 truncate">
             <Reply className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
             <span className="text-gray-400">Respondendo a</span>
-            <span className="font-bold text-brand-400">
-              @{replyingTo.author.display_name || replyingTo.author.username}
-            </span>
-            <span className="text-gray-500 truncate max-w-xs italic hidden md:inline">
-              "{replyingTo.content}"
-            </span>
+            <span className="font-semibold text-brand-400">@{replyingTo.author.display_name || replyingTo.author.username}</span>
+            <span className="text-gray-400 truncate italic max-w-xs">"{replyingTo.content}"</span>
           </div>
           <button
             onClick={onCancelReply}
-            className="p-1 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white"
             title="Cancelar resposta"
           >
             <X className="w-3.5 h-3.5" />
