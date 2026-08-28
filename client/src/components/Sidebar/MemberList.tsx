@@ -1,5 +1,5 @@
 import React from 'react';
-import { Crown } from 'lucide-react';
+import { Crown, X } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { UserPublic } from '../../types';
 
@@ -8,7 +8,7 @@ interface MemberListProps {
   onClose?: () => void;
 }
 
-export const MemberList: React.FC<MemberListProps> = ({ isOpen }) => {
+export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose }) => {
   const { activeGuild } = useGuildStore();
 
   if (!isOpen || !activeGuild) return null;
@@ -24,7 +24,7 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen }) => {
     return (
       <div
         key={user.id}
-        className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-background-light/40 group cursor-pointer transition-colors"
+        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-background-light/40 group cursor-pointer transition-colors"
       >
         <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
           {user.avatar_url ? (
@@ -65,28 +65,45 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen }) => {
   };
 
   return (
-    <div className="w-60 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar">
-      {/* Online Section */}
-      <div className="mb-4">
-        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 mb-2">
-          DISPONÍVEL — {onlineMembers.length}
-        </h3>
-        <div className="space-y-0.5">
-          {onlineMembers.map(renderMember)}
-        </div>
-      </div>
+    <>
+      {/* Mobile Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-200"
+        onClick={onClose}
+      />
 
-      {/* Offline Section */}
-      {offlineMembers.length > 0 && (
-        <div>
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2 mb-2">
-            INDISPONÍVEL — {offlineMembers.length}
+      {/* Member Sidebar / Drawer */}
+      <div className="fixed md:static inset-y-0 right-0 z-50 md:z-0 w-64 md:w-60 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none animate-in slide-in-from-right duration-200 md:animate-none">
+        {/* Mobile Header */}
+        <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 md:hidden">
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Membros do Servidor</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-1">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Online Section */}
+        <div className="mb-4">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 mb-2">
+            DISPONÍVEL — {onlineMembers.length}
           </h3>
-          <div className="space-y-0.5 opacity-70">
-            {offlineMembers.map(renderMember)}
+          <div className="space-y-0.5">
+            {onlineMembers.map(renderMember)}
           </div>
         </div>
-      )}
-    </div>
+
+        {/* Offline Section */}
+        {offlineMembers.length > 0 && (
+          <div>
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2 mb-2">
+              INDISPONÍVEL — {offlineMembers.length}
+            </h3>
+            <div className="space-y-0.5 opacity-70">
+              {offlineMembers.map(renderMember)}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 };
