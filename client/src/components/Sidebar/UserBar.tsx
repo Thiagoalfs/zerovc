@@ -1,5 +1,5 @@
-import React from 'react';
-import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, Radio } from 'lucide-react';
+import React, { useState } from 'react';
+import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -10,7 +10,8 @@ interface UserBarProps {
 }
 
 export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenShare }) => {
-  const { user } = useAuthStore();
+  const { user, updateProfile } = useAuthStore();
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
   const {
     currentChannelId,
     isConnected,
@@ -21,15 +22,65 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     toggleMute,
     toggleDeafen,
     leaveVoice,
+    startScreenShare,
     stopScreenShare,
   } = useVoiceStore();
 
   const { activeGuild } = useGuildStore();
-
   const activeVoiceChannel = activeGuild?.channels?.find((c) => c.id === currentChannelId);
 
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'online': return 'bg-online';
+      case 'idle': return 'bg-idle';
+      case 'dnd': return 'bg-dnd';
+      default: return 'bg-offline';
+    }
+  };
+
+  const getStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'online': return 'Disponível';
+      case 'idle': return 'Ausente';
+      case 'dnd': return 'Não Perturbe';
+      default: return 'Invisível';
+    }
+  };
+
+  const handleSetStatus = async (newStatus: 'online' | 'idle' | 'dnd' | 'offline') => {
+    try {
+      await updateProfile({ status: newStatus });
+      setShowStatusMenu(false);
+    } catch (err) {
+      console.error('Failed to change status:', err);
+    }
+  };
+
   return (
-    <div className="flex flex-col bg-background-darkest select-none">
+    <div className="flex flex-col bg-background-darkest select-none relative">
+      {/* Quick Status Menu Popover */}
+      {showStatusMenu && (
+        <div className="absolute bottom-16 left-2 z-40 bg-background-darkest border border-white/10 rounded-2xl p-2 shadow-2xl w-48 animate-in fade-in zoom-in-95">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1 block">
+            Alterar Estado
+          </span>
+          <div className="space-y-1 mt-1">
+            {(['online', 'idle', 'dnd', 'offline'] as const).map((st) => (
+              <button
+                key={st}
+                onClick={() => handleSetStatus(st)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  user?.status === st ? 'bg-brand-500 text-white' : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${getStatusColor(st)}`} />
+                <span>{getStatusLabel(st)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Active Voice Connection Bar */}
       {(isConnected || isConnecting) && (
         <div className="bg-background-darkest/90 border-b border-white/5 p-2 px-3 flex flex-col gap-1.5">
@@ -47,13 +98,16 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             </div>
 
             <div className="flex items-center gap-1">
-              {/* Screen share toggle */}
               <button
                 onClick={() => {
                   if (isScreensharing) {
                     stopScreenShare();
                   } else {
-                    onOpenScreenShare();
+                    if ((window as any).electronAPI?.getScreenSources) {
+                      onOpenScreenShare();
+                    } else {
+                      startScreenShare();
+                    }
                   }
                 }}
                 className={`p-1.5 rounded hover:bg-background-light transition-colors ${
@@ -64,7 +118,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 <Monitor className="w-4 h-4" />
               </button>
 
-              {/* Disconnect button */}
               <button
                 onClick={leaveVoice}
                 className="p-1.5 rounded hover:bg-dnd/20 text-gray-300 hover:text-dnd transition-colors"
@@ -79,23 +132,32 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
       {/* User Info and Controls */}
       <div className="h-[52px] px-2 flex items-center justify-between bg-background-darkest/60">
-        <div className="flex items-center gap-2 p-1 rounded hover:bg-background-light/50 cursor-pointer max-w-[120px] transition-colors">
+        <div
+          onClick={() => setShowStatusMenu(!showStatusMenu)}
+          className="flex items-center gap-2 p-1 rounded-xl hover:bg-background-light/50 cursor-pointer max-w-[130px] transition-colors"
+        >
           {/* Avatar */}
           <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
             {user?.avatar_url ? (
               <img src={user.avatar_url} alt={user.username} className="w-full h-full rounded-full object-cover" />
             ) : (
-              <span>{user?.username?.[0]?.toUpperCase() || 'U'}</span>
+              <span>{user?.display_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'U'}</span>
             )}
             {/* Status dot */}
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-online border-2 border-background-darkest" />
+            <div
+              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background-darkest ${getStatusColor(
+                user?.status
+              )}`}
+            />
           </div>
 
           <div className="flex flex-col truncate">
-            <span className="text-sm font-semibold text-gray-100 truncate leading-tight">
-              {user?.username || 'Usuário'}
+            <span className="text-xs font-semibold text-gray-100 truncate leading-tight">
+              {user?.display_name || user?.username || 'Usuário'}
             </span>
-            <span className="text-[11px] text-gray-400 truncate leading-tight">Online</span>
+            <span className="text-[10px] text-gray-400 truncate leading-tight">
+              {user?.custom_status || getStatusLabel(user?.status)}
+            </span>
           </div>
         </div>
 
@@ -124,7 +186,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           <button
             onClick={onOpenSettings}
             className="p-1.5 rounded hover:bg-background-light hover:text-gray-200 transition-colors"
-            title="Configurações do Usuário"
+            title="Editar Meu Perfil"
           >
             <Settings className="w-4 h-4" />
           </button>

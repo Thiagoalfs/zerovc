@@ -9,9 +9,12 @@ import (
 type User struct {
 	ID           uuid.UUID `json:"id"`
 	Username     string    `json:"username"`
+	DisplayName  string    `json:"display_name"`
 	Email        string    `json:"email,omitempty"`
 	PasswordHash string    `json:"-"`
 	AvatarURL    string    `json:"avatar_url"`
+	BannerURL    string    `json:"banner_url"`
+	Bio          string    `json:"bio"`
 	Status       string    `json:"status"` // online, idle, dnd, offline
 	CustomStatus string    `json:"custom_status"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -21,19 +24,36 @@ type User struct {
 type UserPublic struct {
 	ID           uuid.UUID `json:"id"`
 	Username     string    `json:"username"`
+	DisplayName  string    `json:"display_name"`
 	AvatarURL    string    `json:"avatar_url"`
+	BannerURL    string    `json:"banner_url"`
+	Bio          string    `json:"bio"`
 	Status       string    `json:"status"`
 	CustomStatus string    `json:"custom_status"`
+	Roles        []Role    `json:"roles,omitempty"`
 }
 
 func (u *User) ToPublic() UserPublic {
 	return UserPublic{
 		ID:           u.ID,
 		Username:     u.Username,
+		DisplayName:  u.DisplayName,
 		AvatarURL:    u.AvatarURL,
+		BannerURL:    u.BannerURL,
+		Bio:          u.Bio,
 		Status:       u.Status,
 		CustomStatus: u.CustomStatus,
 	}
+}
+
+type Role struct {
+	ID          uuid.UUID `json:"id"`
+	GuildID     uuid.UUID `json:"guild_id"`
+	Name        string    `json:"name"`
+	Color       string    `json:"color"`
+	Position    int       `json:"position"`
+	Permissions int64     `json:"permissions"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Guild struct {
@@ -43,6 +63,7 @@ type Guild struct {
 	OwnerID   uuid.UUID    `json:"owner_id"`
 	Channels  []Channel    `json:"channels,omitempty"`
 	Members   []UserPublic `json:"members,omitempty"`
+	Roles     []Role       `json:"roles,omitempty"`
 	CreatedAt time.Time    `json:"created_at"`
 	UpdatedAt time.Time    `json:"updated_at"`
 }
@@ -89,6 +110,8 @@ type Message struct {
 	Attachments []Attachment `json:"attachments"`
 	ReplyToID   *uuid.UUID   `json:"reply_to_id,omitempty"`
 	IsPinned    bool         `json:"is_pinned"`
+	IsEdited    bool         `json:"is_edited"`
+	EditedAt    *time.Time   `json:"edited_at,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
@@ -104,7 +127,6 @@ type VoiceSession struct {
 	JoinedAt        time.Time  `json:"joined_at"`
 }
 
-// Guild Invite (10-character hash)
 type GuildInvite struct {
 	Code      string      `json:"code"`
 	GuildID   uuid.UUID   `json:"guild_id"`
@@ -115,7 +137,6 @@ type GuildInvite struct {
 	CreatedAt time.Time   `json:"created_at"`
 }
 
-// Friendship / Friend Request
 type Friendship struct {
 	ID        uuid.UUID  `json:"id"`
 	UserID    uuid.UUID  `json:"user_id"`
@@ -125,6 +146,29 @@ type Friendship struct {
 	Friend    UserPublic `json:"friend,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// Direct Message Room
+type DMRoom struct {
+	ID          uuid.UUID    `json:"id"`
+	User1ID     uuid.UUID    `json:"user1_id"`
+	User2ID     uuid.UUID    `json:"user2_id"`
+	Recipient   UserPublic   `json:"recipient"`
+	LastMessage *DMMessage   `json:"last_message,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+}
+
+// Direct Message
+type DMMessage struct {
+	ID          uuid.UUID    `json:"id"`
+	DMRoomID    uuid.UUID    `json:"dm_room_id"`
+	AuthorID    uuid.UUID    `json:"author_id"`
+	Author      UserPublic   `json:"author"`
+	Content     string       `json:"content"`
+	Attachments []Attachment `json:"attachments"`
+	IsEdited    bool         `json:"is_edited"`
+	EditedAt    *time.Time   `json:"edited_at,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
 }
 
 // WebSocket Event Types
@@ -140,8 +184,17 @@ const (
 	EventVoiceStateUpdate    WSEventType = "VOICE_STATE_UPDATE"
 	EventGuildCreate         WSEventType = "GUILD_CREATE"
 	EventChannelCreate       WSEventType = "CHANNEL_CREATE"
+	EventChannelUpdate       WSEventType = "CHANNEL_UPDATE"
+	EventChannelDelete       WSEventType = "CHANNEL_DELETE"
 	EventFriendRequestCreate WSEventType = "FRIEND_REQUEST_CREATE"
 	EventFriendRequestUpdate WSEventType = "FRIEND_REQUEST_UPDATE"
+	EventDMMessageCreate     WSEventType = "DM_MESSAGE_CREATE"
+	EventDMMessageUpdate     WSEventType = "DM_MESSAGE_UPDATE"
+	EventDMMessageDelete     WSEventType = "DM_MESSAGE_DELETE"
+	EventRoleCreate          WSEventType = "ROLE_CREATE"
+	EventRoleUpdate          WSEventType = "ROLE_UPDATE"
+	EventRoleDelete          WSEventType = "ROLE_DELETE"
+	EventUserUpdate          WSEventType = "USER_UPDATE"
 )
 
 type WSEvent struct {

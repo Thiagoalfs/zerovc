@@ -1,9 +1,9 @@
 import React from 'react';
-import { Hash, Volume2, Plus, UserPlus, Users, X } from 'lucide-react';
+import { Hash, Volume2, Plus, UserPlus, Users, X, Settings } from 'lucide-react';
 import { Channel } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
 import { useVoiceStore } from '../../stores/voiceStore';
-import { useFriendStore } from '../../stores/friendStore';
+import { useAuthStore } from '../../stores/authStore';
 import { UserBar } from './UserBar';
 
 interface ChannelListProps {
@@ -11,6 +11,8 @@ interface ChannelListProps {
   onOpenCreateChannel: (type: 'text' | 'voice') => void;
   onOpenInviteModal: () => void;
   onOpenSettings: () => void;
+  onOpenServerSettings?: () => void;
+  onOpenChannelSettings?: (channel: Channel) => void;
   onOpenScreenShare: () => void;
   onCloseMobileDrawer?: () => void;
 }
@@ -20,13 +22,16 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onOpenCreateChannel,
   onOpenInviteModal,
   onOpenSettings,
+  onOpenServerSettings,
+  onOpenChannelSettings,
   onOpenScreenShare,
   onCloseMobileDrawer,
 }) => {
+  const { user } = useAuthStore();
   const { activeGuild, activeChannel, selectChannel } = useGuildStore();
   const { currentChannelId, joinVoice, isConnected, speakingUserIds } = useVoiceStore();
-  const { friends } = useFriendStore();
 
+  const isOwner = activeGuild?.owner_id === user?.id;
   const textChannels = activeGuild?.channels?.filter((c) => c.type === 'text') || [];
   const voiceChannels = activeGuild?.channels?.filter((c) => c.type === 'voice') || [];
 
@@ -61,8 +66,18 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         </div>
       ) : (
         <div className="h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm">
-          <span className="truncate max-w-[140px]">{activeGuild?.name || 'Selecione um servidor'}</span>
-          <div className="flex items-center gap-1">
+          <span className="truncate max-w-[130px]">{activeGuild?.name || 'Servidor'}</span>
+          <div className="flex items-center gap-0.5">
+            {isOwner && onOpenServerSettings && (
+              <button
+                onClick={onOpenServerSettings}
+                className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/10 transition-colors"
+                title="Configurações do Servidor & Cargos"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
+
             {activeGuild && (
               <button
                 onClick={onOpenInviteModal}
@@ -72,6 +87,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 <UserPlus className="w-4 h-4 text-brand-500" />
               </button>
             )}
+
             {onCloseMobileDrawer && (
               <button
                 onClick={onCloseMobileDrawer}
@@ -84,48 +100,9 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         </div>
       )}
 
-      {/* Channels List / Friends DM List */}
+      {/* Channels List */}
       <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4 no-scrollbar">
-        {isHomeActive ? (
-          <div>
-            <div className="flex items-center justify-between px-2 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
-              <span>MENSAGENS DIRETAS</span>
-            </div>
-
-            <div className="space-y-0.5">
-              {friends.length === 0 ? (
-                <div className="px-2 py-4 text-xs text-gray-500 text-center">
-                  Adicione amigos para começar a conversar!
-                </div>
-              ) : (
-                friends.map((f) => {
-                  const target = f.friend?.id ? f.friend : f.user;
-                  return (
-                    <button
-                      key={f.id}
-                      onClick={() => onCloseMobileDrawer?.()}
-                      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm text-gray-400 hover:bg-background-light/40 hover:text-gray-200 transition-colors"
-                    >
-                      <div className="relative w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0">
-                        {target?.avatar_url ? (
-                          <img src={target.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
-                        ) : (
-                          <span>{target?.username?.[0]?.toUpperCase()}</span>
-                        )}
-                        <div
-                          className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background-darker ${
-                            target?.status === 'online' ? 'bg-online' : 'bg-offline'
-                          }`}
-                        />
-                      </div>
-                      <span className="truncate text-gray-300 font-medium">{target?.username}</span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        ) : (
+        {!isHomeActive && (
           <>
             {/* Text Channels Section */}
             <div>
@@ -146,18 +123,35 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 {textChannels.map((channel) => {
                   const isActive = activeChannel?.id === channel.id;
                   return (
-                    <button
+                    <div
                       key={channel.id}
-                      onClick={() => handleChannelClick(channel)}
-                      className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                      className={`group flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${
                         isActive
                           ? 'bg-background-light text-white font-medium'
                           : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
                       }`}
                     >
-                      <Hash className="w-4 h-4 flex-shrink-0 text-gray-400" />
-                      <span className="truncate">{channel.name}</span>
-                    </button>
+                      <button
+                        onClick={() => handleChannelClick(channel)}
+                        className="flex items-center gap-2 truncate flex-1 text-left"
+                      >
+                        <Hash className="w-4 h-4 flex-shrink-0 text-gray-400" />
+                        <span className="truncate">{channel.name}</span>
+                      </button>
+
+                      {isOwner && onOpenChannelSettings && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenChannelSettings(channel);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white p-0.5 rounded transition-opacity"
+                          title="Editar Canal"
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -183,19 +177,34 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   const isInThisVoice = currentChannelId === channel.id && isConnected;
                   return (
                     <div key={channel.id} className="space-y-0.5">
-                      <button
-                        onClick={() => handleVoiceChannelClick(channel)}
-                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                      <div
+                        className={`group flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${
                           isInThisVoice
                             ? 'bg-online/15 text-online font-medium'
                             : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
                         }`}
                       >
-                        <div className="flex items-center gap-2 truncate">
+                        <button
+                          onClick={() => handleVoiceChannelClick(channel)}
+                          className="flex items-center gap-2 truncate flex-1 text-left"
+                        >
                           <Volume2 className={`w-4 h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400'}`} />
                           <span className="truncate">{channel.name}</span>
-                        </div>
-                      </button>
+                        </button>
+
+                        {isOwner && onOpenChannelSettings && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenChannelSettings(channel);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white p-0.5 rounded transition-opacity"
+                            title="Editar Canal"
+                          >
+                            <Settings className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
 
                       {/* Connected Voice Members */}
                       {channel.voice_sessions && channel.voice_sessions.length > 0 && (
@@ -216,11 +225,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                                     {vs.user?.avatar_url ? (
                                       <img src={vs.user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                                     ) : (
-                                      <span>{vs.user?.username?.[0]?.toUpperCase() || 'U'}</span>
+                                      <span>{vs.user?.display_name?.[0]?.toUpperCase() || vs.user?.username?.[0]?.toUpperCase() || 'U'}</span>
                                     )}
                                   </div>
                                   <span className={`truncate ${isSpeaking ? 'text-white font-semibold' : ''}`}>
-                                    {vs.user?.username || 'Usuário'}
+                                    {vs.user?.display_name || vs.user?.username || 'Usuário'}
                                   </span>
                                 </div>
                               </div>

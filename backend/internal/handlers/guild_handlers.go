@@ -184,7 +184,20 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Get Channels
+	// 3. Get Roles
+	rQuery := `SELECT id, guild_id, name, color, position, permissions, created_at FROM guild_roles WHERE guild_id = $1 ORDER BY position ASC, created_at ASC`
+	rRows, err := h.db.Pool.Query(r.Context(), rQuery, guildID)
+	if err == nil {
+		for rRows.Next() {
+			var role models.Role
+			if scanErr := rRows.Scan(&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.CreatedAt); scanErr == nil {
+				guild.Roles = append(guild.Roles, role)
+			}
+		}
+		rRows.Close()
+	}
+
+	// 4. Get Channels
 	chanQuery := `SELECT id, guild_id, name, type, topic, position, created_at FROM channels WHERE guild_id = $1 ORDER BY position ASC, name ASC`
 	cRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildID)
 	if err == nil {
@@ -192,11 +205,10 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		for cRows.Next() {
 			var ch models.Channel
 			if err := cRows.Scan(&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.Topic, &ch.Position, &ch.CreatedAt); err == nil {
-				// If voice channel, get active voice sessions
 				if ch.Type == models.ChannelTypeVoice {
 					vQuery := `
 						SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, vs.is_screensharing, vs.joined_at,
-						       u.username, u.avatar_url, u.status, u.custom_status
+						       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
 						FROM voice_sessions vs
 						INNER JOIN users u ON u.id = vs.user_id
 						WHERE vs.channel_id = $1
@@ -207,7 +219,7 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 							var vs models.VoiceSession
 							if scanErr := vRows.Scan(
 								&vs.ID, &vs.ChannelID, &vs.UserID, &vs.IsMuted, &vs.IsDeafened, &vs.IsScreensharing, &vs.JoinedAt,
-								&vs.User.Username, &vs.User.AvatarURL, &vs.User.Status, &vs.User.CustomStatus,
+								&vs.User.Username, &vs.User.DisplayName, &vs.User.AvatarURL, &vs.User.BannerURL, &vs.User.Bio, &vs.User.Status, &vs.User.CustomStatus,
 							); scanErr == nil {
 								vs.User.ID = vs.UserID
 								ch.VoiceSessions = append(ch.VoiceSessions, vs)
@@ -221,9 +233,9 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 4. Get Members
+	// 5. Get Members with Roles
 	memQuery := `
-		SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status
+		SELECT u.id, u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
 		FROM users u
 		INNER JOIN guild_members gm ON gm.user_id = u.id
 		WHERE gm.guild_id = $1
@@ -234,7 +246,25 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		defer mRows.Close()
 		for mRows.Next() {
 			var u models.UserPublic
-			if err := mRows.Scan(&u.ID, &u.Username, &u.AvatarURL, &u.Status, &u.CustomStatus); err == nil {
+			if err := mRows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus); err == nil {
+				// Query roles for member
+				roleQuery := `
+					SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, gr.created_at
+					FROM guild_roles gr
+					INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+					WHERE gmr.guild_id = $1 AND gmr.user_id = $2
+					ORDER BY gr.position ASC
+				`
+				mrRows, mrErr := h.db.Pool.Query(r.Context(), roleQuery, guildID, u.ID)
+				if mrErr == nil {
+					for mrRows.Next() {
+						var mr models.Role
+						if mrScan := mrRows.Scan(&mr.ID, &mr.GuildID, &mr.Name, &mr.Color, &mr.Position, &mr.Permissions, &mr.CreatedAt); mrScan == nil {
+							u.Roles = append(u.Roles, mr)
+						}
+					}
+					mrRows.Close()
+				}
 				guild.Members = append(guild.Members, u)
 			}
 		}

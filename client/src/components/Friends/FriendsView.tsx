@@ -1,22 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Check, X, MessageSquare, Trash2, Menu } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
+import { useDMStore } from '../../stores/dmStore';
 
 interface FriendsViewProps {
   onOpenMobileDrawer?: () => void;
+  onOpenDM?: (userId: string) => void;
 }
 
-export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer }) => {
+export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, onOpenDM }) => {
   const [activeTab, setActiveTab] = useState<'online' | 'all' | 'pending' | 'add'>('online');
   const [usernameInput, setUsernameInput] = useState('');
   const [requestStatus, setRequestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { friends, pending, incoming, fetchFriends, sendRequest, acceptRequest, removeFriend } = useFriendStore();
+  const { openDMWithUser } = useDMStore();
 
   useEffect(() => {
     fetchFriends();
   }, []);
+
+  const handleStartDM = async (userId: string) => {
+    await openDMWithUser(userId);
+    if (onOpenDM) onOpenDM(userId);
+  };
 
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,7 +161,6 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer }) 
         {/* PENDING TAB */}
         {activeTab === 'pending' && (
           <div className="space-y-6 max-w-2xl">
-            {/* Incoming Requests */}
             <div>
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                 PEDIDOS RECEBIDOS — {incoming.length}
@@ -172,12 +179,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer }) 
                           {req.user?.avatar_url ? (
                             <img src={req.user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                           ) : (
-                            <span>{req.user?.username?.[0]?.toUpperCase()}</span>
+                            <span>{req.user?.display_name?.[0]?.toUpperCase() || req.user?.username?.[0]?.toUpperCase()}</span>
                           )}
                         </div>
                         <div className="truncate">
-                          <span className="font-semibold text-white text-sm truncate block">{req.user?.username}</span>
-                          <span className="block text-[11px] text-gray-400">Pedido recebido</span>
+                          <span className="font-semibold text-white text-sm truncate block">
+                            {req.user?.display_name || req.user?.username}
+                          </span>
+                          <span className="block text-[11px] text-gray-400">@{req.user?.username}</span>
                         </div>
                       </div>
 
@@ -203,7 +212,6 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer }) 
               )}
             </div>
 
-            {/* Sent Pending Requests */}
             <div>
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                 PEDIDOS ENVIADOS — {pending.length}
@@ -222,12 +230,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer }) 
                           {req.friend?.avatar_url ? (
                             <img src={req.friend.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                           ) : (
-                            <span>{req.friend?.username?.[0]?.toUpperCase()}</span>
+                            <span>{req.friend?.display_name?.[0]?.toUpperCase() || req.friend?.username?.[0]?.toUpperCase()}</span>
                           )}
                         </div>
                         <div className="truncate">
-                          <span className="font-semibold text-white text-sm truncate block">{req.friend?.username}</span>
-                          <span className="block text-[11px] text-gray-400">Aguardando resposta...</span>
+                          <span className="font-semibold text-white text-sm truncate block">
+                            {req.friend?.display_name || req.friend?.username}
+                          </span>
+                          <span className="block text-[11px] text-gray-400">@{req.friend?.username}</span>
                         </div>
                       </div>
 
@@ -277,7 +287,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer }) 
                         {target?.avatar_url ? (
                           <img src={target.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                         ) : (
-                          <span>{target?.username?.[0]?.toUpperCase()}</span>
+                          <span>{target?.display_name?.[0]?.toUpperCase() || target?.username?.[0]?.toUpperCase()}</span>
                         )}
                         <div
                           className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background-dark ${
@@ -293,17 +303,20 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer }) 
                       </div>
 
                       <div className="truncate">
-                        <span className="font-semibold text-white text-sm block truncate">{target?.username}</span>
-                        <span className="block text-xs text-gray-400 capitalize">
-                          {target?.status || 'Offline'}
+                        <span className="font-semibold text-white text-sm block truncate">
+                          {target?.display_name || target?.username}
+                        </span>
+                        <span className="block text-xs text-gray-400">
+                          {target?.custom_status || (target?.status ? target.status : 'Offline')}
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <button
+                        onClick={() => target?.id && handleStartDM(target.id)}
                         className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-background-light hover:bg-brand-500 text-gray-300 hover:text-white flex items-center justify-center transition-colors"
-                        title="Iniciar Conversa"
+                        title="Enviar Mensagem Direta"
                       >
                         <MessageSquare className="w-4 h-4" />
                       </button>

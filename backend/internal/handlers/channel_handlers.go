@@ -33,6 +33,16 @@ type CreateChannelRequest struct {
 	Topic string             `json:"topic"`
 }
 
+type UpdateChannelRequest struct {
+	Name     *string `json:"name,omitempty"`
+	Topic    *string `json:"topic,omitempty"`
+	Position *int    `json:"position,omitempty"`
+}
+
+type ReorderChannelsRequest struct {
+	ChannelIDs []uuid.UUID `json:"channel_ids"`
+}
+
 func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -47,11 +57,10 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify user is member of the guild
 	var isMember bool
 	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
-		http.Error(w, `{"error":"forbidden: you must be a member of this server to create channels"}`, http.StatusForbidden)
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
 
@@ -79,7 +88,6 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Broadcast channel creation to guild
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: models.EventChannelCreate,
 		Data: channel,
@@ -88,6 +96,117 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(channel)
+}
+
+func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	channelIDStr := chi.URLParam(r, "id")
+	channelID, err := uuid.Parse(channelIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var guildID, ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT c.guild_id, g.owner_id FROM channels c INNER JOIN guilds g ON g.id = c.guild_id WHERE c.id = $1", channelID).Scan(&guildID, &ownerID)
+	if err != nil || ownerID != userID {
+		http.Error(w, `{"error":"forbidden: only server owner can edit channels"}`, http.StatusForbidden)
+		return
+	}
+
+	var req UpdateChannelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	var channel models.Channel
+	query := `
+		UPDATE channels
+		SET name = COALESCE($1, name),
+		    topic = COALESCE($2, topic),
+		    position = COALESCE($3, position)
+		WHERE id = $4
+		RETURNING id, guild_id, name, type, topic, position, created_at
+	`
+	err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, channelID).Scan(
+		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.Topic, &channel.Position, &channel.CreatedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update channel"}`, http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: models.EventChannelUpdate,
+		Data: channel,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(channel)
+}
+
+func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	channelIDStr := chi.URLParam(r, "id")
+	channelID, err := uuid.Parse(channelIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var guildID, ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT c.guild_id, g.owner_id FROM channels c INNER JOIN guilds g ON g.id = c.guild_id WHERE c.id = $1", channelID).Scan(&guildID, &ownerID)
+	if err != nil || ownerID != userID {
+		http.Error(w, `{"error":"forbidden: only server owner can delete channels"}`, http.StatusForbidden)
+		return
+	}
+
+	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM channels WHERE id = $1", channelID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to delete channel"}`, http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: models.EventChannelDelete,
+		Data: map[string]any{"id": channelID, "guild_id": guildID},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "id": channelID})
+}
+
+func (h *ChannelHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	guildIDStr := chi.URLParam(r, "guildID")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req ReorderChannelsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	for idx, id := range req.ChannelIDs {
+		h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1 WHERE id = $2 AND guild_id = $3", idx, id, guildID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
 
 type JoinVoiceResponse struct {
@@ -110,7 +229,6 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Get channel and verify it is a voice channel
 	var guildID uuid.UUID
 	var channelType models.ChannelType
 	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, type FROM channels WHERE id = $1", channelID).Scan(&guildID, &channelType)
@@ -119,25 +237,22 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Verify guild membership
 	var isMember bool
 	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
-		http.Error(w, `{"error":"forbidden: you are not a member of this server"}`, http.StatusForbidden)
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
 
-	// 3. Get user info
 	var user models.User
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT id, username, avatar_url, status, custom_status FROM users WHERE id = $1", userID).Scan(
-		&user.ID, &user.Username, &user.AvatarURL, &user.Status, &user.CustomStatus,
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1", userID).Scan(
+		&user.ID, &user.Username, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
 		return
 	}
 
-	// 4. Upsert voice session for this user
 	voiceSessionQuery := `
 		INSERT INTO voice_sessions (channel_id, user_id)
 		VALUES ($1, $2)
@@ -155,7 +270,6 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	}
 	session.User = user.ToPublic()
 
-	// 5. Generate LiveKit Token (room name = channelID.String())
 	roomName := channelID.String()
 	token, err := h.livekit.GenerateJoinToken(roomName, userID, user.Username, true)
 	if err != nil {
@@ -163,7 +277,6 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Broadcast voice state update to guild
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: models.EventVoiceStateUpdate,
 		Data: map[string]any{
@@ -203,7 +316,6 @@ func (h *ChannelHandler) LeaveVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Broadcast leave event
 	if guildID != uuid.Nil {
 		h.hub.BroadcastToGuild(guildID, models.WSEvent{
 			Type: models.EventVoiceStateUpdate,
@@ -265,7 +377,6 @@ func (h *ChannelHandler) UpdateVoiceState(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Broadcast updated state
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: models.EventVoiceStateUpdate,
 		Data: map[string]any{

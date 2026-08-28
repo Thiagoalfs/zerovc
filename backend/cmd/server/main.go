@@ -91,11 +91,14 @@ func main() {
 
 	// 4. Initialize Handlers
 	authHandler := handlers.NewAuthHandler(db, authService)
+	userHandler := handlers.NewUserHandler(db, hub)
 	guildHandler := handlers.NewGuildHandler(db, hub)
 	channelHandler := handlers.NewChannelHandler(db, hub, livekitService)
 	messageHandler := handlers.NewMessageHandler(db, hub)
 	inviteHandler := handlers.NewInviteHandler(db, hub)
 	friendHandler := handlers.NewFriendHandler(db, hub)
+	roleHandler := handlers.NewRoleHandler(db, hub)
+	dmHandler := handlers.NewDMHandler(db, hub)
 
 	// 5. Router & Middleware
 	r := chi.NewRouter()
@@ -108,7 +111,7 @@ func main() {
 	// CORS Configuration
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
@@ -134,8 +137,9 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(authService.Middleware)
 
-		// Current User
+		// Current User & Profile Customization
 		r.Get("/api/auth/me", authHandler.Me)
+		r.Patch("/api/users/@me", userHandler.UpdateProfile)
 
 		// Guilds (Protected)
 		r.Get("/api/guilds", guildHandler.List)
@@ -143,7 +147,20 @@ func main() {
 		r.Get("/api/guilds/{id}", guildHandler.GetDetails)
 		r.Post("/api/guilds/{id}/join", guildHandler.Join)
 		r.Post("/api/guilds/{id}/invites", inviteHandler.CreateInvite)
+
+		// Channels (Protected)
 		r.Post("/api/guilds/{guildID}/channels", channelHandler.Create)
+		r.Patch("/api/channels/{id}", channelHandler.Update)
+		r.Delete("/api/channels/{id}", channelHandler.Delete)
+		r.Put("/api/guilds/{guildID}/channels/positions", channelHandler.Reorder)
+
+		// Server Roles (Protected)
+		r.Get("/api/guilds/{guildID}/roles", roleHandler.List)
+		r.Post("/api/guilds/{guildID}/roles", roleHandler.Create)
+		r.Patch("/api/guilds/{guildID}/roles/{roleID}", roleHandler.Update)
+		r.Delete("/api/guilds/{guildID}/roles/{roleID}", roleHandler.Delete)
+		r.Post("/api/guilds/{guildID}/members/{userID}/roles/{roleID}", roleHandler.AssignRole)
+		r.Delete("/api/guilds/{guildID}/members/{userID}/roles/{roleID}", roleHandler.RemoveRole)
 
 		// Join server via 10-char invite hash
 		r.Post("/api/invites/{code}/join", inviteHandler.JoinByInvite)
@@ -154,9 +171,17 @@ func main() {
 		r.Post("/api/friends/{id}/accept", friendHandler.AcceptRequest)
 		r.Post("/api/friends/{id}/reject", friendHandler.RemoveFriend)
 
+		// Direct Messages 1x1 (Protected)
+		r.Get("/api/dms", dmHandler.ListRooms)
+		r.Post("/api/dms", dmHandler.CreateOrGetRoom)
+		r.Get("/api/dms/{roomID}/messages", dmHandler.ListMessages)
+		r.Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)
+
 		// Messages (Protected)
 		r.Get("/api/channels/{channelID}/messages", messageHandler.List)
 		r.Post("/api/channels/{channelID}/messages", messageHandler.Send)
+		r.Patch("/api/channels/{channelID}/messages/{messageID}", messageHandler.Update)
+		r.Delete("/api/channels/{channelID}/messages/{messageID}", messageHandler.Delete)
 
 		// Voice & WebRTC (Protected)
 		r.Post("/api/channels/{id}/join-voice", channelHandler.JoinVoice)
@@ -171,7 +196,6 @@ func main() {
 				return
 			}
 
-			// Load and sync user's authorized guilds into the hub
 			rows, err := db.Pool.Query(r.Context(), "SELECT guild_id FROM guild_members WHERE user_id = $1", userID)
 			if err == nil {
 				defer rows.Close()
@@ -203,7 +227,6 @@ func main() {
 				return
 			}
 
-			// SPA Fallback: serve index.html for React Router / client routes
 			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
 		})
 		log.Printf("[ZeroVC] Web App enabled: serving from %s", webDir)
