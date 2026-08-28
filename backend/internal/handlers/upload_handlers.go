@@ -50,6 +50,16 @@ func (h *UploadHandler) UploadGuildIcon(w http.ResponseWriter, r *http.Request) 
 	h.handleUpload(w, r, "guild", "icon")
 }
 
+func (h *UploadHandler) UploadGuildBanner(w http.ResponseWriter, r *http.Request) {
+	_, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	h.handleUpload(w, r, "guild", "banner")
+}
+
 func (h *UploadHandler) UploadBanner(w http.ResponseWriter, r *http.Request) {
 	_, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {

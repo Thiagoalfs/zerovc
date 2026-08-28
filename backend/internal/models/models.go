@@ -64,6 +64,7 @@ type Guild struct {
 	ID        uuid.UUID    `json:"id"`
 	Name      string       `json:"name"`
 	IconURL   string       `json:"icon_url"`
+	BannerURL string       `json:"banner_url"`
 	OwnerID   uuid.UUID    `json:"owner_id"`
 	Channels  []Channel    `json:"channels,omitempty"`
 	Members   []UserPublic `json:"members,omitempty"`

@@ -406,6 +406,24 @@ export const App: React.FC = () => {
         }
       };
 
+      const handleGuildUpdate = (event: any) => {
+        if (event.data?.id) {
+          useGuildStore.getState().handleGuildUpdateEvent(event.data);
+        }
+      };
+
+      const handleGuildDelete = (event: any) => {
+        const deletedId = event.data?.guild_id || event.data?.id;
+        if (deletedId) {
+          useGuildStore.getState().handleGuildDeleteEvent(deletedId);
+          const currentActive = useGuildStore.getState().activeGuild;
+          if (!currentActive || currentActive.id === deletedId) {
+            setIsHomeActive(true);
+            navigateTo('/@me', true);
+          }
+        }
+      };
+
       socket.on('MESSAGE_CREATE', handleMessageCreate);
       socket.on('MESSAGE_UPDATE', handleMessageUpdate);
       socket.on('MESSAGE_DELETE', handleMessageDelete);
@@ -426,6 +444,8 @@ export const App: React.FC = () => {
       socket.on('FRIEND_REQUEST_CREATE', handleFriendUpdate);
       socket.on('FRIEND_REQUEST_UPDATE', handleFriendUpdate);
       socket.on('USER_UPDATE', handleUserUpdate);
+      socket.on('GUILD_UPDATE', handleGuildUpdate);
+      socket.on('GUILD_DELETE', handleGuildDelete);
       socket.on('GUILD_MEMBER_ADD', handleGuildMemberAdd);
       socket.on('GUILD_MEMBER_REMOVE', handleGuildMemberRemove);
       socket.on('GUILD_BAN_ADD', handleGuildMemberRemove);
@@ -454,6 +474,8 @@ export const App: React.FC = () => {
         socket.off('FRIEND_REQUEST_CREATE', handleFriendUpdate);
         socket.off('FRIEND_REQUEST_UPDATE', handleFriendUpdate);
         socket.off('USER_UPDATE', handleUserUpdate);
+        socket.off('GUILD_UPDATE', handleGuildUpdate);
+        socket.off('GUILD_DELETE', handleGuildDelete);
         socket.off('GUILD_MEMBER_ADD', handleGuildMemberAdd);
         socket.off('GUILD_MEMBER_REMOVE', handleGuildMemberRemove);
         socket.off('GUILD_BAN_ADD', handleGuildMemberRemove);
