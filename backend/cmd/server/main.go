@@ -176,12 +176,17 @@ func main() {
 		r.Post("/api/dms", dmHandler.CreateOrGetRoom)
 		r.Get("/api/dms/{roomID}/messages", dmHandler.ListMessages)
 		r.Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)
+		r.Post("/api/dms/{roomID}/messages/{messageID}/reactions", dmHandler.AddReaction)
+		r.Delete("/api/dms/{roomID}/messages/{messageID}/reactions/{emoji}", dmHandler.RemoveReaction)
 
 		// Messages (Protected)
 		r.Get("/api/channels/{channelID}/messages", messageHandler.List)
 		r.Post("/api/channels/{channelID}/messages", messageHandler.Send)
 		r.Patch("/api/channels/{channelID}/messages/{messageID}", messageHandler.Update)
 		r.Delete("/api/channels/{channelID}/messages/{messageID}", messageHandler.Delete)
+		r.Post("/api/channels/{channelID}/messages/{messageID}/reactions", messageHandler.AddReaction)
+		r.Delete("/api/channels/{channelID}/messages/{messageID}/reactions/{emoji}", messageHandler.RemoveReaction)
+		r.Post("/api/channels/{channelID}/messages/{messageID}/pin", messageHandler.TogglePin)
 
 		// Voice & WebRTC (Protected)
 		r.Post("/api/channels/{id}/join-voice", channelHandler.JoinVoice)

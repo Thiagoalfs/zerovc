@@ -170,10 +170,36 @@ export const App: React.FC = () => {
         }
       };
 
+      const handleMessageReactionAdd = (event: any) => {
+        useGuildStore.getState().handleReactionEvent({ ...event.data, is_add: true });
+      };
+
+      const handleMessageReactionRemove = (event: any) => {
+        useGuildStore.getState().handleReactionEvent({ ...event.data, is_add: false });
+      };
+
+      const handleMessagePin = (event: any) => {
+        useGuildStore.getState().handlePinEvent(event.data);
+      };
+
+      const handleDMReactionAdd = (event: any) => {
+        useDMStore.getState().handleDMReactionEvent({ ...event.data, is_add: true });
+      };
+
+      const handleDMReactionRemove = (event: any) => {
+        useDMStore.getState().handleDMReactionEvent({ ...event.data, is_add: false });
+      };
+
       socket.on('MESSAGE_CREATE', handleMessageCreate);
       socket.on('MESSAGE_UPDATE', handleMessageUpdate);
       socket.on('MESSAGE_DELETE', handleMessageDelete);
+      socket.on('MESSAGE_REACTION_ADD', handleMessageReactionAdd);
+      socket.on('MESSAGE_REACTION_REMOVE', handleMessageReactionRemove);
+      socket.on('MESSAGE_PIN', handleMessagePin);
+      socket.on('MESSAGE_UNPIN', handleMessagePin);
       socket.on('DM_MESSAGE_CREATE', handleDMMessageCreate);
+      socket.on('DM_REACTION_ADD', handleDMReactionAdd);
+      socket.on('DM_REACTION_REMOVE', handleDMReactionRemove);
       socket.on('VOICE_STATE_UPDATE', handleVoiceStateUpdate);
       socket.on('TYPING_START', handleTypingStart);
       socket.on('FRIEND_REQUEST_CREATE', handleFriendUpdate);
@@ -185,7 +211,13 @@ export const App: React.FC = () => {
         socket.off('MESSAGE_CREATE', handleMessageCreate);
         socket.off('MESSAGE_UPDATE', handleMessageUpdate);
         socket.off('MESSAGE_DELETE', handleMessageDelete);
+        socket.off('MESSAGE_REACTION_ADD', handleMessageReactionAdd);
+        socket.off('MESSAGE_REACTION_REMOVE', handleMessageReactionRemove);
+        socket.off('MESSAGE_PIN', handleMessagePin);
+        socket.off('MESSAGE_UNPIN', handleMessagePin);
         socket.off('DM_MESSAGE_CREATE', handleDMMessageCreate);
+        socket.off('DM_REACTION_ADD', handleDMReactionAdd);
+        socket.off('DM_REACTION_REMOVE', handleDMReactionRemove);
         socket.off('VOICE_STATE_UPDATE', handleVoiceStateUpdate);
         socket.off('TYPING_START', handleTypingStart);
         socket.off('FRIEND_REQUEST_CREATE', handleFriendUpdate);

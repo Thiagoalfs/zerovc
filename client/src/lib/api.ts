@@ -111,6 +111,11 @@ export const api = {
   },
 
   channels: {
+    create: (guildId: string, data: { name: string; type: 'text' | 'voice' | 'category'; topic?: string }) =>
+      request<Channel>(`/guilds/${guildId}/channels`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     getMessages: (channelId: string, limit = 50, before?: string) => {
       const query = new URLSearchParams({ limit: String(limit) });
       if (before) query.append('before', before);
@@ -157,6 +162,19 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    addReaction: (channelId: string, messageId: string, emoji: string) =>
+      request<{ success: boolean; emoji: string }>(`/channels/${channelId}/messages/${messageId}/reactions`, {
+        method: 'POST',
+        body: JSON.stringify({ emoji }),
+      }),
+    removeReaction: (channelId: string, messageId: string, emoji: string) =>
+      request<{ success: boolean }>(`/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+        method: 'DELETE',
+      }),
+    togglePin: (channelId: string, messageId: string) =>
+      request<{ success: boolean; is_pinned: boolean }>(`/channels/${channelId}/messages/${messageId}/pin`, {
+        method: 'POST',
+      }),
   },
 
   roles: {
@@ -194,10 +212,19 @@ export const api = {
       }),
     getMessages: (roomId: string, limit = 50) =>
       request<DMMessage[]>(`/dms/${roomId}/messages?limit=${limit}`),
-    sendMessage: (roomId: string, data: { content: string; attachments?: any[] }) =>
+    sendMessage: (roomId: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
       request<DMMessage>(`/dms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    addReaction: (roomId: string, messageId: string, emoji: string) =>
+      request<{ success: boolean; emoji: string }>(`/dms/${roomId}/messages/${messageId}/reactions`, {
+        method: 'POST',
+        body: JSON.stringify({ emoji }),
+      }),
+    removeReaction: (roomId: string, messageId: string, emoji: string) =>
+      request<{ success: boolean }>(`/dms/${roomId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+        method: 'DELETE',
       }),
   },
 

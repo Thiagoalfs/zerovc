@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import { Channel, Guild, Message, Role, VoiceSession } from '../types';
 import { api } from '../lib/api';
+import { playMessageSound } from '../utils/audio';
+import { useAuthStore } from './authStore';
 
 interface GuildState {
   guilds: Guild[];
   activeGuild: Guild | null;
   activeChannel: Channel | null;
   messages: Message[];
+  unreadChannels: Set<string>;
   isLoadingGuilds: boolean;
   isLoadingMessages: boolean;
   typingUsers: Map<string, Set<string>>;
@@ -15,17 +18,22 @@ interface GuildState {
   selectGuild: (guildId: string) => Promise<void>;
   selectChannel: (channel: Channel) => Promise<void>;
   createGuild: (name: string, iconUrl?: string) => Promise<Guild>;
-  createChannel: (guildId: string, name: string, type: 'text' | 'voice', topic?: string) => Promise<Channel>;
+  createChannel: (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string) => Promise<Channel>;
   updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number }) => Promise<void>;
   deleteChannel: (channelId: string) => Promise<void>;
   reorderChannels: (guildId: string, channelIds: string[]) => Promise<void>;
 
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, replyToId?: string) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
+  toggleReaction: (messageId: string, emoji: string) => Promise<void>;
+  togglePin: (messageId: string) => Promise<void>;
+
   addMessage: (message: Message) => void;
   updateMessageInStore: (message: Message) => void;
   removeMessageFromStore: (messageId: string) => void;
+  handleReactionEvent: (data: { message_id: string; channel_id: string; user_id: string; emoji: string; is_add: boolean }) => void;
+  handlePinEvent: (data: { message_id: string; channel_id: string; is_pinned: boolean }) => void;
 
   updateVoiceState: (action: string, session?: VoiceSession, channelId?: string, userId?: string) => void;
   setTyping: (channelId: string, userId: string) => void;
@@ -43,6 +51,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   activeGuild: null,
   activeChannel: null,
   messages: [],
+  unreadChannels: new Set(),
   isLoadingGuilds: false,
   isLoadingMessages: false,
   typingUsers: new Map(),
@@ -70,50 +79,40 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         set({ activeChannel: null, messages: [] });
       }
     } catch (err) {
-      console.error('Failed to get guild details:', err);
+      console.error('Failed to select guild:', err);
     }
   },
 
   selectChannel: async (channel: Channel) => {
-    set({ activeChannel: channel, messages: [], isLoadingMessages: true });
+    set((state) => {
+      const unread = new Set(state.unreadChannels);
+      unread.delete(channel.id);
+      return { activeChannel: channel, unreadChannels: unread, isLoadingMessages: channel.type === 'text' };
+    });
+
     if (channel.type === 'text') {
       try {
         const messages = await api.channels.getMessages(channel.id);
         set({ messages, isLoadingMessages: false });
       } catch (err) {
-        console.error('Failed to get messages:', err);
+        console.error('Failed to fetch messages for channel:', err);
         set({ isLoadingMessages: false });
       }
-    } else {
-      set({ isLoadingMessages: false });
     }
   },
 
   createGuild: async (name: string, iconUrl?: string) => {
-    const newGuild = await api.guilds.create({ name, icon_url: iconUrl });
-    const fullGuild = await api.guilds.getDetails(newGuild.id);
-    set((state) => ({
-      guilds: [...state.guilds, fullGuild],
-      activeGuild: fullGuild,
-    }));
-    if (fullGuild.channels && fullGuild.channels.length > 0) {
-      get().selectChannel(fullGuild.channels[0]);
-    }
-    return fullGuild;
+    const guild = await api.guilds.create({ name, icon_url: iconUrl });
+    set((state) => ({ guilds: [...state.guilds, guild] }));
+    return guild;
   },
 
-  createChannel: async (guildId: string, name: string, type: 'text' | 'voice', topic?: string) => {
-    const channel = await api.guilds.createChannel(guildId, { name, type, topic });
+  createChannel: async (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string) => {
+    const channel = await api.channels.create(guildId, { name, type, topic });
     set((state) => {
-      if (state.activeGuild && state.activeGuild.id === guildId) {
-        return {
-          activeGuild: {
-            ...state.activeGuild,
-            channels: [...(state.activeGuild.channels || []), channel],
-          },
-        };
-      }
-      return state;
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const channels = [...(state.activeGuild.channels || []), channel];
+      return { activeGuild: { ...state.activeGuild, channels } };
     });
     return channel;
   },
@@ -150,10 +149,10 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     await api.channels.reorder(guildId, channelIds);
   },
 
-  sendMessage: async (content: string) => {
+  sendMessage: async (content: string, replyToId?: string) => {
     const { activeChannel } = get();
     if (!activeChannel) return;
-    await api.channels.sendMessage(activeChannel.id, { content });
+    await api.channels.sendMessage(activeChannel.id, { content, reply_to_id: replyToId });
   },
 
   editMessage: async (messageId: string, content: string) => {
@@ -170,13 +169,47 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     get().removeMessageFromStore(messageId);
   },
 
+  toggleReaction: async (messageId: string, emoji: string) => {
+    const { activeChannel, messages } = get();
+    if (!activeChannel) return;
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
+
+    const msg = messages.find((m) => m.id === messageId);
+    const existingReaction = msg?.reactions?.find((r) => r.emoji === emoji);
+    const hasReacted = existingReaction?.user_ids.includes(currentUser.id);
+
+    if (hasReacted) {
+      await api.channels.removeReaction(activeChannel.id, messageId, emoji);
+    } else {
+      await api.channels.addReaction(activeChannel.id, messageId, emoji);
+    }
+  },
+
+  togglePin: async (messageId: string) => {
+    const { activeChannel } = get();
+    if (!activeChannel) return;
+    await api.channels.togglePin(activeChannel.id, messageId);
+  },
+
   addMessage: (message: Message) => {
+    const currentUser = useAuthStore.getState().user;
+    const isMention = currentUser && message.content.includes(`@${currentUser.username}`);
+
     set((state) => {
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
         if (state.messages.some((m) => m.id === message.id)) return state;
+        if (message.author_id !== currentUser?.id) {
+          playMessageSound(!!isMention);
+        }
         return { messages: [...state.messages, message] };
+      } else {
+        // Mark as unread
+        const unread = new Set(state.unreadChannels);
+        unread.add(message.channel_id);
+        playMessageSound(!!isMention);
+        return { unreadChannels: unread };
       }
-      return state;
     });
   },
 
@@ -184,7 +217,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
         return {
-          messages: state.messages.map((m) => (m.id === message.id ? message : m)),
+          messages: state.messages.map((m) => (m.id === message.id ? { ...m, ...message } : m)),
         };
       }
       return state;
@@ -197,112 +230,137 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }));
   },
 
+  handleReactionEvent: ({ message_id, user_id, emoji, is_add }) => {
+    set((state) => {
+      const messages = state.messages.map((m) => {
+        if (m.id !== message_id) return m;
+        let reactions = [...(m.reactions || [])];
+        const existing = reactions.find((r) => r.emoji === emoji);
+
+        if (is_add) {
+          if (existing) {
+            if (!existing.user_ids.includes(user_id)) {
+              reactions = reactions.map((r) =>
+                r.emoji === emoji
+                  ? { ...r, count: r.count + 1, user_ids: [...r.user_ids, user_id] }
+                  : r
+              );
+            }
+          } else {
+            reactions.push({ emoji, count: 1, user_ids: [user_id] });
+          }
+        } else {
+          if (existing) {
+            const nextUsers = existing.user_ids.filter((id) => id !== user_id);
+            if (nextUsers.length === 0) {
+              reactions = reactions.filter((r) => r.emoji !== emoji);
+            } else {
+              reactions = reactions.map((r) =>
+                r.emoji === emoji ? { ...r, count: nextUsers.length, user_ids: nextUsers } : r
+              );
+            }
+          }
+        }
+        return { ...m, reactions };
+      });
+      return { messages };
+    });
+  },
+
+  handlePinEvent: ({ message_id, is_pinned }) => {
+    set((state) => ({
+      messages: state.messages.map((m) => (m.id === message_id ? { ...m, is_pinned } : m)),
+    }));
+  },
+
   updateVoiceState: (action: string, session?: VoiceSession, channelId?: string, userId?: string) => {
     set((state) => {
       if (!state.activeGuild || !state.activeGuild.channels) return state;
 
-      const targetUserId = session?.user_id || userId;
-      if (!targetUserId) return state;
-
-      const updatedChannels = state.activeGuild.channels.map((ch) => {
-        if (ch.type !== 'voice') return ch;
-
-        let sessions = ch.voice_sessions ? [...ch.voice_sessions] : [];
-        sessions = sessions.filter((s) => s.user_id !== targetUserId);
-
-        if ((action === 'join' || action === 'update') && session && ch.id === session.channel_id) {
-          sessions.push(session);
+      const channels = state.activeGuild.channels.map((channel) => {
+        if (action === 'join' && session && channel.id === session.channel_id) {
+          const sessions = channel.voice_sessions || [];
+          const exists = sessions.some((s) => s.user_id === session.user_id);
+          if (exists) {
+            return {
+              ...channel,
+              voice_sessions: sessions.map((s) => (s.user_id === session.user_id ? session : s)),
+            };
+          }
+          return { ...channel, voice_sessions: [...sessions, session] };
+        } else if (action === 'leave' && channelId && userId && channel.id === channelId) {
+          const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== userId);
+          return { ...channel, voice_sessions: sessions };
+        } else if (action === 'state' && session && channel.id === session.channel_id) {
+          const sessions = (channel.voice_sessions || []).map((s) =>
+            s.user_id === session.user_id ? session : s
+          );
+          return { ...channel, voice_sessions: sessions };
         }
-
-        return { ...ch, voice_sessions: sessions };
+        return channel;
       });
 
-      return {
-        activeGuild: {
-          ...state.activeGuild,
-          channels: updatedChannels,
-        },
-      };
+      return { activeGuild: { ...state.activeGuild, channels } };
     });
   },
 
   setTyping: (channelId: string, userId: string) => {
     set((state) => {
-      const map = new Map(state.typingUsers);
-      const setForChan = new Set(map.get(channelId) || []);
-      setForChan.add(userId);
-      map.set(channelId, setForChan);
-
-      setTimeout(() => {
-        set((curr) => {
-          const m = new Map(curr.typingUsers);
-          const s = m.get(channelId);
-          if (s) {
-            s.delete(userId);
-            if (s.size === 0) m.delete(channelId);
-            else m.set(channelId, s);
-          }
-          return { typingUsers: m };
-        });
-      }, 4000);
-
-      return { typingUsers: map };
+      const nextMap = new Map(state.typingUsers);
+      const currentSet = new Set(nextMap.get(channelId) || []);
+      currentSet.add(userId);
+      nextMap.set(channelId, currentSet);
+      return { typingUsers: nextMap };
     });
+
+    setTimeout(() => {
+      set((state) => {
+        const nextMap = new Map(state.typingUsers);
+        const currentSet = new Set(nextMap.get(channelId) || []);
+        currentSet.delete(userId);
+        if (currentSet.size === 0) {
+          nextMap.delete(channelId);
+        } else {
+          nextMap.set(channelId, currentSet);
+        }
+        return { typingUsers: nextMap };
+      });
+    }, 4000);
   },
 
-  createRole: async (guildId: string, name: string, color: string, permissions?: number) => {
+  createRole: async (guildId: string, name: string, color: string, permissions = 0) => {
     const role = await api.roles.create(guildId, { name, color, permissions });
     set((state) => {
-      if (state.activeGuild && state.activeGuild.id === guildId) {
-        return {
-          activeGuild: {
-            ...state.activeGuild,
-            roles: [...(state.activeGuild.roles || []), role],
-          },
-        };
-      }
-      return state;
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const roles = [...(state.activeGuild.roles || []), role];
+      return { activeGuild: { ...state.activeGuild, roles } };
     });
     return role;
   },
 
   updateRole: async (guildId: string, roleId: string, data) => {
-    const role = await api.roles.update(guildId, roleId, data);
+    const updated = await api.roles.update(guildId, roleId, data);
     set((state) => {
-      if (state.activeGuild && state.activeGuild.id === guildId) {
-        return {
-          activeGuild: {
-            ...state.activeGuild,
-            roles: (state.activeGuild.roles || []).map((r) => (r.id === roleId ? role : r)),
-          },
-        };
-      }
-      return state;
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const roles = (state.activeGuild.roles || []).map((r) => (r.id === roleId ? { ...r, ...updated } : r));
+      return { activeGuild: { ...state.activeGuild, roles } };
     });
   },
 
   deleteRole: async (guildId: string, roleId: string) => {
     await api.roles.delete(guildId, roleId);
     set((state) => {
-      if (state.activeGuild && state.activeGuild.id === guildId) {
-        return {
-          activeGuild: {
-            ...state.activeGuild,
-            roles: (state.activeGuild.roles || []).filter((r) => r.id !== roleId),
-          },
-        };
-      }
-      return state;
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const roles = (state.activeGuild.roles || []).filter((r) => r.id !== roleId);
+      return { activeGuild: { ...state.activeGuild, roles } };
     });
   },
 
   assignRole: async (guildId: string, userId: string, roleId: string) => {
     await api.roles.assign(guildId, userId, roleId);
-    get().selectGuild(guildId);
   },
 
   removeRole: async (guildId: string, userId: string, roleId: string) => {
     await api.roles.remove(guildId, userId, roleId);
-    get().selectGuild(guildId);
   },
 }));
