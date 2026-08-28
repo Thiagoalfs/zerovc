@@ -357,6 +357,30 @@ export const App: React.FC = () => {
         useDMGroupStore.getState().handleGroupMessageCreate(event.data);
       };
 
+      const handleGuildMemberAdd = (event: any) => {
+        if (event.data?.guild_id && event.data?.member) {
+          useGuildStore.getState().handleGuildMemberAdd(event.data.guild_id, event.data.member);
+        }
+      };
+
+      const handleGuildMemberRemove = (event: any) => {
+        if (event.data?.guild_id && event.data?.user_id) {
+          useGuildStore.getState().handleGuildMemberRemove(event.data.guild_id, event.data.user_id);
+        }
+      };
+
+      const handleGuildMemberUpdate = (event: any) => {
+        if (event.data?.guild_id && event.data?.user_id) {
+          useGuildStore.getState().handleGuildMemberUpdate(event.data.guild_id, event.data.user_id, event.data);
+        }
+      };
+
+      const handlePresenceUpdate = (event: any) => {
+        if (event.data?.user_id) {
+          useGuildStore.getState().handlePresenceUpdate(event.data.user_id, event.data.status, event.data.custom_status);
+        }
+      };
+
       socket.on('MESSAGE_CREATE', handleMessageCreate);
       socket.on('MESSAGE_UPDATE', handleMessageUpdate);
       socket.on('MESSAGE_DELETE', handleMessageDelete);
@@ -377,6 +401,11 @@ export const App: React.FC = () => {
       socket.on('FRIEND_REQUEST_CREATE', handleFriendUpdate);
       socket.on('FRIEND_REQUEST_UPDATE', handleFriendUpdate);
       socket.on('USER_UPDATE', handleUserUpdate);
+      socket.on('GUILD_MEMBER_ADD', handleGuildMemberAdd);
+      socket.on('GUILD_MEMBER_REMOVE', handleGuildMemberRemove);
+      socket.on('GUILD_BAN_ADD', handleGuildMemberRemove);
+      socket.on('GUILD_MEMBER_UPDATE', handleGuildMemberUpdate);
+      socket.on('PRESENCE_UPDATE', handlePresenceUpdate);
 
       return () => {
         window.removeEventListener('popstate', onPopState);
@@ -390,11 +419,21 @@ export const App: React.FC = () => {
         socket.off('DM_MESSAGE_CREATE', handleDMMessageCreate);
         socket.off('DM_REACTION_ADD', handleDMReactionAdd);
         socket.off('DM_REACTION_REMOVE', handleDMReactionRemove);
+        socket.off('GROUP_MESSAGE_CREATE', handleGroupMessageCreate);
+        socket.off('CALL_INCOMING', handleCallIncoming);
+        socket.off('CALL_ACCEPT', handleCallAccept);
+        socket.off('CALL_REJECT', handleCallEnd);
+        socket.off('CALL_LEAVE', handleCallEnd);
         socket.off('VOICE_STATE_UPDATE', handleVoiceStateUpdate);
         socket.off('TYPING_START', handleTypingStart);
         socket.off('FRIEND_REQUEST_CREATE', handleFriendUpdate);
         socket.off('FRIEND_REQUEST_UPDATE', handleFriendUpdate);
         socket.off('USER_UPDATE', handleUserUpdate);
+        socket.off('GUILD_MEMBER_ADD', handleGuildMemberAdd);
+        socket.off('GUILD_MEMBER_REMOVE', handleGuildMemberRemove);
+        socket.off('GUILD_BAN_ADD', handleGuildMemberRemove);
+        socket.off('GUILD_MEMBER_UPDATE', handleGuildMemberUpdate);
+        socket.off('PRESENCE_UPDATE', handlePresenceUpdate);
       };
     }
   }, [token, user]);

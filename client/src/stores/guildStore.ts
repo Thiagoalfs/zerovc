@@ -41,6 +41,10 @@ interface GuildState {
   handleReactionEvent: (data: { message_id: string; channel_id: string; user_id: string; emoji: string; is_add: boolean }) => void;
   handlePinEvent: (data: { message_id: string; channel_id: string; is_pinned: boolean }) => void;
   updateMemberInGuild: (user: Partial<User> & { id: string }) => void;
+  handleGuildMemberAdd: (guildId: string, member: User) => void;
+  handleGuildMemberRemove: (guildId: string, userId: string) => void;
+  handleGuildMemberUpdate: (guildId: string, userId: string, data: Partial<User>) => void;
+  handlePresenceUpdate: (userId: string, status: string, customStatus?: string) => void;
 
   updateVoiceState: (action: string, session?: VoiceSession, channelId?: string, userId?: string) => void;
   setTyping: (channelId: string, userId: string) => void;
@@ -513,6 +517,70 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       return {
         activeGuild: { ...state.activeGuild, members },
         messages,
+      };
+    });
+  },
+
+  handleGuildMemberAdd: (guildId, member) => {
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const currentMembers = state.activeGuild.members || [];
+      if (currentMembers.some((m) => m.id === member.id)) {
+        return {
+          activeGuild: {
+            ...state.activeGuild,
+            members: currentMembers.map((m) => (m.id === member.id ? { ...m, ...member } : m)),
+          },
+        };
+      }
+      return {
+        activeGuild: {
+          ...state.activeGuild,
+          members: [...currentMembers, member],
+        },
+      };
+    });
+  },
+
+  handleGuildMemberRemove: (guildId, userId) => {
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const members = (state.activeGuild.members || []).filter((m) => m.id !== userId);
+      return {
+        activeGuild: {
+          ...state.activeGuild,
+          members,
+        },
+      };
+    });
+  },
+
+  handleGuildMemberUpdate: (guildId, userId, data) => {
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const members = (state.activeGuild.members || []).map((m) =>
+        m.id === userId ? ({ ...m, ...data } as User) : m
+      );
+      return {
+        activeGuild: {
+          ...state.activeGuild,
+          members,
+        },
+      };
+    });
+  },
+
+  handlePresenceUpdate: (userId, status, customStatus) => {
+    set((state) => {
+      if (!state.activeGuild) return state;
+      const members = (state.activeGuild.members || []).map((m) =>
+        m.id === userId ? ({ ...m, status: status as any, custom_status: customStatus } as User) : m
+      );
+      return {
+        activeGuild: {
+          ...state.activeGuild,
+          members,
+        },
       };
     });
   },

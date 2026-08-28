@@ -175,6 +175,27 @@ func (h *InviteHandler) JoinByInvite(w http.ResponseWriter, r *http.Request) {
 	// 3. Register user in hub for real-time events
 	h.hub.AddGuildMember(guildID, userID)
 
+	// Fetch new member data and broadcast to guild
+	var newMem models.UserPublic
+	h.db.Pool.QueryRow(r.Context(), `
+		SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status
+		FROM users
+		WHERE id = $1
+	`, userID).Scan(
+		&newMem.ID, &newMem.Username, &newMem.DisplayName, &newMem.AvatarURL, &newMem.BannerURL, &newMem.Bio, &newMem.Status, &newMem.CustomStatus,
+	)
+	if h.hub.IsUserOnline(newMem.ID) {
+		newMem.Status = "online"
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_MEMBER_ADD",
+		Data: map[string]any{
+			"guild_id": guildID,
+			"member":   newMem,
+		},
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"success":  true,
