@@ -90,7 +90,7 @@ export const MemberList: React.FC<MemberListProps> = ({
       }
     });
 
-    const isHierarchyAllowed = isCurrentOwner || (currentUserHighestPos < targetHighestPos);
+    const isHierarchyAllowed = isCurrentOwner || isMe || (currentUserHighestPos < targetHighestPos);
 
     const items: ContextMenuItem[] = [
       {
@@ -115,88 +115,86 @@ export const MemberList: React.FC<MemberListProps> = ({
         : []),
     ];
 
-    // Moderation items (only if not self, not target owner, and hierarchy allows)
-    if (!isMe && !isTargetOwner && isHierarchyAllowed) {
+    // Change Roles Submenu (allowed if has permission and hierarchy allows or is self)
+    if (canManageRoles && guildRoles.length > 0 && (isCurrentOwner || isMe || isHierarchyAllowed)) {
       items.push({ label: '', separator: true });
-
-      // Change Roles Submenu
-      if (canManageRoles && guildRoles.length > 0) {
-        const roleSubItems: ContextMenuItem[] = guildRoles.map((role) => {
-          const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
-          return {
-            label: role.name,
-            icon: hasRole ? (
-              <Check className="w-3.5 h-3.5 text-online" />
-            ) : (
-              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
-            ),
-            onClick: async () => {
-              if (hasRole) {
-                await removeRole(activeGuild.id, targetMember.id, role.id);
-              } else {
-                await assignRole(activeGuild.id, targetMember.id, role.id);
-              }
-            },
-          };
-        });
-
-        items.push({
-          label: 'Alterar Cargos',
-          icon: <Shield className="w-4 h-4 text-brand-400" />,
-          subItems: roleSubItems,
-        });
-      }
-
-      // Mute/Timeout Submenu
-      if (canMute) {
-        const isMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
-
-        const muteSubItems: ContextMenuItem[] = [
-          {
-            label: '15 minutos',
-            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
+      const roleSubItems: ContextMenuItem[] = guildRoles.map((role) => {
+        const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
+        return {
+          label: role.name,
+          icon: hasRole ? (
+            <Check className="w-3.5 h-3.5 text-online" />
+          ) : (
+            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
+          ),
+          onClick: async () => {
+            if (hasRole) {
+              await removeRole(activeGuild.id, targetMember.id, role.id);
+            } else {
+              await assignRole(activeGuild.id, targetMember.id, role.id);
+            }
           },
-          {
-            label: '1 hora',
-            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
-          },
-          {
-            label: '24 horas',
-            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
-          },
-          {
-            label: '1 semana',
-            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
-          },
-          {
-            label: 'Permanente',
-            icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
-          },
-          ...(isMuted
-            ? [
-                { label: '', separator: true },
-                {
-                  label: 'Remover Silenciamento',
-                  icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
-                  onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
-                },
-              ]
-            : []),
-        ];
+        };
+      });
 
-        items.push({
-          label: isMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
-          icon: <VolumeX className={`w-4 h-4 ${isMuted ? 'text-dnd' : 'text-gray-400'}`} />,
-          subItems: muteSubItems,
-        });
-      }
+      items.push({
+        label: 'Alterar Cargos',
+        icon: <Shield className="w-4 h-4 text-brand-400" />,
+        subItems: roleSubItems,
+      });
+    }
 
-      // Kick Member
+    // Mute/Timeout Submenu (allowed if has permission and hierarchy allows or is self)
+    if (canMute && (isCurrentOwner || isMe || isHierarchyAllowed)) {
+      const isMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
+
+      const muteSubItems: ContextMenuItem[] = [
+        {
+          label: '15 minutos',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
+        },
+        {
+          label: '1 hora',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
+        },
+        {
+          label: '24 horas',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
+        },
+        {
+          label: '1 semana',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
+        },
+        {
+          label: 'Permanente',
+          icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
+        },
+        ...(isMuted
+          ? [
+              { label: '', separator: true },
+              {
+                label: 'Remover Silenciamento',
+                icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
+                onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
+              },
+            ]
+          : []),
+      ];
+
+      items.push({
+        label: isMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
+        icon: <VolumeX className={`w-4 h-4 ${isMuted ? 'text-dnd' : 'text-gray-400'}`} />,
+        subItems: muteSubItems,
+      });
+    }
+
+    // Kick and Ban (only for other members)
+    if (!isMe && !isTargetOwner && isHierarchyAllowed) {
       if (canKick) {
         items.push({
           label: `Expulsar ${targetMember.display_name || targetMember.username}`,
@@ -210,7 +208,6 @@ export const MemberList: React.FC<MemberListProps> = ({
         });
       }
 
-      // Ban Member
       if (canBan) {
         items.push({
           label: `Banir ${targetMember.display_name || targetMember.username}`,

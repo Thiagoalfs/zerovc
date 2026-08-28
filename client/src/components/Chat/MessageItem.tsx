@@ -246,12 +246,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       });
     }
 
-    // Server Member Moderation Actions
-    if (activeGuild && targetMember && !isMe && !isTargetOwner && isHierarchyAllowed) {
-      items.push({ label: '', separator: true });
-
+    // Server Member Moderation Actions (Roles & Mute allowed for self if permitted)
+    if (activeGuild && targetMember && (isCurrentOwner || isMe || (!isTargetOwner && isHierarchyAllowed))) {
       // Change Roles Submenu
       if (canManageRoles && guildRoles.length > 0) {
+        items.push({ label: '', separator: true });
         const roleSubItems: ContextMenuItem[] = guildRoles.map((role) => {
           const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
           return {
@@ -280,6 +279,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
       // Timeout / Mute Submenu
       if (canMute) {
+        const isMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
         const muteSubItems: ContextMenuItem[] = [
           {
             label: 'Por 60 segundos',
@@ -305,38 +305,39 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         ];
 
         items.push({
-          label: 'Silenciar Membro',
+          label: isMuted ? 'Membro Silenciado' : 'Silenciar Membro',
           icon: <VolumeX className="w-4 h-4 text-amber-400" />,
           subItems: muteSubItems,
         });
       }
 
-      // Kick Member
-      if (canKick) {
-        items.push({
-          label: `Expulsar ${targetMember.display_name || targetMember.username}`,
-          icon: <UserMinus className="w-4 h-4 text-amber-400" />,
-          variant: 'danger',
-          onClick: () => {
-            if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
-              kickMember(activeGuild.id, targetMember.id);
-            }
-          },
-        });
-      }
+      // Kick & Ban (only for other members)
+      if (!isMe && !isTargetOwner && isHierarchyAllowed) {
+        if (canKick) {
+          items.push({
+            label: `Expulsar ${targetMember.display_name || targetMember.username}`,
+            icon: <UserMinus className="w-4 h-4 text-amber-400" />,
+            variant: 'danger',
+            onClick: () => {
+              if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
+                kickMember(activeGuild.id, targetMember.id);
+              }
+            },
+          });
+        }
 
-      // Ban Member
-      if (canBan) {
-        items.push({
-          label: `Banir ${targetMember.display_name || targetMember.username}`,
-          icon: <Ban className="w-4 h-4 text-dnd" />,
-          variant: 'danger',
-          onClick: () => {
-            if (confirm(`Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor?`)) {
-              banMember(activeGuild.id, targetMember.id);
-            }
-          },
-        });
+        if (canBan) {
+          items.push({
+            label: `Banir ${targetMember.display_name || targetMember.username}`,
+            icon: <Ban className="w-4 h-4 text-dnd" />,
+            variant: 'danger',
+            onClick: () => {
+              if (confirm(`Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor?`)) {
+                banMember(activeGuild.id, targetMember.id);
+              }
+            },
+          });
+        }
       }
     }
 
