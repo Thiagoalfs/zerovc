@@ -57,6 +57,7 @@ export const App: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<User | null>(null);
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
+  const [isMemberListOpen, setIsMemberListOpen] = useState(false);
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
 
   const navigateTo = (path: string, replace = false) => {
@@ -295,6 +296,9 @@ export const App: React.FC = () => {
             onOpenChannelSettings={(channel) => {
               setChannelToEdit(channel);
             }}
+            onOpenMemberList={() => {
+              setIsMemberListOpen(true);
+            }}
             onOpenScreenShare={() => {
               setIsScreenShareOpen(true);
               setIsMobileDrawerOpen(false);
@@ -338,6 +342,8 @@ export const App: React.FC = () => {
           <ChatArea
             onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
             onOpenUserProfile={(targetUser) => setSelectedUserForProfile(targetUser)}
+            isMemberListOpen={isMemberListOpen}
+            onToggleMemberList={(open) => setIsMemberListOpen(open)}
           />
         )}
 

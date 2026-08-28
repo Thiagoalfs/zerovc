@@ -4,18 +4,33 @@ import { useGuildStore } from '../../stores/guildStore';
 import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
 import { MemberList } from '../Sidebar/MemberList';
-
 import { User } from '../../types';
 
 interface ChatAreaProps {
   onOpenMobileDrawer?: () => void;
   onOpenUserProfile?: (user: User) => void;
+  isMemberListOpen?: boolean;
+  onToggleMemberList?: (open: boolean) => void;
 }
 
-export const ChatArea: React.FC<ChatAreaProps> = ({ onOpenMobileDrawer, onOpenUserProfile }) => {
+export const ChatArea: React.FC<ChatAreaProps> = ({
+  onOpenMobileDrawer,
+  onOpenUserProfile,
+  isMemberListOpen,
+  onToggleMemberList,
+}) => {
   const { activeChannel, messages, isLoadingMessages, sendMessage, typingUsers } = useGuildStore();
-  const [showMemberList, setShowMemberList] = useState(false);
+  const [localShowMemberList, setLocalShowMemberList] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const showMembers = isMemberListOpen !== undefined ? isMemberListOpen : localShowMemberList;
+  const toggleMembers = () => {
+    if (onToggleMemberList) {
+      onToggleMemberList(!showMembers);
+    } else {
+      setLocalShowMemberList(!showMembers);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -62,24 +77,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ onOpenMobileDrawer, onOpenUs
                 <Menu className="w-5 h-5" />
               </button>
             )}
-
-            <Hash className="w-5 h-5 text-gray-400 flex-shrink-0" />
+            <Hash className="w-5 h-5 md:w-6 md:h-6 text-gray-400 flex-shrink-0" />
             <span className="font-bold text-gray-100 truncate text-sm md:text-base">{activeChannel.name}</span>
-            {activeChannel.topic && (
-              <>
-                <div className="hidden sm:block w-[1px] h-4 bg-white/10 mx-1.5" />
-                <span className="hidden sm:inline-block text-xs text-gray-400 truncate max-w-xs md:max-w-md">
-                  {activeChannel.topic}
-                </span>
-              </>
-            )}
           </div>
 
-          <div className="flex items-center gap-2 text-gray-400">
+          {/* Right Header Actions */}
+          <div className="flex items-center gap-1 md:gap-2">
+            {/* Member List Toggle */}
             <button
-              onClick={() => setShowMemberList(!showMemberList)}
+              onClick={toggleMembers}
               className={`p-1.5 rounded-lg transition-colors ${
-                showMemberList ? 'text-gray-100 bg-white/15' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                showMembers
+                  ? 'text-brand-400 bg-white/10'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
               }`}
               title="Lista de Membros"
             >
@@ -144,8 +154,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ onOpenMobileDrawer, onOpenUs
 
       {/* Right-side Member List Sidebar */}
       <MemberList
-        isOpen={showMemberList}
-        onClose={() => setShowMemberList(false)}
+        isOpen={showMembers}
+        onClose={() => {
+          if (onToggleMemberList) onToggleMemberList(false);
+          else setLocalShowMemberList(false);
+        }}
         onSelectUser={onOpenUserProfile}
       />
     </div>
