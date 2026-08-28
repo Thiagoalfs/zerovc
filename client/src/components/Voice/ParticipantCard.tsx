@@ -130,53 +130,18 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
     >
       {/* 1. If screen sharing and watching: render live screen video */}
       {isScreenSharing && isWatching && hasScreenVideoTrack ? (
-        <>
-          <video
-            ref={(el) => {
-              videoRef.current = el;
-              if (el && screenPub?.track) {
-                screenPub.track.attach(el);
-                el.play().catch(() => {});
-              }
-            }}
-            autoPlay
-            playsInline
-            className="w-full h-full object-contain bg-black"
-          />
-
-          {/* Controls Bar on Hover */}
-          <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 z-20">
-            {!isLocal && (
-              <button
-                onClick={() => handleToggleWatch(false)}
-                className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 text-xs flex items-center gap-1 font-medium transition-colors"
-                title="Parar de assistir transmissão"
-              >
-                <EyeOff className="w-3.5 h-3.5" />
-                <span className="text-[11px] hidden sm:inline">Parar de Ver</span>
-              </button>
-            )}
-
-            {isLocal && (
-              <button
-                onClick={stopScreenShare}
-                className="p-1 text-dnd hover:bg-dnd/20 rounded text-xs flex items-center gap-1 font-medium transition-colors"
-                title="Encerrar compartilhamento"
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                <span className="text-[11px] hidden sm:inline">Parar Live</span>
-              </button>
-            )}
-
-            <button
-              onClick={toggleFullscreen}
-              className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 transition-colors"
-              title="Tela cheia"
-            >
-              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-        </>
+        <video
+          ref={(el) => {
+            videoRef.current = el;
+            if (el && screenPub?.track) {
+              screenPub.track.attach(el);
+              el.play().catch(() => {});
+            }
+          }}
+          autoPlay
+          playsInline
+          className="w-full h-full object-contain bg-black"
+        />
       ) : hasCameraVideoTrack ? (
         /* 2. WebCam Video Stream */
         <>
@@ -216,7 +181,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
 
           <button
             onClick={() => handleToggleWatch(true)}
-            className="mt-1 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-lg shadow-brand-500/30 flex items-center gap-1.5"
+            className="mt-1 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-lg shadow-brand-500/30 flex items-center gap-1.5 cursor-pointer"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Assistir Transmissão</span>
@@ -248,22 +213,64 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
         )}
       </div>
 
-      {/* Top Right Controls: Volume Slider */}
-      {!isLocal && (
-        <div className="absolute top-3 right-3 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="relative">
+      {/* Top Right Unified Action Controls Bar (Hover) */}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 shadow-lg">
+        {/* Watch / Stop Live Controls & Fullscreen */}
+        {isScreenSharing && isWatching && hasScreenVideoTrack && (
+          <>
+            {!isLocal ? (
+              <button
+                type="button"
+                onClick={() => handleToggleWatch(false)}
+                className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                title="Parar de assistir transmissão"
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+                <span className="text-[11px] hidden sm:inline">Parar de Ver</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={stopScreenShare}
+                className="p-1 text-dnd hover:bg-dnd/20 rounded text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                title="Encerrar compartilhamento"
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                <span className="text-[11px] hidden sm:inline">Parar Live</span>
+              </button>
+            )}
+
             <button
-              onClick={() => setShowVolumeSlider(!showVolumeSlider)}
-              className="p-1.5 rounded-lg bg-black/60 hover:bg-black/90 text-gray-300 hover:text-white backdrop-blur-sm transition-colors"
-              title="Ajustar volume"
+              type="button"
+              onClick={toggleFullscreen}
+              className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 transition-colors cursor-pointer"
+              title={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
             >
-              {currentVolume === 0 ? <VolumeX className="w-3.5 h-3.5 text-dnd" /> : <Volume2 className="w-3.5 h-3.5" />}
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+          </>
+        )}
+
+        {/* Volume Slider for Remote participants */}
+        {!isLocal && (
+          <div className="relative flex items-center">
+            <button
+              type="button"
+              onClick={() => setShowVolumeSlider(!showVolumeSlider)}
+              className="p-1 rounded text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Ajustar volume do participante"
+            >
+              {currentVolume === 0 ? (
+                <VolumeX className="w-3.5 h-3.5 text-dnd" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5" />
+              )}
             </button>
 
             {showVolumeSlider && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowVolumeSlider(false)} />
-                <div className="absolute right-0 top-full mt-1.5 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-40 flex flex-col gap-2 animate-in fade-in zoom-in-95">
+                <div className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-40 flex flex-col gap-2 animate-in fade-in zoom-in-95">
                   <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
                     <span>Volume</span>
                     <span className="text-brand-400">{Math.round(currentVolume * 100)}%</span>
@@ -281,8 +288,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
               </>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Bottom Overlay Bar: Name & Mic Status */}
       <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl flex items-center justify-between text-xs text-white z-10">
