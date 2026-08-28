@@ -1,9 +1,15 @@
 import { Channel, Guild, Message, User, VoiceSession } from '../types';
 
-const DEFAULT_SERVER_URL = 'http://162.35.97.76:8081';
-
 export function getApiBaseUrl(): string {
-  return localStorage.getItem('zerovc_server_url') || DEFAULT_SERVER_URL;
+  const saved = localStorage.getItem('zerovc_server_url');
+  if (saved) return saved;
+
+  // If accessed directly from browser (e.g. http://162.35.97.76:8081)
+  if (typeof window !== 'undefined' && window.location && window.location.origin && !window.location.origin.includes('5173')) {
+    return window.location.origin;
+  }
+
+  return 'http://162.35.97.76:8081';
 }
 
 export function setApiBaseUrl(url: string) {
@@ -42,7 +48,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     return res.json();
   } catch (err: any) {
     if (err.message.includes('Failed to fetch') || err.name === 'TypeError') {
-      throw new Error(`Não foi possível conectar ao servidor em ${getApiBaseUrl()}. Verifique a URL do servidor nas configurações.`);
+      throw new Error(`Não foi possível conectar ao servidor em ${getApiBaseUrl()}.`);
     }
     throw err;
   }

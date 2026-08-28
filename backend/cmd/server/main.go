@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,6 +37,7 @@ func main() {
 	livekitPublicURL := getEnv("LIVEKIT_PUBLIC_URL", "ws://localhost:7880")
 	livekitKey := getEnv("LIVEKIT_API_KEY", "devkey")
 	livekitSecret := getEnv("LIVEKIT_API_SECRET", "secret_livekit_key_change_in_production")
+	webDir := getEnv("WEB_DIR", "./web")
 
 	log.Printf("[ZeroVC] Starting backend on port %s...", port)
 
@@ -70,7 +73,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
-	// CORS Configuration (Permissive for Desktop, Web and Cross-Origin)
+	// CORS Configuration (Permissive for Web, Desktop and Cross-Origin)
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -79,12 +82,6 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-
-	// Root Welcome Route
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"name":"ZeroVC API","status":"online","version":"1.0.0","health":"/health"}`))
-	})
 
 	// Public Health Check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +142,34 @@ func main() {
 		})
 	})
 
-	// 6. Graceful Server Lifecycle
+	// 6. Serve Web Application (Single Page Application)
+	if _, err := os.Stat(webDir); err == nil {
+		fileServer := http.FileServer(http.Dir(webDir))
+		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+			path := r.URL.Path
+			if strings.HasPrefix(path, "/api") || path == "/ws" || path == "/health" {
+				http.NotFound(w, r)
+				return
+			}
+
+			fpath := filepath.Join(webDir, filepath.Clean(path))
+			if info, err := os.Stat(fpath); err == nil && !info.IsDir() {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+
+			// SPA Fallback: serve index.html for React Router / client routes
+			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+		})
+		log.Printf("[ZeroVC] Web App enabled: serving from %s", webDir)
+	} else {
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"name":"ZeroVC API","status":"online","version":"1.0.0"}`))
+		})
+	}
+
+	// 7. Graceful Server Lifecycle
 	server := &http.Server{
 		Addr:         fmt.Sprintf("0.0.0.0:%s", port),
 		Handler:      r,
