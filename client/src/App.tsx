@@ -678,6 +678,9 @@ export const App: React.FC = () => {
                 setIsHomeActive(false);
                 if (gId && ch) navigateTo(`/${gId}/${ch.id}`);
               }}
+              onOpenUserProfile={(targetUser, pos) => {
+                setSelectedUserForProfile({ user: targetUser, position: pos });
+              }}
             />
           ) : (
             <div className="absolute bottom-16 md:bottom-20 right-4 z-20 bg-background-darkest/95 backdrop-blur-md p-2.5 px-4 rounded-2xl shadow-2xl border border-online/30 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">

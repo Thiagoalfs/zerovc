@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Track, RemoteTrackPublication } from 'livekit-client';
 import {
   Monitor,
@@ -10,16 +10,24 @@ import {
   PhoneOff,
   Volume2,
   VolumeX,
+  GripHorizontal,
 } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
+import { User } from '../../types';
+
+type PiPCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
 interface VoiceFloatingPiPProps {
   onNavigateToVoiceChannel?: (channelId: string, guildId?: string) => void;
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
 }
 
-export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({ onNavigateToVoiceChannel }) => {
+export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
+  onNavigateToVoiceChannel,
+  onOpenUserProfile,
+}) => {
   const { user } = useAuthStore();
   const { activeGuild, guilds, selectGuild, selectChannel } = useGuildStore();
   const {
@@ -39,7 +47,29 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({ onNavigateTo
   } = useVoiceStore();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [showVolume, setShowVolume] = useState(false);
+
+  // Drag and Snap Corner state
+  const [corner, setCorner] = useState<PiPCorner>(() => {
+    try {
+      const saved = localStorage.getItem('zerovc_pip_corner') as PiPCorner;
+      if (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(saved)) {
+        return saved;
+      }
+    } catch {}
+    return 'bottom-right';
+  });
+
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; initX: number; initY: number }>({
+    startX: 0,
+    startY: 0,
+    initX: 0,
+    initY: 0,
+  });
+  const hasMovedSignificantlyRef = useRef(false);
 
   // Find target participant to display
   const targetParticipant = participants.find(
@@ -51,6 +81,16 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({ onNavigateTo
   const screenPub = targetParticipant?.getTrackPublication(Track.Source.ScreenShare);
   const hasScreenVideoTrack = !!screenPub?.track && !screenPub.isMuted;
   const isLocal = targetParticipant?.isLocal;
+
+  // Resolve target participant User info for profile modal
+  const targetUser: User =
+    activeGuild?.members?.find((m) => m.id === targetParticipant?.identity) || {
+      id: targetParticipant?.identity || '',
+      username: targetParticipant?.name || 'Usuário',
+      display_name: targetParticipant?.name,
+      avatar_url: isLocal ? user?.avatar_url : undefined,
+      status: 'online',
+    };
 
   // Find the voice channel info
   const voiceChannel =
@@ -79,6 +119,87 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({ onNavigateTo
     };
   }, [screenPub?.track, hasScreenVideoTrack]);
 
+  // Drag Handlers
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Only drag on primary mouse button or touch
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initX: rect.left,
+      initY: rect.top,
+    };
+    hasMovedSignificantlyRef.current = false;
+    setIsDragging(true);
+    setDragPos({ x: rect.left, y: rect.top });
+
+    container.setPointerCapture(e.pointerId);
+  }, []);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging) return;
+
+    const dx = e.clientX - dragStartRef.current.startX;
+    const dy = e.clientY - dragStartRef.current.startY;
+
+    if (Math.hypot(dx, dy) > 5) {
+      hasMovedSignificantlyRef.current = true;
+    }
+
+    const newX = dragStartRef.current.initX + dx;
+    const newY = dragStartRef.current.initY + dy;
+
+    // Constrain within viewport
+    const container = containerRef.current;
+    const width = container?.offsetWidth || 320;
+    const height = container?.offsetHeight || 220;
+
+    const clampedX = Math.max(10, Math.min(window.innerWidth - width - 10, newX));
+    const clampedY = Math.max(10, Math.min(window.innerHeight - height - 10, newY));
+
+    setDragPos({ x: clampedX, y: clampedY });
+  }, [isDragging]);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+
+    try {
+      containerRef.current?.releasePointerCapture(e.pointerId);
+    } catch {}
+
+    const container = containerRef.current;
+    const width = container?.offsetWidth || 320;
+    const height = container?.offsetHeight || 220;
+
+    const currentX = dragPos?.x ?? dragStartRef.current.initX;
+    const currentY = dragPos?.y ?? dragStartRef.current.initY;
+
+    const centerX = currentX + width / 2;
+    const centerY = currentY + height / 2;
+
+    const screenMidX = window.innerWidth / 2;
+    const screenMidY = window.innerHeight / 2;
+
+    let nearestCorner: PiPCorner = 'bottom-right';
+    if (centerX < screenMidX) {
+      nearestCorner = centerY < screenMidY ? 'top-left' : 'bottom-left';
+    } else {
+      nearestCorner = centerY < screenMidY ? 'top-right' : 'bottom-right';
+    }
+
+    setCorner(nearestCorner);
+    setDragPos(null);
+
+    try {
+      localStorage.setItem('zerovc_pip_corner', nearestCorner);
+    } catch {}
+  }, [isDragging, dragPos]);
+
   if (!isConnected || !currentChannelId || !targetParticipant || !hasScreenVideoTrack) {
     return null;
   }
@@ -87,6 +208,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({ onNavigateTo
   const displayName = targetParticipant.name || targetParticipant.identity;
 
   const handleOpenVoiceRoom = () => {
+    if (hasMovedSignificantlyRef.current) return;
     if (voiceChannel && parentGuild) {
       if (onNavigateToVoiceChannel) {
         onNavigateToVoiceChannel(voiceChannel.id, parentGuild.id);
@@ -97,8 +219,56 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({ onNavigateTo
     }
   };
 
+  const handleOpenUserProfile = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (hasMovedSignificantlyRef.current) return;
+    onOpenUserProfile?.(targetUser, { x: e.clientX, y: e.clientY });
+  };
+
+  // Corner positioning CSS
+  const getCornerClass = () => {
+    if (dragPos) return '';
+    switch (corner) {
+      case 'top-left':
+        return 'top-4 left-4';
+      case 'top-right':
+        return 'top-4 right-4';
+      case 'bottom-left':
+        return 'bottom-4 left-4';
+      case 'bottom-right':
+      default:
+        return 'bottom-4 right-4';
+    }
+  };
+
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-72 sm:w-80 rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-background-darkest/95 backdrop-blur-md select-none group animate-in slide-in-from-bottom-3 fade-in duration-150">
+    <div
+      ref={containerRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      style={
+        dragPos
+          ? {
+              position: 'fixed',
+              top: `${dragPos.y}px`,
+              left: `${dragPos.x}px`,
+              touchAction: 'none',
+            }
+          : { touchAction: 'none' }
+      }
+      className={`fixed z-40 w-72 sm:w-80 rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-background-darkest/95 backdrop-blur-md select-none group ${getCornerClass()} ${
+        isDragging
+          ? 'scale-105 cursor-grabbing shadow-brand-500/20 border-brand-500/40'
+          : 'transition-all duration-300 ease-out cursor-grab'
+      }`}
+    >
+      {/* Drag Grip Handle Bar on Top */}
+      <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-30 opacity-40 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <GripHorizontal className="w-5 h-3 text-white/60" />
+      </div>
+
       {/* Video Stream Stage */}
       <div
         onClick={handleOpenVoiceRoom}
@@ -108,18 +278,30 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({ onNavigateTo
           ref={videoRef}
           autoPlay
           playsInline
-          className="w-full h-full object-contain bg-black"
+          className="w-full h-full object-contain bg-black pointer-events-none"
         />
 
         {/* Top Floating Bar */}
         <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-20">
-          <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-white shadow">
-            <Monitor className="w-3 h-3 text-brand-400" />
-            <span className="truncate max-w-[110px]">{displayName}</span>
-            <span className="bg-brand-500 text-white text-[9px] px-1 py-0.2 rounded uppercase font-bold">
+          {/* User Profile Badge (Click to open profile modal) */}
+          <button
+            type="button"
+            onClick={handleOpenUserProfile}
+            className="flex items-center gap-1.5 bg-black/75 hover:bg-black/95 active:scale-95 border border-white/10 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow transition-all cursor-pointer z-30"
+            title="Ver perfil do participante"
+          >
+            <div className="w-3.5 h-3.5 rounded-full bg-brand-500 flex items-center justify-center text-[8px] font-bold overflow-hidden">
+              {targetUser.avatar_url ? (
+                <img src={targetUser.avatar_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                displayName?.[0]?.toUpperCase() || 'U'
+              )}
+            </div>
+            <span className="truncate max-w-[90px]">{displayName}</span>
+            <span className="bg-brand-500 text-white text-[8px] px-1 py-0.2 rounded uppercase font-bold">
               Ao Vivo
             </span>
-          </div>
+          </button>
 
           <div className="flex items-center gap-1">
             <button
@@ -162,16 +344,17 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({ onNavigateTo
       {/* Bottom Voice Control Bar */}
       <div className="p-2.5 px-3 bg-background-darker/90 border-t border-white/5 flex items-center justify-between">
         <div
-          onClick={handleOpenVoiceRoom}
+          onClick={handleOpenUserProfile}
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0"
+          title="Clique para ver perfil do usuário em call"
         >
           <div className="w-2 h-2 rounded-full bg-online animate-pulse flex-shrink-0" />
-          <span className="text-xs font-semibold text-gray-200 truncate">
-            #{voiceChannel?.name || 'Canal de Voz'}
+          <span className="text-xs font-semibold text-gray-200 truncate hover:underline hover:text-white">
+            {displayName} • #{voiceChannel?.name || 'Voz'}
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {!isLocal && (
             <div className="relative">
               <button
