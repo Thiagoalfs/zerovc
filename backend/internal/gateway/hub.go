@@ -21,6 +21,9 @@ type Hub struct {
 	Unregister chan *Client
 	Broadcast  chan BroadcastMessage
 
+	// Disconnect Hook
+	OnUserDisconnected func(userID uuid.UUID)
+
 	mu sync.RWMutex
 }
 
@@ -54,16 +57,22 @@ func (h *Hub) Run() {
 			log.Printf("[Gateway] Client connected: user_id=%s, socket_count=%d", client.UserID, len(h.clients[client.UserID]))
 
 		case client := <-h.Unregister:
+			var userFullyDisconnected bool
 			h.mu.Lock()
 			if userClients, ok := h.clients[client.UserID]; ok {
 				delete(userClients, client)
 				close(client.send)
 				if len(userClients) == 0 {
 					delete(h.clients, client.UserID)
+					userFullyDisconnected = true
 					log.Printf("[Gateway] User fully disconnected: user_id=%s", client.UserID)
 				}
 			}
 			h.mu.Unlock()
+
+			if userFullyDisconnected && h.OnUserDisconnected != nil {
+				go h.OnUserDisconnected(client.UserID)
+			}
 
 		case msg := <-h.Broadcast:
 			payload, err := json.Marshal(msg.Event)
