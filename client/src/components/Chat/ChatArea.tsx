@@ -23,13 +23,25 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   isMemberListOpen,
   onToggleMemberList,
 }) => {
-  const { activeChannel, messages, isLoadingMessages, sendMessage, typingUsers } = useGuildStore();
+  const {
+    activeChannel,
+    messages,
+    isLoadingMessages,
+    isLoadingMoreMessages,
+    hasMoreByChannel,
+    loadMoreMessages,
+    sendMessage,
+    typingUsers,
+  } = useGuildStore();
   const [localShowMemberList, setLocalShowMemberList] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeightRef = useRef<number | null>(null);
+  const isAutoScrollingRef = useRef<boolean>(false);
 
   const showMembers = isMemberListOpen !== undefined ? isMemberListOpen : localShowMemberList;
   const toggleMembers = () => {
@@ -40,15 +52,38 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  const scrollToBottom = () => {
-    if (!showPinnedOnly && !searchQuery) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (smooth = true) => {
+    if (!showPinnedOnly && !searchQuery && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
     }
   };
 
+  // Keep scroll position when loading older messages
   useEffect(() => {
-    scrollToBottom();
+    if (prevScrollHeightRef.current !== null && scrollContainerRef.current) {
+      const heightDiff = scrollContainerRef.current.scrollHeight - prevScrollHeightRef.current;
+      if (heightDiff > 0) {
+        scrollContainerRef.current.scrollTop = heightDiff;
+      }
+      prevScrollHeightRef.current = null;
+      return;
+    }
+
+    if (!isAutoScrollingRef.current) {
+      scrollToBottom();
+    }
   }, [messages]);
+
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container || !activeChannel) return;
+
+    // Detect near top scroll for pagination
+    if (container.scrollTop < 60 && !isLoadingMoreMessages && hasMoreByChannel[activeChannel.id] !== false) {
+      prevScrollHeightRef.current = container.scrollHeight;
+      loadMoreMessages(activeChannel.id);
+    }
+  };
 
   if (!activeChannel) {
     return (
@@ -186,9 +221,21 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         )}
 
         {/* Messages Scroll Area */}
-        <div className="flex-1 overflow-y-auto px-2 md:px-4 py-2">
-          {/* Welcome Header */}
-          {!showPinnedOnly && !searchQuery && (
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-2 md:px-4 py-2 no-scrollbar"
+        >
+          {/* Loading older messages indicator */}
+          {isLoadingMoreMessages && (
+            <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
+              <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+              <span>Carregando mensagens anteriores...</span>
+            </div>
+          )}
+
+          {/* Welcome Header (show only when reached the absolute top / no more older messages) */}
+          {!showPinnedOnly && !searchQuery && hasMoreByChannel[activeChannel.id] === false && (
             <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
               <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-background-light flex items-center justify-center mb-3">
                 <Hash className="w-6 h-6 md:w-10 md:h-10 text-white" />

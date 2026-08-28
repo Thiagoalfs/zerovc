@@ -39,7 +39,16 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   onPreviewImage,
 }) => {
   const { user } = useAuthStore();
-  const { activeGroup, messages, sendMessage, removeMember } = useDMGroupStore();
+  const {
+    activeGroup,
+    messages,
+    sendMessage,
+    removeMember,
+    isLoadingMessages,
+    isLoadingMoreMessages,
+    hasMoreByGroup,
+    loadMoreMessages,
+  } = useDMGroupStore();
 
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -52,14 +61,37 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeightRef = useRef<number | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (smooth = true) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    }
   };
 
   useEffect(() => {
+    if (prevScrollHeightRef.current !== null && scrollContainerRef.current) {
+      const heightDiff = scrollContainerRef.current.scrollHeight - prevScrollHeightRef.current;
+      if (heightDiff > 0) {
+        scrollContainerRef.current.scrollTop = heightDiff;
+      }
+      prevScrollHeightRef.current = null;
+      return;
+    }
+
     scrollToBottom();
   }, [messages]);
+
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container || !activeGroup) return;
+
+    if (container.scrollTop < 60 && !isLoadingMoreMessages && hasMoreByGroup[activeGroup.id] !== false) {
+      prevScrollHeightRef.current = container.scrollHeight;
+      loadMoreMessages(activeGroup.id);
+    }
+  };
 
   if (!activeGroup) {
     return (
@@ -193,8 +225,23 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* Messages Feed */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-0.5 no-scrollbar">
-            {messages.map((msg, index) => {
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto p-4 space-y-0.5 no-scrollbar"
+          >
+            {/* Loading older messages indicator */}
+            {isLoadingMoreMessages && (
+              <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
+                <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+                <span>Carregando mensagens anteriores...</span>
+              </div>
+            )}
+
+            {isLoadingMessages ? (
+              <div className="flex justify-center py-6 text-xs text-gray-500">Carregando mensagens...</div>
+            ) : (
+              messages.map((msg, index) => {
               const isMe = msg.author_id === user?.id;
               const prevMsg = messages[index - 1];
               const isCompact = prevMsg && prevMsg.author_id === msg.author_id;
@@ -240,7 +287,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                   </div>
                 </div>
               );
-            })}
+            })
+          )}
             <div ref={messagesEndRef} />
           </div>
 

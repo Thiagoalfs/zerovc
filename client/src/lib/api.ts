@@ -242,8 +242,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ recipient_id: recipientId }),
       }),
-    getMessages: (roomId: string, limit = 50) =>
-      request<DMMessage[]>(`/dms/${roomId}/messages?limit=${limit}`),
+    getMessages: (roomId: string, limit = 50, before?: string) => {
+      const query = new URLSearchParams({ limit: String(limit) });
+      if (before) query.append('before', before);
+      return request<DMMessage[]>(`/dms/${roomId}/messages?${query.toString()}`);
+    },
     sendMessage: (roomId: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
       request<DMMessage>(`/dms/${roomId}/messages`, {
         method: 'POST',
@@ -298,8 +301,11 @@ export const api = {
       request<{ success: boolean }>(`/dm/groups/${id}/members/${userId}`, {
         method: 'DELETE',
       }),
-    getMessages: (id: string, limit = 50) =>
-      request<DMGroupMessage[]>(`/dm/groups/${id}/messages?limit=${limit}`),
+    getMessages: (id: string, limit = 50, before?: string) => {
+      const query = new URLSearchParams({ limit: String(limit) });
+      if (before) query.append('before', before);
+      return request<DMGroupMessage[]>(`/dm/groups/${id}/messages?${query.toString()}`);
+    },
     sendMessage: (id: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
       request<DMGroupMessage>(`/dm/groups/${id}/messages`, {
         method: 'POST',
