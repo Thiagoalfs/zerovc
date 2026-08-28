@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Server, Settings, Check, Users } from 'lucide-react';
+import { MessageSquare, Server, Settings, Check, Shield, ArrowLeft, KeyRound } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { api, getApiBaseUrl, setApiBaseUrl } from '../../lib/api';
 
@@ -8,6 +8,8 @@ export const AuthScreen: React.FC = () => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [requires2FA, setRequires2FA] = useState(false);
   const [showServerConfig, setShowServerConfig] = useState(false);
   const [serverUrl, setServerUrl] = useState(getApiBaseUrl());
   const [serverSaved, setServerSaved] = useState(false);
@@ -45,7 +47,10 @@ export const AuthScreen: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLogin) {
-      await login(email, password);
+      const res = await login(email, password, twoFactorCode.trim() || undefined);
+      if (res?.requires_2fa) {
+        setRequires2FA(true);
+      }
     } else {
       await register(username, email, password);
     }
@@ -66,7 +71,7 @@ export const AuthScreen: React.FC = () => {
       {/* Server Config Button at top right */}
       <button
         onClick={() => setShowServerConfig(!showServerConfig)}
-        className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-background-dark/80 hover:bg-background-dark text-gray-400 hover:text-gray-200 text-xs px-3 py-1.5 rounded-full border border-white/10 transition-colors shadow-md backdrop-blur-sm"
+        className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-background-dark/80 hover:bg-background-dark text-gray-400 hover:text-gray-200 text-xs px-3 py-1.5 rounded-full border border-white/10 transition-colors shadow-md backdrop-blur-sm cursor-pointer"
         title="Configurar Servidor"
       >
         <Server className="w-3.5 h-3.5 text-online" />
@@ -83,11 +88,15 @@ export const AuthScreen: React.FC = () => {
         {/* Logo and Brand */}
         <div className="text-center mb-6">
           <div className="w-14 h-14 bg-brand-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-500/30">
-            <MessageSquare className="w-8 h-8 text-white" />
+            {requires2FA ? <Shield className="w-8 h-8 text-white" /> : <MessageSquare className="w-8 h-8 text-white" />}
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">ZeroVC</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            {requires2FA ? 'Autenticação em 2 Etapas' : 'ZeroVC'}
+          </h1>
           <p className="text-sm text-gray-400 mt-1">
-            {invitePreview
+            {requires2FA
+              ? 'Digite o código de 6 dígitos gerado pelo seu app autenticador'
+              : invitePreview
               ? `Junte-se ao servidor ${invitePreview.guild_name}`
               : isLogin
               ? 'Boas-vindas de volta!'
@@ -96,33 +105,28 @@ export const AuthScreen: React.FC = () => {
         </div>
 
         {/* Invite Preview Banner if user followed an invite link */}
-        {invitePreview && (
+        {!requires2FA && invitePreview && (
           <div className="mb-5 p-3.5 bg-brand-500/15 border border-brand-500/30 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
-            <div className="w-11 h-11 rounded-2xl bg-brand-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0 shadow-md overflow-hidden">
-              {invitePreview.icon_url ? (
-                <img src={invitePreview.icon_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span>{invitePreview.guild_name[0]?.toUpperCase() || 'S'}</span>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">
-                Convite para Servidor
-              </span>
-              <h3 className="text-sm font-bold text-white truncate">{invitePreview.guild_name}</h3>
-              <div className="flex items-center gap-1 text-[11px] text-brand-300 font-semibold">
-                <Users className="w-3 h-3" />
-                <span>{invitePreview.member_count} membros</span>
+            {invitePreview.icon_url ? (
+              <img src={invitePreview.icon_url} alt="" className="w-10 h-10 rounded-full object-cover shadow" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white shadow">
+                {invitePreview.guild_name[0]?.toUpperCase()}
               </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <span className="text-xs text-brand-300 font-semibold block uppercase tracking-wider">Convite Para Servidor</span>
+              <h3 className="font-bold text-white text-sm truncate">{invitePreview.guild_name}</h3>
+              <span className="text-[11px] text-gray-400">{invitePreview.member_count} membros</span>
             </div>
           </div>
         )}
 
-        {/* Server Config Dropdown */}
+        {/* Server URL Config Drawer */}
         {showServerConfig && (
-          <form onSubmit={handleSaveServer} className="mb-4 p-4 bg-background-darkest rounded-2xl border border-brand-500/30 shadow-inner">
-            <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
-              Endereço da API do Servidor
+          <form onSubmit={handleSaveServer} className="mb-5 p-4 bg-background-darker rounded-2xl border border-white/10 animate-in fade-in slide-in-from-top-2">
+            <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+              URL do Servidor ZeroVC
             </label>
             <div className="flex gap-2">
               <input
@@ -134,7 +138,7 @@ export const AuthScreen: React.FC = () => {
               />
               <button
                 type="submit"
-                className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
               >
                 {serverSaved ? <Check className="w-3.5 h-3.5" /> : 'Salvar'}
               </button>
@@ -151,57 +155,80 @@ export const AuthScreen: React.FC = () => {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && (
+          {requires2FA ? (
             <div>
-              <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
-                Nome de Usuário
+              <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5 flex items-center gap-1">
+                <KeyRound className="w-3.5 h-3.5 text-brand-400" />
+                <span>Código 2FA (6 dígitos)</span>
               </label>
               <input
                 type="text"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="timotei"
-                className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                maxLength={6}
+                autoFocus
+                value={twoFactorCode}
+                onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
+                placeholder="123456"
+                className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-3 text-center text-xl tracking-widest font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
               />
             </div>
+          ) : (
+            <>
+              {!isLogin && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+                    Nome de Usuário
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="timotei"
+                    className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+                  E-mail
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="timotei@email.com"
+                  className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+                  Senha
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                />
+              </div>
+            </>
           )}
-
-          <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
-              E-mail
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="timotei@email.com"
-              className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
-              Senha
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-            />
-          </div>
 
           <button
             type="submit"
-            disabled={isLoading}
-            className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2"
+            disabled={isLoading || (requires2FA && twoFactorCode.length !== 6)}
+            className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
           >
             {isLoading
               ? 'Processando...'
+              : requires2FA
+              ? 'Verificar Código'
               : invitePreview
               ? isLogin
                 ? 'Entrar e Participar do Servidor'
@@ -210,32 +237,48 @@ export const AuthScreen: React.FC = () => {
               ? 'Entrar'
               : 'Cadastrar'}
           </button>
+
+          {requires2FA && (
+            <button
+              type="button"
+              onClick={() => {
+                setRequires2FA(false);
+                setTwoFactorCode('');
+              }}
+              className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-white pt-1 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Voltar ao login</span>
+            </button>
+          )}
         </form>
 
         {/* Toggle between Login and Register */}
-        <div className="mt-6 text-center text-sm text-gray-400">
-          {isLogin ? (
-            <span>
-              Precisando de uma conta?{' '}
-              <button
-                onClick={() => setIsLogin(false)}
-                className="text-brand-500 font-semibold hover:underline"
-              >
-                Registre-se
-              </button>
-            </span>
-          ) : (
-            <span>
-              Já tem uma conta?{' '}
-              <button
-                onClick={() => setIsLogin(true)}
-                className="text-brand-500 font-semibold hover:underline"
-              >
-                Entrar
-              </button>
-            </span>
-          )}
-        </div>
+        {!requires2FA && (
+          <div className="mt-6 text-center text-sm text-gray-400">
+            {isLogin ? (
+              <span>
+                Precisando de uma conta?{' '}
+                <button
+                  onClick={() => setIsLogin(false)}
+                  className="text-brand-500 font-semibold hover:underline cursor-pointer"
+                >
+                  Registre-se
+                </button>
+              </span>
+            ) : (
+              <span>
+                Já tem uma conta?{' '}
+                <button
+                  onClick={() => setIsLogin(true)}
+                  className="text-brand-500 font-semibold hover:underline cursor-pointer"
+                >
+                  Entrar
+                </button>
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

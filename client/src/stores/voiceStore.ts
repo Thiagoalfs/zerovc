@@ -78,7 +78,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       });
 
       playJoinVoiceSound();
-      set({ isConnected: true, isConnecting: false, isMuted: false, isCameraOn: false });
+      const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
+      if (isPTT) {
+        await livekit.setMuted(true);
+      }
+      set({ isConnected: true, isConnecting: false, isMuted: isPTT, isCameraOn: false });
     } catch (err) {
       console.error('[Voice] Failed to join voice:', err);
       set({ isConnected: false, isConnecting: false, currentChannelId: null });

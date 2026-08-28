@@ -175,6 +175,11 @@ func main() {
 
 		// Current User & Profile Customization
 		r.Get("/api/auth/me", authHandler.Me)
+		r.Post("/api/auth/2fa/generate", authHandler.Generate2FA)
+		r.Post("/api/auth/2fa/enable", authHandler.Enable2FA)
+		r.Post("/api/auth/2fa/disable", authHandler.Disable2FA)
+		r.Post("/api/auth/change-password", authHandler.ChangePassword)
+		r.Post("/api/auth/change-email", authHandler.ChangeEmail)
 		r.Patch("/api/users/@me", userHandler.UpdateProfile)
 		r.Get("/api/users/me/blocks", userHandler.ListBlockedUsers)
 		r.Post("/api/users/{id}/block", userHandler.BlockUser)

@@ -28,6 +28,7 @@ import { InviteModal } from './components/Modals/InviteModal';
 import { UserProfileModal } from './components/Modals/UserProfileModal';
 import { ImageModal } from './components/Modals/ImageModal';
 import { IncomingCallModal } from './components/DM/IncomingCallModal';
+import { livekit } from './lib/livekit';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 
@@ -186,6 +187,54 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     checkAuth();
+  }, []);
+
+  // Push-to-Talk (PTT) Global Key Listener
+  useEffect(() => {
+    let isPTTPressed = false;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
+      const mode = localStorage.getItem('zerovc_input_mode');
+      if (mode !== 'ptt') return;
+
+      const pttKey = localStorage.getItem('zerovc_ptt_key') || 'Space';
+      if (e.code === pttKey && !isPTTPressed) {
+        if (e.code === 'Space') {
+          e.preventDefault();
+        }
+        isPTTPressed = true;
+        livekit.setMuted(false);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
+      const mode = localStorage.getItem('zerovc_input_mode');
+      if (mode !== 'ptt') return;
+
+      const pttKey = localStorage.getItem('zerovc_ptt_key') || 'Space';
+      if (e.code === pttKey) {
+        isPTTPressed = false;
+        livekit.setMuted(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, []);
 
   useEffect(() => {
