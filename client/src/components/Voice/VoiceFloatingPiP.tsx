@@ -213,9 +213,21 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       if (onNavigateToVoiceChannel) {
         onNavigateToVoiceChannel(voiceChannel.id, parentGuild.id);
       } else {
-        selectGuild(parentGuild.id);
-        selectChannel(voiceChannel);
+        selectGuild(parentGuild.id, voiceChannel.id);
       }
+    }
+  };
+
+  const toggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+    if (!document.fullscreenElement) {
+      if (videoEl.requestFullscreen) {
+        videoEl.requestFullscreen().catch(() => {});
+      }
+    } else {
+      document.exitFullscreen().catch(() => {});
     }
   };
 
@@ -306,12 +318,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenVoiceRoom();
-              }}
+              onClick={toggleFullscreen}
               className="p-1 rounded-lg bg-black/60 hover:bg-white/20 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
-              title="Expandir canal de voz"
+              title="Tela cheia do vídeo"
             >
               <Maximize2 className="w-3.5 h-3.5" />
             </button>
@@ -335,7 +344,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
         {/* Center Hover Click Overlay */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
           <div className="bg-background-darkest/90 border border-white/10 px-3 py-1.5 rounded-xl text-xs font-semibold text-white flex items-center gap-1.5 shadow-xl">
-            <Maximize2 className="w-3.5 h-3.5 text-brand-400" />
+            <Monitor className="w-3.5 h-3.5 text-brand-400" />
             <span>Clique para abrir a call</span>
           </div>
         </div>

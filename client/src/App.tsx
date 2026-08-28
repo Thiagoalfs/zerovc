@@ -672,11 +672,10 @@ export const App: React.FC = () => {
           watchedParticipantId || isScreensharing ? (
             <VoiceFloatingPiP
               onNavigateToVoiceChannel={(chId, gId) => {
-                if (gId) selectGuild(gId);
-                const ch = useGuildStore.getState().activeGuild?.channels?.find((c) => c.id === chId);
-                if (ch) selectChannel(ch);
                 setIsHomeActive(false);
-                if (gId && ch) navigateTo(`/${gId}/${ch.id}`);
+                if (gId && chId) {
+                  navigateTo(`/${gId}/${chId}`);
+                }
               }}
               onOpenUserProfile={(targetUser, pos) => {
                 setSelectedUserForProfile({ user: targetUser, position: pos });
