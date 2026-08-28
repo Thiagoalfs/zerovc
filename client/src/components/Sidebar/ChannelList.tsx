@@ -1,5 +1,5 @@
-import React from 'react';
-import { Hash, Volume2, Plus, UserPlus, Users, X, Settings } from 'lucide-react';
+import React, { useState } from 'react';
+import { Hash, Volume2, Plus, UserPlus, Users, X, Settings, ChevronDown } from 'lucide-react';
 import { Channel } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -14,6 +14,7 @@ interface ChannelListProps {
   onOpenSettings: () => void;
   onOpenServerSettings?: () => void;
   onOpenChannelSettings?: (channel: Channel) => void;
+  onOpenMemberList?: () => void;
   onOpenScreenShare: () => void;
   onCloseMobileDrawer?: () => void;
 }
@@ -26,12 +27,14 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onOpenSettings,
   onOpenServerSettings,
   onOpenChannelSettings,
+  onOpenMemberList,
   onOpenScreenShare,
   onCloseMobileDrawer,
 }) => {
   const { user } = useAuthStore();
   const { activeGuild, activeChannel, selectChannel } = useGuildStore();
   const { currentChannelId, joinVoice, isConnected, speakingUserIds } = useVoiceStore();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const isOwner = activeGuild?.owner_id === user?.id;
   const textChannels = activeGuild?.channels?.filter((c) => c.type === 'text') || [];
@@ -51,7 +54,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   };
 
   return (
-    <div className="w-60 bg-background-darker flex flex-col h-full border-r border-black/20 select-none flex-shrink-0">
+    <div className="w-60 bg-background-darker flex flex-col h-full border-r border-black/20 select-none flex-shrink-0 relative">
       {/* Server Header or Home Header */}
       {isHomeActive ? (
         <div className="h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm">
@@ -69,38 +72,79 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           )}
         </div>
       ) : (
-        <div className="h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm">
-          <span className="truncate max-w-[130px]">{activeGuild?.name || 'Servidor'}</span>
-          <div className="flex items-center gap-0.5">
-            {isOwner && onOpenServerSettings && (
-              <button
-                onClick={onOpenServerSettings}
-                className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/10 transition-colors"
-                title="Configurações do Servidor & Cargos"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            )}
+        <div className="relative z-30">
+          {/* Clickable Server Name Header */}
+          <button
+            type="button"
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="w-full h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm hover:bg-white/5 transition-colors group cursor-pointer text-left"
+          >
+            <span className="truncate max-w-[170px] text-sm md:text-base font-bold text-white group-hover:text-gray-100">
+              {activeGuild?.name || 'Servidor'}
+            </span>
+            <ChevronDown
+              className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 flex-shrink-0 ${
+                isDropdownOpen ? 'rotate-180 text-brand-400' : ''
+              }`}
+            />
+          </button>
 
-            {activeGuild && (
-              <button
-                onClick={onOpenInviteModal}
-                className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/10 transition-colors"
-                title="Convidar Pessoas (Código de 10 Caracteres)"
-              >
-                <UserPlus className="w-4 h-4 text-brand-500" />
-              </button>
-            )}
+          {/* Dropdown Menu */}
+          {isDropdownOpen && (
+            <>
+              {/* Invisible backdrop to dismiss */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setIsDropdownOpen(false)}
+              />
 
-            {onCloseMobileDrawer && (
-              <button
-                onClick={onCloseMobileDrawer}
-                className="md:hidden text-gray-400 hover:text-white p-1 ml-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
-          </div>
+              {/* Menu Card */}
+              <div className="absolute top-13 left-2 right-2 z-50 bg-background-darkest rounded-2xl p-1.5 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 space-y-1">
+                {/* 1. Convidar Membros */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    onOpenInviteModal();
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs md:text-sm font-semibold text-brand-400 hover:bg-brand-500 hover:text-white transition-colors"
+                >
+                  <span>Convidar Membros</span>
+                  <UserPlus className="w-4 h-4" />
+                </button>
+
+                {/* 2. Configurações do Servidor */}
+                {isOwner && onOpenServerSettings && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      onOpenServerSettings();
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs md:text-sm font-medium text-gray-200 hover:bg-brand-500 hover:text-white transition-colors"
+                  >
+                    <span>Configurar Servidor</span>
+                    <Settings className="w-4 h-4" />
+                  </button>
+                )}
+
+                {/* 3. Membros do Servidor */}
+                {onOpenMemberList && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      onOpenMemberList();
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs md:text-sm font-medium text-gray-200 hover:bg-brand-500 hover:text-white transition-colors"
+                  >
+                    <span>Membros ({activeGuild?.members?.length || 0})</span>
+                    <Users className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
