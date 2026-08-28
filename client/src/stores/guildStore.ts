@@ -20,10 +20,10 @@ interface GuildState {
   selectGuild: (guildId: string) => Promise<void>;
   selectChannel: (channel: Channel) => Promise<void>;
   createGuild: (name: string, iconUrl?: string) => Promise<Guild>;
-  createChannel: (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string) => Promise<Channel>;
-  updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number }) => Promise<void>;
+  createChannel: (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string, categoryId?: string, isPrivate?: boolean, roleIds?: string[]) => Promise<Channel>;
+  updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean }) => Promise<void>;
   deleteChannel: (channelId: string) => Promise<void>;
-  reorderChannels: (guildId: string, channelIds: string[]) => Promise<void>;
+  reorderChannels: (guildId: string, payload: string[] | Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }>) => Promise<void>;
 
   sendMessage: (content: string, replyToId?: string) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
@@ -47,6 +47,12 @@ interface GuildState {
   deleteRole: (guildId: string, roleId: string) => Promise<void>;
   assignRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
   removeRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
+
+  // Moderation
+  kickMember: (guildId: string, userId: string) => Promise<void>;
+  banMember: (guildId: string, userId: string, reason?: string) => Promise<void>;
+  unbanMember: (guildId: string, userId: string) => Promise<void>;
+  muteMember: (guildId: string, userId: string, durationSeconds: number) => Promise<void>;
 }
 
 export const useGuildStore = create<GuildState>((set, get) => ({
@@ -131,8 +137,15 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     return guild;
   },
 
-  createChannel: async (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string) => {
-    const channel = await api.channels.create(guildId, { name, type, topic });
+  createChannel: async (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string, categoryId?: string, isPrivate?: boolean, roleIds?: string[]) => {
+    const channel = await api.channels.create(guildId, {
+      name,
+      type,
+      topic,
+      category_id: categoryId,
+      is_private: isPrivate,
+      role_ids: roleIds,
+    } as any);
     set((state) => {
       if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
       const channels = [...(state.activeGuild.channels || []), channel];
@@ -160,7 +173,10 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     await api.channels.delete(channelId);
     set((state) => {
       if (!state.activeGuild) return state;
-      const channels = (state.activeGuild.channels || []).filter((c) => c.id !== channelId);
+      // If deleted channel was a category, reset category_id of children
+      const channels = (state.activeGuild.channels || [])
+        .filter((c) => c.id !== channelId)
+        .map((c) => (c.category_id === channelId ? { ...c, category_id: undefined } : c));
       const activeChannel = state.activeChannel?.id === channelId ? (channels[0] || null) : state.activeChannel;
       return {
         activeGuild: { ...state.activeGuild, channels },
@@ -169,20 +185,42 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     });
   },
 
-  reorderChannels: async (guildId: string, channelIds: string[]) => {
+  reorderChannels: async (guildId: string, payload: string[] | Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }>) => {
     set((state) => {
       if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
-      const orderMap = new Map(channelIds.map((id, idx) => [id, idx]));
-      const channels = [...(state.activeGuild.channels || [])].map((c) => ({
-        ...c,
-        position: orderMap.has(c.id) ? orderMap.get(c.id)! : (c.position ?? 999),
-      })).sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
 
-      return { activeGuild: { ...state.activeGuild, channels } };
+      if (Array.isArray(payload) && typeof payload[0] === 'string') {
+        const channelIds = payload as string[];
+        const orderMap = new Map(channelIds.map((id, idx) => [id, idx]));
+        const channels = [...(state.activeGuild.channels || [])].map((c) => ({
+          ...c,
+          position: orderMap.has(c.id) ? orderMap.get(c.id)! : (c.position ?? 999),
+        })).sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+        return { activeGuild: { ...state.activeGuild, channels } };
+      } else {
+        const items = payload as Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }>;
+        const itemMap = new Map(items.map((it) => [it.id, it]));
+        const channels = [...(state.activeGuild.channels || [])].map((c) => {
+          const it = itemMap.get(c.id);
+          if (it) {
+            return {
+              ...c,
+              position: it.position,
+              category_id: it.clear_category ? undefined : (it.category_id !== undefined ? it.category_id : c.category_id),
+            };
+          }
+          return c;
+        }).sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+        return { activeGuild: { ...state.activeGuild, channels } };
+      }
     });
 
     try {
-      await api.channels.reorder(guildId, channelIds);
+      if (Array.isArray(payload) && typeof payload[0] === 'string') {
+        await api.channels.reorder(guildId, { channel_ids: payload as string[] });
+      } else {
+        await api.channels.reorder(guildId, { channels: payload as any });
+      }
     } catch (err) {
       console.error('Failed to persist channel reorder:', err);
     }
@@ -450,5 +488,38 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
   removeRole: async (guildId: string, userId: string, roleId: string) => {
     await api.roles.remove(guildId, userId, roleId);
+  },
+
+  kickMember: async (guildId: string, userId: string) => {
+    await api.guilds.kickMember(guildId, userId);
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const members = (state.activeGuild.members || []).filter((m) => m.id !== userId);
+      return { activeGuild: { ...state.activeGuild, members } };
+    });
+  },
+
+  banMember: async (guildId: string, userId: string, reason?: string) => {
+    await api.guilds.banMember(guildId, userId, reason);
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const members = (state.activeGuild.members || []).filter((m) => m.id !== userId);
+      return { activeGuild: { ...state.activeGuild, members } };
+    });
+  },
+
+  unbanMember: async (guildId: string, userId: string) => {
+    await api.guilds.unbanMember(guildId, userId);
+  },
+
+  muteMember: async (guildId: string, userId: string, durationSeconds: number) => {
+    const res = await api.guilds.muteMember(guildId, userId, durationSeconds);
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const members = (state.activeGuild.members || []).map((m) =>
+        m.id === userId ? { ...m, muted_until: res.muted_until || undefined } : m
+      );
+      return { activeGuild: { ...state.activeGuild, members } };
+    });
   },
 }));

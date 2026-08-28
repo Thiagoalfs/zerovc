@@ -76,11 +76,34 @@ type GuildMember struct {
 	JoinedAt time.Time `json:"joined_at"`
 }
 
+const (
+	// Permissões Gerais
+	PermAdministrator  int64 = 1 << 0  // 1: Administrador (Acesso Mestre)
+	PermManageGuild    int64 = 1 << 1  // 2: Gerenciar Servidor
+	PermManageRoles    int64 = 1 << 2  // 4: Gerenciar Cargos
+	PermManageChannels int64 = 1 << 3  // 8: Gerenciar Canais e Categorias
+	PermKickMembers    int64 = 1 << 4  // 16: Expulsar Membros
+	PermBanMembers     int64 = 1 << 5  // 32: Banir Membros
+	PermMuteMembers    int64 = 1 << 6  // 64: Silenciar Membros
+
+	// Permissões de Mensagens & Chat
+	PermSendMessages   int64 = 1 << 7  // 128: Enviar Mensagens
+	PermManageMessages int64 = 1 << 8  // 256: Gerenciar Mensagens
+	PermAttachFiles    int64 = 1 << 9  // 512: Anexar Arquivos
+
+	// Permissões de Voz
+	PermConnectVoice   int64 = 1 << 10 // 1024: Conectar em Canais de Voz
+	PermSpeakVoice     int64 = 1 << 11 // 2048: Falar em Canais de Voz
+	PermMuteVoice      int64 = 1 << 12 // 4096: Silenciar Membros em Voz
+	PermDeafenVoice    int64 = 1 << 13 // 8192: Ensurdecer Membros em Voz
+)
+
 type ChannelType string
 
 const (
-	ChannelTypeText  ChannelType = "text"
-	ChannelTypeVoice ChannelType = "voice"
+	ChannelTypeText     ChannelType = "text"
+	ChannelTypeVoice    ChannelType = "voice"
+	ChannelTypeCategory ChannelType = "category"
 )
 
 type Channel struct {
@@ -88,8 +111,11 @@ type Channel struct {
 	GuildID       uuid.UUID      `json:"guild_id"`
 	Name          string         `json:"name"`
 	Type          ChannelType    `json:"type"`
+	CategoryID    *uuid.UUID     `json:"category_id,omitempty"`
 	Topic         string         `json:"topic"`
 	Position      int            `json:"position"`
+	IsPrivate     bool           `json:"is_private"`
+	RoleIDs       []uuid.UUID    `json:"role_ids,omitempty"`
 	VoiceSessions []VoiceSession `json:"voice_sessions,omitempty"`
 	CreatedAt     time.Time      `json:"created_at"`
 }

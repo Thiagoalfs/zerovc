@@ -104,7 +104,7 @@ export const api = {
       request<{ success: boolean }>(`/guilds/${id}/join`, {
         method: 'POST',
       }),
-    createChannel: (guildId: string, data: { name: string; type: 'text' | 'voice'; topic?: string }) =>
+    createChannel: (guildId: string, data: { name: string; type: 'text' | 'voice' | 'category'; category_id?: string; topic?: string }) =>
       request<Channel>(`/guilds/${guildId}/channels`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -113,10 +113,28 @@ export const api = {
       request<GuildInvite>(`/guilds/${guildId}/invites`, {
         method: 'POST',
       }),
+    kickMember: (guildId: string, userId: string) =>
+      request<{ success: boolean; user_id: string }>(`/guilds/${guildId}/members/${userId}/kick`, {
+        method: 'POST',
+      }),
+    banMember: (guildId: string, userId: string, reason?: string) =>
+      request<{ success: boolean; user_id: string }>(`/guilds/${guildId}/bans`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId, reason: reason || '' }),
+      }),
+    unbanMember: (guildId: string, userId: string) =>
+      request<{ success: boolean; user_id: string }>(`/guilds/${guildId}/bans/${userId}`, {
+        method: 'DELETE',
+      }),
+    muteMember: (guildId: string, userId: string, durationSeconds: number) =>
+      request<{ success: boolean; user_id: string; muted_until: string | null }>(`/guilds/${guildId}/members/${userId}/mute`, {
+        method: 'POST',
+        body: JSON.stringify({ duration_seconds: durationSeconds }),
+      }),
   },
 
   channels: {
-    create: (guildId: string, data: { name: string; type: 'text' | 'voice' | 'category'; topic?: string }) =>
+    create: (guildId: string, data: { name: string; type: 'text' | 'voice' | 'category'; category_id?: string; topic?: string }) =>
       request<Channel>(`/guilds/${guildId}/channels`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -140,7 +158,7 @@ export const api = {
       request<{ success: boolean }>(`/channels/${channelId}/messages/${messageId}`, {
         method: 'DELETE',
       }),
-    update: (channelId: string, data: { name?: string; topic?: string; position?: number }) =>
+    update: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean }) =>
       request<Channel>(`/channels/${channelId}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -149,10 +167,10 @@ export const api = {
       request<{ success: boolean }>(`/channels/${channelId}`, {
         method: 'DELETE',
       }),
-    reorder: (guildId: string, channelIds: string[]) =>
+    reorder: (guildId: string, payload: { channel_ids?: string[]; channels?: Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }> }) =>
       request<{ success: boolean }>(`/guilds/${guildId}/channels/positions`, {
         method: 'PUT',
-        body: JSON.stringify({ channel_ids: channelIds }),
+        body: JSON.stringify(payload),
       }),
     joinVoice: (channelId: string) =>
       request<{ token: string; livekit_url: string; room_name: string }>(`/channels/${channelId}/join-voice`, {
