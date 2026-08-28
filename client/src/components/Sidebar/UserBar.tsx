@@ -60,25 +60,31 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     <div className="flex flex-col bg-background-darkest select-none relative">
       {/* Quick Status Menu Popover */}
       {showStatusMenu && (
-        <div className="absolute bottom-16 left-2 z-40 bg-background-darkest border border-white/10 rounded-2xl p-2 shadow-2xl w-48 animate-in fade-in zoom-in-95">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1 block">
-            Alterar Estado
-          </span>
-          <div className="space-y-1 mt-1">
-            {(['online', 'idle', 'dnd', 'offline'] as const).map((st) => (
-              <button
-                key={st}
-                onClick={() => handleSetStatus(st)}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  user?.status === st ? 'bg-brand-500 text-white' : 'text-gray-300 hover:bg-white/5'
-                }`}
-              >
-                <span className={`w-2 h-2 rounded-full ${getStatusColor(st)}`} />
-                <span>{getStatusLabel(st)}</span>
-              </button>
-            ))}
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setShowStatusMenu(false)}
+          />
+          <div className="absolute bottom-16 left-2 z-50 bg-background-darkest border border-white/10 rounded-2xl p-2 shadow-2xl w-48 animate-in fade-in zoom-in-95">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1 block">
+              Definir Status
+            </span>
+            <div className="space-y-1 mt-1">
+              {(['online', 'idle', 'dnd', 'offline'] as const).map((st) => (
+                <button
+                  key={st}
+                  onClick={() => handleSetStatus(st)}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    user?.status === st ? 'bg-brand-500 text-white' : 'text-gray-300 hover:bg-white/5'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${getStatusColor(st)}`} />
+                  <span>{getStatusLabel(st)}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Active Voice Connection Bar */}
