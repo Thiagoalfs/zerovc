@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Camera, Image, Sparkles, Check } from 'lucide-react';
+import { X, Camera, Image, Sparkles, Check, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 
 interface ProfileModalProps {
@@ -8,7 +8,7 @@ interface ProfileModalProps {
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
-  const { user, updateProfile } = useAuthStore();
+  const { user, updateProfile, logout } = useAuthStore();
 
   const [displayName, setDisplayName] = useState(user?.display_name || '');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
@@ -189,30 +189,45 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               />
             </div>
 
-            {/* Submit Button */}
-            <div className="pt-2 flex justify-end gap-3">
+            {/* Footer Buttons: Logout + Cancel + Save */}
+            <div className="pt-4 mt-2 border-t border-white/5 flex items-center justify-between">
               <button
                 type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-300 hover:underline"
+                onClick={() => {
+                  onClose();
+                  logout();
+                }}
+                className="px-3.5 py-2 rounded-xl bg-dnd/15 hover:bg-dnd text-dnd hover:text-white text-xs md:text-sm font-semibold transition-all flex items-center gap-2"
+                title="Sair da sua conta"
               >
-                Cancelar
+                <LogOut className="w-4 h-4" />
+                <span>Sair da Conta</span>
               </button>
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-medium px-6 py-2 rounded-xl text-sm transition-all shadow-md flex items-center gap-2"
-              >
-                {savedSuccess ? (
-                  <>
-                    <Check className="w-4 h-4" /> Salvo!
-                  </>
-                ) : isSaving ? (
-                  'Salvando...'
-                ) : (
-                  'Salvar Alterações'
-                )}
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-xs md:text-sm font-medium text-gray-400 hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs md:text-sm transition-all shadow-md shadow-brand-500/20 flex items-center gap-1.5"
+                >
+                  {savedSuccess ? (
+                    <>
+                      <Check className="w-4 h-4" /> Salvo!
+                    </>
+                  ) : isSaving ? (
+                    'Salvando...'
+                  ) : (
+                    'Salvar'
+                  )}
+                </button>
+              </div>
             </div>
           </form>
         </div>

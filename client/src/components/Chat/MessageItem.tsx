@@ -2,16 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2, Check, X } from 'lucide-react';
-import { Message } from '../../types';
+import { Message, User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 
 interface MessageItemProps {
   message: Message;
   isCompact?: boolean;
+  onOpenUserProfile?: (user: User) => void;
 }
 
-export const MessageItem: React.FC<MessageItemProps> = ({ message, isCompact = false }) => {
+export const MessageItem: React.FC<MessageItemProps> = ({
+  message,
+  isCompact = false,
+  onOpenUserProfile,
+}) => {
   const { user } = useAuthStore();
   const { activeGuild, editMessage, deleteMessage } = useGuildStore();
 
@@ -169,7 +174,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message, isCompact = f
           {shortTime}
         </div>
       ) : (
-        <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white flex-shrink-0 mt-0.5 shadow-sm text-sm overflow-hidden">
+        <div
+          onClick={() => message.author && onOpenUserProfile?.(message.author)}
+          className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white flex-shrink-0 mt-0.5 shadow-sm text-sm overflow-hidden cursor-pointer hover:opacity-85 transition-opacity"
+          title="Ver perfil"
+        >
           {message.author?.avatar_url ? (
             <img
               src={message.author.avatar_url}
@@ -190,7 +199,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message, isCompact = f
       <div className="flex-1 min-w-0">
         {!isCompact && (
           <div className="flex items-baseline gap-2 mb-0.5">
-            <span className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer">
+            <span
+              onClick={() => message.author && onOpenUserProfile?.(message.author)}
+              className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
+              title="Ver perfil"
+            >
               {message.author?.display_name || message.author?.username || 'Usuário'}
             </span>
             <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>

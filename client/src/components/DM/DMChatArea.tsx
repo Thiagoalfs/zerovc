@@ -5,16 +5,18 @@ import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu } from 'lucid
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
+import { User } from '../../types';
 
 interface DMChatAreaProps {
   onOpenMobileDrawer?: () => void;
+  onOpenUserProfile?: (user: User) => void;
 }
 
 const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
 const MAX_CHARS = 2000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
 
-export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) => {
+export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer, onOpenUserProfile }) => {
   const { user } = useAuthStore();
   const { activeRoom, messages, sendMessage, isLoadingMessages } = useDMStore();
 
@@ -203,7 +205,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
           )}
 
           {/* Recipient Avatar */}
-          <div className="relative w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+          <div
+            onClick={() => recipient && onOpenUserProfile?.(recipient)}
+            className="relative w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 cursor-pointer hover:opacity-85 transition-opacity"
+            title="Ver perfil"
+          >
             {recipient?.avatar_url ? (
               <img src={recipient.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
             ) : (
@@ -212,8 +218,12 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
             <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-background-dark ${getStatusColor(recipient?.status)}`} />
           </div>
 
-          <div className="flex flex-col truncate">
-            <span className="font-bold text-gray-100 text-sm truncate">
+          <div
+            onClick={() => recipient && onOpenUserProfile?.(recipient)}
+            className="flex flex-col truncate cursor-pointer group"
+            title="Ver perfil"
+          >
+            <span className="font-bold text-gray-100 text-sm truncate group-hover:text-brand-400 transition-colors">
               {recipient?.display_name || recipient?.username}
             </span>
             <span className="text-[10px] text-gray-400 truncate">@{recipient?.username}</span>
@@ -297,7 +307,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
               >
                 {/* Avatar */}
                 {!isCompact ? (
-                  <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5">
+                  <div
+                    onClick={() => msg.author && onOpenUserProfile?.(msg.author)}
+                    className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-85 transition-opacity"
+                    title="Ver perfil"
+                  >
                     {msg.author?.avatar_url ? (
                       <img src={msg.author.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                     ) : (
@@ -312,7 +326,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
                 <div className={`max-w-[85%] md:max-w-[75%] flex flex-col ${isMe ? 'items-end text-right' : 'items-start text-left'}`}>
                   {!isCompact && (
                     <div className="flex items-baseline gap-2 mb-1">
-                      <span className="text-xs font-semibold text-gray-200">
+                      <span
+                        onClick={() => msg.author && onOpenUserProfile?.(msg.author)}
+                        className="text-xs font-semibold text-gray-200 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
+                        title="Ver perfil"
+                      >
                         {msg.author?.display_name || msg.author?.username}
                       </span>
                       <span className="text-[10px] text-gray-500">{timeStr}</span>
