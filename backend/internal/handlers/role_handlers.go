@@ -220,8 +220,36 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch updated roles for member and broadcast
+	var updatedRoles []models.Role
+	rRows, rErr := h.db.Pool.Query(r.Context(), `
+		SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, gr.created_at
+		FROM guild_roles gr
+		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
+		ORDER BY gr.position ASC
+	`, guildID, targetUserID)
+	if rErr == nil {
+		for rRows.Next() {
+			var r models.Role
+			if rRows.Scan(&r.ID, &r.GuildID, &r.Name, &r.Color, &r.Position, &r.Permissions, &r.CreatedAt) == nil {
+				updatedRoles = append(updatedRoles, r)
+			}
+		}
+		rRows.Close()
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_MEMBER_UPDATE",
+		Data: map[string]any{
+			"guild_id": guildID,
+			"user_id":  targetUserID,
+			"roles":    updatedRoles,
+		},
+	})
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"success": true})
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "roles": updatedRoles})
 }
 
 func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
@@ -239,6 +267,34 @@ func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch updated roles for member and broadcast
+	var updatedRoles []models.Role
+	rRows, rErr := h.db.Pool.Query(r.Context(), `
+		SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, gr.created_at
+		FROM guild_roles gr
+		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
+		ORDER BY gr.position ASC
+	`, guildID, targetUserID)
+	if rErr == nil {
+		for rRows.Next() {
+			var r models.Role
+			if rRows.Scan(&r.ID, &r.GuildID, &r.Name, &r.Color, &r.Position, &r.Permissions, &r.CreatedAt) == nil {
+				updatedRoles = append(updatedRoles, r)
+			}
+		}
+		rRows.Close()
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_MEMBER_UPDATE",
+		Data: map[string]any{
+			"guild_id": guildID,
+			"user_id":  targetUserID,
+			"roles":    updatedRoles,
+		},
+	})
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"success": true})
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "roles": updatedRoles})
 }
