@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X, Loader2 } from 'lucide-react';
+import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { api } from '../../lib/api';
@@ -11,6 +11,8 @@ interface MessageInputProps {
   replyingTo?: Message | null;
   onCancelReply?: () => void;
   onSendMessage: (content: string, replyToId?: string) => Promise<void>;
+  droppedFile?: File | null;
+  onClearDroppedFile?: () => void;
 }
 
 const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
@@ -22,6 +24,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   replyingTo,
   onCancelReply,
   onSendMessage,
+  droppedFile,
+  onClearDroppedFile,
 }) => {
   const { activeGuild } = useGuildStore();
   const [content, setContent] = useState('');
@@ -78,6 +82,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     return list.slice(0, 8);
   }, [mentionQuery, activeGuild?.members]);
+
+  useEffect(() => {
+    if (droppedFile) {
+      processFile(droppedFile);
+      onClearDroppedFile?.();
+    }
+  }, [droppedFile]);
 
   useEffect(() => {
     if (channel?.id && textareaRef.current) {
@@ -226,11 +237,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
-  const processImageFile = (file: File) => {
+  const processFile = (file: File) => {
     if (file.size > MAX_FILE_BYTES) {
       setLimitAlert({
         title: 'Arquivo Muito Grande',
-        message: 'O limite de imagens/vídeos/arquivos são 20mb',
+        message: 'O limite de imagens/vídeos/arquivos é de 20 MB',
         detail: `Tamanho do arquivo: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
       });
       return;
@@ -238,12 +249,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     setSelectedFile(file);
 
-    // Generate local thumbnail preview
-    const reader = new FileReader();
-    reader.onload = (readEvent) => {
-      setSelectedImagePreview(readEvent.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    if (file.type.startsWith('image/')) {
+      // Generate local thumbnail preview
+      const reader = new FileReader();
+      reader.onload = (readEvent) => {
+        setSelectedImagePreview(readEvent.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedImagePreview(null);
+    }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -252,11 +267,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (item.type.indexOf('image') !== -1) {
+      if (item.kind === 'file') {
         e.preventDefault();
         const file = item.getAsFile();
         if (file) {
-          processImageFile(file);
+          processFile(file);
           break;
         }
       }
@@ -266,7 +281,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    processImageFile(file);
+    processFile(file);
     e.target.value = '';
   };
 
@@ -343,21 +358,27 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {/* Selected Image Preview */}
-      {selectedImagePreview && (
+      {/* Selected File / Image Preview */}
+      {selectedFile && (
         <div className="mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <img
-              src={selectedImagePreview}
-              alt="Preview"
-              className="w-12 h-12 object-cover rounded-xl border border-white/10"
-            />
-            <div>
+          <div className="flex items-center gap-2.5">
+            {selectedImagePreview ? (
+              <img
+                src={selectedImagePreview}
+                alt="Preview"
+                className="w-12 h-12 object-cover rounded-xl border border-white/10 flex-shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-background-light flex items-center justify-center text-brand-400 border border-white/10 flex-shrink-0">
+                <FileText className="w-5 h-5" />
+              </div>
+            )}
+            <div className="min-w-0">
               <span className="text-xs text-gray-200 font-medium block truncate max-w-[140px]">
-                {selectedFile?.name || 'Imagem anexada'}
+                {selectedFile.name}
               </span>
-              <span className="text-[10px] text-gray-400">
-                {selectedFile ? `${(selectedFile.size / 1024).toFixed(0)} KB` : ''}
+              <span className="text-[10px] text-gray-400 font-mono">
+                {(selectedFile.size / 1024).toFixed(0)} KB
               </span>
             </div>
           </div>
@@ -367,7 +388,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               setSelectedFile(null);
               setSelectedImagePreview(null);
             }}
-            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3 cursor-pointer"
+            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3 cursor-pointer flex-shrink-0"
+            title="Remover anexo"
           >
             <X className="w-4 h-4" />
           </button>
@@ -396,7 +418,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="*/*"
         onChange={handleFileChange}
         className="hidden"
       />
@@ -412,7 +434,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
           className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
-          title="Anexar Imagem (até 20 MB)"
+          title="Anexar Arquivo ou Imagem (até 20 MB)"
         >
           <PlusCircle className="w-5 h-5" />
         </button>
