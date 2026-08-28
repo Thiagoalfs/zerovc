@@ -1,14 +1,16 @@
 version: '3.8'
 
 services:
+  # Se você já tiver um container de Postgres rodando separadamente,
+  # você pode comentar ou remover o serviço 'postgres' abaixo.
   postgres:
     image: postgres:16-alpine
     container_name: zerovc-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: zerovc
-      POSTGRES_USER: zerovc_user
-      POSTGRES_PASSWORD: zerovc_password_change_me
+      POSTGRES_DB: ${POSTGRES_DB:-zerovc}
+      POSTGRES_USER: ${POSTGRES_USER:-zerovc_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zerovc_password_change_me}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres-tuned.conf:/etc/postgresql/postgresql.conf
@@ -44,17 +46,14 @@ services:
       dockerfile: Dockerfile
     container_name: zerovc-backend
     restart: unless-stopped
-    depends_on:
-      - postgres
-      - livekit
     environment:
-      PORT: "8080"
-      DATABASE_URL: "postgres://zerovc_user:zerovc_password_change_me@postgres:5432/zerovc?sslmode=disable"
-      JWT_SECRET: "zerovc_super_secret_jwt_key_32bytes_long"
-      LIVEKIT_URL: "ws://livekit:7880"
-      LIVEKIT_PUBLIC_URL: "ws://localhost:7880"
-      LIVEKIT_API_KEY: "devkey"
-      LIVEKIT_API_SECRET: "secret_livekit_key_change_in_production"
+      PORT: "${PORT:-8080}"
+      DATABASE_URL: "${DATABASE_URL:-postgres://zerovc_user:zerovc_password_change_me@postgres:5432/zerovc?sslmode=disable}"
+      JWT_SECRET: "${JWT_SECRET:-zerovc_super_secret_jwt_key_32bytes_long}"
+      LIVEKIT_URL: "${LIVEKIT_URL:-ws://livekit:7880}"
+      LIVEKIT_PUBLIC_URL: "${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}"
+      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY:-devkey}"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET:-secret_livekit_key_change_in_production}"
     ports:
       - "8080:8080"
     deploy:
