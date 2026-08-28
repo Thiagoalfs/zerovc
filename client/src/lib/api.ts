@@ -1,13 +1,17 @@
 import { Channel, Guild, Message, User, VoiceSession } from '../types';
 
-const API_BASE_URL = localStorage.getItem('zerovc_server_url') || 'http://localhost:8080';
+const DEFAULT_SERVER_URL = 'http://162.35.97.76:8081';
 
 export function getApiBaseUrl(): string {
-  return API_BASE_URL;
+  return localStorage.getItem('zerovc_server_url') || DEFAULT_SERVER_URL;
 }
 
 export function setApiBaseUrl(url: string) {
-  localStorage.setItem('zerovc_server_url', url);
+  let cleaned = url.trim().replace(/\/+$/, '');
+  if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
+    cleaned = `http://${cleaned}`;
+  }
+  localStorage.setItem('zerovc_server_url', cleaned);
 }
 
 function getAuthHeader(): Record<string, string> {
@@ -23,19 +27,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options.headers,
   };
 
-  const res = await fetch(url, { ...options, headers });
-  if (!res.ok) {
-    let errorMsg = 'Unknown error';
-    try {
-      const data = await res.json();
-      errorMsg = data.error || errorMsg;
-    } catch {
-      errorMsg = await res.text();
+  try {
+    const res = await fetch(url, { ...options, headers });
+    if (!res.ok) {
+      let errorMsg = 'Erro na requisição';
+      try {
+        const data = await res.json();
+        errorMsg = data.error || errorMsg;
+      } catch {
+        errorMsg = await res.text();
+      }
+      throw new Error(errorMsg);
     }
-    throw new Error(errorMsg);
+    return res.json();
+  } catch (err: any) {
+    if (err.message.includes('Failed to fetch') || err.name === 'TypeError') {
+      throw new Error(`Não foi possível conectar ao servidor em ${getApiBaseUrl()}. Verifique a URL do servidor nas configurações.`);
+    }
+    throw err;
   }
-
-  return res.json();
 }
 
 export const api = {

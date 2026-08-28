@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { MessageSquare, ShieldCheck, Sparkles } from 'lucide-react';
+import { MessageSquare, Server, Settings, Check } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { getApiBaseUrl, setApiBaseUrl } from '../../lib/api';
 
 export const AuthScreen: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showServerConfig, setShowServerConfig] = useState(false);
+  const [serverUrl, setServerUrl] = useState(getApiBaseUrl());
+  const [serverSaved, setServerSaved] = useState(false);
+
   const { login, register, isLoading, error } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -18,8 +23,29 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
+  const handleSaveServer = (e: React.FormEvent) => {
+    e.preventDefault();
+    setApiBaseUrl(serverUrl);
+    setServerSaved(true);
+    setTimeout(() => {
+      setServerSaved(false);
+      setShowServerConfig(false);
+    }, 1200);
+  };
+
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-background-darkest select-none p-4 relative overflow-hidden">
+      {/* Server Config Button at top right */}
+      <button
+        onClick={() => setShowServerConfig(!showServerConfig)}
+        className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-background-dark/80 hover:bg-background-dark text-gray-400 hover:text-gray-200 text-xs px-3 py-1.5 rounded-full border border-white/10 transition-colors shadow-md backdrop-blur-sm"
+        title="Configurar Servidor"
+      >
+        <Server className="w-3.5 h-3.5 text-online" />
+        <span className="truncate max-w-[200px]">{getApiBaseUrl()}</span>
+        <Settings className="w-3.5 h-3.5 ml-0.5" />
+      </button>
+
       {/* Background ambient glow */}
       <div className="absolute w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-3xl pointer-events-none -top-20 -left-20" />
       <div className="absolute w-[500px] h-[500px] bg-online/10 rounded-full blur-3xl pointer-events-none -bottom-20 -right-20" />
@@ -36,6 +62,30 @@ export const AuthScreen: React.FC = () => {
             {isLogin ? 'Boas-vindas de volta!' : 'Crie sua conta para começar'}
           </p>
         </div>
+
+        {/* Server Config Dropdown */}
+        {showServerConfig && (
+          <form onSubmit={handleSaveServer} className="mb-4 p-4 bg-background-darkest rounded-2xl border border-brand-500/30 shadow-inner">
+            <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
+              Endereço da API do Servidor
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={serverUrl}
+                onChange={(e) => setServerUrl(e.target.value)}
+                placeholder="http://162.35.97.76:8081"
+                className="flex-1 bg-background-dark text-white px-3 py-1.5 rounded-lg border border-white/10 text-xs font-mono focus:outline-none focus:border-brand-500"
+              />
+              <button
+                type="submit"
+                className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+              >
+                {serverSaved ? <Check className="w-3.5 h-3.5" /> : 'Salvar'}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Error alert */}
         {error && (
