@@ -1,7 +1,7 @@
 import React from 'react';
 import { Crown, X } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
-import { UserPublic } from '../../types';
+import { User } from '../../types';
 
 interface MemberListProps {
   isOpen: boolean;
@@ -18,19 +18,20 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose }) => {
   const onlineMembers = members.filter((m) => m.status !== 'offline');
   const offlineMembers = members.filter((m) => m.status === 'offline');
 
-  const renderMember = (user: UserPublic) => {
+  const renderMember = (user: User) => {
     const isOwner = user.id === activeGuild.owner_id;
+    const topRole = user.roles && user.roles.length > 0 ? user.roles[0] : null;
 
     return (
       <div
         key={user.id}
-        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-background-light/40 group cursor-pointer transition-colors"
+        className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-colors"
       >
         <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
           {user.avatar_url ? (
             <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
           ) : (
-            <span>{user.username?.[0]?.toUpperCase() || 'U'}</span>
+            <span>{user.display_name?.[0]?.toUpperCase() || user.username?.[0]?.toUpperCase() || 'U'}</span>
           )}
           <div
             className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background-darker ${
@@ -47,8 +48,11 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose }) => {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className={`text-sm truncate font-medium ${isOwner ? 'text-brand-500 font-semibold' : 'text-gray-300'}`}>
-              {user.username}
+            <span
+              className={`text-sm truncate font-medium ${isOwner ? 'font-semibold' : ''}`}
+              style={topRole ? { color: topRole.color } : isOwner ? { color: '#5865F2' } : { color: '#E0E0E0' }}
+            >
+              {user.display_name || user.username}
             </span>
             {isOwner && (
               <span title="Dono do Servidor">
@@ -56,9 +60,18 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose }) => {
               </span>
             )}
           </div>
-          {user.custom_status && (
+
+          {/* Custom Status / Roles Badges */}
+          {user.custom_status ? (
             <p className="text-[11px] text-gray-500 truncate">{user.custom_status}</p>
-          )}
+          ) : topRole ? (
+            <span
+              className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-white/5 truncate max-w-fit block"
+              style={{ color: topRole.color }}
+            >
+              {topRole.name}
+            </span>
+          ) : null}
         </div>
       </div>
     );

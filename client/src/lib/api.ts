@@ -1,141 +1,228 @@
-import { Channel, Guild, GuildInvite, Friendship, Message, User, VoiceSession } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role } from '../types';
 
-export function getApiBaseUrl(): string {
-  const saved = localStorage.getItem('zerovc_server_url');
-  if (saved) return saved;
+let cachedApiUrl: string | null = null;
 
-  if (typeof window !== 'undefined' && window.location && window.location.origin && !window.location.origin.includes('5173')) {
+export const getApiBaseUrl = (): string => {
+  if (cachedApiUrl) return cachedApiUrl;
+  const stored = localStorage.getItem('zerovc_api_url');
+  if (stored) {
+    cachedApiUrl = stored;
+    return stored;
+  }
+  if (typeof window !== 'undefined' && window.location.origin.startsWith('http')) {
+    cachedApiUrl = window.location.origin;
     return window.location.origin;
   }
-
   return 'http://162.35.97.76:8081';
-}
+};
 
-export function setApiBaseUrl(url: string) {
-  let cleaned = url.trim().replace(/\/+$/, '');
-  if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
-    cleaned = `http://${cleaned}`;
-  }
-  localStorage.setItem('zerovc_server_url', cleaned);
-}
+export const setApiBaseUrl = (url: string): void => {
+  cachedApiUrl = url;
+  localStorage.setItem('zerovc_api_url', url);
+};
 
-function getAuthHeader(): Record<string, string> {
-  const token = localStorage.getItem('zerovc_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+export const API_BASE_URL = getApiBaseUrl();
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${getApiBaseUrl()}${path}`;
-  const headers = {
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+  const baseUrl = getApiBaseUrl();
+
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...getAuthHeader(),
-    ...options.headers,
+    ...(options.headers as Record<string, string>),
   };
 
-  try {
-    const res = await fetch(url, { ...options, headers });
-    if (!res.ok) {
-      let errorMsg = 'Erro na requisição';
-      try {
-        const data = await res.json();
-        errorMsg = data.error || errorMsg;
-      } catch {
-        errorMsg = await res.text();
-      }
-      throw new Error(errorMsg);
-    }
-    return res.json();
-  } catch (err: any) {
-    if (err.message.includes('Failed to fetch') || err.name === 'TypeError') {
-      throw new Error(`Não foi possível conectar ao servidor em ${getApiBaseUrl()}.`);
-    }
-    throw err;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
+
+  const response = await fetch(`${baseUrl}/api${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    let errorMsg = `HTTP Error ${response.status}`;
+    try {
+      const errJson = await response.json();
+      if (errJson.error) errorMsg = errJson.error;
+    } catch {}
+    throw new Error(errorMsg);
+  }
+
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  return response.json();
 }
 
 export const api = {
   auth: {
     register: (data: { username: string; email: string; password: string }) =>
-      request<{ token: string; user: User }>('/api/auth/register', {
+      request<{ token: string; user: User }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     login: (data: { email: string; password: string }) =>
-      request<{ token: string; user: User }>('/api/auth/login', {
+      request<{ token: string; user: User }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    me: () => request<User>('/api/auth/me'),
+    me: () => request<User>('/auth/me'),
   },
+
+  users: {
+    updateProfile: (data: {
+      display_name?: string;
+      avatar_url?: string;
+      banner_url?: string;
+      bio?: string;
+      status?: 'online' | 'idle' | 'dnd' | 'offline';
+      custom_status?: string;
+    }) =>
+      request<User>('/users/@me', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+  },
+
   guilds: {
-    list: () => request<Guild[]>('/api/guilds'),
+    list: () => request<Guild[]>('/guilds'),
     create: (data: { name: string; icon_url?: string }) =>
-      request<Guild>('/api/guilds', {
+      request<Guild>('/guilds', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    getDetails: (guildId: string) => request<Guild>(`/api/guilds/${guildId}`),
-    join: (guildId: string) =>
-      request<{ success: boolean }>(`/api/guilds/${guildId}/join`, {
+    getDetails: (id: string) => request<Guild>(`/guilds/${id}`),
+    join: (id: string) =>
+      request<{ success: boolean }>(`/guilds/${id}/join`, {
         method: 'POST',
       }),
     createChannel: (guildId: string, data: { name: string; type: 'text' | 'voice'; topic?: string }) =>
-      request<Channel>(`/api/guilds/${guildId}/channels`, {
+      request<Channel>(`/guilds/${guildId}/channels`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     createInvite: (guildId: string) =>
-      request<GuildInvite>(`/api/guilds/${guildId}/invites`, {
+      request<GuildInvite>(`/guilds/${guildId}/invites`, {
         method: 'POST',
       }),
   },
-  invites: {
-    get: (code: string) => request<{ invite: GuildInvite; member_count: number }>(`/api/invites/${code}`),
-    join: (code: string) =>
-      request<{ success: boolean; guild_id: string }>(`/api/invites/${code}/join`, {
-        method: 'POST',
-      }),
-  },
-  friends: {
-    list: () =>
-      request<{ friends: Friendship[]; pending: Friendship[]; incoming: Friendship[] }>('/api/friends'),
-    sendRequest: (username: string) =>
-      request<Friendship>('/api/friends/request', {
-        method: 'POST',
-        body: JSON.stringify({ username }),
-      }),
-    accept: (friendshipId: string) =>
-      request<{ success: boolean }>(`/api/friends/${friendshipId}/accept`, {
-        method: 'POST',
-      }),
-    remove: (friendshipId: string) =>
-      request<{ success: boolean }>(`/api/friends/${friendshipId}/reject`, {
-        method: 'POST',
-      }),
-  },
+
   channels: {
     getMessages: (channelId: string, limit = 50, before?: string) => {
-      const params = new URLSearchParams({ limit: limit.toString() });
-      if (before) params.append('before', before);
-      return request<Message[]>(`/api/channels/${channelId}/messages?${params.toString()}`);
+      const query = new URLSearchParams({ limit: String(limit) });
+      if (before) query.append('before', before);
+      return request<Message[]>(`/channels/${channelId}/messages?${query.toString()}`);
     },
-    sendMessage: (channelId: string, data: { content: string; reply_to_id?: string }) =>
-      request<Message>(`/api/channels/${channelId}/messages`, {
+    sendMessage: (channelId: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
+      request<Message>(`/channels/${channelId}/messages`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    updateMessage: (channelId: string, messageId: string, data: { content: string }) =>
+      request<Message>(`/channels/${channelId}/messages/${messageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    deleteMessage: (channelId: string, messageId: string) =>
+      request<{ success: boolean }>(`/channels/${channelId}/messages/${messageId}`, {
+        method: 'DELETE',
+      }),
+    update: (channelId: string, data: { name?: string; topic?: string; position?: number }) =>
+      request<Channel>(`/channels/${channelId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    delete: (channelId: string) =>
+      request<{ success: boolean }>(`/channels/${channelId}`, {
+        method: 'DELETE',
+      }),
+    reorder: (guildId: string, channelIds: string[]) =>
+      request<{ success: boolean }>(`/guilds/${guildId}/channels/positions`, {
+        method: 'PUT',
+        body: JSON.stringify({ channel_ids: channelIds }),
+      }),
     joinVoice: (channelId: string) =>
-      request<{ token: string; livekit_url: string; room_name: string }>(`/api/channels/${channelId}/join-voice`, {
+      request<{ token: string; livekit_url: string; room_name: string }>(`/channels/${channelId}/join-voice`, {
         method: 'POST',
       }),
     leaveVoice: (channelId: string) =>
-      request<{ success: boolean }>(`/api/channels/${channelId}/leave-voice`, {
+      request<{ success: boolean }>(`/channels/${channelId}/leave-voice`, {
         method: 'POST',
       }),
     updateVoiceState: (channelId: string, data: { is_muted?: boolean; is_deafened?: boolean; is_screensharing?: boolean }) =>
-      request<VoiceSession>(`/api/channels/${channelId}/voice-state`, {
+      request<any>(`/channels/${channelId}/voice-state`, {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+  },
+
+  roles: {
+    list: (guildId: string) => request<Role[]>(`/guilds/${guildId}/roles`),
+    create: (guildId: string, data: { name: string; color: string; permissions?: number }) =>
+      request<Role>(`/guilds/${guildId}/roles`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (guildId: string, roleId: string, data: { name?: string; color?: string; permissions?: number; position?: number }) =>
+      request<Role>(`/guilds/${guildId}/roles/${roleId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    delete: (guildId: string, roleId: string) =>
+      request<{ success: boolean }>(`/guilds/${guildId}/roles/${roleId}`, {
+        method: 'DELETE',
+      }),
+    assign: (guildId: string, userId: string, roleId: string) =>
+      request<{ success: boolean }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+        method: 'POST',
+      }),
+    remove: (guildId: string, userId: string, roleId: string) =>
+      request<{ success: boolean }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+        method: 'DELETE',
+      }),
+  },
+
+  dms: {
+    listRooms: () => request<DMRoom[]>('/dms'),
+    createOrGet: (recipientId: string) =>
+      request<DMRoom>('/dms', {
+        method: 'POST',
+        body: JSON.stringify({ recipient_id: recipientId }),
+      }),
+    getMessages: (roomId: string, limit = 50) =>
+      request<DMMessage[]>(`/dms/${roomId}/messages?limit=${limit}`),
+    sendMessage: (roomId: string, data: { content: string; attachments?: any[] }) =>
+      request<DMMessage>(`/dms/${roomId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
+
+  invites: {
+    get: (code: string) => request<GuildInvite>(`/invites/${code}`),
+    join: (code: string) =>
+      request<Guild>(`/invites/${code}/join`, {
+        method: 'POST',
+      }),
+  },
+
+  friends: {
+    list: () => request<{ friends: Friendship[]; pending: Friendship[]; incoming: Friendship[] }>('/friends'),
+    sendRequest: (username: string) =>
+      request<Friendship>('/friends/request', {
+        method: 'POST',
+        body: JSON.stringify({ username }),
+      }),
+    accept: (id: string) =>
+      request<Friendship>(`/friends/${id}/accept`, {
+        method: 'POST',
+      }),
+    remove: (id: string) =>
+      request<{ success: boolean }>(`/friends/${id}/reject`, {
+        method: 'POST',
       }),
   },
 };
