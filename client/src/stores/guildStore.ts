@@ -291,7 +291,10 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   sendMessage: async (content: string, replyToId?: string) => {
     const { activeChannel } = get();
     if (!activeChannel) return;
-    await api.channels.sendMessage(activeChannel.id, { content, reply_to_id: replyToId });
+    const msg = await api.channels.sendMessage(activeChannel.id, { content, reply_to_id: replyToId });
+    if (msg) {
+      get().addMessage(msg);
+    }
   },
 
   editMessage: async (messageId: string, content: string) => {

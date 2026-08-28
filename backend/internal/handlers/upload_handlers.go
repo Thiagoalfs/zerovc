@@ -60,6 +60,16 @@ func (h *UploadHandler) UploadBanner(w http.ResponseWriter, r *http.Request) {
 	h.handleUpload(w, r, "user", "banner")
 }
 
+func (h *UploadHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
+	_, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	h.handleUpload(w, r, "user", "att")
+}
+
 func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string) {
 	// Max 20 MB
 	if err := r.ParseMultipartForm(20 << 20); err != nil {

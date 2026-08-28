@@ -427,5 +427,25 @@ export const api = {
       }
       return res.json() as Promise<{ url: string; filename: string; size: number }>;
     },
+    attachment: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      const res = await fetch(`${getApiBaseUrl()}/api/upload/attachment`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        let msg = 'Falha ao enviar arquivo';
+        try {
+          const err = await res.json();
+          if (err.error) msg = err.error;
+        } catch {}
+        throw new Error(msg);
+      }
+      return res.json() as Promise<{ url: string; filename: string; size: number }>;
+    },
   },
 };
