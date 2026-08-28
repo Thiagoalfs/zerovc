@@ -13,7 +13,7 @@ export const getApiBaseUrl = (): string => {
     cachedApiUrl = window.location.origin;
     return window.location.origin;
   }
-  return 'http://162.35.97.76:8081';
+  return (import.meta as any).env?.VITE_API_URL || 'https://zerovc.safiroko.xyz';
 };
 
 export const setApiBaseUrl = (url: string): void => {
