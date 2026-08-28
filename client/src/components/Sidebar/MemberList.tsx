@@ -1,6 +1,6 @@
-import React from 'react';
 import { Crown, X } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
+import { useAuthStore } from '../../stores/authStore';
 import { User } from '../../types';
 
 interface MemberListProps {
@@ -11,6 +11,7 @@ interface MemberListProps {
 
 export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose, onSelectUser }) => {
   const { activeGuild } = useGuildStore();
+  const { user: currentUser } = useAuthStore();
 
   if (!isOpen || !activeGuild) return null;
 
@@ -19,7 +20,9 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose, onSelec
   const onlineMembers = members.filter((m) => m.status !== 'offline');
   const offlineMembers = members.filter((m) => m.status === 'offline');
 
-  const renderMember = (user: User) => {
+  const renderMember = (m: User) => {
+    const isMe = m.id === currentUser?.id;
+    const user = isMe && currentUser ? { ...m, ...currentUser } : m;
     const isOwner = user.id === activeGuild.owner_id;
     const topRole = user.roles && user.roles.length > 0 ? user.roles[0] : null;
 
