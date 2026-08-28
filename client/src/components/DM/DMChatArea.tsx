@@ -26,7 +26,16 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   onPreviewImage,
 }) => {
   const { user } = useAuthStore();
-  const { activeRoom, messages, sendMessage, toggleReaction, isLoadingMessages } = useDMStore();
+  const {
+    activeRoom,
+    messages,
+    sendMessage,
+    toggleReaction,
+    isLoadingMessages,
+    isLoadingMoreMessages,
+    hasMoreByRoom,
+    loadMoreMessages,
+  } = useDMStore();
   const { startCall, callState } = useCallStore();
 
   const [content, setContent] = useState('');
@@ -38,6 +47,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeightRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,11 +61,34 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (!searchQuery) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (smooth = true) => {
+    if (!searchQuery && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
     }
+  };
+
+  useEffect(() => {
+    if (prevScrollHeightRef.current !== null && scrollContainerRef.current) {
+      const heightDiff = scrollContainerRef.current.scrollHeight - prevScrollHeightRef.current;
+      if (heightDiff > 0) {
+        scrollContainerRef.current.scrollTop = heightDiff;
+      }
+      prevScrollHeightRef.current = null;
+      return;
+    }
+
+    scrollToBottom();
   }, [messages, searchQuery]);
+
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container || !activeRoom) return;
+
+    if (container.scrollTop < 60 && !isLoadingMoreMessages && hasMoreByRoom[activeRoom.id] !== false) {
+      prevScrollHeightRef.current = container.scrollHeight;
+      loadMoreMessages(activeRoom.id);
+    }
+  };
 
   useEffect(() => {
     if (replyingTo && textareaRef.current) {
@@ -325,9 +359,21 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       </div>
 
       {/* DM Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-0.5">
-        {/* Recipient Intro Hero Card */}
-        {!searchQuery && (
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-0.5 no-scrollbar"
+      >
+        {/* Loading older messages indicator */}
+        {isLoadingMoreMessages && (
+          <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
+            <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+            <span>Carregando mensagens anteriores...</span>
+          </div>
+        )}
+
+        {/* Recipient Intro Hero Card (show only when reached the absolute top) */}
+        {!searchQuery && hasMoreByRoom[activeRoom.id] === false && (
           <div className="p-6 my-4 bg-background-darker/60 rounded-2xl border border-white/5 flex flex-col items-center text-center">
             <div className="w-20 h-20 rounded-full bg-brand-500 flex items-center justify-center text-2xl font-bold text-white shadow-xl mb-3 overflow-hidden">
               {recipient?.avatar_url ? (

@@ -6,12 +6,16 @@ interface DMGroupState {
   groups: DMGroup[];
   activeGroup: DMGroup | null;
   messages: DMGroupMessage[];
+  messagesByGroup: Record<string, DMGroupMessage[]>;
+  hasMoreByGroup: Record<string, boolean>;
   isLoadingGroups: boolean;
   isLoadingMessages: boolean;
+  isLoadingMoreMessages: boolean;
 
   fetchGroups: () => Promise<void>;
   selectGroup: (group: DMGroup) => Promise<void>;
   selectGroupById: (id: string) => Promise<void>;
+  loadMoreMessages: (groupId: string) => Promise<void>;
   createGroup: (name?: string, memberIds?: string[]) => Promise<DMGroup>;
   updateGroup: (groupId: string, data: { name?: string; icon_url?: string }) => Promise<void>;
   addMembers: (groupId: string, memberIds: string[]) => Promise<void>;
@@ -24,8 +28,11 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   groups: [],
   activeGroup: null,
   messages: [],
+  messagesByGroup: {},
+  hasMoreByGroup: {},
   isLoadingGroups: false,
   isLoadingMessages: false,
+  isLoadingMoreMessages: false,
 
   fetchGroups: async () => {
     set({ isLoadingGroups: true });
@@ -40,14 +47,33 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   },
 
   selectGroup: async (group: DMGroup) => {
-    set({ activeGroup: group, isLoadingMessages: true, messages: [] });
-    try {
-      const messages = await api.dmGroups.getMessages(group.id);
-      set({ messages: messages || [] });
-    } catch (err) {
-      console.error('Failed to fetch group messages:', err);
-    } finally {
-      set({ isLoadingMessages: false });
+    const cachedMessages = get().messagesByGroup[group.id];
+
+    set({
+      activeGroup: group,
+      messages: cachedMessages || [],
+      isLoadingMessages: !cachedMessages,
+    });
+
+    if (!cachedMessages) {
+      try {
+        const messages = await api.dmGroups.getMessages(group.id, 50);
+        set((state) => ({
+          messages: state.activeGroup?.id === group.id ? messages : state.messages,
+          messagesByGroup: {
+            ...state.messagesByGroup,
+            [group.id]: messages || [],
+          },
+          hasMoreByGroup: {
+            ...state.hasMoreByGroup,
+            [group.id]: (messages || []).length === 50,
+          },
+          isLoadingMessages: false,
+        }));
+      } catch (err) {
+        console.error('Failed to fetch group messages:', err);
+        set({ isLoadingMessages: false });
+      }
     }
   },
 
@@ -66,6 +92,42 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     }
     if (group) {
       await get().selectGroup(group);
+    }
+  },
+
+  loadMoreMessages: async (groupId: string) => {
+    const state = get();
+    if (state.isLoadingMoreMessages || state.hasMoreByGroup[groupId] === false) return;
+
+    const currentGroupMessages = state.messagesByGroup[groupId] || state.messages;
+    if (currentGroupMessages.length === 0) return;
+
+    const oldestMessage = currentGroupMessages[0];
+    set({ isLoadingMoreMessages: true });
+
+    try {
+      const olderMessages = await api.dmGroups.getMessages(groupId, 50, oldestMessage.created_at || oldestMessage.id);
+      const hasMore = olderMessages.length === 50;
+
+      const existingIds = new Set(currentGroupMessages.map((m) => m.id));
+      const uniqueOlder = olderMessages.filter((m) => !existingIds.has(m.id));
+      const combined = [...uniqueOlder, ...currentGroupMessages];
+
+      set((curr) => ({
+        messages: curr.activeGroup?.id === groupId ? combined : curr.messages,
+        messagesByGroup: {
+          ...curr.messagesByGroup,
+          [groupId]: combined,
+        },
+        hasMoreByGroup: {
+          ...curr.hasMoreByGroup,
+          [groupId]: hasMore,
+        },
+        isLoadingMoreMessages: false,
+      }));
+    } catch (err) {
+      console.error('Failed to load older group messages:', err);
+      set({ isLoadingMoreMessages: false });
     }
   },
 
@@ -119,10 +181,16 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
       set((state) => {
         if (state.activeGroup?.id !== activeGroup.id) return state;
-        const exists = state.messages.some((m) => m.id === msg.id);
-        if (exists) return state;
+        const groupMsgs = state.messagesByGroup[activeGroup.id] || [];
+        const exists = groupMsgs.some((m) => m.id === msg.id);
+        const updatedGroupMsgs = exists ? groupMsgs : [...groupMsgs, msg];
+
         return {
-          messages: [...state.messages, msg],
+          messages: state.messages.some((m) => m.id === msg.id) ? state.messages : [...state.messages, msg],
+          messagesByGroup: {
+            ...state.messagesByGroup,
+            [activeGroup.id]: updatedGroupMsgs,
+          },
           groups: state.groups.map((g) => (g.id === activeGroup.id ? { ...g, last_message: msg } : g)),
         };
       });
@@ -134,6 +202,10 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
   handleGroupMessageCreate: (message: DMGroupMessage) => {
     set((state) => {
+      const groupMsgs = state.messagesByGroup[message.group_id] || [];
+      const alreadyHas = groupMsgs.some((m) => m.id === message.id);
+      const updatedGroupMsgs = alreadyHas ? groupMsgs : [...groupMsgs, message];
+
       const isCurrentActive = state.activeGroup?.id === message.group_id;
       const updatedMessages = isCurrentActive
         ? state.messages.some((m) => m.id === message.id)
@@ -147,6 +219,10 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
       return {
         messages: updatedMessages,
+        messagesByGroup: {
+          ...state.messagesByGroup,
+          [message.group_id]: updatedGroupMsgs,
+        },
         groups: updatedGroups,
       };
     });

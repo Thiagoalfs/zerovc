@@ -12,13 +12,17 @@ interface GuildState {
   unreadChannels: Set<string>;
   guildMentions: Record<string, number>;
   channelMentions: Record<string, number>;
+  messagesByChannel: Record<string, Message[]>;
+  hasMoreByChannel: Record<string, boolean>;
   isLoadingGuilds: boolean;
   isLoadingMessages: boolean;
+  isLoadingMoreMessages: boolean;
   typingUsers: Map<string, Set<string>>;
 
   fetchGuilds: () => Promise<void>;
   selectGuild: (guildId: string) => Promise<void>;
   selectChannel: (channel: Channel) => Promise<void>;
+  loadMoreMessages: (channelId: string) => Promise<void>;
   createGuild: (name: string, iconUrl?: string) => Promise<Guild>;
   createChannel: (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string, categoryId?: string, isPrivate?: boolean, roleIds?: string[]) => Promise<Channel>;
   updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean }) => Promise<void>;
@@ -63,8 +67,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   unreadChannels: new Set(),
   guildMentions: {},
   channelMentions: {},
+  messagesByChannel: {},
+  hasMoreByChannel: {},
   isLoadingGuilds: false,
   isLoadingMessages: false,
+  isLoadingMoreMessages: false,
   typingUsers: new Map(),
 
   fetchGuilds: async () => {
@@ -95,6 +102,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   },
 
   selectChannel: async (channel: Channel) => {
+    const cachedMessages = get().messagesByChannel[channel.id];
+
     set((state) => {
       const unread = new Set(state.unreadChannels);
       unread.delete(channel.id);
@@ -113,21 +122,70 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
       return {
         activeChannel: channel,
+        messages: cachedMessages || [],
         unreadChannels: unread,
         guildMentions: nextGuildMentions,
         channelMentions: nextChannelMentions,
-        isLoadingMessages: channel.type === 'text',
+        isLoadingMessages: channel.type === 'text' && !cachedMessages,
       };
     });
 
-    if (channel.type === 'text') {
+    if (channel.type === 'text' && !cachedMessages) {
       try {
-        const messages = await api.channels.getMessages(channel.id);
-        set({ messages, isLoadingMessages: false });
+        const messages = await api.channels.getMessages(channel.id, 50);
+        set((state) => ({
+          messages: state.activeChannel?.id === channel.id ? messages : state.messages,
+          messagesByChannel: {
+            ...state.messagesByChannel,
+            [channel.id]: messages,
+          },
+          hasMoreByChannel: {
+            ...state.hasMoreByChannel,
+            [channel.id]: messages.length === 50,
+          },
+          isLoadingMessages: false,
+        }));
       } catch (err) {
         console.error('Failed to fetch messages for channel:', err);
         set({ isLoadingMessages: false });
       }
+    }
+  },
+
+  loadMoreMessages: async (channelId: string) => {
+    const state = get();
+    if (state.isLoadingMoreMessages || state.hasMoreByChannel[channelId] === false) return;
+
+    const currentChannelMessages = state.messagesByChannel[channelId] || state.messages;
+    if (currentChannelMessages.length === 0) return;
+
+    const oldestMessage = currentChannelMessages[0];
+    set({ isLoadingMoreMessages: true });
+
+    try {
+      const olderMessages = await api.channels.getMessages(channelId, 50, oldestMessage.created_at || oldestMessage.id);
+      const hasMore = olderMessages.length === 50;
+
+      // Filter out any duplicates
+      const existingIds = new Set(currentChannelMessages.map((m) => m.id));
+      const uniqueOlder = olderMessages.filter((m) => !existingIds.has(m.id));
+      const combined = [...uniqueOlder, ...currentChannelMessages];
+
+      set((curr) => ({
+        messages: curr.activeChannel?.id === channelId ? combined : curr.messages,
+        messagesByChannel: {
+          ...curr.messagesByChannel,
+          [channelId]: combined,
+        },
+        hasMoreByChannel: {
+          ...curr.hasMoreByChannel,
+          [channelId]: hasMore,
+        },
+        isLoadingMoreMessages: false,
+      }));
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+      set({ isLoadingMoreMessages: false });
     }
   },
 
@@ -281,12 +339,26 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     );
 
     set((state) => {
+      const channelMsgs = state.messagesByChannel[message.channel_id] || [];
+      const alreadyHas = channelMsgs.some((m) => m.id === message.id);
+      const updatedChannelMsgs = alreadyHas ? channelMsgs : [...channelMsgs, message];
+
+      const nextMessagesByChannel = {
+        ...state.messagesByChannel,
+        [message.channel_id]: updatedChannelMsgs,
+      };
+
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
-        if (state.messages.some((m) => m.id === message.id)) return state;
+        if (state.messages.some((m) => m.id === message.id)) {
+          return { messagesByChannel: nextMessagesByChannel };
+        }
         if (message.author_id !== currentUser?.id) {
           playMessageSound(isMention);
         }
-        return { messages: [...state.messages, message] };
+        return {
+          messages: [...state.messages, message],
+          messagesByChannel: nextMessagesByChannel,
+        };
       } else {
         // Mark as unread
         const unread = new Set(state.unreadChannels);
@@ -318,6 +390,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           unreadChannels: unread,
           guildMentions: nextGuildMentions,
           channelMentions: nextChannelMentions,
+          messagesByChannel: nextMessagesByChannel,
         };
       }
     });
@@ -325,62 +398,107 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
   updateMessageInStore: (message: Message) => {
     set((state) => {
+      const channelMsgs = state.messagesByChannel[message.channel_id];
+      const nextMessagesByChannel = channelMsgs
+        ? {
+            ...state.messagesByChannel,
+            [message.channel_id]: channelMsgs.map((m) => (m.id === message.id ? { ...m, ...message } : m)),
+          }
+        : state.messagesByChannel;
+
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
         return {
           messages: state.messages.map((m) => (m.id === message.id ? { ...m, ...message } : m)),
+          messagesByChannel: nextMessagesByChannel,
         };
       }
-      return state;
+      return { messagesByChannel: nextMessagesByChannel };
     });
   },
 
   removeMessageFromStore: (messageId: string) => {
-    set((state) => ({
-      messages: state.messages.filter((m) => m.id !== messageId),
-    }));
-  },
-
-  handleReactionEvent: ({ message_id, user_id, emoji, is_add }) => {
     set((state) => {
-      const messages = state.messages.map((m) => {
-        if (m.id !== message_id) return m;
-        let reactions = [...(m.reactions || [])];
-        const existing = reactions.find((r) => r.emoji === emoji);
-
-        if (is_add) {
-          if (existing) {
-            if (!existing.user_ids.includes(user_id)) {
-              reactions = reactions.map((r) =>
-                r.emoji === emoji
-                  ? { ...r, count: r.count + 1, user_ids: [...r.user_ids, user_id] }
-                  : r
-              );
-            }
-          } else {
-            reactions.push({ emoji, count: 1, user_ids: [user_id] });
-          }
-        } else {
-          if (existing) {
-            const nextUsers = existing.user_ids.filter((id) => id !== user_id);
-            if (nextUsers.length === 0) {
-              reactions = reactions.filter((r) => r.emoji !== emoji);
-            } else {
-              reactions = reactions.map((r) =>
-                r.emoji === emoji ? { ...r, count: nextUsers.length, user_ids: nextUsers } : r
-              );
-            }
-          }
-        }
-        return { ...m, reactions };
-      });
-      return { messages };
+      const nextMessagesByChannel: Record<string, Message[]> = {};
+      for (const [chId, msgs] of Object.entries(state.messagesByChannel)) {
+        nextMessagesByChannel[chId] = msgs.filter((m) => m.id !== messageId);
+      }
+      return {
+        messages: state.messages.filter((m) => m.id !== messageId),
+        messagesByChannel: nextMessagesByChannel,
+      };
     });
   },
 
-  handlePinEvent: ({ message_id, is_pinned }) => {
-    set((state) => ({
-      messages: state.messages.map((m) => (m.id === message_id ? { ...m, is_pinned } : m)),
-    }));
+  handleReactionEvent: ({ message_id, channel_id, user_id, emoji, is_add }) => {
+    set((state) => {
+      const updateMsgList = (list: Message[]) =>
+        list.map((m) => {
+          if (m.id !== message_id) return m;
+          const reactions = [...(m.reactions || [])];
+          const rxIndex = reactions.findIndex((r) => r.emoji === emoji);
+
+          if (is_add) {
+            if (rxIndex > -1) {
+              const rx = reactions[rxIndex];
+              if (!rx.user_ids.includes(user_id)) {
+                reactions[rxIndex] = {
+                  ...rx,
+                  count: rx.count + 1,
+                  user_ids: [...rx.user_ids, user_id],
+                };
+              }
+            } else {
+              reactions.push({
+                emoji,
+                count: 1,
+                user_ids: [user_id],
+              });
+            }
+          } else {
+            if (rxIndex > -1) {
+              const rx = reactions[rxIndex];
+              const nextUsers = rx.user_ids.filter((id) => id !== user_id);
+              if (nextUsers.length === 0) {
+                reactions.splice(rxIndex, 1);
+              } else {
+                reactions[rxIndex] = {
+                  ...rx,
+                  count: Math.max(0, rx.count - 1),
+                  user_ids: nextUsers,
+                };
+              }
+            }
+          }
+          return { ...m, reactions };
+        });
+
+      const nextMessagesByChannel = { ...state.messagesByChannel };
+      if (nextMessagesByChannel[channel_id]) {
+        nextMessagesByChannel[channel_id] = updateMsgList(nextMessagesByChannel[channel_id]);
+      }
+
+      return {
+        messages: state.activeChannel?.id === channel_id ? updateMsgList(state.messages) : state.messages,
+        messagesByChannel: nextMessagesByChannel,
+      };
+    });
+  },
+
+  handlePinEvent: ({ message_id, channel_id, is_pinned }) => {
+    set((state) => {
+      const updateMsgList = (list: Message[]) =>
+        list.map((m) => (m.id === message_id ? { ...m, is_pinned } : m));
+
+      const nextMessagesByChannel = { ...state.messagesByChannel };
+      if (nextMessagesByChannel[channel_id]) {
+        nextMessagesByChannel[channel_id] = updateMsgList(nextMessagesByChannel[channel_id]);
+      }
+
+      return {
+        messages: state.activeChannel?.id === channel_id ? updateMsgList(state.messages) : state.messages,
+        messagesByChannel: nextMessagesByChannel,
+      };
+    });
   },
 
   updateMemberInGuild: (updatedUser) => {
