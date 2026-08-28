@@ -129,6 +129,32 @@ export interface DMMessage {
   created_at: string;
 }
 
+export interface DMGroup {
+  id: string;
+  name?: string;
+  icon_url?: string;
+  owner_id: string;
+  members: User[];
+  last_message?: DMGroupMessage;
+  created_at: string;
+}
+
+export interface DMGroupMessage {
+  id: string;
+  group_id: string;
+  author_id: string;
+  author: User;
+  content: string;
+  attachments?: Attachment[];
+  reply_to_id?: string;
+  reply_to?: MessageReplyInfo;
+  reactions?: MessageReaction[];
+  is_pinned?: boolean;
+  is_edited?: boolean;
+  edited_at?: string;
+  created_at: string;
+}
+
 export interface VoiceSession {
   id: string;
   channel_id: string;

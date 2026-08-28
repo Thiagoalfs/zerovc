@@ -196,9 +196,40 @@ CREATE TABLE IF NOT EXISTS channel_role_access (
     PRIMARY KEY (channel_id, role_id)
 );
 
+-- 17. DM Groups
+CREATE TABLE IF NOT EXISTS dm_groups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(64),
+    icon_url TEXT,
+    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS dm_group_members (
+    group_id UUID NOT NULL REFERENCES dm_groups(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS dm_group_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id UUID NOT NULL REFERENCES dm_groups(id) ON DELETE CASCADE,
+    author_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    attachments JSONB DEFAULT '[]'::jsonb,
+    reply_to_id UUID REFERENCES dm_group_messages(id) ON DELETE SET NULL,
+    is_pinned BOOLEAN DEFAULT FALSE,
+    is_edited BOOLEAN DEFAULT FALSE,
+    edited_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_channel_created ON messages (channel_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dm_messages_room_created ON dm_messages (dm_room_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_group_messages_created ON dm_group_messages (group_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_group_members_user ON dm_group_members (user_id);
 CREATE INDEX IF NOT EXISTS idx_guild_members_user ON guild_members (user_id);
 CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships (user_id, status);
 CREATE INDEX IF NOT EXISTS idx_message_reactions_msg ON message_reactions (message_id);
@@ -212,3 +243,4 @@ CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions (channel
 CREATE INDEX IF NOT EXISTS idx_guild_invites_guild ON guild_invites (guild_id);
 CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships (user_id);
 CREATE INDEX IF NOT EXISTS idx_friendships_friend ON friendships (friend_id);
+

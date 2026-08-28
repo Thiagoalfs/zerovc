@@ -124,6 +124,14 @@ func (h *FriendHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if there is a block in either direction
+	var isBlocked bool
+	blockCheckQuery := `SELECT EXISTS(SELECT 1 FROM user_blocks WHERE (user_id = $1 AND blocked_user_id = $2) OR (user_id = $2 AND blocked_user_id = $1))`
+	if err := h.db.Pool.QueryRow(r.Context(), blockCheckQuery, userID, target.ID).Scan(&isBlocked); err == nil && isBlocked {
+		http.Error(w, `{"error":"não é possível enviar solicitação para este usuário"}`, http.StatusForbidden)
+		return
+	}
+
 	// 2. Check if reverse request exists (if other user already sent a request, auto-accept!)
 	var reverseID uuid.UUID
 	var reverseStatus string

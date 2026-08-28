@@ -218,25 +218,46 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           </div>
 
           {/* Action Button */}
-          <div className="mt-3">
+          <div className="mt-3 space-y-1.5">
             {isMe ? (
               <button
                 type="button"
                 onClick={handleOpenEdit}
-                className="w-full bg-background-light hover:bg-white/15 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 border border-white/10"
+                className="w-full bg-background-light hover:bg-white/15 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 border border-white/10 cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Editar Meu Perfil</span>
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={handleStartChat}
-                className="w-full bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-brand-500/20"
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span>Enviar Mensagem</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleStartChat}
+                  className="w-full bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-brand-500/20 cursor-pointer"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Enviar Mensagem</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (confirm(`Tem certeza que deseja bloquear ${user.display_name || user.username}? Isso removerá a amizade e impedirá mensagens diretas.`)) {
+                      try {
+                        const { api } = await import('../../lib/api');
+                        await api.users.block(user.id);
+                        alert(`Usuário ${user.display_name || user.username} bloqueado.`);
+                        onClose();
+                      } catch (err: any) {
+                        alert(err.message || 'Falha ao bloquear usuário');
+                      }
+                    }
+                  }}
+                  className="w-full text-gray-400 hover:text-dnd hover:bg-dnd/10 py-1.5 rounded-xl text-[11px] font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>Bloquear Usuário</span>
+                </button>
+              </>
             )}
           </div>
         </div>
