@@ -13,6 +13,10 @@ class LiveKitManager {
   private onTrackUpdated?: () => void;
   private onScreenShareEnded?: () => void;
   private attachedAudioElements: Map<string, HTMLMediaElement> = new Map();
+  private attachedUserAudioElements: Map<string, HTMLMediaElement> = new Map();
+  private attachedStreamAudioElements: Map<string, HTMLMediaElement> = new Map();
+  private userVolumes: Map<string, number> = new Map();
+  private streamVolumes: Map<string, number> = new Map();
 
   getRoom(): Room | null {
     return this.room;
@@ -89,25 +93,49 @@ class LiveKitManager {
 
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
       if (track.kind === Track.Kind.Audio) {
+        const isScreenAudio = publication.source === Track.Source.ScreenShareAudio;
         const audioEl = track.attach();
-        audioEl.id = `audio-${participant.identity}-${track.sid || 'audio'}`;
+        audioEl.id = isScreenAudio
+          ? `audio-stream-${participant.identity}-${track.sid || 'audio'}`
+          : `audio-user-${participant.identity}-${track.sid || 'audio'}`;
         audioEl.style.display = 'none';
         document.body.appendChild(audioEl);
         audioEl.play().catch((err) => console.log('[LiveKit] Audio play blocked:', err));
-        if (track.sid) {
-          this.attachedAudioElements.set(track.sid, audioEl);
+
+        const sid = track.sid || `${participant.identity}-${isScreenAudio ? 'screen' : 'mic'}`;
+        this.attachedAudioElements.set(sid, audioEl);
+
+        if (isScreenAudio) {
+          audioEl.muted = true; // Initially muted until user explicitly watches this stream!
+          this.attachedStreamAudioElements.set(sid, audioEl);
+          const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
+          audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
+          if (typeof (track as any).setVolume === 'function') {
+            (track as any).setVolume(streamVol);
+          }
+        } else {
+          audioEl.muted = false;
+          this.attachedUserAudioElements.set(sid, audioEl);
+          const userVol = this.userVolumes.get(participant.identity) ?? 1;
+          audioEl.volume = Math.min(Math.max(userVol, 0), 1);
+          if (typeof (track as any).setVolume === 'function') {
+            (track as any).setVolume(userVol);
+          }
         }
       }
       this.onTrackUpdated?.();
       updateParticipants();
     });
 
-    room.on(RoomEvent.TrackUnsubscribed, (track) => {
-      if (track.sid) {
-        const audioEl = this.attachedAudioElements.get(track.sid);
+    room.on(RoomEvent.TrackUnsubscribed, (track, _publication, participant) => {
+      const sid = track.sid;
+      if (sid) {
+        const audioEl = this.attachedAudioElements.get(sid);
         if (audioEl) {
           audioEl.remove();
-          this.attachedAudioElements.delete(track.sid);
+          this.attachedAudioElements.delete(sid);
+          this.attachedUserAudioElements.delete(sid);
+          this.attachedStreamAudioElements.delete(sid);
         }
       }
       track.detach().forEach((el) => el.remove());
@@ -294,23 +322,84 @@ class LiveKitManager {
     await this.room.switchActiveDevice('audiooutput', deviceId);
   }
 
-  setParticipantVolume(participantIdentity: string, volume: number) {
+  setUserVolume(participantIdentity: string, volume: number) {
+    this.userVolumes.set(participantIdentity, volume);
     if (!this.room) return;
-    const remote = this.room.remoteParticipants.get(participantIdentity);
-    if (remote) {
-      remote.setVolume(volume);
-    }
-    // Also adjust HTMLMediaElement if exists
-    this.attachedAudioElements.forEach((el, key) => {
+
+    // Adjust user audio elements (microphone)
+    this.attachedUserAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
         el.volume = Math.min(Math.max(volume, 0), 1);
       }
     });
+
+    const remote = this.room.remoteParticipants.get(participantIdentity);
+    if (remote) {
+      // Find microphone audio track
+      remote.audioTrackPublications.forEach((pub) => {
+        if (pub.source === Track.Source.Microphone && pub.audioTrack) {
+          if (typeof (pub.audioTrack as any).setVolume === 'function') {
+            (pub.audioTrack as any).setVolume(volume);
+          }
+        }
+      });
+    }
+  }
+
+  setStreamVolume(participantIdentity: string, volume: number) {
+    this.streamVolumes.set(participantIdentity, volume);
+    if (!this.room) return;
+
+    // Adjust screen share audio elements
+    this.attachedStreamAudioElements.forEach((el, key) => {
+      if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
+        el.volume = Math.min(Math.max(volume, 0), 1);
+      }
+    });
+
+    const remote = this.room.remoteParticipants.get(participantIdentity);
+    if (remote) {
+      // Find screen share audio track
+      remote.audioTrackPublications.forEach((pub) => {
+        if (pub.source === Track.Source.ScreenShareAudio && pub.audioTrack) {
+          if (typeof (pub.audioTrack as any).setVolume === 'function') {
+            (pub.audioTrack as any).setVolume(volume);
+          }
+        }
+      });
+    }
+  }
+
+  setStreamAudioSubscribed(participantIdentity: string, subscribed: boolean) {
+    // 1. Mute or unmute all stream audio elements for this participant
+    this.attachedStreamAudioElements.forEach((el, key) => {
+      if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
+        el.muted = !subscribed;
+      }
+    });
+
+    // 2. Adjust subscription on remote participant track publication if applicable
+    if (this.room) {
+      const remote = this.room.remoteParticipants.get(participantIdentity);
+      if (remote) {
+        remote.audioTrackPublications.forEach((pub) => {
+          if (pub.source === Track.Source.ScreenShareAudio) {
+            pub.setSubscribed(subscribed);
+          }
+        });
+      }
+    }
+  }
+
+  setParticipantVolume(participantIdentity: string, volume: number) {
+    this.setUserVolume(participantIdentity, volume);
   }
 
   async disconnect() {
     this.attachedAudioElements.forEach((el) => el.remove());
     this.attachedAudioElements.clear();
+    this.attachedUserAudioElements.clear();
+    this.attachedStreamAudioElements.clear();
 
     if (this.room) {
       await this.room.disconnect();

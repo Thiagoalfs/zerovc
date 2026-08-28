@@ -14,6 +14,8 @@ interface VoiceState {
   isCameraOn: boolean;
   participants: Participant[];
   speakingUserIds: string[];
+  userVolumes: Record<string, number>;
+  streamVolumes: Record<string, number>;
   participantVolumes: Record<string, number>;
   watchedParticipantId: string | null;
 
@@ -23,6 +25,8 @@ interface VoiceState {
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
   toggleCamera: () => Promise<void>;
+  setUserVolume: (userId: string, volume: number) => void;
+  setStreamVolume: (userId: string, volume: number) => void;
   setParticipantVolume: (userId: string, volume: number) => void;
   startScreenShare: (
     sourceId?: string,
@@ -31,7 +35,7 @@ interface VoiceState {
   stopScreenShare: () => Promise<void>;
 }
 
-const loadSavedVolumes = (): Record<string, number> => {
+const loadSavedUserVolumes = (): Record<string, number> => {
   try {
     const raw = localStorage.getItem('zerovc_user_volumes');
     return raw ? JSON.parse(raw) : {};
@@ -40,11 +44,29 @@ const loadSavedVolumes = (): Record<string, number> => {
   }
 };
 
-const saveVolumesToStorage = (volumes: Record<string, number>) => {
+const loadSavedStreamVolumes = (): Record<string, number> => {
+  try {
+    const raw = localStorage.getItem('zerovc_stream_volumes');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveUserVolumesToStorage = (volumes: Record<string, number>) => {
   try {
     localStorage.setItem('zerovc_user_volumes', JSON.stringify(volumes));
   } catch {}
 };
+
+const saveStreamVolumesToStorage = (volumes: Record<string, number>) => {
+  try {
+    localStorage.setItem('zerovc_stream_volumes', JSON.stringify(volumes));
+  } catch {}
+};
+
+const initialUserVolumes = loadSavedUserVolumes();
+const initialStreamVolumes = loadSavedStreamVolumes();
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
   currentChannelId: null,
@@ -56,7 +78,9 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   isCameraOn: false,
   participants: [],
   speakingUserIds: [],
-  participantVolumes: loadSavedVolumes(),
+  userVolumes: initialUserVolumes,
+  streamVolumes: initialStreamVolumes,
+  participantVolumes: initialUserVolumes,
   watchedParticipantId: null,
 
   setWatchedParticipant: (identity: string | null) => {
@@ -78,11 +102,16 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       await livekit.connect(res.livekit_url, res.token, {
         onParticipantsChanged: (participants) => {
           set({ participants });
-          // Apply saved volumes to participants
-          const savedVolumes = get().participantVolumes;
+          // Apply saved user & stream volumes to participants
+          const { userVolumes, streamVolumes } = get();
           participants.forEach((p) => {
-            if (!p.isLocal && savedVolumes[p.identity] !== undefined) {
-              livekit.setParticipantVolume(p.identity, savedVolumes[p.identity]);
+            if (!p.isLocal) {
+              if (userVolumes[p.identity] !== undefined) {
+                livekit.setUserVolume(p.identity, userVolumes[p.identity]);
+              }
+              if (streamVolumes[p.identity] !== undefined) {
+                livekit.setStreamVolume(p.identity, streamVolumes[p.identity]);
+              }
             }
           });
         },
@@ -94,10 +123,15 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
           if (room) {
             const participants = [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
             set({ participants });
-            const savedVolumes = get().participantVolumes;
+            const { userVolumes, streamVolumes } = get();
             participants.forEach((p) => {
-              if (!p.isLocal && savedVolumes[p.identity] !== undefined) {
-                livekit.setParticipantVolume(p.identity, savedVolumes[p.identity]);
+              if (!p.isLocal) {
+                if (userVolumes[p.identity] !== undefined) {
+                  livekit.setUserVolume(p.identity, userVolumes[p.identity]);
+                }
+                if (streamVolumes[p.identity] !== undefined) {
+                  livekit.setStreamVolume(p.identity, streamVolumes[p.identity]);
+                }
               }
             });
           }
@@ -189,14 +223,28 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     set({ isCameraOn: nextCamera });
   },
 
-  setParticipantVolume: (userId: string, volume: number) => {
-    livekit.setParticipantVolume(userId, volume);
+  setUserVolume: (userId: string, volume: number) => {
+    livekit.setUserVolume(userId, volume);
     const updated = {
-      ...get().participantVolumes,
+      ...get().userVolumes,
       [userId]: volume,
     };
-    saveVolumesToStorage(updated);
-    set({ participantVolumes: updated });
+    saveUserVolumesToStorage(updated);
+    set({ userVolumes: updated, participantVolumes: updated });
+  },
+
+  setStreamVolume: (userId: string, volume: number) => {
+    livekit.setStreamVolume(userId, volume);
+    const updated = {
+      ...get().streamVolumes,
+      [userId]: volume,
+    };
+    saveStreamVolumesToStorage(updated);
+    set({ streamVolumes: updated });
+  },
+
+  setParticipantVolume: (userId: string, volume: number) => {
+    get().setUserVolume(userId, volume);
   },
 
   startScreenShare: async (sourceId?: string, config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }) => {
