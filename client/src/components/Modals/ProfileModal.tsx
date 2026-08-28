@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, Image, Sparkles, Check, LogOut, Mic, Volume2, Shield, Lock, Radio } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
+import { api } from '../../lib/api';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -22,6 +23,40 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [status, setStatus] = useState<'online' | 'idle' | 'dnd' | 'offline'>(user?.status || 'online');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const bannerFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingAvatar(true);
+    try {
+      const res = await api.upload.avatar(file);
+      setAvatarUrl(res.url);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao enviar foto de perfil');
+    } finally {
+      setIsUploadingAvatar(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingBanner(true);
+    try {
+      const res = await api.upload.banner(file);
+      setBannerUrl(res.url);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao enviar banner');
+    } finally {
+      setIsUploadingBanner(false);
+      e.target.value = '';
+    }
+  };
 
   // Audio / Device Fields
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
@@ -306,32 +341,70 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 />
               </div>
 
-              {/* Avatar URL */}
+              {/* Avatar Upload / URL */}
               <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  URL da Foto de Perfil
+                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Foto de Perfil</span>
+                  {avatarUrl && <span className="text-[10px] text-online font-normal">Foto definida</span>}
                 </label>
-                <input
-                  type="text"
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                    placeholder="URL da imagem ou faça upload..."
+                    className="flex-1 bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                  />
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    disabled={isUploadingAvatar}
+                    className="px-3 py-2 bg-background-light hover:bg-white/15 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-colors"
+                  >
+                    <Camera className="w-4 h-4 text-brand-400" />
+                    <span>{isUploadingAvatar ? 'Enviando...' : 'Upload'}</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Banner URL */}
+              {/* Banner Upload / URL */}
               <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  URL do Banner de Perfil
+                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Banner de Perfil</span>
+                  {bannerUrl && <span className="text-[10px] text-online font-normal">Banner definido</span>}
                 </label>
-                <input
-                  type="text"
-                  value={bannerUrl}
-                  onChange={(e) => setBannerUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={bannerUrl}
+                    onChange={(e) => setBannerUrl(e.target.value)}
+                    placeholder="URL do banner ou faça upload..."
+                    className="flex-1 bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                  />
+                  <input
+                    ref={bannerFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBannerUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => bannerFileInputRef.current?.click()}
+                    disabled={isUploadingBanner}
+                    className="px-3 py-2 bg-background-light hover:bg-white/15 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-colors"
+                  >
+                    <Image className="w-4 h-4 text-brand-400" />
+                    <span>{isUploadingBanner ? 'Enviando...' : 'Upload'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Bio */}
