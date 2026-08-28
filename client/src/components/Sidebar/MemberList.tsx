@@ -6,9 +6,10 @@ import { User } from '../../types';
 interface MemberListProps {
   isOpen: boolean;
   onClose?: () => void;
+  onSelectUser?: (user: User) => void;
 }
 
-export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose }) => {
+export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose, onSelectUser }) => {
   const { activeGuild } = useGuildStore();
 
   if (!isOpen || !activeGuild) return null;
@@ -25,7 +26,9 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose }) => {
     return (
       <div
         key={user.id}
-        className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-colors"
+        onClick={() => onSelectUser?.(user)}
+        className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-colors active:scale-[0.98]"
+        title="Clique para ver o perfil"
       >
         <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
           {user.avatar_url ? (
@@ -49,7 +52,7 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose }) => {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span
-              className={`text-sm truncate font-medium ${isOwner ? 'font-semibold' : ''}`}
+              className={`text-sm truncate font-medium group-hover:underline ${isOwner ? 'font-semibold' : ''}`}
               style={topRole ? { color: topRole.color } : isOwner ? { color: '#5865F2' } : { color: '#E0E0E0' }}
             >
               {user.display_name || user.username}
@@ -63,7 +66,7 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose }) => {
 
           {/* Custom Status / Roles Badges */}
           {user.custom_status ? (
-            <p className="text-[11px] text-gray-500 truncate">{user.custom_status}</p>
+            <p className="text-[11px] text-gray-400 truncate">{user.custom_status}</p>
           ) : topRole ? (
             <span
               className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-white/5 truncate max-w-fit block"

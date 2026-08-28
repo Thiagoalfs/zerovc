@@ -22,6 +22,8 @@ import { ProfileModal } from './components/Modals/ProfileModal';
 import { ServerSettingsModal } from './components/Modals/ServerSettingsModal';
 import { ChannelSettingsModal } from './components/Modals/ChannelSettingsModal';
 import { InviteModal } from './components/Modals/InviteModal';
+import { UserProfileModal } from './components/Modals/UserProfileModal';
+import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -53,6 +55,7 @@ export const App: React.FC = () => {
   const [createChannelType, setCreateChannelType] = useState<'text' | 'voice'>('text');
   const [isScreenShareOpen, setIsScreenShareOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [selectedUserForProfile, setSelectedUserForProfile] = useState<User | null>(null);
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
 
@@ -320,7 +323,10 @@ export const App: React.FC = () => {
               }}
             />
           ) : (
-            <DMChatArea onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)} />
+            <DMChatArea
+              onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+              onOpenUserProfile={(targetUser) => setSelectedUserForProfile(targetUser)}
+            />
           )
         ) : activeChannel?.type === 'voice' ? (
           <VoiceRoom
@@ -329,7 +335,10 @@ export const App: React.FC = () => {
             onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
           />
         ) : (
-          <ChatArea onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)} />
+          <ChatArea
+            onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+            onOpenUserProfile={(targetUser) => setSelectedUserForProfile(targetUser)}
+          />
         )}
 
         {/* Floating Mini Voice Dock */}
@@ -398,6 +407,26 @@ export const App: React.FC = () => {
       <ProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      <UserProfileModal
+        user={selectedUserForProfile}
+        isOpen={!!selectedUserForProfile}
+        onClose={() => setSelectedUserForProfile(null)}
+        onOpenDM={async (userId) => {
+          setSelectedUserForProfile(null);
+          setIsHomeActive(true);
+          setHomeView('dm');
+          setIsMobileDrawerOpen(false);
+          const room = await useDMStore.getState().openDMWithUser(userId);
+          if (room) {
+            navigateTo(`/@me/${room.id}`);
+          }
+        }}
+        onEditOwnProfile={() => {
+          setSelectedUserForProfile(null);
+          setIsProfileModalOpen(true);
+        }}
       />
 
       <ServerSettingsModal
