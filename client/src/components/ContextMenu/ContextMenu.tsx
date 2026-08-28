@@ -94,6 +94,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
               );
             }
 
+            if (item.customRender) {
+              return (
+                <div key={item.id || index} className="relative">
+                  {item.customRender}
+                </div>
+              );
+            }
+
             const isDanger = item.variant === 'danger';
             const hasSubmenu = item.subItems && item.subItems.length > 0;
             const isSubmenuOpen = activeSubmenuIndex === index;

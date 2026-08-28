@@ -82,7 +82,14 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     removeRole,
   } = useGuildStore();
   const { openDMWithUser } = useDMStore();
-  const { currentChannelId, joinVoice, isConnected, speakingUserIds } = useVoiceStore();
+  const {
+    currentChannelId,
+    joinVoice,
+    isConnected,
+    speakingUserIds,
+    participantVolumes,
+    setParticipantVolume,
+  } = useVoiceStore();
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
@@ -400,6 +407,41 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           },
         });
       }
+    }
+
+    // User Volume Slider (0 - 200%, default 100%, saved locally)
+    if (!isMe) {
+      items.push({ label: '', separator: true });
+      const currentVol = participantVolumes[targetMember.id] ?? 1;
+      items.push({
+        label: 'Volume de Usuário',
+        customRender: (
+          <div className="px-2.5 py-1.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
+              <div className="flex items-center gap-1.5">
+                {currentVol === 0 ? (
+                  <VolumeX className="w-3.5 h-3.5 text-dnd" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5 text-gray-400" />
+                )}
+                <span>Volume de Usuário</span>
+              </div>
+              <span className="text-brand-400 font-mono text-[11px] font-bold">
+                {Math.round(currentVol * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.01}
+              value={currentVol}
+              onChange={(e) => setParticipantVolume(targetMember.id, parseFloat(e.target.value))}
+              className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
+            />
+          </div>
+        ),
+      });
     }
 
     // Change Roles Submenu
