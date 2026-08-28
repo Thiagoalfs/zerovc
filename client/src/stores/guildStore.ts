@@ -24,6 +24,10 @@ interface GuildState {
   selectChannel: (channel: Channel) => Promise<void>;
   loadMoreMessages: (channelId: string) => Promise<void>;
   createGuild: (name: string, iconUrl?: string) => Promise<Guild>;
+  updateGuild: (guildId: string, data: { name?: string; icon_url?: string; banner_url?: string }) => Promise<void>;
+  deleteGuild: (guildId: string) => Promise<void>;
+  handleGuildUpdateEvent: (guild: Guild) => void;
+  handleGuildDeleteEvent: (guildId: string) => void;
   createChannel: (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string, categoryId?: string, isPrivate?: boolean, roleIds?: string[]) => Promise<Channel>;
   updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean }) => Promise<void>;
   deleteChannel: (channelId: string) => Promise<void>;
@@ -199,6 +203,60 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     const guild = await api.guilds.create({ name, icon_url: iconUrl });
     set((state) => ({ guilds: [...state.guilds, guild] }));
     return guild;
+  },
+
+  updateGuild: async (guildId: string, data: { name?: string; icon_url?: string; banner_url?: string }) => {
+    const updated = await api.guilds.update(guildId, data);
+    set((state) => {
+      const guilds = state.guilds.map((g) => (g.id === guildId ? { ...g, ...updated } : g));
+      const activeGuild =
+        state.activeGuild?.id === guildId
+          ? {
+              ...state.activeGuild,
+              ...updated,
+              channels: state.activeGuild.channels,
+              members: state.activeGuild.members,
+              roles: state.activeGuild.roles,
+            }
+          : state.activeGuild;
+      return { guilds, activeGuild };
+    });
+  },
+
+  deleteGuild: async (guildId: string) => {
+    await api.guilds.delete(guildId);
+    set((state) => {
+      const guilds = state.guilds.filter((g) => g.id !== guildId);
+      const activeGuild = state.activeGuild?.id === guildId ? null : state.activeGuild;
+      const activeChannel = state.activeGuild?.id === guildId ? null : state.activeChannel;
+      return { guilds, activeGuild, activeChannel, messages: [] };
+    });
+  },
+
+  handleGuildUpdateEvent: (updatedGuild: Guild) => {
+    set((state) => {
+      const guilds = state.guilds.map((g) => (g.id === updatedGuild.id ? { ...g, ...updatedGuild } : g));
+      const activeGuild =
+        state.activeGuild?.id === updatedGuild.id
+          ? {
+              ...state.activeGuild,
+              ...updatedGuild,
+              channels: state.activeGuild.channels,
+              members: state.activeGuild.members,
+              roles: state.activeGuild.roles,
+            }
+          : state.activeGuild;
+      return { guilds, activeGuild };
+    });
+  },
+
+  handleGuildDeleteEvent: (guildId: string) => {
+    set((state) => {
+      const guilds = state.guilds.filter((g) => g.id !== guildId);
+      const activeGuild = state.activeGuild?.id === guildId ? null : state.activeGuild;
+      const activeChannel = state.activeGuild?.id === guildId ? null : state.activeChannel;
+      return { guilds, activeGuild, activeChannel, messages: [] };
+    });
   },
 
   createChannel: async (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string, categoryId?: string, isPrivate?: boolean, roleIds?: string[]) => {

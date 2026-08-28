@@ -756,18 +756,36 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             )}
           </div>
         ) : (
-          <div className="relative z-30">
+          <div className="relative z-30 flex-shrink-0">
             {/* Clickable Server Name Header */}
             <button
               type="button"
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm hover:bg-white/5 transition-colors group cursor-pointer text-left"
+              style={
+                activeGuild?.banner_url
+                  ? {
+                      backgroundImage: `url(${activeGuild.banner_url})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }
+                  : undefined
+              }
+              className={`w-full px-4 border-b border-black/20 flex justify-between font-bold text-gray-100 shadow-sm transition-all group cursor-pointer text-left relative overflow-hidden ${
+                activeGuild?.banner_url
+                  ? 'h-36 pt-3.5 items-start hover:brightness-105'
+                  : 'h-12 items-center hover:bg-white/5'
+              }`}
             >
-              <span className="truncate max-w-[170px] text-sm md:text-base font-bold text-white group-hover:text-gray-100">
+              {/* Gradient overlay for banner readability */}
+              {activeGuild?.banner_url && (
+                <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/35 to-transparent pointer-events-none" />
+              )}
+
+              <span className="truncate max-w-[170px] text-sm md:text-base font-bold text-white group-hover:text-gray-100 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                 {activeGuild?.name || 'Servidor'}
               </span>
               <ChevronDown
-                className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 flex-shrink-0 ${
+                className={`w-4 h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
                   isDropdownOpen ? 'rotate-180 text-brand-400' : ''
                 }`}
               />
@@ -777,7 +795,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             {isDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
-                <div className="absolute top-13 left-2 right-2 z-50 bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                <div
+                  className={`absolute left-2 right-2 z-50 bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-1 animate-in fade-in zoom-in-95 duration-100 ${
+                    activeGuild?.banner_url ? 'top-38' : 'top-13'
+                  }`}
+                >
                   <button
                     onClick={() => {
                       setIsDropdownOpen(false);

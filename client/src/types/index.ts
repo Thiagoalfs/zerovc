@@ -47,6 +47,7 @@ export interface Guild {
   id: string;
   name: string;
   icon_url?: string;
+  banner_url?: string;
   owner_id: string;
   channels?: Channel[];
   members?: User[];

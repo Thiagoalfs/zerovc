@@ -54,12 +54,12 @@ func (h *GuildHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// 1. Create Guild
 	var guild models.Guild
 	guildQuery := `
-		INSERT INTO guilds (name, icon_url, owner_id)
-		VALUES ($1, $2, $3)
-		RETURNING id, name, icon_url, owner_id, created_at, updated_at
+		INSERT INTO guilds (name, icon_url, banner_url, owner_id)
+		VALUES ($1, $2, '', $3)
+		RETURNING id, name, icon_url, COALESCE(banner_url, ''), owner_id, created_at, updated_at
 	`
 	err = tx.QueryRow(r.Context(), guildQuery, req.Name, req.IconURL, userID).Scan(
-		&guild.ID, &guild.Name, &guild.IconURL, &guild.OwnerID, &guild.CreatedAt, &guild.UpdatedAt,
+		&guild.ID, &guild.Name, &guild.IconURL, &guild.BannerURL, &guild.OwnerID, &guild.CreatedAt, &guild.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create guild"}`, http.StatusInternalServerError)
@@ -127,7 +127,7 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at, g.updated_at
+		SELECT g.id, g.name, g.icon_url, COALESCE(g.banner_url, ''), g.owner_id, g.created_at, g.updated_at
 		FROM guilds g
 		INNER JOIN guild_members gm ON gm.guild_id = g.id
 		WHERE gm.user_id = $1
@@ -143,7 +143,7 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 	guilds := make([]models.Guild, 0)
 	for rows.Next() {
 		var g models.Guild
-		if err := rows.Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt, &g.UpdatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.IconURL, &g.BannerURL, &g.OwnerID, &g.CreatedAt, &g.UpdatedAt); err != nil {
 			continue
 		}
 		guilds = append(guilds, g)
@@ -177,9 +177,9 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Get Guild
 	var guild models.Guild
-	guildQuery := `SELECT id, name, icon_url, owner_id, created_at, updated_at FROM guilds WHERE id = $1`
+	guildQuery := `SELECT id, name, icon_url, COALESCE(banner_url, ''), owner_id, created_at, updated_at FROM guilds WHERE id = $1`
 	err = h.db.Pool.QueryRow(r.Context(), guildQuery, guildID).Scan(
-		&guild.ID, &guild.Name, &guild.IconURL, &guild.OwnerID, &guild.CreatedAt, &guild.UpdatedAt,
+		&guild.ID, &guild.Name, &guild.IconURL, &guild.BannerURL, &guild.OwnerID, &guild.CreatedAt, &guild.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
@@ -652,5 +652,132 @@ func (h *GuildHandler) MuteMember(w http.ResponseWriter, r *http.Request) {
 		"success":     true,
 		"user_id":     targetUserID,
 		"muted_until": mutedUntil,
+	})
+}
+
+type UpdateGuildRequest struct {
+	Name      *string `json:"name,omitempty"`
+	IconURL   *string `json:"icon_url,omitempty"`
+	BannerURL *string `json:"banner_url,omitempty"`
+}
+
+func (h *GuildHandler) Update(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify permissions (owner or PermAdministrator or PermManageGuild)
+	var ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != ownerID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
+			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar servidor"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	var req UpdateGuildRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	var guild models.Guild
+	updateQuery := `
+		UPDATE guilds
+		SET name = COALESCE($1, name),
+		    icon_url = COALESCE($2, icon_url),
+		    banner_url = COALESCE($3, banner_url),
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4
+		RETURNING id, name, icon_url, COALESCE(banner_url, ''), owner_id, created_at, updated_at
+	`
+	err = h.db.Pool.QueryRow(r.Context(), updateQuery, req.Name, req.IconURL, req.BannerURL, guildID).Scan(
+		&guild.ID, &guild.Name, &guild.IconURL, &guild.BannerURL, &guild.OwnerID, &guild.CreatedAt, &guild.UpdatedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update guild"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Broadcast update to all guild members
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_UPDATE",
+		Data: guild,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(guild)
+}
+
+func (h *GuildHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Check if user is the Owner
+	var ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != ownerID {
+		http.Error(w, `{"error":"forbidden: apenas o dono pode excluir o servidor"}`, http.StatusForbidden)
+		return
+	}
+
+	// Broadcast GUILD_DELETE to all connected members before deleting
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_DELETE",
+		Data: map[string]any{
+			"guild_id": guildID,
+		},
+	})
+
+	// Delete guild (Cascades to channels, roles, members, etc.)
+	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM guilds WHERE id = $1", guildID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to delete guild"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":  true,
+		"guild_id": guildID,
 	})
 }

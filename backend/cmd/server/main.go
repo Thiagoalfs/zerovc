@@ -189,6 +189,8 @@ func main() {
 		r.Get("/api/guilds", guildHandler.List)
 		r.Post("/api/guilds", guildHandler.Create)
 		r.Get("/api/guilds/{id}", guildHandler.GetDetails)
+		r.Patch("/api/guilds/{id}", guildHandler.Update)
+		r.Delete("/api/guilds/{id}", guildHandler.Delete)
 		r.Post("/api/guilds/{id}/join", guildHandler.Join)
 		r.Post("/api/guilds/{id}/invites", inviteHandler.CreateInvite)
 
@@ -266,6 +268,7 @@ func main() {
 		// Upload Endpoints (Protected)
 		r.Post("/api/upload/avatar", uploadHandler.UploadAvatar)
 		r.Post("/api/upload/guild-icon", uploadHandler.UploadGuildIcon)
+		r.Post("/api/upload/guild-banner", uploadHandler.UploadGuildBanner)
 		r.Post("/api/upload/banner", uploadHandler.UploadBanner)
 		r.Post("/api/upload/attachment", uploadHandler.UploadAttachment)
 
