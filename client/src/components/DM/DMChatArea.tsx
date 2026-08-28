@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone, Loader2 } from 'lucide-react';
+import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone, Loader2, UploadCloud, FileText } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
@@ -44,16 +44,54 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [replyingTo, setReplyingTo] = useState<DMMessage | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
+  const dragCounterRef = useRef<number>(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer?.types?.includes('Files')) {
+      setIsDraggingFile(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDraggingFile(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingFile(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      processFile(files[0]);
+    }
+  };
 
   const handleStartCall = async () => {
     if (!activeRoom || !activeRoom.recipient) return;
@@ -239,11 +277,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     }
   };
 
-  const processImageFile = (file: File) => {
+  const processFile = (file: File) => {
     if (file.size > MAX_FILE_BYTES) {
       setLimitAlert({
         title: 'Arquivo Muito Grande',
-        message: 'O limite de imagens/vídeos/arquivos são 20mb',
+        message: 'O limite de imagens/vídeos/arquivos é de 20 MB',
         detail: `Tamanho do arquivo: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
       });
       return;
@@ -251,11 +289,15 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
     setSelectedFile(file);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setSelectedImagePreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setSelectedImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedImagePreview(null);
+    }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -264,11 +306,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (item.type.indexOf('image') !== -1) {
+      if (item.kind === 'file') {
         e.preventDefault();
         const file = item.getAsFile();
         if (file) {
-          processImageFile(file);
+          processFile(file);
           break;
         }
       }
@@ -278,7 +320,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    processImageFile(file);
+    processFile(file);
     e.target.value = '';
   };
 
@@ -315,7 +357,26 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   });
 
   return (
-    <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden relative select-none">
+    <div
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden relative select-none"
+    >
+      {/* Drag & Drop Files Overlay */}
+      {isDraggingFile && (
+        <div className="absolute inset-3 z-50 bg-background-darkest/90 backdrop-blur-md border-2 border-dashed border-brand-500 rounded-3xl flex flex-col items-center justify-center gap-3 p-6 animate-in fade-in zoom-in-95 pointer-events-none shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-brand-500/20 text-brand-400 flex items-center justify-center shadow-inner animate-bounce">
+            <UploadCloud className="w-8 h-8" />
+          </div>
+          <div className="text-center">
+            <h3 className="text-lg font-bold text-white mb-0.5">Solte seus arquivos aqui</h3>
+            <p className="text-xs text-gray-400">Imagens, vídeos ou documentos (até 20 MB)</p>
+          </div>
+        </div>
+      )}
+
       {/* Active Call Overlay if calling or connected */}
       <ActiveCallOverlay />
 
@@ -673,13 +734,24 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       )}
 
       {/* Selected Image / File Preview */}
-      {selectedImagePreview && (
+      {selectedFile && (
         <div className="mx-4 mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-xl border border-white/10" />
-            <span className="text-xs text-gray-300 font-medium truncate max-w-[150px]">
-              {selectedFile?.name || 'Imagem anexada'}
-            </span>
+          <div className="flex items-center gap-2.5">
+            {selectedImagePreview ? (
+              <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-xl border border-white/10 flex-shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-background-light flex items-center justify-center text-brand-400 border border-white/10 flex-shrink-0">
+                <FileText className="w-5 h-5" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <span className="text-xs text-gray-200 font-medium block truncate max-w-[140px]">
+                {selectedFile.name}
+              </span>
+              <span className="text-[10px] text-gray-400 font-mono">
+                {(selectedFile.size / 1024).toFixed(0)} KB
+              </span>
+            </div>
           </div>
           <button
             type="button"
@@ -687,7 +759,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               setSelectedFile(null);
               setSelectedImagePreview(null);
             }}
-            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3 cursor-pointer"
+            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3 cursor-pointer flex-shrink-0"
+            title="Remover anexo"
           >
             <X className="w-4 h-4" />
           </button>
@@ -716,7 +789,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="*/*"
         onChange={handleFileChange}
         className="hidden"
       />
@@ -729,7 +802,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
           className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
-          title="Anexar imagem (até 20 MB)"
+          title="Anexar arquivo ou imagem (até 20 MB)"
         >
           <PlusCircle className="w-5 h-5" />
         </button>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Hash, Users, Menu, Pin, Search, X } from 'lucide-react';
+import { Hash, Users, Menu, Pin, Search, X, UploadCloud } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
@@ -38,6 +38,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const dragCounterRef = useRef<number>(0);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number | null>(null);
@@ -45,6 +49,42 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const isInitialLoadRef = useRef<boolean>(true);
   const prevChannelIdRef = useRef<string | null>(null);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer?.types?.includes('Files')) {
+      setIsDraggingFile(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDraggingFile(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingFile(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      setDroppedFile(files[0]);
+    }
+  };
 
   const showMembers = isMemberListOpen !== undefined ? isMemberListOpen : localShowMemberList;
   const toggleMembers = () => {
@@ -153,7 +193,26 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   });
 
   return (
-    <div className="flex-1 bg-background-dark flex flex-row h-full overflow-hidden relative">
+    <div
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="flex-1 bg-background-dark flex flex-row h-full overflow-hidden relative"
+    >
+      {/* Drag & Drop Files Overlay */}
+      {isDraggingFile && (
+        <div className="absolute inset-3 z-50 bg-background-darkest/90 backdrop-blur-md border-2 border-dashed border-brand-500 rounded-3xl flex flex-col items-center justify-center gap-3 p-6 animate-in fade-in zoom-in-95 pointer-events-none shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-brand-500/20 text-brand-400 flex items-center justify-center shadow-inner animate-bounce">
+            <UploadCloud className="w-8 h-8" />
+          </div>
+          <div className="text-center">
+            <h3 className="text-lg font-bold text-white mb-0.5">Solte seus arquivos aqui</h3>
+            <p className="text-xs text-gray-400">Imagens, vídeos ou documentos (até 20 MB)</p>
+          </div>
+        </div>
+      )}
+
       {/* Center Chat View */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Channel Header */}
@@ -331,6 +390,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
           onSendMessage={sendMessage}
+          droppedFile={droppedFile}
+          onClearDroppedFile={() => setDroppedFile(null)}
         />
       </div>
 
