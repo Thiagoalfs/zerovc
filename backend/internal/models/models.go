@@ -104,19 +104,44 @@ type VoiceSession struct {
 	JoinedAt        time.Time  `json:"joined_at"`
 }
 
+// Guild Invite (10-character hash)
+type GuildInvite struct {
+	Code      string      `json:"code"`
+	GuildID   uuid.UUID   `json:"guild_id"`
+	Guild     *Guild      `json:"guild,omitempty"`
+	CreatorID uuid.UUID   `json:"creator_id"`
+	Creator   *UserPublic `json:"creator,omitempty"`
+	Uses      int         `json:"uses"`
+	CreatedAt time.Time   `json:"created_at"`
+}
+
+// Friendship / Friend Request
+type Friendship struct {
+	ID        uuid.UUID  `json:"id"`
+	UserID    uuid.UUID  `json:"user_id"`
+	FriendID  uuid.UUID  `json:"friend_id"`
+	Status    string     `json:"status"` // pending, accepted, blocked
+	User      UserPublic `json:"user,omitempty"`
+	Friend    UserPublic `json:"friend,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
 // WebSocket Event Types
 type WSEventType string
 
 const (
-	EventReady            WSEventType = "READY"
-	EventMessageCreate    WSEventType = "MESSAGE_CREATE"
-	EventMessageUpdate    WSEventType = "MESSAGE_UPDATE"
-	EventMessageDelete    WSEventType = "MESSAGE_DELETE"
-	EventTypingStart      WSEventType = "TYPING_START"
-	EventPresenceUpdate   WSEventType = "PRESENCE_UPDATE"
-	EventVoiceStateUpdate WSEventType = "VOICE_STATE_UPDATE"
-	EventGuildCreate      WSEventType = "GUILD_CREATE"
-	EventChannelCreate    WSEventType = "CHANNEL_CREATE"
+	EventReady               WSEventType = "READY"
+	EventMessageCreate       WSEventType = "MESSAGE_CREATE"
+	EventMessageUpdate       WSEventType = "MESSAGE_UPDATE"
+	EventMessageDelete       WSEventType = "MESSAGE_DELETE"
+	EventTypingStart         WSEventType = "TYPING_START"
+	EventPresenceUpdate      WSEventType = "PRESENCE_UPDATE"
+	EventVoiceStateUpdate    WSEventType = "VOICE_STATE_UPDATE"
+	EventGuildCreate         WSEventType = "GUILD_CREATE"
+	EventChannelCreate       WSEventType = "CHANNEL_CREATE"
+	EventFriendRequestCreate WSEventType = "FRIEND_REQUEST_CREATE"
+	EventFriendRequestUpdate WSEventType = "FRIEND_REQUEST_UPDATE"
 )
 
 type WSEvent struct {

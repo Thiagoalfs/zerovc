@@ -1,10 +1,9 @@
-import { Channel, Guild, Message, User, VoiceSession } from '../types';
+import { Channel, Guild, GuildInvite, Friendship, Message, User, VoiceSession } from '../types';
 
 export function getApiBaseUrl(): string {
   const saved = localStorage.getItem('zerovc_server_url');
   if (saved) return saved;
 
-  // If accessed directly from browser (e.g. http://162.35.97.76:8081)
   if (typeof window !== 'undefined' && window.location && window.location.origin && !window.location.origin.includes('5173')) {
     return window.location.origin;
   }
@@ -84,6 +83,34 @@ export const api = {
       request<Channel>(`/api/guilds/${guildId}/channels`, {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    createInvite: (guildId: string) =>
+      request<GuildInvite>(`/api/guilds/${guildId}/invites`, {
+        method: 'POST',
+      }),
+  },
+  invites: {
+    get: (code: string) => request<{ invite: GuildInvite; member_count: number }>(`/api/invites/${code}`),
+    join: (code: string) =>
+      request<{ success: boolean; guild_id: string }>(`/api/invites/${code}/join`, {
+        method: 'POST',
+      }),
+  },
+  friends: {
+    list: () =>
+      request<{ friends: Friendship[]; pending: Friendship[]; incoming: Friendship[] }>('/api/friends'),
+    sendRequest: (username: string) =>
+      request<Friendship>('/api/friends/request', {
+        method: 'POST',
+        body: JSON.stringify({ username }),
+      }),
+    accept: (friendshipId: string) =>
+      request<{ success: boolean }>(`/api/friends/${friendshipId}/accept`, {
+        method: 'POST',
+      }),
+    remove: (friendshipId: string) =>
+      request<{ success: boolean }>(`/api/friends/${friendshipId}/reject`, {
+        method: 'POST',
       }),
   },
   channels: {

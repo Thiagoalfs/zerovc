@@ -91,9 +91,33 @@ CREATE TABLE IF NOT EXISTS voice_sessions (
     CONSTRAINT unique_user_voice UNIQUE (user_id)
 );
 
+-- 9. Guild Invites (10-character hash code)
+CREATE TABLE IF NOT EXISTS guild_invites (
+    code VARCHAR(10) PRIMARY KEY,
+    guild_id UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+    creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    uses INT DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 10. Friendships & Friend Requests
+CREATE TABLE IF NOT EXISTS friendships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    friend_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'accepted', 'blocked')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_friendship UNIQUE (user_id, friend_id),
+    CONSTRAINT different_friend_users CHECK (user_id <> friend_id)
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_channel_created ON messages (channel_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dm_messages_room_created ON dm_messages (dm_room_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_guild_members_user ON guild_members (user_id);
 CREATE INDEX IF NOT EXISTS idx_channels_guild ON channels (guild_id, position);
 CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions (channel_id);
+CREATE INDEX IF NOT EXISTS idx_guild_invites_guild ON guild_invites (guild_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships (user_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_friend ON friendships (friend_id);
