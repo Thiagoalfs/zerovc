@@ -65,8 +65,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    login: (data: { email: string; password: string }) =>
-      request<{ token: string; user: User }>('/auth/login', {
+    login: (data: { email: string; password: string; code?: string }) =>
+      request<{ token?: string; requires_2fa?: boolean; user?: User }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -75,6 +75,30 @@ export const api = {
         method: 'POST',
       }),
     me: () => request<User>('/auth/me'),
+    generate2FA: () =>
+      request<{ secret: string; otpauth_uri: string }>('/auth/2fa/generate', {
+        method: 'POST',
+      }),
+    enable2FA: (data: { secret: string; code: string }) =>
+      request<{ success: boolean; two_factor_enabled: boolean }>('/auth/2fa/enable', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    disable2FA: (data: { password?: string; code?: string }) =>
+      request<{ success: boolean; two_factor_enabled: boolean }>('/auth/2fa/disable', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    changePassword: (data: { current_password: string; new_password: string }) =>
+      request<{ success: boolean; message: string }>('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    changeEmail: (data: { password: string; new_email: string }) =>
+      request<{ success: boolean; email: string }>('/auth/change-email', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
 
   users: {

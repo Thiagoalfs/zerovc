@@ -8,7 +8,7 @@ interface AuthState {
   token: string | null;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, code?: string) => Promise<{ requires_2fa?: boolean } | void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
@@ -29,16 +29,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: true,
   error: null,
 
-  login: async (email, password) => {
+  login: async (email, password, code) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await api.auth.login({ email, password });
-      if (res.token) {
+      const res = await api.auth.login({ email, password, code });
+      if (res.requires_2fa) {
+        set({ isLoading: false });
+        return { requires_2fa: true };
+      }
+      if (res.token && res.user) {
         localStorage.setItem('token', res.token);
         localStorage.setItem('zerovc_token', res.token);
+        set({ user: res.user, token: res.token, isLoading: false });
+        socket.connect();
       }
-      set({ user: res.user, token: res.token, isLoading: false });
-      socket.connect();
     } catch (err: any) {
       set({ error: err.message || 'Falha ao fazer login', isLoading: false });
       throw err;
