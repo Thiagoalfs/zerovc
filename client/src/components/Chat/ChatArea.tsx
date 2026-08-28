@@ -9,6 +9,7 @@ import { User, Message } from '../../types';
 interface ChatAreaProps {
   onOpenMobileDrawer?: () => void;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
+  onPreviewImage?: (url: string) => void;
   isMemberListOpen?: boolean;
   onToggleMemberList?: (open: boolean) => void;
 }
@@ -16,6 +17,7 @@ interface ChatAreaProps {
 export const ChatArea: React.FC<ChatAreaProps> = ({
   onOpenMobileDrawer,
   onOpenUserProfile,
+  onPreviewImage,
   isMemberListOpen,
   onToggleMemberList,
 }) => {
@@ -218,6 +220,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   message={message}
                   isCompact={isCompact}
                   onOpenUserProfile={onOpenUserProfile}
+                  onPreviewImage={onPreviewImage}
                   onReply={(msg) => setReplyingTo(msg)}
                 />
               );
