@@ -2,12 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Participant, Track, RemoteTrackPublication } from 'livekit-client';
 import { MicOff, Monitor, Maximize2, Minimize2, Play, EyeOff, Radio, Video, Volume2, VolumeX } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useGuildStore } from '../../stores/guildStore';
 
 interface ParticipantCardProps {
   participant: Participant;
 }
 
 export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant }) => {
+  const { user } = useAuthStore();
+  const { activeGuild } = useGuildStore();
   const { speakingUserIds, stopScreenShare, participantVolumes, setParticipantVolume } = useVoiceStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraRef = useRef<HTMLVideoElement | null>(null);
@@ -19,6 +23,21 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
 
   const isSpeaking = speakingUserIds.includes(participant.identity);
   const isLocal = participant.isLocal;
+
+  // Resolve participant profile avatar
+  const meta = (() => {
+    try {
+      return participant.metadata ? JSON.parse(participant.metadata) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const avatarUrl =
+    (isLocal ? user?.avatar_url : null) ||
+    meta?.avatar_url ||
+    activeGuild?.members?.find((m) => m.id === participant.identity)?.avatar_url ||
+    (participant.identity === user?.id ? user?.avatar_url : null);
 
   // Check audio mute status
   const audioPub = participant.getTrackPublication(Track.Source.Microphone);
@@ -207,11 +226,15 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
         /* 4. Default Voice Participant Avatar View */
         <div className="flex flex-col items-center justify-center gap-2">
           <div
-            className={`w-16 h-16 md:w-20 md:h-20 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-xl shadow-lg transition-transform ${
+            className={`w-16 h-16 md:w-20 md:h-20 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-xl shadow-lg overflow-hidden transition-transform ${
               isSpeaking ? 'scale-105 ring-4 ring-online ring-offset-2 ring-offset-background-darkest' : ''
             }`}
           >
-            <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+            ) : (
+              <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
+            )}
           </div>
         </div>
       )}

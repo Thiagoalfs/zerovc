@@ -168,6 +168,7 @@ export const App: React.FC = () => {
         if (event.data.id === user.id) {
           setUser(event.data);
         }
+        useGuildStore.getState().updateMemberInGuild(event.data);
       };
 
       const handleMessageReactionAdd = (event: any) => {

@@ -22,7 +22,7 @@ func NewLiveKitService(apiKey, apiSecret, publicURL string) *LiveKitService {
 	}
 }
 
-func (s *LiveKitService) GenerateJoinToken(roomName string, userID uuid.UUID, username string, canPublish bool) (string, error) {
+func (s *LiveKitService) GenerateJoinToken(roomName string, userID uuid.UUID, username string, metadata string, canPublish bool) (string, error) {
 	at := auth.NewAccessToken(s.apiKey, s.apiSecret)
 	grant := &auth.VideoGrant{
 		RoomJoin:       true,
@@ -35,6 +35,7 @@ func (s *LiveKitService) GenerateJoinToken(roomName string, userID uuid.UUID, us
 	at.AddGrant(grant).
 		SetIdentity(userID.String()).
 		SetName(username).
+		SetMetadata(metadata).
 		SetValidFor(24 * time.Hour)
 
 	token, err := at.ToJWT()
