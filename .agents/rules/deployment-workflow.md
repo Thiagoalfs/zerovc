@@ -13,3 +13,6 @@
 - **NUNCA suba ou faça deploy automático no Docker / VPS via SSH por conta própria.**
 - **Sempre pergunte ao usuário** se deseja realizar o deploy das atualizações no Docker/VPS.
 - O deploy na VPS só deve ser executado **EXCLUSIVAMENTE se o usuário permitir de forma explícita**.
+
+## ⏱️ 4. Intervalo de Verificação e Timer de Deploy (60 segundos)
+- Ao executar builds ou deploys no Docker/VPS que requeiram espera assíncrona ou verificação periódica de status, utilize **SEMPRE intervalos de 60 em 60 segundos** (`DurationSeconds: 60`), evitando múltiplos timers curtos e desnecessários.
