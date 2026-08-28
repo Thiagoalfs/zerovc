@@ -133,6 +133,15 @@ export const api = {
         body: JSON.stringify(data),
       }),
     getDetails: (id: string) => request<Guild>(`/guilds/${id}`),
+    update: (id: string, data: { name?: string; icon_url?: string; banner_url?: string }) =>
+      request<Guild>(`/guilds/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<{ success: boolean; guild_id: string }>(`/guilds/${id}`, {
+        method: 'DELETE',
+      }),
     join: (id: string) =>
       request<{ success: boolean }>(`/guilds/${id}/join`, {
         method: 'POST',
@@ -408,6 +417,26 @@ export const api = {
       });
       if (!res.ok) {
         let msg = 'Falha ao enviar ícone do servidor';
+        try {
+          const err = await res.json();
+          if (err.error) msg = err.error;
+        } catch {}
+        throw new Error(msg);
+      }
+      return res.json() as Promise<{ url: string; filename: string; size: number }>;
+    },
+    guildBanner: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-banner`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        let msg = 'Falha ao enviar banner do servidor';
         try {
           const err = await res.json();
           if (err.error) msg = err.error;
