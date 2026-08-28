@@ -5,11 +5,14 @@ import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
 import { MemberList } from '../Sidebar/MemberList';
 
+import { User } from '../../types';
+
 interface ChatAreaProps {
   onOpenMobileDrawer?: () => void;
+  onOpenUserProfile?: (user: User) => void;
 }
 
-export const ChatArea: React.FC<ChatAreaProps> = ({ onOpenMobileDrawer }) => {
+export const ChatArea: React.FC<ChatAreaProps> = ({ onOpenMobileDrawer, onOpenUserProfile }) => {
   const { activeChannel, messages, isLoadingMessages, sendMessage, typingUsers } = useGuildStore();
   const [showMemberList, setShowMemberList] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -116,6 +119,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ onOpenMobileDrawer }) => {
                   key={message.id}
                   message={message}
                   isCompact={isCompact}
+                  onOpenUserProfile={onOpenUserProfile}
                 />
               );
             })
@@ -138,8 +142,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ onOpenMobileDrawer }) => {
         <MessageInput channel={activeChannel} onSendMessage={sendMessage} />
       </div>
 
-      {/* Right Sidebar: Member List */}
-      <MemberList isOpen={showMemberList} onClose={() => setShowMemberList(false)} />
+      {/* Right-side Member List Sidebar */}
+      <MemberList
+        isOpen={showMemberList}
+        onClose={() => setShowMemberList(false)}
+        onSelectUser={onOpenUserProfile}
+      />
     </div>
   );
 };
