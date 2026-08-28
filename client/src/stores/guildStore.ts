@@ -52,10 +52,6 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     try {
       const guilds = await api.guilds.list();
       set({ guilds, isLoadingGuilds: false });
-
-      if (guilds.length > 0 && !get().activeGuild) {
-        get().selectGuild(guilds[0].id);
-      }
     } catch (err) {
       console.error('Failed to fetch guilds:', err);
       set({ isLoadingGuilds: false });

@@ -1,21 +1,21 @@
 import React from 'react';
-import { Plus, Compass, MessageSquare, Settings } from 'lucide-react';
+import { Plus, Compass, MessageSquare } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 
 interface ServerListProps {
   isHomeActive: boolean;
   onSelectHome: () => void;
+  onSelectGuild?: (guildId: string) => void;
   onOpenCreateServer: () => void;
   onOpenJoinServer: () => void;
-  onOpenSettings: () => void;
 }
 
 export const ServerList: React.FC<ServerListProps> = ({
   isHomeActive,
   onSelectHome,
+  onSelectGuild,
   onOpenCreateServer,
   onOpenJoinServer,
-  onOpenSettings,
 }) => {
   const { guilds, activeGuild, selectGuild } = useGuildStore();
 
@@ -56,7 +56,11 @@ export const ServerList: React.FC<ServerListProps> = ({
             <button
               key={guild.id}
               onClick={() => {
-                selectGuild(guild.id);
+                if (onSelectGuild) {
+                  onSelectGuild(guild.id);
+                } else {
+                  selectGuild(guild.id);
+                }
               }}
               className={`relative group w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 font-semibold text-sm ${
                 isActive
@@ -103,15 +107,6 @@ export const ServerList: React.FC<ServerListProps> = ({
           <Compass className="w-6 h-6" />
         </button>
       </div>
-
-      {/* Settings Button */}
-      <button
-        onClick={onOpenSettings}
-        className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-background-light flex items-center justify-center text-gray-400 hover:text-gray-200 transition-all duration-200 mt-auto"
-        title="Configurações"
-      >
-        <Settings className="w-5 h-5" />
-      </button>
     </div>
   );
 };

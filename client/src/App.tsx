@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from './stores/authStore';
 import { useGuildStore } from './stores/guildStore';
 import { useFriendStore } from './stores/friendStore';
 import { useVoiceStore } from './stores/voiceStore';
 import { useDMStore } from './stores/dmStore';
 import { socket } from './lib/socket';
-import { Message, VoiceSession, Channel } from './types';
+import { Message, VoiceSession, Channel, DMRoom } from './types';
+import { api } from './lib/api';
 import { ServerList } from './components/Sidebar/ServerList';
 import { ChannelList } from './components/Sidebar/ChannelList';
 import { DMChannelList } from './components/DM/DMChannelList';
@@ -35,13 +36,14 @@ export const App: React.FC = () => {
     removeMessageFromStore,
     updateVoiceState,
     setTyping,
+    selectGuild,
     selectChannel,
   } = useGuildStore();
   const { handleFriendEvent } = useFriendStore();
   const { isConnected, currentChannelId, isMuted, toggleMute, leaveVoice } = useVoiceStore();
   const { addMessage: addDMMessage } = useDMStore();
 
-  const [isHomeActive, setIsHomeActive] = useState(false);
+  const [isHomeActive, setIsHomeActive] = useState(true);
   const [homeView, setHomeView] = useState<'friends' | 'dm'>('friends');
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
@@ -56,6 +58,67 @@ export const App: React.FC = () => {
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
 
+  const navigateTo = (path: string, replace = false) => {
+    if (window.location.pathname !== path) {
+      if (replace) {
+        window.history.replaceState(null, '', path);
+      } else {
+        window.history.pushState(null, '', path);
+      }
+    }
+  };
+
+  const handleRoute = useCallback(async (pathname: string) => {
+    const cleanPath = pathname.replace(/^\/+|\/+$/g, '');
+    const segments = cleanPath ? cleanPath.split('/') : [];
+
+    // 1. Default to /@me or /@me/friends or /@me/:roomId
+    if (segments.length === 0 || segments[0] === '@me') {
+      setIsHomeActive(true);
+      if (segments.length > 1 && segments[1]) {
+        const roomId = segments[1];
+        setHomeView('dm');
+        const { rooms, fetchRooms, selectRoom } = useDMStore.getState();
+        if (rooms.length === 0) await fetchRooms();
+        const targetRoom = useDMStore.getState().rooms.find((r) => r.id === roomId);
+        if (targetRoom) {
+          selectRoom(targetRoom);
+        }
+        navigateTo(`/@me/${roomId}`, true);
+      } else {
+        setHomeView('friends');
+        navigateTo('/@me', true);
+      }
+      return;
+    }
+
+    // 2. Server & Channel: /:guildId/:channelId
+    if (segments.length >= 1) {
+      const guildId = segments[0];
+      const channelId = segments[1];
+
+      setIsHomeActive(false);
+      try {
+        const fullGuild = await api.guilds.getDetails(guildId);
+        useGuildStore.setState({ activeGuild: fullGuild });
+
+        if (fullGuild.channels && fullGuild.channels.length > 0) {
+          const targetChannel = channelId
+            ? fullGuild.channels.find((c) => c.id === channelId) || fullGuild.channels[0]
+            : fullGuild.channels.find((c) => c.type === 'text') || fullGuild.channels[0];
+
+          useGuildStore.getState().selectChannel(targetChannel);
+          navigateTo(`/${guildId}/${targetChannel.id}`, true);
+        }
+      } catch (err) {
+        console.error('Failed to route to guild:', err);
+        setIsHomeActive(true);
+        setHomeView('friends');
+        navigateTo('/@me', true);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -63,6 +126,12 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (token && user) {
       fetchGuilds();
+      handleRoute(window.location.pathname);
+
+      const onPopState = () => {
+        handleRoute(window.location.pathname);
+      };
+      window.addEventListener('popstate', onPopState);
 
       // WebSocket Event Subscriptions
       const handleMessageCreate = (event: any) => {
@@ -110,6 +179,7 @@ export const App: React.FC = () => {
       socket.on('USER_UPDATE', handleUserUpdate);
 
       return () => {
+        window.removeEventListener('popstate', onPopState);
         socket.off('MESSAGE_CREATE', handleMessageCreate);
         socket.off('MESSAGE_UPDATE', handleMessageUpdate);
         socket.off('MESSAGE_DELETE', handleMessageDelete);
@@ -161,6 +231,17 @@ export const App: React.FC = () => {
           onSelectHome={() => {
             setIsHomeActive(true);
             setHomeView('friends');
+            navigateTo('/@me');
+            setIsMobileDrawerOpen(false);
+          }}
+          onSelectGuild={async (guildId) => {
+            setIsHomeActive(false);
+            await selectGuild(guildId);
+            const active = useGuildStore.getState().activeGuild;
+            const ch = useGuildStore.getState().activeChannel;
+            if (active && ch) {
+              navigateTo(`/${active.id}/${ch.id}`);
+            }
             setIsMobileDrawerOpen(false);
           }}
           onOpenCreateServer={() => {
@@ -171,17 +252,20 @@ export const App: React.FC = () => {
             setIsJoinServerOpen(true);
             setIsMobileDrawerOpen(false);
           }}
-          onOpenSettings={() => {
-            setIsProfileModalOpen(true);
-            setIsMobileDrawerOpen(false);
-          }}
         />
 
         {/* 2. Channels Sidebar OR DMs Sidebar */}
         {isHomeActive ? (
           <DMChannelList
             currentView={homeView}
-            onSelectFriends={() => setHomeView('friends')}
+            onSelectFriends={() => {
+              setHomeView('friends');
+              navigateTo('/@me');
+            }}
+            onSelectRoom={(room: DMRoom) => {
+              setHomeView('dm');
+              navigateTo(`/@me/${room.id}`);
+            }}
             onOpenSettings={() => setIsProfileModalOpen(true)}
             onOpenScreenShare={() => setIsScreenShareOpen(true)}
             onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
@@ -189,6 +273,11 @@ export const App: React.FC = () => {
         ) : (
           <ChannelList
             isHomeActive={false}
+            onSelectChannel={(channel) => {
+              if (activeGuild) {
+                navigateTo(`/${activeGuild.id}/${channel.id}`);
+              }
+            }}
             onOpenCreateChannel={(type) => {
               setCreateChannelType(type);
               setIsCreateChannelOpen(true);
@@ -224,7 +313,15 @@ export const App: React.FC = () => {
           homeView === 'friends' ? (
             <FriendsView
               onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
-              onOpenDM={() => setHomeView('dm')}
+              onOpenDM={() => {
+                setHomeView('dm');
+                const activeRoom = useDMStore.getState().activeRoom;
+                if (activeRoom) {
+                  navigateTo(`/@me/${activeRoom.id}`);
+                } else {
+                  navigateTo('/@me');
+                }
+              }}
             />
           ) : (
             <DMChatArea onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)} />
