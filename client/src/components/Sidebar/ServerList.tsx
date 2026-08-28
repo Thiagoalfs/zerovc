@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Compass, MessageSquare } from 'lucide-react';
+import { Plus, MessageSquare } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 
 interface ServerListProps {
@@ -7,7 +7,6 @@ interface ServerListProps {
   onSelectHome: () => void;
   onSelectGuild?: (guildId: string) => void;
   onOpenCreateServer: () => void;
-  onOpenJoinServer: () => void;
 }
 
 export const ServerList: React.FC<ServerListProps> = ({
@@ -15,7 +14,6 @@ export const ServerList: React.FC<ServerListProps> = ({
   onSelectHome,
   onSelectGuild,
   onOpenCreateServer,
-  onOpenJoinServer,
 }) => {
   const { guilds, activeGuild, selectGuild } = useGuildStore();
 
@@ -89,22 +87,13 @@ export const ServerList: React.FC<ServerListProps> = ({
           );
         })}
 
-        {/* Add Server Button */}
+        {/* Unified Add/Join Server Button (+) */}
         <button
           onClick={onOpenCreateServer}
-          className="relative group w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-online flex items-center justify-center text-online hover:text-white transition-all duration-200"
-          title="Criar um Servidor"
+          className="relative group w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-online flex items-center justify-center text-online hover:text-white transition-all duration-200 shadow-md"
+          title="Adicionar ou Entrar em um Servidor"
         >
           <Plus className="w-6 h-6 transition-transform group-hover:rotate-90 duration-200" />
-        </button>
-
-        {/* Join Server by 10-char Invite Code */}
-        <button
-          onClick={onOpenJoinServer}
-          className="relative group w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 flex items-center justify-center text-gray-400 hover:text-white transition-all duration-200"
-          title="Entrar em um Servidor (Código de Convite)"
-        >
-          <Compass className="w-6 h-6" />
         </button>
       </div>
     </div>
