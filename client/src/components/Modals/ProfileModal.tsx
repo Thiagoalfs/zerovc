@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Camera, Image, Sparkles, Check, LogOut, Mic, Volume2, Shield, Lock, Radio } from 'lucide-react';
+import { X, Camera, Image, Sparkles, Check, LogOut, Mic, Volume2, Shield, Lock, UploadCloud } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
 import { api } from '../../lib/api';
@@ -27,6 +27,34 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const bannerFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Audio / Device Fields
+  const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
+  const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
+  const [selectedInput, setSelectedInput] = useState<string>('');
+  const [selectedOutput, setSelectedOutput] = useState<string>('');
+  const [isTestingMic, setIsTestingMic] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const [inputMode, setInputMode] = useState<'activity' | 'ptt'>('activity');
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+
+  // Load media devices
+  useEffect(() => {
+    if (isOpen) {
+      navigator.mediaDevices?.enumerateDevices().then((devices) => {
+        const inputs = devices.filter((d) => d.kind === 'audioinput');
+        const outputs = devices.filter((d) => d.kind === 'audiooutput');
+        setAudioInputs(inputs);
+        setAudioOutputs(outputs);
+        if (inputs[0]) setSelectedInput(inputs[0].deviceId);
+        if (outputs[0]) setSelectedOutput(outputs[0].deviceId);
+      }).catch(() => {});
+    } else {
+      stopMicTest();
+    }
+  }, [isOpen]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -57,42 +85,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       e.target.value = '';
     }
   };
-
-  // Audio / Device Fields
-  const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
-  const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
-  const [selectedInput, setSelectedInput] = useState<string>('');
-  const [selectedOutput, setSelectedOutput] = useState<string>('');
-  const [isTestingMic, setIsTestingMic] = useState(false);
-  const [micLevel, setMicLevel] = useState(0);
-  const [inputMode, setInputMode] = useState<'activity' | 'ptt'>('activity');
-  const [pttKey, setPttKey] = useState('Space');
-  const [isRecordingKey, setIsRecordingKey] = useState(false);
-  const micStreamRef = useRef<MediaStream | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-
-  // Security Fields
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordMsg, setPasswordMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
-
-  // Load media devices
-  useEffect(() => {
-    if (isOpen) {
-      navigator.mediaDevices?.enumerateDevices().then((devices) => {
-        const inputs = devices.filter((d) => d.kind === 'audioinput');
-        const outputs = devices.filter((d) => d.kind === 'audiooutput');
-        setAudioInputs(inputs);
-        setAudioOutputs(outputs);
-        if (inputs[0]) setSelectedInput(inputs[0].deviceId);
-        if (outputs[0]) setSelectedOutput(outputs[0].deviceId);
-      }).catch(() => {});
-    } else {
-      stopMicTest();
-    }
-  }, [isOpen]);
 
   const startMicTest = async () => {
     try {
@@ -177,14 +169,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       console.error('Failed to save profile:', err);
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handlePttKeyDown = (e: React.KeyboardEvent) => {
-    if (isRecordingKey) {
-      e.preventDefault();
-      setPttKey(e.code);
-      setIsRecordingKey(false);
     }
   };
 
@@ -288,7 +272,94 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
           {/* TAB 1: Profile */}
           {activeTab === 'profile' && (
-            <form onSubmit={handleSave} className="space-y-4">
+            <form onSubmit={handleSave} className="space-y-5">
+              {/* Hidden File Inputs */}
+              <input
+                ref={avatarFileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+              <input
+                ref={bannerFileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleBannerUpload}
+                className="hidden"
+              />
+
+              {/* Interactive Profile Visual Header (Banner & Avatar Previews) */}
+              <div className="bg-background-darker rounded-3xl overflow-hidden border border-white/5 shadow-xl">
+                {/* 1. Banner Preview & Clickable Upload Button */}
+                <div
+                  onClick={() => bannerFileInputRef.current?.click()}
+                  className="relative h-28 md:h-32 w-full bg-gradient-to-r from-brand-600 via-indigo-700 to-purple-800 cursor-pointer group flex items-center justify-center overflow-hidden"
+                  title="Clique para alterar o banner"
+                >
+                  {bannerUrl ? (
+                    <img
+                      src={bannerUrl}
+                      alt="Banner"
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : null}
+
+                  {/* Banner Hover Action Overlay */}
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-semibold">
+                    <Image className="w-4 h-4 text-brand-300" />
+                    <span>{isUploadingBanner ? 'Enviando banner...' : 'Clique para alterar o banner'}</span>
+                  </div>
+
+                  <div className="absolute top-2.5 right-2.5 bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-xl text-[11px] text-white/90 font-medium flex items-center gap-1.5 border border-white/10 group-hover:bg-brand-500 transition-colors">
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>{isUploadingBanner ? 'Enviando...' : 'Trocar Banner'}</span>
+                  </div>
+                </div>
+
+                {/* 2. Avatar Preview & Clickable Upload Button */}
+                <div className="px-5 pb-5 flex items-end justify-between -mt-10">
+                  <div className="relative">
+                    <div
+                      onClick={() => avatarFileInputRef.current?.click()}
+                      className="relative w-20 h-20 rounded-full border-4 border-background-darker bg-brand-500 cursor-pointer group overflow-hidden shadow-2xl transition-transform hover:scale-105"
+                      title="Clique para alterar a foto de perfil"
+                    >
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={displayName || user.username}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white text-2xl font-bold">
+                          {displayName?.[0]?.toUpperCase() || user.username[0]?.toUpperCase() || 'U'}
+                        </div>
+                      )}
+
+                      {/* Avatar Hover Action Overlay */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold">
+                        <Camera className="w-5 h-5 mb-0.5" />
+                        <span>{isUploadingAvatar ? 'ENVIANDO...' : 'MUDAR'}</span>
+                      </div>
+                    </div>
+
+                    {/* Status Dot */}
+                    <div
+                      className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-background-darker ${getStatusColor(
+                        status
+                      )}`}
+                    />
+                  </div>
+
+                  <div className="text-right pb-1">
+                    <span className="text-xs text-gray-400 font-medium block">
+                      Toque na foto ou no banner para fazer upload
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* Display Name */}
               <div>
                 <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
@@ -341,72 +412,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 />
               </div>
 
-              {/* Avatar Upload / URL */}
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                  <span>Foto de Perfil</span>
-                  {avatarUrl && <span className="text-[10px] text-online font-normal">Foto definida</span>}
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="URL da imagem ou faça upload..."
-                    className="flex-1 bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
-                  <input
-                    ref={avatarFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => avatarFileInputRef.current?.click()}
-                    disabled={isUploadingAvatar}
-                    className="px-3 py-2 bg-background-light hover:bg-white/15 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-colors"
-                  >
-                    <Camera className="w-4 h-4 text-brand-400" />
-                    <span>{isUploadingAvatar ? 'Enviando...' : 'Upload'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Banner Upload / URL */}
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                  <span>Banner de Perfil</span>
-                  {bannerUrl && <span className="text-[10px] text-online font-normal">Banner definido</span>}
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={bannerUrl}
-                    onChange={(e) => setBannerUrl(e.target.value)}
-                    placeholder="URL do banner ou faça upload..."
-                    className="flex-1 bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
-                  <input
-                    ref={bannerFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleBannerUpload}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => bannerFileInputRef.current?.click()}
-                    disabled={isUploadingBanner}
-                    className="px-3 py-2 bg-background-light hover:bg-white/15 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-colors"
-                  >
-                    <Image className="w-4 h-4 text-brand-400" />
-                    <span>{isUploadingBanner ? 'Enviando...' : 'Upload'}</span>
-                  </button>
-                </div>
-              </div>
-
               {/* Bio */}
               <div>
                 <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
@@ -422,13 +427,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               </div>
 
               {/* Save Profile Button */}
-              <div className="pt-3 flex justify-end">
+              <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
-                  disabled={isSaving}
+                  disabled={isSaving || isUploadingAvatar || isUploadingBanner}
                   className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-xl text-xs md:text-sm transition-all shadow-md shadow-brand-500/20 flex items-center gap-1.5"
                 >
-                  {savedSuccess ? <><Check className="w-4 h-4" /> Salvo!</> : isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                  {savedSuccess ? (
+                    <>
+                      <Check className="w-4 h-4" /> Salvo!
+                    </>
+                  ) : isSaving ? (
+                    'Salvando...'
+                  ) : (
+                    'Salvar Alterações'
+                  )}
                 </button>
               </div>
             </form>
@@ -500,7 +513,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   />
                 </div>
                 <span className="text-[11px] text-gray-400 block">
-                  {isTestingMic ? `Nível de captação: ${micLevel}%` : 'Fale algo para verificar se o microfone está captando seu áudio.'}
+                  {isTestingMic
+                    ? `Nível de captação: ${micLevel}%`
+                    : 'Fale algo para verificar se o microfone está captando seu áudio.'}
                 </span>
               </div>
 
