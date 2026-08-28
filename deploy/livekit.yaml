@@ -8,8 +8,7 @@ rtc:
   port_range_end: 50050
   use_external_ip: true
 
-keys:
-  devkey: secret_livekit_key_change_in_production
+# Keys are injected via environment variable LIVEKIT_KEYS in docker-compose.yml
 
 logging:
   json: false

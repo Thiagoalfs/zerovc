@@ -13,18 +13,16 @@ yarn-error.log*
 
 # Environment and secrets
 .env
-.env.local
+.env.*
+!.env.example
+deploy/.env
+deploy/.env.*
+!deploy/.env.example
 *.pem
 *.key
-
-# OS files
-.DS_Store
-Thumbs.db
 
 # Database files
 pgdata/
 *.sqlite
 *.db
-deploy/.env.example
-*.example
-deploy/livekit.yaml
+

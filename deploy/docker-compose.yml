@@ -1,23 +1,23 @@
 version: '3.8'
 
 services:
-  # Se você já tiver um container de Postgres rodando separadamente,
-  # você pode comentar ou remover o serviço 'postgres' abaixo.
   postgres:
     image: postgres:16-alpine
     container_name: zerovc-postgres
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-zerovc}
-      POSTGRES_USER: ${POSTGRES_USER:-zerovc_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zerovc_password_change_me}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres-tuned.conf:/etc/postgresql/postgresql.conf
       - ../backend/migrations/000001_init.up.sql:/docker-entrypoint-initdb.d/01_init.sql
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
-    ports:
-      - "5432:5432"
+    networks:
+      - zerovc-net
     deploy:
       resources:
         limits:
@@ -28,6 +28,10 @@ services:
     container_name: zerovc-livekit
     restart: unless-stopped
     command: --config /etc/livekit.yaml
+    env_file:
+      - .env
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
     ports:
@@ -35,6 +39,16 @@ services:
       - "7881:7881"         # TCP fallback
       - "7882:7882/udp"     # UDP WebRTC media
       - "50000-50050:50000-50050/udp" # WebRTC ICE UDP range
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.zerovc-livekit.rule=Host(`${LIVEKIT_DOMAIN}`)"
+      - "traefik.http.routers.zerovc-livekit.entrypoints=https"
+      - "traefik.http.routers.zerovc-livekit.tls=true"
+      - "traefik.http.routers.zerovc-livekit.tls.certresolver=letsencrypt"
+      - "traefik.http.services.zerovc-livekit.loadbalancer.server.port=7880"
+    networks:
+      - zerovc-net
+      - coolify
     deploy:
       resources:
         limits:
@@ -46,16 +60,29 @@ services:
       dockerfile: Dockerfile
     container_name: zerovc-backend
     restart: unless-stopped
+    depends_on:
+      - postgres
+      - livekit
+    env_file:
+      - .env
     environment:
       PORT: "8080"
-      DATABASE_URL: "${DATABASE_URL:-postgres://zerovc_user:zerovc_password_change_me@postgres:5432/zerovc?sslmode=disable}"
-      JWT_SECRET: "${JWT_SECRET:-zerovc_super_secret_jwt_key_32bytes_long}"
-      LIVEKIT_URL: "${LIVEKIT_URL:-ws://livekit:7880}"
-      LIVEKIT_PUBLIC_URL: "${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}"
-      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY:-devkey}"
-      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET:-secret_livekit_key_change_in_production}"
-    ports:
-      - "${API_PORT:-8081}:8080"
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      JWT_SECRET: "${JWT_SECRET}"
+      LIVEKIT_URL: "ws://livekit:7880"
+      LIVEKIT_PUBLIC_URL: "wss://${LIVEKIT_DOMAIN}"
+      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY}"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.zerovc-backend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.zerovc-backend.entrypoints=https"
+      - "traefik.http.routers.zerovc-backend.tls=true"
+      - "traefik.http.routers.zerovc-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.zerovc-backend.loadbalancer.server.port=8080"
+    networks:
+      - zerovc-net
+      - coolify
     deploy:
       resources:
         limits:
@@ -63,3 +90,10 @@ services:
 
 volumes:
   pgdata:
+
+networks:
+  zerovc-net:
+    driver: bridge
+  coolify:
+    external: true
+
