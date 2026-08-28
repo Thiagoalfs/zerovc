@@ -152,6 +152,12 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	guildIDStr := chi.URLParam(r, "id")
 	guildID, err := uuid.Parse(guildIDStr)
 	if err != nil {
@@ -159,7 +165,15 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Get Guild
+	// 1. Enforce Guild Membership Authorization
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you are not a member of this server"}`, http.StatusForbidden)
+		return
+	}
+
+	// 2. Get Guild
 	var guild models.Guild
 	guildQuery := `SELECT id, name, icon_url, owner_id, created_at, updated_at FROM guilds WHERE id = $1`
 	err = h.db.Pool.QueryRow(r.Context(), guildQuery, guildID).Scan(
@@ -170,7 +184,7 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Get Channels
+	// 3. Get Channels
 	chanQuery := `SELECT id, guild_id, name, type, topic, position, created_at FROM channels WHERE guild_id = $1 ORDER BY position ASC, name ASC`
 	cRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildID)
 	if err == nil {
@@ -207,7 +221,7 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3. Get Members
+	// 4. Get Members
 	memQuery := `
 		SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status
 		FROM users u

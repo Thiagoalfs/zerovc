@@ -52,11 +52,18 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Verify channel & get guild ID
+	// 1. Verify channel, get guild ID & verify membership
 	var guildID uuid.UUID
 	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you must be a member of this server to post messages"}`, http.StatusForbidden)
 		return
 	}
 
@@ -88,7 +95,7 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 	msg.Author = author
 	msg.Attachments = req.Attachments
 
-	// 4. Broadcast via WebSocket Gateway
+	// 4. Broadcast via WebSocket Gateway to guild members only
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: models.EventMessageCreate,
 		Data: msg,
@@ -100,7 +107,7 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
-	_, ok := auth.GetUserIDFromContext(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -110,6 +117,21 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	channelID, err := uuid.Parse(channelIDStr)
 	if err != nil {
 		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 1. Verify channel & membership
+	var guildID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
+	if err != nil {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you must be a member of this server to view messages"}`, http.StatusForbidden)
 		return
 	}
 

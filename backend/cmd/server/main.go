@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/google/uuid"
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
@@ -79,47 +80,61 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	// Public Health Check
+	// Public Health Check (No token required)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok","time":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
 	})
 
-	// Public Auth Endpoints
+	// Public Auth Endpoints (Register and Login only)
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
 	})
 
-	// Protected API Routes
+	// ALL other API routes are strictly PROTECTED by JWT Authentication Middleware
 	r.Group(func(r chi.Router) {
 		r.Use(authService.Middleware)
 
+		// Current User
 		r.Get("/api/auth/me", authHandler.Me)
 
-		// Guilds
+		// Guilds (Protected)
 		r.Get("/api/guilds", guildHandler.List)
 		r.Post("/api/guilds", guildHandler.Create)
 		r.Get("/api/guilds/{id}", guildHandler.GetDetails)
 		r.Post("/api/guilds/{id}/join", guildHandler.Join)
 		r.Post("/api/guilds/{guildID}/channels", channelHandler.Create)
 
-		// Messages
+		// Messages (Protected)
 		r.Get("/api/channels/{channelID}/messages", messageHandler.List)
 		r.Post("/api/channels/{channelID}/messages", messageHandler.Send)
 
-		// Voice & WebRTC
+		// Voice & WebRTC (Protected)
 		r.Post("/api/channels/{id}/join-voice", channelHandler.JoinVoice)
 		r.Post("/api/channels/{id}/leave-voice", channelHandler.LeaveVoice)
 		r.Post("/api/channels/{id}/voice-state", channelHandler.UpdateVoiceState)
 
-		// WebSocket Gateway
+		// WebSocket Gateway (Protected)
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
 			userID, ok := auth.GetUserIDFromContext(r.Context())
 			if !ok {
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
+
+			// Load and sync user's authorized guilds into the hub
+			rows, err := db.Pool.Query(r.Context(), "SELECT guild_id FROM guild_members WHERE user_id = $1", userID)
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var gID uuid.UUID
+					if scanErr := rows.Scan(&gID); scanErr == nil {
+						hub.AddGuildMember(gID, userID)
+					}
+				}
+			}
+
 			gateway.ServeWs(hub, w, r, userID)
 		})
 	})

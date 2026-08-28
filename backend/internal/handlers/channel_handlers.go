@@ -34,7 +34,7 @@ type CreateChannelRequest struct {
 }
 
 func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
-	_, ok := auth.GetUserIDFromContext(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -44,6 +44,14 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 	guildID, err := uuid.Parse(guildIDStr)
 	if err != nil {
 		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify user is member of the guild
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you must be a member of this server to create channels"}`, http.StatusForbidden)
 		return
 	}
 
@@ -83,9 +91,9 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 type JoinVoiceResponse struct {
-	Token     string `json:"token"`
+	Token      string `json:"token"`
 	LiveKitURL string `json:"livekit_url"`
-	RoomName  string `json:"room_name"`
+	RoomName   string `json:"room_name"`
 }
 
 func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +110,7 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get channel and user info
+	// 1. Get channel and verify it is a voice channel
 	var guildID uuid.UUID
 	var channelType models.ChannelType
 	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, type FROM channels WHERE id = $1", channelID).Scan(&guildID, &channelType)
@@ -111,6 +119,15 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 2. Verify guild membership
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you are not a member of this server"}`, http.StatusForbidden)
+		return
+	}
+
+	// 3. Get user info
 	var user models.User
 	err = h.db.Pool.QueryRow(r.Context(), "SELECT id, username, avatar_url, status, custom_status FROM users WHERE id = $1", userID).Scan(
 		&user.ID, &user.Username, &user.AvatarURL, &user.Status, &user.CustomStatus,
@@ -120,7 +137,7 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upsert voice session for this user
+	// 4. Upsert voice session for this user
 	voiceSessionQuery := `
 		INSERT INTO voice_sessions (channel_id, user_id)
 		VALUES ($1, $2)
@@ -138,7 +155,7 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	}
 	session.User = user.ToPublic()
 
-	// Generate LiveKit Token (room name = channelID.String())
+	// 5. Generate LiveKit Token (room name = channelID.String())
 	roomName := channelID.String()
 	token, err := h.livekit.GenerateJoinToken(roomName, userID, user.Username, true)
 	if err != nil {
