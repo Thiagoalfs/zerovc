@@ -20,7 +20,7 @@ interface GuildState {
   typingUsers: Map<string, Set<string>>;
 
   fetchGuilds: () => Promise<void>;
-  selectGuild: (guildId: string) => Promise<void>;
+  selectGuild: (guildId: string, initialChannelId?: string) => Promise<void>;
   selectChannel: (channel: Channel) => Promise<void>;
   loadMoreMessages: (channelId: string) => Promise<void>;
   createGuild: (name: string, iconUrl?: string) => Promise<Guild>;
@@ -89,14 +89,16 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }
   },
 
-  selectGuild: async (guildId: string) => {
+  selectGuild: async (guildId: string, initialChannelId?: string) => {
     try {
       const fullGuild = await api.guilds.getDetails(guildId);
       set({ activeGuild: fullGuild });
 
       if (fullGuild.channels && fullGuild.channels.length > 0) {
-        const textChannel = fullGuild.channels.find((c: Channel) => c.type === 'text') || fullGuild.channels[0];
-        get().selectChannel(textChannel);
+        const targetChannel = initialChannelId
+          ? fullGuild.channels.find((c: Channel) => c.id === initialChannelId) || fullGuild.channels[0]
+          : fullGuild.channels.find((c: Channel) => c.type === 'text') || fullGuild.channels[0];
+        get().selectChannel(targetChannel);
       } else {
         set({ activeChannel: null, messages: [] });
       }
