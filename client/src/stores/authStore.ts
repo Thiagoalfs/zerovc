@@ -20,7 +20,7 @@ interface AuthState {
     status?: 'online' | 'idle' | 'dnd' | 'offline';
     custom_status?: string;
   }) => Promise<User>;
-  setUser: (user: User) => void;
+  setUser: (user: Partial<User> & { id?: string }) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -90,7 +90,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return updated;
   },
 
-  setUser: (user: User) => {
-    set({ user });
+  setUser: (user: Partial<User> & { id?: string }) => {
+    set((state) => ({
+      user: state.user ? { ...state.user, ...user } : (user as User),
+    }));
   },
 }));
