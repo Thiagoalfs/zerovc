@@ -55,7 +55,10 @@ export const App: React.FC = () => {
   const [createChannelType, setCreateChannelType] = useState<'text' | 'voice'>('text');
   const [isScreenShareOpen, setIsScreenShareOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [selectedUserForProfile, setSelectedUserForProfile] = useState<User | null>(null);
+  const [selectedUserForProfile, setSelectedUserForProfile] = useState<{
+    user: User;
+    position?: { x: number; y: number };
+  } | null>(null);
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
   const [isMemberListOpen, setIsMemberListOpen] = useState(false);
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
@@ -445,7 +448,9 @@ export const App: React.FC = () => {
           ) : (
             <DMChatArea
               onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
-              onOpenUserProfile={(targetUser) => setSelectedUserForProfile(targetUser)}
+              onOpenUserProfile={(targetUser, pos) =>
+                setSelectedUserForProfile({ user: targetUser, position: pos })
+              }
             />
           )
         ) : activeChannel?.type === 'voice' ? (
@@ -457,7 +462,9 @@ export const App: React.FC = () => {
         ) : (
           <ChatArea
             onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
-            onOpenUserProfile={(targetUser) => setSelectedUserForProfile(targetUser)}
+            onOpenUserProfile={(targetUser, pos) =>
+              setSelectedUserForProfile({ user: targetUser, position: pos })
+            }
             isMemberListOpen={isMemberListOpen}
             onToggleMemberList={(open) => setIsMemberListOpen(open)}
           />
@@ -532,7 +539,8 @@ export const App: React.FC = () => {
       />
 
       <UserProfileModal
-        user={selectedUserForProfile}
+        user={selectedUserForProfile?.user || null}
+        position={selectedUserForProfile?.position || null}
         isOpen={!!selectedUserForProfile}
         onClose={() => setSelectedUserForProfile(null)}
         onOpenDM={async (userId) => {
