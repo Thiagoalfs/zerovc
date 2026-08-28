@@ -485,3 +485,114 @@ func (h *ChannelHandler) UpdateVoiceState(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(session)
 }
+
+type AdminUpdateVoiceStateRequest struct {
+	IsMuted    *bool `json:"is_muted,omitempty"`
+	IsDeafened *bool `json:"is_deafened,omitempty"`
+	Disconnect *bool `json:"disconnect,omitempty"`
+}
+
+func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Request) {
+	adminID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	channelIDStr := chi.URLParam(r, "channelID")
+	channelID, err := uuid.Parse(channelIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+
+	targetUserIDStr := chi.URLParam(r, "userID")
+	targetUserID, err := uuid.Parse(targetUserIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var guildID uuid.UUID
+	var ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT c.guild_id, g.owner_id 
+		FROM channels c 
+		JOIN guilds g ON g.id = c.guild_id 
+		WHERE c.id = $1
+	`, channelID).Scan(&guildID, &ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"channel or guild not found"}`, http.StatusNotFound)
+		return
+	}
+
+	isOwner := adminID == ownerID
+	if !isOwner && adminID != targetUserID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN member_roles mr ON mr.guild_id = gm.guild_id AND mr.user_id = gm.user_id
+			JOIN roles r ON r.id = mr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, adminID).Scan(&perms)
+
+		hasAdmin := (perms & int64(models.PermissionAdministrator)) != 0
+		hasMute := (perms & int64(models.PermissionMuteMembers)) != 0
+
+		if !hasAdmin && !hasMute {
+			http.Error(w, `{"error":"forbidden: insufficient voice moderation permissions"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	var req AdminUpdateVoiceStateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Disconnect != nil && *req.Disconnect {
+		h.db.Pool.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1 AND channel_id = $2", targetUserID, channelID)
+		h.hub.BroadcastToGuild(guildID, models.WSEvent{
+			Type: models.EventVoiceStateUpdate,
+			Data: map[string]any{
+				"action":     "leave",
+				"channel_id": channelID,
+				"user_id":    targetUserID,
+				"forced":     true,
+			},
+		})
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"action":"disconnect"}`))
+		return
+	}
+
+	query := `
+		UPDATE voice_sessions
+		SET is_muted = COALESCE($1, is_muted),
+		    is_deafened = COALESCE($2, is_deafened)
+		WHERE user_id = $3 AND channel_id = $4
+		RETURNING id, channel_id, user_id, is_muted, is_deafened, is_screensharing, joined_at
+	`
+	var session models.VoiceSession
+	err = h.db.Pool.QueryRow(r.Context(), query, req.IsMuted, req.IsDeafened, targetUserID, channelID).Scan(
+		&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.IsScreensharing, &session.JoinedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"participant is not in this voice channel"}`, http.StatusNotFound)
+		return
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: models.EventVoiceStateUpdate,
+		Data: map[string]any{
+			"action":  "update",
+			"session": session,
+			"forced":  true,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(session)
+}

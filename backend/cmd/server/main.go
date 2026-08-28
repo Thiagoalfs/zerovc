@@ -261,6 +261,7 @@ func main() {
 		r.Post("/api/channels/{id}/join-voice", channelHandler.JoinVoice)
 		r.Post("/api/channels/{id}/leave-voice", channelHandler.LeaveVoice)
 		r.Post("/api/channels/{id}/voice-state", channelHandler.UpdateVoiceState)
+		r.Post("/api/channels/{channelID}/members/{userID}/voice-state", channelHandler.AdminUpdateVoiceState)
 
 		// Upload Endpoints (Protected)
 		r.Post("/api/upload/avatar", uploadHandler.UploadAvatar)

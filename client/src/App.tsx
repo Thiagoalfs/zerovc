@@ -312,6 +312,22 @@ export const App: React.FC = () => {
 
       const handleVoiceStateUpdate = (event: any) => {
         updateVoiceState(event.data.action, event.data.session, event.data.channel_id, event.data.user_id);
+
+        const currentUserId = useAuthStore.getState().user?.id;
+        if (event.data.forced) {
+          if (event.data.action === 'leave' && event.data.user_id === currentUserId) {
+            useVoiceStore.getState().leaveVoice();
+          } else if (event.data.action === 'update' && event.data.session?.user_id === currentUserId) {
+            if (event.data.session.is_muted !== undefined) {
+              livekit.setMuted(event.data.session.is_muted);
+              useVoiceStore.setState({ isMuted: event.data.session.is_muted });
+            }
+            if (event.data.session.is_deafened !== undefined) {
+              livekit.setDeafened(event.data.session.is_deafened);
+              useVoiceStore.setState({ isDeafened: event.data.session.is_deafened });
+            }
+          }
+        }
       };
 
       const handleTypingStart = (event: any) => {
@@ -556,6 +572,18 @@ export const App: React.FC = () => {
             onOpenMemberList={() => {
               setIsMemberListOpen(true);
             }}
+            onSelectUser={(targetUser, pos) => {
+              setSelectedUserForProfile({ user: targetUser, position: pos });
+            }}
+            onOpenDM={async (userId) => {
+              setIsHomeActive(true);
+              setHomeView('dm');
+              setIsMobileDrawerOpen(false);
+              const room = await useDMStore.getState().openDMWithUser(userId);
+              if (room) {
+                navigateTo(`/@me/${room.id}`);
+              }
+            }}
             onOpenScreenShare={() => {
               setIsScreenShareOpen(true);
               setIsMobileDrawerOpen(false);
@@ -605,6 +633,18 @@ export const App: React.FC = () => {
             channel={activeChannel}
             onOpenScreenShare={() => setIsScreenShareOpen(true)}
             onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+            onOpenUserProfile={(targetUser, pos) =>
+              setSelectedUserForProfile({ user: targetUser, position: pos })
+            }
+            onOpenDM={async (userId) => {
+              setIsHomeActive(true);
+              setHomeView('dm');
+              setIsMobileDrawerOpen(false);
+              const room = await useDMStore.getState().openDMWithUser(userId);
+              if (room) {
+                navigateTo(`/@me/${room.id}`);
+              }
+            }}
           />
         ) : (
           <ChatArea

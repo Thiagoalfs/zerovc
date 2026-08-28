@@ -218,6 +218,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    adminUpdateVoiceState: (
+      channelId: string,
+      userId: string,
+      data: { is_muted?: boolean; is_deafened?: boolean; disconnect?: boolean }
+    ) =>
+      request<any>(`/channels/${channelId}/members/${userId}/voice-state`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     addReaction: (channelId: string, messageId: string, emoji: string) =>
       request<{ success: boolean; emoji: string }>(`/channels/${channelId}/messages/${messageId}/reactions`, {
         method: 'POST',

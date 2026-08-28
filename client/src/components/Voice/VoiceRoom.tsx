@@ -1,5 +1,5 @@
 import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff } from 'lucide-react';
-import { Channel } from '../../types';
+import { Channel, User } from '../../types';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { ParticipantCard } from './ParticipantCard';
 
@@ -7,9 +7,17 @@ interface VoiceRoomProps {
   channel: Channel;
   onOpenScreenShare: () => void;
   onOpenMobileDrawer?: () => void;
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
+  onOpenDM?: (userId: string) => void;
 }
 
-export const VoiceRoom: React.FC<VoiceRoomProps> = ({ channel, onOpenScreenShare, onOpenMobileDrawer }) => {
+export const VoiceRoom: React.FC<VoiceRoomProps> = ({
+  channel,
+  onOpenScreenShare,
+  onOpenMobileDrawer,
+  onOpenUserProfile,
+  onOpenDM,
+}) => {
   const {
     isConnected,
     isConnecting,
@@ -78,7 +86,12 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({ channel, onOpenScreenShare
         ) : (
           <div className={`w-full grid gap-3 md:gap-4 ${getGridColsClass()}`}>
             {participants.map((p) => (
-              <ParticipantCard key={p.sid || p.identity} participant={p} />
+              <ParticipantCard
+                key={p.sid || p.identity}
+                participant={p}
+                onOpenUserProfile={onOpenUserProfile}
+                onOpenDM={onOpenDM}
+              />
             ))}
           </div>
         )}

@@ -15,11 +15,25 @@ import {
   Trash2,
   CheckCheck,
   Lock,
+  User as UserIcon,
+  MessageSquare,
+  Shield,
+  VolumeX,
+  UserMinus,
+  Ban,
+  Check,
+  Clock,
+  MicOff,
+  Mic,
+  Headphones,
+  PhoneOff,
 } from 'lucide-react';
-import { Channel } from '../../types';
+import { Channel, User, Permissions } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useDMStore } from '../../stores/dmStore';
+import { api } from '../../lib/api';
 import { UserBar } from './UserBar';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
@@ -32,6 +46,8 @@ interface ChannelListProps {
   onOpenServerSettings?: () => void;
   onOpenChannelSettings?: (channel: Channel) => void;
   onOpenMemberList?: () => void;
+  onSelectUser?: (user: User, position?: { x: number; y: number }) => void;
+  onOpenDM?: (userId: string) => void;
   onOpenScreenShare: () => void;
   onCloseMobileDrawer?: () => void;
 }
@@ -45,6 +61,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onOpenServerSettings,
   onOpenChannelSettings,
   onOpenMemberList,
+  onSelectUser,
+  onOpenDM,
   onOpenScreenShare,
   onCloseMobileDrawer,
 }) => {
@@ -57,7 +75,13 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     channelMentions,
     reorderChannels,
     deleteChannel,
+    kickMember,
+    banMember,
+    muteMember,
+    assignRole,
+    removeRole,
   } = useGuildStore();
+  const { openDMWithUser } = useDMStore();
   const { currentChannelId, joinVoice, isConnected, speakingUserIds } = useVoiceStore();
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -278,6 +302,217 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     openContextMenu(e, items, activeGuild?.name || 'Servidor');
   };
 
+  const handleVoiceMemberContextMenu = (
+    e: React.MouseEvent,
+    channel: Channel,
+    vs: any,
+    targetMember: User
+  ) => {
+    e.stopPropagation();
+    if (!activeGuild || !user) return;
+
+    const isMe = targetMember.id === user.id;
+    const isTargetOwner = targetMember.id === activeGuild.owner_id;
+    const isCurrentOwner = activeGuild.owner_id === user.id;
+
+    // Calculate permissions
+    const currentUserRoles = activeGuild.members?.find((m) => m.id === user.id)?.roles || [];
+    let currentUserPerms = 0;
+    let currentUserHighestPos = 999999;
+    currentUserRoles.forEach((r) => {
+      currentUserPerms |= Number(r.permissions || 0);
+      if (r.position < currentUserHighestPos) {
+        currentUserHighestPos = r.position;
+      }
+    });
+
+    const hasAdmin = isCurrentOwner || (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
+    const canManageRoles = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_ROLES) !== 0;
+    const canKick = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.KICK_MEMBERS) !== 0;
+    const canBan = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.BAN_MEMBERS) !== 0;
+    const canMute = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_MEMBERS) !== 0;
+
+    let targetHighestPos = 999999;
+    (targetMember.roles || []).forEach((r) => {
+      if (r.position < targetHighestPos) {
+        targetHighestPos = r.position;
+      }
+    });
+
+    const isHierarchyAllowed = isCurrentOwner || isMe || currentUserHighestPos < targetHighestPos;
+    const guildRoles = activeGuild.roles || [];
+
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Ver Perfil',
+        icon: <UserIcon className="w-4 h-4" />,
+        onClick: () => onSelectUser?.(targetMember, { x: e.clientX, y: e.clientY }),
+      },
+      ...(!isMe
+        ? [
+            {
+              label: 'Enviar Mensagem',
+              icon: <MessageSquare className="w-4 h-4" />,
+              onClick: async () => {
+                if (onOpenDM) {
+                  onOpenDM(targetMember.id);
+                } else {
+                  await openDMWithUser(targetMember.id);
+                }
+              },
+            },
+          ]
+        : []),
+    ];
+
+    // Voice Call Moderation (Admin)
+    if (canMute || isCurrentOwner || hasAdmin) {
+      items.push({ label: '', separator: true });
+
+      items.push({
+        label: vs.is_muted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
+        icon: vs.is_muted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
+        onClick: async () => {
+          await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+            is_muted: !vs.is_muted,
+          });
+        },
+      });
+
+      items.push({
+        label: vs.is_deafened ? 'Desativar Ensurdecimento' : 'Ensurdecer na Call',
+        icon: <Headphones className={`w-4 h-4 ${vs.is_deafened ? 'text-online' : 'text-amber-400'}`} />,
+        onClick: async () => {
+          await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+            is_deafened: !vs.is_deafened,
+          });
+        },
+      });
+
+      if (!isMe) {
+        items.push({
+          label: 'Desconectar da Call',
+          icon: <PhoneOff className="w-4 h-4 text-dnd" />,
+          onClick: async () => {
+            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+              disconnect: true,
+            });
+          },
+        });
+      }
+    }
+
+    // Change Roles Submenu
+    if (canManageRoles && guildRoles.length > 0 && (isCurrentOwner || isMe || isHierarchyAllowed)) {
+      items.push({ label: '', separator: true });
+      const roleSubItems: ContextMenuItem[] = guildRoles.map((role) => {
+        const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
+        return {
+          label: role.name,
+          icon: hasRole ? (
+            <Check className="w-3.5 h-3.5 text-online" />
+          ) : (
+            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
+          ),
+          onClick: async () => {
+            if (hasRole) {
+              await removeRole(activeGuild.id, targetMember.id, role.id);
+            } else {
+              await assignRole(activeGuild.id, targetMember.id, role.id);
+            }
+          },
+        };
+      });
+
+      items.push({
+        label: 'Alterar Cargos',
+        icon: <Shield className="w-4 h-4 text-brand-400" />,
+        subItems: roleSubItems,
+      });
+    }
+
+    // Mute/Timeout Submenu
+    if (canMute && (isCurrentOwner || isMe || isHierarchyAllowed)) {
+      const isServerMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
+
+      const muteSubItems: ContextMenuItem[] = [
+        {
+          label: '15 minutos',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
+        },
+        {
+          label: '1 hora',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
+        },
+        {
+          label: '24 horas',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
+        },
+        {
+          label: '1 semana',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
+        },
+        {
+          label: 'Permanente',
+          icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
+        },
+        ...(isServerMuted
+          ? [
+              { label: '', separator: true },
+              {
+                label: 'Remover Silenciamento',
+                icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
+                onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
+              },
+            ]
+          : []),
+      ];
+
+      items.push({
+        label: isServerMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
+        icon: <VolumeX className={`w-4 h-4 ${isServerMuted ? 'text-dnd' : 'text-gray-400'}`} />,
+        subItems: muteSubItems,
+      });
+    }
+
+    // Kick and Ban
+    if (!isMe && !isTargetOwner && isHierarchyAllowed) {
+      if (canKick) {
+        items.push({
+          label: `Expulsar ${targetMember.display_name || targetMember.username}`,
+          icon: <UserMinus className="w-4 h-4" />,
+          variant: 'danger',
+          onClick: async () => {
+            if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
+              await kickMember(activeGuild.id, targetMember.id);
+            }
+          },
+        });
+      }
+
+      if (canBan) {
+        items.push({
+          label: `Banir ${targetMember.display_name || targetMember.username}`,
+          icon: <Ban className="w-4 h-4" />,
+          variant: 'danger',
+          onClick: async () => {
+            const reason = prompt(`Motivo do banimento para ${targetMember.display_name || targetMember.username} (opcional):`);
+            if (reason !== null) {
+              await banMember(activeGuild.id, targetMember.id, reason);
+            }
+          },
+        });
+      }
+    }
+
+    openContextMenu(e, items, targetMember.display_name || targetMember.username);
+  };
+
   // Render a Single Channel Row (Text or Voice)
   const renderChannelItem = (channel: Channel) => {
     const isText = channel.type === 'text';
@@ -384,37 +619,65 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
         {/* Connected Voice Members */}
         {!isText && channel.voice_sessions && channel.voice_sessions.length > 0 && (
-          <div className="pl-6 pr-2 py-1 space-y-1">
+          <div className="pl-6 pr-2 py-1 space-y-0.5">
             {channel.voice_sessions.map((vs) => {
               const isSpeaking = speakingUserIds.includes(vs.user_id);
+              const targetUser: User =
+                activeGuild?.members?.find((m) => m.id === vs.user_id) ||
+                vs.user || {
+                  id: vs.user_id,
+                  username: 'Usuário',
+                  status: 'online',
+                };
+
               return (
                 <div
                   key={vs.id}
-                  className="flex items-center justify-between py-1 px-1.5 rounded hover:bg-background-light/30 text-xs text-gray-300"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectUser?.(targetUser, { x: e.clientX, y: e.clientY });
+                  }}
+                  onContextMenu={(e) => handleVoiceMemberContextMenu(e, channel, vs, targetUser)}
+                  className="flex items-center justify-between py-1 px-1.5 rounded-lg hover:bg-background-light/40 text-xs text-gray-300 cursor-pointer transition-colors group/voice-member"
+                  title="Clique com botão esquerdo para perfil ou direito para opções"
                 >
                   <div className="flex items-center gap-2 truncate">
                     <div
-                      className={`w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all ${
+                      className={`w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all overflow-hidden flex-shrink-0 ${
                         isSpeaking ? 'ring-2 ring-online ring-offset-1 ring-offset-background-darker' : ''
                       }`}
                     >
-                      {vs.user?.avatar_url ? (
+                      {targetUser.avatar_url ? (
                         <img
-                          src={vs.user.avatar_url}
+                          src={targetUser.avatar_url}
                           alt=""
                           className="w-full h-full rounded-full object-cover"
                         />
                       ) : (
                         <span>
-                          {vs.user?.display_name?.[0]?.toUpperCase() ||
-                            vs.user?.username?.[0]?.toUpperCase() ||
+                          {targetUser.display_name?.[0]?.toUpperCase() ||
+                            targetUser.username?.[0]?.toUpperCase() ||
                             'U'}
                         </span>
                       )}
                     </div>
                     <span className={`truncate ${isSpeaking ? 'text-white font-semibold' : ''}`}>
-                      {vs.user?.display_name || vs.user?.username || 'Usuário'}
+                      {targetUser.display_name || targetUser.username || 'Usuário'}
                     </span>
+                  </div>
+
+                  {/* Voice state indicators */}
+                  <div className="flex items-center gap-1 flex-shrink-0 opacity-70 group-hover/voice-member:opacity-100">
+                    {vs.is_muted && (
+                      <span title="Microfone Mutado">
+                        <MicOff className="w-3 h-3 text-dnd" />
+                      </span>
+                    )}
+                    {vs.is_deafened && (
+                      <span title="Áudio Desativado">
+                        <Headphones className="w-3 h-3 text-dnd" />
+                      </span>
+                    )}
                   </div>
                 </div>
               );
