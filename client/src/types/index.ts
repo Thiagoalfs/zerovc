@@ -39,6 +39,27 @@ export interface Guild {
   updated_at: string;
 }
 
+export interface GuildInvite {
+  code: string;
+  guild_id: string;
+  guild?: Guild;
+  creator_id: string;
+  creator?: User;
+  uses: number;
+  created_at: string;
+}
+
+export interface Friendship {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  status: 'pending' | 'accepted' | 'blocked';
+  user?: User;
+  friend?: User;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Attachment {
   url: string;
   filename: string;

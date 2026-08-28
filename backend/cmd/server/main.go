@@ -64,6 +64,8 @@ func main() {
 	guildHandler := handlers.NewGuildHandler(db, hub)
 	channelHandler := handlers.NewChannelHandler(db, hub, livekitService)
 	messageHandler := handlers.NewMessageHandler(db, hub)
+	inviteHandler := handlers.NewInviteHandler(db, hub)
+	friendHandler := handlers.NewFriendHandler(db, hub)
 
 	// 5. Router & Middleware
 	r := chi.NewRouter()
@@ -95,6 +97,9 @@ func main() {
 		r.Post("/login", authHandler.Login)
 	})
 
+	// Public Invite Preview
+	r.Get("/api/invites/{code}", inviteHandler.GetInvite)
+
 	// ALL other API routes are strictly PROTECTED by JWT Authentication Middleware
 	r.Group(func(r chi.Router) {
 		r.Use(authService.Middleware)
@@ -107,7 +112,17 @@ func main() {
 		r.Post("/api/guilds", guildHandler.Create)
 		r.Get("/api/guilds/{id}", guildHandler.GetDetails)
 		r.Post("/api/guilds/{id}/join", guildHandler.Join)
+		r.Post("/api/guilds/{id}/invites", inviteHandler.CreateInvite)
 		r.Post("/api/guilds/{guildID}/channels", channelHandler.Create)
+
+		// Join server via 10-char invite hash
+		r.Post("/api/invites/{code}/join", inviteHandler.JoinByInvite)
+
+		// Friends & Friend Requests (Protected)
+		r.Get("/api/friends", friendHandler.ListFriends)
+		r.Post("/api/friends/request", friendHandler.SendRequest)
+		r.Post("/api/friends/{id}/accept", friendHandler.AcceptRequest)
+		r.Post("/api/friends/{id}/reject", friendHandler.RemoveFriend)
 
 		// Messages (Protected)
 		r.Get("/api/channels/{channelID}/messages", messageHandler.List)
