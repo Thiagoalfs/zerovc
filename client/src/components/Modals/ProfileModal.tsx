@@ -40,9 +40,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Load media devices
+  // Load media devices & sync user state
   useEffect(() => {
     if (isOpen) {
+      if (user) {
+        setDisplayName(user.display_name || '');
+        setAvatarUrl(user.avatar_url || '');
+        setBannerUrl(user.banner_url || '');
+        setBio(user.bio || '');
+        setCustomStatus(user.custom_status || '');
+        setStatus(user.status || 'online');
+      }
+
       navigator.mediaDevices?.enumerateDevices().then((devices) => {
         const inputs = devices.filter((d) => d.kind === 'audioinput');
         const outputs = devices.filter((d) => d.kind === 'audiooutput');
@@ -54,7 +63,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     } else {
       stopMicTest();
     }
-  }, [isOpen]);
+  }, [isOpen, user]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
