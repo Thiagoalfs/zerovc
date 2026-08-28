@@ -537,8 +537,8 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 			WHERE gm.guild_id = $1 AND gm.user_id = $2
 		`, guildID, adminID).Scan(&perms)
 
-		hasAdmin := (perms & int64(models.PermissionAdministrator)) != 0
-		hasMute := (perms & int64(models.PermissionMuteMembers)) != 0
+		hasAdmin := (perms & models.PermAdministrator) != 0
+		hasMute := (perms & models.PermMuteVoice) != 0 || (perms & models.PermMuteMembers) != 0
 
 		if !hasAdmin && !hasMute {
 			http.Error(w, `{"error":"forbidden: insufficient voice moderation permissions"}`, http.StatusForbidden)
