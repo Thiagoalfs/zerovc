@@ -78,6 +78,8 @@ services:
       LIVEKIT_PUBLIC_URL: "wss://${LIVEKIT_DOMAIN}"
       LIVEKIT_API_KEY: "${LIVEKIT_API_KEY}"
       LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
+    volumes:
+      - ../assets:/app/assets
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.zerovc-backend-http.rule=Host(`${DOMAIN}`)"
