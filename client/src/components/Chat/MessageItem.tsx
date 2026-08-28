@@ -451,11 +451,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     <>
       <div
         onContextMenu={handleContextMenu}
-        className={`relative flex flex-col px-3 md:px-4 group rounded-lg transition-colors select-none ${
+        className={`relative flex flex-col px-3 md:px-4 group rounded transition-colors select-none ${
           isMentioned
             ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-2 border-amber-500'
             : 'hover:bg-background-dark/40'
-        } ${isCompact ? 'py-1 mt-1' : 'pt-3 pb-1 mt-3'}`}
+        } ${isCompact ? 'py-[1.5px] mt-0' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
       >
         {/* Reply Reference Header */}
         {message.reply_to && (
@@ -551,7 +551,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
           {/* Left Avatar OR Hover Timestamp */}
           {isCompact ? (
-            <div className="w-9 md:w-10 flex-shrink-0 text-right select-none text-[10px] text-gray-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity pt-0.5 leading-none pr-1">
+            <div className="w-9 md:w-10 flex-shrink-0 text-right select-none text-[10px] text-gray-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity leading-[1.375rem] pr-1">
               {shortTime}
             </div>
           ) : (
@@ -633,7 +633,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-gray-200 break-words leading-relaxed whitespace-pre-wrap font-normal">
+              <div className="text-[0.9375rem] text-gray-200 break-words leading-[1.375rem] whitespace-pre-wrap font-normal">
                 {renderFormattedContent(message.content)}
               </div>
             )}
