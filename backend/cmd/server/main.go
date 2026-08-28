@@ -20,6 +20,7 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
 	"github.com/zerovc/zerovc/backend/internal/handlers"
+	"github.com/zerovc/zerovc/backend/internal/models"
 	"github.com/zerovc/zerovc/backend/internal/voice"
 )
 
@@ -57,6 +58,35 @@ func main() {
 	authService := auth.NewService(jwtSecret)
 	livekitService := voice.NewLiveKitService(livekitKey, livekitSecret, livekitPublicURL)
 	hub := gateway.NewHub()
+
+	// Auto-clean voice session on user disconnection
+	hub.OnUserDisconnected = func(userID uuid.UUID) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		var channelID, guildID uuid.UUID
+		query := `
+			SELECT vs.channel_id, c.guild_id
+			FROM voice_sessions vs
+			INNER JOIN channels c ON c.id = vs.channel_id
+			WHERE vs.user_id = $1
+		`
+		err := db.Pool.QueryRow(ctx, query, userID).Scan(&channelID, &guildID)
+		if err == nil {
+			db.Pool.Exec(ctx, "DELETE FROM voice_sessions WHERE user_id = $1", userID)
+			if guildID != uuid.Nil {
+				hub.BroadcastToGuild(guildID, models.WSEvent{
+					Type: models.EventVoiceStateUpdate,
+					Data: map[string]any{
+						"action":     "leave",
+						"channel_id": channelID,
+						"user_id":    userID,
+					},
+				})
+			}
+		}
+	}
+
 	go hub.Run()
 
 	// 4. Initialize Handlers
@@ -75,7 +105,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
-	// CORS Configuration (Permissive for Web, Desktop and Cross-Origin)
+	// CORS Configuration
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -100,7 +130,7 @@ func main() {
 	// Public Invite Preview
 	r.Get("/api/invites/{code}", inviteHandler.GetInvite)
 
-	// ALL other API routes are strictly PROTECTED by JWT Authentication Middleware
+	// Protected API Routes
 	r.Group(func(r chi.Router) {
 		r.Use(authService.Middleware)
 

@@ -50,6 +50,10 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to execute schema migration: %w", err)
 	}
+
+	// Clean up any stale voice sessions on server startup
+	db.Pool.Exec(ctx, "DELETE FROM voice_sessions")
+
 	log.Println("Database schema migration executed successfully")
 	return nil
 }
