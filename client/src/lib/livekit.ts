@@ -227,7 +227,7 @@ class LiveKitManager {
         return frameRate === 15 ? 800_000 : frameRate === 30 ? 2_000_000 : 3_000_000;
       })();
 
-      if (sourceId && sourceId !== 'screen:0:0' && (window as any).electronAPI) {
+      if (sourceId && (window as any).electronAPI) {
         // Electron Screen Capture API
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: false,

@@ -30,6 +30,23 @@ function createWindow() {
     }
   });
 
+  // Handle getDisplayMedia requests in Electron
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    desktopCapturer
+      .getSources({ types: ['screen', 'window'] })
+      .then((sources) => {
+        if (sources.length > 0) {
+          callback({ video: sources[0], audio: 'loopback' });
+        } else {
+          callback({ video: undefined as any });
+        }
+      })
+      .catch((err) => {
+        console.error('Error handling display media request:', err);
+        callback({ video: undefined as any });
+      });
+  });
+
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
   if (isDev) {
