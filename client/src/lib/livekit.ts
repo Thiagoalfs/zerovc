@@ -157,10 +157,31 @@ class LiveKitManager {
     }
   }
 
-  async setScreenShareEnabled(enabled: boolean, sourceId?: string) {
+  async setScreenShareEnabled(
+    enabled: boolean,
+    sourceId?: string,
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }
+  ) {
     if (!this.room) return;
 
     if (enabled) {
+      const res = config?.resolution || '720p';
+      const frameRate = config?.fps || 30;
+
+      const dims = (() => {
+        switch (res) {
+          case '480p': return { width: 854, height: 480 };
+          case '1080p': return { width: 1920, height: 1080 };
+          default: return { width: 1280, height: 720 };
+        }
+      })();
+
+      const maxBitrate = (() => {
+        if (res === '480p') return frameRate === 15 ? 400_000 : frameRate === 30 ? 800_000 : 1_200_000;
+        if (res === '1080p') return frameRate === 15 ? 1_800_000 : frameRate === 30 ? 3_500_000 : 5_000_000;
+        return frameRate === 15 ? 800_000 : frameRate === 30 ? 2_000_000 : 3_000_000;
+      })();
+
       if (sourceId && sourceId !== 'screen:0:0' && (window as any).electronAPI) {
         // Electron Screen Capture API
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -170,15 +191,16 @@ class LiveKitManager {
             mandatory: {
               chromeMediaSource: 'desktop',
               chromeMediaSourceId: sourceId,
-              minWidth: 1280,
-              maxWidth: 1920,
-              maxHeight: 1080,
-              maxFrameRate: 30,
+              minWidth: dims.width,
+              maxWidth: dims.width,
+              maxHeight: dims.height,
+              maxFrameRate: frameRate,
             },
           },
         });
 
         const videoTrack = stream.getVideoTracks()[0];
+        videoTrack.contentHint = frameRate === 60 ? 'motion' : 'detail';
         videoTrack.onended = () => {
           this.setScreenShareEnabled(false);
           this.onScreenShareEnded?.();
@@ -187,15 +209,36 @@ class LiveKitManager {
         await this.room.localParticipant.publishTrack(videoTrack, {
           name: 'screen_share',
           source: Track.Source.ScreenShare,
+          simulcast: true,
+          videoEncoding: {
+            maxBitrate: maxBitrate,
+            maxFramerate: frameRate,
+          },
         });
       } else {
         // Native W3C getDisplayMedia for Web Browsers
-        const pub = await this.room.localParticipant.setScreenShareEnabled(true, {
-          audio: true,
-          selfBrowserSurface: 'include',
-          surfaceSwitching: 'include',
-          systemAudio: 'include',
-        });
+        const pub = await this.room.localParticipant.setScreenShareEnabled(
+          true,
+          {
+            audio: true,
+            selfBrowserSurface: 'include',
+            surfaceSwitching: 'include',
+            systemAudio: 'include',
+            resolution: {
+              width: dims.width,
+              height: dims.height,
+              frameRate: frameRate,
+            },
+            contentHint: frameRate === 60 ? 'motion' : 'detail',
+          },
+          {
+            simulcast: true,
+            videoEncoding: {
+              maxBitrate: maxBitrate,
+              maxFramerate: frameRate,
+            },
+          }
+        );
 
         if (pub && pub.track) {
           const mediaStreamTrack = pub.track.mediaStreamTrack;

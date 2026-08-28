@@ -29,12 +29,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({ channel, onOpenScreenShare
     if (isScreensharing) {
       stopScreenShare();
     } else {
-      if ((window as any).electronAPI?.getScreenSources) {
-        onOpenScreenShare();
-      } else {
-        // Direct browser screen share dialog
-        startScreenShare();
-      }
+      onOpenScreenShare();
     }
   };
 
