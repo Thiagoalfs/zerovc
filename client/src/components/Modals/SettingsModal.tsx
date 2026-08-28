@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Mic,
@@ -16,9 +16,11 @@ import {
   Mail,
   Keyboard,
   Radio,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { getApiBaseUrl, setApiBaseUrl, api } from '../../lib/api';
+import { livekit } from '../../lib/livekit';
 import { User } from '../../types';
 
 interface SettingsModalProps {
@@ -31,11 +33,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [serverUrl, setServerUrlState] = useState(getApiBaseUrl());
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
-  const [selectedInput, setSelectedInput] = useState('');
-  const [selectedOutput, setSelectedOutput] = useState('');
+  const [selectedInput, setSelectedInput] = useState(
+    localStorage.getItem('zerovc_audio_input_device') || ''
+  );
+  const [selectedOutput, setSelectedOutput] = useState(
+    localStorage.getItem('zerovc_audio_output_device') || ''
+  );
+  const [isLoadingDevices, setIsLoadingDevices] = useState(false);
   const [activeTab, setActiveTab] = useState<'voice' | 'account' | 'connection' | 'blocked'>('voice');
   const [blockedUsers, setBlockedUsers] = useState<User[]>([]);
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
+
+  // Mic test state
+  const [isTestingMic, setIsTestingMic] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
   // 2FA state
   const [twoFactorData, setTwoFactorData] = useState<{ secret: string; otpauth_uri: string } | null>(null);
@@ -70,23 +84,150 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   );
   const [isRecordingPTT, setIsRecordingPTT] = useState(false);
 
-  useEffect(() => {
-    if (!isOpen) return;
+  const loadAudioDevices = async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    setIsLoadingDevices(true);
 
-    // Enumerate audio devices
-    navigator.mediaDevices?.enumerateDevices().then((devices) => {
+    try {
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      const hasLabels = devices.some((d) => d.kind === 'audioinput' && d.label !== '');
+
+      // If browser hasn't granted mic permission yet, prompt briefly to retrieve device names
+      if (!hasLabels && navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((t) => t.stop());
+          devices = await navigator.mediaDevices.enumerateDevices();
+        } catch (permErr) {
+          console.warn('[AudioDevices] Mic permission not granted yet:', permErr);
+        }
+      }
+
       const inputs = devices.filter((d) => d.kind === 'audioinput');
       const outputs = devices.filter((d) => d.kind === 'audiooutput');
+
       setAudioInputs(inputs);
       setAudioOutputs(outputs);
-      if (inputs.length > 0) setSelectedInput(inputs[0].deviceId);
-      if (outputs.length > 0) setSelectedOutput(outputs[0].deviceId);
-    });
+
+      const savedInput = localStorage.getItem('zerovc_audio_input_device');
+      if (savedInput && inputs.some((d) => d.deviceId === savedInput)) {
+        setSelectedInput(savedInput);
+      } else if (inputs.length > 0) {
+        const defaultId = inputs[0].deviceId;
+        setSelectedInput(defaultId);
+        localStorage.setItem('zerovc_audio_input_device', defaultId);
+      }
+
+      const savedOutput = localStorage.getItem('zerovc_audio_output_device');
+      if (savedOutput && outputs.some((d) => d.deviceId === savedOutput)) {
+        setSelectedOutput(savedOutput);
+      } else if (outputs.length > 0) {
+        const defaultOutId = outputs[0].deviceId;
+        setSelectedOutput(defaultOutId);
+        localStorage.setItem('zerovc_audio_output_device', defaultOutId);
+      }
+    } catch (err) {
+      console.error('Failed to load audio devices:', err);
+    } finally {
+      setIsLoadingDevices(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      stopMicTest();
+      return;
+    }
+
+    loadAudioDevices();
+
+    const handleDeviceChange = () => {
+      loadAudioDevices();
+    };
+
+    navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
 
     if (activeTab === 'blocked') {
       loadBlockedUsers();
     }
+
+    return () => {
+      navigator.mediaDevices?.removeEventListener('devicechange', handleDeviceChange);
+      stopMicTest();
+    };
   }, [isOpen, activeTab]);
+
+  const handleInputChange = (deviceId: string) => {
+    setSelectedInput(deviceId);
+    localStorage.setItem('zerovc_audio_input_device', deviceId);
+    livekit.setAudioInputDevice(deviceId);
+
+    if (isTestingMic) {
+      stopMicTest();
+      setTimeout(() => startMicTest(deviceId), 100);
+    }
+  };
+
+  const handleOutputChange = (deviceId: string) => {
+    setSelectedOutput(deviceId);
+    localStorage.setItem('zerovc_audio_output_device', deviceId);
+    livekit.setAudioOutputDevice(deviceId);
+  };
+
+  const startMicTest = async (overrideDeviceId?: string) => {
+    const targetDevice = overrideDeviceId || selectedInput;
+    try {
+      setIsTestingMic(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: targetDevice ? { deviceId: { exact: targetDevice } } : true,
+      });
+      micStreamRef.current = stream;
+
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioContextClass();
+      audioContextRef.current = ctx;
+
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      const source = ctx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const checkLevel = () => {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / dataArray.length;
+        const normalized = Math.min(100, Math.round((avg / 128) * 100));
+        setMicLevel(normalized);
+        animFrameRef.current = requestAnimationFrame(checkLevel);
+      };
+
+      checkLevel();
+    } catch (err) {
+      console.error('Failed to test microphone:', err);
+      setIsTestingMic(false);
+    }
+  };
+
+  const stopMicTest = () => {
+    setIsTestingMic(false);
+    setMicLevel(0);
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+  };
 
   // Handle PTT key recording
   useEffect(() => {
@@ -255,7 +396,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-4">
-      <div className="bg-background-dark w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex h-[600px] animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-background-dark w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex h-[620px] animate-in fade-in zoom-in-95 duration-150">
         {/* Left Sidebar Tabs */}
         <div className="w-56 bg-background-darker p-4 flex flex-col justify-between border-r border-black/20">
           <div className="space-y-1">
@@ -339,20 +480,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 {/* Audio Devices */}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
-                      Dispositivo de Entrada (Microfone)
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold text-gray-300 uppercase">
+                        Dispositivo de Entrada (Microfone)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={loadAudioDevices}
+                        disabled={isLoadingDevices}
+                        className="text-[11px] text-brand-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isLoadingDevices ? 'animate-spin' : ''}`} />
+                        <span>Recarregar</span>
+                      </button>
+                    </div>
+
                     <select
                       value={selectedInput}
-                      onChange={(e) => setSelectedInput(e.target.value)}
-                      className="w-full bg-background-darkest text-white px-3 py-2.5 rounded-lg border border-white/5 focus:outline-none focus:border-brand-500 text-sm cursor-pointer"
+                      onChange={(e) => handleInputChange(e.target.value)}
+                      className="w-full bg-background-darkest text-white px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-brand-500 text-sm cursor-pointer"
                     >
                       {audioInputs.length === 0 ? (
-                        <option value="">Microfone Padrão</option>
+                        <option value="">Microfone Padrão do Sistema</option>
                       ) : (
-                        audioInputs.map((d) => (
-                          <option key={d.deviceId} value={d.deviceId}>
-                            {d.label || `Microfone ${d.deviceId.slice(0, 5)}`}
+                        audioInputs.map((d, i) => (
+                          <option key={d.deviceId || i} value={d.deviceId}>
+                            {d.label || `Microfone ${i + 1}`}
                           </option>
                         ))
                       )}
@@ -365,19 +518,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     </label>
                     <select
                       value={selectedOutput}
-                      onChange={(e) => setSelectedOutput(e.target.value)}
-                      className="w-full bg-background-darkest text-white px-3 py-2.5 rounded-lg border border-white/5 focus:outline-none focus:border-brand-500 text-sm cursor-pointer"
+                      onChange={(e) => handleOutputChange(e.target.value)}
+                      className="w-full bg-background-darkest text-white px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-brand-500 text-sm cursor-pointer"
                     >
                       {audioOutputs.length === 0 ? (
-                        <option value="">Alto-falante Padrão</option>
+                        <option value="">Alto-falante Padrão do Sistema</option>
                       ) : (
-                        audioOutputs.map((d) => (
-                          <option key={d.deviceId} value={d.deviceId}>
-                            {d.label || `Alto-falante ${d.deviceId.slice(0, 5)}`}
+                        audioOutputs.map((d, i) => (
+                          <option key={d.deviceId || i} value={d.deviceId}>
+                            {d.label || `Alto-falante / Fone ${i + 1}`}
                           </option>
                         ))
                       )}
                     </select>
+                  </div>
+
+                  {/* Mic Test Section */}
+                  <div className="p-4 bg-background-darkest rounded-xl border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold text-white block">Teste de Microfone</span>
+                        <span className="text-[11px] text-gray-400">
+                          Fale para verificar se seu microfone está captando áudio corretamente.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={isTestingMic ? stopMicTest : () => startMicTest()}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          isTestingMic
+                            ? 'bg-dnd hover:bg-rose-700 text-white'
+                            : 'bg-brand-500 hover:bg-brand-600 text-white'
+                        }`}
+                      >
+                        {isTestingMic ? 'Parar Teste' : 'Testar'}
+                      </button>
+                    </div>
+
+                    <div className="h-2.5 bg-background-dark rounded-full overflow-hidden border border-white/10">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
+                        style={{ width: `${isTestingMic ? micLevel : 0}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
 
