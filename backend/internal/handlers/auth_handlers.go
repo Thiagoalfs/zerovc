@@ -37,6 +37,29 @@ type AuthResponse struct {
 	User  models.UserPublic `json:"user"`
 }
 
+func setAuthCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   30 * 24 * 3600, // 30 days
+		HttpOnly: true,
+		Secure:   false, // Allows HTTP and HTTPS without breaking local/VPS setups
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearAuthCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -75,6 +98,9 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set HttpOnly session cookie
+	setAuthCookie(w, token)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(AuthResponse{
@@ -110,11 +136,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set HttpOnly session cookie
+	setAuthCookie(w, token)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
 		Token: token,
 		User:  user.ToPublic(),
 	})
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	clearAuthCookie(w)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"message":"logged out successfully"}`))
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {

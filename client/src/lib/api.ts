@@ -37,6 +37,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 
   const response = await fetch(`${baseUrl}/api${endpoint}`, {
+    credentials: 'include',
     ...options,
     headers,
   });
@@ -68,6 +69,10 @@ export const api = {
       request<{ token: string; user: User }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    logout: () =>
+      request<{ message: string }>('/auth/logout', {
+        method: 'POST',
       }),
     me: () => request<User>('/auth/me'),
   },
@@ -260,6 +265,7 @@ export const api = {
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
       const res = await fetch(`${getApiBaseUrl()}/api/upload/avatar`, {
         method: 'POST',
+        credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
@@ -279,6 +285,7 @@ export const api = {
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
       const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-icon`, {
         method: 'POST',
+        credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
@@ -298,6 +305,7 @@ export const api = {
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
       const res = await fetch(`${getApiBaseUrl()}/api/upload/banner`, {
         method: 'POST',
+        credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });

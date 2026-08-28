@@ -10,7 +10,7 @@ interface AuthState {
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   updateProfile: (data: {
     display_name?: string;
@@ -33,8 +33,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await api.auth.login({ email, password });
-      localStorage.setItem('token', res.token);
-      localStorage.setItem('zerovc_token', res.token);
+      if (res.token) {
+        localStorage.setItem('token', res.token);
+        localStorage.setItem('zerovc_token', res.token);
+      }
       set({ user: res.user, token: res.token, isLoading: false });
       socket.connect();
     } catch (err: any) {
@@ -47,8 +49,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await api.auth.register({ username, email, password });
-      localStorage.setItem('token', res.token);
-      localStorage.setItem('zerovc_token', res.token);
+      if (res.token) {
+        localStorage.setItem('token', res.token);
+        localStorage.setItem('zerovc_token', res.token);
+      }
       set({ user: res.user, token: res.token, isLoading: false });
       socket.connect();
     } catch (err: any) {
@@ -57,7 +61,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    try {
+      await api.auth.logout();
+    } catch {}
     localStorage.removeItem('token');
     localStorage.removeItem('zerovc_token');
     socket.disconnect();
@@ -65,14 +72,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   checkAuth: async () => {
-    const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
-    if (!token) {
-      set({ user: null, token: null, isLoading: false });
-      return;
-    }
-
     try {
       const user = await api.auth.me();
+      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token') || 'cookie_session';
       set({ user, token, isLoading: false });
       socket.connect();
     } catch {
