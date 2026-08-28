@@ -1,5 +1,5 @@
 import React from 'react';
-import { Hash, Volume2, Plus, UserPlus, Users, MessageSquare } from 'lucide-react';
+import { Hash, Volume2, Plus, UserPlus, Users, X } from 'lucide-react';
 import { Channel } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -12,6 +12,7 @@ interface ChannelListProps {
   onOpenInviteModal: () => void;
   onOpenSettings: () => void;
   onOpenScreenShare: () => void;
+  onCloseMobileDrawer?: () => void;
 }
 
 export const ChannelList: React.FC<ChannelListProps> = ({
@@ -20,6 +21,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onOpenInviteModal,
   onOpenSettings,
   onOpenScreenShare,
+  onCloseMobileDrawer,
 }) => {
   const { activeGuild, activeChannel, selectChannel } = useGuildStore();
   const { currentChannelId, joinVoice, isConnected, speakingUserIds } = useVoiceStore();
@@ -28,28 +30,57 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   const textChannels = activeGuild?.channels?.filter((c) => c.type === 'text') || [];
   const voiceChannels = activeGuild?.channels?.filter((c) => c.type === 'voice') || [];
 
+  const handleChannelClick = (channel: Channel) => {
+    selectChannel(channel);
+    onCloseMobileDrawer?.();
+  };
+
+  const handleVoiceChannelClick = (channel: Channel) => {
+    selectChannel(channel);
+    joinVoice(channel.id);
+    onCloseMobileDrawer?.();
+  };
+
   return (
-    <div className="w-60 bg-background-darker flex flex-col h-full border-r border-black/20 select-none">
+    <div className="w-60 bg-background-darker flex flex-col h-full border-r border-black/20 select-none flex-shrink-0">
       {/* Server Header or Home Header */}
       {isHomeActive ? (
-        <div className="h-12 px-4 border-b border-black/20 flex items-center font-bold text-gray-100 shadow-sm">
+        <div className="h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-brand-500" />
-            <span>Painel de Amigos</span>
+            <span className="truncate">Painel de Amigos</span>
           </div>
+          {onCloseMobileDrawer && (
+            <button
+              onClick={onCloseMobileDrawer}
+              className="md:hidden text-gray-400 hover:text-white p-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
       ) : (
         <div className="h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm">
-          <span className="truncate">{activeGuild?.name || 'Selecione um servidor'}</span>
-          {activeGuild && (
-            <button
-              onClick={onOpenInviteModal}
-              className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/10 transition-colors"
-              title="Convidar Pessoas (Código de 10 Caracteres)"
-            >
-              <UserPlus className="w-4 h-4 text-brand-500" />
-            </button>
-          )}
+          <span className="truncate max-w-[140px]">{activeGuild?.name || 'Selecione um servidor'}</span>
+          <div className="flex items-center gap-1">
+            {activeGuild && (
+              <button
+                onClick={onOpenInviteModal}
+                className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/10 transition-colors"
+                title="Convidar Pessoas (Código de 10 Caracteres)"
+              >
+                <UserPlus className="w-4 h-4 text-brand-500" />
+              </button>
+            )}
+            {onCloseMobileDrawer && (
+              <button
+                onClick={onCloseMobileDrawer}
+                className="md:hidden text-gray-400 hover:text-white p-1 ml-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -72,9 +103,10 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   return (
                     <button
                       key={f.id}
-                      className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-sm text-gray-400 hover:bg-background-light/40 hover:text-gray-200 transition-colors"
+                      onClick={() => onCloseMobileDrawer?.()}
+                      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm text-gray-400 hover:bg-background-light/40 hover:text-gray-200 transition-colors"
                     >
-                      <div className="relative w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white text-[11px] font-bold">
+                      <div className="relative w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0">
                         {target?.avatar_url ? (
                           <img src={target.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                         ) : (
@@ -102,7 +134,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 {activeGuild && (
                   <button
                     onClick={() => onOpenCreateChannel('text')}
-                    className="opacity-0 group-hover:opacity-100 hover:text-gray-200 transition-opacity"
+                    className="p-1 hover:text-gray-200 transition-colors"
                     title="Criar Canal de Texto"
                   >
                     <Plus className="w-4 h-4" />
@@ -116,8 +148,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   return (
                     <button
                       key={channel.id}
-                      onClick={() => selectChannel(channel)}
-                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
+                      onClick={() => handleChannelClick(channel)}
+                      className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors ${
                         isActive
                           ? 'bg-background-light text-white font-medium'
                           : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
@@ -138,7 +170,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 {activeGuild && (
                   <button
                     onClick={() => onOpenCreateChannel('voice')}
-                    className="opacity-0 group-hover:opacity-100 hover:text-gray-200 transition-opacity"
+                    className="p-1 hover:text-gray-200 transition-colors"
                     title="Criar Canal de Voz"
                   >
                     <Plus className="w-4 h-4" />
@@ -152,11 +184,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   return (
                     <div key={channel.id} className="space-y-0.5">
                       <button
-                        onClick={() => {
-                          selectChannel(channel);
-                          joinVoice(channel.id);
-                        }}
-                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-sm transition-colors ${
+                        onClick={() => handleVoiceChannelClick(channel)}
+                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${
                           isInThisVoice
                             ? 'bg-online/15 text-online font-medium'
                             : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
