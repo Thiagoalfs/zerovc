@@ -195,7 +195,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         isMentioned
           ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-2 border-amber-500'
           : 'hover:bg-background-dark/40'
-      } ${isCompact ? 'py-0 mt-0' : 'pt-3 pb-0.5 mt-2.5'}`}
+      } ${isCompact ? 'py-1 mt-1' : 'pt-3 pb-1 mt-3'}`}
     >
       {/* Reply Reference Header if message is replying to another */}
       {message.reply_to && (

@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage } from '../types';
 
 let cachedApiUrl: string | null = null;
 
@@ -90,6 +90,15 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
+    block: (userId: string) =>
+      request<{ success: boolean; blocked_user_id: string }>(`/users/${userId}/block`, {
+        method: 'POST',
+      }),
+    unblock: (userId: string) =>
+      request<{ success: boolean; unblocked_user_id: string }>(`/users/${userId}/block`, {
+        method: 'DELETE',
+      }),
+    listBlocks: () => request<User[]>('/users/me/blocks'),
   },
 
   guilds: {
@@ -248,6 +257,57 @@ export const api = {
     removeReaction: (roomId: string, messageId: string, emoji: string) =>
       request<{ success: boolean }>(`/dms/${roomId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
         method: 'DELETE',
+      }),
+    inviteCall: (roomId: string) =>
+      request<{ success: boolean; room_id: string }>(`/dms/${roomId}/call/invite`, {
+        method: 'POST',
+      }),
+    acceptCall: (roomId: string) =>
+      request<{ success: boolean; room_id: string; room_name: string; token: string; livekit_url: string }>(`/dms/${roomId}/call/accept`, {
+        method: 'POST',
+      }),
+    rejectCall: (roomId: string) =>
+      request<{ success: boolean }>(`/dms/${roomId}/call/reject`, {
+        method: 'POST',
+      }),
+    leaveCall: (roomId: string) =>
+      request<{ success: boolean }>(`/dms/${roomId}/call/leave`, {
+        method: 'POST',
+      }),
+  },
+
+  dmGroups: {
+    list: () => request<DMGroup[]>('/dm/groups'),
+    create: (data: { name?: string; member_ids: string[] }) =>
+      request<DMGroup>('/dm/groups', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    get: (id: string) => request<DMGroup>(`/dm/groups/${id}`),
+    update: (id: string, data: { name?: string; icon_url?: string }) =>
+      request<DMGroup>(`/dm/groups/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    addMembers: (id: string, memberIds: string[]) =>
+      request<User[]>(`/dm/groups/${id}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ member_ids: memberIds }),
+      }),
+    removeMember: (id: string, userId: string) =>
+      request<{ success: boolean }>(`/dm/groups/${id}/members/${userId}`, {
+        method: 'DELETE',
+      }),
+    getMessages: (id: string, limit = 50) =>
+      request<DMGroupMessage[]>(`/dm/groups/${id}/messages?limit=${limit}`),
+    sendMessage: (id: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
+      request<DMGroupMessage>(`/dm/groups/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    getVoiceToken: (id: string) =>
+      request<{ token: string; livekit_url: string; room_name: string }>(`/dm/groups/${id}/voice-token`, {
+        method: 'POST',
       }),
   },
 
