@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Hash, Volume2, Plus, UserPlus, Users, X, Settings, ChevronDown } from 'lucide-react';
+import { Hash, Volume2, Plus, UserPlus, Users, X, Settings, ChevronDown, GripVertical } from 'lucide-react';
 import { Channel } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -32,9 +32,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onCloseMobileDrawer,
 }) => {
   const { user } = useAuthStore();
-  const { activeGuild, activeChannel, selectChannel, unreadChannels, channelMentions } = useGuildStore();
+  const { activeGuild, activeChannel, selectChannel, unreadChannels, channelMentions, reorderChannels } = useGuildStore();
   const { currentChannelId, joinVoice, isConnected, speakingUserIds } = useVoiceStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [draggedChannelId, setDraggedChannelId] = useState<string | null>(null);
+  const [dragOverChannelId, setDragOverChannelId] = useState<string | null>(null);
 
   const isOwner = activeGuild?.owner_id === user?.id;
   const textChannels = activeGuild?.channels?.filter((c) => c.type === 'text') || [];
@@ -51,6 +53,37 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     if (onSelectChannel) onSelectChannel(channel);
     joinVoice(channel.id);
     onCloseMobileDrawer?.();
+  };
+
+  const handleDrop = (type: 'text' | 'voice', targetChannelId: string) => {
+    if (!activeGuild || !draggedChannelId || draggedChannelId === targetChannelId) {
+      setDraggedChannelId(null);
+      setDragOverChannelId(null);
+      return;
+    }
+
+    const currentList = type === 'text' ? [...textChannels] : [...voiceChannels];
+    const otherList = type === 'text' ? [...voiceChannels] : [...textChannels];
+
+    const sourceIdx = currentList.findIndex((c) => c.id === draggedChannelId);
+    const targetIdx = currentList.findIndex((c) => c.id === targetChannelId);
+
+    if (sourceIdx === -1 || targetIdx === -1) {
+      setDraggedChannelId(null);
+      setDragOverChannelId(null);
+      return;
+    }
+
+    const [moved] = currentList.splice(sourceIdx, 1);
+    currentList.splice(targetIdx, 0, moved);
+
+    const reorderedAll = type === 'text'
+      ? [...currentList, ...otherList]
+      : [...otherList, ...currentList];
+
+    reorderChannels(activeGuild.id, reorderedAll.map((c) => c.id));
+    setDraggedChannelId(null);
+    setDragOverChannelId(null);
   };
 
   return (
@@ -98,45 +131,38 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 onClick={() => setIsDropdownOpen(false)}
               />
 
-              {/* Menu Card */}
-              <div className="absolute top-13 left-2 right-2 z-50 bg-background-darkest rounded-2xl p-1.5 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 space-y-1">
-                {/* 1. Convidar Membros */}
+              <div className="absolute top-13 left-2 right-2 z-50 bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-1 animate-in fade-in zoom-in-95 duration-100">
                 <button
-                  type="button"
                   onClick={() => {
                     setIsDropdownOpen(false);
                     onOpenInviteModal();
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs md:text-sm font-semibold text-brand-400 hover:bg-brand-500 hover:text-white transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-brand-400 hover:bg-brand-500/10 transition-colors cursor-pointer"
                 >
-                  <span>Convidar Membros</span>
+                  <span>Convidar Pessoas</span>
                   <UserPlus className="w-4 h-4" />
                 </button>
 
-                {/* 2. Configurações do Servidor */}
                 {isOwner && onOpenServerSettings && (
                   <button
-                    type="button"
                     onClick={() => {
                       setIsDropdownOpen(false);
                       onOpenServerSettings();
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs md:text-sm font-medium text-gray-200 hover:bg-brand-500 hover:text-white transition-colors"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-300 hover:bg-white/5 transition-colors cursor-pointer"
                   >
-                    <span>Configurar Servidor</span>
+                    <span>Configurações do Servidor</span>
                     <Settings className="w-4 h-4" />
                   </button>
                 )}
 
-                {/* 3. Membros do Servidor */}
                 {onOpenMemberList && (
                   <button
-                    type="button"
                     onClick={() => {
                       setIsDropdownOpen(false);
                       onOpenMemberList();
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs md:text-sm font-medium text-gray-200 hover:bg-brand-500 hover:text-white transition-colors"
+                    className="w-full md:hidden flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-300 hover:bg-white/5 transition-colors cursor-pointer"
                   >
                     <span>Membros ({activeGuild?.members?.length || 0})</span>
                     <Users className="w-4 h-4" />
@@ -172,12 +198,47 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   const isActive = activeChannel?.id === channel.id;
                   const isUnread = unreadChannels.has(channel.id) && !isActive;
                   const mentionCount = channelMentions[channel.id] || 0;
+                  const isDragging = draggedChannelId === channel.id;
+                  const isDragOver = dragOverChannelId === channel.id && !isDragging;
+
                   return (
                     <div
                       key={channel.id}
-                      className={`group flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors relative ${
+                      draggable={isOwner}
+                      onDragStart={(e) => {
+                        if (!isOwner) return;
+                        e.dataTransfer.setData('text/plain', channel.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        setDraggedChannelId(channel.id);
+                      }}
+                      onDragOver={(e) => {
+                        if (!isOwner || !draggedChannelId) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDragOverChannelId(channel.id);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverChannelId === channel.id) {
+                          setDragOverChannelId(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleDrop('text', channel.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedChannelId(null);
+                        setDragOverChannelId(null);
+                      }}
+                      className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all relative ${
+                        isOwner ? 'cursor-grab active:cursor-grabbing' : ''
+                      } ${
+                        isDragging ? 'opacity-30 scale-[0.98]' : ''
+                      } ${
+                        isDragOver ? 'border-t-2 border-brand-500 bg-brand-500/10' : ''
+                      } ${
                         isActive
-                          ? 'bg-background-light text-white font-medium'
+                          ? 'bg-background-light text-white font-medium shadow-sm'
                           : isUnread
                           ? 'text-white font-semibold'
                           : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
@@ -188,9 +249,14 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         <div className="absolute -left-1 w-1.5 h-2 rounded-r-full bg-white shadow-sm" />
                       )}
 
+                      {/* Drag Handle icon for owner */}
+                      {isOwner && (
+                        <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 -ml-0.5 mr-0.5 transition-opacity" />
+                      )}
+
                       <button
                         onClick={() => handleChannelClick(channel)}
-                        className="flex items-center gap-2 truncate flex-1 text-left min-w-0"
+                        className="flex items-center gap-1.5 truncate flex-1 text-left min-w-0"
                       >
                         <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
                         <span className="truncate">{channel.name}</span>
@@ -198,7 +264,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
                       {/* Mention Badge */}
                       {mentionCount > 0 && !isActive && (
-                        <div className="ml-1.5 px-1.5 py-0.5 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
+                        <div className="ml-1 px-1.5 py-0.5 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
                           {mentionCount > 99 ? '99+' : mentionCount}
                         </div>
                       )}
@@ -239,18 +305,58 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               <div className="space-y-0.5">
                 {voiceChannels.map((channel) => {
                   const isInThisVoice = currentChannelId === channel.id && isConnected;
+                  const isDragging = draggedChannelId === channel.id;
+                  const isDragOver = dragOverChannelId === channel.id && !isDragging;
+
                   return (
                     <div key={channel.id} className="space-y-0.5">
                       <div
-                        className={`group flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                        draggable={isOwner}
+                        onDragStart={(e) => {
+                          if (!isOwner) return;
+                          e.dataTransfer.setData('text/plain', channel.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          setDraggedChannelId(channel.id);
+                        }}
+                        onDragOver={(e) => {
+                          if (!isOwner || !draggedChannelId) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          setDragOverChannelId(channel.id);
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverChannelId === channel.id) {
+                            setDragOverChannelId(null);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          handleDrop('voice', channel.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedChannelId(null);
+                          setDragOverChannelId(null);
+                        }}
+                        className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all ${
+                          isOwner ? 'cursor-grab active:cursor-grabbing' : ''
+                        } ${
+                          isDragging ? 'opacity-30 scale-[0.98]' : ''
+                        } ${
+                          isDragOver ? 'border-t-2 border-brand-500 bg-brand-500/10' : ''
+                        } ${
                           isInThisVoice
                             ? 'bg-online/15 text-online font-medium'
                             : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
                         }`}
                       >
+                        {/* Drag Handle icon for owner */}
+                        {isOwner && (
+                          <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 -ml-0.5 mr-0.5 transition-opacity" />
+                        )}
+
                         <button
                           onClick={() => handleVoiceChannelClick(channel)}
-                          className="flex items-center gap-2 truncate flex-1 text-left"
+                          className="flex items-center gap-1.5 truncate flex-1 text-left min-w-0"
                         >
                           <Volume2 className={`w-4 h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400'}`} />
                           <span className="truncate">{channel.name}</span>
@@ -262,7 +368,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                               e.stopPropagation();
                               onOpenChannelSettings(channel);
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white p-0.5 rounded transition-opacity"
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white p-0.5 rounded transition-opacity ml-1"
                             title="Editar Canal"
                           >
                             <Settings className="w-3.5 h-3.5" />

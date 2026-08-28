@@ -170,7 +170,22 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   },
 
   reorderChannels: async (guildId: string, channelIds: string[]) => {
-    await api.channels.reorder(guildId, channelIds);
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const orderMap = new Map(channelIds.map((id, idx) => [id, idx]));
+      const channels = [...(state.activeGuild.channels || [])].map((c) => ({
+        ...c,
+        position: orderMap.has(c.id) ? orderMap.get(c.id)! : (c.position ?? 999),
+      })).sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+
+      return { activeGuild: { ...state.activeGuild, channels } };
+    });
+
+    try {
+      await api.channels.reorder(guildId, channelIds);
+    } catch (err) {
+      console.error('Failed to persist channel reorder:', err);
+    }
   },
 
   sendMessage: async (content: string, replyToId?: string) => {
