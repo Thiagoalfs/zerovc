@@ -247,6 +247,11 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		for mRows.Next() {
 			var u models.UserPublic
 			if err := mRows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus); err == nil {
+				// If user is not currently active on WebSocket, mark as offline
+				if !h.hub.IsUserOnline(u.ID) {
+					u.Status = "offline"
+				}
+
 				// Query roles for member
 				roleQuery := `
 					SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, gr.created_at

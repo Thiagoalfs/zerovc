@@ -59,7 +59,28 @@ func main() {
 	livekitService := voice.NewLiveKitService(livekitKey, livekitSecret, livekitPublicURL)
 	hub := gateway.NewHub()
 
-	// Auto-clean voice session on user disconnection
+	// On user connection: update user status to 'online' if was 'offline', and broadcast
+	hub.OnUserConnected = func(userID uuid.UUID) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		var currentStatus string
+		_ = db.Pool.QueryRow(ctx, "SELECT status FROM users WHERE id = $1", userID).Scan(&currentStatus)
+		if currentStatus == "offline" || currentStatus == "" {
+			db.Pool.Exec(ctx, "UPDATE users SET status = 'online' WHERE id = $1", userID)
+			currentStatus = "online"
+		}
+
+		hub.BroadcastGlobal(models.WSEvent{
+			Type: models.EventUserUpdate,
+			Data: map[string]any{
+				"id":     userID,
+				"status": currentStatus,
+			},
+		})
+	}
+
+	// Auto-clean voice session on user disconnection and mark as offline
 	hub.OnUserDisconnected = func(userID uuid.UUID) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -85,6 +106,16 @@ func main() {
 				})
 			}
 		}
+
+		// Update database status to offline and broadcast
+		db.Pool.Exec(ctx, "UPDATE users SET status = 'offline' WHERE id = $1", userID)
+		hub.BroadcastGlobal(models.WSEvent{
+			Type: models.EventUserUpdate,
+			Data: map[string]any{
+				"id":     userID,
+				"status": "offline",
+			},
+		})
 	}
 
 	go hub.Run()
