@@ -64,23 +64,58 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number | null>(null);
 
-  const scrollToBottom = (smooth = true) => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+  const isInitialLoadRef = useRef<boolean>(true);
+  const prevGroupIdRef = useRef<string | null>(null);
+
+  const scrollToBottom = (smooth = false) => {
+    if (scrollContainerRef.current) {
+      if (smooth) {
+        scrollContainerRef.current.scrollTo({
+          top: scrollContainerRef.current.scrollHeight,
+          behavior: 'smooth',
+        });
+      } else {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
     }
   };
 
+  // Reset initial load flag on group change
   useEffect(() => {
-    if (prevScrollHeightRef.current !== null && scrollContainerRef.current) {
-      const heightDiff = scrollContainerRef.current.scrollHeight - prevScrollHeightRef.current;
+    if (activeGroup?.id !== prevGroupIdRef.current) {
+      prevGroupIdRef.current = activeGroup?.id || null;
+      isInitialLoadRef.current = true;
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    }
+  }, [activeGroup?.id]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    if (prevScrollHeightRef.current !== null) {
+      const heightDiff = container.scrollHeight - prevScrollHeightRef.current;
       if (heightDiff > 0) {
-        scrollContainerRef.current.scrollTop = heightDiff;
+        container.scrollTop = heightDiff;
       }
       prevScrollHeightRef.current = null;
       return;
     }
 
-    scrollToBottom();
+    if (isInitialLoadRef.current) {
+      container.scrollTop = container.scrollHeight;
+      if (messages.length > 0) {
+        isInitialLoadRef.current = false;
+      }
+      return;
+    }
+
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+    if (isNearBottom) {
+      scrollToBottom(true);
+    }
   }, [messages]);
 
   const handleScroll = () => {
