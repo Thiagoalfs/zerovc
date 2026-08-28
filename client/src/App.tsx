@@ -253,8 +253,9 @@ export const App: React.FC = () => {
       };
 
       const handleUserUpdate = (event: any) => {
-        if (event.data.id === user.id) {
-          setUser(event.data);
+        const currentUserId = useAuthStore.getState().user?.id;
+        if (event.data?.id && currentUserId && event.data.id === currentUserId) {
+          useAuthStore.getState().setUser(event.data);
         }
         useGuildStore.getState().updateMemberInGuild(event.data);
       };
