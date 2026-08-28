@@ -153,8 +153,19 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
         {isLoadingMessages ? (
           <div className="flex justify-center py-6 text-xs text-gray-500">Carregando mensagens...</div>
         ) : (
-          messages.map((msg) => {
+          messages.map((msg, index) => {
             const isMe = msg.author_id === user?.id;
+            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const isCompact = (() => {
+              if (!prevMsg) return false;
+              if (prevMsg.author_id !== msg.author_id) return false;
+              const prevTime = new Date(prevMsg.created_at).getTime();
+              const currTime = new Date(msg.created_at).getTime();
+              if (isNaN(prevTime) || isNaN(currTime)) return false;
+              const diffMs = currTime - prevTime;
+              return diffMs >= 0 && diffMs <= 5 * 60 * 1000;
+            })();
+
             const timeStr = (() => {
               try {
                 return format(new Date(msg.created_at), 'dd/MM HH:mm', { locale: ptBR });
@@ -166,27 +177,33 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
             return (
               <div
                 key={msg.id}
-                className={`flex gap-3 px-3 py-1.5 rounded-xl hover:bg-background-darkest/40 transition-colors ${
-                  isMe ? 'flex-row-reverse' : ''
-                }`}
+                className={`flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-colors ${
+                  isCompact ? 'py-0.5' : 'py-1.5 mt-1'
+                } ${isMe ? 'flex-row-reverse' : ''}`}
               >
                 {/* Avatar */}
-                <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5">
-                  {msg.author?.avatar_url ? (
-                    <img src={msg.author.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    <span>{msg.author?.display_name?.[0]?.toUpperCase() || msg.author?.username?.[0]?.toUpperCase() || 'U'}</span>
-                  )}
-                </div>
+                {!isCompact ? (
+                  <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5">
+                    {msg.author?.avatar_url ? (
+                      <img src={msg.author.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                      <span>{msg.author?.display_name?.[0]?.toUpperCase() || msg.author?.username?.[0]?.toUpperCase() || 'U'}</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-8 flex-shrink-0" />
+                )}
 
                 {/* Message Bubble */}
                 <div className={`max-w-[75%] ${isMe ? 'items-end text-right' : 'items-start text-left'}`}>
-                  <div className="flex items-baseline gap-2 mb-0.5">
-                    <span className="text-xs font-semibold text-gray-200">
-                      {msg.author?.display_name || msg.author?.username}
-                    </span>
-                    <span className="text-[10px] text-gray-500">{timeStr}</span>
-                  </div>
+                  {!isCompact && (
+                    <div className="flex items-baseline gap-2 mb-0.5">
+                      <span className="text-xs font-semibold text-gray-200">
+                        {msg.author?.display_name || msg.author?.username}
+                      </span>
+                      <span className="text-[10px] text-gray-500">{timeStr}</span>
+                    </div>
+                  )}
 
                   <div className={`p-2.5 rounded-2xl text-xs leading-relaxed break-words select-text ${
                     isMe ? 'bg-brand-500 text-white rounded-tr-none' : 'bg-background-light text-gray-100 rounded-tl-none'

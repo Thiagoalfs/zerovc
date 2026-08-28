@@ -7,6 +7,7 @@ import { UserBar } from '../Sidebar/UserBar';
 interface DMChannelListProps {
   currentView: 'friends' | 'dm';
   onSelectFriends: () => void;
+  onSelectRoom?: (room: DMRoom) => void;
   onOpenSettings: () => void;
   onOpenScreenShare: () => void;
   onCloseMobileDrawer?: () => void;
@@ -15,6 +16,7 @@ interface DMChannelListProps {
 export const DMChannelList: React.FC<DMChannelListProps> = ({
   currentView,
   onSelectFriends,
+  onSelectRoom,
   onOpenSettings,
   onOpenScreenShare,
   onCloseMobileDrawer,
@@ -27,6 +29,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
 
   const handleSelectRoom = (room: DMRoom) => {
     selectRoom(room);
+    if (onSelectRoom) onSelectRoom(room);
     if (onCloseMobileDrawer) onCloseMobileDrawer();
   };
 

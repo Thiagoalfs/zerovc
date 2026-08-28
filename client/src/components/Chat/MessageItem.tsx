@@ -8,9 +8,10 @@ import { useGuildStore } from '../../stores/guildStore';
 
 interface MessageItemProps {
   message: Message;
+  isCompact?: boolean;
 }
 
-export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
+export const MessageItem: React.FC<MessageItemProps> = ({ message, isCompact = false }) => {
   const { user } = useAuthStore();
   const { activeGuild, editMessage, deleteMessage } = useGuildStore();
 
@@ -26,6 +27,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   const formattedTime = (() => {
     try {
       return format(new Date(message.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+    } catch {
+      return '';
+    }
+  })();
+
+  const shortTime = (() => {
+    try {
+      return format(new Date(message.created_at), 'HH:mm', { locale: ptBR });
     } catch {
       return '';
     }
@@ -123,10 +132,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   };
 
   return (
-    <div className="relative flex gap-3 md:gap-4 px-3 md:px-4 py-2 hover:bg-background-dark/50 group rounded-xl transition-colors select-none">
+    <div
+      className={`relative flex gap-3 md:gap-4 px-3 md:px-4 hover:bg-background-dark/50 group rounded-xl transition-colors select-none ${
+        isCompact ? 'py-0.5' : 'pt-2.5 pb-1 mt-1'
+      }`}
+    >
       {/* Quick Action Floating Bar on Hover */}
       {!isEditing && (
-        <div className="absolute top-2 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
+        <div className="absolute -top-3 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
           {isAuthor && (
             <button
               onClick={() => setIsEditing(true)}
@@ -150,38 +163,46 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
         </div>
       )}
 
-      {/* Avatar */}
-      <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white flex-shrink-0 mt-0.5 shadow-sm text-sm overflow-hidden">
-        {message.author?.avatar_url ? (
-          <img
-            src={message.author.avatar_url}
-            alt={message.author.username}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <span>
-            {message.author?.display_name?.[0]?.toUpperCase() ||
-              message.author?.username?.[0]?.toUpperCase() ||
-              'U'}
-          </span>
-        )}
-      </div>
+      {/* Left Avatar OR Hover Timestamp for compact messages */}
+      {isCompact ? (
+        <div className="w-9 md:w-10 flex-shrink-0 text-right select-none text-[10px] text-gray-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity self-center leading-none">
+          {shortTime}
+        </div>
+      ) : (
+        <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white flex-shrink-0 mt-0.5 shadow-sm text-sm overflow-hidden">
+          {message.author?.avatar_url ? (
+            <img
+              src={message.author.avatar_url}
+              alt={message.author.username}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span>
+              {message.author?.display_name?.[0]?.toUpperCase() ||
+                message.author?.username?.[0]?.toUpperCase() ||
+                'U'}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
-          <span className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer">
-            {message.author?.display_name || message.author?.username || 'Usuário'}
-          </span>
-          <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>
-          {message.is_edited && (
-            <span className="text-[10px] text-gray-500 font-normal select-none">(editado)</span>
-          )}
-        </div>
+        {!isCompact && (
+          <div className="flex items-baseline gap-2 mb-0.5">
+            <span className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer">
+              {message.author?.display_name || message.author?.username || 'Usuário'}
+            </span>
+            <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>
+            {message.is_edited && (
+              <span className="text-[10px] text-gray-500 font-normal select-none">(editado)</span>
+            )}
+          </div>
+        )}
 
         {/* Inline Editing Mode */}
         {isEditing ? (
-          <div className="mt-1.5 space-y-1.5">
+          <div className="mt-1 space-y-1.5">
             <textarea
               ref={editInputRef}
               rows={2}
@@ -214,8 +235,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
           /* Normal Message View */
           <>
             {textLines.length > 0 && (
-              <div className="text-sm text-gray-200 mt-0.5 leading-relaxed break-words whitespace-pre-wrap select-text">
+              <div className="text-sm text-gray-200 leading-relaxed break-words whitespace-pre-wrap select-text">
                 {renderFormattedText(textLines.join('\n'))}
+                {isCompact && message.is_edited && (
+                  <span className="text-[10px] text-gray-500 font-normal select-none ml-1.5">(editado)</span>
+                )}
               </div>
             )}
 
@@ -223,7 +247,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
             {imageUrls.map((url, idx) => (
               <div
                 key={idx}
-                className="mt-2 max-w-md overflow-hidden rounded-xl border border-white/10 shadow-md"
+                className="mt-1.5 max-w-md overflow-hidden rounded-xl border border-white/10 shadow-md"
               >
                 <img src={url} alt="Imagem enviada" className="max-h-80 w-auto object-contain bg-black/40" />
               </div>

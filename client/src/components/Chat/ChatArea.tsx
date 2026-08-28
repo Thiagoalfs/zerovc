@@ -99,7 +99,26 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ onOpenMobileDrawer }) => {
           {isLoadingMessages ? (
             <div className="flex justify-center py-6 text-sm text-gray-500">Carregando mensagens...</div>
           ) : (
-            messages.map((message) => <MessageItem key={message.id} message={message} />)
+            messages.map((message, index) => {
+              const prevMessage = index > 0 ? messages[index - 1] : null;
+              const isCompact = (() => {
+                if (!prevMessage) return false;
+                if (prevMessage.author_id !== message.author_id) return false;
+                const prevTime = new Date(prevMessage.created_at).getTime();
+                const currTime = new Date(message.created_at).getTime();
+                if (isNaN(prevTime) || isNaN(currTime)) return false;
+                const diffMs = currTime - prevTime;
+                return diffMs >= 0 && diffMs <= 5 * 60 * 1000;
+              })();
+
+              return (
+                <MessageItem
+                  key={message.id}
+                  message={message}
+                  isCompact={isCompact}
+                />
+              );
+            })
           )}
 
           <div ref={messagesEndRef} />
