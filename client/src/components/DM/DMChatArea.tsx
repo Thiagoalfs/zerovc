@@ -9,7 +9,7 @@ import { User, DMMessage } from '../../types';
 
 interface DMChatAreaProps {
   onOpenMobileDrawer?: () => void;
-  onOpenUserProfile?: (user: User) => void;
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
 }
 
 const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
@@ -419,7 +419,10 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer, onOp
                 {/* Avatar */}
                 {!isCompact ? (
                   <div
-                    onClick={() => msg.author && onOpenUserProfile?.(msg.author)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
+                    }}
                     className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-85 transition-opacity"
                     title="Ver perfil"
                   >
@@ -451,7 +454,10 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer, onOp
                   {!isCompact && (
                     <div className="flex items-baseline gap-2 mb-1">
                       <span
-                        onClick={() => msg.author && onOpenUserProfile?.(msg.author)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
+                        }}
                         className="text-xs font-semibold text-gray-200 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
                         title="Ver perfil"
                       >
