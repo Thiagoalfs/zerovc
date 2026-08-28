@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { Channel, Guild, Message, VoiceSession } from '../types';
 import { api } from '../lib/api';
-import { socket } from '../lib/socket';
 
 interface GuildState {
   guilds: Guild[];
@@ -38,7 +37,6 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const guilds = await api.guilds.list();
       set({ guilds, isLoadingGuilds: false });
 
-      // If no active guild and guilds exist, select the first one
       if (guilds.length > 0 && !get().activeGuild) {
         get().selectGuild(guilds[0].id);
       }
@@ -53,7 +51,6 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const fullGuild = await api.guilds.getDetails(guildId);
       set({ activeGuild: fullGuild });
 
-      // Automatically select first text channel
       if (fullGuild.channels && fullGuild.channels.length > 0) {
         const textChannel = fullGuild.channels.find((c) => c.type === 'text') || fullGuild.channels[0];
         get().selectChannel(textChannel);
@@ -118,7 +115,6 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   addMessage: (message: Message) => {
     set((state) => {
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
-        // Avoid duplicate messages
         if (state.messages.some((m) => m.id === message.id)) {
           return state;
         }
@@ -132,18 +128,20 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       if (!state.activeGuild || !state.activeGuild.channels) return state;
 
+      const targetUserId = session?.user_id || userId;
+      if (!targetUserId) return state;
+
       const updatedChannels = state.activeGuild.channels.map((ch) => {
         if (ch.type !== 'voice') return ch;
 
         let sessions = ch.voice_sessions ? [...ch.voice_sessions] : [];
 
-        if (action === 'join' && session && ch.id === session.channel_id) {
-          sessions = sessions.filter((s) => s.user_id !== session.user_id);
+        // 1. Always purge user from ALL channels to prevent phantom duplicate listings
+        sessions = sessions.filter((s) => s.user_id !== targetUserId);
+
+        // 2. Add user back ONLY if joining or updating this specific channel
+        if ((action === 'join' || action === 'update') && session && ch.id === session.channel_id) {
           sessions.push(session);
-        } else if (action === 'leave' && channelId === ch.id && userId) {
-          sessions = sessions.filter((s) => s.user_id !== userId);
-        } else if (action === 'update' && session && ch.id === session.channel_id) {
-          sessions = sessions.map((s) => (s.user_id === session.user_id ? session : s));
         }
 
         return { ...ch, voice_sessions: sessions };
