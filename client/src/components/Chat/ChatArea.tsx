@@ -8,7 +8,7 @@ import { User, Message } from '../../types';
 
 interface ChatAreaProps {
   onOpenMobileDrawer?: () => void;
-  onOpenUserProfile?: (user: User) => void;
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   isMemberListOpen?: boolean;
   onToggleMemberList?: (open: boolean) => void;
 }

@@ -9,7 +9,7 @@ import { useGuildStore } from '../../stores/guildStore';
 interface MessageItemProps {
   message: Message;
   isCompact?: boolean;
-  onOpenUserProfile?: (user: User) => void;
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   onReply?: (message: Message) => void;
 }
 
@@ -274,7 +274,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </div>
         ) : (
           <div
-            onClick={() => message.author && onOpenUserProfile?.(message.author)}
+            onClick={(e) => {
+              e.stopPropagation();
+              message.author && onOpenUserProfile?.(message.author, { x: e.clientX, y: e.clientY });
+            }}
             className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white flex-shrink-0 mt-0.5 shadow-sm text-sm overflow-hidden cursor-pointer hover:opacity-85 transition-opacity"
             title="Ver perfil"
           >
@@ -299,7 +302,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           {!isCompact && (
             <div className="flex items-baseline gap-2 mb-0.5">
               <span
-                onClick={() => message.author && onOpenUserProfile?.(message.author)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  message.author && onOpenUserProfile?.(message.author, { x: e.clientX, y: e.clientY });
+                }}
                 className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
                 title="Ver perfil"
               >

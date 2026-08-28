@@ -6,7 +6,7 @@ import { User } from '../../types';
 interface MemberListProps {
   isOpen: boolean;
   onClose?: () => void;
-  onSelectUser?: (user: User) => void;
+  onSelectUser?: (user: User, position?: { x: number; y: number }) => void;
 }
 
 export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose, onSelectUser }) => {
@@ -39,7 +39,10 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose, onSelec
     return (
       <div
         key={user.id}
-        onClick={() => onSelectUser?.(user)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelectUser?.(user, { x: e.clientX, y: e.clientY });
+        }}
         className={`flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-all active:scale-[0.98] ${
           isOffline ? 'opacity-55 hover:opacity-100' : ''
         }`}
