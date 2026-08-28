@@ -158,7 +158,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         banner_url: bannerUrl,
         bio: bio,
         custom_status: customStatus,
-        status: status,
       });
       setSavedSuccess(true);
       setTimeout(() => {
@@ -372,30 +371,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   placeholder={user.username}
                   className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
                 />
-              </div>
-
-              {/* Status Selector */}
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  Status de Conexão
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['online', 'idle', 'dnd', 'offline'] as const).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setStatus(s)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
-                        status === s
-                          ? 'bg-white/10 border-white/30 text-white shadow-sm'
-                          : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      <span className={`w-2.5 h-2.5 rounded-full ${getStatusColor(s)}`} />
-                      <span>{getStatusLabel(s)}</span>
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Custom Status */}
