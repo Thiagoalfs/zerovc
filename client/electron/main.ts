@@ -1,0 +1,83 @@
+import { app, BrowserWindow, ipcMain, desktopCapturer, session } from 'electron';
+import path from 'path';
+
+let mainWindow: BrowserWindow | null = null;
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 940,
+    minHeight: 600,
+    backgroundColor: '#1e1f22',
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 12, y: 16 },
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+    },
+  });
+
+  // Handle media permissions automatically (Microphone, Camera, Screen share)
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowedPermissions = ['media', 'microphone', 'camera', 'screen', 'notifications'];
+    if (allowedPermissions.includes(permission)) {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+
+  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173');
+    // Open DevTools in dev mode if needed
+    // mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+// IPC: Get Screen Sources for Screen Sharing in WebRTC
+ipcMain.handle('get-screen-sources', async () => {
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['window', 'screen'],
+      thumbnailSize: { width: 400, height: 225 },
+      fetchWindowIcons: true,
+    });
+
+    return sources.map((source) => ({
+      id: source.id,
+      name: source.name,
+      thumbnail: source.thumbnail.toDataURL(),
+      appIcon: source.appIcon ? source.appIcon.toDataURL() : null,
+    }));
+  } catch (err) {
+    console.error('Failed to get screen sources:', err);
+    return [];
+  }
+});
+
+app.whenReady().then(() => {
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});

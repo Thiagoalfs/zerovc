@@ -1,0 +1,27 @@
+# Binaries and builds
+zerovc-server
+dist/
+dist-electron/
+release/
+build/
+
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment and secrets
+.env
+.env.local
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database files
+pgdata/
+*.sqlite
+*.db
