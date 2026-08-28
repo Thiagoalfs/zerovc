@@ -78,10 +78,40 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
 
     const reader = new FileReader();
     reader.onload = (loadEvt) => {
-      const base64 = loadEvt.target?.result as string;
-      if (base64) {
-        setSelectedImage(base64);
-      }
+      const src = loadEvt.target?.result as string;
+      if (!src) return;
+
+      // Compress and resize with Canvas for optimal performance
+      const img = new Image();
+      img.onload = () => {
+        const maxWidth = 1280;
+        const maxHeight = 1280;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.85);
+          setSelectedImage(compressed);
+        } else {
+          setSelectedImage(src);
+        }
+      };
+      img.src = src;
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -94,6 +124,28 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
       case 'dnd': return 'bg-dnd';
       default: return 'bg-offline';
     }
+  };
+
+  const renderFormattedText = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, i) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-400 hover:underline break-all"
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
   };
 
   return (
@@ -130,7 +182,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
       </div>
 
       {/* DM Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {/* Recipient Intro Hero Card */}
         <div className="p-6 my-4 bg-background-darker/60 rounded-2xl border border-white/5 flex flex-col items-center text-center">
           <div className="w-20 h-20 rounded-full bg-brand-500 flex items-center justify-center text-2xl font-bold text-white shadow-xl mb-3 overflow-hidden">
@@ -174,6 +226,28 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
               }
             })();
 
+            // Separate text lines from images (base64 data:image or URL links)
+            const lines = msg.content.split('\n');
+            const textLines: string[] = [];
+            const imageUrls: string[] = [];
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (
+                trimmed.startsWith('data:image/') ||
+                (trimmed.startsWith('http') &&
+                  (trimmed.endsWith('.png') ||
+                    trimmed.endsWith('.jpg') ||
+                    trimmed.endsWith('.jpeg') ||
+                    trimmed.endsWith('.gif') ||
+                    trimmed.endsWith('.webp')))
+              ) {
+                imageUrls.push(trimmed);
+              } else {
+                textLines.push(line);
+              }
+            }
+
             return (
               <div
                 key={msg.id}
@@ -194,10 +268,10 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
                   <div className="w-8 flex-shrink-0" />
                 )}
 
-                {/* Message Bubble */}
-                <div className={`max-w-[75%] ${isMe ? 'items-end text-right' : 'items-start text-left'}`}>
+                {/* Message Bubble & Images */}
+                <div className={`max-w-[85%] md:max-w-[75%] flex flex-col ${isMe ? 'items-end text-right' : 'items-start text-left'}`}>
                   {!isCompact && (
-                    <div className="flex items-baseline gap-2 mb-0.5">
+                    <div className="flex items-baseline gap-2 mb-1">
                       <span className="text-xs font-semibold text-gray-200">
                         {msg.author?.display_name || msg.author?.username}
                       </span>
@@ -205,11 +279,31 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
                     </div>
                   )}
 
-                  <div className={`p-2.5 rounded-2xl text-xs leading-relaxed break-words select-text ${
-                    isMe ? 'bg-brand-500 text-white rounded-tr-none' : 'bg-background-light text-gray-100 rounded-tl-none'
-                  }`}>
-                    {msg.content}
-                  </div>
+                  {/* Text content */}
+                  {textLines.length > 0 && (
+                    <div className={`p-2.5 px-3.5 rounded-2xl text-xs leading-relaxed break-words whitespace-pre-wrap select-text shadow-sm ${
+                      isMe ? 'bg-brand-500 text-white rounded-tr-none' : 'bg-background-light text-gray-100 rounded-tl-none'
+                    }`}>
+                      {renderFormattedText(textLines.join('\n'))}
+                    </div>
+                  )}
+
+                  {/* Attached Images */}
+                  {imageUrls.map((url, idx) => (
+                    <div
+                      key={idx}
+                      className={`mt-1.5 max-w-sm sm:max-w-md overflow-hidden rounded-2xl border border-white/10 shadow-md ${
+                        textLines.length === 0 && isMe ? 'rounded-tr-none' : textLines.length === 0 && !isMe ? 'rounded-tl-none' : ''
+                      }`}
+                    >
+                      <img
+                        src={url}
+                        alt="Imagem enviada"
+                        className="max-h-80 w-auto object-contain bg-black/40 cursor-pointer hover:opacity-95 transition-opacity"
+                        onClick={() => window.open(url, '_blank')}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             );
