@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plus, MessageSquare } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
+import { useDMStore } from '../../stores/dmStore';
 
 interface ServerListProps {
   isHomeActive: boolean;
@@ -15,7 +16,10 @@ export const ServerList: React.FC<ServerListProps> = ({
   onSelectGuild,
   onOpenCreateServer,
 }) => {
-  const { guilds, activeGuild, selectGuild } = useGuildStore();
+  const { guilds, activeGuild, selectGuild, unreadChannels, guildMentions } = useGuildStore();
+  const { roomUnreadCounts } = useDMStore();
+
+  const totalUnreadDMs = Object.values(roomUnreadCounts).reduce((acc, count) => acc + count, 0);
 
   return (
     <div className="w-[72px] bg-background-darkest flex flex-col items-center py-3 gap-2 select-none z-20 border-r border-black/20">
@@ -30,11 +34,20 @@ export const ServerList: React.FC<ServerListProps> = ({
         title="Amigos e Mensagens"
       >
         <MessageSquare className="w-6 h-6" />
+
+        {/* Left active pill */}
         <div
           className={`absolute left-0 w-1 bg-white rounded-r-full transition-all duration-200 ${
-            isHomeActive ? 'h-10' : 'h-0 group-hover:h-5'
+            isHomeActive ? 'h-10' : totalUnreadDMs > 0 ? 'h-2' : 'h-0 group-hover:h-5'
           }`}
         />
+
+        {/* Discord-style Unread DM Notification Badge */}
+        {totalUnreadDMs > 0 && !isHomeActive && (
+          <div className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg animate-in zoom-in-50">
+            {totalUnreadDMs > 99 ? '99+' : totalUnreadDMs}
+          </div>
+        )}
       </button>
 
       <div className="w-8 h-[2px] bg-white/10 rounded-full my-1" />
@@ -43,6 +56,8 @@ export const ServerList: React.FC<ServerListProps> = ({
       <div className="flex-1 w-full flex flex-col items-center gap-2 overflow-y-auto overflow-x-hidden no-scrollbar">
         {guilds.map((guild) => {
           const isActive = !isHomeActive && activeGuild?.id === guild.id;
+          const mentionCount = guildMentions[guild.id] || 0;
+          const hasUnread = guild.channels?.some((c) => unreadChannels.has(c.id));
           const initials = guild.name
             .split(' ')
             .map((w) => w[0])
@@ -67,10 +82,10 @@ export const ServerList: React.FC<ServerListProps> = ({
               }`}
               title={guild.name}
             >
-              {/* Left Indicator Pill */}
+              {/* Left Indicator Pill (white dot for unread, long pill for active) */}
               <div
                 className={`absolute left-0 w-1 bg-white rounded-r-full transition-all duration-200 ${
-                  isActive ? 'h-10' : 'h-0 group-hover:h-5'
+                  isActive ? 'h-10' : hasUnread ? 'h-2' : 'h-0 group-hover:h-5'
                 }`}
               />
 
@@ -82,6 +97,13 @@ export const ServerList: React.FC<ServerListProps> = ({
                 />
               ) : (
                 <span>{initials}</span>
+              )}
+
+              {/* Discord-style Mention Notification Badge */}
+              {mentionCount > 0 && !isActive && (
+                <div className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg animate-in zoom-in-50">
+                  {mentionCount > 99 ? '99+' : mentionCount}
+                </div>
               )}
             </button>
           );

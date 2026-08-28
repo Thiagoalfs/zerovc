@@ -32,7 +32,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onCloseMobileDrawer,
 }) => {
   const { user } = useAuthStore();
-  const { activeGuild, activeChannel, selectChannel, unreadChannels } = useGuildStore();
+  const { activeGuild, activeChannel, selectChannel, unreadChannels, channelMentions } = useGuildStore();
   const { currentChannelId, joinVoice, isConnected, speakingUserIds } = useVoiceStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -171,6 +171,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 {textChannels.map((channel) => {
                   const isActive = activeChannel?.id === channel.id;
                   const isUnread = unreadChannels.has(channel.id) && !isActive;
+                  const mentionCount = channelMentions[channel.id] || 0;
                   return (
                     <div
                       key={channel.id}
@@ -189,11 +190,18 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
                       <button
                         onClick={() => handleChannelClick(channel)}
-                        className="flex items-center gap-2 truncate flex-1 text-left"
+                        className="flex items-center gap-2 truncate flex-1 text-left min-w-0"
                       >
                         <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
                         <span className="truncate">{channel.name}</span>
                       </button>
+
+                      {/* Mention Badge */}
+                      {mentionCount > 0 && !isActive && (
+                        <div className="ml-1.5 px-1.5 py-0.5 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
+                          {mentionCount > 99 ? '99+' : mentionCount}
+                        </div>
+                      )}
 
                       {isOwner && onOpenChannelSettings && (
                         <button
@@ -201,7 +209,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                             e.stopPropagation();
                             onOpenChannelSettings(channel);
                           }}
-                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white p-0.5 rounded transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white p-0.5 rounded transition-opacity ml-1"
                           title="Editar Canal"
                         >
                           <Settings className="w-3.5 h-3.5" />

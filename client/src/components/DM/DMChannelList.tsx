@@ -21,7 +21,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   onOpenScreenShare,
   onCloseMobileDrawer,
 }) => {
-  const { rooms, activeRoom, selectRoom, fetchRooms } = useDMStore();
+  const { rooms, activeRoom, selectRoom, fetchRooms, roomUnreadCounts, unreadRooms } = useDMStore();
 
   useEffect(() => {
     fetchRooms();
@@ -83,6 +83,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
           rooms.map((room) => {
             const isSelected = currentView === 'dm' && activeRoom?.id === room.id;
             const recipient = room.recipient;
+            const unreadCount = roomUnreadCounts[room.id] || (unreadRooms.has(room.id) ? 1 : 0);
 
             return (
               <button
@@ -91,6 +92,8 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                 className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-colors ${
                   isSelected
                     ? 'bg-white/10 text-white'
+                    : unreadCount > 0
+                    ? 'text-white font-bold hover:bg-white/5'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
@@ -103,14 +106,21 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                   <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-background-darker ${getStatusColor(recipient?.status)}`} />
                 </div>
 
-                <div className="flex flex-col text-left truncate flex-1">
-                  <span className="text-gray-200 truncate">
+                <div className="flex flex-col text-left truncate flex-1 min-w-0">
+                  <span className={`truncate ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-200'}`}>
                     {recipient?.display_name || recipient?.username}
                   </span>
                   <span className="text-[10px] text-gray-500 truncate">
                     @{recipient?.username}
                   </span>
                 </div>
+
+                {/* Unread DM Notification Badge */}
+                {unreadCount > 0 && !isSelected && (
+                  <div className="ml-1 px-1.5 py-0.5 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </div>
+                )}
               </button>
             );
           })

@@ -10,6 +10,8 @@ interface GuildState {
   activeChannel: Channel | null;
   messages: Message[];
   unreadChannels: Set<string>;
+  guildMentions: Record<string, number>;
+  channelMentions: Record<string, number>;
   isLoadingGuilds: boolean;
   isLoadingMessages: boolean;
   typingUsers: Map<string, Set<string>>;
@@ -53,6 +55,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   activeChannel: null,
   messages: [],
   unreadChannels: new Set(),
+  guildMentions: {},
+  channelMentions: {},
   isLoadingGuilds: false,
   isLoadingMessages: false,
   typingUsers: new Map(),
@@ -88,7 +92,26 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       const unread = new Set(state.unreadChannels);
       unread.delete(channel.id);
-      return { activeChannel: channel, unreadChannels: unread, isLoadingMessages: channel.type === 'text' };
+
+      const chMentions = state.channelMentions[channel.id] || 0;
+      const curGuild = state.activeGuild;
+      const nextGuildMentions = { ...state.guildMentions };
+      const nextChannelMentions = { ...state.channelMentions };
+
+      if (chMentions > 0) {
+        delete nextChannelMentions[channel.id];
+        if (curGuild) {
+          nextGuildMentions[curGuild.id] = Math.max(0, (nextGuildMentions[curGuild.id] || 0) - chMentions);
+        }
+      }
+
+      return {
+        activeChannel: channel,
+        unreadChannels: unread,
+        guildMentions: nextGuildMentions,
+        channelMentions: nextChannelMentions,
+        isLoadingMessages: channel.type === 'text',
+      };
     });
 
     if (channel.type === 'text') {
@@ -195,21 +218,54 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
   addMessage: (message: Message) => {
     const currentUser = useAuthStore.getState().user;
-    const isMention = currentUser && message.content.includes(`@${currentUser.username}`);
+    const isMention = !!(
+      currentUser &&
+      message.author_id !== currentUser.id &&
+      (message.content.includes(`@${currentUser.username}`) ||
+        (currentUser.display_name && message.content.includes(`@${currentUser.display_name}`)) ||
+        message.content.includes('@everyone') ||
+        message.content.includes('@here'))
+    );
 
     set((state) => {
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
         if (state.messages.some((m) => m.id === message.id)) return state;
         if (message.author_id !== currentUser?.id) {
-          playMessageSound(!!isMention);
+          playMessageSound(isMention);
         }
         return { messages: [...state.messages, message] };
       } else {
         // Mark as unread
         const unread = new Set(state.unreadChannels);
         unread.add(message.channel_id);
-        playMessageSound(!!isMention);
-        return { unreadChannels: unread };
+        playMessageSound(isMention);
+
+        const nextGuildMentions = { ...state.guildMentions };
+        const nextChannelMentions = { ...state.channelMentions };
+
+        if (isMention) {
+          let targetGuildId = '';
+          for (const g of state.guilds) {
+            if (g.channels?.some((c) => c.id === message.channel_id)) {
+              targetGuildId = g.id;
+              break;
+            }
+          }
+          if (!targetGuildId && state.activeGuild?.channels?.some((c) => c.id === message.channel_id)) {
+            targetGuildId = state.activeGuild.id;
+          }
+
+          nextChannelMentions[message.channel_id] = (nextChannelMentions[message.channel_id] || 0) + 1;
+          if (targetGuildId) {
+            nextGuildMentions[targetGuildId] = (nextGuildMentions[targetGuildId] || 0) + 1;
+          }
+        }
+
+        return {
+          unreadChannels: unread,
+          guildMentions: nextGuildMentions,
+          channelMentions: nextChannelMentions,
+        };
       }
     });
   },

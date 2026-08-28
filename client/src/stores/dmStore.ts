@@ -9,6 +9,7 @@ interface DMState {
   activeRoom: DMRoom | null;
   messages: DMMessage[];
   unreadRooms: Set<string>;
+  roomUnreadCounts: Record<string, number>;
   isLoadingRooms: boolean;
   isLoadingMessages: boolean;
 
@@ -26,6 +27,7 @@ export const useDMStore = create<DMState>((set, get) => ({
   activeRoom: null,
   messages: [],
   unreadRooms: new Set(),
+  roomUnreadCounts: {},
   isLoadingRooms: false,
   isLoadingMessages: false,
 
@@ -44,7 +46,15 @@ export const useDMStore = create<DMState>((set, get) => ({
     set((state) => {
       const unread = new Set(state.unreadRooms);
       unread.delete(room.id);
-      return { activeRoom: room, unreadRooms: unread, messages: [], isLoadingMessages: true };
+      const counts = { ...state.roomUnreadCounts };
+      delete counts[room.id];
+      return {
+        activeRoom: room,
+        unreadRooms: unread,
+        roomUnreadCounts: counts,
+        messages: [],
+        isLoadingMessages: true,
+      };
     });
     try {
       const messages = await api.dms.getMessages(room.id);
@@ -102,8 +112,12 @@ export const useDMStore = create<DMState>((set, get) => ({
       } else {
         const unread = new Set(state.unreadRooms);
         unread.add(message.dm_room_id);
+        const counts = { ...state.roomUnreadCounts };
+        if (message.author_id !== currentUser?.id) {
+          counts[message.dm_room_id] = (counts[message.dm_room_id] || 0) + 1;
+        }
         playMessageSound(false);
-        return { unreadRooms: unread };
+        return { unreadRooms: unread, roomUnreadCounts: counts };
       }
     });
   },
