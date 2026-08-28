@@ -28,6 +28,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { User, Permissions } from '../../types';
 import { api } from '../../lib/api';
+import { livekit } from '../../lib/livekit';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
 interface ParticipantCardProps {
@@ -56,8 +57,10 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     currentChannelId,
     speakingUserIds,
     stopScreenShare,
-    participantVolumes,
-    setParticipantVolume,
+    userVolumes,
+    streamVolumes,
+    setUserVolume,
+    setStreamVolume,
     watchedParticipantId,
     setWatchedParticipant,
   } = useVoiceStore();
@@ -99,10 +102,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   const hasScreenVideoTrack = !!screenPub?.track && !screenPub.isMuted;
   const hasCameraVideoTrack = !!cameraPub?.track && !cameraPub.isMuted;
 
-  const currentVolume = participantVolumes[participant.identity] ?? 1;
+  const currentUVol = userVolumes[participant.identity] ?? 1;
+  const currentSVol = streamVolumes[participant.identity] ?? 1;
   const isWatching = (isLocal && isScreenSharing) || watchedParticipantId === participant.identity;
 
-  // Handle Screen Share track attachment
+  // Handle Screen Share video track & Screen Share audio track attachment
   useEffect(() => {
     const el = videoRef.current;
     if (isWatching && hasScreenVideoTrack && screenPub?.track && el) {
@@ -114,12 +118,20 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
       screenPub.setSubscribed(isWatching);
     }
 
+    // Toggle screen share audio track subscription & playback only when watching!
+    if (!isLocal) {
+      livekit.setStreamAudioSubscribed(participant.identity, isWatching);
+    }
+
     return () => {
       if (el && screenPub?.track) {
         screenPub.track.detach(el);
       }
+      if (!isLocal) {
+        livekit.setStreamAudioSubscribed(participant.identity, false);
+      }
     };
-  }, [screenPub?.track, hasScreenVideoTrack, isWatching]);
+  }, [screenPub?.track, hasScreenVideoTrack, isWatching, isLocal, participant.identity]);
 
   // Handle Camera track attachment
   useEffect(() => {
@@ -262,17 +274,17 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
       }
     }
 
-    // User Volume Slider (0 - 200%, default 100%, saved locally)
+    // User & Stream Volume Sliders (0 - 200%, default 100%, saved locally)
     if (!isMe) {
       items.push({ label: '', separator: true });
-      const currentVol = participantVolumes[targetMember.id] ?? 1;
+      const userVol = userVolumes[targetMember.id] ?? 1;
       items.push({
         label: 'Volume de Usuário',
         customRender: (
           <div className="px-2.5 py-1.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
               <div className="flex items-center gap-1.5">
-                {currentVol === 0 ? (
+                {userVol === 0 ? (
                   <VolumeX className="w-3.5 h-3.5 text-dnd" />
                 ) : (
                   <Volume2 className="w-3.5 h-3.5 text-gray-400" />
@@ -280,7 +292,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                 <span>Volume de Usuário</span>
               </div>
               <span className="text-brand-400 font-mono text-[11px] font-bold">
-                {Math.round(currentVol * 100)}%
+                {Math.round(userVol * 100)}%
               </span>
             </div>
             <input
@@ -288,13 +300,42 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               min={0}
               max={2}
               step={0.01}
-              value={currentVol}
-              onChange={(e) => setParticipantVolume(targetMember.id, parseFloat(e.target.value))}
+              value={userVol}
+              onChange={(e) => setUserVolume(targetMember.id, parseFloat(e.target.value))}
               className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
             />
           </div>
         ),
       });
+
+      if (isScreenSharing) {
+        const streamVol = streamVolumes[targetMember.id] ?? 1;
+        items.push({
+          label: 'Volume da Transmissão',
+          customRender: (
+            <div className="px-2.5 py-1.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
+                <div className="flex items-center gap-1.5">
+                  <Monitor className="w-3.5 h-3.5 text-brand-400" />
+                  <span>Volume da Transmissão</span>
+                </div>
+                <span className="text-brand-400 font-mono text-[11px] font-bold">
+                  {Math.round(streamVol * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={2}
+                step={0.01}
+                value={streamVol}
+                onChange={(e) => setStreamVolume(targetMember.id, parseFloat(e.target.value))}
+                className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
+              />
+            </div>
+          ),
+        });
+      }
     }
 
     // Change Roles Submenu
@@ -556,7 +597,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             </>
           )}
 
-          {/* Volume Slider for Remote participants */}
+          {/* Volume Sliders for Remote participants */}
           {!isLocal && (
             <div className="relative flex items-center">
               <button
@@ -566,9 +607,9 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                   setShowVolumeSlider(!showVolumeSlider);
                 }}
                 className="p-1 rounded text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                title="Ajustar volume do participante"
+                title="Ajustar volumes"
               >
-                {currentVolume === 0 ? (
+                {currentUVol === 0 ? (
                   <VolumeX className="w-3.5 h-3.5 text-dnd" />
                 ) : (
                   <Volume2 className="w-3.5 h-3.5" />
@@ -578,20 +619,48 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               {showVolumeSlider && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowVolumeSlider(false)} />
-                  <div className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-40 flex flex-col gap-2 animate-in fade-in zoom-in-95">
-                    <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-                      <span>Volume</span>
-                      <span className="text-brand-400">{Math.round(currentVolume * 100)}%</span>
+                  <div className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-48 flex flex-col gap-3 animate-in fade-in zoom-in-95">
+                    {/* User Mic Volume */}
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
+                        <div className="flex items-center gap-1.5">
+                          <Volume2 className="w-3 h-3 text-gray-400" />
+                          <span>Voz</span>
+                        </div>
+                        <span className="text-brand-400 font-mono text-[11px]">{Math.round(currentUVol * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={2}
+                        step={0.05}
+                        value={currentUVol}
+                        onChange={(e) => setUserVolume(participant.identity, parseFloat(e.target.value))}
+                        className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={2}
-                      step={0.05}
-                      value={currentVolume}
-                      onChange={(e) => setParticipantVolume(participant.identity, parseFloat(e.target.value))}
-                      className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-                    />
+
+                    {/* Stream Audio Volume if Screen Sharing */}
+                    {isScreenSharing && (
+                      <div className="flex flex-col gap-1.5 pt-2 border-t border-white/10">
+                        <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
+                          <div className="flex items-center gap-1.5">
+                            <Monitor className="w-3 h-3 text-brand-400" />
+                            <span>Transmissão</span>
+                          </div>
+                          <span className="text-brand-400 font-mono text-[11px]">{Math.round(currentSVol * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          value={currentSVol}
+                          onChange={(e) => setStreamVolume(participant.identity, parseFloat(e.target.value))}
+                          className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
+                        />
+                      </div>
+                    )}
                   </div>
                 </>
               )}
