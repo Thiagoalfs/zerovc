@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zerovc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zerovc
+      POSTGRES_USER: zerovc_user
+      POSTGRES_PASSWORD: zerovc_password_change_me
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-tuned.conf:/etc/postgresql/postgresql.conf
+      - ../backend/migrations/000001_init.up.sql:/docker-entrypoint-initdb.d/01_init.sql
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    ports:
+      - "5432:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: zerovc-livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml
+    ports:
+      - "7880:7880"         # HTTP/WebSocket API
+      - "7881:7881"         # TCP fallback
+      - "7882:7882/udp"     # UDP WebRTC media
+      - "50000-50050:50000-50050/udp" # WebRTC ICE UDP range
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: zerovc-backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - livekit
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgres://zerovc_user:zerovc_password_change_me@postgres:5432/zerovc?sslmode=disable"
+      JWT_SECRET: "zerovc_super_secret_jwt_key_32bytes_long"
+      LIVEKIT_URL: "ws://livekit:7880"
+      LIVEKIT_PUBLIC_URL: "ws://localhost:7880"
+      LIVEKIT_API_KEY: "devkey"
+      LIVEKIT_API_SECRET: "secret_livekit_key_change_in_production"
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+
+volumes:
+  pgdata:
