@@ -26,7 +26,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     stopScreenShare,
   } = useVoiceStore();
 
-  const { activeGuild } = useGuildStore();
+  const { activeGuild, selectChannel } = useGuildStore();
   const activeVoiceChannel = activeGuild?.channels?.find((c) => c.id === currentChannelId);
 
   const getStatusColor = (status?: string) => {
@@ -91,7 +91,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       {(isConnected || isConnecting) && (
         <div className="bg-background-darkest/90 border-b border-white/5 p-2 px-3 flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div
+              onClick={() => {
+                if (activeVoiceChannel) selectChannel(activeVoiceChannel);
+              }}
+              className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity"
+              title="Abrir canal de voz"
+            >
               <div className="w-2.5 h-2.5 rounded-full bg-online animate-pulse" />
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-online leading-tight">

@@ -12,13 +12,19 @@ interface ParticipantCardProps {
 export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant }) => {
   const { user } = useAuthStore();
   const { activeGuild } = useGuildStore();
-  const { speakingUserIds, stopScreenShare, participantVolumes, setParticipantVolume } = useVoiceStore();
+  const {
+    speakingUserIds,
+    stopScreenShare,
+    participantVolumes,
+    setParticipantVolume,
+    watchedParticipantId,
+    setWatchedParticipant,
+  } = useVoiceStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isWatching, setIsWatching] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
   const isSpeaking = speakingUserIds.includes(participant.identity);
@@ -53,13 +59,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
   const hasCameraVideoTrack = !!cameraPub?.track && !cameraPub.isMuted;
 
   const currentVolume = participantVolumes[participant.identity] ?? 1;
-
-  // Auto-watch for local participant
-  useEffect(() => {
-    if (isLocal && isScreenSharing) {
-      setIsWatching(true);
-    }
-  }, [isLocal, isScreenSharing]);
+  const isWatching = (isLocal && isScreenSharing) || watchedParticipantId === participant.identity;
 
   // Handle Screen Share track attachment
   useEffect(() => {
@@ -100,10 +100,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
   }, [cameraPub?.track, hasCameraVideoTrack]);
 
   const handleToggleWatch = (watch: boolean) => {
-    setIsWatching(watch);
-    if (screenPub instanceof RemoteTrackPublication) {
-      screenPub.setSubscribed(watch);
-    }
+    setWatchedParticipant(watch ? participant.identity : null);
   };
 
   const toggleFullscreen = () => {

@@ -15,7 +15,9 @@ interface VoiceState {
   participants: Participant[];
   speakingUserIds: string[];
   participantVolumes: Record<string, number>;
+  watchedParticipantId: string | null;
 
+  setWatchedParticipant: (identity: string | null) => void;
   joinVoice: (channelId: string) => Promise<void>;
   leaveVoice: () => Promise<void>;
   toggleMute: () => Promise<void>;
@@ -40,6 +42,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   participants: [],
   speakingUserIds: [],
   participantVolumes: {},
+  watchedParticipantId: null,
+
+  setWatchedParticipant: (identity: string | null) => {
+    set({ watchedParticipantId: identity });
+  },
 
   joinVoice: async (channelId: string) => {
     if (get().currentChannelId === channelId && get().isConnected) return;
@@ -109,6 +116,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       isCameraOn: false,
       participants: [],
       speakingUserIds: [],
+      watchedParticipantId: null,
     });
   },
 
