@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Channel, Guild, Message, Role, VoiceSession } from '../types';
+import { Channel, Guild, Message, Role, VoiceSession, User } from '../types';
 import { api } from '../lib/api';
 import { playMessageSound } from '../utils/audio';
 import { useAuthStore } from './authStore';
@@ -34,6 +34,7 @@ interface GuildState {
   removeMessageFromStore: (messageId: string) => void;
   handleReactionEvent: (data: { message_id: string; channel_id: string; user_id: string; emoji: string; is_add: boolean }) => void;
   handlePinEvent: (data: { message_id: string; channel_id: string; is_pinned: boolean }) => void;
+  updateMemberInGuild: (user: Partial<User> & { id: string }) => void;
 
   updateVoiceState: (action: string, session?: VoiceSession, channelId?: string, userId?: string) => void;
   setTyping: (channelId: string, userId: string) => void;
@@ -271,6 +272,22 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => ({
       messages: state.messages.map((m) => (m.id === message_id ? { ...m, is_pinned } : m)),
     }));
+  },
+
+  updateMemberInGuild: (updatedUser) => {
+    set((state) => {
+      if (!state.activeGuild) return state;
+      const members = (state.activeGuild.members || []).map((m) =>
+        m.id === updatedUser.id ? ({ ...m, ...updatedUser } as User) : m
+      );
+      const messages = state.messages.map((msg) =>
+        msg.author_id === updatedUser.id ? { ...msg, author: { ...msg.author, ...updatedUser } as User } : msg
+      );
+      return {
+        activeGuild: { ...state.activeGuild, members },
+        messages,
+      };
+    });
   },
 
   updateVoiceState: (action: string, session?: VoiceSession, channelId?: string, userId?: string) => {

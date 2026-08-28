@@ -271,7 +271,13 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	session.User = user.ToPublic()
 
 	roomName := channelID.String()
-	token, err := h.livekit.GenerateJoinToken(roomName, userID, user.Username, true)
+	metaJSON, _ := json.Marshal(map[string]any{
+		"avatar_url":    user.AvatarURL,
+		"display_name":  user.DisplayName,
+		"username":      user.Username,
+		"custom_status": user.CustomStatus,
+	})
+	token, err := h.livekit.GenerateJoinToken(roomName, userID, user.Username, string(metaJSON), true)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate voice token"}`, http.StatusInternalServerError)
 		return
