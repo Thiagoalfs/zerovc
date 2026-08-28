@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS channels (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     guild_id UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
     name VARCHAR(32) NOT NULL,
-    type VARCHAR(16) NOT NULL CHECK (type IN ('text', 'voice')),
+    type VARCHAR(16) NOT NULL CHECK (type IN ('text', 'voice', 'category')),
+    category_id UUID REFERENCES channels(id) ON DELETE SET NULL,
     topic VARCHAR(255) DEFAULT '',
     position INT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -185,7 +186,15 @@ ALTER TABLE channels ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES channe
 ALTER TABLE channels DROP CONSTRAINT IF EXISTS channels_type_check;
 ALTER TABLE channels ADD CONSTRAINT channels_type_check CHECK (type IN ('text', 'voice', 'category'));
 ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(64) DEFAULT '';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT FALSE;
+ALTER TABLE guild_members ADD COLUMN IF NOT EXISTS muted_until TIMESTAMP WITH TIME ZONE;
+
+-- 16. Channel Role Access (Private channels)
+CREATE TABLE IF NOT EXISTS channel_role_access (
+    channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES guild_roles(id) ON DELETE CASCADE,
+    PRIMARY KEY (channel_id, role_id)
+);
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_channel_created ON messages (channel_id, created_at DESC);
@@ -196,6 +205,9 @@ CREATE INDEX IF NOT EXISTS idx_message_reactions_msg ON message_reactions (messa
 CREATE INDEX IF NOT EXISTS idx_message_reactions_dm ON message_reactions (dm_message_id);
 CREATE INDEX IF NOT EXISTS idx_guild_roles_guild ON guild_roles (guild_id, position ASC);
 CREATE INDEX IF NOT EXISTS idx_channels_guild ON channels (guild_id, position);
+CREATE INDEX IF NOT EXISTS idx_channels_category_id ON channels (category_id);
+CREATE INDEX IF NOT EXISTS idx_channel_role_access_chan ON channel_role_access (channel_id);
+CREATE INDEX IF NOT EXISTS idx_channel_role_access_role ON channel_role_access (role_id);
 CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions (channel_id);
 CREATE INDEX IF NOT EXISTS idx_guild_invites_guild ON guild_invites (guild_id);
 CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships (user_id);

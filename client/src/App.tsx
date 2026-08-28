@@ -53,7 +53,8 @@ export const App: React.FC = () => {
   const [isCreateServerOpen, setIsCreateServerOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
-  const [createChannelType, setCreateChannelType] = useState<'text' | 'voice'>('text');
+  const [createChannelType, setCreateChannelType] = useState<'text' | 'voice' | 'category'>('text');
+  const [createChannelCategoryId, setCreateChannelCategoryId] = useState<string | undefined>(undefined);
   const [isScreenShareOpen, setIsScreenShareOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<{
@@ -398,8 +399,9 @@ export const App: React.FC = () => {
                 navigateTo(`/${activeGuild.id}/${channel.id}`);
               }
             }}
-            onOpenCreateChannel={(type) => {
+            onOpenCreateChannel={(type, categoryId) => {
               setCreateChannelType(type);
+              setCreateChannelCategoryId(categoryId);
               setIsCreateChannelOpen(true);
               setIsMobileDrawerOpen(false);
             }}
@@ -469,6 +471,15 @@ export const App: React.FC = () => {
             onOpenUserProfile={(targetUser, pos) =>
               setSelectedUserForProfile({ user: targetUser, position: pos })
             }
+            onOpenDM={async (userId) => {
+              setIsHomeActive(true);
+              setHomeView('dm');
+              setIsMobileDrawerOpen(false);
+              const room = await useDMStore.getState().openDMWithUser(userId);
+              if (room) {
+                navigateTo(`/@me/${room.id}`);
+              }
+            }}
             onPreviewImage={(url) => setPreviewImageUrl(url)}
             isMemberListOpen={isMemberListOpen}
             onToggleMemberList={(open) => setIsMemberListOpen(open)}
@@ -530,7 +541,11 @@ export const App: React.FC = () => {
       <CreateChannelModal
         isOpen={isCreateChannelOpen}
         initialType={createChannelType}
-        onClose={() => setIsCreateChannelOpen(false)}
+        initialCategoryId={createChannelCategoryId}
+        onClose={() => {
+          setIsCreateChannelOpen(false);
+          setCreateChannelCategoryId(undefined);
+        }}
       />
 
       <ScreenShareModal
