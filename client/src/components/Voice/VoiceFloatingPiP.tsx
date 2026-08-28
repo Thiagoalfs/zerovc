@@ -15,6 +15,7 @@ import {
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
+import { livekit } from '../../lib/livekit';
 import { User } from '../../types';
 
 type PiPCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
@@ -42,8 +43,10 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     toggleMute,
     toggleDeafen,
     leaveVoice,
-    participantVolumes,
-    setParticipantVolume,
+    userVolumes,
+    streamVolumes,
+    setUserVolume,
+    setStreamVolume,
   } = useVoiceStore();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -82,6 +85,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   const hasScreenVideoTrack = !!screenPub?.track && !screenPub.isMuted;
   const isLocal = targetParticipant?.isLocal;
 
+  const currentUVol = targetParticipant ? (userVolumes[targetParticipant.identity] ?? 1) : 1;
+  const currentSVol = targetParticipant ? (streamVolumes[targetParticipant.identity] ?? 1) : 1;
+
   // Resolve target participant User info for profile modal
   const targetUser: User =
     activeGuild?.members?.find((m) => m.id === targetParticipant?.identity) || {
@@ -100,7 +106,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   const parentGuild =
     (voiceChannel && guilds.find((g) => g.id === voiceChannel.guild_id)) || activeGuild;
 
-  // Attach and subscribe video stream
+  // Attach and subscribe video stream & stream audio
   useEffect(() => {
     const el = videoRef.current;
     if (hasScreenVideoTrack && screenPub?.track && el) {
@@ -112,12 +118,19 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       screenPub.setSubscribed(true);
     }
 
+    if (!isLocal && targetParticipant) {
+      livekit.setStreamAudioSubscribed(targetParticipant.identity, true);
+    }
+
     return () => {
       if (el && screenPub?.track) {
         screenPub.track.detach(el);
       }
+      if (!isLocal && targetParticipant) {
+        livekit.setStreamAudioSubscribed(targetParticipant.identity, false);
+      }
     };
-  }, [screenPub?.track, hasScreenVideoTrack]);
+  }, [screenPub?.track, hasScreenVideoTrack, isLocal, targetParticipant]);
 
   // Drag Handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -206,7 +219,6 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     return null;
   }
 
-  const currentVolume = participantVolumes[targetParticipant.identity] ?? 1;
   const displayName = targetParticipant.name || targetParticipant.identity;
 
   const handleOpenVoiceRoom = () => {
@@ -373,7 +385,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          {!isLocal && (
+          {!isLocal && targetParticipant && (
             <div className="relative">
               <button
                 type="button"
@@ -383,9 +395,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                   setShowVolume(!showVolume);
                 }}
                 className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                title="Ajustar volume"
+                title="Ajustar volumes"
               >
-                {currentVolume === 0 ? (
+                {currentUVol === 0 ? (
                   <VolumeX className="w-3.5 h-3.5 text-dnd" />
                 ) : (
                   <Volume2 className="w-3.5 h-3.5" />
@@ -395,22 +407,52 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
               {showVolume && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowVolume(false)} />
-                  <div className="absolute right-0 bottom-full mb-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-36 flex flex-col gap-2 animate-in fade-in zoom-in-95">
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-300">
-                      <span>Volume</span>
-                      <span className="text-brand-400">{Math.round(currentVolume * 100)}%</span>
+                  <div className="absolute right-0 bottom-full mb-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-44 flex flex-col gap-2.5 animate-in fade-in zoom-in-95">
+                    {/* User Voice Volume */}
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-gray-300">
+                        <div className="flex items-center gap-1">
+                          <Volume2 className="w-3 h-3 text-gray-400" />
+                          <span>Voz</span>
+                        </div>
+                        <span className="text-brand-400 font-mono text-[10px] font-bold">{Math.round(currentUVol * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={2}
+                        step={0.05}
+                        value={currentUVol}
+                        onChange={(e) =>
+                          setUserVolume(targetParticipant.identity, parseFloat(e.target.value))
+                        }
+                        className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={2}
-                      step={0.05}
-                      value={currentVolume}
-                      onChange={(e) =>
-                        setParticipantVolume(targetParticipant.identity, parseFloat(e.target.value))
-                      }
-                      className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-                    />
+
+                    {/* Stream Audio Volume */}
+                    {hasScreenVideoTrack && (
+                      <div className="flex flex-col gap-1 pt-2 border-t border-white/10">
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-gray-300">
+                          <div className="flex items-center gap-1">
+                            <Monitor className="w-3 h-3 text-brand-400" />
+                            <span>Transmissão</span>
+                          </div>
+                          <span className="text-brand-400 font-mono text-[10px] font-bold">{Math.round(currentSVol * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          value={currentSVol}
+                          onChange={(e) =>
+                            setStreamVolume(targetParticipant.identity, parseFloat(e.target.value))
+                          }
+                          className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
+                        />
+                      </div>
+                    )}
                   </div>
                 </>
               )}
