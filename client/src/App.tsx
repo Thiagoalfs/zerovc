@@ -4,6 +4,7 @@ import { useGuildStore } from './stores/guildStore';
 import { useFriendStore } from './stores/friendStore';
 import { useVoiceStore } from './stores/voiceStore';
 import { useDMStore } from './stores/dmStore';
+import { useCallStore } from './stores/callStore';
 import { socket } from './lib/socket';
 import { Message, VoiceSession, Channel, DMRoom } from './types';
 import { api } from './lib/api';
@@ -14,6 +15,8 @@ import { ChatArea } from './components/Chat/ChatArea';
 import { VoiceRoom } from './components/Voice/VoiceRoom';
 import { FriendsView } from './components/Friends/FriendsView';
 import { DMChatArea } from './components/DM/DMChatArea';
+import { DMGroupChatArea } from './components/DM/DMGroupChatArea';
+import { useDMGroupStore } from './stores/dmGroupStore';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { CreateServerModal } from './components/Modals/CreateServerModal';
 import { CreateChannelModal } from './components/Modals/CreateChannelModal';
@@ -24,6 +27,7 @@ import { ChannelSettingsModal } from './components/Modals/ChannelSettingsModal';
 import { InviteModal } from './components/Modals/InviteModal';
 import { UserProfileModal } from './components/Modals/UserProfileModal';
 import { ImageModal } from './components/Modals/ImageModal';
+import { IncomingCallModal } from './components/DM/IncomingCallModal';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 
@@ -46,7 +50,7 @@ export const App: React.FC = () => {
   const { addMessage: addDMMessage } = useDMStore();
 
   const [isHomeActive, setIsHomeActive] = useState(true);
-  const [homeView, setHomeView] = useState<'friends' | 'dm'>('friends');
+  const [homeView, setHomeView] = useState<'friends' | 'dm' | 'group'>('friends');
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   // Modals
@@ -126,19 +130,26 @@ export const App: React.FC = () => {
       }
     }
 
-    // 1. Default to /@me or /@me/friends or /@me/:roomId
+    // 1. Default to /@me or /@me/friends or /@me/:roomId or /@me/group/:groupId
     if (segments.length === 0 || segments[0] === '@me') {
       setIsHomeActive(true);
       if (segments.length > 1 && segments[1]) {
-        const roomId = segments[1];
-        setHomeView('dm');
-        const { rooms, fetchRooms, selectRoom } = useDMStore.getState();
-        if (rooms.length === 0) await fetchRooms();
-        const targetRoom = useDMStore.getState().rooms.find((r) => r.id === roomId);
-        if (targetRoom) {
-          selectRoom(targetRoom);
+        if (segments[1] === 'group' && segments[2]) {
+          const groupId = segments[2];
+          setHomeView('group');
+          await useDMGroupStore.getState().selectGroupById(groupId);
+          navigateTo(`/@me/group/${groupId}`, true);
+        } else {
+          const roomId = segments[1];
+          setHomeView('dm');
+          const { rooms, fetchRooms, selectRoom } = useDMStore.getState();
+          if (rooms.length === 0) await fetchRooms();
+          const targetRoom = useDMStore.getState().rooms.find((r) => r.id === roomId);
+          if (targetRoom) {
+            selectRoom(targetRoom);
+          }
+          navigateTo(`/@me/${roomId}`, true);
         }
-        navigateTo(`/@me/${roomId}`, true);
       } else {
         setHomeView('friends');
         navigateTo('/@me', true);
@@ -281,6 +292,22 @@ export const App: React.FC = () => {
         useDMStore.getState().handleDMReactionEvent({ ...event.data, is_add: false });
       };
 
+      const handleCallIncoming = (event: any) => {
+        useCallStore.getState().handleIncomingCall(event.data.room_id, event.data.caller);
+      };
+
+      const handleCallAccept = (event: any) => {
+        useCallStore.getState().handleCallAccepted(event.data.token, event.data.livekit_url, event.data.room_name);
+      };
+
+      const handleCallEnd = () => {
+        useCallStore.getState().handleCallEnded();
+      };
+
+      const handleGroupMessageCreate = (event: any) => {
+        useDMGroupStore.getState().handleGroupMessageCreate(event.data);
+      };
+
       socket.on('MESSAGE_CREATE', handleMessageCreate);
       socket.on('MESSAGE_UPDATE', handleMessageUpdate);
       socket.on('MESSAGE_DELETE', handleMessageDelete);
@@ -291,6 +318,11 @@ export const App: React.FC = () => {
       socket.on('DM_MESSAGE_CREATE', handleDMMessageCreate);
       socket.on('DM_REACTION_ADD', handleDMReactionAdd);
       socket.on('DM_REACTION_REMOVE', handleDMReactionRemove);
+      socket.on('GROUP_MESSAGE_CREATE', handleGroupMessageCreate);
+      socket.on('CALL_INCOMING', handleCallIncoming);
+      socket.on('CALL_ACCEPT', handleCallAccept);
+      socket.on('CALL_REJECT', handleCallEnd);
+      socket.on('CALL_LEAVE', handleCallEnd);
       socket.on('VOICE_STATE_UPDATE', handleVoiceStateUpdate);
       socket.on('TYPING_START', handleTypingStart);
       socket.on('FRIEND_REQUEST_CREATE', handleFriendUpdate);
@@ -387,6 +419,10 @@ export const App: React.FC = () => {
               setHomeView('dm');
               navigateTo(`/@me/${room.id}`);
             }}
+            onSelectGroup={(group) => {
+              setHomeView('group');
+              navigateTo(`/@me/group/${group.id}`);
+            }}
             onOpenSettings={() => setIsProfileModalOpen(true)}
             onOpenScreenShare={() => setIsScreenShareOpen(true)}
             onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
@@ -449,6 +485,14 @@ export const App: React.FC = () => {
                   navigateTo('/@me');
                 }
               }}
+            />
+          ) : homeView === 'group' ? (
+            <DMGroupChatArea
+              onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+              onOpenUserProfile={(targetUser, pos) =>
+                setSelectedUserForProfile({ user: targetUser, position: pos })
+              }
+              onPreviewImage={(url) => setPreviewImageUrl(url)}
             />
           ) : (
             <DMChatArea
@@ -595,6 +639,9 @@ export const App: React.FC = () => {
         isOpen={!!channelToEdit}
         onClose={() => setChannelToEdit(null)}
       />
+
+      {/* Global Incoming Call Popup */}
+      <IncomingCallModal />
     </div>
   );
 };

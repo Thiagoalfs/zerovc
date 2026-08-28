@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search } from 'lucide-react';
+import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useCallStore } from '../../stores/callStore';
+import { ActiveCallOverlay } from './ActiveCallOverlay';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { User, DMMessage } from '../../types';
 
@@ -25,6 +27,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 }) => {
   const { user } = useAuthStore();
   const { activeRoom, messages, sendMessage, toggleReaction, isLoadingMessages } = useDMStore();
+  const { startCall, callState } = useCallStore();
 
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -37,6 +40,15 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleStartCall = async () => {
+    if (!activeRoom || !activeRoom.recipient) return;
+    try {
+      await startCall(activeRoom.id, activeRoom.recipient);
+    } catch (err: any) {
+      alert(err.message || 'Falha ao iniciar chamada');
+    }
+  };
 
   useEffect(() => {
     if (!searchQuery) {
@@ -225,14 +237,17 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   });
 
   return (
-    <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden select-none relative">
-      {/* DM Header */}
+    <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden relative select-none">
+      {/* Active Call Overlay if calling or connected */}
+      <ActiveCallOverlay />
+
+      {/* DM Chat Header */}
       <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10">
         <div className="flex items-center gap-2.5 truncate">
           {onOpenMobileDrawer && (
             <button
               onClick={onOpenMobileDrawer}
-              className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 rounded hover:bg-white/10 transition-colors"
+              className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
               title="Menu Lateral"
             >
               <Menu className="w-5 h-5" />
@@ -265,8 +280,17 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           </div>
         </div>
 
-        {/* Header Right Search */}
+        {/* Header Right Actions */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleStartCall}
+            disabled={callState !== 'idle'}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-online hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
+            title="Iniciar Chamada de Voz/Vídeo"
+          >
+            <Phone className="w-5 h-5" />
+          </button>
+
           {isSearchOpen ? (
             <div className="flex items-center gap-1 bg-background-darkest px-2 py-1 rounded-xl border border-white/10 text-xs">
               <Search className="w-3.5 h-3.5 text-gray-400" />
@@ -283,7 +307,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                   setSearchQuery('');
                   setIsSearchOpen(false);
                 }}
-                className="p-0.5 text-gray-400 hover:text-white"
+                className="p-0.5 text-gray-400 hover:text-white cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -291,7 +315,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           ) : (
             <button
               onClick={() => setIsSearchOpen(true)}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors cursor-pointer"
               title="Buscar na conversa"
             >
               <Search className="w-5 h-5" />
@@ -373,7 +397,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               <div
                 key={msg.id}
                 className={`relative group flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-colors ${
-                  isCompact ? 'py-[1px] mt-0' : 'py-1.5 mt-2'
+                  isCompact ? 'py-1 mt-1' : 'py-2 mt-3'
                 } ${isMe ? 'flex-row-reverse' : ''}`}
               >
                 {/* Quick action bar */}

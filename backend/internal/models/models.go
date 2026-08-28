@@ -208,10 +208,38 @@ type DMMessage struct {
 	Attachments []Attachment      `json:"attachments"`
 	ReplyToID   *uuid.UUID        `json:"reply_to_id,omitempty"`
 	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
-	Reactions   []MessageReaction `json:"reactions,omitempty"`
 	IsPinned    bool              `json:"is_pinned"`
 	IsEdited    bool              `json:"is_edited"`
 	EditedAt    *time.Time        `json:"edited_at,omitempty"`
+	Reactions   []MessageReaction `json:"reactions,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+}
+
+// DM Group
+type DMGroup struct {
+	ID          uuid.UUID       `json:"id"`
+	Name        *string         `json:"name"`
+	IconURL     *string         `json:"icon_url"`
+	OwnerID     uuid.UUID       `json:"owner_id"`
+	Members     []UserPublic    `json:"members"`
+	LastMessage *DMGroupMessage `json:"last_message,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+}
+
+// DM Group Message
+type DMGroupMessage struct {
+	ID          uuid.UUID         `json:"id"`
+	GroupID     uuid.UUID         `json:"group_id"`
+	AuthorID    uuid.UUID         `json:"author_id"`
+	Author      UserPublic        `json:"author"`
+	Content     string            `json:"content"`
+	Attachments []Attachment      `json:"attachments"`
+	ReplyToID   *uuid.UUID        `json:"reply_to_id,omitempty"`
+	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
+	IsPinned    bool              `json:"is_pinned"`
+	IsEdited    bool              `json:"is_edited"`
+	EditedAt    *time.Time        `json:"edited_at,omitempty"`
+	Reactions   []MessageReaction `json:"reactions,omitempty"`
 	CreatedAt   time.Time         `json:"created_at"`
 }
 

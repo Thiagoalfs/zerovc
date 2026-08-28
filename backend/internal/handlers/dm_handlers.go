@@ -11,17 +11,20 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
 	"github.com/zerovc/zerovc/backend/internal/models"
+	"github.com/zerovc/zerovc/backend/internal/voice"
 )
 
 type DMHandler struct {
-	db  *database.DB
-	hub *gateway.Hub
+	db      *database.DB
+	hub     *gateway.Hub
+	livekit *voice.LiveKitService
 }
 
-func NewDMHandler(db *database.DB, hub *gateway.Hub) *DMHandler {
+func NewDMHandler(db *database.DB, hub *gateway.Hub, livekit *voice.LiveKitService) *DMHandler {
 	return &DMHandler{
-		db:  db,
-		hub: hub,
+		db:      db,
+		hub:     hub,
+		livekit: livekit,
 	}
 }
 
@@ -89,6 +92,14 @@ func (h *DMHandler) CreateOrGetRoom(w http.ResponseWriter, r *http.Request) {
 
 	if req.RecipientID == userID {
 		http.Error(w, `{"error":"cannot dm yourself"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Check if there is a block between users
+	var isBlocked bool
+	blockCheckQuery := `SELECT EXISTS(SELECT 1 FROM user_blocks WHERE (user_id = $1 AND blocked_user_id = $2) OR (user_id = $2 AND blocked_user_id = $1))`
+	if err := h.db.Pool.QueryRow(r.Context(), blockCheckQuery, userID, req.RecipientID).Scan(&isBlocked); err == nil && isBlocked {
+		http.Error(w, `{"error":"não é possível abrir conversa com este usuário"}`, http.StatusForbidden)
 		return
 	}
 
@@ -305,6 +316,14 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		recipientID = user2ID
 	}
 
+	// Check if there is a block between users
+	var isBlocked bool
+	blockCheckQuery := `SELECT EXISTS(SELECT 1 FROM user_blocks WHERE (user_id = $1 AND blocked_user_id = $2) OR (user_id = $2 AND blocked_user_id = $1))`
+	if err := h.db.Pool.QueryRow(r.Context(), blockCheckQuery, userID, recipientID).Scan(&isBlocked); err == nil && isBlocked {
+		http.Error(w, `{"error":"você não pode enviar mensagens para este usuário"}`, http.StatusForbidden)
+		return
+	}
+
 	// Fetch author details
 	var author models.UserPublic
 	h.db.Pool.QueryRow(r.Context(), "SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1", userID).Scan(
@@ -479,6 +498,207 @@ func (h *DMHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
 	h.hub.SendToUser(userID, models.WSEvent{
 		Type: models.EventDMReactionRemove,
 		Data: eventData,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true})
+}
+
+// 1x1 Call Endpoints
+
+func (h *DMHandler) InviteCall(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify participant and find recipient
+	var user1ID, user2ID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
+	if err != nil || (user1ID != userID && user2ID != userID) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	recipientID := user1ID
+	if recipientID == userID {
+		recipientID = user2ID
+	}
+
+	// Check if there is a block
+	var isBlocked bool
+	blockCheckQuery := `SELECT EXISTS(SELECT 1 FROM user_blocks WHERE (user_id = $1 AND blocked_user_id = $2) OR (user_id = $2 AND blocked_user_id = $1))`
+	if err := h.db.Pool.QueryRow(r.Context(), blockCheckQuery, userID, recipientID).Scan(&isBlocked); err == nil && isBlocked {
+		http.Error(w, `{"error":"não é possível iniciar chamada com este usuário"}`, http.StatusForbidden)
+		return
+	}
+
+	// Fetch caller details
+	var caller models.UserPublic
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1", userID).Scan(
+		&caller.ID, &caller.Username, &caller.DisplayName, &caller.AvatarURL, &caller.BannerURL, &caller.Bio, &caller.Status, &caller.CustomStatus,
+	)
+
+	// Send CALL_INCOMING event to recipient
+	h.hub.SendToUser(recipientID, models.WSEvent{
+		Type: "CALL_INCOMING",
+		Data: map[string]any{
+			"room_id":   roomID,
+			"caller":    caller,
+			"call_type": "dm",
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "room_id": roomID})
+}
+
+func (h *DMHandler) AcceptCall(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var user1ID, user2ID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
+	if err != nil || (user1ID != userID && user2ID != userID) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	otherUserID := user1ID
+	if otherUserID == userID {
+		otherUserID = user2ID
+	}
+
+	// Fetch user details for token generation
+	var currentName, otherName string
+	h.db.Pool.QueryRow(r.Context(), "SELECT COALESCE(display_name, username) FROM users WHERE id = $1", userID).Scan(&currentName)
+	h.db.Pool.QueryRow(r.Context(), "SELECT COALESCE(display_name, username) FROM users WHERE id = $1", otherUserID).Scan(&otherName)
+
+	livekitRoomName := "dm-" + roomID.String()
+
+	// Generate LiveKit tokens
+	tokenAcceptor, err := h.livekit.GenerateJoinToken(livekitRoomName, userID, currentName, "", true)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate voice token"}`, http.StatusInternalServerError)
+		return
+	}
+
+	tokenCaller, err := h.livekit.GenerateJoinToken(livekitRoomName, otherUserID, otherName, "", true)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate voice token"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Notify caller via WS with token and URL
+	h.hub.SendToUser(otherUserID, models.WSEvent{
+		Type: "CALL_ACCEPT",
+		Data: map[string]any{
+			"room_id":     roomID,
+			"room_name":   livekitRoomName,
+			"token":       tokenCaller,
+			"livekit_url": h.livekit.GetPublicURL(),
+		},
+	})
+
+	// Respond to acceptor with their token and URL
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":     true,
+		"room_id":     roomID,
+		"room_name":   livekitRoomName,
+		"token":       tokenAcceptor,
+		"livekit_url": h.livekit.GetPublicURL(),
+	})
+}
+
+func (h *DMHandler) RejectCall(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var user1ID, user2ID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
+	if err != nil || (user1ID != userID && user2ID != userID) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	otherUserID := user1ID
+	if otherUserID == userID {
+		otherUserID = user2ID
+	}
+
+	h.hub.SendToUser(otherUserID, models.WSEvent{
+		Type: "CALL_REJECT",
+		Data: map[string]any{
+			"room_id": roomID,
+			"user_id": userID,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true})
+}
+
+func (h *DMHandler) LeaveCall(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var user1ID, user2ID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
+	if err != nil || (user1ID != userID && user2ID != userID) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	otherUserID := user1ID
+	if otherUserID == userID {
+		otherUserID = user2ID
+	}
+
+	h.hub.SendToUser(otherUserID, models.WSEvent{
+		Type: "CALL_LEAVE",
+		Data: map[string]any{
+			"room_id": roomID,
+			"user_id": userID,
+		},
 	})
 
 	w.Header().Set("Content-Type", "application/json")
