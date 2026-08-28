@@ -17,7 +17,7 @@ interface VoiceState {
   leaveVoice: () => Promise<void>;
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
-  startScreenShare: (sourceId: string) => Promise<void>;
+  startScreenShare: (sourceId?: string) => Promise<void>;
   stopScreenShare: () => Promise<void>;
 }
 
@@ -32,10 +32,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   speakingUserIds: [],
 
   joinVoice: async (channelId: string) => {
-    // If already in this channel, do nothing
     if (get().currentChannelId === channelId && get().isConnected) return;
 
-    // If in another channel, leave it first
     if (get().currentChannelId) {
       await get().leaveVoice();
     }
@@ -53,12 +51,18 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
           set({ speakingUserIds });
         },
         onTrackUpdated: () => {
-          // Force update participants list to reflect tracks
           const room = livekit.getRoom();
           if (room) {
             set({
               participants: [room.localParticipant, ...Array.from(room.remoteParticipants.values())],
             });
+          }
+        },
+        onScreenShareEnded: () => {
+          set({ isScreensharing: false });
+          const { currentChannelId } = get();
+          if (currentChannelId) {
+            api.channels.updateVoiceState(currentChannelId, { is_screensharing: false }).catch(() => {});
           }
         },
       });
@@ -122,7 +126,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     }
   },
 
-  startScreenShare: async (sourceId: string) => {
+  startScreenShare: async (sourceId?: string) => {
     const { currentChannelId } = get();
     try {
       await livekit.setScreenShareEnabled(true, sourceId);
@@ -131,8 +135,9 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       if (currentChannelId) {
         api.channels.updateVoiceState(currentChannelId, { is_screensharing: true }).catch(() => {});
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[Voice] Failed to start screen share:', err);
+      set({ isScreensharing: false });
     }
   },
 

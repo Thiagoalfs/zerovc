@@ -21,8 +21,22 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({ channel, onOpenScreenShare
     toggleMute,
     toggleDeafen,
     leaveVoice,
+    startScreenShare,
     stopScreenShare,
   } = useVoiceStore();
+
+  const handleScreenShareClick = () => {
+    if (isScreensharing) {
+      stopScreenShare();
+    } else {
+      if ((window as any).electronAPI?.getScreenSources) {
+        onOpenScreenShare();
+      } else {
+        // Direct browser screen share dialog
+        startScreenShare();
+      }
+    }
+  };
 
   const getGridColsClass = () => {
     const count = participants.length;
@@ -74,7 +88,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({ channel, onOpenScreenShare
         )}
       </div>
 
-      {/* Floating Bottom Voice Controls (Mobile & Desktop) */}
+      {/* Floating Bottom Voice Controls */}
       <div className="p-3 md:p-4 flex justify-center bg-background-darker/80 backdrop-blur-md border-t border-black/20">
         <div className="bg-background-darkest/95 px-4 md:px-6 py-2 rounded-2xl shadow-2xl flex items-center gap-3 md:gap-4 border border-white/10">
           {/* Mute Mic */}
@@ -105,19 +119,13 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({ channel, onOpenScreenShare
 
           {/* Screen Share */}
           <button
-            onClick={() => {
-              if (isScreensharing) {
-                stopScreenShare();
-              } else {
-                onOpenScreenShare();
-              }
-            }}
+            onClick={handleScreenShareClick}
             className={`p-2.5 md:p-3 rounded-full transition-all ${
               isScreensharing
-                ? 'bg-online text-white hover:bg-online/80'
+                ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
                 : 'bg-background-light text-gray-200 hover:bg-white/20'
             }`}
-            title={isScreensharing ? 'Parar Compartilhamento' : 'Compartilhar Tela'}
+            title={isScreensharing ? 'Parar Compartilhamento de Tela' : 'Compartilhar Tela'}
           >
             <Monitor className="w-5 h-5" />
           </button>
