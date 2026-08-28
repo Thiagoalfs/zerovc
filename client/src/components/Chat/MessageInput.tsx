@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X, Reply } from 'lucide-react';
+import { PlusCircle, SendHorizontal, Smile, X, Loader2 } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
+import { api } from '../../lib/api';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { useGuildStore } from '../../stores/guildStore';
 
@@ -25,7 +26,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const { activeGuild } = useGuildStore();
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionCursorPos, setMentionCursorPos] = useState<number>(0);
@@ -110,6 +113,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleSend = async () => {
+    if (isUploading) return;
     let finalContent = content.trim();
 
     // Check 2,000 character limit on raw text
@@ -122,16 +126,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return;
     }
 
-    if (selectedImage) {
-      finalContent = finalContent ? `${finalContent}\n${selectedImage}` : selectedImage;
-    }
+    if (!finalContent && !selectedFile) return;
 
-    if (!finalContent) return;
-
+    const fileToUpload = selectedFile;
     const replyId = replyingTo?.id;
 
     setContent('');
-    setSelectedImage(null);
+    setSelectedFile(null);
+    setSelectedImagePreview(null);
     setShowEmojiPicker(false);
     setMentionQuery(null);
     onCancelReply?.();
@@ -139,7 +141,23 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       textareaRef.current.style.height = 'auto';
     }
 
-    await onSendMessage(finalContent, replyId);
+    try {
+      if (fileToUpload) {
+        setIsUploading(true);
+        const uploaded = await api.upload.attachment(fileToUpload);
+        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
+      }
+
+      await onSendMessage(finalContent, replyId);
+    } catch (err: any) {
+      console.error('Failed to send message/file:', err);
+      setLimitAlert({
+        title: 'Erro ao Enviar Mensagem',
+        message: err.message || 'Não foi possível enviar a mensagem. Verifique sua conexão.',
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -208,58 +226,29 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
-  const compressAndSetImage = (file: File) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     if (file.size > MAX_FILE_BYTES) {
       setLimitAlert({
         title: 'Arquivo Muito Grande',
         message: 'O limite de imagens/vídeos/arquivos são 20mb',
         detail: `Tamanho do arquivo: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
       });
+      e.target.value = '';
       return;
     }
 
+    setSelectedFile(file);
+
+    // Generate local thumbnail preview
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (!result) return;
-
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1280;
-        const MAX_HEIGHT = 1280;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width = Math.round((width * MAX_HEIGHT) / height);
-            height = MAX_HEIGHT;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        const compressed = canvas.toDataURL('image/jpeg', 0.85);
-        setSelectedImage(compressed);
-      };
-      img.src = result;
+    reader.onload = (readEvent) => {
+      setSelectedImagePreview(readEvent.target?.result as string);
     };
     reader.readAsDataURL(file);
-  };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    compressAndSetImage(file);
     e.target.value = '';
   };
 
@@ -279,7 +268,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 type="button"
                 onClick={() => insertMention(item)}
                 onMouseEnter={() => setSelectedMentionIndex(idx)}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors ${
+                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer ${
                   selectedMentionIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
                 }`}
               >
@@ -299,12 +288,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span
                     className="font-semibold text-xs truncate"
-                    style={item.roleColor ? { color: item.roleColor } : {}}
+                    style={{ color: item.roleColor || undefined }}
                   >
                     {item.name}
                   </span>
                   {!item.isSpecial && (
-                    <span className="text-[10px] text-gray-400 font-mono">@{item.username}</span>
+                    <span className="text-[10px] text-gray-500 truncate">@{item.username}</span>
                   )}
                 </div>
               </button>
@@ -313,19 +302,23 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {/* Replying Bar */}
+      {/* Replying banner */}
       {replyingTo && (
-        <div className="bg-background-darkest/90 border border-b-0 border-white/5 rounded-t-2xl px-3 py-1.5 flex items-center justify-between text-xs text-gray-300 animate-in fade-in slide-in-from-bottom-1">
+        <div className="bg-background-darkest/90 border border-b-0 border-white/5 px-4 py-2 rounded-t-2xl flex items-center justify-between text-xs text-gray-300 animate-in fade-in slide-in-from-bottom-1">
           <div className="flex items-center gap-2 truncate">
-            <Reply className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
-            <span className="text-gray-400">Respondendo a</span>
-            <span className="font-semibold text-brand-400">@{replyingTo.author.display_name || replyingTo.author.username}</span>
-            <span className="text-gray-400 truncate italic max-w-xs">"{replyingTo.content}"</span>
+            <span className="text-gray-500">Respondendo a</span>
+            <span className="font-bold text-brand-400">
+              @{replyingTo.author?.display_name || replyingTo.author?.username}
+            </span>
+            <span className="truncate text-gray-400 max-w-xs italic font-normal">
+              "{replyingTo.content}"
+            </span>
           </div>
           <button
+            type="button"
             onClick={onCancelReply}
-            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white"
-            title="Cancelar resposta"
+            className="text-gray-400 hover:text-white p-1 hover:bg-white/5 rounded-full transition-colors cursor-pointer"
+            title="Cancelar Resposta (Esc)"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -333,20 +326,30 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       )}
 
       {/* Selected Image Preview */}
-      {selectedImage && (
+      {selectedImagePreview && (
         <div className="mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in">
           <div className="flex items-center gap-2">
             <img
-              src={selectedImage}
+              src={selectedImagePreview}
               alt="Preview"
               className="w-12 h-12 object-cover rounded-xl border border-white/10"
             />
-            <span className="text-xs text-gray-300 font-medium">Imagem anexada</span>
+            <div>
+              <span className="text-xs text-gray-200 font-medium block truncate max-w-[140px]">
+                {selectedFile?.name || 'Imagem anexada'}
+              </span>
+              <span className="text-[10px] text-gray-400">
+                {selectedFile ? `${(selectedFile.size / 1024).toFixed(0)} KB` : ''}
+              </span>
+            </div>
           </div>
           <button
             type="button"
-            onClick={() => setSelectedImage(null)}
-            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3"
+            onClick={() => {
+              setSelectedFile(null);
+              setSelectedImagePreview(null);
+            }}
+            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -363,7 +366,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 key={emoji}
                 type="button"
                 onClick={() => handleSelectEmoji(emoji)}
-                className="w-9 h-9 flex items-center justify-center text-xl hover:bg-white/10 rounded-xl transition-all active:scale-125"
+                className="w-9 h-9 flex items-center justify-center text-xl hover:bg-white/10 rounded-xl transition-all active:scale-125 cursor-pointer"
               >
                 {emoji}
               </button>
@@ -389,7 +392,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0"
+          disabled={isUploading}
+          className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
           title="Anexar Imagem (até 20 MB)"
         >
           <PlusCircle className="w-5 h-5" />
@@ -401,8 +405,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           value={content}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder={replyingTo ? `Respondendo a @${replyingTo.author.username}...` : `Conversar em #${channel.name}`}
+          placeholder={replyingTo ? `Respondendo a @${replyingTo.author?.username}...` : `Conversar em #${channel.name}`}
           rows={1}
+          disabled={isUploading}
           className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1 max-h-40 leading-relaxed font-normal no-scrollbar"
         />
 
@@ -410,7 +415,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <button
           type="button"
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          className={`p-1.5 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 ${
+          className={`p-1.5 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer ${
             showEmojiPicker ? 'text-brand-500' : 'text-gray-400 hover:text-white'
           }`}
           title="Inserir Emoji"
@@ -422,11 +427,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <button
           type="button"
           onClick={handleSend}
-          disabled={!content.trim() && !selectedImage}
-          className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white p-2 rounded-xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0"
+          disabled={(!content.trim() && !selectedFile) || isUploading}
+          className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white p-2 rounded-xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0 cursor-pointer"
           title="Enviar Mensagem"
         >
-          <SendHorizontal className="w-4 h-4" />
+          {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
         </button>
       </div>
 
