@@ -121,7 +121,12 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
   // Drag Handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // Only drag on primary mouse button or touch
+    // Ignore clicks on buttons, inputs, links
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, textarea, a, select, [role="button"]')) {
+      return;
+    }
+
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const container = containerRef.current;
     if (!container) return;
@@ -134,70 +139,67 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       initY: rect.top,
     };
     hasMovedSignificantlyRef.current = false;
-    setIsDragging(true);
-    setDragPos({ x: rect.left, y: rect.top });
-
-    container.setPointerCapture(e.pointerId);
   }, []);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging) return;
+    if (dragStartRef.current.startX === 0 && dragStartRef.current.startY === 0) return;
 
     const dx = e.clientX - dragStartRef.current.startX;
     const dy = e.clientY - dragStartRef.current.startY;
 
-    if (Math.hypot(dx, dy) > 5) {
+    if (!isDragging && Math.hypot(dx, dy) > 5) {
+      setIsDragging(true);
       hasMovedSignificantlyRef.current = true;
     }
 
-    const newX = dragStartRef.current.initX + dx;
-    const newY = dragStartRef.current.initY + dy;
+    if (isDragging || Math.hypot(dx, dy) > 5) {
+      const newX = dragStartRef.current.initX + dx;
+      const newY = dragStartRef.current.initY + dy;
 
-    // Constrain within viewport
-    const container = containerRef.current;
-    const width = container?.offsetWidth || 320;
-    const height = container?.offsetHeight || 220;
+      const container = containerRef.current;
+      const width = container?.offsetWidth || 320;
+      const height = container?.offsetHeight || 220;
 
-    const clampedX = Math.max(10, Math.min(window.innerWidth - width - 10, newX));
-    const clampedY = Math.max(10, Math.min(window.innerHeight - height - 10, newY));
+      const clampedX = Math.max(10, Math.min(window.innerWidth - width - 10, newX));
+      const clampedY = Math.max(10, Math.min(window.innerHeight - height - 10, newY));
 
-    setDragPos({ x: clampedX, y: clampedY });
+      setDragPos({ x: clampedX, y: clampedY });
+    }
   }, [isDragging]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (!isDragging) return;
-    setIsDragging(false);
+    if (isDragging) {
+      setIsDragging(false);
 
-    try {
-      containerRef.current?.releasePointerCapture(e.pointerId);
-    } catch {}
+      const container = containerRef.current;
+      const width = container?.offsetWidth || 320;
+      const height = container?.offsetHeight || 220;
 
-    const container = containerRef.current;
-    const width = container?.offsetWidth || 320;
-    const height = container?.offsetHeight || 220;
+      const currentX = dragPos?.x ?? dragStartRef.current.initX;
+      const currentY = dragPos?.y ?? dragStartRef.current.initY;
 
-    const currentX = dragPos?.x ?? dragStartRef.current.initX;
-    const currentY = dragPos?.y ?? dragStartRef.current.initY;
+      const centerX = currentX + width / 2;
+      const centerY = currentY + height / 2;
 
-    const centerX = currentX + width / 2;
-    const centerY = currentY + height / 2;
+      const screenMidX = window.innerWidth / 2;
+      const screenMidY = window.innerHeight / 2;
 
-    const screenMidX = window.innerWidth / 2;
-    const screenMidY = window.innerHeight / 2;
+      let nearestCorner: PiPCorner = 'bottom-right';
+      if (centerX < screenMidX) {
+        nearestCorner = centerY < screenMidY ? 'top-left' : 'bottom-left';
+      } else {
+        nearestCorner = centerY < screenMidY ? 'top-right' : 'bottom-right';
+      }
 
-    let nearestCorner: PiPCorner = 'bottom-right';
-    if (centerX < screenMidX) {
-      nearestCorner = centerY < screenMidY ? 'top-left' : 'bottom-left';
-    } else {
-      nearestCorner = centerY < screenMidY ? 'top-right' : 'bottom-right';
+      setCorner(nearestCorner);
+      setDragPos(null);
+
+      try {
+        localStorage.setItem('zerovc_pip_corner', nearestCorner);
+      } catch {}
     }
 
-    setCorner(nearestCorner);
-    setDragPos(null);
-
-    try {
-      localStorage.setItem('zerovc_pip_corner', nearestCorner);
-    } catch {}
+    dragStartRef.current = { startX: 0, startY: 0, initX: 0, initY: 0 };
   }, [isDragging, dragPos]);
 
   if (!isConnected || !currentChannelId || !targetParticipant || !hasScreenVideoTrack) {
@@ -266,9 +268,8 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
               position: 'fixed',
               top: `${dragPos.y}px`,
               left: `${dragPos.x}px`,
-              touchAction: 'none',
             }
-          : { touchAction: 'none' }
+          : undefined
       }
       className={`fixed z-40 w-72 sm:w-80 rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-background-darkest/95 backdrop-blur-md select-none group ${getCornerClass()} ${
         isDragging
@@ -298,6 +299,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
           {/* User Profile Badge (Click to open profile modal) */}
           <button
             type="button"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={handleOpenUserProfile}
             className="flex items-center gap-1.5 bg-black/75 hover:bg-black/95 active:scale-95 border border-white/10 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow transition-all cursor-pointer z-30"
             title="Ver perfil do participante"
@@ -315,9 +317,10 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             </span>
           </button>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
             <button
               type="button"
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={toggleFullscreen}
               className="p-1 rounded-lg bg-black/60 hover:bg-white/20 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
               title="Tela cheia do vídeo"
@@ -328,6 +331,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             {!isLocal && (
               <button
                 type="button"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   setWatchedParticipant(null);
@@ -353,6 +357,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       {/* Bottom Voice Control Bar */}
       <div className="p-2.5 px-3 bg-background-darker/90 border-t border-white/5 flex items-center justify-between">
         <div
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={handleOpenUserProfile}
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0"
           title="Clique para ver perfil do usuário em call"
@@ -363,11 +368,16 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex items-center gap-1.5 flex-shrink-0"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           {!isLocal && (
             <div className="relative">
               <button
                 type="button"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowVolume(!showVolume);
@@ -409,6 +419,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
           <button
             type="button"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={toggleMute}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               isMuted
@@ -422,6 +433,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
           <button
             type="button"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={toggleDeafen}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               isDeafened
@@ -435,6 +447,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
           <button
             type="button"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={leaveVoice}
             className="p-1.5 rounded-lg text-dnd hover:bg-dnd/20 transition-colors cursor-pointer"
             title="Desconectar da call"
