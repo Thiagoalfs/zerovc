@@ -3,9 +3,11 @@ import { Users, UserPlus, Check, X, MessageSquare, Trash2, Menu } from 'lucide-r
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMStore } from '../../stores/dmStore';
 
+import { DMRoom } from '../../types';
+
 interface FriendsViewProps {
   onOpenMobileDrawer?: () => void;
-  onOpenDM?: (userId: string) => void;
+  onOpenDM?: (userId: string, room?: DMRoom) => void;
 }
 
 export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, onOpenDM }) => {
@@ -22,8 +24,12 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
   }, []);
 
   const handleStartDM = async (userId: string) => {
-    await openDMWithUser(userId);
-    if (onOpenDM) onOpenDM(userId);
+    try {
+      const room = await openDMWithUser(userId);
+      if (onOpenDM) onOpenDM(userId, room);
+    } catch (err) {
+      console.error('Failed to open DM:', err);
+    }
   };
 
   const handleSendRequest = async (e: React.FormEvent) => {
@@ -280,10 +286,11 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                 return (
                   <div
                     key={f.id}
-                    className="flex items-center justify-between p-2.5 md:p-3 px-3 md:px-4 rounded-xl hover:bg-background-darker border border-transparent hover:border-white/5 transition-all group"
+                    onClick={() => target?.id && handleStartDM(target.id)}
+                    className="flex items-center justify-between p-2.5 md:p-3 px-3 md:px-4 rounded-2xl hover:bg-background-darker border border-transparent hover:border-white/5 transition-all group cursor-pointer active:scale-[0.99]"
                   >
                     <div className="flex items-center gap-3 truncate">
-                      <div className="relative w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+                      <div className="relative w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold flex-shrink-0">
                         {target?.avatar_url ? (
                           <img src={target.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                         ) : (
@@ -303,7 +310,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                       </div>
 
                       <div className="truncate">
-                        <span className="font-semibold text-white text-sm block truncate">
+                        <span className="font-semibold text-white text-sm block truncate group-hover:text-brand-400 transition-colors">
                           {target?.display_name || target?.username}
                         </span>
                         <span className="block text-xs text-gray-400">
@@ -312,17 +319,25 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <button
-                        onClick={() => target?.id && handleStartDM(target.id)}
-                        className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-background-light hover:bg-brand-500 text-gray-300 hover:text-white flex items-center justify-center transition-colors"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (target?.id) handleStartDM(target.id);
+                        }}
+                        className="w-10 h-10 rounded-full bg-background-light hover:bg-brand-500 text-gray-300 hover:text-white flex items-center justify-center transition-colors shadow-sm"
                         title="Enviar Mensagem Direta"
                       >
                         <MessageSquare className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => removeFriend(f.id)}
-                        className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-background-light hover:bg-dnd text-gray-400 hover:text-white flex items-center justify-center transition-colors opacity-80 md:opacity-0 md:group-hover:opacity-100"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFriend(f.id);
+                        }}
+                        className="w-10 h-10 rounded-full bg-background-light hover:bg-dnd text-gray-400 hover:text-white flex items-center justify-center transition-colors opacity-80 md:opacity-0 md:group-hover:opacity-100"
                         title="Remover Amigo"
                       >
                         <Trash2 className="w-4 h-4" />
