@@ -78,27 +78,35 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 
 func (s *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			// Also check query param for WebSocket connections (?token=...)
-			tokenParam := r.URL.Query().Get("token")
-			if tokenParam != "" {
-				authHeader = "Bearer " + tokenParam
+		var tokenString string
+
+		// 1. Check HttpOnly Cookie first
+		if cookie, err := r.Cookie("token"); err == nil && cookie.Value != "" {
+			tokenString = cookie.Value
+		}
+
+		// 2. Fallback to Authorization Header (Bearer <token>)
+		if tokenString == "" {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader != "" {
+				parts := strings.Split(authHeader, " ")
+				if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+					tokenString = parts[1]
+				}
 			}
 		}
 
-		if authHeader == "" {
+		// 3. Fallback to Query param for WebSocket connections (?token=...)
+		if tokenString == "" {
+			tokenString = r.URL.Query().Get("token")
+		}
+
+		if tokenString == "" {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			http.Error(w, `{"error":"invalid authorization header format"}`, http.StatusUnauthorized)
-			return
-		}
-
-		claims, err := s.ValidateToken(parts[1])
+		claims, err := s.ValidateToken(tokenString)
 		if err != nil {
 			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 			return

@@ -162,6 +162,7 @@ func main() {
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
+		r.Post("/logout", authHandler.Logout)
 	})
 
 	// Public Invite Preview
