@@ -290,8 +290,22 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	limit := 50
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 50 {
 			limit = parsed
+		}
+	}
+
+	var beforeTime *time.Time
+	if b := r.URL.Query().Get("before"); b != "" {
+		if t, err := time.Parse(time.RFC3339Nano, b); err == nil {
+			beforeTime = &t
+		} else if t, err := time.Parse(time.RFC3339, b); err == nil {
+			beforeTime = &t
+		} else if beforeUUID, err := uuid.Parse(b); err == nil {
+			var t time.Time
+			if h.db.Pool.QueryRow(r.Context(), "SELECT created_at FROM messages WHERE id = $1", beforeUUID).Scan(&t) == nil {
+				beforeTime = &t
+			}
 		}
 	}
 
@@ -303,12 +317,12 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		INNER JOIN users u ON u.id = m.author_id
 		LEFT JOIN messages rm ON rm.id = m.reply_to_id
 		LEFT JOIN users ru ON ru.id = rm.author_id
-		WHERE m.channel_id = $1
+		WHERE m.channel_id = $1 AND ($3::timestamptz IS NULL OR m.created_at < $3)
 		ORDER BY m.created_at DESC
 		LIMIT $2
 	`
 
-	rows, err := h.db.Pool.Query(r.Context(), query, channelID, limit)
+	rows, err := h.db.Pool.Query(r.Context(), query, channelID, limit, beforeTime)
 	if err != nil {
 		http.Error(w, `{"error":"failed to query messages"}`, http.StatusInternalServerError)
 		return
