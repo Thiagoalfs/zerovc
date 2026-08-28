@@ -4,12 +4,15 @@ import { ptBR } from 'date-fns/locale';
 import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
+import { LimitAlertModal } from '../Modals/LimitAlertModal';
 
 interface DMChatAreaProps {
   onOpenMobileDrawer?: () => void;
 }
 
 const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
+const MAX_CHARS = 2000;
+const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) => {
   const { user } = useAuthStore();
@@ -18,6 +21,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,6 +54,17 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
 
   const handleSend = async () => {
     let finalContent = content.trim();
+
+    // Check 2,000 character limit on raw text
+    if (finalContent.length > MAX_CHARS) {
+      setLimitAlert({
+        title: 'Limite de Caracteres Excedido',
+        message: 'O limite de tamanho de mensagem é 2.000 caracteres',
+        detail: `${finalContent.length.toLocaleString('pt-BR')} / 2.000 caracteres`,
+      });
+      return;
+    }
+
     if (selectedImage) {
       finalContent = finalContent ? `${finalContent}\n${selectedImage}` : selectedImage;
     }
@@ -75,6 +90,17 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Check 20MB file limit
+    if (file.size > MAX_FILE_BYTES) {
+      setLimitAlert({
+        title: 'Arquivo Muito Grande',
+        message: 'O limite de tamanho de imagens, vídeos e arquivos é de 20 MB.',
+        detail: `Tamanho: ${(file.size / (1024 * 1024)).toFixed(1)} MB / Limite: 20 MB`,
+      });
+      e.target.value = '';
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (loadEvt) => {
@@ -148,8 +174,22 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
     });
   };
 
+  const charsLeft = MAX_CHARS - content.length;
+  const isNearOrExceededLimit = content.length > 1800;
+
   return (
     <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden select-none">
+      {/* Limit Alert Modal */}
+      {limitAlert && (
+        <LimitAlertModal
+          isOpen={!!limitAlert}
+          title={limitAlert.title}
+          message={limitAlert.message}
+          detail={limitAlert.detail}
+          onClose={() => setLimitAlert(null)}
+        />
+      )}
+
       {/* DM Header */}
       <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10">
         <div className="flex items-center gap-3 truncate">
@@ -342,11 +382,30 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
           </div>
         )}
 
-        <div className="bg-background-light/70 rounded-2xl px-3 md:px-4 py-2 flex items-center gap-2 md:gap-3 border border-white/5 focus-within:border-brand-500/50 transition-colors shadow-inner">
+        {/* Warning indicator when typing near 2000 chars */}
+        {isNearOrExceededLimit && (
+          <div className="mb-1 flex justify-end">
+            <span
+              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                charsLeft < 0
+                  ? 'bg-dnd/20 text-dnd animate-pulse'
+                  : 'bg-yellow-500/20 text-yellow-400'
+              }`}
+            >
+              {charsLeft < 0 ? `Excedido por ${Math.abs(charsLeft)}` : `${charsLeft} restantes`}
+            </span>
+          </div>
+        )}
+
+        <div
+          className={`bg-background-light/70 rounded-2xl px-3 md:px-4 py-2 flex items-center gap-2 md:gap-3 border transition-colors shadow-inner ${
+            charsLeft < 0 ? 'border-dnd/60' : 'border-white/5 focus-within:border-brand-500/50'
+          }`}
+        >
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/*,.pdf,.doc,.docx,.zip,.txt"
             className="hidden"
             onChange={handleImageUpload}
           />
@@ -355,6 +414,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer }) =>
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="text-gray-400 hover:text-brand-500 transition-colors p-1"
+            title="Adicionar imagem/anexo (Máx. 20MB)"
           >
             <PlusCircle className="w-5 h-5" />
           </button>
