@@ -103,11 +103,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   if (isScreensharing) {
                     stopScreenShare();
                   } else {
-                    if ((window as any).electronAPI?.getScreenSources) {
-                      onOpenScreenShare();
-                    } else {
-                      startScreenShare();
-                    }
+                    onOpenScreenShare();
                   }
                 }}
                 className={`p-1.5 rounded hover:bg-background-light transition-colors ${

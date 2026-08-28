@@ -17,7 +17,10 @@ interface VoiceState {
   leaveVoice: () => Promise<void>;
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
-  startScreenShare: (sourceId?: string) => Promise<void>;
+  startScreenShare: (
+    sourceId?: string,
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }
+  ) => Promise<void>;
   stopScreenShare: () => Promise<void>;
 }
 
@@ -126,10 +129,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     }
   },
 
-  startScreenShare: async (sourceId?: string) => {
+  startScreenShare: async (
+    sourceId?: string,
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }
+  ) => {
     const { currentChannelId } = get();
     try {
-      await livekit.setScreenShareEnabled(true, sourceId);
+      await livekit.setScreenShareEnabled(true, sourceId, config);
       set({ isScreensharing: true });
 
       if (currentChannelId) {
