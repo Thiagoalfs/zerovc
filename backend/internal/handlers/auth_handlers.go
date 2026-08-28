@@ -82,10 +82,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	query := `
 		INSERT INTO users (username, email, password_hash, status)
 		VALUES ($1, $2, $3, 'online')
-		RETURNING id, username, email, avatar_url, status, custom_status, created_at, updated_at
+		RETURNING id, username, email, display_name, avatar_url, banner_url, bio, status, custom_status, created_at, updated_at
 	`
 	err = h.db.Pool.QueryRow(r.Context(), query, req.Username, req.Email, hash).Scan(
-		&user.ID, &user.Username, &user.Email, &user.AvatarURL, &user.Status, &user.CustomStatus, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"username or email already registered"}`, http.StatusConflict)
@@ -118,12 +118,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	query := `
-		SELECT id, username, email, password_hash, avatar_url, status, custom_status, created_at, updated_at
+		SELECT id, username, email, password_hash, display_name, avatar_url, banner_url, bio, status, custom_status, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, req.Email).Scan(
-		&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.AvatarURL, &user.Status, &user.CustomStatus, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil || !h.auth.CheckPassword(req.Password, user.PasswordHash) {
 		http.Error(w, `{"error":"invalid email or password"}`, http.StatusUnauthorized)
@@ -161,12 +161,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	query := `
-		SELECT id, username, email, avatar_url, status, custom_status, created_at, updated_at
+		SELECT id, username, email, display_name, avatar_url, banner_url, bio, status, custom_status, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, userID).Scan(
-		&user.ID, &user.Username, &user.Email, &user.AvatarURL, &user.Status, &user.CustomStatus, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
