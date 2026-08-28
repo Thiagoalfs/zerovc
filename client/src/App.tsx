@@ -13,6 +13,7 @@ import { ChannelList } from './components/Sidebar/ChannelList';
 import { DMChannelList } from './components/DM/DMChannelList';
 import { ChatArea } from './components/Chat/ChatArea';
 import { VoiceRoom } from './components/Voice/VoiceRoom';
+import { VoiceFloatingPiP } from './components/Voice/VoiceFloatingPiP';
 import { FriendsView } from './components/Friends/FriendsView';
 import { DMChatArea } from './components/DM/DMChatArea';
 import { DMGroupChatArea } from './components/DM/DMGroupChatArea';
@@ -47,7 +48,15 @@ export const App: React.FC = () => {
     selectChannel,
   } = useGuildStore();
   const { handleFriendEvent } = useFriendStore();
-  const { isConnected, currentChannelId, isMuted, toggleMute, leaveVoice } = useVoiceStore();
+  const {
+    isConnected,
+    currentChannelId,
+    isMuted,
+    isScreensharing,
+    watchedParticipantId,
+    toggleMute,
+    leaveVoice,
+  } = useVoiceStore();
   const { addMessage: addDMMessage } = useDMStore();
 
   const [isHomeActive, setIsHomeActive] = useState(true);
@@ -618,44 +627,60 @@ export const App: React.FC = () => {
           />
         )}
 
-        {/* Floating Mini Voice Dock */}
-        {isConnected && activeChannel?.type !== 'voice' && (
-          <div className="absolute bottom-16 md:bottom-20 right-4 z-20 bg-background-darkest/95 backdrop-blur-md p-2.5 px-4 rounded-2xl shadow-2xl border border-online/30 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
-            <button
-              onClick={() => {
-                if (connectedVoiceChannel) selectChannel(connectedVoiceChannel);
+        {/* Floating Live Screen PiP OR Mini Voice Dock */}
+        {isConnected && (isHomeActive || activeChannel?.type !== 'voice' || activeChannel?.id !== currentChannelId) && (
+          watchedParticipantId || isScreensharing ? (
+            <VoiceFloatingPiP
+              onNavigateToVoiceChannel={(chId, gId) => {
+                if (gId) selectGuild(gId);
+                const ch = useGuildStore.getState().activeGuild?.channels?.find((c) => c.id === chId);
+                if (ch) selectChannel(ch);
+                setIsHomeActive(false);
+                if (gId && ch) navigateTo(`/${gId}/${ch.id}`);
               }}
-              className="flex items-center gap-2 hover:opacity-80 text-left"
-            >
-              <Volume2 className="w-4 h-4 text-online animate-pulse" />
-              <div className="text-xs">
-                <span className="font-bold text-white block truncate max-w-[120px]">
-                  {connectedVoiceChannel?.name || 'Voz Conectada'}
-                </span>
-                <span className="text-[10px] text-online">Toque para ver sala</span>
-              </div>
-            </button>
+            />
+          ) : (
+            <div className="absolute bottom-16 md:bottom-20 right-4 z-20 bg-background-darkest/95 backdrop-blur-md p-2.5 px-4 rounded-2xl shadow-2xl border border-online/30 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
+              <button
+                onClick={() => {
+                  if (connectedVoiceChannel && activeGuild) {
+                    selectChannel(connectedVoiceChannel);
+                    setIsHomeActive(false);
+                    navigateTo(`/${activeGuild.id}/${connectedVoiceChannel.id}`);
+                  }
+                }}
+                className="flex items-center gap-2 hover:opacity-80 text-left cursor-pointer"
+              >
+                <Volume2 className="w-4 h-4 text-online animate-pulse" />
+                <div className="text-xs">
+                  <span className="font-bold text-white block truncate max-w-[120px]">
+                    {connectedVoiceChannel?.name || 'Voz Conectada'}
+                  </span>
+                  <span className="text-[10px] text-online">Toque para ver sala</span>
+                </div>
+              </button>
 
-            <div className="w-[1px] h-6 bg-white/10 mx-1" />
+              <div className="w-[1px] h-6 bg-white/10 mx-1" />
 
-            <button
-              onClick={toggleMute}
-              className={`p-2 rounded-full transition-colors ${
-                isMuted ? 'bg-dnd text-white' : 'bg-background-light text-gray-200'
-              }`}
-              title="Mutar/Desmutar"
-            >
-              {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-            </button>
+              <button
+                onClick={toggleMute}
+                className={`p-2 rounded-full transition-colors cursor-pointer ${
+                  isMuted ? 'bg-dnd text-white' : 'bg-background-light text-gray-200'
+                }`}
+                title="Mutar/Desmutar"
+              >
+                {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+              </button>
 
-            <button
-              onClick={leaveVoice}
-              className="p-2 rounded-full bg-dnd/20 text-dnd hover:bg-dnd hover:text-white transition-colors"
-              title="Desconectar"
-            >
-              <PhoneOff className="w-3.5 h-3.5" />
-            </button>
-          </div>
+              <button
+                onClick={leaveVoice}
+                className="p-2 rounded-full bg-dnd/20 text-dnd hover:bg-dnd hover:text-white transition-colors cursor-pointer"
+                title="Desconectar"
+              >
+                <PhoneOff className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )
         )}
       </div>
 
