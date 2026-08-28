@@ -482,12 +482,17 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           /* 4. Default Voice Participant Avatar View */
           <div className="flex flex-col items-center justify-center gap-2">
             <div
-              className={`w-16 h-16 md:w-20 md:h-20 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-xl shadow-lg overflow-hidden transition-transform ${
-                isSpeaking ? 'scale-105 ring-4 ring-online ring-offset-2 ring-offset-background-darkest' : ''
+              style={
+                isSpeaking
+                  ? { boxShadow: '0 0 0 3px #23a55a' }
+                  : undefined
+              }
+              className={`w-16 h-16 md:w-20 md:h-20 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-xl shadow-lg transition-transform ${
+                isSpeaking ? 'scale-105' : ''
               }`}
             >
               {avatarUrl ? (
-                <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+                <img src={avatarUrl} alt={displayName} className="w-full h-full rounded-full object-cover" />
               ) : (
                 <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
               )}
