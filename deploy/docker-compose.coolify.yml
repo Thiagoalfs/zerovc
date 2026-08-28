@@ -35,7 +35,7 @@ services:
       LIVEKIT_API_KEY: "${LIVEKIT_API_KEY}"
       LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
     ports:
-      - "8080:8080"
+      - "${API_PORT:-8081}:8080"
     deploy:
       resources:
         limits:
