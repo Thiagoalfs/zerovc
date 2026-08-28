@@ -252,4 +252,64 @@ export const api = {
         method: 'POST',
       }),
   },
+
+  upload: {
+    avatar: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      const res = await fetch(`${getApiBaseUrl()}/api/upload/avatar`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        let msg = 'Falha ao enviar avatar';
+        try {
+          const err = await res.json();
+          if (err.error) msg = err.error;
+        } catch {}
+        throw new Error(msg);
+      }
+      return res.json() as Promise<{ url: string; filename: string; size: number }>;
+    },
+    guildIcon: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-icon`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        let msg = 'Falha ao enviar ícone do servidor';
+        try {
+          const err = await res.json();
+          if (err.error) msg = err.error;
+        } catch {}
+        throw new Error(msg);
+      }
+      return res.json() as Promise<{ url: string; filename: string; size: number }>;
+    },
+    banner: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      const res = await fetch(`${getApiBaseUrl()}/api/upload/banner`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        let msg = 'Falha ao enviar banner';
+        try {
+          const err = await res.json();
+          if (err.error) msg = err.error;
+        } catch {}
+        throw new Error(msg);
+      }
+      return res.json() as Promise<{ url: string; filename: string; size: number }>;
+    },
+  },
 };

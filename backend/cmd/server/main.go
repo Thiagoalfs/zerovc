@@ -100,6 +100,9 @@ func main() {
 	roleHandler := handlers.NewRoleHandler(db, hub)
 	dmHandler := handlers.NewDMHandler(db, hub)
 
+	uploadDir := getEnv("UPLOAD_DIR", "./assets")
+	uploadHandler := handlers.NewUploadHandler(uploadDir)
+
 	// 5. Router & Middleware
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -193,6 +196,11 @@ func main() {
 		r.Post("/api/channels/{id}/leave-voice", channelHandler.LeaveVoice)
 		r.Post("/api/channels/{id}/voice-state", channelHandler.UpdateVoiceState)
 
+		// Upload Endpoints (Protected)
+		r.Post("/api/upload/avatar", uploadHandler.UploadAvatar)
+		r.Post("/api/upload/guild-icon", uploadHandler.UploadGuildIcon)
+		r.Post("/api/upload/banner", uploadHandler.UploadBanner)
+
 		// WebSocket Gateway (Protected)
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
 			userID, ok := auth.GetUserIDFromContext(r.Context())
@@ -216,7 +224,22 @@ func main() {
 		})
 	})
 
-	// 6. Serve Web Application (Single Page Application)
+	// 6. Internal CDN for user and guild uploaded media
+	userAssetsDir := filepath.Join(uploadDir, "user")
+	guildAssetsDir := filepath.Join(uploadDir, "guild")
+	os.MkdirAll(userAssetsDir, 0755)
+	os.MkdirAll(guildAssetsDir, 0755)
+
+	r.Get("/assets/user/*", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		http.StripPrefix("/assets/user/", http.FileServer(http.Dir(userAssetsDir))).ServeHTTP(w, r)
+	})
+	r.Get("/assets/guild/*", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		http.StripPrefix("/assets/guild/", http.FileServer(http.Dir(guildAssetsDir))).ServeHTTP(w, r)
+	})
+
+	// 7. Serve Web Application (Single Page Application)
 	if _, err := os.Stat(webDir); err == nil {
 		fileServer := http.FileServer(http.Dir(webDir))
 		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
