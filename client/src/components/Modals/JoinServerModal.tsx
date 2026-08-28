@@ -36,8 +36,8 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
     try {
       const res = await api.invites.join(cleanCode);
       await fetchGuilds();
-      if (res.id) {
-        await selectGuild(res.id);
+      if (res.guild_id) {
+        await selectGuild(res.guild_id);
       }
       setInputCode('');
       onClose();

@@ -229,9 +229,9 @@ export const api = {
   },
 
   invites: {
-    get: (code: string) => request<GuildInvite>(`/invites/${code}`),
+    get: (code: string) => request<{ invite: GuildInvite; member_count: number }>(`/invites/${code}`),
     join: (code: string) =>
-      request<Guild>(`/invites/${code}/join`, {
+      request<{ success: boolean; guild_id: string }>(`/invites/${code}/join`, {
         method: 'POST',
       }),
   },
