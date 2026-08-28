@@ -116,6 +116,7 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch reply preview if exists
 	if msg.ReplyToID != nil {
+		var replyID uuid.UUID
 		var replyAuthor models.UserPublic
 		var replyContent string
 		err := h.db.Pool.QueryRow(r.Context(), `
@@ -123,7 +124,7 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 			FROM messages m
 			JOIN users u ON u.id = m.author_id
 			WHERE m.id = $1
-		`, *msg.ReplyToID).Scan(&replyAuthor.ID, &replyContent, &replyAuthor.ID, &replyAuthor.Username, &replyAuthor.DisplayName, &replyAuthor.AvatarURL)
+		`, *msg.ReplyToID).Scan(&replyID, &replyContent, &replyAuthor.ID, &replyAuthor.Username, &replyAuthor.DisplayName, &replyAuthor.AvatarURL)
 		if err == nil {
 			msg.ReplyTo = &models.MessageReplyInfo{
 				ID:      *msg.ReplyToID,

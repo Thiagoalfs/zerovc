@@ -22,7 +22,7 @@ import { Message, User, Permissions } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
-import { api } from '../../lib/api';
+import { api, getApiBaseUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
 interface MessageItemProps {
@@ -361,9 +361,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const renderFormattedContent = (content: string) => {
     const lines = content.split('\n');
     return lines.map((line, lineIdx) => {
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const urlRegex = /(https?:\/\/[^\s]+|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+)/g;
       const mentionRegex = /(@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
-      const combinedRegex = /(https?:\/\/[^\s]+|@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
+      const combinedRegex = /(https?:\/\/[^\s]+|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
 
       const parts = line.split(combinedRegex);
 
@@ -371,14 +371,20 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         <React.Fragment key={lineIdx}>
           {parts.map((part, i) => {
             if (part.match(urlRegex)) {
-              const isImage = part.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i);
+              const isImage =
+                part.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) ||
+                part.startsWith('/assets/user/') ||
+                part.startsWith('/assets/guild/');
+
+              const fullSrc = part.startsWith('/assets/') ? `${getApiBaseUrl()}${part}` : part;
+
               if (isImage) {
                 return (
                   <div key={i} className="mt-2 mb-1 max-w-sm rounded-lg overflow-hidden border border-white/10">
                     <img
-                      src={part}
+                      src={fullSrc}
                       alt="Uploaded content"
-                      onClick={() => onPreviewImage?.(part)}
+                      onClick={() => onPreviewImage?.(fullSrc)}
                       className="max-h-64 object-cover rounded-lg cursor-pointer hover:opacity-95 transition-opacity"
                     />
                   </div>
@@ -387,7 +393,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               return (
                 <a
                   key={i}
-                  href={part}
+                  href={fullSrc}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-brand-400 hover:underline break-all inline-block"

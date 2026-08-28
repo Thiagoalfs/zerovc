@@ -266,6 +266,7 @@ func main() {
 		r.Post("/api/upload/avatar", uploadHandler.UploadAvatar)
 		r.Post("/api/upload/guild-icon", uploadHandler.UploadGuildIcon)
 		r.Post("/api/upload/banner", uploadHandler.UploadBanner)
+		r.Post("/api/upload/attachment", uploadHandler.UploadAttachment)
 
 		// WebSocket Gateway (Protected)
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
