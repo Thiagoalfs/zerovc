@@ -1,6 +1,7 @@
 import React, { useRef, useLayoutEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronRight } from 'lucide-react';
-import { ContextMenuItem, ContextMenuState } from './useContextMenu';
+import { ContextMenuState } from './useContextMenu';
 
 interface ContextMenuProps {
   menu: ContextMenuState | null;
@@ -11,6 +12,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
+  const [submenuSide, setSubmenuSide] = useState<'right' | 'left'>('right');
 
   useLayoutEffect(() => {
     if (!menu || !menuRef.current) return;
@@ -23,14 +25,21 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
     let adjustedX = menu.x;
     let adjustedY = menu.y;
 
-    // Adjust horizontal position if overflowing right
+    // Adjust horizontal position if overflowing right edge
     if (adjustedX + rect.width > viewportWidth - 10) {
       adjustedX = Math.max(10, viewportWidth - rect.width - 10);
     }
 
-    // Adjust vertical position if overflowing bottom
+    // Adjust vertical position if overflowing bottom edge
     if (adjustedY + rect.height > viewportHeight - 10) {
       adjustedY = Math.max(10, viewportHeight - rect.height - 10);
+    }
+
+    // Determine if submenus have room to open on the right (approx 200px submenu)
+    if (adjustedX + rect.width + 200 > viewportWidth - 10) {
+      setSubmenuSide('left');
+    } else {
+      setSubmenuSide('right');
     }
 
     setPosition({ x: adjustedX, y: adjustedY });
@@ -38,11 +47,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
 
   if (!menu) return null;
 
-  return (
-    <>
+  const content = (
+    <div className="fixed inset-0 z-[99999] pointer-events-auto">
       {/* Invisible backdrop to dismiss on click outside */}
       <div
-        className="fixed inset-0 z-50 bg-transparent"
+        className="fixed inset-0 bg-transparent"
         onClick={(e) => {
           e.stopPropagation();
           onClose();
@@ -61,8 +70,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
           top: `${position.y}px`,
           left: `${position.x}px`,
         }}
-        className="fixed z-50 min-w-[200px] max-w-[280px] bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 text-gray-200 select-none animate-in fade-in zoom-in-95 duration-100 font-sans"
+        className="fixed z-[100000] min-w-[200px] max-w-[280px] bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 text-gray-200 select-none animate-in fade-in zoom-in-95 duration-100 font-sans"
         onClick={(e) => e.stopPropagation()}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
       >
         {menu.title && (
           <div className="px-2.5 py-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1 truncate">
@@ -123,9 +136,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
                 >
                   <div className="flex items-center gap-2 truncate">
                     {item.icon && (
-                      <span className={`w-4 h-4 flex items-center justify-center flex-shrink-0 ${
-                        isDanger ? 'text-dnd group-hover:text-red-400' : 'text-gray-400 group-hover:text-white'
-                      }`}>
+                      <span
+                        className={`w-4 h-4 flex items-center justify-center flex-shrink-0 ${
+                          isDanger ? 'text-dnd group-hover:text-red-400' : 'text-gray-400 group-hover:text-white'
+                        }`}
+                      >
                         {item.icon}
                       </span>
                     )}
@@ -133,14 +148,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
                   </div>
 
                   {hasSubmenu && (
-                    <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-white flex-shrink-0" />
+                    <ChevronRight
+                      className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${
+                        submenuSide === 'left' ? 'rotate-180 text-gray-400 group-hover:text-white' : 'text-gray-400 group-hover:text-white'
+                      }`}
+                    />
                   )}
                 </button>
 
-                {/* Submenu */}
+                {/* Submenu with adaptive horizontal & vertical alignment */}
                 {hasSubmenu && isSubmenuOpen && (
                   <div
-                    className="absolute top-0 left-full -ml-1 min-w-[180px] bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-0.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+                    className={`absolute top-0 min-w-[190px] max-w-[260px] max-h-[300px] overflow-y-auto no-scrollbar bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-0.5 z-[100001] animate-in fade-in zoom-in-95 duration-100 ${
+                      submenuSide === 'left'
+                        ? 'right-full mr-1'
+                        : 'left-full ml-1'
+                    }`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     {item.subItems!.map((subItem, subIndex) => {
@@ -193,6 +216,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
           })}
         </div>
       </div>
-    </>
+    </div>
   );
+
+  return createPortal(content, document.body);
 };
