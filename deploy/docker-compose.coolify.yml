@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: zerovc-livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml
+    ports:
+      - "7880:7880"         # Sinalização HTTP/WebSocket
+      - "7881:7881"         # TCP fallback
+      - "7882:7882/udp"     # Mídia WebRTC Primária
+      - "50000-50050:50000-50050/udp" # Faixa ICE UDP
+    deploy:
+      resources:
+        limits:
+          memory: 250M
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: zerovc-backend
+    restart: unless-stopped
+    depends_on:
+      - livekit
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "${DATABASE_URL}"
+      JWT_SECRET: "${JWT_SECRET}"
+      LIVEKIT_URL: "ws://livekit:7880"
+      LIVEKIT_PUBLIC_URL: "${LIVEKIT_PUBLIC_URL}"
+      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY}"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 120M
