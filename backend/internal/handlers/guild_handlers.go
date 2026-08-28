@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -197,14 +199,64 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		rRows.Close()
 	}
 
-	// 4. Get Channels
-	chanQuery := `SELECT id, guild_id, name, type, topic, position, created_at FROM channels WHERE guild_id = $1 ORDER BY position ASC, name ASC`
+	// 4. Get User's Role IDs and Check Admin
+	userRoleMap := make(map[uuid.UUID]bool)
+	hasAdminPerm := (guild.OwnerID == userID)
+	if !hasAdminPerm {
+		uRolesQuery := `
+			SELECT gr.id, gr.permissions
+			FROM guild_roles gr
+			INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+			WHERE gmr.guild_id = $1 AND gmr.user_id = $2
+		`
+		urRows, urErr := h.db.Pool.Query(r.Context(), uRolesQuery, guildID, userID)
+		if urErr == nil {
+			for urRows.Next() {
+				var rID uuid.UUID
+				var perms int64
+				if urRows.Scan(&rID, &perms) == nil {
+					userRoleMap[rID] = true
+					if (perms & models.PermAdministrator) != 0 {
+						hasAdminPerm = true
+					}
+				}
+			}
+			urRows.Close()
+		}
+	}
+
+	// 5. Get Channels
+	chanQuery := `SELECT id, guild_id, name, type, category_id, topic, position, is_private, created_at FROM channels WHERE guild_id = $1 ORDER BY position ASC, name ASC`
 	cRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildID)
 	if err == nil {
 		defer cRows.Close()
 		for cRows.Next() {
 			var ch models.Channel
-			if err := cRows.Scan(&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.Topic, &ch.Position, &ch.CreatedAt); err == nil {
+			if err := cRows.Scan(&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic, &ch.Position, &ch.IsPrivate, &ch.CreatedAt); err == nil {
+				// If private, load allowed role IDs and check access
+				if ch.IsPrivate {
+					accessQuery := `SELECT role_id FROM channel_role_access WHERE channel_id = $1`
+					aRows, aErr := h.db.Pool.Query(r.Context(), accessQuery, ch.ID)
+					hasChannelAccess := hasAdminPerm
+					if aErr == nil {
+						for aRows.Next() {
+							var allowedRoleID uuid.UUID
+							if aRows.Scan(&allowedRoleID) == nil {
+								ch.RoleIDs = append(ch.RoleIDs, allowedRoleID)
+								if userRoleMap[allowedRoleID] {
+									hasChannelAccess = true
+								}
+							}
+						}
+						aRows.Close()
+					}
+
+					// If user does not have access to this private channel, skip it
+					if !hasChannelAccess {
+						continue
+					}
+				}
+
 				if ch.Type == models.ChannelTypeVoice {
 					vQuery := `
 						SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, vs.is_screensharing, vs.joined_at,
@@ -307,4 +359,276 @@ func (h *GuildHandler) Join(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"success":true}`))
+}
+
+// Moderation Helper
+func (h *GuildHandler) checkModerationHierarchy(ctx context.Context, guildID, actorID, targetUserID uuid.UUID, requiredPerm int64) (bool, string) {
+	var ownerID uuid.UUID
+	err := h.db.Pool.QueryRow(ctx, "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		return false, "servidor não encontrado"
+	}
+
+	if actorID == targetUserID {
+		return false, "você não pode moderar a si mesmo"
+	}
+	if targetUserID == ownerID {
+		return false, "você não pode moderar o dono do servidor"
+	}
+
+	if actorID == ownerID {
+		return true, ""
+	}
+
+	var actorMaxPos int = 999999
+	var actorPerms int64 = 0
+	actorRows, err := h.db.Pool.Query(ctx, `
+		SELECT gr.position, gr.permissions
+		FROM guild_roles gr
+		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
+	`, guildID, actorID)
+	if err == nil {
+		for actorRows.Next() {
+			var pos int
+			var p int64
+			if actorRows.Scan(&pos, &p) == nil {
+				actorPerms |= p
+				if pos < actorMaxPos {
+					actorMaxPos = pos
+				}
+			}
+		}
+		actorRows.Close()
+	}
+
+	hasPerm := (actorPerms&models.PermAdministrator) != 0 || (actorPerms&requiredPerm) != 0
+	if !hasPerm {
+		return false, "você não tem permissão para realizar esta ação"
+	}
+
+	var targetMaxPos int = 999999
+	targetRows, err := h.db.Pool.Query(ctx, `
+		SELECT gr.position
+		FROM guild_roles gr
+		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
+	`, guildID, targetUserID)
+	if err == nil {
+		for targetRows.Next() {
+			var pos int
+			if targetRows.Scan(&pos) == nil {
+				if pos < targetMaxPos {
+					targetMaxPos = pos
+				}
+			}
+		}
+		targetRows.Close()
+	}
+
+	if actorMaxPos >= targetMaxPos {
+		return false, "você não pode moderar um membro com cargo igual ou superior ao seu"
+	}
+
+	return true, ""
+}
+
+type BanMemberRequest struct {
+	UserID uuid.UUID `json:"user_id"`
+	Reason string    `json:"reason"`
+}
+
+type MuteMemberRequest struct {
+	DurationSeconds int `json:"duration_seconds"` // -1: permanente, 0: desmutar, >0: segundos
+}
+
+func (h *GuildHandler) KickMember(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	targetUserIDStr := chi.URLParam(r, "userID")
+	guildID, _ := uuid.Parse(guildIDStr)
+	targetUserID, _ := uuid.Parse(targetUserIDStr)
+
+	allowed, msg := h.checkModerationHierarchy(r.Context(), guildID, actorID, targetUserID, models.PermKickMembers)
+	if !allowed {
+		http.Error(w, `{"error":"`+msg+`"}`, http.StatusForbidden)
+		return
+	}
+
+	// Remove from guild_members, member_roles, voice_sessions
+	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID)
+	h.db.Pool.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", targetUserID)
+	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID)
+
+	h.hub.RemoveGuildMember(guildID, targetUserID)
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_MEMBER_REMOVE",
+		Data: map[string]any{
+			"guild_id": guildID,
+			"user_id":  targetUserID,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "user_id": targetUserID})
+}
+
+func (h *GuildHandler) BanMember(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, _ := uuid.Parse(guildIDStr)
+
+	var req BanMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == uuid.Nil {
+		http.Error(w, `{"error":"user_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	allowed, msg := h.checkModerationHierarchy(r.Context(), guildID, actorID, req.UserID, models.PermBanMembers)
+	if !allowed {
+		http.Error(w, `{"error":"`+msg+`"}`, http.StatusForbidden)
+		return
+	}
+
+	// Insert into guild_bans
+	banQuery := `
+		INSERT INTO guild_bans (guild_id, user_id, reason, banned_by)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (guild_id, user_id) DO UPDATE SET reason = EXCLUDED.reason, banned_by = EXCLUDED.banned_by
+	`
+	_, err := h.db.Pool.Exec(r.Context(), banQuery, guildID, req.UserID, req.Reason, actorID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to ban user"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Remove member
+	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", guildID, req.UserID)
+	h.db.Pool.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", req.UserID)
+	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, req.UserID)
+
+	h.hub.RemoveGuildMember(guildID, req.UserID)
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_BAN_ADD",
+		Data: map[string]any{
+			"guild_id": guildID,
+			"user_id":  req.UserID,
+			"reason":   req.Reason,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "user_id": req.UserID})
+}
+
+func (h *GuildHandler) UnbanMember(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	targetUserIDStr := chi.URLParam(r, "userID")
+	guildID, _ := uuid.Parse(guildIDStr)
+	targetUserID, _ := uuid.Parse(targetUserIDStr)
+
+	// Check if actor is owner or has PermBanMembers
+	var ownerID uuid.UUID
+	h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+
+	if actorID != ownerID {
+		var actorPerms int64
+		rows, err := h.db.Pool.Query(r.Context(), `
+			SELECT gr.permissions
+			FROM guild_roles gr
+			INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+			WHERE gmr.guild_id = $1 AND gmr.user_id = $2
+		`, guildID, actorID)
+		if err == nil {
+			for rows.Next() {
+				var p int64
+				if rows.Scan(&p) == nil {
+					actorPerms |= p
+				}
+			}
+			rows.Close()
+		}
+		if (actorPerms&models.PermAdministrator) == 0 && (actorPerms&models.PermBanMembers) == 0 {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_bans WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "user_id": targetUserID})
+}
+
+func (h *GuildHandler) MuteMember(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	targetUserIDStr := chi.URLParam(r, "userID")
+	guildID, _ := uuid.Parse(guildIDStr)
+	targetUserID, _ := uuid.Parse(targetUserIDStr)
+
+	allowed, msg := h.checkModerationHierarchy(r.Context(), guildID, actorID, targetUserID, models.PermMuteMembers)
+	if !allowed {
+		http.Error(w, `{"error":"`+msg+`"}`, http.StatusForbidden)
+		return
+	}
+
+	var req MuteMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	var mutedUntil *time.Time
+	if req.DurationSeconds > 0 {
+		t := time.Now().UTC().Add(time.Duration(req.DurationSeconds) * time.Second)
+		mutedUntil = &t
+	} else if req.DurationSeconds < 0 {
+		// Permanent (year 2099)
+		t := time.Date(2099, 12, 31, 23, 59, 59, 0, time.UTC)
+		mutedUntil = &t
+	} // if req.DurationSeconds == 0 -> unmute (mutedUntil = nil)
+
+	_, err := h.db.Pool.Exec(r.Context(), "UPDATE guild_members SET muted_until = $1 WHERE guild_id = $2 AND user_id = $3", mutedUntil, guildID, targetUserID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update mute status"}`, http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_MEMBER_UPDATE",
+		Data: map[string]any{
+			"guild_id":    guildID,
+			"user_id":     targetUserID,
+			"muted_until": mutedUntil,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":     true,
+		"user_id":     targetUserID,
+		"muted_until": mutedUntil,
+	})
 }

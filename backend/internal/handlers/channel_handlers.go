@@ -28,19 +28,34 @@ func NewChannelHandler(db *database.DB, hub *gateway.Hub, livekit *voice.LiveKit
 }
 
 type CreateChannelRequest struct {
-	Name  string             `json:"name"`
-	Type  models.ChannelType `json:"type"` // "text" or "voice"
-	Topic string             `json:"topic"`
+	Name       string             `json:"name"`
+	Type       models.ChannelType `json:"type"` // "text", "voice", "category"
+	CategoryID *uuid.UUID         `json:"category_id,omitempty"`
+	Topic      string             `json:"topic"`
+	IsPrivate  bool               `json:"is_private"`
+	RoleIDs    []uuid.UUID        `json:"role_ids,omitempty"`
 }
 
 type UpdateChannelRequest struct {
-	Name     *string `json:"name,omitempty"`
-	Topic    *string `json:"topic,omitempty"`
-	Position *int    `json:"position,omitempty"`
+	Name          *string     `json:"name,omitempty"`
+	Topic         *string     `json:"topic,omitempty"`
+	Position      *int        `json:"position,omitempty"`
+	CategoryID    *uuid.UUID  `json:"category_id,omitempty"`
+	ClearCategory *bool       `json:"clear_category,omitempty"`
+	IsPrivate     *bool       `json:"is_private,omitempty"`
+	RoleIDs       []uuid.UUID `json:"role_ids,omitempty"`
+}
+
+type ReorderChannelItem struct {
+	ID            uuid.UUID  `json:"id"`
+	Position      int        `json:"position"`
+	CategoryID    *uuid.UUID `json:"category_id,omitempty"`
+	ClearCategory bool       `json:"clear_category,omitempty"`
 }
 
 type ReorderChannelsRequest struct {
-	ChannelIDs []uuid.UUID `json:"channel_ids"`
+	Channels   []ReorderChannelItem `json:"channels,omitempty"`
+	ChannelIDs []uuid.UUID          `json:"channel_ids,omitempty"`
 }
 
 func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -70,22 +85,35 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Type != models.ChannelTypeText && req.Type != models.ChannelTypeVoice {
+	if req.Type != models.ChannelTypeText && req.Type != models.ChannelTypeVoice && req.Type != models.ChannelTypeCategory {
 		req.Type = models.ChannelTypeText
+	}
+
+	// Categories cannot have a parent category
+	if req.Type == models.ChannelTypeCategory {
+		req.CategoryID = nil
 	}
 
 	var channel models.Channel
 	query := `
-		INSERT INTO channels (guild_id, name, type, topic)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, guild_id, name, type, topic, position, created_at
+		INSERT INTO channels (guild_id, name, type, category_id, topic, is_private)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, guild_id, name, type, category_id, topic, position, is_private, created_at
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, guildID, req.Name, req.Type, req.Topic).Scan(
-		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.Topic, &channel.Position, &channel.CreatedAt,
+	err = h.db.Pool.QueryRow(r.Context(), query, guildID, req.Name, req.Type, req.CategoryID, req.Topic, req.IsPrivate).Scan(
+		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create channel"}`, http.StatusInternalServerError)
 		return
+	}
+
+	// Insert role access if private
+	if req.IsPrivate && len(req.RoleIDs) > 0 {
+		for _, roleID := range req.RoleIDs {
+			h.db.Pool.Exec(r.Context(), "INSERT INTO channel_role_access (channel_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", channel.ID, roleID)
+		}
+		channel.RoleIDs = req.RoleIDs
 	}
 
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
@@ -126,20 +154,63 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var channel models.Channel
-	query := `
-		UPDATE channels
-		SET name = COALESCE($1, name),
-		    topic = COALESCE($2, topic),
-		    position = COALESCE($3, position)
-		WHERE id = $4
-		RETURNING id, guild_id, name, type, topic, position, created_at
-	`
-	err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, channelID).Scan(
-		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.Topic, &channel.Position, &channel.CreatedAt,
-	)
+	var query string
+
+	if req.ClearCategory != nil && *req.ClearCategory {
+		query = `
+			UPDATE channels
+			SET name = COALESCE($1, name),
+			    topic = COALESCE($2, topic),
+			    position = COALESCE($3, position),
+			    is_private = COALESCE($4, is_private),
+			    category_id = NULL
+			WHERE id = $5
+			RETURNING id, guild_id, name, type, category_id, topic, position, is_private, created_at
+		`
+		err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, req.IsPrivate, channelID).Scan(
+			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+		)
+	} else if req.CategoryID != nil {
+		query = `
+			UPDATE channels
+			SET name = COALESCE($1, name),
+			    topic = COALESCE($2, topic),
+			    position = COALESCE($3, position),
+			    is_private = COALESCE($4, is_private),
+			    category_id = $5
+			WHERE id = $6
+			RETURNING id, guild_id, name, type, category_id, topic, position, is_private, created_at
+		`
+		err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, req.IsPrivate, req.CategoryID, channelID).Scan(
+			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+		)
+	} else {
+		query = `
+			UPDATE channels
+			SET name = COALESCE($1, name),
+			    topic = COALESCE($2, topic),
+			    position = COALESCE($3, position),
+			    is_private = COALESCE($4, is_private)
+			WHERE id = $5
+			RETURNING id, guild_id, name, type, category_id, topic, position, is_private, created_at
+		`
+		err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, req.IsPrivate, channelID).Scan(
+			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+		)
+	}
+
 	if err != nil {
 		http.Error(w, `{"error":"failed to update channel"}`, http.StatusInternalServerError)
 		return
+	}
+
+	// Update role access if provided
+	if req.RoleIDs != nil {
+		h.db.Pool.Exec(r.Context(), "DELETE FROM channel_role_access WHERE channel_id = $1", channelID)
+		for _, roleID := range req.RoleIDs {
+			h.db.Pool.Exec(r.Context(), "INSERT INTO channel_role_access (channel_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", channelID, roleID)
+		}
+		channel.RoleIDs = req.RoleIDs
 	}
 
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
@@ -166,10 +237,16 @@ func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var guildID, ownerID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT c.guild_id, g.owner_id FROM channels c INNER JOIN guilds g ON g.id = c.guild_id WHERE c.id = $1", channelID).Scan(&guildID, &ownerID)
+	var channelType models.ChannelType
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT c.guild_id, g.owner_id, c.type FROM channels c INNER JOIN guilds g ON g.id = c.guild_id WHERE c.id = $1", channelID).Scan(&guildID, &ownerID, &channelType)
 	if err != nil || ownerID != userID {
 		http.Error(w, `{"error":"forbidden: only server owner can delete channels"}`, http.StatusForbidden)
 		return
+	}
+
+	// If category is being deleted, move child channels to root (category_id = NULL)
+	if channelType == models.ChannelTypeCategory {
+		h.db.Pool.Exec(r.Context(), "UPDATE channels SET category_id = NULL WHERE category_id = $1", channelID)
 	}
 
 	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM channels WHERE id = $1", channelID)
@@ -201,8 +278,22 @@ func (h *ChannelHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for idx, id := range req.ChannelIDs {
-		h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1 WHERE id = $2 AND guild_id = $3", idx, id, guildID)
+	// Granular reorder with category_id and position
+	if len(req.Channels) > 0 {
+		for _, item := range req.Channels {
+			if item.ClearCategory {
+				h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1, category_id = NULL WHERE id = $2 AND guild_id = $3", item.Position, item.ID, guildID)
+			} else if item.CategoryID != nil {
+				h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1, category_id = $2 WHERE id = $3 AND guild_id = $4", item.Position, item.CategoryID, item.ID, guildID)
+			} else {
+				h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1 WHERE id = $2 AND guild_id = $3", item.Position, item.ID, guildID)
+			}
+		}
+	} else if len(req.ChannelIDs) > 0 {
+		// Fallback simple reorder
+		for idx, id := range req.ChannelIDs {
+			h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1 WHERE id = $2 AND guild_id = $3", idx, id, guildID)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

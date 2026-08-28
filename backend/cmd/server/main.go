@@ -183,6 +183,12 @@ func main() {
 		r.Post("/api/guilds/{id}/join", guildHandler.Join)
 		r.Post("/api/guilds/{id}/invites", inviteHandler.CreateInvite)
 
+		// Guild Moderation (Protected)
+		r.Post("/api/guilds/{id}/members/{userID}/kick", guildHandler.KickMember)
+		r.Post("/api/guilds/{id}/bans", guildHandler.BanMember)
+		r.Delete("/api/guilds/{id}/bans/{userID}", guildHandler.UnbanMember)
+		r.Post("/api/guilds/{id}/members/{userID}/mute", guildHandler.MuteMember)
+
 		// Channels (Protected)
 		r.Post("/api/guilds/{guildID}/channels", channelHandler.Create)
 		r.Patch("/api/channels/{id}", channelHandler.Update)

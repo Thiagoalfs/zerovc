@@ -1,3 +1,22 @@
+export const Permissions = {
+  ADMINISTRATOR: 1 << 0, // 1: Permissão Mestre (Ativa tudo e ignora restrições)
+  MANAGE_GUILD: 1 << 1, // 2: Gerenciar Servidor
+  MANAGE_ROLES: 1 << 2, // 4: Gerenciar Cargos
+  MANAGE_CHANNELS: 1 << 3, // 8: Gerenciar Canais e Categorias
+  KICK_MEMBERS: 1 << 4, // 16: Expulsar Membros
+  BAN_MEMBERS: 1 << 5, // 32: Banir Membros
+  MUTE_MEMBERS: 1 << 6, // 64: Silenciar Membros
+
+  SEND_MESSAGES: 1 << 7, // 128: Enviar Mensagens
+  MANAGE_MESSAGES: 1 << 8, // 256: Gerenciar Mensagens
+  ATTACH_FILES: 1 << 9, // 512: Anexar Arquivos
+
+  CONNECT_VOICE: 1 << 10, // 1024: Conectar em Voz
+  SPEAK_VOICE: 1 << 11, // 2048: Falar em Voz
+  MUTE_VOICE: 1 << 12, // 4096: Silenciar Outros em Voz
+  DEAFEN_VOICE: 1 << 13, // 8192: Ensurdecer Outros em Voz
+} as const;
+
 export interface User {
   id: string;
   username: string;
@@ -10,6 +29,7 @@ export interface User {
   custom_status?: string;
   roles?: Role[];
   two_factor_enabled?: boolean;
+  muted_until?: string;
   created_at?: string;
 }
 
@@ -42,6 +62,8 @@ export interface Channel {
   category_id?: string;
   topic?: string;
   position: number;
+  is_private?: boolean;
+  role_ids?: string[];
   voice_sessions?: VoiceSession[];
   created_at: string;
 }
