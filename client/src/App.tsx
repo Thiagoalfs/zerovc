@@ -307,11 +307,13 @@ export const App: React.FC = () => {
           homeView === 'friends' ? (
             <FriendsView
               onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
-              onOpenDM={() => {
+              onOpenDM={(userId, room) => {
+                setIsHomeActive(true);
                 setHomeView('dm');
-                const activeRoom = useDMStore.getState().activeRoom;
-                if (activeRoom) {
-                  navigateTo(`/@me/${activeRoom.id}`);
+                setIsMobileDrawerOpen(false);
+                const targetRoom = room || useDMStore.getState().activeRoom;
+                if (targetRoom) {
+                  navigateTo(`/@me/${targetRoom.id}`);
                 } else {
                   navigateTo('/@me');
                 }
