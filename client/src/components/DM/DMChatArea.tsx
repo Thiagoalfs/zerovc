@@ -10,6 +10,7 @@ import { User, DMMessage } from '../../types';
 interface DMChatAreaProps {
   onOpenMobileDrawer?: () => void;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
+  onPreviewImage?: (url: string) => void;
 }
 
 const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
@@ -17,7 +18,11 @@ const QUICK_EMOJIS = ['👍', '❤️', '🔥', '😂', '🎉', '👀', '✨', '
 const MAX_CHARS = 2000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
 
-export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer, onOpenUserProfile }) => {
+export const DMChatArea: React.FC<DMChatAreaProps> = ({
+  onOpenMobileDrawer,
+  onOpenUserProfile,
+  onPreviewImage,
+}) => {
   const { user } = useAuthStore();
   const { activeRoom, messages, sendMessage, toggleReaction, isLoadingMessages } = useDMStore();
 
@@ -488,7 +493,10 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer, onOp
                         src={url}
                         alt="Imagem enviada"
                         className="max-h-80 w-auto object-contain bg-black/40 cursor-pointer hover:opacity-95 transition-opacity"
-                        onClick={() => window.open(url, '_blank')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onPreviewImage) onPreviewImage(url);
+                        }}
                       />
                     </div>
                   ))}

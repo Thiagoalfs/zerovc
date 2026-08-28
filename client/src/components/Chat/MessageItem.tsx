@@ -10,6 +10,7 @@ interface MessageItemProps {
   message: Message;
   isCompact?: boolean;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
+  onPreviewImage?: (url: string) => void;
   onReply?: (message: Message) => void;
 }
 
@@ -19,6 +20,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   message,
   isCompact = false,
   onOpenUserProfile,
+  onPreviewImage,
   onReply,
 }) => {
   const { user } = useAuthStore();
@@ -354,7 +356,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     <div
                       key={idx}
                       className="relative rounded-2xl overflow-hidden max-w-sm max-h-72 border border-white/10 shadow-lg bg-black/40 group/img cursor-pointer"
-                      onClick={() => window.open(imgSrc, '_blank')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onPreviewImage) onPreviewImage(imgSrc);
+                      }}
                     >
                       <img
                         src={imgSrc}
