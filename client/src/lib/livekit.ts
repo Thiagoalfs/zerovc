@@ -3,9 +3,6 @@ import {
   RoomEvent,
   VideoPresets,
   Track,
-  RemoteParticipant,
-  RemoteTrackPublication,
-  LocalParticipant,
   Participant,
 } from 'livekit-client';
 
@@ -14,6 +11,7 @@ class LiveKitManager {
   private onParticipantsChanged?: (participants: Participant[]) => void;
   private onSpeakingChanged?: (speakingUserIds: string[]) => void;
   private onTrackUpdated?: () => void;
+  private onScreenShareEnded?: () => void;
   private attachedAudioElements: Map<string, HTMLMediaElement> = new Map();
 
   getRoom(): Room | null {
@@ -27,6 +25,7 @@ class LiveKitManager {
       onParticipantsChanged?: (participants: Participant[]) => void;
       onSpeakingChanged?: (speakingUserIds: string[]) => void;
       onTrackUpdated?: () => void;
+      onScreenShareEnded?: () => void;
     }
   ) {
     if (this.room) {
@@ -36,6 +35,7 @@ class LiveKitManager {
     this.onParticipantsChanged = callbacks.onParticipantsChanged;
     this.onSpeakingChanged = callbacks.onSpeakingChanged;
     this.onTrackUpdated = callbacks.onTrackUpdated;
+    this.onScreenShareEnded = callbacks.onScreenShareEnded;
 
     const room = new Room({
       adaptiveStream: true,
@@ -125,6 +125,16 @@ class LiveKitManager {
       updateParticipants();
     });
 
+    room.on(RoomEvent.LocalTrackPublished, () => {
+      this.onTrackUpdated?.();
+      updateParticipants();
+    });
+
+    room.on(RoomEvent.LocalTrackUnpublished, () => {
+      this.onTrackUpdated?.();
+      updateParticipants();
+    });
+
     await room.connect(url, token);
 
     // Auto-enable and publish microphone track on connect
@@ -150,29 +160,59 @@ class LiveKitManager {
   async setScreenShareEnabled(enabled: boolean, sourceId?: string) {
     if (!this.room) return;
 
-    if (enabled && sourceId) {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          // @ts-ignore
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: sourceId,
-            minWidth: 1280,
-            maxWidth: 1920,
-            maxHeight: 1080,
-            maxFrameRate: 30,
+    if (enabled) {
+      if (sourceId && sourceId !== 'screen:0:0' && (window as any).electronAPI) {
+        // Electron Screen Capture API
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            // @ts-ignore
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: sourceId,
+              minWidth: 1280,
+              maxWidth: 1920,
+              maxHeight: 1080,
+              maxFrameRate: 30,
+            },
           },
-        },
-      });
+        });
 
-      const videoTrack = stream.getVideoTracks()[0];
-      await this.room.localParticipant.publishTrack(videoTrack, {
-        name: 'screen_share',
-        source: Track.Source.ScreenShare,
-      });
+        const videoTrack = stream.getVideoTracks()[0];
+        videoTrack.onended = () => {
+          this.setScreenShareEnabled(false);
+          this.onScreenShareEnded?.();
+        };
+
+        await this.room.localParticipant.publishTrack(videoTrack, {
+          name: 'screen_share',
+          source: Track.Source.ScreenShare,
+        });
+      } else {
+        // Native W3C getDisplayMedia for Web Browsers
+        const pub = await this.room.localParticipant.setScreenShareEnabled(true, {
+          audio: true,
+          selfBrowserSurface: 'include',
+          surfaceSwitching: 'include',
+          systemAudio: 'include',
+        });
+
+        if (pub && pub.track) {
+          const mediaStreamTrack = pub.track.mediaStreamTrack;
+          if (mediaStreamTrack) {
+            mediaStreamTrack.onended = () => {
+              this.setScreenShareEnabled(false);
+              this.onScreenShareEnded?.();
+            };
+          }
+        }
+      }
     } else {
-      await this.room.localParticipant.setScreenShareEnabled(enabled);
+      await this.room.localParticipant.setScreenShareEnabled(false);
+      const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+      if (screenPub && screenPub.track) {
+        this.room.localParticipant.unpublishTrack(screenPub.track);
+      }
     }
 
     this.onTrackUpdated?.();
