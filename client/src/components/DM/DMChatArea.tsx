@@ -296,7 +296,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer, onOp
       </div>
 
       {/* DM Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 overflow-y-auto p-4 space-y-0.5">
         {/* Recipient Intro Hero Card */}
         {!searchQuery && (
           <div className="p-6 my-4 bg-background-darker/60 rounded-2xl border border-white/5 flex flex-col items-center text-center">
@@ -368,7 +368,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({ onOpenMobileDrawer, onOp
               <div
                 key={msg.id}
                 className={`relative group flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-colors ${
-                  isCompact ? 'py-0.5' : 'py-1.5 mt-1'
+                  isCompact ? 'py-[1px] mt-0' : 'py-1.5 mt-2'
                 } ${isMe ? 'flex-row-reverse' : ''}`}
               >
                 {/* Quick action bar */}

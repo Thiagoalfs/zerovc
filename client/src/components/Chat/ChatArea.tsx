@@ -182,7 +182,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         )}
 
         {/* Messages Scroll Area */}
-        <div className="flex-1 overflow-y-auto px-2 md:px-4 py-4 space-y-1">
+        <div className="flex-1 overflow-y-auto px-2 md:px-4 py-2">
           {/* Welcome Header */}
           {!showPinnedOnly && !searchQuery && (
             <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
