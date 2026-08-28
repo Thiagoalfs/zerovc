@@ -35,7 +35,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
 
   if (!isOpen || !activeGuild) return null;
 
-  const fullInviteUrl = `${getApiBaseUrl()}/invite/${inviteCode}`;
+  const fullInviteUrl = `${window.location.origin}/invite/${inviteCode}`;
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(inviteCode);

@@ -74,6 +74,52 @@ export const App: React.FC = () => {
     const cleanPath = pathname.replace(/^\/+|\/+$/g, '');
     const segments = cleanPath ? cleanPath.split('/') : [];
 
+    // 0. Handle /invite/:code
+    if (segments.length >= 1 && segments[0] === 'invite') {
+      const code = segments[1];
+      if (code) {
+        sessionStorage.setItem('pending_invite_code', code);
+        const { user, token } = useAuthStore.getState();
+        if (token && user) {
+          try {
+            const res = await api.invites.join(code);
+            sessionStorage.removeItem('pending_invite_code');
+            await useGuildStore.getState().fetchGuilds();
+            const joinedGuild = await api.guilds.getDetails(res.guild_id);
+            useGuildStore.setState({ activeGuild: joinedGuild });
+            setIsHomeActive(false);
+            const defaultChannel =
+              joinedGuild.channels?.find((c) => c.type === 'text') || joinedGuild.channels?.[0];
+            if (defaultChannel) {
+              useGuildStore.getState().selectChannel(defaultChannel);
+              navigateTo(`/${joinedGuild.id}/${defaultChannel.id}`, true);
+            }
+            return;
+          } catch (err) {
+            console.error('Failed to auto-join invite:', err);
+            try {
+              const preview = await api.invites.get(code);
+              if (preview?.invite?.guild_id) {
+                const joinedGuild = await api.guilds.getDetails(preview.invite.guild_id);
+                useGuildStore.setState({ activeGuild: joinedGuild });
+                setIsHomeActive(false);
+                const defaultChannel =
+                  joinedGuild.channels?.find((c) => c.type === 'text') || joinedGuild.channels?.[0];
+                if (defaultChannel) {
+                  useGuildStore.getState().selectChannel(defaultChannel);
+                  navigateTo(`/${joinedGuild.id}/${defaultChannel.id}`, true);
+                }
+                sessionStorage.removeItem('pending_invite_code');
+                return;
+              }
+            } catch {}
+          }
+        } else {
+          return;
+        }
+      }
+    }
+
     // 1. Default to /@me or /@me/friends or /@me/:roomId
     if (segments.length === 0 || segments[0] === '@me') {
       setIsHomeActive(true);
@@ -129,6 +175,43 @@ export const App: React.FC = () => {
     if (token && user) {
       fetchGuilds();
       handleRoute(window.location.pathname);
+
+      // Auto join pending invite upon login/register
+      const pendingInvite = sessionStorage.getItem('pending_invite_code');
+      if (pendingInvite) {
+        api.invites
+          .join(pendingInvite)
+          .then(async (res) => {
+            sessionStorage.removeItem('pending_invite_code');
+            await fetchGuilds();
+            const joinedGuild = await api.guilds.getDetails(res.guild_id);
+            useGuildStore.setState({ activeGuild: joinedGuild });
+            setIsHomeActive(false);
+            const defaultChannel =
+              joinedGuild.channels?.find((c) => c.type === 'text') || joinedGuild.channels?.[0];
+            if (defaultChannel) {
+              useGuildStore.getState().selectChannel(defaultChannel);
+              navigateTo(`/${joinedGuild.id}/${defaultChannel.id}`, true);
+            }
+          })
+          .catch(async () => {
+            try {
+              const preview = await api.invites.get(pendingInvite);
+              if (preview?.invite?.guild_id) {
+                const joinedGuild = await api.guilds.getDetails(preview.invite.guild_id);
+                useGuildStore.setState({ activeGuild: joinedGuild });
+                setIsHomeActive(false);
+                const defaultChannel =
+                  joinedGuild.channels?.find((c) => c.type === 'text') || joinedGuild.channels?.[0];
+                if (defaultChannel) {
+                  useGuildStore.getState().selectChannel(defaultChannel);
+                  navigateTo(`/${joinedGuild.id}/${defaultChannel.id}`, true);
+                }
+                sessionStorage.removeItem('pending_invite_code');
+              }
+            } catch {}
+          });
+      }
 
       const onPopState = () => {
         handleRoute(window.location.pathname);

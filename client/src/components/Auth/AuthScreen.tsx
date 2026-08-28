@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { MessageSquare, Server, Settings, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { MessageSquare, Server, Settings, Check, Users } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
-import { getApiBaseUrl, setApiBaseUrl } from '../../lib/api';
+import { api, getApiBaseUrl, setApiBaseUrl } from '../../lib/api';
 
 export const AuthScreen: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,8 +11,36 @@ export const AuthScreen: React.FC = () => {
   const [showServerConfig, setShowServerConfig] = useState(false);
   const [serverUrl, setServerUrl] = useState(getApiBaseUrl());
   const [serverSaved, setServerSaved] = useState(false);
+  const [invitePreview, setInvitePreview] = useState<{ guild_name: string; icon_url?: string; member_count: number } | null>(null);
 
   const { login, register, isLoading, error } = useAuthStore();
+
+  useEffect(() => {
+    // Check if path has /invite/:code or stored in sessionStorage
+    const path = window.location.pathname;
+    let code = '';
+    if (path.startsWith('/invite/')) {
+      code = path.split('/invite/')[1]?.split('/')[0] || '';
+    }
+    if (!code) {
+      code = sessionStorage.getItem('pending_invite_code') || '';
+    }
+    if (code) {
+      sessionStorage.setItem('pending_invite_code', code);
+      api.invites
+        .get(code)
+        .then((res) => {
+          if (res?.invite?.guild) {
+            setInvitePreview({
+              guild_name: res.invite.guild.name,
+              icon_url: res.invite.guild.icon_url,
+              member_count: res.member_count,
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,9 +87,36 @@ export const AuthScreen: React.FC = () => {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">ZeroVC</h1>
           <p className="text-sm text-gray-400 mt-1">
-            {isLogin ? 'Boas-vindas de volta!' : 'Crie sua conta para começar'}
+            {invitePreview
+              ? `Junte-se ao servidor ${invitePreview.guild_name}`
+              : isLogin
+              ? 'Boas-vindas de volta!'
+              : 'Crie sua conta para começar'}
           </p>
         </div>
+
+        {/* Invite Preview Banner if user followed an invite link */}
+        {invitePreview && (
+          <div className="mb-5 p-3.5 bg-brand-500/15 border border-brand-500/30 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
+            <div className="w-11 h-11 rounded-2xl bg-brand-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0 shadow-md overflow-hidden">
+              {invitePreview.icon_url ? (
+                <img src={invitePreview.icon_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span>{invitePreview.guild_name[0]?.toUpperCase() || 'S'}</span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">
+                Convite para Servidor
+              </span>
+              <h3 className="text-sm font-bold text-white truncate">{invitePreview.guild_name}</h3>
+              <div className="flex items-center gap-1 text-[11px] text-brand-300 font-semibold">
+                <Users className="w-3 h-3" />
+                <span>{invitePreview.member_count} membros</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Server Config Dropdown */}
         {showServerConfig && (
@@ -106,8 +161,8 @@ export const AuthScreen: React.FC = () => {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Ex: thiago"
-                className="w-full bg-background-darkest text-white px-3.5 py-2.5 rounded-xl border border-white/5 focus:outline-none focus:border-brand-500 text-sm transition-colors"
+                placeholder="seunome"
+                className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
               />
             </div>
           )}
@@ -122,7 +177,7 @@ export const AuthScreen: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="seu@email.com"
-              className="w-full bg-background-darkest text-white px-3.5 py-2.5 rounded-xl border border-white/5 focus:outline-none focus:border-brand-500 text-sm transition-colors"
+              className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
             />
           </div>
 
@@ -136,29 +191,50 @@ export const AuthScreen: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full bg-background-darkest text-white px-3.5 py-2.5 rounded-xl border border-white/5 focus:outline-none focus:border-brand-500 text-sm transition-colors"
+              className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
             />
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg shadow-brand-500/25 mt-2"
+            className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2"
           >
-            {isLoading ? 'Aguarde...' : isLogin ? 'Entrar' : 'Registrar'}
+            {isLoading
+              ? 'Processando...'
+              : invitePreview
+              ? isLogin
+                ? 'Entrar e Participar do Servidor'
+                : 'Criar Conta e Participar'
+              : isLogin
+              ? 'Entrar'
+              : 'Cadastrar'}
           </button>
         </form>
 
-        {/* Toggle Login/Register */}
-        <div className="mt-6 text-center text-xs text-gray-400">
-          {isLogin ? 'Novo por aqui? ' : 'Já possui uma conta? '}
-          <button
-            type="button"
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-brand-500 hover:underline font-semibold"
-          >
-            {isLogin ? 'Criar uma conta' : 'Fazer login'}
-          </button>
+        {/* Toggle between Login and Register */}
+        <div className="mt-6 text-center text-sm text-gray-400">
+          {isLogin ? (
+            <span>
+              Precisando de uma conta?{' '}
+              <button
+                onClick={() => setIsLogin(false)}
+                className="text-brand-500 font-semibold hover:underline"
+              >
+                Registre-se
+              </button>
+            </span>
+          ) : (
+            <span>
+              Já tem uma conta?{' '}
+              <button
+                onClick={() => setIsLogin(true)}
+                className="text-brand-500 font-semibold hover:underline"
+              >
+                Entrar
+              </button>
+            </span>
+          )}
         </div>
       </div>
     </div>
