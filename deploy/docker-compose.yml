@@ -11,6 +11,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: "trust"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres-tuned.conf:/etc/postgresql/postgresql.conf
@@ -41,10 +42,14 @@ services:
       - "50000-50050:50000-50050/udp" # WebRTC ICE UDP range
     labels:
       - "traefik.enable=true"
+      - "traefik.http.routers.zerovc-livekit-http.rule=Host(`${LIVEKIT_DOMAIN}`)"
+      - "traefik.http.routers.zerovc-livekit-http.entrypoints=http"
+      - "traefik.http.routers.zerovc-livekit-http.service=zerovc-livekit"
       - "traefik.http.routers.zerovc-livekit.rule=Host(`${LIVEKIT_DOMAIN}`)"
       - "traefik.http.routers.zerovc-livekit.entrypoints=https"
       - "traefik.http.routers.zerovc-livekit.tls=true"
       - "traefik.http.routers.zerovc-livekit.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.zerovc-livekit.service=zerovc-livekit"
       - "traefik.http.services.zerovc-livekit.loadbalancer.server.port=7880"
     networks:
       - zerovc-net
@@ -67,7 +72,7 @@ services:
       - .env
     environment:
       PORT: "8080"
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@zerovc-postgres:5432/${POSTGRES_DB}?sslmode=disable"
       JWT_SECRET: "${JWT_SECRET}"
       LIVEKIT_URL: "ws://livekit:7880"
       LIVEKIT_PUBLIC_URL: "wss://${LIVEKIT_DOMAIN}"
@@ -75,10 +80,14 @@ services:
       LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
     labels:
       - "traefik.enable=true"
+      - "traefik.http.routers.zerovc-backend-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.zerovc-backend-http.entrypoints=http"
+      - "traefik.http.routers.zerovc-backend-http.service=zerovc-backend"
       - "traefik.http.routers.zerovc-backend.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.zerovc-backend.entrypoints=https"
       - "traefik.http.routers.zerovc-backend.tls=true"
       - "traefik.http.routers.zerovc-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.zerovc-backend.service=zerovc-backend"
       - "traefik.http.services.zerovc-backend.loadbalancer.server.port=8080"
     networks:
       - zerovc-net

@@ -8,6 +8,7 @@ import { UserBar } from './UserBar';
 
 interface ChannelListProps {
   isHomeActive: boolean;
+  onSelectChannel?: (channel: Channel) => void;
   onOpenCreateChannel: (type: 'text' | 'voice') => void;
   onOpenInviteModal: () => void;
   onOpenSettings: () => void;
@@ -19,6 +20,7 @@ interface ChannelListProps {
 
 export const ChannelList: React.FC<ChannelListProps> = ({
   isHomeActive,
+  onSelectChannel,
   onOpenCreateChannel,
   onOpenInviteModal,
   onOpenSettings,
@@ -37,11 +39,13 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
   const handleChannelClick = (channel: Channel) => {
     selectChannel(channel);
+    if (onSelectChannel) onSelectChannel(channel);
     onCloseMobileDrawer?.();
   };
 
   const handleVoiceChannelClick = (channel: Channel) => {
     selectChannel(channel);
+    if (onSelectChannel) onSelectChannel(channel);
     joinVoice(channel.id);
     onCloseMobileDrawer?.();
   };
