@@ -12,11 +12,20 @@ interface AuthState {
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
+  updateProfile: (data: {
+    display_name?: string;
+    avatar_url?: string;
+    banner_url?: string;
+    bio?: string;
+    status?: 'online' | 'idle' | 'dnd' | 'offline';
+    custom_status?: string;
+  }) => Promise<User>;
+  setUser: (user: User) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: localStorage.getItem('zerovc_token'),
+  token: localStorage.getItem('token') || localStorage.getItem('zerovc_token'),
   isLoading: true,
   error: null,
 
@@ -24,6 +33,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await api.auth.login({ email, password });
+      localStorage.setItem('token', res.token);
       localStorage.setItem('zerovc_token', res.token);
       set({ user: res.user, token: res.token, isLoading: false });
       socket.connect();
@@ -37,6 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await api.auth.register({ username, email, password });
+      localStorage.setItem('token', res.token);
       localStorage.setItem('zerovc_token', res.token);
       set({ user: res.user, token: res.token, isLoading: false });
       socket.connect();
@@ -47,13 +58,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
+    localStorage.removeItem('token');
     localStorage.removeItem('zerovc_token');
     socket.disconnect();
     set({ user: null, token: null, isLoading: false });
   },
 
   checkAuth: async () => {
-    const token = localStorage.getItem('zerovc_token');
+    const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
     if (!token) {
       set({ user: null, token: null, isLoading: false });
       return;
@@ -64,8 +76,19 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user, token, isLoading: false });
       socket.connect();
     } catch {
+      localStorage.removeItem('token');
       localStorage.removeItem('zerovc_token');
       set({ user: null, token: null, isLoading: false });
     }
+  },
+
+  updateProfile: async (data) => {
+    const updated = await api.users.updateProfile(data);
+    set({ user: updated });
+    return updated;
+  },
+
+  setUser: (user: User) => {
+    set({ user });
   },
 }));

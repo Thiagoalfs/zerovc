@@ -3,37 +3,58 @@ import { useAuthStore } from './stores/authStore';
 import { useGuildStore } from './stores/guildStore';
 import { useFriendStore } from './stores/friendStore';
 import { useVoiceStore } from './stores/voiceStore';
+import { useDMStore } from './stores/dmStore';
 import { socket } from './lib/socket';
-import { WSEvent, Message, VoiceSession } from './types';
+import { Message, VoiceSession, Channel } from './types';
 import { ServerList } from './components/Sidebar/ServerList';
 import { ChannelList } from './components/Sidebar/ChannelList';
+import { DMChannelList } from './components/DM/DMChannelList';
 import { ChatArea } from './components/Chat/ChatArea';
 import { VoiceRoom } from './components/Voice/VoiceRoom';
 import { FriendsView } from './components/Friends/FriendsView';
+import { DMChatArea } from './components/DM/DMChatArea';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { CreateServerModal } from './components/Modals/CreateServerModal';
 import { CreateChannelModal } from './components/Modals/CreateChannelModal';
 import { ScreenShareModal } from './components/Modals/ScreenShareModal';
-import { SettingsModal } from './components/Modals/SettingsModal';
+import { ProfileModal } from './components/Modals/ProfileModal';
+import { ServerSettingsModal } from './components/Modals/ServerSettingsModal';
+import { ChannelSettingsModal } from './components/Modals/ChannelSettingsModal';
 import { InviteModal } from './components/Modals/InviteModal';
 import { JoinServerModal } from './components/Modals/JoinServerModal';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const { user, token, isLoading, checkAuth } = useAuthStore();
-  const { fetchGuilds, activeGuild, activeChannel, addMessage, updateVoiceState, setTyping, selectChannel } = useGuildStore();
+  const { user, token, isLoading, checkAuth, setUser } = useAuthStore();
+  const {
+    fetchGuilds,
+    activeGuild,
+    activeChannel,
+    addMessage,
+    updateMessageInStore,
+    removeMessageFromStore,
+    updateVoiceState,
+    setTyping,
+    selectChannel,
+  } = useGuildStore();
   const { handleFriendEvent } = useFriendStore();
   const { isConnected, currentChannelId, isMuted, toggleMute, leaveVoice } = useVoiceStore();
+  const { addMessage: addDMMessage } = useDMStore();
 
   const [isHomeActive, setIsHomeActive] = useState(false);
+  const [homeView, setHomeView] = useState<'friends' | 'dm'>('friends');
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+
+  // Modals
   const [isCreateServerOpen, setIsCreateServerOpen] = useState(false);
   const [isJoinServerOpen, setIsJoinServerOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
   const [createChannelType, setCreateChannelType] = useState<'text' | 'voice'>('text');
   const [isScreenShareOpen, setIsScreenShareOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
+  const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -44,34 +65,60 @@ export const App: React.FC = () => {
       fetchGuilds();
 
       // WebSocket Event Subscriptions
-      const handleMessageCreate = (event: WSEvent<Message>) => {
+      const handleMessageCreate = (event: any) => {
         addMessage(event.data);
       };
 
-      const handleVoiceStateUpdate = (event: WSEvent<{ action: string; session?: VoiceSession; channel_id?: string; user_id?: string }>) => {
+      const handleMessageUpdate = (event: any) => {
+        updateMessageInStore(event.data);
+      };
+
+      const handleMessageDelete = (event: any) => {
+        removeMessageFromStore(event.data.id);
+      };
+
+      const handleDMMessageCreate = (event: any) => {
+        addDMMessage(event.data);
+      };
+
+      const handleVoiceStateUpdate = (event: any) => {
         updateVoiceState(event.data.action, event.data.session, event.data.channel_id, event.data.user_id);
       };
 
-      const handleTypingStart = (event: WSEvent<{ channel_id: string; user_id: string }>) => {
+      const handleTypingStart = (event: any) => {
         setTyping(event.data.channel_id, event.data.user_id);
       };
 
-      const handleFriendUpdate = (event: WSEvent) => {
+      const handleFriendUpdate = (event: any) => {
         handleFriendEvent(event.data);
       };
 
+      const handleUserUpdate = (event: any) => {
+        if (event.data.id === user.id) {
+          setUser(event.data);
+        }
+      };
+
       socket.on('MESSAGE_CREATE', handleMessageCreate);
+      socket.on('MESSAGE_UPDATE', handleMessageUpdate);
+      socket.on('MESSAGE_DELETE', handleMessageDelete);
+      socket.on('DM_MESSAGE_CREATE', handleDMMessageCreate);
       socket.on('VOICE_STATE_UPDATE', handleVoiceStateUpdate);
       socket.on('TYPING_START', handleTypingStart);
       socket.on('FRIEND_REQUEST_CREATE', handleFriendUpdate);
       socket.on('FRIEND_REQUEST_UPDATE', handleFriendUpdate);
+      socket.on('USER_UPDATE', handleUserUpdate);
 
       return () => {
         socket.off('MESSAGE_CREATE', handleMessageCreate);
+        socket.off('MESSAGE_UPDATE', handleMessageUpdate);
+        socket.off('MESSAGE_DELETE', handleMessageDelete);
+        socket.off('DM_MESSAGE_CREATE', handleDMMessageCreate);
         socket.off('VOICE_STATE_UPDATE', handleVoiceStateUpdate);
         socket.off('TYPING_START', handleTypingStart);
         socket.off('FRIEND_REQUEST_CREATE', handleFriendUpdate);
         socket.off('FRIEND_REQUEST_UPDATE', handleFriendUpdate);
+        socket.off('USER_UPDATE', handleUserUpdate);
       };
     }
   }, [token, user]);
@@ -88,7 +135,6 @@ export const App: React.FC = () => {
     return <AuthScreen />;
   }
 
-  // Find connected voice channel object if any
   const connectedVoiceChannel = isConnected
     ? activeGuild?.channels?.find((c) => c.id === currentChannelId)
     : null;
@@ -103,17 +149,18 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* 1 & 2. Sidebars (Desktop fixed, Mobile slide-in drawer) */}
+      {/* 1 & 2. Sidebars */}
       <div
         className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex h-full transition-transform duration-200 ease-in-out ${
           isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        {/* 1. Server Sidebar */}
+        {/* 1. Server List */}
         <ServerList
           isHomeActive={isHomeActive}
           onSelectHome={() => {
             setIsHomeActive(true);
+            setHomeView('friends');
             setIsMobileDrawerOpen(false);
           }}
           onOpenCreateServer={() => {
@@ -125,39 +172,63 @@ export const App: React.FC = () => {
             setIsMobileDrawerOpen(false);
           }}
           onOpenSettings={() => {
-            setIsSettingsOpen(true);
+            setIsProfileModalOpen(true);
             setIsMobileDrawerOpen(false);
           }}
         />
 
-        {/* 2. Channels Sidebar */}
-        <ChannelList
-          isHomeActive={isHomeActive}
-          onOpenCreateChannel={(type) => {
-            setCreateChannelType(type);
-            setIsCreateChannelOpen(true);
-            setIsMobileDrawerOpen(false);
-          }}
-          onOpenInviteModal={() => {
-            setIsInviteModalOpen(true);
-            setIsMobileDrawerOpen(false);
-          }}
-          onOpenSettings={() => {
-            setIsSettingsOpen(true);
-            setIsMobileDrawerOpen(false);
-          }}
-          onOpenScreenShare={() => {
-            setIsScreenShareOpen(true);
-            setIsMobileDrawerOpen(false);
-          }}
-          onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
-        />
+        {/* 2. Channels Sidebar OR DMs Sidebar */}
+        {isHomeActive ? (
+          <DMChannelList
+            currentView={homeView}
+            onSelectFriends={() => setHomeView('friends')}
+            onOpenSettings={() => setIsProfileModalOpen(true)}
+            onOpenScreenShare={() => setIsScreenShareOpen(true)}
+            onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
+          />
+        ) : (
+          <ChannelList
+            isHomeActive={false}
+            onOpenCreateChannel={(type) => {
+              setCreateChannelType(type);
+              setIsCreateChannelOpen(true);
+              setIsMobileDrawerOpen(false);
+            }}
+            onOpenInviteModal={() => {
+              setIsInviteModalOpen(true);
+              setIsMobileDrawerOpen(false);
+            }}
+            onOpenSettings={() => {
+              setIsProfileModalOpen(true);
+              setIsMobileDrawerOpen(false);
+            }}
+            onOpenServerSettings={() => {
+              setIsServerSettingsOpen(true);
+              setIsMobileDrawerOpen(false);
+            }}
+            onOpenChannelSettings={(channel) => {
+              setChannelToEdit(channel);
+            }}
+            onOpenScreenShare={() => {
+              setIsScreenShareOpen(true);
+              setIsMobileDrawerOpen(false);
+            }}
+            onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
+          />
+        )}
       </div>
 
-      {/* 3. Main Stage: Friends View OR Voice Room OR Chat Area */}
+      {/* 3. Main Stage */}
       <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
         {isHomeActive ? (
-          <FriendsView onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)} />
+          homeView === 'friends' ? (
+            <FriendsView
+              onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+              onOpenDM={() => setHomeView('dm')}
+            />
+          ) : (
+            <DMChatArea onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)} />
+          )
         ) : activeChannel?.type === 'voice' ? (
           <VoiceRoom
             channel={activeChannel}
@@ -168,7 +239,7 @@ export const App: React.FC = () => {
           <ChatArea onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)} />
         )}
 
-        {/* Floating Mini Voice Dock (when connected to voice but viewing text channel or friends) */}
+        {/* Floating Mini Voice Dock */}
         {isConnected && activeChannel?.type !== 'voice' && (
           <div className="absolute bottom-16 md:bottom-20 right-4 z-20 bg-background-darkest/95 backdrop-blur-md p-2.5 px-4 rounded-2xl shadow-2xl border border-online/30 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
             <button
@@ -236,9 +307,20 @@ export const App: React.FC = () => {
         onClose={() => setIsScreenShareOpen(false)}
       />
 
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      <ServerSettingsModal
+        isOpen={isServerSettingsOpen}
+        onClose={() => setIsServerSettingsOpen(false)}
+      />
+
+      <ChannelSettingsModal
+        channel={channelToEdit}
+        isOpen={!!channelToEdit}
+        onClose={() => setChannelToEdit(null)}
       />
     </div>
   );

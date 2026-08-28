@@ -1,5 +1,9 @@
-import { WSEvent } from '../types';
-import { getApiBaseUrl } from './api';
+import { API_BASE_URL } from './api';
+
+export interface WSEvent {
+  type: string;
+  data: any;
+}
 
 type EventHandler = (event: WSEvent) => void;
 
@@ -10,11 +14,11 @@ class SocketClient {
   private isExplicitlyClosed = false;
 
   connect() {
-    const token = localStorage.getItem('zerovc_token');
+    const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
     if (!token) return;
 
     this.isExplicitlyClosed = false;
-    const baseUrl = getApiBaseUrl().replace(/^http/, 'ws');
+    const baseUrl = API_BASE_URL.replace(/^http/, 'ws');
     const wsUrl = `${baseUrl}/ws?token=${token}`;
 
     try {
@@ -89,13 +93,11 @@ class SocketClient {
   }
 
   private dispatch(event: WSEvent) {
-    // Specific event listeners
     const listeners = this.handlers.get(event.type);
     if (listeners) {
       listeners.forEach((handler) => handler(event));
     }
 
-    // Global event listeners
     const globalListeners = this.handlers.get('*');
     if (globalListeners) {
       globalListeners.forEach((handler) => handler(event));
