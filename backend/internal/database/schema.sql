@@ -146,10 +146,54 @@ CREATE TABLE IF NOT EXISTS friendships (
     CONSTRAINT different_friend_users CHECK (user_id <> friend_id)
 );
 
+-- 13. Message Reactions
+CREATE TABLE IF NOT EXISTS message_reactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
+    dm_message_id UUID REFERENCES dm_messages(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    emoji VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_msg_reaction ON message_reactions (message_id, user_id, emoji) WHERE message_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_reaction ON message_reactions (dm_message_id, user_id, emoji) WHERE dm_message_id IS NOT NULL;
+
+-- 14. Guild Bans
+CREATE TABLE IF NOT EXISTS guild_bans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    guild_id UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reason TEXT DEFAULT '',
+    banned_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_guild_ban UNIQUE (guild_id, user_id)
+);
+
+-- 15. User Blocks
+CREATE TABLE IF NOT EXISTS user_blocks (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, blocked_user_id)
+);
+
+-- Schema Upgrades & Columns
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS reply_to_id UUID REFERENCES dm_messages(id) ON DELETE SET NULL;
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES channels(id) ON DELETE SET NULL;
+ALTER TABLE channels DROP CONSTRAINT IF EXISTS channels_type_check;
+ALTER TABLE channels ADD CONSTRAINT channels_type_check CHECK (type IN ('text', 'voice', 'category'));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(64) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT FALSE;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_channel_created ON messages (channel_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dm_messages_room_created ON dm_messages (dm_room_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_guild_members_user ON guild_members (user_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships (user_id, status);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_msg ON message_reactions (message_id);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_dm ON message_reactions (dm_message_id);
 CREATE INDEX IF NOT EXISTS idx_guild_roles_guild ON guild_roles (guild_id, position ASC);
 CREATE INDEX IF NOT EXISTS idx_channels_guild ON channels (guild_id, position);
 CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions (channel_id);

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Participant } from 'livekit-client';
 import { api } from '../lib/api';
 import { livekit } from '../lib/livekit';
+import { playJoinVoiceSound, playLeaveVoiceSound } from '../utils/audio';
 
 interface VoiceState {
   currentChannelId: string | null;
@@ -10,13 +11,17 @@ interface VoiceState {
   isMuted: boolean;
   isDeafened: boolean;
   isScreensharing: boolean;
+  isCameraOn: boolean;
   participants: Participant[];
   speakingUserIds: string[];
+  participantVolumes: Record<string, number>;
 
   joinVoice: (channelId: string) => Promise<void>;
   leaveVoice: () => Promise<void>;
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
+  toggleCamera: () => Promise<void>;
+  setParticipantVolume: (userId: string, volume: number) => void;
   startScreenShare: (
     sourceId?: string,
     config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }
@@ -31,8 +36,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   isMuted: false,
   isDeafened: false,
   isScreensharing: false,
+  isCameraOn: false,
   participants: [],
   speakingUserIds: [],
+  participantVolumes: {},
 
   joinVoice: async (channelId: string) => {
     if (get().currentChannelId === channelId && get().isConnected) return;
@@ -70,7 +77,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
         },
       });
 
-      set({ isConnected: true, isConnecting: false, isMuted: false });
+      playJoinVoiceSound();
+      set({ isConnected: true, isConnecting: false, isMuted: false, isCameraOn: false });
     } catch (err) {
       console.error('[Voice] Failed to join voice:', err);
       set({ isConnected: false, isConnecting: false, currentChannelId: null });
@@ -87,12 +95,14 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       console.warn('[Voice] Failed to notify leave API:', err);
     }
 
+    playLeaveVoiceSound();
     await livekit.disconnect();
     set({
       currentChannelId: null,
       isConnected: false,
       isConnecting: false,
       isScreensharing: false,
+      isCameraOn: false,
       participants: [],
       speakingUserIds: [],
     });
@@ -100,39 +110,57 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
 
   toggleMute: async () => {
     const { isMuted, currentChannelId } = get();
-    const newMuted = !isMuted;
-    set({ isMuted: newMuted });
+    const nextMuted = !isMuted;
 
-    await livekit.setMicrophoneEnabled(!newMuted);
+    await livekit.setMuted(nextMuted);
+    set({ isMuted: nextMuted });
 
     if (currentChannelId) {
-      api.channels.updateVoiceState(currentChannelId, { is_muted: newMuted }).catch(() => {});
+      try {
+        await api.channels.updateVoiceState(currentChannelId, { is_muted: nextMuted });
+      } catch (err) {
+        console.warn('[Voice] Failed to sync mute state:', err);
+      }
     }
   },
 
   toggleDeafen: async () => {
     const { isDeafened, currentChannelId } = get();
-    const newDeafened = !isDeafened;
-    set({ isDeafened: newDeafened, isMuted: newDeafened ? true : get().isMuted });
+    const nextDeafened = !isDeafened;
 
-    if (newDeafened) {
-      await livekit.setMicrophoneEnabled(false);
-    } else {
-      await livekit.setMicrophoneEnabled(!get().isMuted);
-    }
+    await livekit.setDeafened(nextDeafened);
+    set({ isDeafened: nextDeafened, isMuted: nextDeafened ? true : get().isMuted });
 
     if (currentChannelId) {
-      api.channels.updateVoiceState(currentChannelId, {
-        is_deafened: newDeafened,
-        is_muted: get().isMuted,
-      }).catch(() => {});
+      try {
+        await api.channels.updateVoiceState(currentChannelId, {
+          is_deafened: nextDeafened,
+          is_muted: nextDeafened ? true : get().isMuted,
+        });
+      } catch (err) {
+        console.warn('[Voice] Failed to sync deafen state:', err);
+      }
     }
   },
 
-  startScreenShare: async (
-    sourceId?: string,
-    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }
-  ) => {
+  toggleCamera: async () => {
+    const { isCameraOn } = get();
+    const nextCamera = !isCameraOn;
+    await livekit.setCameraEnabled(nextCamera);
+    set({ isCameraOn: nextCamera });
+  },
+
+  setParticipantVolume: (userId: string, volume: number) => {
+    livekit.setParticipantVolume(userId, volume);
+    set((state) => ({
+      participantVolumes: {
+        ...state.participantVolumes,
+        [userId]: volume,
+      },
+    }));
+  },
+
+  startScreenShare: async (sourceId?: string, config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }) => {
     const { currentChannelId } = get();
     try {
       await livekit.setScreenShareEnabled(true, sourceId, config);
@@ -141,7 +169,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       if (currentChannelId) {
         api.channels.updateVoiceState(currentChannelId, { is_screensharing: true }).catch(() => {});
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('[Voice] Failed to start screen share:', err);
       set({ isScreensharing: false });
     }

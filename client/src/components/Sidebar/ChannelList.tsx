@@ -32,7 +32,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onCloseMobileDrawer,
 }) => {
   const { user } = useAuthStore();
-  const { activeGuild, activeChannel, selectChannel } = useGuildStore();
+  const { activeGuild, activeChannel, selectChannel, unreadChannels } = useGuildStore();
   const { currentChannelId, joinVoice, isConnected, speakingUserIds } = useVoiceStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -170,20 +170,28 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               <div className="space-y-0.5">
                 {textChannels.map((channel) => {
                   const isActive = activeChannel?.id === channel.id;
+                  const isUnread = unreadChannels.has(channel.id) && !isActive;
                   return (
                     <div
                       key={channel.id}
-                      className={`group flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                      className={`group flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors relative ${
                         isActive
                           ? 'bg-background-light text-white font-medium'
+                          : isUnread
+                          ? 'text-white font-semibold'
                           : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
                       }`}
                     >
+                      {/* Left white indicator dot for unread */}
+                      {isUnread && (
+                        <div className="absolute -left-1 w-1.5 h-2 rounded-r-full bg-white shadow-sm" />
+                      )}
+
                       <button
                         onClick={() => handleChannelClick(channel)}
                         className="flex items-center gap-2 truncate flex-1 text-left"
                       >
-                        <Hash className="w-4 h-4 flex-shrink-0 text-gray-400" />
+                        <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
                         <span className="truncate">{channel.name}</span>
                       </button>
 

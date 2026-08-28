@@ -1,19 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X } from 'lucide-react';
-import { Channel } from '../../types';
+import { PlusCircle, SendHorizontal, Smile, X, Reply } from 'lucide-react';
+import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 
 interface MessageInputProps {
   channel: Channel;
-  onSendMessage: (content: string) => Promise<void>;
+  replyingTo?: Message | null;
+  onCancelReply?: () => void;
+  onSendMessage: (content: string, replyToId?: string) => Promise<void>;
 }
 
 const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
 const MAX_CHARS = 2000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
 
-export const MessageInput: React.FC<MessageInputProps> = ({ channel, onSendMessage }) => {
+export const MessageInput: React.FC<MessageInputProps> = ({
+  channel,
+  replyingTo,
+  onCancelReply,
+  onSendMessage,
+}) => {
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -21,6 +28,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({ channel, onSendMessa
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingTime = useRef<number>(0);
+
+  useEffect(() => {
+    if (replyingTo && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [replyingTo]);
 
   const handleSend = async () => {
     let finalContent = content.trim();
@@ -41,81 +54,83 @@ export const MessageInput: React.FC<MessageInputProps> = ({ channel, onSendMessa
 
     if (!finalContent) return;
 
+    const replyId = replyingTo?.id;
+
     setContent('');
     setSelectedImage(null);
     setShowEmojiPicker(false);
+    onCancelReply?.();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
-    await onSendMessage(finalContent);
+    await onSendMessage(finalContent, replyId);
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       await handleSend();
+    } else if (e.key === 'Escape' && replyingTo) {
+      e.preventDefault();
+      onCancelReply?.();
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setContent(val);
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
 
     const now = Date.now();
-    if (now - lastTypingTime.current > 3000) {
+    if (now - lastTypingTime.current > 2000) {
       lastTypingTime.current = now;
-      socket.send('TYPING_START', {
-        channel_id: channel.id,
-        guild_id: channel.guild_id,
-      });
-    }
-
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      socket.send('TYPING_START', { channel_id: channel.id });
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleSelectEmoji = (emoji: string) => {
+    setContent((prev) => prev + emoji);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
 
-    // Check 20MB file limit
+  const compressAndSetImage = (file: File) => {
     if (file.size > MAX_FILE_BYTES) {
       setLimitAlert({
         title: 'Arquivo Muito Grande',
-        message: 'O limite de tamanho de imagens, vídeos e arquivos é de 20 MB.',
-        detail: `Tamanho: ${(file.size / (1024 * 1024)).toFixed(1)} MB / Limite: 20 MB`,
+        message: 'O limite de imagens/vídeos/arquivos são 20mb',
+        detail: `Tamanho do arquivo: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
       });
-      e.target.value = '';
       return;
     }
 
-    // Convert and compress with Canvas
     const reader = new FileReader();
-    reader.onload = (loadEvt) => {
-      const src = loadEvt.target?.result as string;
-      if (!src) return;
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (!result) return;
 
       const img = new Image();
       img.onload = () => {
-        const maxWidth = 1280;
-        const maxHeight = 1280;
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1280;
+        const MAX_HEIGHT = 1280;
         let width = img.width;
         let height = img.height;
 
-        if (width > maxWidth || height > maxHeight) {
-          if (width > height) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          } else {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
           }
         }
 
-        const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
@@ -124,110 +139,105 @@ export const MessageInput: React.FC<MessageInputProps> = ({ channel, onSendMessa
           const compressed = canvas.toDataURL('image/jpeg', 0.85);
           setSelectedImage(compressed);
         } else {
-          setSelectedImage(src);
+          setSelectedImage(result);
         }
       };
-      img.src = src;
+      img.src = result;
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    compressAndSetImage(file);
     e.target.value = '';
   };
 
-  const handleInsertEmoji = (emoji: string) => {
-    setContent((prev) => prev + emoji);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  };
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [channel.id]);
-
-  const charsLeft = MAX_CHARS - content.length;
-  const isNearOrExceededLimit = content.length > 1800;
-
   return (
-    <div className="p-3 md:p-4 pt-0 relative">
-      {/* Limit Alert Modal */}
-      {limitAlert && (
-        <LimitAlertModal
-          isOpen={!!limitAlert}
-          title={limitAlert.title}
-          message={limitAlert.message}
-          detail={limitAlert.detail}
-          onClose={() => setLimitAlert(null)}
-        />
-      )}
-
-      {/* Emoji Picker Popover */}
-      {showEmojiPicker && (
-        <div className="absolute bottom-16 right-4 z-30 bg-background-darkest p-3 rounded-2xl shadow-2xl border border-white/10 flex flex-wrap gap-2 max-w-[240px] animate-in fade-in zoom-in-95">
-          {COMMON_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => handleInsertEmoji(emoji)}
-              className="text-xl hover:scale-125 transition-transform p-1 rounded hover:bg-white/10"
-            >
-              {emoji}
-            </button>
-          ))}
+    <div className="px-3 md:px-4 pb-4 md:pb-6 relative select-none">
+      {/* Replying Banner */}
+      {replyingTo && (
+        <div className="flex items-center justify-between px-4 py-2 bg-background-darkest border border-b-0 border-white/10 rounded-t-2xl text-xs text-gray-300 animate-in fade-in slide-in-from-bottom-1">
+          <div className="flex items-center gap-2 truncate">
+            <Reply className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
+            <span className="text-gray-400">Respondendo a</span>
+            <span className="font-bold text-brand-400">
+              @{replyingTo.author.display_name || replyingTo.author.username}
+            </span>
+            <span className="text-gray-500 truncate max-w-xs italic hidden md:inline">
+              "{replyingTo.content}"
+            </span>
+          </div>
+          <button
+            onClick={onCancelReply}
+            className="p-1 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+            title="Cancelar resposta"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
       {/* Selected Image Preview */}
       {selectedImage && (
-        <div className="mb-2 p-2 bg-background-darkest rounded-xl border border-white/10 flex items-center gap-3 w-fit">
-          <img src={selectedImage} alt="Anexo" className="h-16 w-16 object-cover rounded-lg" />
+        <div className="mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <img
+              src={selectedImage}
+              alt="Preview"
+              className="w-12 h-12 object-cover rounded-xl border border-white/10"
+            />
+            <span className="text-xs text-gray-300 font-medium">Imagem anexada</span>
+          </div>
           <button
             type="button"
             onClick={() => setSelectedImage(null)}
-            className="text-gray-400 hover:text-white p-1 rounded-full bg-white/10"
-            title="Remover anexo"
+            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Warning indicator when typing near 2000 chars */}
-      {isNearOrExceededLimit && (
-        <div className="mb-1 flex justify-end">
-          <span
-            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
-              charsLeft < 0
-                ? 'bg-dnd/20 text-dnd animate-pulse'
-                : 'bg-yellow-500/20 text-yellow-400'
-            }`}
-          >
-            {charsLeft < 0 ? `Excedido por ${Math.abs(charsLeft)}` : `${charsLeft} restantes`}
-          </span>
-        </div>
+      {/* Emoji Picker Popover */}
+      {showEmojiPicker && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setShowEmojiPicker(false)} />
+          <div className="absolute bottom-20 right-4 z-30 bg-background-darkest p-3 rounded-2xl shadow-2xl border border-white/10 grid grid-cols-6 gap-2 animate-in fade-in zoom-in-95 duration-150">
+            {COMMON_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => handleSelectEmoji(emoji)}
+                className="w-9 h-9 flex items-center justify-center text-xl hover:bg-white/10 rounded-xl transition-all active:scale-125"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
       <div
-        className={`bg-background-light/70 rounded-2xl px-3 md:px-4 py-2 flex items-center gap-2 md:gap-3 border transition-colors shadow-inner ${
-          charsLeft < 0 ? 'border-dnd/60' : 'border-white/5 focus-within:border-brand-500/50'
+        className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2 border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
+          replyingTo ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl'
         }`}
       >
-        {/* Hidden File Input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,video/*,.pdf,.doc,.docx,.zip,.txt"
-          className="hidden"
-          onChange={handleImageUpload}
-        />
-
-        {/* Upload attachment button */}
+        {/* Attachment Upload Button */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="text-gray-400 hover:text-brand-500 transition-colors p-1"
-          title="Adicionar imagem/anexo (Máx. 20MB)"
+          className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0"
+          title="Anexar Imagem (até 20 MB)"
         >
           <PlusCircle className="w-5 h-5" />
         </button>
@@ -235,37 +245,48 @@ export const MessageInput: React.FC<MessageInputProps> = ({ channel, onSendMessa
         {/* Text Input */}
         <textarea
           ref={textareaRef}
-          rows={1}
           value={content}
-          onChange={handleChange}
+          onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder={`Conversar em #${channel.name}`}
-          className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none max-h-40 py-1 leading-normal"
+          placeholder={replyingTo ? `Respondendo a @${replyingTo.author.username}...` : `Conversar em #${channel.name}`}
+          rows={1}
+          className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1 max-h-40 leading-relaxed font-normal no-scrollbar"
         />
 
-        {/* Action icons */}
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className={`p-1 rounded-lg transition-colors ${
-              showEmojiPicker ? 'text-brand-500 bg-white/10' : 'text-gray-400 hover:text-gray-200'
-            }`}
-            title="Emoji"
-          >
-            <Smile className="w-5 h-5" />
-          </button>
+        {/* Emoji Button */}
+        <button
+          type="button"
+          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          className={`p-1.5 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 ${
+            showEmojiPicker ? 'text-brand-500' : 'text-gray-400 hover:text-white'
+          }`}
+          title="Inserir Emoji"
+        >
+          <Smile className="w-5 h-5" />
+        </button>
 
-          {(content.trim() || selectedImage) && (
-            <button
-              onClick={handleSend}
-              className="bg-brand-500 hover:bg-brand-600 text-white transition-colors p-1.5 rounded-xl shadow-md"
-            >
-              <SendHorizontal className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        {/* Send Button */}
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={!content.trim() && !selectedImage}
+          className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white p-2 rounded-xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0"
+          title="Enviar Mensagem"
+        >
+          <SendHorizontal className="w-4 h-4" />
+        </button>
       </div>
+
+      {/* 2k Char / 20MB Limit Modal */}
+      {limitAlert && (
+        <LimitAlertModal
+          isOpen={true}
+          title={limitAlert.title}
+          message={limitAlert.message}
+          detail={limitAlert.detail}
+          onClose={() => setLimitAlert(null)}
+        />
+      )}
     </div>
   );
 };

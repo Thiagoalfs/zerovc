@@ -9,6 +9,7 @@ export interface User {
   status: 'online' | 'idle' | 'dnd' | 'offline';
   custom_status?: string;
   roles?: Role[];
+  two_factor_enabled?: boolean;
   created_at?: string;
 }
 
@@ -37,7 +38,8 @@ export interface Channel {
   id: string;
   guild_id: string;
   name: string;
-  type: 'text' | 'voice';
+  type: 'text' | 'voice' | 'category';
+  category_id?: string;
   topic?: string;
   position: number;
   voice_sessions?: VoiceSession[];
@@ -51,6 +53,18 @@ export interface Attachment {
   type: string;
 }
 
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  user_ids: string[];
+}
+
+export interface MessageReplyInfo {
+  id: string;
+  author: User;
+  content: string;
+}
+
 export interface Message {
   id: string;
   channel_id: string;
@@ -59,6 +73,8 @@ export interface Message {
   content: string;
   attachments?: Attachment[];
   reply_to_id?: string;
+  reply_to?: MessageReplyInfo;
+  reactions?: MessageReaction[];
   is_pinned: boolean;
   is_edited?: boolean;
   edited_at?: string;
@@ -82,6 +98,10 @@ export interface DMMessage {
   author: User;
   content: string;
   attachments?: Attachment[];
+  reply_to_id?: string;
+  reply_to?: MessageReplyInfo;
+  reactions?: MessageReaction[];
+  is_pinned?: boolean;
   is_edited?: boolean;
   edited_at?: string;
   created_at: string;
@@ -98,16 +118,6 @@ export interface VoiceSession {
   joined_at: string;
 }
 
-export interface Friendship {
-  id: string;
-  user_id: string;
-  friend_id: string;
-  status: 'pending' | 'accepted' | 'blocked';
-  user?: User;
-  friend?: User;
-  created_at: string;
-}
-
 export interface GuildInvite {
   code: string;
   guild_id: string;
@@ -117,3 +127,15 @@ export interface GuildInvite {
   uses: number;
   created_at: string;
 }
+
+export interface Friend {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  status: 'pending' | 'accepted' | 'blocked';
+  user?: User;
+  friend?: User;
+  created_at: string;
+}
+
+export type Friendship = Friend;
