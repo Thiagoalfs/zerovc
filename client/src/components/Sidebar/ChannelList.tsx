@@ -685,9 +685,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 >
                   <div className="flex items-center gap-2 truncate">
                     <div
-                      className={`w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all overflow-hidden flex-shrink-0 ${
-                        isSpeaking ? 'ring-2 ring-online ring-offset-1 ring-offset-background-darker' : ''
-                      }`}
+                      style={
+                        isSpeaking
+                          ? { boxShadow: '0 0 0 2px #23a55a' }
+                          : undefined
+                      }
+                      className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all flex-shrink-0"
                     >
                       {targetUser.avatar_url ? (
                         <img
