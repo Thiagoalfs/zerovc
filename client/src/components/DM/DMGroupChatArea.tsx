@@ -93,6 +93,12 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (activeGroup?.id && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [activeGroup?.id]);
+
   if (!activeGroup) {
     return (
       <div className="flex-1 bg-background-dark flex flex-col items-center justify-center text-gray-500 font-medium p-4 select-none">
