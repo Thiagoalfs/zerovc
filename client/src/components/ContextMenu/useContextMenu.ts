@@ -10,6 +10,7 @@ export interface ContextMenuItem {
   separator?: boolean;
   onClick?: () => void;
   subItems?: ContextMenuItem[];
+  customRender?: React.ReactNode;
 }
 
 export interface ContextMenuState {
