@@ -22,7 +22,6 @@ import { ProfileModal } from './components/Modals/ProfileModal';
 import { ServerSettingsModal } from './components/Modals/ServerSettingsModal';
 import { ChannelSettingsModal } from './components/Modals/ChannelSettingsModal';
 import { InviteModal } from './components/Modals/InviteModal';
-import { JoinServerModal } from './components/Modals/JoinServerModal';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -49,7 +48,6 @@ export const App: React.FC = () => {
 
   // Modals
   const [isCreateServerOpen, setIsCreateServerOpen] = useState(false);
-  const [isJoinServerOpen, setIsJoinServerOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
   const [createChannelType, setCreateChannelType] = useState<'text' | 'voice'>('text');
@@ -248,10 +246,6 @@ export const App: React.FC = () => {
             setIsCreateServerOpen(true);
             setIsMobileDrawerOpen(false);
           }}
-          onOpenJoinServer={() => {
-            setIsJoinServerOpen(true);
-            setIsMobileDrawerOpen(false);
-          }}
         />
 
         {/* 2. Channels Sidebar OR DMs Sidebar */}
@@ -381,11 +375,6 @@ export const App: React.FC = () => {
       <CreateServerModal
         isOpen={isCreateServerOpen}
         onClose={() => setIsCreateServerOpen(false)}
-      />
-
-      <JoinServerModal
-        isOpen={isJoinServerOpen}
-        onClose={() => setIsJoinServerOpen(false)}
       />
 
       <InviteModal
