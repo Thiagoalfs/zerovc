@@ -21,7 +21,8 @@ type Hub struct {
 	Unregister chan *Client
 	Broadcast  chan BroadcastMessage
 
-	// Disconnect Hook
+	// Hooks
+	OnUserConnected    func(userID uuid.UUID)
 	OnUserDisconnected func(userID uuid.UUID)
 
 	mu sync.RWMutex
@@ -43,18 +44,30 @@ func NewHub() *Hub {
 	}
 }
 
+func (h *Hub) IsUserOnline(userID uuid.UUID) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	userClients, exists := h.clients[userID]
+	return exists && len(userClients) > 0
+}
+
 func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.Register:
+			var isFirstConnect bool
 			h.mu.Lock()
 			if h.clients[client.UserID] == nil {
 				h.clients[client.UserID] = make(map[*Client]bool)
+				isFirstConnect = true
 			}
 			h.clients[client.UserID][client] = true
 			h.mu.Unlock()
 
 			log.Printf("[Gateway] Client connected: user_id=%s, socket_count=%d", client.UserID, len(h.clients[client.UserID]))
+			if isFirstConnect && h.OnUserConnected != nil {
+				go h.OnUserConnected(client.UserID)
+			}
 
 		case client := <-h.Unregister:
 			var userFullyDisconnected bool
