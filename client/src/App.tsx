@@ -23,6 +23,7 @@ import { ServerSettingsModal } from './components/Modals/ServerSettingsModal';
 import { ChannelSettingsModal } from './components/Modals/ChannelSettingsModal';
 import { InviteModal } from './components/Modals/InviteModal';
 import { UserProfileModal } from './components/Modals/UserProfileModal';
+import { ImageModal } from './components/Modals/ImageModal';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 
@@ -62,6 +63,7 @@ export const App: React.FC = () => {
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
   const [isMemberListOpen, setIsMemberListOpen] = useState(false);
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const navigateTo = (path: string, replace = false) => {
     if (window.location.pathname !== path) {
@@ -451,6 +453,7 @@ export const App: React.FC = () => {
               onOpenUserProfile={(targetUser, pos) =>
                 setSelectedUserForProfile({ user: targetUser, position: pos })
               }
+              onPreviewImage={(url) => setPreviewImageUrl(url)}
             />
           )
         ) : activeChannel?.type === 'voice' ? (
@@ -465,6 +468,7 @@ export const App: React.FC = () => {
             onOpenUserProfile={(targetUser, pos) =>
               setSelectedUserForProfile({ user: targetUser, position: pos })
             }
+            onPreviewImage={(url) => setPreviewImageUrl(url)}
             isMemberListOpen={isMemberListOpen}
             onToggleMemberList={(open) => setIsMemberListOpen(open)}
           />
@@ -557,6 +561,12 @@ export const App: React.FC = () => {
           setSelectedUserForProfile(null);
           setIsProfileModalOpen(true);
         }}
+      />
+
+      <ImageModal
+        imageUrl={previewImageUrl}
+        isOpen={!!previewImageUrl}
+        onClose={() => setPreviewImageUrl(null)}
       />
 
       <ServerSettingsModal
