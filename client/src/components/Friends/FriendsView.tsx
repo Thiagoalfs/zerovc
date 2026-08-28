@@ -139,7 +139,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                   type="text"
                   value={usernameInput}
                   onChange={(e) => setUsernameInput(e.target.value)}
-                  placeholder="Nome de usuário (Ex: thiago)"
+                  placeholder="Nome de usuário (Ex: timotei)"
                   className="flex-1 bg-transparent text-white text-sm px-2 sm:px-0 py-1.5 focus:outline-none"
                 />
                 <button
