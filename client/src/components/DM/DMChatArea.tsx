@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone } from 'lucide-react';
+import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone, Loader2 } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
+import { api } from '../../lib/api';
 import { ActiveCallOverlay } from './ActiveCallOverlay';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { User, DMMessage } from '../../types';
@@ -40,7 +41,9 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [replyingTo, setReplyingTo] = useState<DMMessage | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -167,6 +170,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   };
 
   const handleSend = async () => {
+    if (isUploading) return;
     let finalContent = content.trim();
 
     // Check 2,000 character limit on raw text
@@ -179,23 +183,37 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       return;
     }
 
-    if (selectedImage) {
-      finalContent = finalContent ? `${finalContent}\n${selectedImage}` : selectedImage;
-    }
+    if (!finalContent && !selectedFile) return;
 
-    if (!finalContent) return;
-
+    const fileToUpload = selectedFile;
     const replyId = replyingTo?.id;
 
     setContent('');
-    setSelectedImage(null);
+    setSelectedFile(null);
+    setSelectedImagePreview(null);
     setShowEmojiPicker(false);
     setReplyingTo(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
-    await sendMessage(finalContent, undefined, replyId);
+    try {
+      if (fileToUpload) {
+        setIsUploading(true);
+        const uploaded = await api.upload.attachment(fileToUpload);
+        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
+      }
+
+      await sendMessage(finalContent, undefined, replyId);
+    } catch (err: any) {
+      console.error('Failed to send DM message/file:', err);
+      setLimitAlert({
+        title: 'Erro ao Enviar Mensagem',
+        message: err.message || 'Não foi possível enviar a mensagem/imagem.',
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -221,7 +239,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     }
   };
 
-  const compressAndSetImage = (file: File) => {
+  const processImageFile = (file: File) => {
     if (file.size > MAX_FILE_BYTES) {
       setLimitAlert({
         title: 'Arquivo Muito Grande',
@@ -231,51 +249,36 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       return;
     }
 
+    setSelectedFile(file);
+
     const reader = new FileReader();
     reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (!result) return;
-
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1280;
-        const MAX_HEIGHT = 1280;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL('image/jpeg', 0.85);
-          setSelectedImage(compressed);
-        } else {
-          setSelectedImage(result);
-        }
-      };
-      img.src = result;
+      setSelectedImagePreview(e.target?.result as string);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          processImageFile(file);
+          break;
+        }
+      }
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    compressAndSetImage(file);
+    processImageFile(file);
     e.target.value = '';
   };
 
@@ -467,12 +470,16 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               const trimmed = line.trim();
               if (
                 trimmed.startsWith('data:image/') ||
+                trimmed.startsWith('/assets/user/') ||
+                trimmed.startsWith('/assets/guild/') ||
                 (trimmed.startsWith('http') &&
                   (trimmed.endsWith('.png') ||
                     trimmed.endsWith('.jpg') ||
                     trimmed.endsWith('.jpeg') ||
                     trimmed.endsWith('.gif') ||
-                    trimmed.endsWith('.webp')))
+                    trimmed.endsWith('.webp') ||
+                    trimmed.includes('/assets/user/') ||
+                    trimmed.includes('/assets/guild/')))
               ) {
                 imageUrls.push(trimmed);
               } else {
@@ -665,17 +672,22 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       )}
 
-      {/* Selected Image Preview */}
-      {selectedImage && (
+      {/* Selected Image / File Preview */}
+      {selectedImagePreview && (
         <div className="mx-4 mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in">
           <div className="flex items-center gap-2">
-            <img src={selectedImage} alt="Preview" className="w-12 h-12 object-cover rounded-xl border border-white/10" />
-            <span className="text-xs text-gray-300 font-medium">Imagem anexada</span>
+            <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-xl border border-white/10" />
+            <span className="text-xs text-gray-300 font-medium truncate max-w-[150px]">
+              {selectedFile?.name || 'Imagem anexada'}
+            </span>
           </div>
           <button
             type="button"
-            onClick={() => setSelectedImage(null)}
-            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3"
+            onClick={() => {
+              setSelectedFile(null);
+              setSelectedImagePreview(null);
+            }}
+            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -692,7 +704,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                 key={emoji}
                 type="button"
                 onClick={() => handleSelectEmoji(emoji)}
-                className="w-9 h-9 flex items-center justify-center text-xl hover:bg-white/10 rounded-xl transition-all active:scale-125"
+                className="w-9 h-9 flex items-center justify-center text-xl hover:bg-white/10 rounded-xl transition-all active:scale-125 cursor-pointer"
               >
                 {emoji}
               </button>
@@ -715,7 +727,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/5 transition-colors flex-shrink-0"
+          disabled={isUploading}
+          className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
           title="Anexar imagem (até 20 MB)"
         >
           <PlusCircle className="w-5 h-5" />
@@ -728,15 +741,17 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             value={content}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={replyingTo ? `Respondendo a @${replyingTo.author.username}...` : `Conversar com @${recipient?.username || 'amigo'}`}
             rows={1}
+            disabled={isUploading}
             className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1 max-h-36 leading-relaxed font-normal no-scrollbar"
           />
 
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className={`p-1 rounded-full hover:bg-white/5 transition-colors ${
+            className={`p-1 rounded-full hover:bg-white/5 transition-colors cursor-pointer ${
               showEmojiPicker ? 'text-brand-500' : 'text-gray-400 hover:text-white'
             }`}
             title="Inserir Emoji"
@@ -749,11 +764,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         <button
           type="button"
           onClick={handleSend}
-          disabled={!content.trim() && !selectedImage}
-          className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white p-2.5 rounded-2xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0"
+          disabled={(!content.trim() && !selectedFile) || isUploading}
+          className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white p-2.5 rounded-2xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0 cursor-pointer"
           title="Enviar Mensagem"
         >
-          <SendHorizontal className="w-5 h-5" />
+          {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <SendHorizontal className="w-5 h-5" />}
         </button>
       </div>
 

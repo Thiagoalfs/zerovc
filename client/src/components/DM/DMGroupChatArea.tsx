@@ -4,20 +4,16 @@ import { ptBR } from 'date-fns/locale';
 import {
   Users,
   SendHorizontal,
-  Smile,
+  PlusCircle,
   X,
   Menu,
-  Reply,
-  CornerDownRight,
-  Search,
   Phone,
-  UserPlus,
-  LogOut,
   PhoneOff,
+  LogOut,
+  Loader2,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useAuthStore } from '../../stores/authStore';
-import { useVoiceStore } from '../../stores/voiceStore';
 import { api } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
@@ -29,7 +25,6 @@ interface DMGroupChatAreaProps {
   onPreviewImage?: (url: string) => void;
 }
 
-const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
 const MAX_CHARS = 2000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
 
@@ -51,9 +46,9 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   } = useDMGroupStore();
 
   const [content, setContent] = useState('');
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [replyingTo, setReplyingTo] = useState<DMGroupMessage | null>(null);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [showMemberList, setShowMemberList] = useState(false);
   const [isInGroupVoice, setIsInGroupVoice] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
@@ -152,6 +147,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     'Grupo';
 
   const handleSend = async () => {
+    if (isUploading) return;
     let finalContent = content.trim();
 
     if (finalContent.length > MAX_CHARS) {
@@ -163,32 +159,83 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       return;
     }
 
-    if (selectedImage) {
-      finalContent = finalContent ? `${finalContent}\n${selectedImage}` : selectedImage;
-    }
+    if (!finalContent && !selectedFile) return;
 
-    if (!finalContent) return;
-
-    const replyId = replyingTo?.id;
+    const fileToUpload = selectedFile;
     setContent('');
-    setSelectedImage(null);
-    setShowEmojiPicker(false);
-    setReplyingTo(null);
+    setSelectedFile(null);
+    setSelectedImagePreview(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
-    await sendMessage(finalContent, undefined, replyId);
+    try {
+      if (fileToUpload) {
+        setIsUploading(true);
+        const uploaded = await api.upload.attachment(fileToUpload);
+        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
+      }
+
+      await sendMessage(finalContent);
+    } catch (err: any) {
+      console.error('Failed to send group message/file:', err);
+      setLimitAlert({
+        title: 'Erro ao Enviar Mensagem',
+        message: err.message || 'Não foi possível enviar a mensagem/imagem.',
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
-    } else if (e.key === 'Escape' && replyingTo) {
-      e.preventDefault();
-      setReplyingTo(null);
     }
+  };
+
+  const processImageFile = (file: File) => {
+    if (file.size > MAX_FILE_BYTES) {
+      setLimitAlert({
+        title: 'Arquivo Muito Grande',
+        message: 'O limite de imagens/vídeos/arquivos são 20mb',
+        detail: `Tamanho do arquivo: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
+      });
+      return;
+    }
+
+    setSelectedFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setSelectedImagePreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          processImageFile(file);
+          break;
+        }
+      }
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processImageFile(file);
+    e.target.value = '';
   };
 
   const handleJoinVoice = async () => {
@@ -203,7 +250,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       await livekit.connect(res.livekit_url, res.token, {});
       setIsInGroupVoice(true);
     } catch (err: any) {
-      alert(err.message || 'Falha ao conectar no chat de voz do grupo');
+      alert(err.message || 'Falha ao conectar no canal de voz');
     }
   };
 
@@ -283,75 +330,167 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               <div className="flex justify-center py-6 text-xs text-gray-500">Carregando mensagens...</div>
             ) : (
               messages.map((msg, index) => {
-              const isMe = msg.author_id === user?.id;
-              const prevMsg = messages[index - 1];
-              const isCompact = prevMsg && prevMsg.author_id === msg.author_id;
+                const prevMsg = messages[index - 1];
+                const isCompact = prevMsg && prevMsg.author_id === msg.author_id;
 
-              return (
-                <div
-                  key={msg.id}
-                  className={`relative group flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-colors ${
-                    isCompact ? 'py-1 mt-1' : 'py-2 mt-3'
-                  }`}
-                >
-                  {!isCompact ? (
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
-                      }}
-                      className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-85"
-                    >
-                      {msg.author?.avatar_url ? (
-                        <img src={msg.author.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        <span>{msg.author?.display_name?.[0]?.toUpperCase() || msg.author?.username?.[0]?.toUpperCase() || 'U'}</span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="w-8 flex-shrink-0" />
-                  )}
+                const lines = msg.content.split('\n');
+                const textLines: string[] = [];
+                const imageUrls: string[] = [];
 
-                  <div className="flex-1 min-w-0">
-                    {!isCompact && (
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-white">
-                          {msg.author?.display_name || msg.author?.username}
-                        </span>
-                        <span className="text-[10px] text-gray-500">
-                          {format(new Date(msg.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                        </span>
+                for (const line of lines) {
+                  const trimmed = line.trim();
+                  if (
+                    trimmed.startsWith('data:image/') ||
+                    trimmed.startsWith('/assets/user/') ||
+                    trimmed.startsWith('/assets/guild/') ||
+                    (trimmed.startsWith('http') &&
+                      (trimmed.endsWith('.png') ||
+                        trimmed.endsWith('.jpg') ||
+                        trimmed.endsWith('.jpeg') ||
+                        trimmed.endsWith('.gif') ||
+                        trimmed.endsWith('.webp') ||
+                        trimmed.includes('/assets/user/') ||
+                        trimmed.includes('/assets/guild/')))
+                  ) {
+                    imageUrls.push(trimmed);
+                  } else {
+                    textLines.push(line);
+                  }
+                }
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={`relative group flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-colors ${
+                      isCompact ? 'py-1 mt-1' : 'py-2 mt-3'
+                    }`}
+                  >
+                    {!isCompact ? (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
+                        }}
+                        className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-85"
+                      >
+                        {msg.author?.avatar_url ? (
+                          <img src={msg.author.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                        ) : (
+                          <span>{msg.author?.display_name?.[0]?.toUpperCase() || msg.author?.username?.[0]?.toUpperCase() || 'U'}</span>
+                        )}
                       </div>
+                    ) : (
+                      <div className="w-8 flex-shrink-0" />
                     )}
 
-                    <div className="text-sm text-gray-200 break-words whitespace-pre-wrap">{msg.content}</div>
+                    <div className="flex-1 min-w-0">
+                      {!isCompact && (
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
+                            }}
+                            className="text-sm font-semibold text-white hover:underline cursor-pointer"
+                          >
+                            {msg.author?.display_name || msg.author?.username}
+                          </span>
+                          <span className="text-[10px] text-gray-500">
+                            {format(new Date(msg.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          </span>
+                        </div>
+                      )}
+
+                      {textLines.length > 0 && (
+                        <div className="text-sm text-gray-200 break-words whitespace-pre-wrap">
+                          {textLines.join('\n')}
+                        </div>
+                      )}
+
+                      {imageUrls.map((url, idx) => (
+                        <div
+                          key={idx}
+                          className="mt-1.5 max-w-sm sm:max-w-md overflow-hidden rounded-2xl border border-white/10 shadow-md"
+                        >
+                          <img
+                            src={url}
+                            alt="Anexo"
+                            onClick={() => onPreviewImage?.(url)}
+                            className="w-full max-h-80 object-cover cursor-pointer hover:opacity-95 transition-opacity"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Selected Image / File Preview */}
+          {selectedImagePreview && (
+            <div className="mx-4 mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-xl border border-white/10" />
+                <span className="text-xs text-gray-300 font-medium truncate max-w-[150px]">
+                  {selectedFile?.name || 'Imagem anexada'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedFile(null);
+                  setSelectedImagePreview(null);
+                }}
+                className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
 
           {/* Input Bar */}
           <div className="p-3 md:p-4 bg-background-dark">
             <div className="bg-background-darkest rounded-2xl p-2 border border-white/10 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
+                title="Anexar imagem (até 20 MB)"
+              >
+                <PlusCircle className="w-5 h-5" />
+              </button>
+
               <textarea
                 ref={textareaRef}
                 rows={1}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                disabled={isUploading}
                 placeholder={`Conversar em ${groupName}...`}
                 className="flex-1 bg-transparent text-white px-2 py-1 focus:outline-none resize-none text-sm no-scrollbar max-h-32"
               />
 
               <button
+                type="button"
                 onClick={handleSend}
-                disabled={!content.trim()}
-                className="p-2 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white transition-all cursor-pointer"
+                disabled={(!content.trim() && !selectedFile) || isUploading}
+                className="p-2 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white transition-all cursor-pointer flex-shrink-0"
+                title="Enviar Mensagem"
               >
-                <SendHorizontal className="w-4 h-4" />
+                {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
               </button>
             </div>
           </div>
