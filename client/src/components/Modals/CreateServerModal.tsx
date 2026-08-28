@@ -65,8 +65,8 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
     try {
       const res = await api.invites.join(cleanCode);
       await fetchGuilds();
-      if (res.id) {
-        await selectGuild(res.id);
+      if (res.guild_id) {
+        await selectGuild(res.guild_id);
       }
       handleClose();
     } catch (err: any) {
