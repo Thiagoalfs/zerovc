@@ -5,9 +5,11 @@ export interface User {
   avatar_url: string;
   status: 'online' | 'idle' | 'dnd' | 'offline';
   custom_status: string;
-  created_at: string;
+  created_at?: string;
   updated_at?: string;
 }
+
+export type UserPublic = User;
 
 export interface GuildMember {
   guild_id: string;
