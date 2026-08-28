@@ -42,6 +42,7 @@ services:
       - "50000-50050:50000-50050/udp" # WebRTC ICE UDP range
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
       - "traefik.http.routers.zerovc-livekit-http.rule=Host(`${LIVEKIT_DOMAIN}`)"
       - "traefik.http.routers.zerovc-livekit-http.entrypoints=http"
       - "traefik.http.routers.zerovc-livekit-http.service=zerovc-livekit"
@@ -82,6 +83,7 @@ services:
       - ../assets:/app/assets
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
       - "traefik.http.routers.zerovc-backend-http.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.zerovc-backend-http.entrypoints=http"
       - "traefik.http.routers.zerovc-backend-http.service=zerovc-backend"
