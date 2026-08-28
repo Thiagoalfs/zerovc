@@ -17,20 +17,32 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose, onSelec
 
   const members = activeGuild.members || [];
 
-  const onlineMembers = members.filter((m) => m.status !== 'offline');
-  const offlineMembers = members.filter((m) => m.status === 'offline');
+  const onlineMembers = members.filter((m) => {
+    const isMe = m.id === currentUser?.id;
+    const st = isMe && currentUser ? currentUser.status : m.status;
+    return st && st !== 'offline';
+  });
+
+  const offlineMembers = members.filter((m) => {
+    const isMe = m.id === currentUser?.id;
+    const st = isMe && currentUser ? currentUser.status : m.status;
+    return !st || st === 'offline';
+  });
 
   const renderMember = (m: User) => {
     const isMe = m.id === currentUser?.id;
     const user = isMe && currentUser ? { ...m, ...currentUser } : m;
     const isOwner = user.id === activeGuild.owner_id;
     const topRole = user.roles && user.roles.length > 0 ? user.roles[0] : null;
+    const isOffline = !user.status || user.status === 'offline';
 
     return (
       <div
         key={user.id}
         onClick={() => onSelectUser?.(user)}
-        className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-colors active:scale-[0.98]"
+        className={`flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-all active:scale-[0.98] ${
+          isOffline ? 'opacity-55 hover:opacity-100' : ''
+        }`}
         title="Clique para ver o perfil"
       >
         <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
@@ -55,8 +67,18 @@ export const MemberList: React.FC<MemberListProps> = ({ isOpen, onClose, onSelec
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span
-              className={`text-sm truncate font-medium group-hover:underline ${isOwner ? 'font-semibold' : ''}`}
-              style={topRole ? { color: topRole.color } : isOwner ? { color: '#5865F2' } : { color: '#E0E0E0' }}
+              className={`text-sm truncate font-medium group-hover:underline ${
+                isOwner ? 'font-semibold' : ''
+              } ${isOffline ? 'text-gray-400' : ''}`}
+              style={
+                !isOffline && topRole
+                  ? { color: topRole.color }
+                  : !isOffline && isOwner
+                  ? { color: '#5865F2' }
+                  : isOffline
+                  ? { color: '#888888' }
+                  : { color: '#E0E0E0' }
+              }
             >
               {user.display_name || user.username}
             </span>
