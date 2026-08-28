@@ -25,3 +25,6 @@ Thumbs.db
 pgdata/
 *.sqlite
 *.db
+deploy/.env.example
+*.example
+deploy/livekit.yaml
