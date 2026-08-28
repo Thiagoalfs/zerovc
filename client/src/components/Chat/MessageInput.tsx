@@ -226,17 +226,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processImageFile = (file: File) => {
     if (file.size > MAX_FILE_BYTES) {
       setLimitAlert({
         title: 'Arquivo Muito Grande',
         message: 'O limite de imagens/vídeos/arquivos são 20mb',
         detail: `Tamanho do arquivo: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
       });
-      e.target.value = '';
       return;
     }
 
@@ -248,7 +244,29 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       setSelectedImagePreview(readEvent.target?.result as string);
     };
     reader.readAsDataURL(file);
+  };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          processImageFile(file);
+          break;
+        }
+      }
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processImageFile(file);
     e.target.value = '';
   };
 
@@ -405,6 +423,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           value={content}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={replyingTo ? `Respondendo a @${replyingTo.author?.username}...` : `Conversar em #${channel.name}`}
           rows={1}
           disabled={isUploading}
