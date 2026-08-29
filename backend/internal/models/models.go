@@ -11,6 +11,7 @@ type User struct {
 	Username         string    `json:"username"`
 	DisplayName      string    `json:"display_name"`
 	Email            string    `json:"email,omitempty"`
+	PhoneNumber      string    `json:"phone_number,omitempty"`
 	PasswordHash     string    `json:"-"`
 	TwoFactorSecret  string    `json:"-"`
 	TwoFactorEnabled bool      `json:"two_factor_enabled"`
@@ -34,6 +35,15 @@ type UserPublic struct {
 	CustomStatus     string    `json:"custom_status"`
 	TwoFactorEnabled bool      `json:"two_factor_enabled"`
 	Roles            []Role    `json:"roles,omitempty"`
+}
+
+type FavoriteGIF struct {
+	ID         uuid.UUID `json:"id"`
+	UserID     uuid.UUID `json:"user_id"`
+	GIFURL     string    `json:"gif_url"`
+	PreviewURL string    `json:"preview_url"`
+	Title      string    `json:"title"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 func (u *User) ToPublic() UserPublic {

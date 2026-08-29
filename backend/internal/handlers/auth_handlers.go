@@ -3,12 +3,15 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/models"
 )
+
+var validUsernameRegex = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 
 type AuthHandler struct {
 	db   *database.DB
@@ -73,8 +76,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
-	if len(req.Username) < 2 || len(req.Password) < 6 || req.Email == "" {
-		http.Error(w, `{"error":"usuário mínimo 2 caracteres, senha mínimo 6 caracteres, e-mail obrigatório"}`, http.StatusBadRequest)
+	if len(req.Username) < 2 || len(req.Username) > 32 || !validUsernameRegex.MatchString(req.Username) {
+		http.Error(w, `{"error":"O nome de usuário (@) deve conter apenas letras e números (2 a 32 caracteres), sem espaços ou símbolos"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Password) < 6 || req.Email == "" {
+		http.Error(w, `{"error":"senha mínimo 6 caracteres, e-mail obrigatório"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -88,10 +96,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	query := `
 		INSERT INTO users (username, email, password_hash, status)
 		VALUES ($1, $2, $3, 'online')
-		RETURNING id, username, email, display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), created_at, updated_at
+		RETURNING id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), created_at, updated_at
 	`
 	err = h.db.Pool.QueryRow(r.Context(), query, req.Username, req.Email, hash).Scan(
-		&user.ID, &user.Username, &user.Email, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"nome de usuário ou e-mail já cadastrado"}`, http.StatusConflict)
@@ -189,12 +197,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	query := `
-		SELECT id, username, email, display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), created_at, updated_at
+		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, userID).Scan(
-		&user.ID, &user.Username, &user.Email, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
@@ -205,6 +213,32 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+}
+
+func (h *AuthHandler) ChangePhone(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		PhoneNumber string `json:"phone_number"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	phone := strings.TrimSpace(req.PhoneNumber)
+	_, err := h.db.Pool.Exec(r.Context(), "UPDATE users SET phone_number = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", phone, userID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update phone number"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "phone_number": phone})
 }
 
 // 2FA Endpoints

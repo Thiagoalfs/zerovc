@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone, Loader2, UploadCloud, FileText } from 'lucide-react';
+import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone, Loader2, UploadCloud, FileText, Star } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
+import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { api } from '../../lib/api';
 import { ActiveCallOverlay } from './ActiveCallOverlay';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
+import { EmojiAndGifPicker } from '../Chat/EmojiAndGifPicker';
 import { User, DMMessage } from '../../types';
 
 interface DMChatAreaProps {
@@ -38,6 +40,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     loadMoreMessages,
   } = useDMStore();
   const { startCall, callState } = useCallStore();
+  const { isFavorited, toggleFavorite } = useFavoriteGifStore();
 
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -275,6 +278,12 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
+  };
+
+  const handleSelectGif = async (gifUrl: string) => {
+    setShowEmojiPicker(false);
+    await sendMessage(gifUrl, undefined, replyingTo?.id);
+    setReplyingTo(null);
   };
 
   const processFile = (file: File) => {
@@ -661,24 +670,51 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                   )}
 
                   {/* Attached Images */}
-                  {imageUrls.map((url, idx) => (
-                    <div
-                      key={idx}
-                      className={`mt-1.5 max-w-sm sm:max-w-md overflow-hidden rounded-2xl border border-white/10 shadow-md ${
-                        textLines.length === 0 && isMe ? 'rounded-tr-none' : textLines.length === 0 && !isMe ? 'rounded-tl-none' : ''
-                      }`}
-                    >
-                      <img
-                        src={url}
-                        alt="Imagem enviada"
-                        className="max-h-80 w-auto object-contain bg-black/40 cursor-pointer hover:opacity-95 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onPreviewImage) onPreviewImage(url);
-                        }}
-                      />
-                    </div>
-                  ))}
+                  {imageUrls.map((url, idx) => {
+                    const isGif =
+                      url.includes('.gif') ||
+                      url.includes('klipy') ||
+                      url.includes('giphy') ||
+                      url.includes('tenor');
+                    const favorited = isFavorited(url);
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`mt-1.5 max-w-sm sm:max-w-md overflow-hidden rounded-2xl border border-white/10 shadow-md relative group/media ${
+                          textLines.length === 0 && isMe ? 'rounded-tr-none' : textLines.length === 0 && !isMe ? 'rounded-tl-none' : ''
+                        }`}
+                      >
+                        <img
+                          src={url}
+                          alt="Imagem enviada"
+                          className="max-h-80 w-auto object-contain bg-black/40 cursor-pointer hover:opacity-95 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onPreviewImage) onPreviewImage(url);
+                          }}
+                        />
+
+                        {isGif && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(url);
+                            }}
+                            className={`absolute top-2 right-2 p-1.5 rounded-xl backdrop-blur-md transition-all shadow-md cursor-pointer ${
+                              favorited
+                                ? 'bg-amber-500 text-white opacity-100'
+                                : 'bg-black/60 text-white/70 hover:text-white hover:bg-black/90 opacity-0 group-hover/media:opacity-100'
+                            }`}
+                            title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
+                          >
+                            <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   {/* Reactions Badges */}
                   {msg.reactions && msg.reactions.length > 0 && (
@@ -767,24 +803,14 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       )}
 
-      {/* Emoji Picker Popover */}
-      {showEmojiPicker && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setShowEmojiPicker(false)} />
-          <div className="absolute bottom-20 right-4 z-30 bg-background-darkest p-3 rounded-2xl shadow-2xl border border-white/10 grid grid-cols-6 gap-2 animate-in fade-in zoom-in-95 duration-150">
-            {COMMON_EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => handleSelectEmoji(emoji)}
-                className="w-9 h-9 flex items-center justify-center text-xl hover:bg-white/10 rounded-xl transition-all active:scale-125 cursor-pointer"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      {/* Emoji & Klipy GIF Picker */}
+      <EmojiAndGifPicker
+        isOpen={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        onSelectEmoji={handleSelectEmoji}
+        onSelectGif={handleSelectGif}
+        positionClass="bottom-20 right-4"
+      />
 
       <input
         ref={fileInputRef}

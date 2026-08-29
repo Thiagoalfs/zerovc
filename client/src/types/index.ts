@@ -22,6 +22,7 @@ export interface User {
   username: string;
   display_name?: string;
   email?: string;
+  phone_number?: string;
   avatar_url?: string;
   banner_url?: string;
   bio?: string;
@@ -31,6 +32,15 @@ export interface User {
   two_factor_enabled?: boolean;
   muted_until?: string;
   created_at?: string;
+}
+
+export interface FavoriteGIF {
+  id: string;
+  user_id: string;
+  gif_url: string;
+  preview_url?: string;
+  title?: string;
+  created_at: string;
 }
 
 export interface Role {

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X, Sparkles, Compass, ChevronRight, ArrowLeft } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Sparkles, Compass, ChevronRight, ArrowLeft, Camera, UploadCloud } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { api } from '../../lib/api';
+import { ImageCropModal } from './ImageCropModal';
 
 interface CreateServerModalProps {
   isOpen: boolean;
@@ -11,9 +12,16 @@ interface CreateServerModalProps {
 export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, onClose }) => {
   const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
   const [name, setName] = useState('');
+  const [iconUrl, setIconUrl] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploadingIcon, setIsUploadingIcon] = useState(false);
   const [error, setError] = useState('');
+
+  // Crop Modal State
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [isCropOpen, setIsCropOpen] = useState(false);
+  const iconInputRef = useRef<HTMLInputElement>(null);
 
   const { createGuild, fetchGuilds, selectGuild } = useGuildStore();
 
@@ -22,10 +30,32 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
   const handleClose = () => {
     setMode('choose');
     setName('');
+    setIconUrl('');
     setInviteCode('');
     setError('');
     setIsLoading(false);
     onClose();
+  };
+
+  const handleIconSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCropFile(file);
+    setIsCropOpen(true);
+    e.target.value = '';
+  };
+
+  const handleCropConfirmed = async (croppedFile: File) => {
+    setIsCropOpen(false);
+    setIsUploadingIcon(true);
+    try {
+      const res = await api.upload.guildIcon(croppedFile);
+      setIconUrl(res.url);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao enviar ícone');
+    } finally {
+      setIsUploadingIcon(false);
+    }
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -35,8 +65,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
     setIsLoading(true);
     setError('');
     try {
-      // Create guild with only the name (no photo/icon requested)
-      await createGuild(name.trim());
+      await createGuild(name.trim(), iconUrl || undefined);
       handleClose();
     } catch (err: any) {
       setError(err.message || 'Erro ao criar servidor');
@@ -178,6 +207,37 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
           {/* 2. CREATE SERVER FORM */}
           {mode === 'create' && (
             <form onSubmit={handleCreateSubmit} className="space-y-4">
+              <input
+                type="file"
+                ref={iconInputRef}
+                onChange={handleIconSelected}
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+              />
+
+              <div className="flex flex-col items-center justify-center pb-2">
+                <button
+                  type="button"
+                  onClick={() => iconInputRef.current?.click()}
+                  className="w-20 h-20 rounded-3xl bg-background-darkest border-2 border-dashed border-white/20 hover:border-brand-500 flex flex-col items-center justify-center text-gray-400 hover:text-white transition-all overflow-hidden relative group cursor-pointer shadow-inner"
+                >
+                  {iconUrl ? (
+                    <img src={iconUrl} alt="Server Icon" className="w-full h-full object-cover" />
+                  ) : (
+                    <>
+                      <Camera className="w-6 h-6 mb-1 group-hover:scale-110 transition-transform" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Ícone</span>
+                    </>
+                  )}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <UploadCloud className="w-5 h-5 text-white" />
+                  </div>
+                </button>
+                <span className="text-[11px] text-gray-400 mt-2">
+                  {iconUrl ? 'Clique para trocar o ícone' : 'Opcional: adicione um ícone'}
+                </span>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
                   Nome do Servidor
@@ -208,10 +268,10 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
 
                 <button
                   type="submit"
-                  disabled={isLoading || !name.trim()}
+                  disabled={isLoading || isUploadingIcon || !name.trim()}
                   className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl text-xs md:text-sm transition-colors shadow-lg shadow-brand-500/25"
                 >
-                  {isLoading ? 'Criando...' : 'Criar Servidor'}
+                  {isLoading || isUploadingIcon ? 'Criando...' : 'Criar Servidor'}
                 </button>
               </div>
             </form>
@@ -260,6 +320,15 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
           )}
         </div>
       </div>
+
+      {/* Image Crop & Framing Modal */}
+      <ImageCropModal
+        isOpen={isCropOpen}
+        file={cropFile}
+        cropType="guildIcon"
+        onConfirm={handleCropConfirmed}
+        onCancel={() => setIsCropOpen(false)}
+      />
     </div>
   );
 };

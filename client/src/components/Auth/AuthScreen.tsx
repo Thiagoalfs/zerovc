@@ -52,7 +52,16 @@ export const AuthScreen: React.FC = () => {
         setRequires2FA(true);
       }
     } else {
-      await register(username, email, password);
+      const cleanUsername = username.trim();
+      if (!/^[a-zA-Z0-9]+$/.test(cleanUsername)) {
+        alert('O nome de usuário (@) deve conter apenas letras e números, sem espaços ou símbolos.');
+        return;
+      }
+      if (cleanUsername.length < 2 || cleanUsername.length > 32) {
+        alert('O nome de usuário (@) deve ter entre 2 e 32 caracteres.');
+        return;
+      }
+      await register(cleanUsername, email, password);
     }
   };
 
@@ -177,16 +186,25 @@ export const AuthScreen: React.FC = () => {
               {!isLogin && (
                 <div>
                   <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
-                    Nome de Usuário
+                    Nome de Usuário (@)
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="timotei"
-                    className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-400 font-bold text-sm select-none">
+                      @
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      maxLength={32}
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                      placeholder="usuario"
+                      className="w-full bg-background-darker border border-white/10 rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-400 mt-1 block">
+                    Apenas letras e números (sem espaços ou símbolos)
+                  </span>
                 </div>
               )}
 

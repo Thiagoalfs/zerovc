@@ -1,4 +1,5 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF } from '../types';
+import { convertToWebP } from '../utils/image';
 
 let cachedApiUrl: string | null = null;
 
@@ -99,10 +100,17 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    changePhone: (data: { phone_number: string }) =>
+      request<{ success: boolean; phone_number: string }>('/auth/change-phone', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
 
   users: {
     updateProfile: (data: {
+      username?: string;
+      phone_number?: string;
       display_name?: string;
       avatar_url?: string;
       banner_url?: string;
@@ -113,6 +121,17 @@ export const api = {
       request<User>('/users/@me', {
         method: 'PATCH',
         body: JSON.stringify(data),
+      }),
+    getFavoriteGifs: () => request<FavoriteGIF[]>('/users/me/favorite-gifs'),
+    addFavoriteGif: (data: { gif_url: string; preview_url?: string; title?: string }) =>
+      request<FavoriteGIF>('/users/me/favorite-gifs', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    removeFavoriteGif: (gifUrl: string) =>
+      request<{ success: boolean }>('/users/me/favorite-gifs', {
+        method: 'DELETE',
+        body: JSON.stringify({ gif_url: gifUrl }),
       }),
     block: (userId: string) =>
       request<{ success: boolean; blocked_user_id: string }>(`/users/${userId}/block`, {
@@ -386,8 +405,9 @@ export const api = {
 
   upload: {
     avatar: async (file: File) => {
+      const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', optimizedFile);
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
       const res = await fetch(`${getApiBaseUrl()}/api/upload/avatar`, {
         method: 'POST',
@@ -406,8 +426,9 @@ export const api = {
       return res.json() as Promise<{ url: string; filename: string; size: number }>;
     },
     guildIcon: async (file: File) => {
+      const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', optimizedFile);
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
       const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-icon`, {
         method: 'POST',
@@ -426,8 +447,9 @@ export const api = {
       return res.json() as Promise<{ url: string; filename: string; size: number }>;
     },
     guildBanner: async (file: File) => {
+      const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', optimizedFile);
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
       const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-banner`, {
         method: 'POST',
@@ -446,8 +468,9 @@ export const api = {
       return res.json() as Promise<{ url: string; filename: string; size: number }>;
     },
     banner: async (file: File) => {
+      const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', optimizedFile);
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
       const res = await fetch(`${getApiBaseUrl()}/api/upload/banner`, {
         method: 'POST',
@@ -466,8 +489,9 @@ export const api = {
       return res.json() as Promise<{ url: string; filename: string; size: number }>;
     },
     attachment: async (file: File) => {
+      const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', optimizedFile);
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
       const res = await fetch(`${getApiBaseUrl()}/api/upload/attachment`, {
         method: 'POST',

@@ -22,6 +22,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Permissions } from '../../types';
 import { api } from '../../lib/api';
+import { ImageCropModal } from './ImageCropModal';
 
 interface ServerSettingsModalProps {
   isOpen: boolean;
@@ -171,6 +172,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [appearanceMsg, setAppearanceMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  // Crop Modal State
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [cropType, setCropType] = useState<'guildIcon' | 'guildBanner'>('guildIcon');
+  const [isCropOpen, setIsCropOpen] = useState(false);
+
   const iconInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
@@ -208,22 +214,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     }
   };
 
-  const handleIconChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleIconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setIsUploadingIcon(true);
-    setAppearanceMsg(null);
-    try {
-      const res = await api.upload.guildIcon(file);
-      await updateGuild(activeGuild.id, { icon_url: res.url });
-      setAppearanceMsg({ text: 'Ícone do servidor alterado com sucesso!', type: 'success' });
-    } catch (err: any) {
-      setAppearanceMsg({ text: err.message || 'Erro ao enviar ícone', type: 'error' });
-    } finally {
-      setIsUploadingIcon(false);
-      if (iconInputRef.current) iconInputRef.current.value = '';
-    }
+    setCropFile(file);
+    setCropType('guildIcon');
+    setIsCropOpen(true);
+    if (iconInputRef.current) iconInputRef.current.value = '';
   };
 
   const handleRemoveIcon = async () => {
@@ -239,21 +236,41 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     }
   };
 
-  const handleBannerChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setCropFile(file);
+    setCropType('guildBanner');
+    setIsCropOpen(true);
+    if (bannerInputRef.current) bannerInputRef.current.value = '';
+  };
 
-    setIsUploadingBanner(true);
-    setAppearanceMsg(null);
-    try {
-      const res = await api.upload.guildBanner(file);
-      await updateGuild(activeGuild.id, { banner_url: res.url });
-      setAppearanceMsg({ text: 'Banner do servidor alterado com sucesso!', type: 'success' });
-    } catch (err: any) {
-      setAppearanceMsg({ text: err.message || 'Erro ao enviar banner', type: 'error' });
-    } finally {
-      setIsUploadingBanner(false);
-      if (bannerInputRef.current) bannerInputRef.current.value = '';
+  const handleCropConfirmed = async (croppedFile: File) => {
+    setIsCropOpen(false);
+    if (cropType === 'guildIcon') {
+      setIsUploadingIcon(true);
+      setAppearanceMsg(null);
+      try {
+        const res = await api.upload.guildIcon(croppedFile);
+        await updateGuild(activeGuild.id, { icon_url: res.url });
+        setAppearanceMsg({ text: 'Ícone do servidor alterado com sucesso!', type: 'success' });
+      } catch (err: any) {
+        setAppearanceMsg({ text: err.message || 'Erro ao enviar ícone', type: 'error' });
+      } finally {
+        setIsUploadingIcon(false);
+      }
+    } else {
+      setIsUploadingBanner(true);
+      setAppearanceMsg(null);
+      try {
+        const res = await api.upload.guildBanner(croppedFile);
+        await updateGuild(activeGuild.id, { banner_url: res.url });
+        setAppearanceMsg({ text: 'Banner do servidor alterado com sucesso!', type: 'success' });
+      } catch (err: any) {
+        setAppearanceMsg({ text: err.message || 'Erro ao enviar banner', type: 'error' });
+      } finally {
+        setIsUploadingBanner(false);
+      }
     }
   };
 
@@ -979,6 +996,15 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           </div>
         </div>
       )}
+
+      {/* Image Crop & Framing Modal */}
+      <ImageCropModal
+        isOpen={isCropOpen}
+        file={cropFile}
+        cropType={cropType}
+        onConfirm={handleCropConfirmed}
+        onCancel={() => setIsCropOpen(false)}
+      />
     </>
   );
 };

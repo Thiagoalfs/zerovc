@@ -4,6 +4,7 @@ import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { api } from '../../lib/api';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
+import { EmojiAndGifPicker } from './EmojiAndGifPicker';
 import { useGuildStore } from '../../stores/guildStore';
 
 interface MessageInputProps {
@@ -237,6 +238,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
+  const handleSelectGif = async (gifUrl: string) => {
+    setShowEmojiPicker(false);
+    await onSendMessage(gifUrl, replyingTo?.id);
+    onCancelReply?.();
+  };
+
   const processFile = (file: File) => {
     if (file.size > MAX_FILE_BYTES) {
       setLimitAlert({
@@ -396,24 +403,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {/* Emoji Picker Popover */}
-      {showEmojiPicker && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setShowEmojiPicker(false)} />
-          <div className="absolute bottom-20 right-4 z-30 bg-background-darkest p-3 rounded-2xl shadow-2xl border border-white/10 grid grid-cols-6 gap-2 animate-in fade-in zoom-in-95 duration-150">
-            {COMMON_EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => handleSelectEmoji(emoji)}
-                className="w-9 h-9 flex items-center justify-center text-xl hover:bg-white/10 rounded-xl transition-all active:scale-125 cursor-pointer"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      {/* Emoji & Klipy GIF Picker */}
+      <EmojiAndGifPicker
+        isOpen={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        onSelectEmoji={handleSelectEmoji}
+        onSelectGif={handleSelectGif}
+        positionClass="bottom-20 right-4"
+      />
 
       <input
         ref={fileInputRef}

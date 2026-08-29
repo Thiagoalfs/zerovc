@@ -177,12 +177,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             ) : (
               <div>
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
-                  Status
+                  Sobre mim
                 </span>
-                <span className="text-xs text-gray-300 flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${getStatusColor(user.status)}`} />
-                  <span>{getStatusLabel(user.status)}</span>
-                </span>
+                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">Oi! Estou usando zerovc!</p>
               </div>
             )}
 

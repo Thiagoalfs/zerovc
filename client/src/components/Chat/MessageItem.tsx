@@ -17,11 +17,13 @@ import {
   Ban,
   Check,
   UserX,
+  Star,
 } from 'lucide-react';
 import { Message, User, Permissions } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
+import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { api, getApiBaseUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
@@ -58,6 +60,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     removeRole,
   } = useGuildStore();
   const { openDMWithUser } = useDMStore();
+  const { isFavorited, toggleFavorite } = useFavoriteGifStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -379,14 +382,41 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               const fullSrc = part.startsWith('/assets/') ? `${getApiBaseUrl()}${part}` : part;
 
               if (isImage) {
+                const isGifImage =
+                  part.match(/\.gif($|\?)/i) ||
+                  fullSrc.includes('.gif') ||
+                  fullSrc.includes('klipy') ||
+                  fullSrc.includes('giphy') ||
+                  fullSrc.includes('tenor');
+
+                const favorited = isFavorited(fullSrc);
+
                 return (
-                  <div key={i} className="mt-2 mb-1 max-w-sm rounded-lg overflow-hidden border border-white/10">
+                  <div key={i} className="mt-2 mb-1 max-w-sm rounded-xl overflow-hidden border border-white/10 relative group/media">
                     <img
                       src={fullSrc}
                       alt="Uploaded content"
                       onClick={() => onPreviewImage?.(fullSrc)}
-                      className="max-h-64 object-cover rounded-lg cursor-pointer hover:opacity-95 transition-opacity"
+                      className="max-h-64 object-cover rounded-xl cursor-pointer hover:opacity-95 transition-opacity"
                     />
+
+                    {isGifImage && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(fullSrc);
+                        }}
+                        className={`absolute top-2 right-2 p-1.5 rounded-xl backdrop-blur-md transition-all shadow-md cursor-pointer ${
+                          favorited
+                            ? 'bg-amber-500 text-white opacity-100'
+                            : 'bg-black/60 text-white/70 hover:text-white hover:bg-black/90 opacity-0 group-hover/media:opacity-100'
+                        }`}
+                        title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
+                      >
+                        <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
+                      </button>
+                    )}
                   </div>
                 );
               }
