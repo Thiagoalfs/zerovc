@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httprate"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
@@ -34,10 +35,16 @@ func getEnv(key, fallback string) string {
 func main() {
 	port := getEnv("PORT", "8080")
 	dbURL := getEnv("DATABASE_URL", "postgres://zerovc_user:zerovc_password_change_me@localhost:5432/zerovc?sslmode=disable")
-	jwtSecret := getEnv("JWT_SECRET", "zerovc_super_secret_jwt_key_32bytes_long")
+	jwtSecret := getEnv("JWT_SECRET")
+	if jwtSecret == "" {
+    log.Fatal("JWT_SECRET não definido — defina uma variável de ambiente forte antes de iniciar o servidor")
+}
 	livekitPublicURL := getEnv("LIVEKIT_PUBLIC_URL", "ws://localhost:7880")
-	livekitKey := getEnv("LIVEKIT_API_KEY", "devkey")
-	livekitSecret := getEnv("LIVEKIT_API_SECRET", "secret_livekit_key_change_in_production")
+	livekitKey := getEnv("LIVEKIT_API_KEY")
+	livekitSecret := getEnv("LIVEKIT_API_SECRET")
+	if livekitSecret == "" {
+    log.Fatal("livekitSecret não definido — defina uma variável de ambiente forte antes de iniciar o servidor")
+}
 	webDir := getEnv("WEB_DIR", "./web")
 
 	log.Printf("[ZeroVC] Starting backend on port %s...", port)
@@ -136,7 +143,7 @@ func main() {
 	uploadHandler := handlers.NewUploadHandler(uploadDir)
 
 	// 5. Router & Middleware
-	r := chi.NewRouter()
+	// Global middlewares (sem rate limit aqui)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
@@ -144,14 +151,32 @@ func main() {
 	r.Use(middleware.Timeout(30 * time.Second))
 
 	// CORS Configuration
+	allowedOrigins := map[string]bool{
+		"https://zerovc.safiroko.xyz": true,
+		"http://localhost:5173":       true,
+	}
+
 	r.Use(cors.Handler(cors.Options{
-		AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
+		AllowOriginFunc: func(r *http.Request, origin string) bool {
+			if origin == "" || origin == "null" {
+				return true
+			}
+			return allowedOrigins[origin]
+		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+
+	// Public Auth Endpoints — rate limit só aqui dentro
+	r.Route("/api/auth", func(r chi.Router) {
+		r.Use(httprate.LimitByIP(5, time.Minute))
+		r.Post("/register", authHandler.Register)
+		r.Post("/login", authHandler.Login)
+		r.Post("/logout", authHandler.Logout)
+	})
 
 	// Public Health Check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
