@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Participant } from 'livekit-client';
+import { Participant, DisconnectReason } from 'livekit-client';
 import { api } from '../lib/api';
 import { livekit } from '../lib/livekit';
 import { playJoinVoiceSound, playLeaveVoiceSound } from '../utils/audio';
@@ -141,6 +141,26 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
           const { currentChannelId } = get();
           if (currentChannelId) {
             api.channels.updateVoiceState(currentChannelId, { is_screensharing: false }).catch(() => {});
+          }
+        },
+        onDisconnected: (reason) => {
+          console.warn('[Voice] LiveKit room disconnected. Reason:', reason);
+          playLeaveVoiceSound();
+          const isDuplicate = reason === DisconnectReason.DUPLICATE_IDENTITY || String(reason).toLowerCase().includes('duplicate');
+          
+          set({
+            currentChannelId: null,
+            isConnected: false,
+            isConnecting: false,
+            isScreensharing: false,
+            isCameraOn: false,
+            participants: [],
+            speakingUserIds: [],
+            watchedParticipantId: null,
+          });
+
+          if (isDuplicate) {
+            alert('Você entrou na chamada por outro dispositivo ou navegador.');
           }
         },
       });

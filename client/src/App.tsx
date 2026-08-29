@@ -356,7 +356,11 @@ export const App: React.FC = () => {
       };
 
       const handleMessagePin = (event: any) => {
-        useGuildStore.getState().handlePinEvent(event.data);
+        if (event.data?.room_id) {
+          useDMStore.getState().handlePinEvent(event.data);
+        } else {
+          useGuildStore.getState().handlePinEvent(event.data);
+        }
       };
 
       const handleDMReactionAdd = (event: any) => {
@@ -571,6 +575,9 @@ export const App: React.FC = () => {
               setHomeView('group');
               navigateTo(`/@me/group/${group.id}`);
             }}
+            onOpenUserProfile={(targetUser, pos) =>
+              setSelectedUserForProfile({ user: targetUser, position: pos })
+            }
             onOpenSettings={() => setIsProfileModalOpen(true)}
             onOpenScreenShare={() => setIsScreenShareOpen(true)}
             onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
@@ -634,6 +641,9 @@ export const App: React.FC = () => {
           homeView === 'friends' ? (
             <FriendsView
               onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+              onOpenUserProfile={(targetUser, pos) =>
+                setSelectedUserForProfile({ user: targetUser, position: pos })
+              }
               onOpenDM={(userId, room) => {
                 setIsHomeActive(true);
                 setHomeView('dm');

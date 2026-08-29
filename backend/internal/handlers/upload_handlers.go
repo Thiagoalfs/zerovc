@@ -30,6 +30,32 @@ func NewUploadHandler(baseDir string) *UploadHandler {
 	}
 }
 
+var dangerousExtensions = map[string]bool{
+	".exe": true,
+	".bat": true,
+	".cmd": true,
+	".sh":  true,
+	".ps1": true,
+	".vbs": true,
+	".msi": true,
+	".scr": true,
+	".jar": true,
+	".pif": true,
+	".com": true,
+	".hta": true,
+	".cpl": true,
+	".wsf": true,
+	".msc": true,
+}
+
+var allowedImageExtensions = map[string]bool{
+	".jpg":  true,
+	".jpeg": true,
+	".png":  true,
+	".webp": true,
+	".gif":  true,
+}
+
 func (h *UploadHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	_, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -37,7 +63,7 @@ func (h *UploadHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.handleUpload(w, r, "user", "avatar")
+	h.handleUpload(w, r, "user", "avatar", true)
 }
 
 func (h *UploadHandler) UploadGuildIcon(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +73,7 @@ func (h *UploadHandler) UploadGuildIcon(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	h.handleUpload(w, r, "guild", "icon")
+	h.handleUpload(w, r, "guild", "icon", true)
 }
 
 func (h *UploadHandler) UploadGuildBanner(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +83,7 @@ func (h *UploadHandler) UploadGuildBanner(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	h.handleUpload(w, r, "guild", "banner")
+	h.handleUpload(w, r, "guild", "banner", true)
 }
 
 func (h *UploadHandler) UploadBanner(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +93,7 @@ func (h *UploadHandler) UploadBanner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.handleUpload(w, r, "user", "banner")
+	h.handleUpload(w, r, "user", "banner", true)
 }
 
 func (h *UploadHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
@@ -77,10 +103,10 @@ func (h *UploadHandler) UploadAttachment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	h.handleUpload(w, r, "user", "att")
+	h.handleUpload(w, r, "user", "att", false)
 }
 
-func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string) {
+func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string, imageOnly bool) {
 	// Max 20 MB
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
 		http.Error(w, `{"error":"O limite de arquivos é 20MB"}`, http.StatusBadRequest)
@@ -95,21 +121,22 @@ func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, fol
 	defer file.Close()
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext == "" {
-		ext = ".jpg"
-	}
 
-	// Validate allowed image extensions
-	allowed := map[string]bool{
-		".jpg":  true,
-		".jpeg": true,
-		".png":  true,
-		".webp": true,
-		".gif":  true,
-	}
-	if !allowed[ext] {
-		http.Error(w, `{"error":"Formato de imagem inválido. Use JPG, PNG, WEBP ou GIF."}`, http.StatusBadRequest)
-		return
+	// If imageOnly (avatar, banner, icon)
+	if imageOnly {
+		if ext == "" {
+			ext = ".jpg"
+		}
+		if !allowedImageExtensions[ext] {
+			http.Error(w, `{"error":"Formato de imagem inválido. Use JPG, PNG, WEBP ou GIF."}`, http.StatusBadRequest)
+			return
+		}
+	} else {
+		// Generic attachment: check dangerous extensions
+		if dangerousExtensions[ext] {
+			http.Error(w, `{"error":"Tipo de arquivo não permitido por motivos de segurança."}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	filename := fmt.Sprintf("%s_%s%s", prefix, uuid.New().String(), ext)
@@ -136,7 +163,7 @@ func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, fol
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
 		"url":      publicURL,
-		"filename": filename,
+		"filename": header.Filename,
 		"size":     header.Size,
 	})
 }

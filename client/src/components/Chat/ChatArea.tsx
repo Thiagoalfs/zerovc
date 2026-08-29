@@ -26,6 +26,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const {
     activeChannel,
     messages,
+    pinnedMessagesByChannel,
+    isLoadingPinned,
+    fetchPinnedMessages,
     isLoadingMessages,
     isLoadingMoreMessages,
     hasMoreByChannel,
@@ -41,6 +44,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const dragCounterRef = useRef<number>(0);
+
+  // Fetch pinned messages from backend whenever showPinnedOnly is toggled or channel changes
+  useEffect(() => {
+    if (showPinnedOnly && activeChannel) {
+      fetchPinnedMessages(activeChannel.id);
+    }
+  }, [showPinnedOnly, activeChannel?.id]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -193,8 +203,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const isSomeoneTyping = typingForThisChannel && typingForThisChannel.size > 0;
 
   // Filter messages based on search & pinned filter
-  const displayedMessages = messages.filter((msg) => {
-    if (showPinnedOnly && !msg.is_pinned) return false;
+  const baseMessages = showPinnedOnly
+    ? pinnedMessagesByChannel[activeChannel.id] || []
+    : messages;
+
+  const displayedMessages = baseMessages.filter((msg) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchContent = msg.content.toLowerCase().includes(q);
@@ -351,10 +364,33 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </div>
           )}
 
-          {isLoadingMessages ? (
-            <div className="flex justify-center py-6 text-sm text-gray-500">Carregando mensagens...</div>
+          {isLoadingMessages || (showPinnedOnly && isLoadingPinned[activeChannel.id]) ? (
+            <div className="flex justify-center items-center gap-2 py-10 text-sm text-gray-500">
+              <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+              <span>{showPinnedOnly ? 'Carregando mensagens fixadas...' : 'Carregando mensagens...'}</span>
+            </div>
           ) : displayedMessages.length === 0 ? (
-            <div className="flex justify-center py-10 text-sm text-gray-500">Nenhuma mensagem encontrada.</div>
+            <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 select-none">
+              {showPinnedOnly ? (
+                <>
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-amber-400">
+                    <Pin className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-300">Nenhuma mensagem fixada</span>
+                  <span className="text-xs text-gray-500">Fixe mensagens importantes para que todos possam consultá-las facilmente.</span>
+                </>
+              ) : searchQuery ? (
+                <>
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-400">
+                    <Search className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-300">Nenhum resultado encontrado</span>
+                  <span className="text-xs text-gray-500">Tente buscar por termos diferentes ou verifique a ortografia.</span>
+                </>
+              ) : (
+                <span>Nenhuma mensagem encontrada.</span>
+              )}
+            </div>
           ) : (
             displayedMessages.map((message, index) => {
               const prevMessage = index > 0 ? displayedMessages[index - 1] : null;

@@ -581,3 +581,146 @@ func (h *MessageHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "is_pinned": isPinned})
 }
+
+func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	channelIDStr := chi.URLParam(r, "channelID")
+	channelID, err := uuid.Parse(channelIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var guildID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
+	if err != nil {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you must be a member of this server to view messages"}`, http.StatusForbidden)
+		return
+	}
+
+	query := `
+		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
+		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
+		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url
+		FROM messages m
+		INNER JOIN users u ON u.id = m.author_id
+		LEFT JOIN messages rm ON rm.id = m.reply_to_id
+		LEFT JOIN users ru ON ru.id = rm.author_id
+		WHERE m.channel_id = $1 AND m.is_pinned = true
+		ORDER BY m.created_at DESC
+		LIMIT 100
+	`
+
+	rows, err := h.db.Pool.Query(r.Context(), query, channelID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to query pinned messages"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	messages := make([]models.Message, 0)
+	msgIDs := make([]uuid.UUID, 0)
+
+	for rows.Next() {
+		var m models.Message
+		var attachmentsJSON []byte
+		var author models.UserPublic
+		var rID, ruID *uuid.UUID
+		var rContent, ruUsername, ruDisplayName, ruAvatar *string
+
+		if err := rows.Scan(
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
+			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
+			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
+		); err != nil {
+			continue
+		}
+		author.ID = m.AuthorID
+		m.Author = author
+		json.Unmarshal(attachmentsJSON, &m.Attachments)
+
+		if rID != nil && ruID != nil {
+			var dName, aUrl string
+			if ruDisplayName != nil {
+				dName = *ruDisplayName
+			}
+			if ruAvatar != nil {
+				aUrl = *ruAvatar
+			}
+			var uName string
+			if ruUsername != nil {
+				uName = *ruUsername
+			}
+			var cnt string
+			if rContent != nil {
+				cnt = *rContent
+			}
+			m.ReplyTo = &models.MessageReplyInfo{
+				ID: *rID,
+				Author: models.UserPublic{
+					ID:          *ruID,
+					Username:    uName,
+					DisplayName: dName,
+					AvatarURL:   aUrl,
+				},
+				Content: cnt,
+			}
+		}
+
+		m.Reactions = make([]models.MessageReaction, 0)
+		messages = append(messages, m)
+		msgIDs = append(msgIDs, m.ID)
+	}
+
+	// Fetch reactions for messages
+	if len(msgIDs) > 0 {
+		reactionsQuery := `
+			SELECT message_id, emoji, user_id
+			FROM message_reactions
+			WHERE message_id = ANY($1)
+		`
+		rxRows, err := h.db.Pool.Query(r.Context(), reactionsQuery, msgIDs)
+		if err == nil {
+			defer rxRows.Close()
+			rxMap := make(map[uuid.UUID]map[string][]uuid.UUID)
+			for rxRows.Next() {
+				var mID, uID uuid.UUID
+				var emoji string
+				if err := rxRows.Scan(&mID, &emoji, &uID); err == nil {
+					if rxMap[mID] == nil {
+						rxMap[mID] = make(map[string][]uuid.UUID)
+					}
+					rxMap[mID][emoji] = append(rxMap[mID][emoji], uID)
+				}
+			}
+
+			for i := range messages {
+				if emojis, ok := rxMap[messages[i].ID]; ok {
+					for em, uids := range emojis {
+						messages[i].Reactions = append(messages[i].Reactions, models.MessageReaction{
+							Emoji:   em,
+							Count:   len(uids),
+							UserIDs: uids,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
+}
+

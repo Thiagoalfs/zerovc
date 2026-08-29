@@ -10,9 +10,12 @@ interface GuildState {
   activeChannel: Channel | null;
   messages: Message[];
   unreadChannels: Set<string>;
+  mutedGuilds: Set<string>;
   guildMentions: Record<string, number>;
   channelMentions: Record<string, number>;
   messagesByChannel: Record<string, Message[]>;
+  pinnedMessagesByChannel: Record<string, Message[]>;
+  isLoadingPinned: Record<string, boolean>;
   hasMoreByChannel: Record<string, boolean>;
   isLoadingGuilds: boolean;
   isLoadingMessages: boolean;
@@ -23,9 +26,14 @@ interface GuildState {
   selectGuild: (guildId: string, initialChannelId?: string) => Promise<void>;
   selectChannel: (channel: Channel) => Promise<void>;
   loadMoreMessages: (channelId: string) => Promise<void>;
+  fetchPinnedMessages: (channelId: string) => Promise<void>;
   createGuild: (name: string, iconUrl?: string) => Promise<Guild>;
   updateGuild: (guildId: string, data: { name?: string; icon_url?: string; banner_url?: string }) => Promise<void>;
   deleteGuild: (guildId: string) => Promise<void>;
+  leaveGuild: (guildId: string) => Promise<void>;
+  toggleMuteGuild: (guildId: string) => Promise<void>;
+  markGuildAsRead: (guildId: string) => void;
+  isGuildMuted: (guildId: string) => boolean;
   handleGuildUpdateEvent: (guild: Guild) => void;
   handleGuildDeleteEvent: (guildId: string) => void;
   createChannel: (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string, categoryId?: string, isPrivate?: boolean, roleIds?: string[]) => Promise<Channel>;
@@ -67,15 +75,28 @@ interface GuildState {
   muteMember: (guildId: string, userId: string, durationSeconds: number) => Promise<void>;
 }
 
+const getInitialMutedGuilds = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem('zerovc_muted_guilds');
+    if (raw) {
+      return new Set(JSON.parse(raw));
+    }
+  } catch {}
+  return new Set();
+};
+
 export const useGuildStore = create<GuildState>((set, get) => ({
   guilds: [],
   activeGuild: null,
   activeChannel: null,
   messages: [],
   unreadChannels: new Set(),
+  mutedGuilds: getInitialMutedGuilds(),
   guildMentions: {},
   channelMentions: {},
   messagesByChannel: {},
+  pinnedMessagesByChannel: {},
+  isLoadingPinned: {},
   hasMoreByChannel: {},
   isLoadingGuilds: false,
   isLoadingMessages: false,
@@ -104,7 +125,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           : fullGuild.channels.find((c: Channel) => c.type === 'text') || fullGuild.channels[0];
         get().selectChannel(targetChannel);
       } else {
-        set({ activeChannel: null, messages: [] });
+        set({ activeGuild: fullGuild, activeChannel: null, messages: [] });
       }
     } catch (err) {
       console.error('Failed to select guild:', err);
@@ -173,7 +194,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set({ isLoadingMoreMessages: true });
 
     try {
-      const olderMessages = await api.channels.getMessages(channelId, 50, oldestMessage.created_at || oldestMessage.id);
+      const olderMessages = await api.channels.getMessages(channelId, 50, oldestMessage.id);
       const hasMore = olderMessages.length === 50;
 
       // Filter out any duplicates
@@ -196,6 +217,27 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     } catch (err) {
       console.error('Failed to load older messages:', err);
       set({ isLoadingMoreMessages: false });
+    }
+  },
+
+  fetchPinnedMessages: async (channelId: string) => {
+    set((state) => ({
+      isLoadingPinned: { ...state.isLoadingPinned, [channelId]: true },
+    }));
+    try {
+      const pins = await api.channels.getPinnedMessages(channelId);
+      set((state) => ({
+        pinnedMessagesByChannel: {
+          ...state.pinnedMessagesByChannel,
+          [channelId]: pins,
+        },
+        isLoadingPinned: { ...state.isLoadingPinned, [channelId]: false },
+      }));
+    } catch (err) {
+      console.error('Failed to fetch pinned messages:', err);
+      set((state) => ({
+        isLoadingPinned: { ...state.isLoadingPinned, [channelId]: false },
+      }));
     }
   },
 
@@ -231,6 +273,65 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const activeChannel = state.activeGuild?.id === guildId ? null : state.activeChannel;
       return { guilds, activeGuild, activeChannel, messages: [] };
     });
+  },
+
+  leaveGuild: async (guildId: string) => {
+    await api.guilds.leave(guildId);
+    set((state) => {
+      const guilds = state.guilds.filter((g) => g.id !== guildId);
+      const activeGuild = state.activeGuild?.id === guildId ? null : state.activeGuild;
+      const activeChannel = state.activeGuild?.id === guildId ? null : state.activeChannel;
+      return { guilds, activeGuild, activeChannel, messages: [] };
+    });
+  },
+
+  toggleMuteGuild: async (guildId: string) => {
+    const isMutedNow = get().mutedGuilds.has(guildId);
+    const nextMuted = new Set(get().mutedGuilds);
+    if (isMutedNow) {
+      nextMuted.delete(guildId);
+    } else {
+      nextMuted.add(guildId);
+    }
+
+    set({ mutedGuilds: nextMuted });
+    try {
+      localStorage.setItem('zerovc_muted_guilds', JSON.stringify(Array.from(nextMuted)));
+    } catch {}
+
+    // Sincronizar com backend se disponível
+    try {
+      await api.guilds.toggleMute(guildId);
+    } catch (err) {
+      console.warn('Backend toggleMute warning:', err);
+    }
+  },
+
+  markGuildAsRead: (guildId: string) => {
+    set((state) => {
+      const targetGuild = state.guilds.find((g) => g.id === guildId) || (state.activeGuild?.id === guildId ? state.activeGuild : null);
+      if (!targetGuild || !targetGuild.channels) return state;
+
+      const nextUnread = new Set(state.unreadChannels);
+      const nextChannelMentions = { ...state.channelMentions };
+      const nextGuildMentions = { ...state.guildMentions };
+
+      targetGuild.channels.forEach((ch) => {
+        nextUnread.delete(ch.id);
+        delete nextChannelMentions[ch.id];
+      });
+      delete nextGuildMentions[guildId];
+
+      return {
+        unreadChannels: nextUnread,
+        channelMentions: nextChannelMentions,
+        guildMentions: nextGuildMentions,
+      };
+    });
+  },
+
+  isGuildMuted: (guildId: string) => {
+    return get().mutedGuilds.has(guildId);
   },
 
   handleGuildUpdateEvent: (updatedGuild: Guild) => {
@@ -415,11 +516,24 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         [message.channel_id]: updatedChannelMsgs,
       };
 
+      // Find target guild for mute check
+      let targetGuildId = '';
+      for (const g of state.guilds) {
+        if (g.channels?.some((c) => c.id === message.channel_id)) {
+          targetGuildId = g.id;
+          break;
+        }
+      }
+      if (!targetGuildId && state.activeGuild?.channels?.some((c) => c.id === message.channel_id)) {
+        targetGuildId = state.activeGuild.id;
+      }
+      const isServerMuted = targetGuildId ? state.mutedGuilds.has(targetGuildId) : false;
+
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
         if (state.messages.some((m) => m.id === message.id)) {
           return { messagesByChannel: nextMessagesByChannel };
         }
-        if (message.author_id !== currentUser?.id) {
+        if (message.author_id !== currentUser?.id && !isServerMuted) {
           playMessageSound(isMention);
         }
         return {
@@ -430,7 +544,9 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         // Mark as unread
         const unread = new Set(state.unreadChannels);
         unread.add(message.channel_id);
-        playMessageSound(isMention);
+        if (!isServerMuted) {
+          playMessageSound(isMention);
+        }
 
         const nextGuildMentions = { ...state.guildMentions };
         const nextChannelMentions = { ...state.channelMentions };
@@ -489,9 +605,14 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       for (const [chId, msgs] of Object.entries(state.messagesByChannel)) {
         nextMessagesByChannel[chId] = msgs.filter((m) => m.id !== messageId);
       }
+      const nextPinnedByChannel: Record<string, Message[]> = {};
+      for (const [chId, msgs] of Object.entries(state.pinnedMessagesByChannel)) {
+        nextPinnedByChannel[chId] = msgs.filter((m) => m.id !== messageId);
+      }
       return {
         messages: state.messages.filter((m) => m.id !== messageId),
         messagesByChannel: nextMessagesByChannel,
+        pinnedMessagesByChannel: nextPinnedByChannel,
       };
     });
   },
@@ -544,9 +665,15 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         nextMessagesByChannel[channel_id] = updateMsgList(nextMessagesByChannel[channel_id]);
       }
 
+      const nextPinnedByChannel = { ...state.pinnedMessagesByChannel };
+      if (nextPinnedByChannel[channel_id]) {
+        nextPinnedByChannel[channel_id] = updateMsgList(nextPinnedByChannel[channel_id]);
+      }
+
       return {
         messages: state.activeChannel?.id === channel_id ? updateMsgList(state.messages) : state.messages,
         messagesByChannel: nextMessagesByChannel,
+        pinnedMessagesByChannel: nextPinnedByChannel,
       };
     });
   },
@@ -561,9 +688,41 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         nextMessagesByChannel[channel_id] = updateMsgList(nextMessagesByChannel[channel_id]);
       }
 
+      const currentPinned = state.pinnedMessagesByChannel[channel_id] || [];
+      let nextPinned: Message[];
+
+      if (is_pinned) {
+        // Find message in current channel messages or state.messages
+        const found =
+          state.messagesByChannel[channel_id]?.find((m) => m.id === message_id) ||
+          (state.activeChannel?.id === channel_id ? state.messages.find((m) => m.id === message_id) : undefined);
+
+        if (found) {
+          const pinnedMsg = { ...found, is_pinned: true };
+          const alreadyInPinned = currentPinned.some((m) => m.id === message_id);
+          nextPinned = alreadyInPinned
+            ? currentPinned.map((m) => (m.id === message_id ? pinnedMsg : m))
+            : [pinnedMsg, ...currentPinned];
+        } else {
+          // If not in local message list, fetch from server in background
+          nextPinned = currentPinned;
+          setTimeout(() => {
+            get().fetchPinnedMessages(channel_id);
+          }, 50);
+        }
+      } else {
+        nextPinned = currentPinned.filter((m) => m.id !== message_id);
+      }
+
+      const nextPinnedByChannel = {
+        ...state.pinnedMessagesByChannel,
+        [channel_id]: nextPinned,
+      };
+
       return {
         messages: state.activeChannel?.id === channel_id ? updateMsgList(state.messages) : state.messages,
         messagesByChannel: nextMessagesByChannel,
+        pinnedMessagesByChannel: nextPinnedByChannel,
       };
     });
   },

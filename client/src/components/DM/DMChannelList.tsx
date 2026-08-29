@@ -1,17 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Plus, MessageSquare } from 'lucide-react';
+import { Users, Plus, MessageSquare, User as UserIcon, Phone, UserPlus, UserMinus, Ban, Copy, Check, Server } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
-import { DMRoom, DMGroup } from '../../types';
+import { useGuildStore } from '../../stores/guildStore';
+import { useFriendStore } from '../../stores/friendStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useCallStore } from '../../stores/callStore';
+import { DMRoom, DMGroup, User } from '../../types';
 import { UserBar } from '../Sidebar/UserBar';
 import { CreateDMGroupModal } from '../Modals/CreateDMGroupModal';
-import { formatAssetUrl } from '../../lib/api';
+import { ContextMenu } from '../ContextMenu/ContextMenu';
+import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
+import { api, formatAssetUrl } from '../../lib/api';
 
 interface DMChannelListProps {
   currentView: 'friends' | 'dm' | 'group';
   onSelectFriends: () => void;
   onSelectRoom?: (room: DMRoom) => void;
   onSelectGroup?: (group: DMGroup) => void;
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   onOpenSettings: () => void;
   onOpenScreenShare: () => void;
   onCloseMobileDrawer?: () => void;
@@ -22,13 +29,20 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   onSelectFriends,
   onSelectRoom,
   onSelectGroup,
+  onOpenUserProfile,
   onOpenSettings,
   onOpenScreenShare,
   onCloseMobileDrawer,
 }) => {
-  const { rooms, activeRoom, selectRoom, fetchRooms, roomUnreadCounts, unreadRooms } = useDMStore();
+  const { user: currentUser } = useAuthStore();
+  const { rooms, activeRoom, selectRoom, fetchRooms, roomUnreadCounts, unreadRooms, openDMWithUser } = useDMStore();
   const { groups, activeGroup, selectGroup, fetchGroups } = useDMGroupStore();
+  const { guilds } = useGuildStore();
+  const { friends, fetchFriends, sendRequest, removeFriend } = useFriendStore();
+  const { startCall } = useCallStore();
+  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRooms();
@@ -59,6 +73,140 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
       case 'dnd': return 'bg-dnd';
       default: return 'bg-offline';
     }
+  };
+
+  const handleUserContextMenu = (e: React.MouseEvent, targetUser?: User, roomId?: string) => {
+    if (!targetUser) return;
+    const isMe = targetUser.id === currentUser?.id;
+    const friendship = friends.find(
+      (f) => (f.friend?.id === targetUser.id || f.user?.id === targetUser.id)
+    );
+    const isFriend = !!friendship && friendship.status === 'accepted';
+
+    // Submenu para convidar para servidor
+    const inviteSubmenu: ContextMenuItem[] = (guilds || []).map((g) => ({
+      label: g.name,
+      icon: <Server className="w-3.5 h-3.5" />,
+      onClick: async () => {
+        try {
+          const invite = await api.guilds.createInvite(g.id);
+          const r = roomId ? { id: roomId } : await openDMWithUser(targetUser.id);
+          const inviteLink = `${window.location.origin}/invite/${invite.code}`;
+          await api.dms.sendMessage(r.id, { content: `Aqui está o convite para o servidor **${g.name}**:\n${inviteLink}` });
+          alert(`Convite para o servidor "${g.name}" enviado com sucesso na DM de @${targetUser.username}!`);
+        } catch (err: any) {
+          alert(err?.message || 'Erro ao enviar convite para o servidor');
+        }
+      },
+    }));
+
+    const items: ContextMenuItem[] = [
+      {
+        id: 'view-profile',
+        label: 'Ver Perfil',
+        icon: <UserIcon className="w-4 h-4" />,
+        onClick: () => {
+          onOpenUserProfile?.(targetUser, { x: e.clientX, y: e.clientY });
+        },
+      },
+      ...(!isMe
+        ? [
+            {
+              id: 'start-call',
+              label: 'Ligar',
+              icon: <Phone className="w-4 h-4 text-emerald-400" />,
+              onClick: async () => {
+                try {
+                  const r = roomId ? { id: roomId } : await openDMWithUser(targetUser.id);
+                  await startCall(r.id, targetUser);
+                } catch (err: any) {
+                  alert(err?.message || 'Erro ao iniciar chamada');
+                }
+              },
+            },
+          ]
+        : []),
+      ...(guilds.length > 0 && !isMe
+        ? [
+            {
+              id: 'invite-to-server',
+              label: 'Convidar para Servidor',
+              icon: <Server className="w-4 h-4 text-brand-400" />,
+              subItems: inviteSubmenu,
+            },
+          ]
+        : []),
+      {
+        separator: true,
+        label: '',
+      },
+      ...(!isMe
+        ? [
+            isFriend
+              ? {
+                  id: 'remove-friend',
+                  label: 'Remover Amigo',
+                  icon: <UserMinus className="w-4 h-4" />,
+                  variant: 'danger' as const,
+                  onClick: async () => {
+                    if (window.confirm(`Tem certeza que deseja remover @${targetUser.username} dos seus amigos?`)) {
+                      try {
+                        if (friendship) await removeFriend(friendship.id);
+                      } catch (err: any) {
+                        alert(err?.message || 'Erro ao remover amigo');
+                      }
+                    }
+                  },
+                }
+              : {
+                  id: 'add-friend',
+                  label: 'Adicionar Amigo',
+                  icon: <UserPlus className="w-4 h-4 text-online" />,
+                  onClick: async () => {
+                    try {
+                      await sendRequest(targetUser.username);
+                      alert(`Pedido de amizade enviado para @${targetUser.username}!`);
+                    } catch (err: any) {
+                      alert(err?.message || 'Erro ao enviar pedido de amizade');
+                    }
+                  },
+                },
+            {
+              id: 'block-user',
+              label: 'Bloquear',
+              icon: <Ban className="w-4 h-4" />,
+              variant: 'danger' as const,
+              onClick: async () => {
+                if (window.confirm(`Tem certeza que deseja bloquear @${targetUser.username}? Vocês não poderão mais trocar mensagens nem ver o status um do outro.`)) {
+                  try {
+                    await api.users.block(targetUser.id);
+                    await fetchFriends();
+                    alert(`Usuário @${targetUser.username} bloqueado.`);
+                  } catch (err: any) {
+                    alert(err?.message || 'Erro ao bloquear usuário');
+                  }
+                }
+              },
+            },
+            {
+              separator: true,
+              label: '',
+            },
+          ]
+        : []),
+      {
+        id: 'copy-user-id',
+        label: copiedUserId === targetUser.id ? 'ID Copiado!' : 'Copiar ID de Usuário',
+        icon: copiedUserId === targetUser.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />,
+        onClick: () => {
+          navigator.clipboard.writeText(targetUser.id);
+          setCopiedUserId(targetUser.id);
+          setTimeout(() => setCopiedUserId(null), 2000);
+        },
+      },
+    ];
+
+    openContextMenu(e, items, targetUser.display_name || `@${targetUser.username}`);
   };
 
   return (
@@ -101,21 +249,11 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
               </button>
             </div>
 
-            {groups.length === 0 ? (
-              <div className="px-2 py-1 text-xs text-gray-500">
-                Nenhum grupo ainda.
-              </div>
-            ) : (
+            {groups.length > 0 && (
               <div className="space-y-0.5 mt-1">
                 {groups.map((group) => {
                   const isSelected = currentView === 'group' && activeGroup?.id === group.id;
-                  const groupDisplayName =
-                    group.name ||
-                    group.members
-                      ?.map((m) => m.display_name || m.username)
-                      ?.slice(0, 3)
-                      ?.join(', ') ||
-                    'Grupo';
+                  const groupDisplayName = group.name || group.members?.map((m) => m.display_name || m.username).join(', ') || 'Grupo de DM';
 
                   return (
                     <button
@@ -164,6 +302,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                     <button
                       key={room.id}
                       onClick={() => handleSelectRoom(room)}
+                      onContextMenu={(e) => handleUserContextMenu(e, recipient, room.id)}
                       className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
                         isSelected
                           ? 'bg-white/10 text-white'
@@ -215,6 +354,8 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
           // Handled via store select
         }}
       />
+
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
     </>
   );
 };

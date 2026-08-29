@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Participant } from 'livekit-client';
+import { Participant, DisconnectReason } from 'livekit-client';
 import { api } from '../lib/api';
 import { livekit } from '../lib/livekit';
 import { User } from '../types';
@@ -101,6 +101,26 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
         },
         onSpeakingChanged: (speakingUserIds) => {
           set({ speakingUserIds });
+        },
+        onDisconnected: (reason) => {
+          console.warn('[DMCall] LiveKit disconnected. Reason:', reason);
+          playLeaveVoiceSound();
+          const isDuplicate = reason === DisconnectReason.DUPLICATE_IDENTITY || String(reason).toLowerCase().includes('duplicate');
+          
+          set({
+            callState: 'idle',
+            roomId: null,
+            targetUser: null,
+            incomingCaller: null,
+            participants: [],
+            speakingUserIds: [],
+            isScreensharing: false,
+            isCameraOn: false,
+          });
+
+          if (isDuplicate) {
+            alert('Você entrou na chamada por outro dispositivo ou navegador.');
+          }
         },
       });
 
