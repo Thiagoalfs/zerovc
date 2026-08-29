@@ -1,6 +1,20 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session } from 'electron';
 import path from 'path';
 
+// Enable Hardware Acceleration & High-Performance Native Screen Capture
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-hardware-overlays', 'single-fullscreen,single-on-top,underlay');
+app.commandLine.appendSwitch('enable-accelerated-video-decode');
+app.commandLine.appendSwitch('enable-accelerated-video-encode');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch(
+  'enable-features',
+  'WindowsGraphicsCapture,WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,ZeroCopy'
+);
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {

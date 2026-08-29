@@ -84,9 +84,15 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* Quality & FPS Controls */}
           <div className="bg-background-darkest/70 rounded-2xl p-4 border border-white/5 space-y-4">
-            <div className="flex items-center gap-2 text-xs font-bold text-gray-300 uppercase tracking-wider">
-              <Sliders className="w-4 h-4 text-brand-500" />
-              <span>Configurações de Transmissão</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-gray-300 uppercase tracking-wider">
+                <Sliders className="w-4 h-4 text-brand-500" />
+                <span>Configurações de Transmissão</span>
+              </div>
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-medium">
+                <Zap className="w-3 h-3" />
+                <span>Hardware Acceleration (WGC)</span>
+              </div>
             </div>
 
             {/* Resolution Selector */}
