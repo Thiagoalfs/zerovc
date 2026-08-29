@@ -4,6 +4,7 @@ import {
   VideoPresets,
   Track,
   Participant,
+  DisconnectReason,
 } from 'livekit-client';
 
 class LiveKitManager {
@@ -12,6 +13,7 @@ class LiveKitManager {
   private onSpeakingChanged?: (speakingUserIds: string[]) => void;
   private onTrackUpdated?: () => void;
   private onScreenShareEnded?: () => void;
+  private onDisconnected?: (reason?: DisconnectReason) => void;
   private attachedAudioElements: Map<string, HTMLMediaElement> = new Map();
   private attachedUserAudioElements: Map<string, HTMLMediaElement> = new Map();
   private attachedStreamAudioElements: Map<string, HTMLMediaElement> = new Map();
@@ -30,6 +32,7 @@ class LiveKitManager {
       onSpeakingChanged?: (speakingUserIds: string[]) => void;
       onTrackUpdated?: () => void;
       onScreenShareEnded?: () => void;
+      onDisconnected?: (reason?: DisconnectReason) => void;
     }
   ) {
     if (this.room) {
@@ -40,6 +43,7 @@ class LiveKitManager {
     this.onSpeakingChanged = callbacks.onSpeakingChanged;
     this.onTrackUpdated = callbacks.onTrackUpdated;
     this.onScreenShareEnded = callbacks.onScreenShareEnded;
+    this.onDisconnected = callbacks.onDisconnected;
 
     const room = new Room({
       adaptiveStream: true,
@@ -161,6 +165,15 @@ class LiveKitManager {
     room.on(RoomEvent.LocalTrackUnpublished, () => {
       this.onTrackUpdated?.();
       updateParticipants();
+    });
+
+    room.on(RoomEvent.Disconnected, (reason) => {
+      console.log('[LiveKit] Disconnected from room. Reason:', reason);
+      this.attachedAudioElements.forEach((el) => el.remove());
+      this.attachedAudioElements.clear();
+      this.attachedUserAudioElements.clear();
+      this.attachedStreamAudioElements.clear();
+      this.onDisconnected?.(reason);
     });
 
     await room.connect(url, token);

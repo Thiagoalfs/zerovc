@@ -781,3 +781,88 @@ func (h *GuildHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		"guild_id": guildID,
 	})
 }
+
+func (h *GuildHandler) Leave(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID == ownerID {
+		http.Error(w, `{"error":"O dono do servidor não pode sair sem antes transferir a posse ou excluir o servidor"}`, http.StatusBadRequest)
+		return
+	}
+
+	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to leave guild"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Remove from hub and broadcast member remove
+	h.hub.RemoveGuildMember(guildID, userID)
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_MEMBER_REMOVE",
+		Data: map[string]any{
+			"guild_id": guildID,
+			"user_id":  userID,
+		},
+	})
+
+	// Also send GUILD_DELETE specifically to the user so their sidebar removes the server immediately
+	h.hub.SendToUser(userID, models.WSEvent{
+		Type: "GUILD_DELETE",
+		Data: map[string]any{
+			"guild_id": guildID,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "guild_id": guildID})
+}
+
+func (h *GuildHandler) ToggleMute(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var isMuted bool
+	err = h.db.Pool.QueryRow(r.Context(), `
+		UPDATE guild_members
+		SET is_muted = NOT COALESCE(is_muted, false)
+		WHERE guild_id = $1 AND user_id = $2
+		RETURNING COALESCE(is_muted, false)
+	`, guildID, userID).Scan(&isMuted)
+	if err != nil {
+		http.Error(w, `{"error":"failed to toggle server mute or member not found"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "guild_id": guildID, "is_muted": isMuted})
+}
+

@@ -55,9 +55,12 @@ CREATE TABLE IF NOT EXISTS guild_members (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     nickname VARCHAR(32) DEFAULT '',
     role VARCHAR(32) DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'moderator', 'member')),
+    is_muted BOOLEAN DEFAULT FALSE,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (guild_id, user_id)
 );
+
+ALTER TABLE guild_members ADD COLUMN IF NOT EXISTS is_muted BOOLEAN DEFAULT FALSE;
 
 -- 5. Guild Member Roles
 CREATE TABLE IF NOT EXISTS guild_member_roles (
@@ -239,6 +242,14 @@ CREATE TABLE IF NOT EXISTS user_favorite_gifs (
     title VARCHAR(128) DEFAULT '',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, gif_url)
+);
+
+-- 19. User Blocks
+CREATE TABLE IF NOT EXISTS user_blocks (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, blocked_user_id)
 );
 
 -- Indexes

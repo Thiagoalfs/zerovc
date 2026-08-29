@@ -308,3 +308,83 @@ func (h *UserHandler) RemoveFavoriteGIF(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
+
+func (h *UserHandler) BlockUser(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	targetIDStr := chi.URLParam(r, "id")
+	targetID, err := uuid.Parse(targetIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+
+	if userID == targetID {
+		http.Error(w, `{"error":"cannot block yourself"}`, http.StatusBadRequest)
+		return
+	}
+
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// 1. Insert block
+	_, err = tx.Exec(r.Context(), `
+		INSERT INTO user_blocks (user_id, blocked_user_id)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id, blocked_user_id) DO NOTHING
+	`, userID, targetID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to block user"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Remove any friendship between both
+	_, _ = tx.Exec(r.Context(), `
+		DELETE FROM friendships
+		WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
+	`, userID, targetID)
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "blocked_user_id": targetID})
+}
+
+func (h *UserHandler) UnblockUser(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	targetIDStr := chi.URLParam(r, "id")
+	targetID, err := uuid.Parse(targetIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+
+	_, err = h.db.Pool.Exec(r.Context(), `
+		DELETE FROM user_blocks
+		WHERE user_id = $1 AND blocked_user_id = $2
+	`, userID, targetID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to unblock user"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "unblocked_user_id": targetID})
+}
+
