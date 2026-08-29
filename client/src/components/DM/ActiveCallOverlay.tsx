@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useCallStore } from '../../stores/callStore';
 import { useAuthStore } from '../../stores/authStore';
+import { formatAssetUrl } from '../../lib/api';
 
 export const ActiveCallOverlay: React.FC = () => {
   const {
@@ -42,7 +43,7 @@ export const ActiveCallOverlay: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="relative w-12 h-12 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-base shadow-lg">
               {targetUser?.avatar_url ? (
-                <img src={targetUser.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                <img src={formatAssetUrl(targetUser.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
               ) : (
                 <span>{targetUser?.display_name?.[0]?.toUpperCase() || targetUser?.username?.[0]?.toUpperCase() || 'U'}</span>
               )}
@@ -75,7 +76,7 @@ export const ActiveCallOverlay: React.FC = () => {
                 speakingUserIds.includes(currentUser?.id || '') ? 'ring-4 ring-online ring-offset-2 ring-offset-background-darker' : ''
               }`}>
                 {currentUser?.avatar_url ? (
-                  <img src={currentUser.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                  <img src={formatAssetUrl(currentUser.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                 ) : (
                   <span>{currentUser?.display_name?.[0]?.toUpperCase() || currentUser?.username?.[0]?.toUpperCase()}</span>
                 )}
@@ -105,7 +106,7 @@ export const ActiveCallOverlay: React.FC = () => {
                 speakingUserIds.includes(targetUser?.id || '') ? 'ring-4 ring-online ring-offset-2 ring-offset-background-darker' : ''
               }`}>
                 {targetUser?.avatar_url ? (
-                  <img src={targetUser.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                  <img src={formatAssetUrl(targetUser.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                 ) : (
                   <span>{targetUser?.display_name?.[0]?.toUpperCase() || targetUser?.username?.[0]?.toUpperCase()}</span>
                 )}

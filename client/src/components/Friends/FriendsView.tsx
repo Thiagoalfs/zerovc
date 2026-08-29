@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Check, X, MessageSquare, Trash2, Menu } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMStore } from '../../stores/dmStore';
-
+import { formatAssetUrl } from '../../lib/api';
 import { DMRoom } from '../../types';
 
 interface FriendsViewProps {
@@ -183,7 +183,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                       <div className="flex items-center gap-3 truncate">
                         <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold flex-shrink-0">
                           {req.user?.avatar_url ? (
-                            <img src={req.user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                            <img src={formatAssetUrl(req.user.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                           ) : (
                             <span>{req.user?.display_name?.[0]?.toUpperCase() || req.user?.username?.[0]?.toUpperCase()}</span>
                           )}
@@ -234,7 +234,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                       <div className="flex items-center gap-3 truncate">
                         <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold flex-shrink-0">
                           {req.friend?.avatar_url ? (
-                            <img src={req.friend.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                            <img src={formatAssetUrl(req.friend.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                           ) : (
                             <span>{req.friend?.display_name?.[0]?.toUpperCase() || req.friend?.username?.[0]?.toUpperCase()}</span>
                           )}
@@ -292,7 +292,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                     <div className="flex items-center gap-3 truncate">
                       <div className="relative w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold flex-shrink-0">
                         {target?.avatar_url ? (
-                          <img src={target.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                          <img src={formatAssetUrl(target.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                         ) : (
                           <span>{target?.display_name?.[0]?.toUpperCase() || target?.username?.[0]?.toUpperCase()}</span>
                         )}

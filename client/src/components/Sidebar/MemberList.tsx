@@ -17,6 +17,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useDMStore } from '../../stores/dmStore';
 import { User, Permissions } from '../../types';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { formatAssetUrl } from '../../lib/api';
 
 interface MemberListProps {
   isOpen: boolean;
@@ -249,7 +250,7 @@ export const MemberList: React.FC<MemberListProps> = ({
       >
         <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
           {user.avatar_url ? (
-            <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+            <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
           ) : (
             <span>{user.display_name?.[0]?.toUpperCase() || user.username?.[0]?.toUpperCase() || 'U'}</span>
           )}

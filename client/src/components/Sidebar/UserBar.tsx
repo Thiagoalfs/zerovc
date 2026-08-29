@@ -3,6 +3,7 @@ import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor } from 'lucide-rea
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
+import { formatAssetUrl } from '../../lib/api';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -147,7 +148,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           {/* Avatar */}
           <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
             {user?.avatar_url ? (
-              <img src={user.avatar_url} alt={user.username} className="w-full h-full rounded-full object-cover" />
+              <img src={formatAssetUrl(user.avatar_url)} alt={user.username} className="w-full h-full rounded-full object-cover" />
             ) : (
               <span>{user?.display_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'U'}</span>
             )}

@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
-import { api } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
 
 interface ProfileModalProps {
@@ -549,7 +549,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {/* Banner */}
                   <div
                     className="h-28 w-full bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative bg-cover bg-center"
-                    style={{ backgroundImage: user.banner_url ? `url(${user.banner_url})` : undefined }}
+                    style={{ backgroundImage: user.banner_url ? `url(${formatAssetUrl(user.banner_url)})` : undefined }}
                   />
 
                   {/* Header Row */}
@@ -558,7 +558,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       {/* Avatar */}
                       <div className="w-20 h-20 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-xl flex-shrink-0 flex items-center justify-center text-white font-bold text-2xl relative">
                         {user.avatar_url ? (
-                          <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+                          <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <span>{user.display_name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
                         )}
@@ -771,7 +771,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {/* Banner */}
                   <div
                     className="h-32 w-full bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center"
-                    style={{ backgroundImage: bannerUrl ? `url(${bannerUrl})` : undefined }}
+                    style={{ backgroundImage: bannerUrl ? `url(${formatAssetUrl(bannerUrl)})` : undefined }}
                     onClick={() => bannerFileInputRef.current?.click()}
                   >
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-semibold backdrop-blur-xs">
@@ -800,7 +800,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="relative -mt-12 group cursor-pointer" onClick={() => avatarFileInputRef.current?.click()}>
                       <div className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex items-center justify-center text-white font-bold text-3xl">
                         {avatarUrl ? (
-                          <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                          <img src={formatAssetUrl(avatarUrl)} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <span>{displayName[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
                         )}

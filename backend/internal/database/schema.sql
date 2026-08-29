@@ -256,6 +256,15 @@ CREATE INDEX IF NOT EXISTS idx_channels_category_id ON channels (category_id);
 CREATE INDEX IF NOT EXISTS idx_channel_role_access_chan ON channel_role_access (channel_id);
 CREATE INDEX IF NOT EXISTS idx_channel_role_access_role ON channel_role_access (role_id);
 CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions (channel_id);
-CREATE INDEX IF NOT EXISTS idx_guild_invites_guild ON guild_invites (guild_id);
 CREATE INDEX IF NOT EXISTS idx_user_favorite_gifs_user ON user_favorite_gifs (user_id, created_at DESC);
+
+-- Convert legacy relative asset paths to absolute internal CDN links
+UPDATE users SET avatar_url = 'https://zerovc.safiroko.xyz' || avatar_url WHERE avatar_url LIKE '/assets/%';
+UPDATE users SET banner_url = 'https://zerovc.safiroko.xyz' || banner_url WHERE banner_url LIKE '/assets/%';
+UPDATE guilds SET icon_url = 'https://zerovc.safiroko.xyz' || icon_url WHERE icon_url LIKE '/assets/%';
+UPDATE guilds SET banner_url = 'https://zerovc.safiroko.xyz' || banner_url WHERE banner_url LIKE '/assets/%';
+UPDATE messages SET content = REPLACE(content, '/assets/', 'https://zerovc.safiroko.xyz/assets/') WHERE content LIKE '%/assets/%' AND content NOT LIKE '%https://%assets/%' AND content NOT LIKE '%http://%assets/%';
+UPDATE dm_messages SET content = REPLACE(content, '/assets/', 'https://zerovc.safiroko.xyz/assets/') WHERE content LIKE '%/assets/%' AND content NOT LIKE '%https://%assets/%' AND content NOT LIKE '%http://%assets/%';
+UPDATE dm_group_messages SET content = REPLACE(content, '/assets/', 'https://zerovc.safiroko.xyz/assets/') WHERE content LIKE '%/assets/%' AND content NOT LIKE '%https://%assets/%' AND content NOT LIKE '%http://%assets/%';
+
 

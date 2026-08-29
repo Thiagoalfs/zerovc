@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api';
+import { getApiBaseUrl } from './api';
 
 export interface WSEvent {
   type: string;
@@ -18,7 +18,7 @@ class SocketClient {
     if (!token) return;
 
     this.isExplicitlyClosed = false;
-    const baseUrl = API_BASE_URL.replace(/^http/, 'ws');
+    const baseUrl = getApiBaseUrl().replace(/^http/, 'ws');
     const wsUrl = `${baseUrl}/ws?token=${token}`;
 
     try {

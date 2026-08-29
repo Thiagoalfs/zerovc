@@ -19,7 +19,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
-import { getApiBaseUrl, setApiBaseUrl, api } from '../../lib/api';
+import { getApiBaseUrl, setApiBaseUrl, api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { User } from '../../types';
 
@@ -641,7 +641,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 <div className="flex items-center gap-4 bg-background-darkest p-4 rounded-xl border border-white/5">
                   <div className="w-14 h-14 rounded-full bg-brand-500 flex items-center justify-center text-xl font-bold text-white flex-shrink-0">
                     {user?.avatar_url ? (
-                      <img src={user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                      <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                     ) : (
                       <span>{user?.username?.[0]?.toUpperCase()}</span>
                     )}
@@ -930,7 +930,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm">
                             {bUser.avatar_url ? (
-                              <img src={bUser.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                              <img src={formatAssetUrl(bUser.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                             ) : (
                               <span>{bUser.display_name?.[0]?.toUpperCase() || bUser.username?.[0]?.toUpperCase()}</span>
                             )}

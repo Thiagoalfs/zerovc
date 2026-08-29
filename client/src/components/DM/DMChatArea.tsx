@@ -6,7 +6,7 @@ import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
-import { api } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { ActiveCallOverlay } from './ActiveCallOverlay';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { EmojiAndGifPicker } from '../Chat/EmojiAndGifPicker';
@@ -421,7 +421,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             title="Ver perfil"
           >
             {recipient?.avatar_url ? (
-              <img src={recipient.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+              <img src={formatAssetUrl(recipient.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
             ) : (
               <span>{recipient?.display_name?.[0]?.toUpperCase() || recipient?.username[0]?.toUpperCase() || 'U'}</span>
             )}
@@ -503,7 +503,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           <div className="p-6 my-4 bg-background-darker/60 rounded-2xl border border-white/5 flex flex-col items-center text-center">
             <div className="w-20 h-20 rounded-full bg-brand-500 flex items-center justify-center text-2xl font-bold text-white shadow-xl mb-3 overflow-hidden">
               {recipient?.avatar_url ? (
-                <img src={recipient.avatar_url} alt="" className="w-full h-full object-cover" />
+                <img src={formatAssetUrl(recipient.avatar_url)} alt="" className="w-full h-full object-cover" />
               ) : (
                 <span>{recipient?.display_name?.[0]?.toUpperCase() || recipient?.username[0]?.toUpperCase() || 'U'}</span>
               )}
@@ -632,7 +632,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                     title="Ver perfil"
                   >
                     {msg.author?.avatar_url ? (
-                      <img src={msg.author.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                      <img src={formatAssetUrl(msg.author.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                     ) : (
                       <span>{msg.author?.display_name?.[0]?.toUpperCase() || msg.author?.username?.[0]?.toUpperCase() || 'U'}</span>
                     )}
@@ -699,13 +699,13 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                         }`}
                       >
                         <img
-                          src={url}
+                          src={formatAssetUrl(url)}
                           alt="Imagem enviada"
                           onLoad={handleMediaLoad}
                           className="max-h-[350px] max-w-full w-auto h-auto object-contain bg-black/40 cursor-pointer hover:opacity-95 transition-opacity block"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (onPreviewImage) onPreviewImage(url);
+                            if (onPreviewImage) onPreviewImage(formatAssetUrl(url));
                           }}
                         />
 

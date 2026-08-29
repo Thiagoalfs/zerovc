@@ -129,7 +129,8 @@ func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, fol
 		return
 	}
 
-	publicURL := fmt.Sprintf("/assets/%s/%s", folder, filename)
+	baseURL := getPublicBaseURL(r)
+	publicURL := fmt.Sprintf("%s/assets/%s/%s", baseURL, folder, filename)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -138,4 +139,23 @@ func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, fol
 		"filename": filename,
 		"size":     header.Size,
 	})
+}
+
+func getPublicBaseURL(r *http.Request) string {
+	cdn := os.Getenv("CDN_BASE_URL")
+	if cdn != "" {
+		return strings.TrimRight(cdn, "/")
+	}
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+		if r.Header.Get("X-Forwarded-Proto") != "" {
+			scheme = r.Header.Get("X-Forwarded-Proto")
+		} else if strings.HasPrefix(r.Host, "localhost") {
+			scheme = "http"
+		}
+	}
+	if r.Host != "" && !strings.HasPrefix(r.Host, "127.0.0.1") && !strings.HasPrefix(r.Host, "localhost") {
+		return fmt.Sprintf("%s://%s", scheme, r.Host)
+	}
+	return "https://zerovc.safiroko.xyz"
 }
