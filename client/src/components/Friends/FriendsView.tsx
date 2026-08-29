@@ -1,23 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Check, X, MessageSquare, Trash2, Menu } from 'lucide-react';
+import { Users, UserPlus, Check, X, MessageSquare, Trash2, Menu, User as UserIcon, Phone, UserMinus, Ban, Copy, Server } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMStore } from '../../stores/dmStore';
-import { formatAssetUrl } from '../../lib/api';
-import { DMRoom } from '../../types';
+import { useGuildStore } from '../../stores/guildStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useCallStore } from '../../stores/callStore';
+import { api, formatAssetUrl } from '../../lib/api';
+import { DMRoom, User } from '../../types';
+import { ContextMenu } from '../ContextMenu/ContextMenu';
+import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 
 interface FriendsViewProps {
   onOpenMobileDrawer?: () => void;
   onOpenDM?: (userId: string, room?: DMRoom) => void;
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
 }
 
-export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, onOpenDM }) => {
+export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, onOpenDM, onOpenUserProfile }) => {
   const [activeTab, setActiveTab] = useState<'online' | 'all' | 'pending' | 'add'>('online');
   const [usernameInput, setUsernameInput] = useState('');
   const [requestStatus, setRequestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
 
+  const { user: currentUser } = useAuthStore();
   const { friends, pending, incoming, fetchFriends, sendRequest, acceptRequest, removeFriend } = useFriendStore();
   const { openDMWithUser } = useDMStore();
+  const { guilds } = useGuildStore();
+  const { startCall } = useCallStore();
+  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
 
   useEffect(() => {
     fetchFriends();
@@ -48,6 +59,140 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleUserContextMenu = (e: React.MouseEvent, targetUser?: User) => {
+    if (!targetUser) return;
+    const isMe = targetUser.id === currentUser?.id;
+    const friendship = friends.find(
+      (f) => (f.friend?.id === targetUser.id || f.user?.id === targetUser.id)
+    );
+    const isFriend = !!friendship && friendship.status === 'accepted';
+
+    // Submenu para convidar para servidor
+    const inviteSubmenu: ContextMenuItem[] = (guilds || []).map((g) => ({
+      label: g.name,
+      icon: <Server className="w-3.5 h-3.5" />,
+      onClick: async () => {
+        try {
+          const invite = await api.guilds.createInvite(g.id);
+          const r = await openDMWithUser(targetUser.id);
+          const inviteLink = `${window.location.origin}/invite/${invite.code}`;
+          await api.dms.sendMessage(r.id, { content: `Aqui está o convite para o servidor **${g.name}**:\n${inviteLink}` });
+          alert(`Convite para o servidor "${g.name}" enviado com sucesso na DM de @${targetUser.username}!`);
+        } catch (err: any) {
+          alert(err?.message || 'Erro ao enviar convite para o servidor');
+        }
+      },
+    }));
+
+    const items: ContextMenuItem[] = [
+      {
+        id: 'view-profile',
+        label: 'Ver Perfil',
+        icon: <UserIcon className="w-4 h-4" />,
+        onClick: () => {
+          onOpenUserProfile?.(targetUser, { x: e.clientX, y: e.clientY });
+        },
+      },
+      ...(!isMe
+        ? [
+            {
+              id: 'start-call',
+              label: 'Ligar',
+              icon: <Phone className="w-4 h-4 text-emerald-400" />,
+              onClick: async () => {
+                try {
+                  const r = await openDMWithUser(targetUser.id);
+                  await startCall(r.id, targetUser);
+                } catch (err: any) {
+                  alert(err?.message || 'Erro ao iniciar chamada');
+                }
+              },
+            },
+          ]
+        : []),
+      ...(guilds.length > 0 && !isMe
+        ? [
+            {
+              id: 'invite-to-server',
+              label: 'Convidar para Servidor',
+              icon: <Server className="w-4 h-4 text-brand-400" />,
+              subItems: inviteSubmenu,
+            },
+          ]
+        : []),
+      {
+        separator: true,
+        label: '',
+      },
+      ...(!isMe
+        ? [
+            isFriend
+              ? {
+                  id: 'remove-friend',
+                  label: 'Remover Amigo',
+                  icon: <UserMinus className="w-4 h-4" />,
+                  variant: 'danger' as const,
+                  onClick: async () => {
+                    if (window.confirm(`Tem certeza que deseja remover @${targetUser.username} dos seus amigos?`)) {
+                      try {
+                        if (friendship) await removeFriend(friendship.id);
+                      } catch (err: any) {
+                        alert(err?.message || 'Erro ao remover amigo');
+                      }
+                    }
+                  },
+                }
+              : {
+                  id: 'add-friend',
+                  label: 'Adicionar Amigo',
+                  icon: <UserPlus className="w-4 h-4 text-online" />,
+                  onClick: async () => {
+                    try {
+                      await sendRequest(targetUser.username);
+                      alert(`Pedido de amizade enviado para @${targetUser.username}!`);
+                    } catch (err: any) {
+                      alert(err?.message || 'Erro ao enviar pedido de amizade');
+                    }
+                  },
+                },
+            {
+              id: 'block-user',
+              label: 'Bloquear',
+              icon: <Ban className="w-4 h-4" />,
+              variant: 'danger' as const,
+              onClick: async () => {
+                if (window.confirm(`Tem certeza que deseja bloquear @${targetUser.username}? Vocês não poderão mais trocar mensagens nem ver o status um do outro.`)) {
+                  try {
+                    await api.users.block(targetUser.id);
+                    await fetchFriends();
+                    alert(`Usuário @${targetUser.username} bloqueado.`);
+                  } catch (err: any) {
+                    alert(err?.message || 'Erro ao bloquear usuário');
+                  }
+                }
+              },
+            },
+            {
+              separator: true,
+              label: '',
+            },
+          ]
+        : []),
+      {
+        id: 'copy-user-id',
+        label: copiedUserId === targetUser.id ? 'ID Copiado!' : 'Copiar ID de Usuário',
+        icon: copiedUserId === targetUser.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />,
+        onClick: () => {
+          navigator.clipboard.writeText(targetUser.id);
+          setCopiedUserId(targetUser.id);
+          setTimeout(() => setCopiedUserId(null), 2000);
+        },
+      },
+    ];
+
+    openContextMenu(e, items, targetUser.display_name || `@${targetUser.username}`);
   };
 
   const onlineFriends = friends.filter((f) => {
@@ -287,6 +432,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                   <div
                     key={f.id}
                     onClick={() => target?.id && handleStartDM(target.id)}
+                    onContextMenu={(e) => handleUserContextMenu(e, target)}
                     className="flex items-center justify-between p-2.5 md:p-3 px-3 md:px-4 rounded-2xl hover:bg-background-darker border border-transparent hover:border-white/5 transition-all group cursor-pointer active:scale-[0.99]"
                   >
                     <div className="flex items-center gap-3 truncate">
@@ -350,6 +496,8 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
           </div>
         )}
       </div>
+
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
     </div>
   );
 };

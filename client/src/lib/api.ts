@@ -185,6 +185,14 @@ export const api = {
       request<{ success: boolean }>(`/guilds/${id}/join`, {
         method: 'POST',
       }),
+    leave: (id: string) =>
+      request<{ success: boolean; guild_id: string }>(`/guilds/${id}/leave`, {
+        method: 'POST',
+      }),
+    toggleMute: (id: string) =>
+      request<{ success: boolean; guild_id: string; is_muted: boolean }>(`/guilds/${id}/mute`, {
+        method: 'POST',
+      }),
     createChannel: (guildId: string, data: { name: string; type: 'text' | 'voice' | 'category'; category_id?: string; topic?: string }) =>
       request<Channel>(`/guilds/${guildId}/channels`, {
         method: 'POST',
@@ -288,6 +296,8 @@ export const api = {
       request<{ success: boolean; is_pinned: boolean }>(`/channels/${channelId}/messages/${messageId}/pin`, {
         method: 'POST',
       }),
+    getPinnedMessages: (channelId: string) =>
+      request<Message[]>(`/channels/${channelId}/pins`),
   },
 
   roles: {
@@ -328,10 +338,16 @@ export const api = {
       if (before) query.append('before', before);
       return request<DMMessage[]>(`/dms/${roomId}/messages?${query.toString()}`);
     },
+    getPinnedMessages: (roomId: string) =>
+      request<DMMessage[]>(`/dms/${roomId}/pins`),
     sendMessage: (roomId: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
       request<DMMessage>(`/dms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    togglePin: (roomId: string, messageId: string) =>
+      request<{ success: boolean; is_pinned: boolean }>(`/dms/${roomId}/messages/${messageId}/pin`, {
+        method: 'POST',
       }),
     addReaction: (roomId: string, messageId: string, emoji: string) =>
       request<{ success: boolean; emoji: string }>(`/dms/${roomId}/messages/${messageId}/reactions`, {

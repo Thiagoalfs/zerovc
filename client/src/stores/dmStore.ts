@@ -11,6 +11,8 @@ interface DMState {
   unreadRooms: Set<string>;
   roomUnreadCounts: Record<string, number>;
   messagesByRoom: Record<string, DMMessage[]>;
+  pinnedMessagesByRoom: Record<string, DMMessage[]>;
+  isLoadingPinned: Record<string, boolean>;
   hasMoreByRoom: Record<string, boolean>;
   isLoadingRooms: boolean;
   isLoadingMessages: boolean;
@@ -19,11 +21,14 @@ interface DMState {
   fetchRooms: () => Promise<void>;
   selectRoom: (room: DMRoom) => Promise<void>;
   loadMoreMessages: (roomId: string) => Promise<void>;
+  fetchPinnedMessages: (roomId: string) => Promise<void>;
   openDMWithUser: (recipientId: string) => Promise<DMRoom>;
   sendMessage: (content: string, attachments?: any[], replyToId?: string) => Promise<void>;
   toggleReaction: (messageId: string, emoji: string) => Promise<void>;
+  togglePin: (messageId: string) => Promise<void>;
   addMessage: (message: DMMessage) => void;
   handleDMReactionEvent: (data: { message_id: string; dm_room_id: string; user_id: string; emoji: string; is_add: boolean }) => void;
+  handlePinEvent: (data: { message_id: string; room_id: string; is_pinned: boolean }) => void;
 }
 
 export const useDMStore = create<DMState>((set, get) => ({
@@ -33,6 +38,8 @@ export const useDMStore = create<DMState>((set, get) => ({
   unreadRooms: new Set(),
   roomUnreadCounts: {},
   messagesByRoom: {},
+  pinnedMessagesByRoom: {},
+  isLoadingPinned: {},
   hasMoreByRoom: {},
   isLoadingRooms: false,
   isLoadingMessages: false,
@@ -267,6 +274,80 @@ export const useDMStore = create<DMState>((set, get) => ({
       return {
         messages: state.activeRoom?.id === dm_room_id ? updateMsgList(state.messages) : state.messages,
         messagesByRoom: nextMessagesByRoom,
+      };
+    });
+  },
+
+  fetchPinnedMessages: async (roomId: string) => {
+    set((state) => ({
+      isLoadingPinned: { ...state.isLoadingPinned, [roomId]: true },
+    }));
+    try {
+      const pins = await api.dms.getPinnedMessages(roomId);
+      set((state) => ({
+        pinnedMessagesByRoom: {
+          ...state.pinnedMessagesByRoom,
+          [roomId]: pins,
+        },
+        isLoadingPinned: { ...state.isLoadingPinned, [roomId]: false },
+      }));
+    } catch (err) {
+      console.error('Failed to fetch pinned DM messages:', err);
+      set((state) => ({
+        isLoadingPinned: { ...state.isLoadingPinned, [roomId]: false },
+      }));
+    }
+  },
+
+  togglePin: async (messageId: string) => {
+    const { activeRoom } = get();
+    if (!activeRoom) return;
+    await api.dms.togglePin(activeRoom.id, messageId);
+  },
+
+  handlePinEvent: ({ message_id, room_id, is_pinned }) => {
+    set((state) => {
+      const updateMsgList = (list: DMMessage[]) =>
+        list.map((m) => (m.id === message_id ? { ...m, is_pinned } : m));
+
+      const nextMessagesByRoom = { ...state.messagesByRoom };
+      if (nextMessagesByRoom[room_id]) {
+        nextMessagesByRoom[room_id] = updateMsgList(nextMessagesByRoom[room_id]);
+      }
+
+      const currentPinned = state.pinnedMessagesByRoom[room_id] || [];
+      let nextPinned: DMMessage[];
+
+      if (is_pinned) {
+        const found =
+          state.messagesByRoom[room_id]?.find((m) => m.id === message_id) ||
+          (state.activeRoom?.id === room_id ? state.messages.find((m) => m.id === message_id) : undefined);
+
+        if (found) {
+          const pinnedMsg = { ...found, is_pinned: true };
+          const alreadyInPinned = currentPinned.some((m) => m.id === message_id);
+          nextPinned = alreadyInPinned
+            ? currentPinned.map((m) => (m.id === message_id ? pinnedMsg : m))
+            : [pinnedMsg, ...currentPinned];
+        } else {
+          nextPinned = currentPinned;
+          setTimeout(() => {
+            get().fetchPinnedMessages(room_id);
+          }, 50);
+        }
+      } else {
+        nextPinned = currentPinned.filter((m) => m.id !== message_id);
+      }
+
+      const nextPinnedByRoom = {
+        ...state.pinnedMessagesByRoom,
+        [room_id]: nextPinned,
+      };
+
+      return {
+        messages: state.activeRoom?.id === room_id ? updateMsgList(state.messages) : state.messages,
+        messagesByRoom: nextMessagesByRoom,
+        pinnedMessagesByRoom: nextPinnedByRoom,
       };
     });
   },

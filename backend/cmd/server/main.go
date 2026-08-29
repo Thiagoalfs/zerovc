@@ -221,6 +221,8 @@ func main() {
 		r.Patch("/api/guilds/{id}", guildHandler.Update)
 		r.Delete("/api/guilds/{id}", guildHandler.Delete)
 		r.Post("/api/guilds/{id}/join", guildHandler.Join)
+		r.Post("/api/guilds/{id}/leave", guildHandler.Leave)
+		r.Post("/api/guilds/{id}/mute", guildHandler.ToggleMute)
 		r.Post("/api/guilds/{id}/invites", inviteHandler.CreateInvite)
 
 		// Guild Moderation (Protected)
@@ -256,9 +258,11 @@ func main() {
 		r.Get("/api/dms", dmHandler.ListRooms)
 		r.Post("/api/dms", dmHandler.CreateOrGetRoom)
 		r.Get("/api/dms/{roomID}/messages", dmHandler.ListMessages)
+		r.Get("/api/dms/{roomID}/pins", dmHandler.ListPinned)
 		r.Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)
 		r.Post("/api/dms/{roomID}/messages/{messageID}/reactions", dmHandler.AddReaction)
 		r.Delete("/api/dms/{roomID}/messages/{messageID}/reactions/{emoji}", dmHandler.RemoveReaction)
+		r.Post("/api/dms/{roomID}/messages/{messageID}/pin", dmHandler.TogglePin)
 		r.Post("/api/dms/{roomID}/call/invite", dmHandler.InviteCall)
 		r.Post("/api/dm/rooms/{roomID}/call/invite", dmHandler.InviteCall)
 		r.Post("/api/dms/{roomID}/call/accept", dmHandler.AcceptCall)
@@ -281,6 +285,7 @@ func main() {
 
 		// Messages (Protected)
 		r.Get("/api/channels/{channelID}/messages", messageHandler.List)
+		r.Get("/api/channels/{channelID}/pins", messageHandler.ListPinned)
 		r.Post("/api/channels/{channelID}/messages", messageHandler.Send)
 		r.Patch("/api/channels/{channelID}/messages/{messageID}", messageHandler.Update)
 		r.Delete("/api/channels/{channelID}/messages/{messageID}", messageHandler.Delete)

@@ -719,3 +719,198 @@ func (h *DMHandler) LeaveCall(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
+
+func (h *DMHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var isParticipant bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM dm_rooms WHERE id = $1 AND (user1_id = $2 OR user2_id = $2))`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, roomID, userID).Scan(&isParticipant); err != nil || !isParticipant {
+		http.Error(w, `{"error":"forbidden: not a participant of this conversation"}`, http.StatusForbidden)
+		return
+	}
+
+	query := `
+		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
+		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url
+		FROM dm_messages m
+		INNER JOIN users u ON u.id = m.author_id
+		LEFT JOIN dm_messages rm ON rm.id = m.reply_to_id
+		LEFT JOIN users ru ON ru.id = rm.author_id
+		WHERE m.dm_room_id = $1 AND m.is_pinned = true
+		ORDER BY m.created_at DESC
+		LIMIT 100
+	`
+	rows, err := h.db.Pool.Query(r.Context(), query, roomID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to query pinned dm messages"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	messages := make([]models.DMMessage, 0)
+	msgIDs := make([]uuid.UUID, 0)
+
+	for rows.Next() {
+		var m models.DMMessage
+		var attachmentsJSON []byte
+		var author models.UserPublic
+		var rID, ruID *uuid.UUID
+		var rContent, ruUsername, ruDisplayName, ruAvatar *string
+
+		if err := rows.Scan(
+			&m.ID, &m.DMRoomID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt,
+			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
+			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
+		); err != nil {
+			continue
+		}
+		author.ID = m.AuthorID
+		m.Author = author
+		json.Unmarshal(attachmentsJSON, &m.Attachments)
+
+		if rID != nil && ruID != nil {
+			var dName, aUrl string
+			if ruDisplayName != nil {
+				dName = *ruDisplayName
+			}
+			if ruAvatar != nil {
+				aUrl = *ruAvatar
+			}
+			var uName string
+			if ruUsername != nil {
+				uName = *ruUsername
+			}
+			var cnt string
+			if rContent != nil {
+				cnt = *rContent
+			}
+			m.ReplyTo = &models.MessageReplyInfo{
+				ID: *rID,
+				Author: models.UserPublic{
+					ID:          *ruID,
+					Username:    uName,
+					DisplayName: dName,
+					AvatarURL:   aUrl,
+				},
+				Content: cnt,
+			}
+		}
+
+		m.Reactions = make([]models.MessageReaction, 0)
+		messages = append(messages, m)
+		msgIDs = append(msgIDs, m.ID)
+	}
+
+	// Fetch reactions for dm messages
+	if len(msgIDs) > 0 {
+		reactionsQuery := `
+			SELECT dm_message_id, emoji, user_id
+			FROM dm_message_reactions
+			WHERE dm_message_id = ANY($1)
+		`
+		rxRows, err := h.db.Pool.Query(r.Context(), reactionsQuery, msgIDs)
+		if err == nil {
+			defer rxRows.Close()
+			rxMap := make(map[uuid.UUID]map[string][]uuid.UUID)
+			for rxRows.Next() {
+				var mID, uID uuid.UUID
+				var emoji string
+				if err := rxRows.Scan(&mID, &emoji, &uID); err == nil {
+					if rxMap[mID] == nil {
+						rxMap[mID] = make(map[string][]uuid.UUID)
+					}
+					rxMap[mID][emoji] = append(rxMap[mID][emoji], uID)
+				}
+			}
+
+			for i := range messages {
+				if emojis, ok := rxMap[messages[i].ID]; ok {
+					for em, uids := range emojis {
+						messages[i].Reactions = append(messages[i].Reactions, models.MessageReaction{
+							Emoji:   em,
+							Count:   len(uids),
+							UserIDs: uids,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
+}
+
+func (h *DMHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	messageIDStr := chi.URLParam(r, "messageID")
+	messageID, err := uuid.Parse(messageIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var user1ID, user2ID uuid.UUID
+	var isPinned bool
+	err = h.db.Pool.QueryRow(r.Context(), `
+		UPDATE dm_messages
+		SET is_pinned = NOT is_pinned
+		FROM dm_rooms
+		WHERE dm_messages.id = $1 AND dm_rooms.id = dm_messages.dm_room_id AND dm_rooms.id = $2
+		  AND (dm_rooms.user1_id = $3 OR dm_rooms.user2_id = $3)
+		RETURNING dm_messages.is_pinned, dm_rooms.user1_id, dm_rooms.user2_id
+	`, messageID, roomID, userID).Scan(&isPinned, &user1ID, &user2ID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found or forbidden"}`, http.StatusNotFound)
+		return
+	}
+
+	eventType := models.EventMessagePin
+	if !isPinned {
+		eventType = models.EventMessageUnpin
+	}
+
+	otherUserID := user1ID
+	if otherUserID == userID {
+		otherUserID = user2ID
+	}
+
+	eventData := map[string]any{
+		"message_id": messageID,
+		"room_id":    roomID,
+		"user_id":    userID,
+		"is_pinned":  isPinned,
+	}
+
+	h.hub.SendToUser(userID, models.WSEvent{Type: eventType, Data: eventData})
+	h.hub.SendToUser(otherUserID, models.WSEvent{Type: eventType, Data: eventData})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "is_pinned": isPinned})
+}
+

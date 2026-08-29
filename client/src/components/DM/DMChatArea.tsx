@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone, Loader2, UploadCloud, FileText, Star } from 'lucide-react';
+import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone, Loader2, UploadCloud, FileText, Star, Pin } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
@@ -32,8 +32,12 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const {
     activeRoom,
     messages,
+    pinnedMessagesByRoom,
+    isLoadingPinned,
+    fetchPinnedMessages,
     sendMessage,
     toggleReaction,
+    togglePin,
     isLoadingMessages,
     isLoadingMoreMessages,
     hasMoreByRoom,
@@ -51,9 +55,16 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const [replyingTo, setReplyingTo] = useState<DMMessage | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
   const dragCounterRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (showPinnedOnly && activeRoom) {
+      fetchPinnedMessages(activeRoom.id);
+    }
+  }, [showPinnedOnly, activeRoom?.id]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number | null>(null);
@@ -367,7 +378,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     });
   };
 
-  const displayedMessages = messages.filter((msg) => {
+  const baseMessages = showPinnedOnly
+    ? (activeRoom ? pinnedMessagesByRoom[activeRoom.id] || [] : [])
+    : messages;
+
+  const displayedMessages = baseMessages.filter((msg) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchContent = msg.content.toLowerCase().includes(q);
@@ -451,6 +466,19 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             <Phone className="w-5 h-5" />
           </button>
 
+          {/* Pinned Messages Toggle */}
+          <button
+            onClick={() => setShowPinnedOnly(!showPinnedOnly)}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              showPinnedOnly
+                ? 'text-amber-400 bg-amber-400/15'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+            title={showPinnedOnly ? 'Mostrar todas as mensagens' : 'Mensagens Fixadas'}
+          >
+            <Pin className="w-5 h-5" />
+          </button>
+
           {isSearchOpen ? (
             <div className="flex items-center gap-1 bg-background-darkest px-2 py-1 rounded-xl border border-white/10 text-xs">
               <Search className="w-3.5 h-3.5 text-gray-400" />
@@ -483,6 +511,26 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           )}
         </div>
       </div>
+
+      {/* Pinned or Search Active Notice Banner */}
+      {(showPinnedOnly || searchQuery) && (
+        <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
+          <span>
+            {showPinnedOnly
+              ? `Exibindo apenas mensagens fixadas (${displayedMessages.length})`
+              : `Resultados da busca para "${searchQuery}" (${displayedMessages.length})`}
+          </span>
+          <button
+            onClick={() => {
+              setShowPinnedOnly(false);
+              setSearchQuery('');
+            }}
+            className="text-brand-400 hover:underline font-semibold cursor-pointer"
+          >
+            Limpar filtro
+          </button>
+        </div>
+      )}
 
       {/* DM Messages Feed */}
       <div
@@ -618,6 +666,18 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                     title="Responder"
                   >
                     <Reply className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    onClick={() => togglePin(msg.id)}
+                    className={`p-1 rounded transition-colors ${
+                      msg.is_pinned
+                        ? 'text-amber-400 hover:bg-amber-400/20'
+                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                    }`}
+                    title={msg.is_pinned ? 'Desafixar mensagem' : 'Fixar mensagem'}
+                  >
+                    <Pin className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
