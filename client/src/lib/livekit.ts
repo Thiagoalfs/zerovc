@@ -222,13 +222,13 @@ class LiveKitManager {
       })();
 
       const maxBitrate = (() => {
-        if (res === '480p') return frameRate === 15 ? 400_000 : frameRate === 30 ? 800_000 : 1_200_000;
-        if (res === '1080p') return frameRate === 15 ? 1_800_000 : frameRate === 30 ? 3_500_000 : 5_000_000;
-        return frameRate === 15 ? 800_000 : frameRate === 30 ? 2_000_000 : 3_000_000;
+        if (res === '480p') return frameRate === 15 ? 600_000 : frameRate === 30 ? 1_200_000 : 2_000_000;
+        if (res === '1080p') return frameRate === 15 ? 3_000_000 : frameRate === 30 ? 6_000_000 : 10_000_000;
+        return frameRate === 15 ? 1_500_000 : frameRate === 30 ? 3_000_000 : 5_500_000;
       })();
 
       if (sourceId && (window as any).electronAPI) {
-        // Electron Screen Capture API
+        // Electron Screen Capture API with Hardware Accelerated WGC & Framerate constraints
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
@@ -238,28 +238,50 @@ class LiveKitManager {
               chromeMediaSourceId: sourceId,
               minWidth: dims.width,
               maxWidth: dims.width,
+              minHeight: dims.height,
               maxHeight: dims.height,
+              minFrameRate: frameRate,
               maxFrameRate: frameRate,
             },
           },
         });
 
         const videoTrack = stream.getVideoTracks()[0];
-        videoTrack.contentHint = frameRate === 60 ? 'motion' : 'detail';
+        videoTrack.contentHint = frameRate >= 60 ? 'motion' : 'detail';
         videoTrack.onended = () => {
           this.setScreenShareEnabled(false);
           this.onScreenShareEnded?.();
         };
 
-        await this.room.localParticipant.publishTrack(videoTrack, {
+        const pub = await this.room.localParticipant.publishTrack(videoTrack, {
           name: 'screen_share',
           source: Track.Source.ScreenShare,
           simulcast: true,
           videoEncoding: {
             maxBitrate: maxBitrate,
             maxFramerate: frameRate,
+            priority: 'high',
           },
         });
+
+        // Set WebRTC degradationPreference to maintain 60 FPS or detail
+        try {
+          const sender = (pub?.track as any)?.sender as RTCRtpSender | undefined;
+          if (sender && typeof sender.getParameters === 'function') {
+            const params = sender.getParameters();
+            if (params) {
+              params.degradationPreference = frameRate >= 60 ? 'maintain-framerate' : 'maintain-resolution';
+              if (params.encodings && params.encodings.length > 0) {
+                params.encodings[0].maxBitrate = maxBitrate;
+                params.encodings[0].maxFramerate = frameRate;
+                params.encodings[0].networkPriority = 'high';
+              }
+              await sender.setParameters(params);
+            }
+          }
+        } catch (e) {
+          console.warn('[LiveKit] Could not set degradationPreference on sender:', e);
+        }
       } else {
         // Native W3C getDisplayMedia for Web Browsers
         const pub = await this.room.localParticipant.setScreenShareEnabled(
@@ -274,18 +296,37 @@ class LiveKitManager {
               height: dims.height,
               frameRate: frameRate,
             },
-            contentHint: frameRate === 60 ? 'motion' : 'detail',
+            contentHint: frameRate >= 60 ? 'motion' : 'detail',
           },
           {
             simulcast: true,
             videoEncoding: {
               maxBitrate: maxBitrate,
               maxFramerate: frameRate,
+              priority: 'high',
             },
           }
         );
 
         if (pub && pub.track) {
+          try {
+            const sender = (pub.track as any)?.sender as RTCRtpSender | undefined;
+            if (sender && typeof sender.getParameters === 'function') {
+              const params = sender.getParameters();
+              if (params) {
+                params.degradationPreference = frameRate >= 60 ? 'maintain-framerate' : 'maintain-resolution';
+                if (params.encodings && params.encodings.length > 0) {
+                  params.encodings[0].maxBitrate = maxBitrate;
+                  params.encodings[0].maxFramerate = frameRate;
+                  params.encodings[0].networkPriority = 'high';
+                }
+                await sender.setParameters(params);
+              }
+            }
+          } catch (e) {
+            console.warn('[LiveKit] Could not set degradationPreference on sender:', e);
+          }
+
           const mediaStreamTrack = pub.track.mediaStreamTrack;
           if (mediaStreamTrack) {
             mediaStreamTrack.onended = () => {
