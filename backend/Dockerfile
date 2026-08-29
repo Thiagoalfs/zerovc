@@ -1,5 +1,5 @@
-# Multi-stage build (100% offline & self-contained, zero apk network dependencies)
-FROM golang:1.22-alpine AS builder
+# Multi-stage build
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
