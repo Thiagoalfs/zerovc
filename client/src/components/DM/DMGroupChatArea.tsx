@@ -18,7 +18,7 @@ import {
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
-import { api } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { User, DMGroupMessage } from '../../types';
@@ -452,7 +452,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                         className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-85"
                       >
                         {msg.author?.avatar_url ? (
-                          <img src={msg.author.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                          <img src={formatAssetUrl(msg.author.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                         ) : (
                           <span>{msg.author?.display_name?.[0]?.toUpperCase() || msg.author?.username?.[0]?.toUpperCase() || 'U'}</span>
                         )}
@@ -500,10 +500,10 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                             className="mt-1.5 w-fit max-w-sm sm:max-w-md md:max-w-lg overflow-hidden rounded-2xl border border-white/10 shadow-md relative group/media"
                           >
                             <img
-                              src={url}
+                              src={formatAssetUrl(url)}
                               alt="Anexo"
                               onLoad={handleMediaLoad}
-                              onClick={() => onPreviewImage?.(url)}
+                              onClick={() => onPreviewImage?.(formatAssetUrl(url))}
                               className="max-h-[350px] max-w-full w-auto h-auto object-contain cursor-pointer hover:opacity-95 transition-opacity block"
                             />
 
@@ -631,7 +631,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 >
                   <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
                     {m.avatar_url ? (
-                      <img src={m.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                      <img src={formatAssetUrl(m.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                     ) : (
                       <span>{m.display_name?.[0]?.toUpperCase() || m.username?.[0]?.toUpperCase()}</span>
                     )}

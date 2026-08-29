@@ -24,7 +24,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
-import { api, getApiBaseUrl } from '../../lib/api';
+import { api, getApiBaseUrl, formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
 interface MessageItemProps {
@@ -381,7 +381,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 part.startsWith('/assets/user/') ||
                 part.startsWith('/assets/guild/');
 
-              const fullSrc = part.startsWith('/assets/') ? `${getApiBaseUrl()}${part}` : part;
+              const fullSrc = formatAssetUrl(part);
 
               if (isImage) {
                 const isGifImage =
@@ -599,7 +599,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             >
               {message.author?.avatar_url ? (
                 <img
-                  src={message.author.avatar_url}
+                  src={formatAssetUrl(message.author.avatar_url)}
                   alt={message.author.username}
                   className="w-full h-full object-cover"
                 />

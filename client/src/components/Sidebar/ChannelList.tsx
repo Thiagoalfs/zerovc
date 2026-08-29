@@ -34,7 +34,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useDMStore } from '../../stores/dmStore';
-import { api } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { UserBar } from './UserBar';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
@@ -726,7 +726,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     >
                       {targetUser.avatar_url ? (
                         <img
-                          src={targetUser.avatar_url}
+                          src={formatAssetUrl(targetUser.avatar_url)}
                           alt=""
                           className="w-full h-full rounded-full object-cover"
                         />
@@ -796,7 +796,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               style={
                 activeGuild?.banner_url
                   ? {
-                      backgroundImage: `url(${activeGuild.banner_url})`,
+                      backgroundImage: `url(${formatAssetUrl(activeGuild.banner_url)})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                     }

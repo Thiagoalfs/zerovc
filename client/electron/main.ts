@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session } from 'electron';
 import path from 'path';
+import { autoUpdater } from 'electron-updater';
 
 // Enable Hardware Acceleration & High-Performance Native Screen Capture
 app.commandLine.appendSwitch('enable-gpu-rasterization');
@@ -23,9 +24,9 @@ function createWindow() {
     height: 800,
     minWidth: 940,
     minHeight: 600,
-    backgroundColor: '#1e1f22',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 12, y: 16 },
+    backgroundColor: '#0d1117',
+    frame: false, // Frameless window for Discord-style custom titlebar
+    titleBarStyle: 'hidden',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -35,7 +36,7 @@ function createWindow() {
   });
 
   // Handle media permissions automatically (Microphone, Camera, Screen share)
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     const allowedPermissions = ['media', 'microphone', 'camera', 'screen', 'notifications'];
     if (allowedPermissions.includes(permission)) {
       callback(true);
@@ -45,7 +46,7 @@ function createWindow() {
   });
 
   // Handle getDisplayMedia requests in Electron
-  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
     desktopCapturer
       .getSources({ types: ['screen', 'window'] })
       .then((sources) => {
@@ -65,8 +66,6 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    // Open DevTools in dev mode if needed
-    // mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
@@ -74,7 +73,106 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Setup auto-updater when running in packaged mode
+  if (!isDev) {
+    setupAutoUpdater();
+  }
 }
+
+// -------------------------------------------------------------
+// Auto-Updater Configuration (GitHub Releases)
+// -------------------------------------------------------------
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = false; // Let user click the Update button in TitleBar
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[AutoUpdater] Checking for updates on GitHub...');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('[AutoUpdater] Update available:', info.version);
+    mainWindow?.webContents.send('update-available', {
+      version: info.version,
+      releaseNotes: info.releaseNotes,
+    });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('[AutoUpdater] Application is up to date.');
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    mainWindow?.webContents.send('update-progress', {
+      percent: progressObj.percent,
+      bytesPerSecond: progressObj.bytesPerSecond,
+      transferred: progressObj.transferred,
+      total: progressObj.total,
+    });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('[AutoUpdater] Update downloaded:', info.version);
+    mainWindow?.webContents.send('update-downloaded', {
+      version: info.version,
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[AutoUpdater] Error checking/downloading update:', err);
+  });
+
+  // Check on boot after 3 seconds
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 3000);
+
+  // Check periodically every 15 minutes
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 15 * 60 * 1000);
+}
+
+// -------------------------------------------------------------
+// IPC Handlers: Window Controls & Updater Actions
+// -------------------------------------------------------------
+ipcMain.on('window-minimize', () => {
+  mainWindow?.minimize();
+});
+
+ipcMain.on('window-maximize', () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow?.maximize();
+  }
+});
+
+ipcMain.on('window-close', () => {
+  mainWindow?.close();
+});
+
+ipcMain.handle('window-is-maximized', () => {
+  return mainWindow?.isMaximized() ?? false;
+});
+
+ipcMain.on('start-download-update', () => {
+  autoUpdater.downloadUpdate().catch((err) => {
+    console.error('[AutoUpdater] Error on downloadUpdate:', err);
+  });
+});
+
+ipcMain.on('quit-and-install', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.on('check-for-updates', () => {
+  if (!app.isPackaged) {
+    return;
+  }
+  autoUpdater.checkForUpdates().catch(() => {});
+});
 
 // IPC: Get Screen Sources for Screen Sharing in WebRTC
 ipcMain.handle('get-screen-sources', async () => {

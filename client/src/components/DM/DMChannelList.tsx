@@ -5,6 +5,7 @@ import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { DMRoom, DMGroup } from '../../types';
 import { UserBar } from '../Sidebar/UserBar';
 import { CreateDMGroupModal } from '../Modals/CreateDMGroupModal';
+import { formatAssetUrl } from '../../lib/api';
 
 interface DMChannelListProps {
   currentView: 'friends' | 'dm' | 'group';
@@ -173,7 +174,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                     >
                       <div className="relative w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
                         {recipient?.avatar_url ? (
-                          <img src={recipient.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                          <img src={formatAssetUrl(recipient.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                         ) : (
                           <span>{recipient?.display_name?.[0]?.toUpperCase() || recipient?.username[0]?.toUpperCase() || 'U'}</span>
                         )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MessageSquare, Server, Settings, Check, Shield, ArrowLeft, KeyRound } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
-import { api, getApiBaseUrl, setApiBaseUrl } from '../../lib/api';
+import { api, getApiBaseUrl, setApiBaseUrl, formatAssetUrl } from '../../lib/api';
 
 export const AuthScreen: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -117,7 +117,7 @@ export const AuthScreen: React.FC = () => {
         {!requires2FA && invitePreview && (
           <div className="mb-5 p-3.5 bg-brand-500/15 border border-brand-500/30 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
             {invitePreview.icon_url ? (
-              <img src={invitePreview.icon_url} alt="" className="w-10 h-10 rounded-full object-cover shadow" />
+              <img src={formatAssetUrl(invitePreview.icon_url)} alt="" className="w-10 h-10 rounded-full object-cover shadow" />
             ) : (
               <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white shadow">
                 {invitePreview.guild_name[0]?.toUpperCase()}

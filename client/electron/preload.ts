@@ -7,14 +7,60 @@ export interface ScreenSource {
   appIcon: string | null;
 }
 
+export interface UpdateInfo {
+  version: string;
+  releaseNotes?: string | Array<{ version: string; note: string }>;
+}
+
+export interface UpdateProgress {
+  percent: number;
+  bytesPerSecond: number;
+  transferred: number;
+  total: number;
+}
+
 export interface ElectronAPI {
-  getScreenSources: () => Promise<ScreenSource[]>;
+  isElectron: boolean;
   platform: string;
+  getScreenSources: () => Promise<ScreenSource[]>;
+  minimize: () => void;
+  maximize: () => void;
+  close: () => void;
+  isMaximized: () => Promise<boolean>;
+  checkForUpdates: () => void;
+  startDownloadUpdate: () => void;
+  quitAndInstall: () => void;
+  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
+  onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
+  onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
 }
 
 const electronAPI: ElectronAPI = {
-  getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
+  isElectron: true,
   platform: process.platform,
+  getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
+  minimize: () => ipcRenderer.send('window-minimize'),
+  maximize: () => ipcRenderer.send('window-maximize'),
+  close: () => ipcRenderer.send('window-close'),
+  isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  checkForUpdates: () => ipcRenderer.send('check-for-updates'),
+  startDownloadUpdate: () => ipcRenderer.send('start-download-update'),
+  quitAndInstall: () => ipcRenderer.send('quit-and-install'),
+  onUpdateAvailable: (callback) => {
+    const handler = (_: any, info: UpdateInfo) => callback(info);
+    ipcRenderer.on('update-available', handler);
+    return () => ipcRenderer.removeListener('update-available', handler);
+  },
+  onUpdateProgress: (callback) => {
+    const handler = (_: any, progress: UpdateProgress) => callback(progress);
+    ipcRenderer.on('update-progress', handler);
+    return () => ipcRenderer.removeListener('update-progress', handler);
+  },
+  onUpdateDownloaded: (callback) => {
+    const handler = (_: any, info: UpdateInfo) => callback(info);
+    ipcRenderer.on('update-downloaded', handler);
+    return () => ipcRenderer.removeListener('update-downloaded', handler);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

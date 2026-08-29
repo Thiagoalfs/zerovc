@@ -2,6 +2,7 @@ import React from 'react';
 import { Plus, MessageSquare } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
+import { formatAssetUrl } from '../../lib/api';
 
 interface ServerListProps {
   isHomeActive: boolean;
@@ -91,7 +92,7 @@ export const ServerList: React.FC<ServerListProps> = ({
 
               {guild.icon_url ? (
                 <img
-                  src={guild.icon_url}
+                  src={formatAssetUrl(guild.icon_url)}
                   alt={guild.name}
                   className="w-full h-full object-cover rounded-[inherit]"
                 />

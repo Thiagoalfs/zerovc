@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Users, Check } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
+import { formatAssetUrl } from '../../lib/api';
 
 interface CreateDMGroupModalProps {
   isOpen: boolean;
@@ -133,7 +134,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
                       <div className="flex items-center gap-2.5 truncate">
                         <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
                           {friendUser.avatar_url ? (
-                            <img src={friendUser.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                            <img src={formatAssetUrl(friendUser.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                           ) : (
                             <span>{friendUser.display_name?.[0]?.toUpperCase() || friendUser.username?.[0]?.toUpperCase()}</span>
                           )}

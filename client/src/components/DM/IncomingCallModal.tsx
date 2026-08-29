@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Phone, PhoneOff, Video } from 'lucide-react';
 import { useCallStore } from '../../stores/callStore';
+import { formatAssetUrl } from '../../lib/api';
 
 export const IncomingCallModal: React.FC = () => {
   const { callState, incomingCaller, acceptCall, rejectCall } = useCallStore();
@@ -71,7 +72,7 @@ export const IncomingCallModal: React.FC = () => {
       <div className="relative">
         <div className="w-14 h-14 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-lg overflow-hidden relative z-10 shadow-lg">
           {incomingCaller.avatar_url ? (
-            <img src={incomingCaller.avatar_url} alt="" className="w-full h-full object-cover" />
+            <img src={formatAssetUrl(incomingCaller.avatar_url)} alt="" className="w-full h-full object-cover" />
           ) : (
             <span>{incomingCaller.display_name?.[0]?.toUpperCase() || incomingCaller.username?.[0]?.toUpperCase()}</span>
           )}

@@ -27,7 +27,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { User, Permissions } from '../../types';
-import { api } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
@@ -533,7 +533,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               }`}
             >
               {avatarUrl ? (
-                <img src={avatarUrl} alt={displayName} className="w-full h-full rounded-full object-cover" />
+                <img src={formatAssetUrl(avatarUrl)} alt={displayName} className="w-full h-full rounded-full object-cover" />
               ) : (
                 <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
               )}
