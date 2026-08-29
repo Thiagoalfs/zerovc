@@ -81,7 +81,25 @@ export const App: React.FC = () => {
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
+  const getCurrentRoute = () => {
+    if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+      return window.location.hash ? window.location.hash.replace(/^#/, '') : '/@me';
+    }
+    return window.location.pathname;
+  };
+
   const navigateTo = (path: string, replace = false) => {
+    if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+      const hashPath = '#' + (path.startsWith('/') ? path : '/' + path);
+      if (window.location.hash !== hashPath) {
+        if (replace) {
+          window.history.replaceState(null, '', hashPath);
+        } else {
+          window.history.pushState(null, '', hashPath);
+        }
+      }
+      return;
+    }
     if (window.location.pathname !== path) {
       if (replace) {
         window.history.replaceState(null, '', path);
@@ -250,7 +268,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (token && user) {
       fetchGuilds();
-      handleRoute(window.location.pathname);
+      handleRoute(getCurrentRoute());
 
       // Auto join pending invite upon login/register
       const pendingInvite = sessionStorage.getItem('pending_invite_code');
@@ -289,10 +307,11 @@ export const App: React.FC = () => {
           });
       }
 
-      const onPopState = () => {
-        handleRoute(window.location.pathname);
+      const onRouteEvent = () => {
+        handleRoute(getCurrentRoute());
       };
-      window.addEventListener('popstate', onPopState);
+      window.addEventListener('popstate', onRouteEvent);
+      window.addEventListener('hashchange', onRouteEvent);
 
       // WebSocket Event Subscriptions
       const handleMessageCreate = (event: any) => {
@@ -458,7 +477,8 @@ export const App: React.FC = () => {
       socket.on('PRESENCE_UPDATE', handlePresenceUpdate);
 
       return () => {
-        window.removeEventListener('popstate', onPopState);
+        window.removeEventListener('popstate', onRouteEvent);
+        window.removeEventListener('hashchange', onRouteEvent);
         socket.off('MESSAGE_CREATE', handleMessageCreate);
         socket.off('MESSAGE_UPDATE', handleMessageUpdate);
         socket.off('MESSAGE_DELETE', handleMessageDelete);
