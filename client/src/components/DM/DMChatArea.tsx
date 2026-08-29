@@ -153,11 +153,23 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       return;
     }
 
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
+    if (isNearBottom) {
+      scrollToBottom(true);
+      setTimeout(() => scrollToBottom(true), 100);
+      setTimeout(() => scrollToBottom(true), 300);
+      setTimeout(() => scrollToBottom(true), 600);
+    }
+  }, [messages, searchQuery]);
+
+  const handleMediaLoad = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 400;
     if (isNearBottom) {
       scrollToBottom(true);
     }
-  }, [messages, searchQuery]);
+  };
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
@@ -689,6 +701,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                         <img
                           src={url}
                           alt="Imagem enviada"
+                          onLoad={handleMediaLoad}
                           className="max-h-[350px] max-w-full w-auto h-auto object-contain bg-black/40 cursor-pointer hover:opacity-95 transition-opacity block"
                           onClick={(e) => {
                             e.stopPropagation();

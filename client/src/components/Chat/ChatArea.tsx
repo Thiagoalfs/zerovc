@@ -143,11 +143,23 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       return;
     }
 
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
     if (isNearBottom && !isAutoScrollingRef.current) {
       scrollToBottom(true);
+      setTimeout(() => scrollToBottom(true), 100);
+      setTimeout(() => scrollToBottom(true), 300);
+      setTimeout(() => scrollToBottom(true), 600);
     }
   }, [messages]);
+
+  const handleMediaLoad = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 400;
+    if (isNearBottom) {
+      scrollToBottom(true);
+    }
+  };
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
@@ -366,6 +378,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   onOpenDM={onOpenDM}
                   onPreviewImage={onPreviewImage}
                   onReply={(msg) => setReplyingTo(msg)}
+                  onImageLoad={handleMediaLoad}
                 />
               );
             })

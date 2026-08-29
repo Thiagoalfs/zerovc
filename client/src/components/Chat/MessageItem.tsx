@@ -34,6 +34,7 @@ interface MessageItemProps {
   onOpenDM?: (userId: string) => void;
   onPreviewImage?: (url: string) => void;
   onReply?: (message: Message) => void;
+  onImageLoad?: () => void;
 }
 
 const QUICK_EMOJIS = ['👍', '❤️', '🔥', '😂', '🎉', '👀', '✨', '💀'];
@@ -45,6 +46,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   onOpenDM,
   onPreviewImage,
   onReply,
+  onImageLoad,
 }) => {
   const { user } = useAuthStore();
   const {
@@ -397,6 +399,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     <img
                       src={fullSrc}
                       alt="Uploaded content"
+                      onLoad={() => onImageLoad?.()}
                       onClick={() => onPreviewImage?.(fullSrc)}
                       className="max-h-[350px] max-w-full w-auto h-auto object-contain rounded-2xl cursor-pointer hover:opacity-95 transition-opacity block"
                     />
@@ -482,7 +485,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     <>
       <div
         onContextMenu={handleContextMenu}
-        className={`relative flex flex-col px-3 md:px-4 group rounded transition-colors select-none ${
+        className={`relative flex flex-col px-3 md:px-4 group rounded transition-colors ${
           isMentioned
             ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-2 border-amber-500'
             : 'hover:bg-background-dark/40'
@@ -613,7 +616,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           {/* Content */}
           <div className="flex-1 min-w-0">
             {!isCompact && (
-              <div className="flex items-baseline gap-2 mb-0.5">
+              <div className="flex items-baseline gap-2 mb-0.5 select-none">
                 <span
                   onClick={(e) => {
                     e.stopPropagation();
@@ -626,10 +629,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 </span>
                 <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>
                 {message.is_edited && (
-                  <span className="text-[10px] text-gray-500 font-normal select-none">(editado)</span>
+                  <span className="text-[10px] text-gray-500 font-normal">(editado)</span>
                 )}
                 {message.is_pinned && (
-                  <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1 select-none">
+                  <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1">
                     <Pin className="w-2.5 h-2.5" /> Fixada
                   </span>
                 )}
@@ -664,7 +667,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="text-[0.9375rem] text-gray-200 break-words leading-[1.375rem] whitespace-pre-wrap font-normal">
+              <div className="text-[0.9375rem] text-gray-200 break-words leading-[1.375rem] whitespace-pre-wrap font-normal select-text">
                 {renderFormattedContent(message.content)}
               </div>
             )}
