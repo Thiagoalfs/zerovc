@@ -673,6 +673,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                   {imageUrls.map((url, idx) => {
                     const isGif =
                       url.includes('.gif') ||
+                      url.includes('.webp') ||
                       url.includes('klipy') ||
                       url.includes('giphy') ||
                       url.includes('tenor');
@@ -681,14 +682,14 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                     return (
                       <div
                         key={idx}
-                        className={`mt-1.5 max-w-sm sm:max-w-md overflow-hidden rounded-2xl border border-white/10 shadow-md relative group/media ${
+                        className={`mt-1.5 w-fit max-w-sm sm:max-w-md md:max-w-lg overflow-hidden rounded-2xl border border-white/10 shadow-md relative group/media ${
                           textLines.length === 0 && isMe ? 'rounded-tr-none' : textLines.length === 0 && !isMe ? 'rounded-tl-none' : ''
                         }`}
                       >
                         <img
                           src={url}
                           alt="Imagem enviada"
-                          className="max-h-80 w-auto object-contain bg-black/40 cursor-pointer hover:opacity-95 transition-opacity"
+                          className="max-h-[350px] max-w-full w-auto h-auto object-contain bg-black/40 cursor-pointer hover:opacity-95 transition-opacity block"
                           onClick={(e) => {
                             e.stopPropagation();
                             if (onPreviewImage) onPreviewImage(url);

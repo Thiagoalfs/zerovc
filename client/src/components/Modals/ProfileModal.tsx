@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Loader2,
   Laptop,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
@@ -502,17 +503,30 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         <div className="flex-1 flex flex-col h-full bg-background-dark overflow-hidden">
           {/* Top Bar with Title and Close Button */}
           <div className="p-5 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
-            <div>
-              <h3 className="text-lg font-bold text-white">
-                {activeTab === 'account' && 'Minha Conta'}
-                {activeTab === 'profile' && 'Perfil de Usuário'}
-                {activeTab === 'audio' && 'Voz & Vídeo'}
-              </h3>
-              <p className="text-xs text-gray-400">
-                {activeTab === 'account' && 'Gerencie seus dados de acesso, nome de usuário, e-mail e segurança.'}
-                {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
-                {activeTab === 'audio' && 'Ajuste seus dispositivos de entrada, saída e sensibilidade do microfone.'}
-              </p>
+            <div className="flex items-center gap-3">
+              {activeTab === 'profile' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('account')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer border border-white/5"
+                  title="Voltar para Minha Conta"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Voltar</span>
+                </button>
+              )}
+              <div>
+                <h3 className="text-lg font-bold text-white">
+                  {activeTab === 'account' && 'Minha Conta'}
+                  {activeTab === 'profile' && 'Perfil de Usuário'}
+                  {activeTab === 'audio' && 'Voz & Vídeo'}
+                </h3>
+                <p className="text-xs text-gray-400">
+                  {activeTab === 'account' && 'Gerencie seus dados de acesso, nome de usuário, e-mail e segurança.'}
+                  {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
+                  {activeTab === 'audio' && 'Ajuste seus dispositivos de entrada, saída e sensibilidade do microfone.'}
+                </p>
+              </div>
             </div>
 
             <button
@@ -634,7 +648,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Phone row */}
-                    <div className="flex items-center justify-between py-1 border-b border-white/5">
+                    <div className="flex items-center justify-between py-1">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                           Número de Telefone
@@ -666,19 +680,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       >
                         {user.phone_number ? 'Editar' : 'Adicionar'}
                       </button>
-                    </div>
-
-                    {/* Age Group row */}
-                    <div className="flex items-center justify-between py-1">
-                      <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                          Faixa Etária
-                        </span>
-                        <span className="text-xs text-gray-300">Adulto (+18)</span>
-                      </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        Verificado
-                      </span>
                     </div>
                   </div>
                 </div>

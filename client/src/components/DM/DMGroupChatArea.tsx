@@ -13,9 +13,11 @@ import {
   Loader2,
   UploadCloud,
   FileText,
+  Star,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { api } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
@@ -46,6 +48,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     hasMoreByGroup,
     loadMoreMessages,
   } = useDMGroupStore();
+  const { isFavorited, toggleFavorite } = useFavoriteGifStore();
 
   const [content, setContent] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -470,19 +473,47 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                         </div>
                       )}
 
-                      {imageUrls.map((url, idx) => (
-                        <div
-                          key={idx}
-                          className="mt-1.5 max-w-sm sm:max-w-md overflow-hidden rounded-2xl border border-white/10 shadow-md"
-                        >
-                          <img
-                            src={url}
-                            alt="Anexo"
-                            onClick={() => onPreviewImage?.(url)}
-                            className="w-full max-h-80 object-cover cursor-pointer hover:opacity-95 transition-opacity"
-                          />
-                        </div>
-                      ))}
+                      {imageUrls.map((url, idx) => {
+                        const isGif =
+                          url.includes('.gif') ||
+                          url.includes('.webp') ||
+                          url.includes('klipy') ||
+                          url.includes('giphy') ||
+                          url.includes('tenor');
+                        const favorited = isFavorited(url);
+
+                        return (
+                          <div
+                            key={idx}
+                            className="mt-1.5 w-fit max-w-sm sm:max-w-md md:max-w-lg overflow-hidden rounded-2xl border border-white/10 shadow-md relative group/media"
+                          >
+                            <img
+                              src={url}
+                              alt="Anexo"
+                              onClick={() => onPreviewImage?.(url)}
+                              className="max-h-[350px] max-w-full w-auto h-auto object-contain cursor-pointer hover:opacity-95 transition-opacity block"
+                            />
+
+                            {isGif && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(url);
+                                }}
+                                className={`absolute top-2 right-2 p-1.5 rounded-xl backdrop-blur-md transition-all shadow-md cursor-pointer ${
+                                  favorited
+                                    ? 'bg-amber-500 text-white opacity-100'
+                                    : 'bg-black/60 text-white/70 hover:text-white hover:bg-black/90 opacity-0 group-hover/media:opacity-100'
+                                }`}
+                                title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
+                              >
+                                <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );

@@ -383,8 +383,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
               if (isImage) {
                 const isGifImage =
-                  part.match(/\.gif($|\?)/i) ||
+                  part.match(/\.(gif|webp)($|\?)/i) ||
                   fullSrc.includes('.gif') ||
+                  fullSrc.includes('.webp') ||
                   fullSrc.includes('klipy') ||
                   fullSrc.includes('giphy') ||
                   fullSrc.includes('tenor');
@@ -392,12 +393,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 const favorited = isFavorited(fullSrc);
 
                 return (
-                  <div key={i} className="mt-2 mb-1 max-w-sm rounded-xl overflow-hidden border border-white/10 relative group/media">
+                  <div key={i} className="mt-2 mb-1 w-fit max-w-sm sm:max-w-md md:max-w-lg rounded-2xl overflow-hidden border border-white/10 relative group/media">
                     <img
                       src={fullSrc}
                       alt="Uploaded content"
                       onClick={() => onPreviewImage?.(fullSrc)}
-                      className="max-h-64 object-cover rounded-xl cursor-pointer hover:opacity-95 transition-opacity"
+                      className="max-h-[350px] max-w-full w-auto h-auto object-contain rounded-2xl cursor-pointer hover:opacity-95 transition-opacity block"
                     />
 
                     {isGifImage && (
