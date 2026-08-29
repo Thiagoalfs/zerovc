@@ -10,7 +10,12 @@ export const getApiBaseUrl = (): string => {
     cachedApiUrl = stored;
     return stored;
   }
-  if (typeof window !== 'undefined' && window.location.origin.startsWith('http')) {
+  if (
+    typeof window !== 'undefined' &&
+    window.location.origin &&
+    window.location.origin.startsWith('http') &&
+    !window.location.origin.includes('localhost:5173')
+  ) {
     cachedApiUrl = window.location.origin;
     return window.location.origin;
   }
@@ -20,6 +25,21 @@ export const getApiBaseUrl = (): string => {
 export const setApiBaseUrl = (url: string): void => {
   cachedApiUrl = url;
   localStorage.setItem('zerovc_api_url', url);
+};
+
+export const formatAssetUrl = (url?: string | null): string => {
+  if (!url) return '';
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('blob:')
+  ) {
+    return url;
+  }
+  const base = getApiBaseUrl();
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${base}${cleanPath}`;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
-import { api } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { EmojiAndGifPicker } from './EmojiAndGifPicker';
 import { useGuildStore } from '../../stores/guildStore';
@@ -319,7 +319,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 ) : (
                   <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden flex-shrink-0">
                     {item.avatar_url ? (
-                      <img src={item.avatar_url} alt="" className="w-full h-full object-cover" />
+                      <img src={formatAssetUrl(item.avatar_url)} alt="" className="w-full h-full object-cover" />
                     ) : (
                       item.name[0]?.toUpperCase()
                     )}

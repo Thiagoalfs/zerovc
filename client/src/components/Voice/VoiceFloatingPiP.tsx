@@ -16,6 +16,7 @@ import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
+import { formatAssetUrl } from '../../lib/api';
 import { User } from '../../types';
 
 type PiPCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
@@ -318,7 +319,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
           >
             <div className="w-3.5 h-3.5 rounded-full bg-brand-500 flex items-center justify-center text-[8px] font-bold overflow-hidden">
               {targetUser.avatar_url ? (
-                <img src={targetUser.avatar_url} alt="" className="w-full h-full object-cover" />
+                <img src={formatAssetUrl(targetUser.avatar_url)} alt="" className="w-full h-full object-cover" />
               ) : (
                 displayName?.[0]?.toUpperCase() || 'U'
               )}

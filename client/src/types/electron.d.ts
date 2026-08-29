@@ -5,9 +5,32 @@ export interface ScreenSource {
   appIcon: string | null;
 }
 
+export interface UpdateInfo {
+  version: string;
+  releaseNotes?: string | Array<{ version: string; note: string }>;
+}
+
+export interface UpdateProgress {
+  percent: number;
+  bytesPerSecond: number;
+  transferred: number;
+  total: number;
+}
+
 export interface ElectronAPI {
-  getScreenSources: () => Promise<ScreenSource[]>;
+  isElectron: boolean;
   platform: string;
+  getScreenSources: () => Promise<ScreenSource[]>;
+  minimize: () => void;
+  maximize: () => void;
+  close: () => void;
+  isMaximized: () => Promise<boolean>;
+  checkForUpdates: () => void;
+  startDownloadUpdate: () => void;
+  quitAndInstall: () => void;
+  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
+  onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
+  onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
 }
 
 declare global {

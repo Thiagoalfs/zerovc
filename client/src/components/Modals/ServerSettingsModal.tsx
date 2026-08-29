@@ -21,7 +21,7 @@ import {
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Permissions } from '../../types';
-import { api } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
 
 interface ServerSettingsModalProps {
@@ -566,7 +566,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <div className="w-20 h-20 rounded-2xl bg-background-dark border border-white/10 flex items-center justify-center font-bold text-white text-xl overflow-hidden shadow-lg flex-shrink-0 relative group">
                         {activeGuild.icon_url ? (
                           <img
-                            src={activeGuild.icon_url}
+                            src={formatAssetUrl(activeGuild.icon_url)}
                             alt={activeGuild.name}
                             className="w-full h-full object-cover"
                           />
@@ -624,7 +624,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <div className="w-full h-24 rounded-xl bg-background-dark border border-white/10 overflow-hidden relative group flex items-center justify-center">
                         {activeGuild.banner_url ? (
                           <img
-                            src={activeGuild.banner_url}
+                            src={formatAssetUrl(activeGuild.banner_url)}
                             alt="Banner do Servidor"
                             className="w-full h-full object-cover"
                           />
@@ -889,7 +889,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm">
                         {member.avatar_url ? (
                           <img
-                            src={member.avatar_url}
+                            src={formatAssetUrl(member.avatar_url)}
                             alt={member.username}
                             className="w-full h-full rounded-full object-cover"
                           />

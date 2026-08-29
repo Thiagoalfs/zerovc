@@ -29,6 +29,7 @@ import { InviteModal } from './components/Modals/InviteModal';
 import { UserProfileModal } from './components/Modals/UserProfileModal';
 import { ImageModal } from './components/Modals/ImageModal';
 import { IncomingCallModal } from './components/DM/IncomingCallModal';
+import { TitleBar } from './components/Desktop/TitleBar';
 import { livekit } from './lib/livekit';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
@@ -487,14 +488,24 @@ export const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="w-screen h-[100dvh] flex items-center justify-center bg-background-darkest text-gray-400">
-        <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest text-gray-400">
+        <TitleBar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
 
   if (!user) {
-    return <AuthScreen />;
+    return (
+      <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+        <TitleBar />
+        <div className="flex-1 overflow-hidden">
+          <AuthScreen />
+        </div>
+      </div>
+    );
   }
 
   const connectedVoiceChannel = isConnected
@@ -502,21 +513,23 @@ export const App: React.FC = () => {
     : null;
 
   return (
-    <div className="w-screen h-[100dvh] flex bg-background-dark overflow-hidden select-none relative">
-      {/* Mobile Left Drawer Backdrop */}
-      {isMobileDrawerOpen && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-30 md:hidden animate-in fade-in duration-200"
-          onClick={() => setIsMobileDrawerOpen(false)}
-        />
-      )}
+    <div className="w-screen h-[100dvh] flex flex-col bg-background-dark overflow-hidden select-none relative">
+      <TitleBar />
+      <div className="flex-1 flex w-full h-full overflow-hidden relative">
+        {/* Mobile Left Drawer Backdrop */}
+        {isMobileDrawerOpen && (
+          <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-30 md:hidden animate-in fade-in duration-200"
+            onClick={() => setIsMobileDrawerOpen(false)}
+          />
+        )}
 
-      {/* 1 & 2. Sidebars */}
-      <div
-        className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex h-full transition-transform duration-200 ease-in-out ${
-          isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        }`}
-      >
+        {/* 1 & 2. Sidebars */}
+        <div
+          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex h-full transition-transform duration-200 ease-in-out ${
+            isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          }`}
+        >
         {/* 1. Server List */}
         <ServerList
           isHomeActive={isHomeActive}
@@ -819,6 +832,7 @@ export const App: React.FC = () => {
 
       {/* Global Incoming Call Popup */}
       <IncomingCallModal />
+      </div>
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { MessageSquare, Shield, Calendar, Edit3 } from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
+import { formatAssetUrl } from '../../lib/api';
 
 export interface UserProfilePosition {
   x: number;
@@ -127,7 +128,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         {/* Banner */}
         <div
           className="h-20 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-cover bg-center"
-          style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : {}}
+          style={user.banner_url ? { backgroundImage: `url(${formatAssetUrl(user.banner_url)})` } : {}}
         />
 
         {/* Profile Details */}
@@ -136,7 +137,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           <div className="relative -mt-9 mb-2 inline-block">
             <div className="w-16 h-16 rounded-full bg-brand-500 border-4 border-background-darkest flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden">
               {user.avatar_url ? (
-                <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={formatAssetUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase() || 'U'}</span>
               )}
