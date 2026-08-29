@@ -13,6 +13,8 @@ interface AuthState {
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   updateProfile: (data: {
+    username?: string;
+    phone_number?: string;
     display_name?: string;
     avatar_url?: string;
     banner_url?: string;

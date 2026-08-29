@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(64) DEFAULT '',
+    phone_number VARCHAR(32) DEFAULT '',
     avatar_url TEXT DEFAULT '',
     banner_url TEXT DEFAULT '',
     bio VARCHAR(255) DEFAULT '',
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Ensure newly added columns exist if table was already created
 ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(64) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(32) DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(255) DEFAULT '';
 
@@ -228,6 +230,17 @@ CREATE TABLE IF NOT EXISTS dm_group_messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 18. User Favorite GIFs
+CREATE TABLE IF NOT EXISTS user_favorite_gifs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    gif_url TEXT NOT NULL,
+    preview_url TEXT DEFAULT '',
+    title VARCHAR(128) DEFAULT '',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, gif_url)
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_channel_created ON messages (channel_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dm_messages_room_created ON dm_messages (dm_room_id, created_at DESC);
@@ -244,6 +257,5 @@ CREATE INDEX IF NOT EXISTS idx_channel_role_access_chan ON channel_role_access (
 CREATE INDEX IF NOT EXISTS idx_channel_role_access_role ON channel_role_access (role_id);
 CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions (channel_id);
 CREATE INDEX IF NOT EXISTS idx_guild_invites_guild ON guild_invites (guild_id);
-CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships (user_id);
-CREATE INDEX IF NOT EXISTS idx_friendships_friend ON friendships (friend_id);
+CREATE INDEX IF NOT EXISTS idx_user_favorite_gifs_user ON user_favorite_gifs (user_id, created_at DESC);
 
