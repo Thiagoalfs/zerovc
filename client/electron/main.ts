@@ -210,7 +210,12 @@ ipcMain.on('open-external', (_event, url) => {
 });
 
 ipcMain.on('reload-app', () => {
-  mainWindow?.webContents.reloadIgnoringCache();
+  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+  if (isDev) {
+    mainWindow?.loadURL('http://localhost:5173');
+  } else {
+    mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
 });
 
 ipcMain.on('check-for-updates', () => {
