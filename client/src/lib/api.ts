@@ -1,5 +1,6 @@
 import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF } from '../types';
 import { convertToWebP } from '../utils/image';
+import { isElectron } from './platform';
 
 let cachedApiUrl: string | null = null;
 
@@ -45,7 +46,6 @@ export const formatAssetUrl = (url?: string | null): string => {
 export const API_BASE_URL = getApiBaseUrl();
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
   const baseUrl = getApiBaseUrl();
 
   const headers: Record<string, string> = {
@@ -53,8 +53,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...(options.headers as Record<string, string>),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  // Só o Electron precisa do Bearer token (ver client/src/lib/platform.ts).
+  // No navegador a sessão é 100% via cookie httpOnly enviado por credentials: 'include'.
+  if (isElectron()) {
+    const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
   }
 
   const response = await fetch(`${baseUrl}/api${endpoint}`, {

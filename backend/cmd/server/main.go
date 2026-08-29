@@ -32,6 +32,16 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+// mustGetEnv exige que a variável de ambiente esteja definida e não vazia.
+// Usada para segredos que nunca devem ter um valor padrão hardcoded no repositório (ver F7/F8).
+func mustGetEnv(key string) string {
+	val := os.Getenv(key)
+	if val == "" {
+		log.Fatalf("%s não definido — defina uma variável de ambiente forte antes de iniciar o servidor", key)
+	}
+	return val
+}
+
 func main() {
 	port := getEnv("PORT", "8080")
 	dbURL := getEnv("DATABASE_URL", "postgres://zerovc_user:zerovc_password_change_me@localhost:5432/zerovc?sslmode=disable")
@@ -337,10 +347,21 @@ func main() {
 
 	r.Get("/assets/user/*", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// Avatares e banners (prefixo avatar_/banner_) precisam continuar renderizando inline em <img>.
+		// Só anexos de chat (prefixo att_) podem conter tipos arbitrários e vão sempre como download,
+		// nunca executados/renderizados como HTML pelo navegador — mitigação para F4.
+		if strings.HasPrefix(strings.TrimPrefix(r.URL.Path, "/assets/user/"), "att_") {
+			w.Header().Set("Content-Disposition", "attachment")
+			w.Header().Set("Content-Security-Policy", "sandbox")
+		}
 		http.StripPrefix("/assets/user/", http.FileServer(http.Dir(userAssetsDir))).ServeHTTP(w, r)
 	})
 	r.Get("/assets/guild/*", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// guild/* só recebe icon_/banner_ (imageOnly=true) hoje — sem rota de anexo genérico aqui.
+		// Mesmo assim aplicamos nosniff acima como defesa em profundidade.
 		http.StripPrefix("/assets/guild/", http.FileServer(http.Dir(guildAssetsDir))).ServeHTTP(w, r)
 	})
 

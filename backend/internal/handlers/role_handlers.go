@@ -38,10 +38,23 @@ type UpdateRoleRequest struct {
 }
 
 func (h *RoleHandler) List(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	guildIDStr := chi.URLParam(r, "guildID")
 	guildID, err := uuid.Parse(guildIDStr)
 	if err != nil {
 		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you must be a member of this server to view its roles"}`, http.StatusForbidden)
 		return
 	}
 
@@ -206,15 +219,49 @@ func (h *RoleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	guildIDStr := chi.URLParam(r, "guildID")
 	userIDStr := chi.URLParam(r, "userID")
 	roleIDStr := chi.URLParam(r, "roleID")
 
-	guildID, _ := uuid.Parse(guildIDStr)
-	targetUserID, _ := uuid.Parse(userIDStr)
-	roleID, _ := uuid.Parse(roleIDStr)
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+	targetUserID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+	roleID, err := uuid.Parse(roleIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid role id"}`, http.StatusBadRequest)
+		return
+	}
 
-	_, err := h.db.Pool.Exec(r.Context(), "INSERT INTO guild_member_roles (guild_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", guildID, targetUserID, roleID)
+	var rolePosition int
+	if err := h.db.Pool.QueryRow(r.Context(), "SELECT position FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&rolePosition); err != nil {
+		http.Error(w, `{"error":"role not found"}`, http.StatusNotFound)
+		return
+	}
+
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, actorID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+	if allowed, msg := actorCtx.canAssignRolePosition(rolePosition); !allowed {
+		http.Error(w, `{"error":"`+msg+`"}`, http.StatusForbidden)
+		return
+	}
+
+	_, err = h.db.Pool.Exec(r.Context(), "INSERT INTO guild_member_roles (guild_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", guildID, targetUserID, roleID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to assign role"}`, http.StatusInternalServerError)
 		return
@@ -253,15 +300,49 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	guildIDStr := chi.URLParam(r, "guildID")
 	userIDStr := chi.URLParam(r, "userID")
 	roleIDStr := chi.URLParam(r, "roleID")
 
-	guildID, _ := uuid.Parse(guildIDStr)
-	targetUserID, _ := uuid.Parse(userIDStr)
-	roleID, _ := uuid.Parse(roleIDStr)
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+	targetUserID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+	roleID, err := uuid.Parse(roleIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid role id"}`, http.StatusBadRequest)
+		return
+	}
 
-	_, err := h.db.Pool.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2 AND role_id = $3", guildID, targetUserID, roleID)
+	var rolePosition int
+	if err := h.db.Pool.QueryRow(r.Context(), "SELECT position FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&rolePosition); err != nil {
+		http.Error(w, `{"error":"role not found"}`, http.StatusNotFound)
+		return
+	}
+
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, actorID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+	if allowed, msg := actorCtx.canAssignRolePosition(rolePosition); !allowed {
+		http.Error(w, `{"error":"`+msg+`"}`, http.StatusForbidden)
+		return
+	}
+
+	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2 AND role_id = $3", guildID, targetUserID, roleID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to remove role"}`, http.StatusInternalServerError)
 		return
