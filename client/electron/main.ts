@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, session } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell } from 'electron';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
 
@@ -74,9 +74,24 @@ function createWindow() {
     mainWindow = null;
   });
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    checkGitHubRepoUpdates();
+  });
+
+  // Check repo updates every 30 seconds
+  setInterval(() => {
+    checkGitHubRepoUpdates();
+  }, 30 * 1000);
+
   // Setup auto-updater when running in packaged mode
   if (!isDev) {
     setupAutoUpdater();
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(() => {});
+    }, 3000);
+    setInterval(() => {
+      autoUpdater.checkForUpdates().catch(() => {});
+    }, 15 * 60 * 1000);
   }
 }
 
@@ -122,16 +137,37 @@ function setupAutoUpdater() {
   autoUpdater.on('error', (err) => {
     console.error('[AutoUpdater] Error checking/downloading update:', err);
   });
+}
 
-  // Check on boot after 3 seconds
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
-  }, 3000);
+// -------------------------------------------------------------
+// GitHub Repository Direct Commit Checker
+// -------------------------------------------------------------
+async function checkGitHubRepoUpdates() {
+  try {
+    const res = await fetch('https://api.github.com/repos/Thiagoalfs/zerovc/commits/main', {
+      headers: {
+        'User-Agent': 'ZeroVC-Desktop-App',
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      const latestSha = data.sha;
+      const commitMsg = data.commit?.message?.split('\n')[0] || 'Novas alterações encontradas no repositório';
+      const author = data.commit?.author?.name || 'GitHub';
 
-  // Check periodically every 15 minutes
-  setInterval(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
-  }, 15 * 60 * 1000);
+      mainWindow?.webContents.send('repo-update-available', {
+        latestSha,
+        shortSha: latestSha.substring(0, 7),
+        message: commitMsg,
+        author,
+        commitUrl: data.html_url,
+        publishedAt: data.commit?.author?.date,
+      });
+    }
+  } catch (err) {
+    console.error('[UpdateChecker] Failed to check GitHub commits:', err);
+  }
 }
 
 // -------------------------------------------------------------
@@ -167,11 +203,21 @@ ipcMain.on('quit-and-install', () => {
   autoUpdater.quitAndInstall(false, true);
 });
 
-ipcMain.on('check-for-updates', () => {
-  if (!app.isPackaged) {
-    return;
+ipcMain.on('open-external', (_event, url) => {
+  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+    shell.openExternal(url);
   }
-  autoUpdater.checkForUpdates().catch(() => {});
+});
+
+ipcMain.on('reload-app', () => {
+  mainWindow?.webContents.reloadIgnoringCache();
+});
+
+ipcMain.on('check-for-updates', () => {
+  checkGitHubRepoUpdates();
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }
 });
 
 // IPC: Get Screen Sources for Screen Sharing in WebRTC

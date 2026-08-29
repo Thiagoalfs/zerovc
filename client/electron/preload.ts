@@ -30,9 +30,12 @@ export interface ElectronAPI {
   checkForUpdates: () => void;
   startDownloadUpdate: () => void;
   quitAndInstall: () => void;
+  openExternal: (url: string) => void;
+  reloadApp: () => void;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
+  onRepoUpdateAvailable: (callback: (info: any) => void) => () => void;
 }
 
 const electronAPI: ElectronAPI = {
@@ -46,6 +49,8 @@ const electronAPI: ElectronAPI = {
   checkForUpdates: () => ipcRenderer.send('check-for-updates'),
   startDownloadUpdate: () => ipcRenderer.send('start-download-update'),
   quitAndInstall: () => ipcRenderer.send('quit-and-install'),
+  openExternal: (url: string) => ipcRenderer.send('open-external', url),
+  reloadApp: () => ipcRenderer.send('reload-app'),
   onUpdateAvailable: (callback) => {
     const handler = (_: any, info: UpdateInfo) => callback(info);
     ipcRenderer.on('update-available', handler);
@@ -60,6 +65,11 @@ const electronAPI: ElectronAPI = {
     const handler = (_: any, info: UpdateInfo) => callback(info);
     ipcRenderer.on('update-downloaded', handler);
     return () => ipcRenderer.removeListener('update-downloaded', handler);
+  },
+  onRepoUpdateAvailable: (callback) => {
+    const handler = (_: any, info: any) => callback(info);
+    ipcRenderer.on('repo-update-available', handler);
+    return () => ipcRenderer.removeListener('repo-update-available', handler);
   },
 };
 
