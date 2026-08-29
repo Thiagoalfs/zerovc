@@ -45,16 +45,10 @@ func mustGetEnv(key string) string {
 func main() {
 	port := getEnv("PORT", "8080")
 	dbURL := getEnv("DATABASE_URL", "postgres://zerovc_user:zerovc_password_change_me@localhost:5432/zerovc?sslmode=disable")
-	jwtSecret := getEnv("JWT_SECRET")
-	if jwtSecret == "" {
-    log.Fatal("JWT_SECRET não definido — defina uma variável de ambiente forte antes de iniciar o servidor")
-}
+	jwtSecret := mustGetEnv("JWT_SECRET")
 	livekitPublicURL := getEnv("LIVEKIT_PUBLIC_URL", "ws://localhost:7880")
-	livekitKey := getEnv("LIVEKIT_API_KEY")
-	livekitSecret := getEnv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-    log.Fatal("livekitSecret não definido — defina uma variável de ambiente forte antes de iniciar o servidor")
-}
+	livekitKey := mustGetEnv("LIVEKIT_API_KEY")
+	livekitSecret := mustGetEnv("LIVEKIT_API_SECRET")
 	webDir := getEnv("WEB_DIR", "./web")
 
 	log.Printf("[ZeroVC] Starting backend on port %s...", port)
@@ -153,6 +147,8 @@ func main() {
 	uploadHandler := handlers.NewUploadHandler(uploadDir)
 
 	// 5. Router & Middleware
+	r := chi.NewRouter()
+
 	// Global middlewares (sem rate limit aqui)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -192,13 +188,6 @@ func main() {
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok","time":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
-	})
-
-	// Public Auth Endpoints
-	r.Route("/api/auth", func(r chi.Router) {
-		r.Post("/register", authHandler.Register)
-		r.Post("/login", authHandler.Login)
-		r.Post("/logout", authHandler.Logout)
 	})
 
 	// Public Invite Preview
