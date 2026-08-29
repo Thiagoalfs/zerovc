@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Smile,
   Film,
@@ -127,8 +127,8 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
         if (res.ok) {
           const json = await res.json();
           const items = (json.data || json.results || []).map((item: any) => ({
-            url: item.images?.original?.url || item.media_formats?.gif?.url || item.url,
-            preview: item.images?.fixed_height?.url || item.media_formats?.tinygif?.url || item.preview_url || item.url,
+            url: item.images?.original?.url || item.media_formats?.gif?.url || item.media_formats?.webp?.url || item.url,
+            preview: item.images?.fixed_height?.url || item.media_formats?.tinygif?.url || item.media_formats?.tinywebp?.url || item.preview_url || item.url,
             title: item.title || 'GIF',
           }));
           if (items.length > 0) {
