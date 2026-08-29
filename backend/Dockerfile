@@ -6,7 +6,7 @@ WORKDIR /app
 COPY . .
 
 # Compile static Go binary
-RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o zerovc-server ./cmd/server/main.go
+RUN go mod tidy && go mod vendor && CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o zerovc-server ./cmd/server/main.go
 
 # Minimal runtime container
 FROM alpine:latest
