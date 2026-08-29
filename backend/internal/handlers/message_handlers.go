@@ -276,7 +276,8 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var guildID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
+	var isPrivate bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
@@ -287,6 +288,23 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server to view messages"}`, http.StatusForbidden)
 		return
+	}
+
+	if isPrivate {
+		var hasAccess bool
+		privateCheckQuery := `
+			SELECT EXISTS(
+				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
+				UNION
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
+			)
+		`
+		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
+			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	limit := 50
@@ -461,6 +479,13 @@ func (h *MessageHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you must be a member of this server to react"}`, http.StatusForbidden)
+		return
+	}
+
 	_, err = h.db.Pool.Exec(r.Context(), `
 		INSERT INTO message_reactions (message_id, user_id, emoji)
 		VALUES ($1, $2, $3)
@@ -512,6 +537,13 @@ func (h *MessageHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you must be a member of this server to react"}`, http.StatusForbidden)
+		return
+	}
+
 	_, err = h.db.Pool.Exec(r.Context(), `
 		DELETE FROM message_reactions
 		WHERE message_id = $1 AND user_id = $2 AND emoji = $3
@@ -550,14 +582,31 @@ func (h *MessageHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var channelID, guildID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT m.channel_id, c.guild_id
+		FROM messages m
+		JOIN channels c ON c.id = m.channel_id
+		WHERE m.id = $1
+	`, messageID).Scan(&channelID, &guildID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you must be a member of this server to pin messages"}`, http.StatusForbidden)
+		return
+	}
+
 	var isPinned bool
 	err = h.db.Pool.QueryRow(r.Context(), `
 		UPDATE messages
 		SET is_pinned = NOT is_pinned
-		FROM channels
-		WHERE messages.id = $1 AND channels.id = messages.channel_id
-		RETURNING messages.is_pinned, messages.channel_id, channels.guild_id
-	`, messageID).Scan(&isPinned, &channelID, &guildID)
+		WHERE id = $1
+		RETURNING is_pinned
+	`, messageID).Scan(&isPinned)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return

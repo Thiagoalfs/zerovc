@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { User } from '../types';
 import { api } from '../lib/api';
 import { socket } from '../lib/socket';
+import { isElectron } from '../lib/platform';
 
 interface AuthState {
   user: User | null;
@@ -27,7 +28,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: localStorage.getItem('token') || localStorage.getItem('zerovc_token'),
+  token: isElectron() ? localStorage.getItem('token') || localStorage.getItem('zerovc_token') : null,
   isLoading: true,
   error: null,
 
@@ -40,9 +41,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { requires_2fa: true };
       }
       if (res.token && res.user) {
-        localStorage.setItem('token', res.token);
-        localStorage.setItem('zerovc_token', res.token);
-        set({ user: res.user, token: res.token, isLoading: false });
+        if (isElectron()) {
+          localStorage.setItem('token', res.token);
+          localStorage.setItem('zerovc_token', res.token);
+        }
+        set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
         socket.connect();
       }
     } catch (err: any) {
@@ -55,11 +58,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await api.auth.register({ username, email, password });
-      if (res.token) {
+      if (res.token && isElectron()) {
         localStorage.setItem('token', res.token);
         localStorage.setItem('zerovc_token', res.token);
       }
-      set({ user: res.user, token: res.token, isLoading: false });
+      set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
       socket.connect();
     } catch (err: any) {
       set({ error: err.message || 'Falha ao criar conta', isLoading: false });
@@ -71,8 +74,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await api.auth.logout();
     } catch {}
-    localStorage.removeItem('token');
-    localStorage.removeItem('zerovc_token');
+    if (isElectron()) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('zerovc_token');
+    }
     socket.disconnect();
     set({ user: null, token: null, isLoading: false });
   },
@@ -80,12 +85,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   checkAuth: async () => {
     try {
       const user = await api.auth.me();
-      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token') || 'cookie_session';
+      const token = isElectron()
+        ? localStorage.getItem('token') || localStorage.getItem('zerovc_token') || 'cookie_session'
+        : 'cookie_session';
       set({ user, token, isLoading: false });
       socket.connect();
     } catch {
-      localStorage.removeItem('token');
-      localStorage.removeItem('zerovc_token');
+      if (isElectron()) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('zerovc_token');
+      }
       set({ user: null, token: null, isLoading: false });
     }
   },

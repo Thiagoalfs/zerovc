@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './api';
+import { isElectron } from './platform';
 
 export interface WSEvent {
   type: string;
@@ -14,12 +15,19 @@ class SocketClient {
   private isExplicitlyClosed = false;
 
   connect() {
-    const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
-    if (!token) return;
+    const baseUrl = getApiBaseUrl().replace(/^http/, 'ws');
+    let wsUrl = `${baseUrl}/ws`;
+
+    // No Electron o handshake do WS é cross-site (client em file://), então precisa do
+    // token na query string. No navegador o cookie httpOnly já autentica automaticamente
+    // (mesma origem: a SPA é servida pelo próprio backend), sem expor o token à URL/JS.
+    if (isElectron()) {
+      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      if (!token) return;
+      wsUrl += `?token=${token}`;
+    }
 
     this.isExplicitlyClosed = false;
-    const baseUrl = getApiBaseUrl().replace(/^http/, 'ws');
-    const wsUrl = `${baseUrl}/ws?token=${token}`;
 
     try {
       this.ws = new WebSocket(wsUrl);

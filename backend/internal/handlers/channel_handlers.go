@@ -265,10 +265,23 @@ func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ChannelHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
 	guildIDStr := chi.URLParam(r, "guildID")
 	guildID, err := uuid.Parse(guildIDStr)
 	if err != nil {
 		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
 
@@ -322,7 +335,8 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 
 	var guildID uuid.UUID
 	var channelType models.ChannelType
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, type FROM channels WHERE id = $1", channelID).Scan(&guildID, &channelType)
+	var isPrivate bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, type, is_private FROM channels WHERE id = $1", channelID).Scan(&guildID, &channelType, &isPrivate)
 	if err != nil || channelType != models.ChannelTypeVoice {
 		http.Error(w, `{"error":"voice channel not found"}`, http.StatusNotFound)
 		return
@@ -333,6 +347,23 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
+	}
+
+	if isPrivate {
+		var hasAccess bool
+		privateCheckQuery := `
+			SELECT EXISTS(
+				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
+				UNION
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
+			)
+		`
+		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
+			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	var user models.User
