@@ -1,8 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Camera, Image, Sparkles, Check, LogOut, Mic, Volume2, Shield, Lock, UploadCloud } from 'lucide-react';
+import {
+  X,
+  Camera,
+  Image,
+  Sparkles,
+  Check,
+  LogOut,
+  Mic,
+  Volume2,
+  Lock,
+  User,
+  Eye,
+  EyeOff,
+  QrCode,
+  ShieldCheck,
+  Loader2,
+  Laptop,
+} from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
 import { api } from '../../lib/api';
+import { ImageCropModal } from './ImageCropModal';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -10,23 +28,68 @@ interface ProfileModalProps {
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
-  const { user, updateProfile, logout } = useAuthStore();
+  const { user, updateProfile, logout, setUser } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'audio' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'account' | 'profile' | 'audio'>('account');
 
-  // Profile Fields
+  // Crop Modal State
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [cropType, setCropType] = useState<'avatar' | 'banner'>('avatar');
+  const [isCropOpen, setIsCropOpen] = useState(false);
+
+  // Profile Form Fields
   const [displayName, setDisplayName] = useState(user?.display_name || '');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
   const [bannerUrl, setBannerUrl] = useState(user?.banner_url || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [customStatus, setCustomStatus] = useState(user?.custom_status || '');
   const [status, setStatus] = useState<'online' | 'idle' | 'dnd' | 'offline'>(user?.status || 'online');
-  const [isSaving, setIsSaving] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const bannerFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Account Submodals & Reveal States
+  const [revealEmail, setRevealEmail] = useState(false);
+  const [revealPhone, setRevealPhone] = useState(false);
+
+  // Username Edit Modal
+  const [isEditUsernameOpen, setIsEditUsernameOpen] = useState(false);
+  const [newUsername, setNewUsername] = useState(user?.username || '');
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [isSavingUsername, setIsSavingUsername] = useState(false);
+
+  // Email Edit Modal
+  const [isEditEmailOpen, setIsEditEmailOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState(user?.email || '');
+  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [isSavingEmail, setIsSavingEmail] = useState(false);
+
+  // Phone Edit Modal
+  const [isEditPhoneOpen, setIsEditPhoneOpen] = useState(false);
+  const [newPhone, setNewPhone] = useState(user?.phone_number || '');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [isSavingPhone, setIsSavingPhone] = useState(false);
+
+  // Password Edit Modal
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  // 2FA Modal
+  const [is2FAModalOpen, setIs2FAModalOpen] = useState(false);
+  const [qrCodeData, setQrCodeData] = useState<string | null>(null);
+  const [secretKey, setSecretKey] = useState<string | null>(null);
+  const [totpCode, setTotpCode] = useState('');
+  const [twoFactorError, setTwoFactorError] = useState<string | null>(null);
+  const [is2FALoading, setIs2FALoading] = useState(false);
 
   // Audio / Device Fields
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
@@ -42,15 +105,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   // Load media devices & sync user state
   useEffect(() => {
-    if (isOpen) {
-      if (user) {
-        setDisplayName(user.display_name || '');
-        setAvatarUrl(user.avatar_url || '');
-        setBannerUrl(user.banner_url || '');
-        setBio(user.bio || '');
-        setCustomStatus(user.custom_status || '');
-        setStatus(user.status || 'online');
-      }
+    if (isOpen && user) {
+      setDisplayName(user.display_name || '');
+      setAvatarUrl(user.avatar_url || '');
+      setBannerUrl(user.banner_url || '');
+      setBio(user.bio || '');
+      setCustomStatus(user.custom_status || '');
+      setStatus(user.status || 'online');
+      setNewUsername(user.username || '');
+      setNewEmail(user.email || '');
+      setNewPhone(user.phone_number || '');
 
       navigator.mediaDevices?.enumerateDevices().then((devices) => {
         const inputs = devices.filter((d) => d.kind === 'audioinput');
@@ -65,50 +129,250 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     }
   }, [isOpen, user]);
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Masking helpers
+  const getMaskedEmail = (email?: string) => {
+    if (!email) return 'Não informado';
+    if (revealEmail) return email;
+    const parts = email.split('@');
+    if (parts.length !== 2) return '••••••••••••';
+    const name = parts[0];
+    const domain = parts[1];
+    const maskedName = name.length > 2 ? name[0] + '••••••' + name.slice(-1) : '••••••';
+    return `${maskedName}@${domain}`;
+  };
+
+  const getMaskedPhone = (phone?: string) => {
+    if (!phone) return 'Nenhum adicionado';
+    if (revealPhone) return phone;
+    return `(••) •••••-••${phone.slice(-2)}`;
+  };
+
+  // Avatar / Banner Cropping
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIsUploadingAvatar(true);
-    try {
-      const res = await api.upload.avatar(file);
-      setAvatarUrl(res.url);
-    } catch (err: any) {
-      alert(err?.message || 'Erro ao enviar foto de perfil');
-    } finally {
-      setIsUploadingAvatar(false);
-      e.target.value = '';
+    setCropFile(file);
+    setCropType('avatar');
+    setIsCropOpen(true);
+    e.target.value = '';
+  };
+
+  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCropFile(file);
+    setCropType('banner');
+    setIsCropOpen(true);
+    e.target.value = '';
+  };
+
+  const handleCropConfirmed = async (croppedFile: File) => {
+    setIsCropOpen(false);
+    if (cropType === 'avatar') {
+      setIsUploadingAvatar(true);
+      try {
+        const res = await api.upload.avatar(croppedFile);
+        setAvatarUrl(res.url);
+      } catch (err) {
+        console.error('Failed to upload avatar:', err);
+      } finally {
+        setIsUploadingAvatar(false);
+      }
+    } else {
+      setIsUploadingBanner(true);
+      try {
+        const res = await api.upload.banner(croppedFile);
+        setBannerUrl(res.url);
+      } catch (err) {
+        console.error('Failed to upload banner:', err);
+      } finally {
+        setIsUploadingBanner(false);
+      }
     }
   };
 
-  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploadingBanner(true);
+  // Profile Save
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
     try {
-      const res = await api.upload.banner(file);
-      setBannerUrl(res.url);
+      await updateProfile({
+        display_name: displayName.trim(),
+        avatar_url: avatarUrl,
+        banner_url: bannerUrl,
+        bio: bio.trim(),
+        custom_status: customStatus.trim(),
+        status,
+      });
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 2500);
     } catch (err: any) {
-      alert(err?.message || 'Erro ao enviar banner');
+      console.error('Failed to update profile:', err);
     } finally {
-      setIsUploadingBanner(false);
-      e.target.value = '';
+      setIsSavingProfile(false);
     }
   };
 
+  // Username Save
+  const handleSaveUsername = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUsernameError(null);
+    const trimmed = newUsername.trim();
+    if (!/^[a-zA-Z0-9]{2,32}$/.test(trimmed)) {
+      setUsernameError('O @ deve conter apenas letras e números (2 a 32 caracteres), sem espaços ou símbolos.');
+      return;
+    }
+
+    setIsSavingUsername(true);
+    try {
+      const updated = await updateProfile({ username: trimmed });
+      setUser(updated);
+      setIsEditUsernameOpen(false);
+    } catch (err: any) {
+      setUsernameError(err.message || 'Este nome de usuário (@) já está em uso.');
+    } finally {
+      setIsSavingUsername(false);
+    }
+  };
+
+  // Email Save
+  const handleSaveEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError(null);
+    if (!newEmail.trim() || !newEmail.includes('@')) {
+      setEmailError('Insira um e-mail válido.');
+      return;
+    }
+    if (!emailCurrentPassword) {
+      setEmailError('Insira sua senha atual para confirmar.');
+      return;
+    }
+
+    setIsSavingEmail(true);
+    try {
+      const res = await api.auth.changeEmail({ password: emailCurrentPassword, new_email: newEmail.trim() });
+      if (user) {
+        setUser({ ...user, email: res.email });
+      }
+      setIsEditEmailOpen(false);
+      setEmailCurrentPassword('');
+    } catch (err: any) {
+      setEmailError(err.message || 'Senha incorreta ou e-mail já cadastrado.');
+    } finally {
+      setIsSavingEmail(false);
+    }
+  };
+
+  // Phone Save
+  const handleSavePhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPhoneError(null);
+    const cleaned = newPhone.replace(/[^\d+]/g, '');
+    if (cleaned && cleaned.length < 8) {
+      setPhoneError('Insira um número de telefone válido.');
+      return;
+    }
+
+    setIsSavingPhone(true);
+    try {
+      const res = await api.auth.changePhone({ phone_number: newPhone.trim() });
+      if (user) {
+        setUser({ ...user, phone_number: res.phone_number });
+      }
+      setIsEditPhoneOpen(false);
+    } catch (err: any) {
+      setPhoneError(err.message || 'Falha ao atualizar número de telefone.');
+    } finally {
+      setIsSavingPhone(false);
+    }
+  };
+
+  // Password Save
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    if (newPassword.length < 6) {
+      setPasswordError('A nova senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('As novas senhas não coincidem.');
+      return;
+    }
+
+    setIsSavingPassword(true);
+    try {
+      await api.auth.changePassword({ current_password: currentPassword, new_password: newPassword });
+      setPasswordSuccess(true);
+      setTimeout(() => {
+        setIsChangePasswordOpen(false);
+        setPasswordSuccess(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }, 1500);
+    } catch (err: any) {
+      setPasswordError(err.message || 'Senha atual incorreta.');
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
+  // 2FA Setup
+  const handleOpen2FAModal = async () => {
+    setIs2FAModalOpen(true);
+    setTwoFactorError(null);
+    setTotpCode('');
+    if (!user?.two_factor_enabled) {
+      setIs2FALoading(true);
+      try {
+        const res = await api.auth.generate2FA();
+        setQrCodeData(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(res.otpauth_uri)}`);
+        setSecretKey(res.secret);
+      } catch (err: any) {
+        setTwoFactorError(err.message || 'Erro ao gerar QR Code.');
+      } finally {
+        setIs2FALoading(false);
+      }
+    }
+  };
+
+  const handleToggle2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTwoFactorError(null);
+    if (!totpCode.trim()) {
+      setTwoFactorError('Digite o código de 6 dígitos.');
+      return;
+    }
+
+    setIs2FALoading(true);
+    try {
+      if (user?.two_factor_enabled) {
+        await api.auth.disable2FA({ code: totpCode.trim() });
+        if (user) setUser({ ...user, two_factor_enabled: false });
+      } else {
+        await api.auth.enable2FA({ secret: secretKey || '', code: totpCode.trim() });
+        if (user) setUser({ ...user, two_factor_enabled: true });
+      }
+      setIs2FAModalOpen(false);
+    } catch (err: any) {
+      setTwoFactorError(err.message || 'Código inválido.');
+    } finally {
+      setIs2FALoading(false);
+    }
+  };
+
+  // Mic test logic
   const startMicTest = async () => {
     try {
-      setIsTestingMic(true);
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
+        audio: { deviceId: selectedInput ? { exact: selectedInput } : undefined },
       });
       micStreamRef.current = stream;
-
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioContextClass();
-      audioContextRef.current = ctx;
-
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
 
@@ -122,141 +386,111 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           sum += dataArray[i];
         }
         const avg = sum / bufferLength;
-        const normalized = Math.min(Math.round((avg / 128) * 100), 100);
-        setMicLevel(normalized);
+        setMicLevel(Math.min(100, Math.round((avg / 128) * 100)));
         animFrameRef.current = requestAnimationFrame(checkLevel);
       };
+
       checkLevel();
+      setIsTestingMic(true);
     } catch (err) {
-      console.error('Failed to test microphone:', err);
-      setIsTestingMic(false);
+      console.error('Failed to start mic test:', err);
     }
   };
 
   const stopMicTest = () => {
-    setIsTestingMic(false);
-    setMicLevel(0);
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
     }
     if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current.close();
       audioContextRef.current = null;
     }
+    setIsTestingMic(false);
+    setMicLevel(0);
   };
 
-  const handleDeviceChange = (type: 'input' | 'output', deviceId: string) => {
+  const handleDeviceChange = async (type: 'input' | 'output', deviceId: string) => {
     if (type === 'input') {
       setSelectedInput(deviceId);
-      livekit.setAudioInputDevice(deviceId);
+      await livekit.setAudioInputDevice(deviceId);
+      if (isTestingMic) {
+        stopMicTest();
+        setTimeout(startMicTest, 100);
+      }
     } else {
       setSelectedOutput(deviceId);
-      livekit.setAudioOutputDevice(deviceId);
-    }
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    try {
-      await updateProfile({
-        display_name: displayName,
-        avatar_url: avatarUrl,
-        banner_url: bannerUrl,
-        bio: bio,
-        custom_status: customStatus,
-      });
-      setSavedSuccess(true);
-      setTimeout(() => {
-        setSavedSuccess(false);
-        onClose();
-      }, 600);
-    } catch (err) {
-      console.error('Failed to save profile:', err);
-    } finally {
-      setIsSaving(false);
+      await livekit.setAudioOutputDevice(deviceId);
     }
   };
 
   if (!isOpen || !user) return null;
 
-  const getStatusColor = (s: string) => {
-    switch (s) {
-      case 'online': return 'bg-online';
-      case 'idle': return 'bg-idle';
-      case 'dnd': return 'bg-dnd';
-      default: return 'bg-offline';
-    }
-  };
-
-  const getStatusLabel = (s: string) => {
-    switch (s) {
-      case 'online': return 'Disponível';
-      case 'idle': return 'Ausente';
-      case 'dnd': return 'Não Perturbe';
-      default: return 'Invisível';
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none animate-in fade-in duration-150">
-      <div className="bg-background-darkest w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row max-h-[90vh] animate-in fade-in zoom-in-95">
-        
-        {/* Left Side: Navigation Tabs */}
-        <div className="w-full md:w-56 bg-background-darker/60 p-4 border-b md:border-b-0 md:border-r border-white/5 flex flex-col justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in select-none">
+      {/* Unified Fixed Container */}
+      <div className="bg-background-dark w-full max-w-5xl h-[680px] rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row relative animate-in zoom-in-95">
+        {/* Left Sidebar */}
+        <div className="w-full md:w-60 bg-background-darker p-4 flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/5 flex-shrink-0">
           <div className="space-y-1">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 mb-3">
-              Configurações
-            </h3>
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-2 block">
+              Configurações de Usuário
+            </span>
 
+            {/* Tab 1: Minha Conta */}
             <button
+              type="button"
+              onClick={() => setActiveTab('account')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'account'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              <span>Minha Conta</span>
+            </button>
+
+            {/* Tab 2: Meu Perfil */}
+            <button
+              type="button"
               onClick={() => setActiveTab('profile')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs md:text-sm font-semibold transition-colors ${
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'profile'
-                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
               }`}
             >
               <Sparkles className="w-4 h-4" />
               <span>Meu Perfil</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab('audio')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs md:text-sm font-semibold transition-colors ${
-                activeTab === 'audio'
-                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-              }`}
-            >
-              <Mic className="w-4 h-4" />
-              <span>Áudio & Voz</span>
-            </button>
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 block pt-2">
+              Configurações do App
+            </span>
 
+            {/* Tab 3: Voz & Vídeo */}
             <button
-              onClick={() => setActiveTab('security')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs md:text-sm font-semibold transition-colors ${
-                activeTab === 'security'
-                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              type="button"
+              onClick={() => setActiveTab('audio')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'audio'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
               }`}
             >
-              <Shield className="w-4 h-4" />
-              <span>Segurança</span>
+              <Volume2 className="w-4 h-4" />
+              <span>Voz & Vídeo</span>
             </button>
           </div>
 
-          {/* Logout Button */}
-          <div className="pt-4 border-t border-white/5">
+          {/* Bottom Logout */}
+          <div className="pt-3 border-t border-white/5">
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                logout();
-              }}
-              className="w-full px-3 py-2 rounded-xl bg-dnd/15 hover:bg-dnd text-dnd hover:text-white text-xs md:text-sm font-semibold transition-all flex items-center gap-2"
+              onClick={logout}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-2xl text-xs font-semibold text-dnd hover:bg-dnd/10 transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
               <span>Sair da Conta</span>
@@ -264,315 +498,895 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           </div>
         </div>
 
-        {/* Right Side: Tab Contents */}
-        <div className="flex-1 p-5 md:p-6 overflow-y-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/5">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              {activeTab === 'profile' && 'Perfil de Usuário'}
-              {activeTab === 'audio' && 'Configurações de Áudio & Voz'}
-              {activeTab === 'security' && 'Segurança da Conta'}
-            </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-white p-1">
+        {/* Right Main Content Area */}
+        <div className="flex-1 flex flex-col h-full bg-background-dark overflow-hidden">
+          {/* Top Bar with Title and Close Button */}
+          <div className="p-5 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
+            <div>
+              <h3 className="text-lg font-bold text-white">
+                {activeTab === 'account' && 'Minha Conta'}
+                {activeTab === 'profile' && 'Perfil de Usuário'}
+                {activeTab === 'audio' && 'Voz & Vídeo'}
+              </h3>
+              <p className="text-xs text-gray-400">
+                {activeTab === 'account' && 'Gerencie seus dados de acesso, nome de usuário, e-mail e segurança.'}
+                {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
+                {activeTab === 'audio' && 'Ajuste seus dispositivos de entrada, saída e sensibilidade do microfone.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+              title="Fechar (Esc)"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* TAB 1: Profile */}
-          {activeTab === 'profile' && (
-            <form onSubmit={handleSave} className="space-y-5">
-              {/* Hidden File Inputs */}
-              <input
-                ref={avatarFileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                className="hidden"
-              />
-              <input
-                ref={bannerFileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleBannerUpload}
-                className="hidden"
-              />
+          {/* Scrollable Tab Content Container */}
+          <div className="flex-1 p-5 overflow-y-auto no-scrollbar space-y-5">
+            {/* TAB 1: MINHA CONTA (DISCORD STYLE) */}
+            {activeTab === 'account' && (
+              <div className="space-y-5 animate-in fade-in">
+                {/* Profile Top Banner Card */}
+                <div className="rounded-3xl overflow-hidden bg-background-darker border border-white/5 shadow-lg relative">
+                  {/* Banner */}
+                  <div
+                    className="h-28 w-full bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative bg-cover bg-center"
+                    style={{ backgroundImage: user.banner_url ? `url(${user.banner_url})` : undefined }}
+                  />
 
-              {/* Interactive Profile Visual Header (Banner & Avatar Previews) */}
-              <div className="bg-background-darker rounded-3xl overflow-hidden border border-white/5 shadow-xl">
-                {/* 1. Banner Preview & Clickable Upload Button */}
-                <div
-                  onClick={() => bannerFileInputRef.current?.click()}
-                  className="relative h-28 md:h-32 w-full bg-gradient-to-r from-brand-600 via-indigo-700 to-purple-800 cursor-pointer group flex items-center justify-center overflow-hidden"
-                  title="Clique para alterar o banner"
-                >
-                  {bannerUrl ? (
-                    <img
-                      src={bannerUrl}
-                      alt="Banner"
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
-                  ) : null}
-
-                  {/* Banner Hover Action Overlay */}
-                  <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-semibold">
-                    <Image className="w-4 h-4 text-brand-300" />
-                    <span>{isUploadingBanner ? 'Enviando banner...' : 'Clique para alterar o banner'}</span>
-                  </div>
-
-                  <div className="absolute top-2.5 right-2.5 bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-xl text-[11px] text-white/90 font-medium flex items-center gap-1.5 border border-white/10 group-hover:bg-brand-500 transition-colors">
-                    <UploadCloud className="w-3.5 h-3.5" />
-                    <span>{isUploadingBanner ? 'Enviando...' : 'Trocar Banner'}</span>
-                  </div>
-                </div>
-
-                {/* 2. Avatar Preview & Clickable Upload Button */}
-                <div className="px-5 pb-5 flex items-end justify-between -mt-10">
-                  <div className="relative">
-                    <div
-                      onClick={() => avatarFileInputRef.current?.click()}
-                      className="relative w-20 h-20 rounded-full border-4 border-background-darker bg-brand-500 cursor-pointer group overflow-hidden shadow-2xl transition-transform hover:scale-105"
-                      title="Clique para alterar a foto de perfil"
-                    >
-                      {avatarUrl ? (
-                        <img
-                          src={avatarUrl}
-                          alt={displayName || user.username}
-                          className="w-full h-full object-cover"
+                  {/* Header Row */}
+                  <div className="p-4 pt-0 flex flex-col sm:flex-row sm:items-end justify-between gap-3 relative">
+                    <div className="flex items-end gap-3.5 -mt-10">
+                      {/* Avatar */}
+                      <div className="w-20 h-20 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-xl flex-shrink-0 flex items-center justify-center text-white font-bold text-2xl relative">
+                        {user.avatar_url ? (
+                          <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{user.display_name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
+                        )}
+                        <span
+                          className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-background-darker ${
+                            user.status === 'online'
+                              ? 'bg-online'
+                              : user.status === 'idle'
+                              ? 'bg-idle'
+                              : user.status === 'dnd'
+                              ? 'bg-dnd'
+                              : 'bg-offline'
+                          }`}
                         />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white text-2xl font-bold">
-                          {displayName?.[0]?.toUpperCase() || user.username[0]?.toUpperCase() || 'U'}
-                        </div>
-                      )}
+                      </div>
 
-                      {/* Avatar Hover Action Overlay */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold">
-                        <Camera className="w-5 h-5 mb-0.5" />
-                        <span>{isUploadingAvatar ? 'ENVIANDO...' : 'MUDAR'}</span>
+                      <div className="mb-1">
+                        <h4 className="text-base font-bold text-white flex items-center gap-1.5">
+                          <span>{user.display_name || user.username}</span>
+                        </h4>
+                        <span className="text-xs text-gray-400 font-mono">@{user.username}</span>
                       </div>
                     </div>
 
-                    {/* Status Dot */}
-                    <div
-                      className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-background-darker ${getStatusColor(
-                        status
-                      )}`}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('profile')}
+                      className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-md transition-all cursor-pointer self-start sm:self-auto"
+                    >
+                      Editar Perfil do Usuário
+                    </button>
+                  </div>
+
+                  {/* Group 1: Informações da Conta */}
+                  <div className="m-4 mt-1 p-4 bg-background-darkest/90 rounded-2xl border border-white/5 space-y-3.5">
+                    {/* Username row */}
+                    <div className="flex items-center justify-between py-1 border-b border-white/5">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                          Nome de Usuário
+                        </span>
+                        <span className="text-xs font-semibold text-white font-mono">@{user.username}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewUsername(user.username);
+                          setUsernameError(null);
+                          setIsEditUsernameOpen(true);
+                        }}
+                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                      >
+                        Editar
+                      </button>
+                    </div>
+
+                    {/* Email row */}
+                    <div className="flex items-center justify-between py-1 border-b border-white/5">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                          E-mail
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-200 font-mono">{getMaskedEmail(user.email)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setRevealEmail(!revealEmail)}
+                            className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            {revealEmail ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            <span>{revealEmail ? 'Ocultar' : 'Revelar e-mail'}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewEmail(user.email || '');
+                          setEmailError(null);
+                          setEmailCurrentPassword('');
+                          setIsEditEmailOpen(true);
+                        }}
+                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                      >
+                        Editar
+                      </button>
+                    </div>
+
+                    {/* Phone row */}
+                    <div className="flex items-center justify-between py-1 border-b border-white/5">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                          Número de Telefone
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-200 font-mono">
+                            {getMaskedPhone(user.phone_number)}
+                          </span>
+                          {user.phone_number && (
+                            <button
+                              type="button"
+                              onClick={() => setRevealPhone(!revealPhone)}
+                              className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
+                            >
+                              {revealPhone ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                              <span>{revealPhone ? 'Ocultar' : 'Revelar número'}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewPhone(user.phone_number || '');
+                          setPhoneError(null);
+                          setIsEditPhoneOpen(true);
+                        }}
+                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                      >
+                        {user.phone_number ? 'Editar' : 'Adicionar'}
+                      </button>
+                    </div>
+
+                    {/* Age Group row */}
+                    <div className="flex items-center justify-between py-1">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                          Faixa Etária
+                        </span>
+                        <span className="text-xs text-gray-300">Adulto (+18)</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        Verificado
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Group 2: Senha e Autenticação */}
+                <div className="p-4 bg-background-darker/80 rounded-3xl border border-white/5 space-y-4 shadow-lg">
+                  <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                    <Lock className="w-3.5 h-3.5 text-brand-400" />
+                    <span>Senha e Autenticação</span>
+                  </h4>
+
+                  {/* Password row */}
+                  <div className="p-3.5 bg-background-darkest/80 rounded-2xl border border-white/5 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-white block">Senha da Conta</span>
+                      <span className="text-xs text-gray-500 font-mono tracking-widest">••••••••••••••••</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPasswordError(null);
+                        setPasswordSuccess(false);
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        setIsChangePasswordOpen(true);
+                      }}
+                      className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
+                    >
+                      Mudar Senha
+                    </button>
+                  </div>
+
+                  {/* 2FA Card */}
+                  <div className="p-3.5 bg-background-darkest/80 rounded-2xl border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">Autenticação de Dois Fatores (2FA)</span>
+                        <span
+                          className={`text-[9px] font-bold px-2 py-0.2 rounded-full border ${
+                            user.two_factor_enabled
+                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                              : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                          }`}
+                        >
+                          {user.two_factor_enabled ? 'ATIVADO' : 'DESATIVADO'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+                        Proteja sua conta adicionando uma etapa de confirmação via código TOTP (Google Authenticator / Authy).
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleOpen2FAModal}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer self-start sm:self-auto ${
+                        user.two_factor_enabled
+                          ? 'bg-dnd/10 hover:bg-dnd/20 text-dnd border-dnd/30'
+                          : 'bg-brand-500 hover:bg-brand-600 text-white border-transparent'
+                      }`}
+                    >
+                      {user.two_factor_enabled ? 'Desativar 2FA' : 'Habilitar 2FA'}
+                    </button>
+                  </div>
+
+                  {/* Active Session Info */}
+                  <div className="p-3.5 bg-background-darkest/80 rounded-2xl border border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
+                        <Laptop className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-white block">Sessão Atual</span>
+                        <span className="text-[11px] text-gray-400">Aplicativo Desktop Electron • Online agora</span>
+                      </div>
+                    </div>
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: MEU PERFIL */}
+            {activeTab === 'profile' && (
+              <form onSubmit={handleSaveProfile} className="space-y-5 animate-in fade-in">
+                {/* Banner & Avatar Upload Section */}
+                <div className="relative rounded-3xl overflow-hidden bg-background-darker border border-white/5 shadow-md">
+                  {/* Banner */}
+                  <div
+                    className="h-32 w-full bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center"
+                    style={{ backgroundImage: bannerUrl ? `url(${bannerUrl})` : undefined }}
+                    onClick={() => bannerFileInputRef.current?.click()}
+                  >
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-semibold backdrop-blur-xs">
+                      <Camera className="w-4 h-4" />
+                      <span>{isUploadingBanner ? 'Processando Banner...' : 'Mudar Banner (WebP/GIF)'}</span>
+                    </div>
+                  </div>
+
+                  <input
+                    ref={bannerFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBannerUpload}
+                    className="hidden"
+                  />
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+
+                  {/* Avatar Overlay */}
+                  <div className="p-4 pt-0 flex items-end justify-between">
+                    <div className="relative -mt-12 group cursor-pointer" onClick={() => avatarFileInputRef.current?.click()}>
+                      <div className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex items-center justify-center text-white font-bold text-3xl">
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{displayName[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <Camera className="w-6 h-6" />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => avatarFileInputRef.current?.click()}
+                        className="px-3.5 py-1.5 rounded-xl bg-background-darkest hover:bg-white/10 text-gray-200 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Image className="w-3.5 h-3.5" />
+                        <span>Mudar Avatar</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Display Name & Status */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                      Nome de Exibição
+                    </label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder={user.username}
+                      maxLength={64}
+                      className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
                     />
                   </div>
 
-                  <div className="text-right pb-1">
-                    <span className="text-xs text-gray-400 font-medium block">
-                      Toque na foto ou no banner para fazer upload
-                    </span>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                      Status de Presença
+                    </label>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as any)}
+                      className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500"
+                    >
+                      <option value="online">🟢 Online</option>
+                      <option value="idle">🟡 Ausente</option>
+                      <option value="dnd">🔴 Não Perturbe</option>
+                      <option value="offline">⚪ Invisível</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Custom Status */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                    Recado / Status Personalizado
+                  </label>
+                  <input
+                    type="text"
+                    value={customStatus}
+                    onChange={(e) => setCustomStatus(e.target.value)}
+                    placeholder="Definir um status personalizado..."
+                    maxLength={128}
+                    className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                {/* Bio / About Me */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                    Sobre Mim (Bio)
+                  </label>
+                  <textarea
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Conte um pouco sobre você..."
+                    rows={3}
+                    maxLength={255}
+                    className="w-full bg-background-darker border border-white/10 rounded-xl p-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none"
+                  />
+                  <span className="text-[10px] text-gray-500 float-right mt-1">{bio.length}/255</span>
+                </div>
+
+                {/* Save Profile Button */}
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSavingProfile}
+                    className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold text-xs px-6 py-2.5 rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    {profileSuccess ? (
+                      <>
+                        <Check className="w-4 h-4 text-emerald-300" />
+                        <span>Perfil Atualizado!</span>
+                      </>
+                    ) : isSavingProfile ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Salvando...</span>
+                      </>
+                    ) : (
+                      'Salvar Alterações'
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 3: VOZ & VÍDEO */}
+            {activeTab === 'audio' && (
+              <div className="space-y-5 animate-in fade-in">
+                {/* Input Device */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <Mic className="w-3.5 h-3.5 text-brand-400" />
+                    Dispositivo de Entrada (Microfone)
+                  </label>
+                  <select
+                    value={selectedInput}
+                    onChange={(e) => handleDeviceChange('input', e.target.value)}
+                    className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500"
+                  >
+                    {audioInputs.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label || `Microfone (${d.deviceId.slice(0, 6)})`}
+                      </option>
+                    ))}
+                    {audioInputs.length === 0 && <option value="">Microfone Padrão do Sistema</option>}
+                  </select>
+                </div>
+
+                {/* Output Device */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <Volume2 className="w-3.5 h-3.5 text-brand-400" />
+                    Dispositivo de Saída (Fone / Alto-falante)
+                  </label>
+                  <select
+                    value={selectedOutput}
+                    onChange={(e) => handleDeviceChange('output', e.target.value)}
+                    className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500"
+                  >
+                    {audioOutputs.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`}
+                      </option>
+                    ))}
+                    {audioOutputs.length === 0 && <option value="">Saída Padrão do Sistema</option>}
+                  </select>
+                </div>
+
+                {/* Mic Test Section */}
+                <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-200">Teste de Microfone</span>
+                    <button
+                      type="button"
+                      onClick={isTestingMic ? stopMicTest : startMicTest}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                        isTestingMic ? 'bg-dnd text-white' : 'bg-brand-500 text-white'
+                      }`}
+                    >
+                      {isTestingMic ? 'Parar Teste' : 'Testar Mic'}
+                    </button>
+                  </div>
+
+                  {/* Level Meter */}
+                  <div className="w-full h-3 bg-background-darkest rounded-full overflow-hidden border border-white/10">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
+                      style={{ width: `${micLevel}%` }}
+                    />
+                  </div>
+                  <span className="text-[11px] text-gray-400 block">
+                    {isTestingMic
+                      ? `Nível de captação: ${micLevel}%`
+                      : 'Fale algo para verificar se o microfone está captando seu áudio.'}
+                  </span>
+                </div>
+
+                {/* Voice Mode: Activity vs PTT */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                    Modo de Entrada
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('activity')}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        inputMode === 'activity'
+                          ? 'bg-brand-500/15 border-brand-500 text-white'
+                          : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <span className="font-bold text-xs block mb-0.5">Detecção de Voz</span>
+                      <span className="text-[11px] text-gray-400">Ativa o microfone automaticamente ao falar</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('ptt')}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        inputMode === 'ptt'
+                          ? 'bg-brand-500/15 border-brand-500 text-white'
+                          : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <span className="font-bold text-xs block mb-0.5">Push-to-Talk</span>
+                      <span className="text-[11px] text-gray-400">Aperte uma tecla para transmitir seu áudio</span>
+                    </button>
                   </div>
                 </div>
               </div>
-
-              {/* Display Name */}
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  Nome de Exibição
-                </label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder={user.username}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                />
-              </div>
-
-              {/* Custom Status */}
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  Status Personalizado
-                </label>
-                <input
-                  type="text"
-                  value={customStatus}
-                  onChange={(e) => setCustomStatus(e.target.value)}
-                  placeholder="Ex: 🎧 Ouvindo música"
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                />
-              </div>
-
-              {/* Bio */}
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  Sobre Mim (Bio)
-                </label>
-                <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  rows={2}
-                  placeholder="Fale um pouco sobre você..."
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none"
-                />
-              </div>
-
-              {/* Save Profile Button */}
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isSaving || isUploadingAvatar || isUploadingBanner}
-                  className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-xl text-xs md:text-sm transition-all shadow-md shadow-brand-500/20 flex items-center gap-1.5"
-                >
-                  {savedSuccess ? (
-                    <>
-                      <Check className="w-4 h-4" /> Salvo!
-                    </>
-                  ) : isSaving ? (
-                    'Salvando...'
-                  ) : (
-                    'Salvar Alterações'
-                  )}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* TAB 2: Audio & Voice */}
-          {activeTab === 'audio' && (
-            <div className="space-y-5">
-              {/* Input Device */}
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <Mic className="w-3.5 h-3.5 text-brand-400" />
-                  Dispositivo de Entrada (Microfone)
-                </label>
-                <select
-                  value={selectedInput}
-                  onChange={(e) => handleDeviceChange('input', e.target.value)}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500"
-                >
-                  {audioInputs.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
-                      {d.label || `Microfone (${d.deviceId.slice(0, 6)})`}
-                    </option>
-                  ))}
-                  {audioInputs.length === 0 && <option value="">Microfone Padrão do Sistema</option>}
-                </select>
-              </div>
-
-              {/* Output Device */}
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <Volume2 className="w-3.5 h-3.5 text-brand-400" />
-                  Dispositivo de Saída (Fone / Alto-falante)
-                </label>
-                <select
-                  value={selectedOutput}
-                  onChange={(e) => handleDeviceChange('output', e.target.value)}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500"
-                >
-                  {audioOutputs.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
-                      {d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`}
-                    </option>
-                  ))}
-                  {audioOutputs.length === 0 && <option value="">Saída Padrão do Sistema</option>}
-                </select>
-              </div>
-
-              {/* Mic Test Section */}
-              <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-200">Teste de Microfone</span>
-                  <button
-                    type="button"
-                    onClick={isTestingMic ? stopMicTest : startMicTest}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                      isTestingMic ? 'bg-dnd text-white' : 'bg-brand-500 text-white'
-                    }`}
-                  >
-                    {isTestingMic ? 'Parar Teste' : 'Testar Mic'}
-                  </button>
-                </div>
-
-                {/* Level Meter */}
-                <div className="w-full h-3 bg-background-darkest rounded-full overflow-hidden border border-white/10">
-                  <div
-                    className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
-                    style={{ width: `${micLevel}%` }}
-                  />
-                </div>
-                <span className="text-[11px] text-gray-400 block">
-                  {isTestingMic
-                    ? `Nível de captação: ${micLevel}%`
-                    : 'Fale algo para verificar se o microfone está captando seu áudio.'}
-                </span>
-              </div>
-
-              {/* Voice Mode: Activity vs PTT */}
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
-                  Modo de Entrada
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setInputMode('activity')}
-                    className={`p-3 rounded-2xl border text-left transition-all ${
-                      inputMode === 'activity'
-                        ? 'bg-brand-500/15 border-brand-500 text-white'
-                        : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    <span className="font-bold text-xs block mb-0.5">Detecção de Voz</span>
-                    <span className="text-[11px] text-gray-400">Ativa o microfone automaticamente ao falar</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setInputMode('ptt')}
-                    className={`p-3 rounded-2xl border text-left transition-all ${
-                      inputMode === 'ptt'
-                        ? 'bg-brand-500/15 border-brand-500 text-white'
-                        : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    <span className="font-bold text-xs block mb-0.5">Push-to-Talk</span>
-                    <span className="text-[11px] text-gray-400">Aperte uma tecla para transmitir seu áudio</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: Security */}
-          {activeTab === 'security' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-background-darker rounded-2xl border border-white/5 space-y-3">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-brand-400" />
-                  Autenticação & Senha
-                </h4>
-                <p className="text-xs text-gray-400">
-                  Sua conta está protegida com criptografia hash Bcrypt e tokens JWT assinados.
-                </p>
-
-                <div className="pt-2">
-                  <span className="text-xs text-gray-300 font-semibold block mb-1">E-mail Cadastrado</span>
-                  <span className="text-xs text-gray-400 bg-background-darkest px-3 py-1.5 rounded-lg border border-white/5 inline-block font-mono">
-                    {user.email || 'Não informado'}
-                  </span>
-                </div>
-              </div>
-
-              {/* 2FA Card */}
-              <div className="p-4 bg-background-darker rounded-2xl border border-white/5 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-white mb-0.5">Autenticação em 2 Etapas (2FA TOTP)</h4>
-                  <span className="text-[11px] text-gray-400">Proteja sua conta com Google Authenticator ou Authy</span>
-                </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  ATIVO
-                </span>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
+
+      {/* --- SUBMODALS FOR ACCOUNT EDITING --- */}
+
+      {/* 1. Edit Username Modal */}
+      {isEditUsernameOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+          <form
+            onSubmit={handleSaveUsername}
+            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white">Alterar Nome de Usuário</h4>
+              <button
+                type="button"
+                onClick={() => setIsEditUsernameOpen(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Digite seu novo identificador <strong>@</strong>. Permitido apenas letras e números, sem espaços ou símbolos.
+            </p>
+
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                Novo @
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">@</span>
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => {
+                    setNewUsername(e.target.value.replace(/[^a-zA-Z0-9]/g, ''));
+                    setUsernameError(null);
+                  }}
+                  maxLength={32}
+                  className="w-full bg-background-darker border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
+                  placeholder="novo_usuario"
+                  autoFocus
+                />
+              </div>
+              {usernameError && <span className="text-[11px] text-dnd block mt-1">{usernameError}</span>}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsEditUsernameOpen(false)}
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingUsername}
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md"
+              >
+                {isSavingUsername ? 'Salvando...' : 'Salvar @'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 2. Edit Email Modal */}
+      {isEditEmailOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+          <form
+            onSubmit={handleSaveEmail}
+            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white">Alterar E-mail</h4>
+              <button
+                type="button"
+                onClick={() => setIsEditEmailOpen(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Novo E-mail
+                </label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
+                  placeholder="seu_novo_email@dominio.com"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Senha Atual (Confirmação)
+                </label>
+                <input
+                  type="password"
+                  value={emailCurrentPassword}
+                  onChange={(e) => setEmailCurrentPassword(e.target.value)}
+                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                  placeholder="Digite sua senha atual..."
+                />
+              </div>
+
+              {emailError && <span className="text-[11px] text-dnd block">{emailError}</span>}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsEditEmailOpen(false)}
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingEmail}
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md"
+              >
+                {isSavingEmail ? 'Salvando...' : 'Salvar E-mail'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 3. Edit Phone Modal */}
+      {isEditPhoneOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+          <form
+            onSubmit={handleSavePhone}
+            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white">
+                {user.phone_number ? 'Editar Número de Telefone' : 'Adicionar Número de Telefone'}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsEditPhoneOpen(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Vincule seu número para recuperação de conta e notificações.
+            </p>
+
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                Número de Celular
+              </label>
+              <input
+                type="tel"
+                value={newPhone}
+                onChange={(e) => {
+                  setNewPhone(e.target.value);
+                  setPhoneError(null);
+                }}
+                className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
+                placeholder="(11) 98765-4321"
+                autoFocus
+              />
+              {phoneError && <span className="text-[11px] text-dnd block mt-1">{phoneError}</span>}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsEditPhoneOpen(false)}
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingPhone}
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md"
+              >
+                {isSavingPhone ? 'Salvando...' : 'Salvar Telefone'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 4. Change Password Modal */}
+      {isChangePasswordOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+          <form
+            onSubmit={handleSavePassword}
+            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white">Mudar Senha</h4>
+              <button
+                type="button"
+                onClick={() => setIsChangePasswordOpen(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Senha Atual
+                </label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                  placeholder="••••••••"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Nova Senha
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  Confirmar Nova Senha
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                  placeholder="Repita a nova senha"
+                />
+              </div>
+
+              {passwordError && <span className="text-[11px] text-dnd block">{passwordError}</span>}
+              {passwordSuccess && <span className="text-[11px] text-emerald-400 block font-semibold">Senha alterada com sucesso!</span>}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsChangePasswordOpen(false)}
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingPassword || passwordSuccess}
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md"
+              >
+                {isSavingPassword ? 'Salvando...' : 'Salvar Nova Senha'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 5. 2FA Modal */}
+      {is2FAModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+          <form
+            onSubmit={handleToggle2FA}
+            className="bg-background-darkest w-full max-w-md rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-brand-400" />
+                <span>{user.two_factor_enabled ? 'Desativar Autenticação 2FA' : 'Configurar Autenticação 2FA (TOTP)'}</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIs2FAModalOpen(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {!user.two_factor_enabled && qrCodeData && (
+              <div className="flex flex-col items-center p-3 bg-white rounded-2xl">
+                <img src={qrCodeData} alt="2FA QR Code" className="w-44 h-44 object-contain" />
+                {secretKey && (
+                  <span className="text-[10px] text-gray-800 font-mono select-all mt-1">
+                    Chave manual: {secretKey}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <p className="text-xs text-gray-400 leading-relaxed">
+              {user.two_factor_enabled
+                ? 'Para desativar a autenticação de dois fatores, insira o código de 6 dígitos gerado pelo seu app autenticador.'
+                : 'Escaneie o QR Code acima no Google Authenticator ou Authy e digite o código de 6 dígitos para ativar.'}
+            </p>
+
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                Código de 6 dígitos
+              </label>
+              <input
+                type="text"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-center text-base tracking-widest text-white font-mono placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                placeholder="123456"
+                autoFocus
+              />
+              {twoFactorError && <span className="text-[11px] text-dnd block mt-1">{twoFactorError}</span>}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIs2FAModalOpen(false)}
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={is2FALoading || totpCode.length < 6}
+                className={`text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md transition-all ${
+                  user.two_factor_enabled
+                    ? 'bg-dnd hover:bg-dnd/80 text-white'
+                    : 'bg-brand-500 hover:bg-brand-600 text-white'
+                }`}
+              >
+                {is2FALoading ? 'Validando...' : user.two_factor_enabled ? 'Desativar 2FA' : 'Ativar 2FA'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Image Crop & Framing Modal */}
+      <ImageCropModal
+        isOpen={isCropOpen}
+        file={cropFile}
+        cropType={cropType}
+        onConfirm={handleCropConfirmed}
+        onCancel={() => setIsCropOpen(false)}
+      />
     </div>
   );
 };
