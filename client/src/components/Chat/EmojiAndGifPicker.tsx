@@ -7,7 +7,6 @@ import {
   Sparkles,
   TrendingUp,
   X,
-  Key,
   Check,
   Loader2,
 } from 'lucide-react';
@@ -81,6 +80,9 @@ const CURATED_GIFS: Array<{ url: string; preview: string; title: string; categor
 
 const GIF_CATEGORIES = ['Todos', 'Favoritos', 'Em Alta', 'Humor', 'Jogos', 'Amor', 'Reação', 'Festa'];
 
+const MIN_PICKER_WIDTH = 384; // Standard w-96
+const MAX_PICKER_WIDTH = 768; // 2x standard size
+
 export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   isOpen,
   onClose,
@@ -93,8 +95,55 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   const [gifSearch, setGifSearch] = useState('');
   const [klipyGifs, setKlipyGifs] = useState<Array<{ url: string; preview: string; title: string }>>([]);
   const [isLoadingGifs, setIsLoadingGifs] = useState(false);
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
+
+  // Horizontal Resize State (Desktop only)
+  const [pickerWidth, setPickerWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('emoji_picker_width');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= MIN_PICKER_WIDTH && parsed <= MAX_PICKER_WIDTH) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return MIN_PICKER_WIDTH;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    if (window.innerWidth < 640) return; // Do not allow on mobile
+
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+
+    const startX = e.clientX;
+    const startWidth = pickerWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      // Anchored to the right: dragging left (lower X) increases width
+      const deltaX = startX - moveEvent.clientX;
+      const newWidth = Math.min(MAX_PICKER_WIDTH, Math.max(MIN_PICKER_WIDTH, startWidth + deltaX));
+      setPickerWidth(newWidth);
+      try {
+        localStorage.setItem('emoji_picker_width', newWidth.toString());
+      } catch {}
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
 
   const { favoriteGifs, isFavorited, toggleFavorite, fetchFavorites, hasLoaded } = useFavoriteGifStore();
 
@@ -171,23 +220,31 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSaveApiKey = () => {
-    if (apiKeyInput.trim()) {
-      localStorage.setItem('klipy_api_key', apiKeyInput.trim());
-      setShowKeyModal(false);
-    }
-  };
-
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
 
       <div
-        className={`absolute ${positionClass} z-50 bg-background-darkest w-80 md:w-96 rounded-3xl shadow-2xl border border-white/10 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 select-none`}
-        style={{ height: '420px' }}
+        className={`absolute ${positionClass} z-50 bg-background-darkest rounded-3xl shadow-2xl border border-white/10 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 select-none ${
+          isResizing ? 'transition-none pointer-events-auto' : 'transition-[width]'
+        }`}
+        style={{
+          width: typeof window !== 'undefined' && window.innerWidth < 640 ? 'calc(100vw - 2rem)' : `${pickerWidth}px`,
+          maxWidth: 'calc(100vw - 2rem)',
+          height: '420px',
+        }}
       >
+        {/* Left Resize Handle (Desktop only) */}
+        <div
+          onMouseDown={handleResizeStart}
+          className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-brand-500/20 active:bg-brand-500/40 z-30 transition-colors hidden sm:flex items-center justify-center group/resizer"
+          title="Arrastar para redimensionar (até o dobro do tamanho)"
+        >
+          <div className="w-1 h-8 bg-white/20 group-hover/resizer:bg-brand-400 group-hover/resizer:scale-y-125 rounded-full transition-all" />
+        </div>
+
         {/* Top Header Tabs */}
-        <div className="p-2 bg-background-darker/80 border-b border-white/5 flex items-center justify-between">
+        <div className="p-2 bg-background-darker/80 border-b border-white/5 flex items-center justify-between pl-3.5">
           <div className="flex items-center gap-1 bg-background-darkest p-1 rounded-2xl border border-white/5">
             <button
               type="button"
@@ -234,7 +291,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2 px-1">
               Todos os Emojis
             </span>
-            <div className="grid grid-cols-6 gap-2">
+            <div className={`grid gap-2 ${pickerWidth >= 640 ? 'grid-cols-10' : pickerWidth >= 500 ? 'grid-cols-8' : 'grid-cols-6'}`}>
               {COMMON_EMOJIS.map((emoji) => (
                 <button
                   key={emoji}
@@ -322,7 +379,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                   <span className="text-xs">Nenhum GIF encontrado para "{gifSearch}".</span>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
+                <div className={`grid gap-2 ${pickerWidth >= 560 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                   {displayedGifs.map((gif, idx) => {
                     const favorited = isFavorited(gif.url);
                     return (
@@ -364,72 +421,16 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
               )}
             </div>
 
-            {/* Klipy Footer Info & API Key Setup */}
-            <div className="p-2 bg-background-darker/70 border-t border-white/5 flex items-center justify-between text-[10px] text-gray-400 px-3">
+            {/* Klipy Footer Info */}
+            <div className="p-2 bg-background-darker/70 border-t border-white/5 flex items-center justify-center text-[10px] text-gray-400 px-3">
               <span className="flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-purple-400" />
                 <span>Powered by Klipy GIF API</span>
               </span>
-
-              <button
-                type="button"
-                onClick={() => setShowKeyModal(true)}
-                className="text-gray-400 hover:text-brand-300 transition-colors flex items-center gap-1 cursor-pointer"
-                title="Configurar chave personalizada da API Klipy"
-              >
-                <Key className="w-3 h-3" />
-                <span>Chave API</span>
-              </button>
             </div>
           </div>
         )}
       </div>
-
-      {/* Mini Modal to Configure Custom Klipy API Key */}
-      {showKeyModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <Key className="w-4 h-4 text-purple-400" />
-                <span>Chave de API do Klipy</span>
-              </h4>
-              <button onClick={() => setShowKeyModal(false)} className="text-gray-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-400 leading-relaxed">
-              Insira sua chave de API gerada no painel de parceiros da <strong>Klipy</strong> para habilitar busca ilimitada de GIFs e vídeos.
-            </p>
-
-            <input
-              type="text"
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="Cole sua API Key do Klipy..."
-              className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
-            />
-
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowKeyModal(false)}
-                className="px-3 py-1.5 text-xs text-gray-400 hover:text-white font-medium"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveApiKey}
-                className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md transition-colors"
-              >
-                Salvar Chave
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };
