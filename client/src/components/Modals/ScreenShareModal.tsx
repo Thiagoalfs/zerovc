@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Monitor, AppWindow, Sliders, Zap, Sparkles } from 'lucide-react';
+import { X, Monitor, AppWindow, Sliders, Zap, Sparkles, Volume2 } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 
 interface ScreenShareModalProps {
@@ -22,6 +22,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [resolution, setResolution] = useState<ScreenResolution>('720p');
   const [fps, setFps] = useState<ScreenFPS>(30);
+  const [includeAudio, setIncludeAudio] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const { startScreenShare } = useVoiceStore();
 
@@ -57,7 +58,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
 
   const handleShare = async () => {
     if (!selectedSourceId) return;
-    await startScreenShare(selectedSourceId, { resolution, fps });
+    await startScreenShare(selectedSourceId, { resolution, fps, includeAudio: isElectron && includeAudio });
     onClose();
   };
 
@@ -157,6 +158,34 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
                 ))}
               </div>
             </div>
+
+            {/* System Audio Toggle (Electron only) */}
+            {isElectron && (
+              <button
+                type="button"
+                onClick={() => setIncludeAudio((v) => !v)}
+                className={`w-full flex items-center justify-between py-2.5 px-3 rounded-xl border transition-all ${
+                  includeAudio
+                    ? 'bg-brand-500/20 border-brand-500 text-white'
+                    : 'bg-background-darker border-white/5 text-gray-400 hover:border-white/20'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Volume2 className="w-4 h-4" />
+                  <div className="text-left">
+                    <span className="font-semibold text-sm block">Compartilhar áudio do sistema</span>
+                    <span className="text-[10px] text-gray-400">Disponível apenas no Windows</span>
+                  </div>
+                </div>
+                <div
+                  className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${
+                    includeAudio ? 'bg-brand-500 justify-end' : 'bg-white/10 justify-start'
+                  }`}
+                >
+                  <div className="w-4 h-4 rounded-full bg-white" />
+                </div>
+              </button>
+            )}
           </div>
 
           {/* Sources Section (if Electron with multiple windows) */}
