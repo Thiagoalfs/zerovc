@@ -30,7 +30,7 @@ interface VoiceState {
   setParticipantVolume: (userId: string, volume: number) => void;
   startScreenShare: (
     sourceId?: string,
-    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }
   ) => Promise<void>;
   stopScreenShare: () => Promise<void>;
 }
@@ -267,7 +267,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     get().setUserVolume(userId, volume);
   },
 
-  startScreenShare: async (sourceId?: string, config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }) => {
+  startScreenShare: async (sourceId?: string, config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }) => {
     const { currentChannelId } = get();
     try {
       await livekit.setScreenShareEnabled(true, sourceId, config);

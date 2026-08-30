@@ -44,7 +44,7 @@ func mustGetEnv(key string) string {
 
 func main() {
 	port := getEnv("PORT", "8080")
-	dbURL := getEnv("DATABASE_URL", "postgres://zerovc_user:zerovc_password_change_me@localhost:5432/zerovc?sslmode=disable")
+	dbURL := mustGetEnv("DATABASE_URL")
 	jwtSecret := mustGetEnv("JWT_SECRET")
 	livekitPublicURL := getEnv("LIVEKIT_PUBLIC_URL", "ws://localhost:7880")
 	livekitKey := mustGetEnv("LIVEKIT_API_KEY")
