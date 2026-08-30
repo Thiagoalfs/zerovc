@@ -218,7 +218,7 @@ class LiveKitManager {
   async setScreenShareEnabled(
     enabled: boolean,
     sourceId?: string,
-    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60 }
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }
   ) {
     if (!this.room) return;
 
@@ -243,7 +243,16 @@ class LiveKitManager {
       if (sourceId && (window as any).electronAPI) {
         // Electron Screen Capture API with Hardware Accelerated WGC & Framerate constraints
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
+          // Áudio do sistema (loopback) via a mesma API legada do Electron.
+          // Funciona de forma confiável só no Windows — é limitação do Chromium/Electron,
+          // não do nosso código. No macOS/Linux normalmente vem sem faixa de áudio.
+          audio: config?.includeAudio
+            ? ({
+                mandatory: {
+                  chromeMediaSource: 'desktop',
+                },
+              } as any)
+            : false,
           video: {
             // @ts-ignore
             mandatory: {
@@ -276,6 +285,22 @@ class LiveKitManager {
             priority: 'high',
           },
         });
+
+        // Publica o áudio do sistema (se capturado) como track separada,
+        // igual ao que o player já espera via Track.Source.ScreenShareAudio.
+        const audioTrack = stream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.onended = () => {
+            const audioPub = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+            if (audioPub?.track) {
+              this.room?.localParticipant.unpublishTrack(audioPub.track);
+            }
+          };
+          await this.room.localParticipant.publishTrack(audioTrack, {
+            name: 'screen_share_audio',
+            source: Track.Source.ScreenShareAudio,
+          });
+        }
 
         // Set WebRTC degradationPreference to maintain 60 FPS or detail
         try {
@@ -354,6 +379,12 @@ class LiveKitManager {
       const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
       if (screenPub && screenPub.track) {
         this.room.localParticipant.unpublishTrack(screenPub.track);
+      }
+
+      // Limpa também a track de áudio do sistema, se estiver publicada.
+      const screenAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+      if (screenAudioPub && screenAudioPub.track) {
+        this.room.localParticipant.unpublishTrack(screenAudioPub.track);
       }
     }
 
