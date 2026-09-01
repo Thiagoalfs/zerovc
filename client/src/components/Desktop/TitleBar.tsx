@@ -9,9 +9,19 @@ import {
   Sparkles,
   CheckCircle2,
   ExternalLink,
-  AlertCircle,
+  GitCommit,
+  ArrowUpCircle,
 } from 'lucide-react';
 import { UpdateInfo, UpdateProgress } from '../../types/electron';
+
+interface RepoUpdateInfo {
+  latestSha: string;
+  shortSha: string;
+  message: string;
+  author: string;
+  commitUrl: string;
+  publishedAt?: string;
+}
 
 export const TitleBar: React.FC = () => {
   const isElectron =
@@ -19,19 +29,73 @@ export const TitleBar: React.FC = () => {
     (!!window.electronAPI?.isElectron || navigator.userAgent.includes('Electron'));
 
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [repoUpdateInfo, setRepoUpdateInfo] = useState<RepoUpdateInfo | null>(null);
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'available' | 'downloading' | 'downloaded'>('idle');
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Local build commit hash from Vite define (badge informativo no header, não relacionado ao updater)
+  // Local build commit hash from Vite define
   const currentBuildCommit = typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : '';
+
+  // Direct GitHub API checker
+  const checkGitHubDirectly = useCallback(async () => {
+    try {
+      const res = await fetch('https://api.github.com/repos/Thiagoalfs/zerovc/commits/main', {
+        headers: { 'Accept': 'application/vnd.github.v3+json' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const latestSha = data.sha;
+        const shortSha = latestSha.substring(0, 7);
+        const commitMsg = data.commit?.message?.split('\n')[0] || 'Novas alterações';
+        const author = data.commit?.author?.name || 'GitHub';
+
+        // If commit differs from current build commit, flag as update available!
+        if (
+          latestSha &&
+          currentBuildCommit &&
+          !latestSha.startsWith(currentBuildCommit) &&
+          !currentBuildCommit.startsWith(shortSha)
+        ) {
+          setRepoUpdateInfo({
+            latestSha,
+            shortSha,
+            message: commitMsg,
+            author,
+            commitUrl: data.html_url,
+            publishedAt: data.commit?.author?.date,
+          });
+          setUpdateStatus((prev) => (prev === 'idle' ? 'available' : prev));
+        }
+      }
+    } catch {
+      // Ignore network errors on background poll
+    }
+  }, [currentBuildCommit]);
 
   useEffect(() => {
     if (!isElectron) return;
 
     // Check initial maximized state
     window.electronAPI?.isMaximized?.().then((max) => setIsMaximized(max)).catch(() => {});
+
+    // Check directly via fetch
+    checkGitHubDirectly();
+    const interval = setInterval(checkGitHubDirectly, 15000);
+
+    // Listen for electron main process repo commit notifications
+    const unsubRepo = window.electronAPI?.onRepoUpdateAvailable?.((info: RepoUpdateInfo) => {
+      if (
+        info?.latestSha &&
+        currentBuildCommit &&
+        !info.latestSha.startsWith(currentBuildCommit) &&
+        !currentBuildCommit.startsWith(info.shortSha)
+      ) {
+        setRepoUpdateInfo(info);
+        setUpdateStatus((prev) => (prev === 'idle' ? 'available' : prev));
+      }
+    });
 
     // Listen for electron-updater available release
     const unsubAvailable = window.electronAPI?.onUpdateAvailable?.((info) => {
@@ -52,11 +116,13 @@ export const TitleBar: React.FC = () => {
     });
 
     return () => {
+      clearInterval(interval);
+      unsubRepo?.();
       unsubAvailable?.();
       unsubProgress?.();
       unsubDownloaded?.();
     };
-  }, [isElectron]);
+  }, [isElectron, checkGitHubDirectly, currentBuildCommit]);
 
   if (!isElectron) {
     return null;
@@ -76,8 +142,16 @@ export const TitleBar: React.FC = () => {
     window.electronAPI?.quitAndInstall?.();
   };
 
+  const handleReloadApp = () => {
+    if (window.electronAPI?.reloadApp) {
+      window.electronAPI.reloadApp();
+    } else {
+      window.location.reload();
+    }
+  };
+
   const handleOpenGitHub = (url?: string) => {
-    const targetUrl = url || 'https://github.com/Thiagoalfs/zerovc/releases';
+    const targetUrl = url || repoUpdateInfo?.commitUrl || 'https://github.com/Thiagoalfs/zerovc/releases';
     if (window.electronAPI?.openExternal) {
       window.electronAPI.openExternal(targetUrl);
     } else {
@@ -135,7 +209,13 @@ export const TitleBar: React.FC = () => {
               title="Nova versão encontrada! Clique para atualizar."
             >
               <DownloadCloud className="w-3.5 h-3.5" />
-              <span>{updateInfo?.version ? `Update v${updateInfo.version}` : 'Update Disponível'}</span>
+              <span>
+                {updateInfo?.version
+                  ? `Update v${updateInfo.version}`
+                  : repoUpdateInfo?.shortSha
+                  ? `Update (${repoUpdateInfo.shortSha})`
+                  : 'Update Disponível'}
+              </span>
             </button>
           )}
 
@@ -205,18 +285,22 @@ export const TitleBar: React.FC = () => {
           onClick={() => setIsModalOpen(false)}
         >
           <div
-            className="bg-background-darker border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4"
+            className="bg-background-darker border border-white/10 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-md">
-                  <DownloadCloud className="w-5 h-5" />
+                  <ArrowUpCircle className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white leading-tight">Nova Atualização Disponível</h3>
                   <span className="text-xs text-emerald-400 font-medium">
-                    {updateInfo ? `Versão ${updateInfo.version}` : 'Uma nova versão do ZeroVC está pronta'}
+                    {updateInfo
+                      ? `Versão ${updateInfo.version}`
+                      : repoUpdateInfo
+                      ? `Novo commit: ${repoUpdateInfo.shortSha}`
+                      : 'Uma nova versão do ZeroVC está disponível'}
                   </span>
                 </div>
               </div>
@@ -227,6 +311,23 @@ export const TitleBar: React.FC = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Commit or Release Info */}
+            {repoUpdateInfo && (
+              <div className="p-3.5 bg-background-darkest/80 rounded-2xl border border-white/5 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-gray-300">
+                  <GitCommit className="w-4 h-4 text-brand-400" />
+                  <span>Última alteração:</span>
+                </div>
+                <p className="text-xs text-gray-200 font-medium">
+                  {repoUpdateInfo.message}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-white/5 font-mono">
+                  <span>Autor: {repoUpdateInfo.author}</span>
+                  <span>SHA: {repoUpdateInfo.shortSha}</span>
+                </div>
+              </div>
+            )}
 
             {updateInfo?.releaseNotes && (
               <div className="bg-background-darkest/70 border border-white/5 rounded-xl p-3.5 text-xs text-gray-300 leading-relaxed max-h-32 overflow-y-auto">
@@ -259,12 +360,11 @@ export const TitleBar: React.FC = () => {
               ) : (
                 <button
                   type="button"
-                  onClick={handleStartDownload}
-                  disabled={updateStatus === 'downloading'}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-98 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={handleReloadApp}
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-98 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <DownloadCloud className="w-4 h-4" />
-                  <span>{updateStatus === 'downloading' ? 'Baixando...' : 'Baixar Atualização'}</span>
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Aplicar Atualizações (Recarregar App)</span>
                 </button>
               )}
 

@@ -43,7 +43,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         return saved === 'true';
       }
     } catch {}
-    return false;
+    return typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
   });
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [searchQuery, setSearchQuery] = useState('');

@@ -84,7 +84,7 @@ export const App: React.FC = () => {
         return saved === 'true';
       }
     } catch {}
-    return false;
+    return typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
   });
 
   const handleToggleMemberList = (open: boolean) => {

@@ -55,7 +55,15 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [showMemberList, setShowMemberList] = useState(false);
+  const [showMemberList, setShowMemberList] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('zerovc_server_members_open');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch {}
+    return typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
+  });
   const [isInGroupVoice, setIsInGroupVoice] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
 
@@ -376,7 +384,13 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
           {/* Members Toggle */}
           <button
-            onClick={() => setShowMemberList(!showMemberList)}
+            onClick={() => {
+              const next = !showMemberList;
+              setShowMemberList(next);
+              try {
+                localStorage.setItem('zerovc_server_members_open', String(next));
+              } catch {}
+            }}
             className={`p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors cursor-pointer ${
               showMemberList ? 'text-white bg-white/10' : ''
             }`}
