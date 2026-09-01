@@ -74,15 +74,6 @@ function createWindow() {
     mainWindow = null;
   });
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    checkGitHubRepoUpdates();
-  });
-
-  // Check repo updates every 30 seconds
-  setInterval(() => {
-    checkGitHubRepoUpdates();
-  }, 30 * 1000);
-
   // Setup auto-updater when running in packaged mode
   if (!isDev) {
     setupAutoUpdater();
@@ -140,37 +131,6 @@ function setupAutoUpdater() {
 }
 
 // -------------------------------------------------------------
-// GitHub Repository Direct Commit Checker
-// -------------------------------------------------------------
-async function checkGitHubRepoUpdates() {
-  try {
-    const res = await fetch('https://api.github.com/repos/Thiagoalfs/zerovc/commits/main', {
-      headers: {
-        'User-Agent': 'ZeroVC-Desktop-App',
-        'Accept': 'application/vnd.github.v3+json',
-      },
-    });
-    if (res.ok) {
-      const data: any = await res.json();
-      const latestSha = data.sha;
-      const commitMsg = data.commit?.message?.split('\n')[0] || 'Novas alterações encontradas no repositório';
-      const author = data.commit?.author?.name || 'GitHub';
-
-      mainWindow?.webContents.send('repo-update-available', {
-        latestSha,
-        shortSha: latestSha.substring(0, 7),
-        message: commitMsg,
-        author,
-        commitUrl: data.html_url,
-        publishedAt: data.commit?.author?.date,
-      });
-    }
-  } catch (err) {
-    console.error('[UpdateChecker] Failed to check GitHub commits:', err);
-  }
-}
-
-// -------------------------------------------------------------
 // IPC Handlers: Window Controls & Updater Actions
 // -------------------------------------------------------------
 ipcMain.on('window-minimize', () => {
@@ -219,7 +179,6 @@ ipcMain.on('reload-app', () => {
 });
 
 ipcMain.on('check-for-updates', () => {
-  checkGitHubRepoUpdates();
   if (app.isPackaged) {
     autoUpdater.checkForUpdates().catch(() => {});
   }
