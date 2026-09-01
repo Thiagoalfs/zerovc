@@ -10,15 +10,6 @@ export interface UpdateInfo {
   releaseNotes?: string | Array<{ version: string; note: string }>;
 }
 
-export interface RepoUpdateInfo {
-  latestSha: string;
-  shortSha: string;
-  message: string;
-  author: string;
-  commitUrl: string;
-  publishedAt?: string;
-}
-
 export interface UpdateProgress {
   percent: number;
   bytesPerSecond: number;
@@ -42,7 +33,6 @@ export interface ElectronAPI {
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
-  onRepoUpdateAvailable: (callback: (info: RepoUpdateInfo) => void) => () => void;
 }
 
 declare global {
@@ -52,4 +42,3 @@ declare global {
     electronAPI?: ElectronAPI;
   }
 }
-
