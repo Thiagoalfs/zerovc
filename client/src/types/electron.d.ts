@@ -33,6 +33,7 @@ export interface ElectronAPI {
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
+  onRepoUpdateAvailable?: (callback: (info: any) => void) => () => void;
 }
 
 declare global {
