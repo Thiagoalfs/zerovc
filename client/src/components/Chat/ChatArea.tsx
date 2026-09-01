@@ -36,7 +36,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     sendMessage,
     typingUsers,
   } = useGuildStore();
-  const [localShowMemberList, setLocalShowMemberList] = useState(false);
+  const [localShowMemberList, setLocalShowMemberList] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('zerovc_server_members_open');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch {}
+    return false;
+  });
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -98,10 +106,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const showMembers = isMemberListOpen !== undefined ? isMemberListOpen : localShowMemberList;
   const toggleMembers = () => {
+    const nextVal = !showMembers;
     if (onToggleMemberList) {
-      onToggleMemberList(!showMembers);
+      onToggleMemberList(nextVal);
     } else {
-      setLocalShowMemberList(!showMembers);
+      setLocalShowMemberList(nextVal);
+      try {
+        localStorage.setItem('zerovc_server_members_open', String(nextVal));
+      } catch {}
     }
   };
 

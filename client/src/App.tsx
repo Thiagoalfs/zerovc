@@ -77,7 +77,22 @@ export const App: React.FC = () => {
     position?: { x: number; y: number };
   } | null>(null);
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
-  const [isMemberListOpen, setIsMemberListOpen] = useState(false);
+  const [isMemberListOpen, setIsMemberListOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('zerovc_server_members_open');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch {}
+    return false;
+  });
+
+  const handleToggleMemberList = (open: boolean) => {
+    setIsMemberListOpen(open);
+    try {
+      localStorage.setItem('zerovc_server_members_open', String(open));
+    } catch {}
+  };
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
@@ -632,7 +647,7 @@ export const App: React.FC = () => {
               setChannelToEdit(channel);
             }}
             onOpenMemberList={() => {
-              setIsMemberListOpen(true);
+              handleToggleMemberList(true);
             }}
             onSelectUser={(targetUser, pos) => {
               setSelectedUserForProfile({ user: targetUser, position: pos });
@@ -728,7 +743,7 @@ export const App: React.FC = () => {
             }}
             onPreviewImage={(url) => setPreviewImageUrl(url)}
             isMemberListOpen={isMemberListOpen}
-            onToggleMemberList={(open) => setIsMemberListOpen(open)}
+            onToggleMemberList={handleToggleMemberList}
           />
         )}
 
