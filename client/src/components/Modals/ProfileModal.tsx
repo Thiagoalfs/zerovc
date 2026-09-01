@@ -12,11 +12,12 @@ import {
   User,
   Eye,
   EyeOff,
-  QrCode,
   ShieldCheck,
   Loader2,
   Laptop,
-  ArrowLeft,
+  Smile,
+  FileText,
+  Edit3,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
@@ -31,7 +32,7 @@ interface ProfileModalProps {
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   const { user, updateProfile, logout, setUser } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState<'account' | 'profile' | 'audio'>('account');
+  const [activeTab, setActiveTab] = useState<'account' | 'audio'>('account');
 
   // Crop Modal State
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -45,8 +46,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [bio, setBio] = useState(user?.bio || '');
   const [customStatus, setCustomStatus] = useState(user?.custom_status || '');
   const [status, setStatus] = useState<'online' | 'idle' | 'dnd' | 'offline'>(user?.status || 'online');
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [profileSuccess, setProfileSuccess] = useState(false);
+  const [isSavingBio, setIsSavingBio] = useState(false);
+  const [bioSuccess, setBioSuccess] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +56,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   // Account Submodals & Reveal States
   const [revealEmail, setRevealEmail] = useState(false);
   const [revealPhone, setRevealPhone] = useState(false);
+
+  // Display Name Edit Modal
+  const [isEditDisplayNameOpen, setIsEditDisplayNameOpen] = useState(false);
+  const [newDisplayName, setNewDisplayName] = useState(user?.display_name || '');
+  const [isSavingDisplayName, setIsSavingDisplayName] = useState(false);
 
   // Username Edit Modal
   const [isEditUsernameOpen, setIsEditUsernameOpen] = useState(false);
@@ -108,6 +114,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   useEffect(() => {
     if (isOpen && user) {
       setDisplayName(user.display_name || '');
+      setNewDisplayName(user.display_name || '');
       setAvatarUrl(user.avatar_url || '');
       setBannerUrl(user.banner_url || '');
       setBio(user.bio || '');
@@ -148,7 +155,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     return `(••) •••••-••${phone.slice(-2)}`;
   };
 
-  // Avatar / Banner Cropping
+  // Avatar / Banner Cropping & Direct Upload
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -174,6 +181,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       try {
         const res = await api.upload.avatar(croppedFile);
         setAvatarUrl(res.url);
+        await updateProfile({ avatar_url: res.url });
       } catch (err) {
         console.error('Failed to upload avatar:', err);
       } finally {
@@ -184,6 +192,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       try {
         const res = await api.upload.banner(croppedFile);
         setBannerUrl(res.url);
+        await updateProfile({ banner_url: res.url });
       } catch (err) {
         console.error('Failed to upload banner:', err);
       } finally {
@@ -192,25 +201,48 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     }
   };
 
-  // Profile Save
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  // Save Bio & Custom Status
+  const handleSaveBioAndStatus = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSavingProfile(true);
+    setIsSavingBio(true);
     try {
       await updateProfile({
-        display_name: displayName.trim(),
-        avatar_url: avatarUrl,
-        banner_url: bannerUrl,
         bio: bio.trim(),
         custom_status: customStatus.trim(),
         status,
       });
-      setProfileSuccess(true);
-      setTimeout(() => setProfileSuccess(false), 2500);
+      setBioSuccess(true);
+      setTimeout(() => setBioSuccess(false), 2500);
     } catch (err: any) {
-      console.error('Failed to update profile:', err);
+      console.error('Failed to update bio & status:', err);
     } finally {
-      setIsSavingProfile(false);
+      setIsSavingBio(false);
+    }
+  };
+
+  // Status quick change
+  const handleStatusChange = async (newStatus: 'online' | 'idle' | 'dnd' | 'offline') => {
+    setStatus(newStatus);
+    try {
+      await updateProfile({ status: newStatus });
+    } catch (err) {
+      console.error('Failed to change status:', err);
+    }
+  };
+
+  // Display Name Save
+  const handleSaveDisplayName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingDisplayName(true);
+    try {
+      const updated = await updateProfile({ display_name: newDisplayName.trim() });
+      setUser(updated);
+      setDisplayName(updated.display_name || '');
+      setIsEditDisplayNameOpen(false);
+    } catch (err: any) {
+      console.error('Failed to update display name:', err);
+    } finally {
+      setIsSavingDisplayName(false);
     }
   };
 
@@ -251,14 +283,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
     setIsSavingEmail(true);
     try {
-      const res = await api.auth.changeEmail({ password: emailCurrentPassword, new_email: newEmail.trim() });
-      if (user) {
-        setUser({ ...user, email: res.email });
-      }
+      const res = await api.auth.changeEmail({
+        password: emailCurrentPassword,
+        new_email: newEmail.trim(),
+      });
+      setUser({ email: res.email });
       setIsEditEmailOpen(false);
       setEmailCurrentPassword('');
     } catch (err: any) {
-      setEmailError(err.message || 'Senha incorreta ou e-mail já cadastrado.');
+      setEmailError(err.message || 'Falha ao atualizar e-mail. Verifique sua senha.');
     } finally {
       setIsSavingEmail(false);
     }
@@ -268,21 +301,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const handleSavePhone = async (e: React.FormEvent) => {
     e.preventDefault();
     setPhoneError(null);
-    const cleaned = newPhone.replace(/[^\d+]/g, '');
-    if (cleaned && cleaned.length < 8) {
-      setPhoneError('Insira um número de telefone válido.');
-      return;
-    }
+    const trimmed = newPhone.trim();
 
     setIsSavingPhone(true);
     try {
-      const res = await api.auth.changePhone({ phone_number: newPhone.trim() });
-      if (user) {
-        setUser({ ...user, phone_number: res.phone_number });
-      }
+      const updated = await updateProfile({ phone_number: trimmed });
+      setUser(updated);
       setIsEditPhoneOpen(false);
     } catch (err: any) {
-      setPhoneError(err.message || 'Falha ao atualizar número de telefone.');
+      setPhoneError(err.message || 'Falha ao atualizar número.');
     } finally {
       setIsSavingPhone(false);
     }
@@ -292,25 +319,30 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const handleSavePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
+    setPasswordSuccess(false);
+
     if (newPassword.length < 6) {
       setPasswordError('A nova senha deve ter no mínimo 6 caracteres.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('As novas senhas não coincidem.');
+      setPasswordError('A confirmação da nova senha não confere.');
       return;
     }
 
     setIsSavingPassword(true);
     try {
-      await api.auth.changePassword({ current_password: currentPassword, new_password: newPassword });
+      await api.auth.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
       setPasswordSuccess(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
       setTimeout(() => {
         setIsChangePasswordOpen(false);
         setPasswordSuccess(false);
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
       }, 1500);
     } catch (err: any) {
       setPasswordError(err.message || 'Senha atual incorreta.');
@@ -453,25 +485,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <span>Minha Conta</span>
             </button>
 
-            {/* Tab 2: Meu Perfil */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('profile')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'profile'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Meu Perfil</span>
-            </button>
-
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 block pt-2">
               Configurações do App
             </span>
 
-            {/* Tab 3: Voz & Vídeo */}
+            {/* Tab 2: Voz & Vídeo */}
             <button
               type="button"
               onClick={() => setActiveTab('audio')}
@@ -503,30 +521,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         <div className="flex-1 flex flex-col h-full bg-background-dark overflow-hidden">
           {/* Top Bar with Title and Close Button */}
           <div className="p-5 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              {activeTab === 'profile' && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('account')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer border border-white/5"
-                  title="Voltar para Minha Conta"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Voltar</span>
-                </button>
-              )}
-              <div>
-                <h3 className="text-lg font-bold text-white">
-                  {activeTab === 'account' && 'Minha Conta'}
-                  {activeTab === 'profile' && 'Perfil de Usuário'}
-                  {activeTab === 'audio' && 'Voz & Vídeo'}
-                </h3>
-                <p className="text-xs text-gray-400">
-                  {activeTab === 'account' && 'Gerencie seus dados de acesso, nome de usuário, e-mail e segurança.'}
-                  {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
-                  {activeTab === 'audio' && 'Ajuste seus dispositivos de entrada, saída e sensibilidade do microfone.'}
-                </p>
-              </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">
+                {activeTab === 'account' && 'Minha Conta'}
+                {activeTab === 'audio' && 'Voz & Vídeo'}
+              </h3>
+              <p className="text-xs text-gray-400">
+                {activeTab === 'account' && 'Gerencie seu perfil, avatar, banner, dados de acesso e segurança.'}
+                {activeTab === 'audio' && 'Ajuste seus dispositivos de entrada, saída e sensibilidade do microfone.'}
+              </p>
             </div>
 
             <button
@@ -539,31 +542,78 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </button>
           </div>
 
+          {/* Hidden File Inputs for Avatar and Banner */}
+          <input
+            ref={bannerFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleBannerUpload}
+            className="hidden"
+          />
+          <input
+            ref={avatarFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarUpload}
+            className="hidden"
+          />
+
           {/* Scrollable Tab Content Container */}
           <div className="flex-1 p-5 overflow-y-auto no-scrollbar space-y-5">
-            {/* TAB 1: MINHA CONTA (DISCORD STYLE) */}
+            {/* TAB 1: MINHA CONTA (UNIFIED WITH PROFILE CUSTOMIZATION) */}
             {activeTab === 'account' && (
               <div className="space-y-5 animate-in fade-in">
-                {/* Profile Top Banner Card */}
+                {/* Profile Top Banner Card with Clickable Banner & Avatar Upload */}
                 <div className="rounded-3xl overflow-hidden bg-background-darker border border-white/5 shadow-lg relative">
-                  {/* Banner */}
+                  {/* Banner (Interactive / Click to Upload) */}
                   <div
-                    className="h-28 w-full bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative bg-cover bg-center"
+                    className="h-32 w-full bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center"
                     style={{ backgroundImage: user.banner_url ? `url(${formatAssetUrl(user.banner_url)})` : undefined }}
-                  />
+                    onClick={() => bannerFileInputRef.current?.click()}
+                    title="Clique para alterar seu banner"
+                  >
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-semibold backdrop-blur-xs">
+                      <Camera className="w-4 h-4" />
+                      <span>{isUploadingBanner ? 'Processando Banner...' : 'Alterar Banner'}</span>
+                    </div>
 
-                  {/* Header Row */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        bannerFileInputRef.current?.click();
+                      }}
+                      className="absolute top-3 right-3 bg-black/50 hover:bg-black/70 backdrop-blur-md text-white text-[11px] font-semibold px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    >
+                      <Image className="w-3.5 h-3.5" />
+                      <span>Mudar Banner</span>
+                    </button>
+                  </div>
+
+                  {/* Header Row: Avatar + Name + Status */}
                   <div className="p-4 pt-0 flex flex-col sm:flex-row sm:items-end justify-between gap-3 relative">
-                    <div className="flex items-end gap-3.5 -mt-10">
-                      {/* Avatar */}
-                      <div className="w-20 h-20 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-xl flex-shrink-0 flex items-center justify-center text-white font-bold text-2xl relative">
+                    <div className="flex items-end gap-3.5 -mt-12">
+                      {/* Avatar (Interactive / Click to Upload) */}
+                      <div
+                        className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex-shrink-0 flex items-center justify-center text-white font-bold text-3xl relative group cursor-pointer"
+                        onClick={() => avatarFileInputRef.current?.click()}
+                        title="Clique para alterar seu avatar"
+                      >
                         {user.avatar_url ? (
                           <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <span>{user.display_name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
                         )}
+
+                        {/* Camera Overlay on Hover */}
+                        <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-0.5">
+                          <Camera className="w-5 h-5" />
+                          <span className="text-[9px] font-bold uppercase tracking-wider">Mudar</span>
+                        </div>
+
+                        {/* Status Indicator Dot */}
                         <span
-                          className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-background-darker ${
+                          className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-background-darker z-10 ${
                             user.status === 'online'
                               ? 'bg-online'
                               : user.status === 'idle'
@@ -585,15 +635,38 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                     <button
                       type="button"
-                      onClick={() => setActiveTab('profile')}
-                      className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-md transition-all cursor-pointer self-start sm:self-auto"
+                      onClick={() => avatarFileInputRef.current?.click()}
+                      className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl border border-white/10 shadow-sm transition-all cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
                     >
-                      Editar Perfil do Usuário
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>{isUploadingAvatar ? 'Enviando...' : 'Mudar Avatar'}</span>
                     </button>
                   </div>
 
                   {/* Group 1: Informações da Conta */}
                   <div className="m-4 mt-1 p-4 bg-background-darkest/90 rounded-2xl border border-white/5 space-y-3.5">
+                    {/* Display Name (Nome de Exibição) row */}
+                    <div className="flex items-center justify-between py-1 border-b border-white/5">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                          Nome de Exibição
+                        </span>
+                        <span className="text-xs font-semibold text-white">
+                          {user.display_name || user.username}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewDisplayName(user.display_name || '');
+                          setIsEditDisplayNameOpen(true);
+                        }}
+                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                      >
+                        Editar
+                      </button>
+                    </div>
+
                     {/* Username row */}
                     <div className="flex items-center justify-between py-1 border-b border-white/5">
                       <div>
@@ -684,8 +757,95 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* Group 2: Senha e Autenticação */}
-                <div className="p-4 bg-background-darker/80 rounded-3xl border border-white/5 space-y-4 shadow-lg">
+                {/* Group 2: Personalização do Perfil (Status & Bio) */}
+                <div className="p-5 bg-background-darker/80 rounded-3xl border border-white/5 space-y-4 shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                      <Smile className="w-3.5 h-3.5 text-brand-400" />
+                      <span>Status e Recado</span>
+                    </h4>
+                  </div>
+
+                  <form onSubmit={handleSaveBioAndStatus} className="space-y-4">
+                    {/* Status de Presença */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                          Status de Presença
+                        </label>
+                        <select
+                          value={status}
+                          onChange={(e) => handleStatusChange(e.target.value as any)}
+                          className="w-full bg-background-darkest border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
+                        >
+                          <option value="online">🟢 Disponível (Online)</option>
+                          <option value="idle">🟡 Ausente (Idle)</option>
+                          <option value="dnd">🔴 Não Perturbe (DND)</option>
+                          <option value="offline">⚪ Invisível (Offline)</option>
+                        </select>
+                      </div>
+
+                      {/* Recado / Status Personalizado */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                          Recado / Status Personalizado
+                        </label>
+                        <input
+                          type="text"
+                          value={customStatus}
+                          onChange={(e) => setCustomStatus(e.target.value)}
+                          placeholder="Definir um status personalizado..."
+                          maxLength={128}
+                          className="w-full bg-background-darkest border border-white/10 rounded-xl px-3.5 py-2 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bio / Sobre Mim */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <FileText className="w-3 h-3 text-brand-400" />
+                          <span>Sobre Mim (Bio)</span>
+                        </label>
+                        <span className="text-[10px] text-gray-500">{bio.length}/255</span>
+                      </div>
+                      <textarea
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        placeholder="Escreva algo sobre você..."
+                        rows={3}
+                        maxLength={255}
+                        className="w-full bg-background-darkest border border-white/10 rounded-xl p-3 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none leading-relaxed"
+                      />
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="submit"
+                        disabled={isSavingBio}
+                        className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold text-xs px-5 py-2 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {bioSuccess ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-300" />
+                            <span>Salvo com Sucesso!</span>
+                          </>
+                        ) : isSavingBio ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Salvando...</span>
+                          </>
+                        ) : (
+                          'Salvar Status e Bio'
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Group 3: Senha e Autenticação */}
+                <div className="p-5 bg-background-darker/80 rounded-3xl border border-white/5 space-y-4 shadow-lg">
                   <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
                     <Lock className="w-3.5 h-3.5 text-brand-400" />
                     <span>Senha e Autenticação</span>
@@ -754,7 +914,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       </div>
                       <div>
                         <span className="text-xs font-bold text-white block">Sessão Atual</span>
-                        <span className="text-[11px] text-gray-400">Aplicativo Desktop Electron • Online agora</span>
+                        <span className="text-[11px] text-gray-400">ZeroVC Desktop • Online agora</span>
                       </div>
                     </div>
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
@@ -763,156 +923,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               </div>
             )}
 
-            {/* TAB 2: MEU PERFIL */}
-            {activeTab === 'profile' && (
-              <form onSubmit={handleSaveProfile} className="space-y-5 animate-in fade-in">
-                {/* Banner & Avatar Upload Section */}
-                <div className="relative rounded-3xl overflow-hidden bg-background-darker border border-white/5 shadow-md">
-                  {/* Banner */}
-                  <div
-                    className="h-32 w-full bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center"
-                    style={{ backgroundImage: bannerUrl ? `url(${formatAssetUrl(bannerUrl)})` : undefined }}
-                    onClick={() => bannerFileInputRef.current?.click()}
-                  >
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-semibold backdrop-blur-xs">
-                      <Camera className="w-4 h-4" />
-                      <span>{isUploadingBanner ? 'Processando Banner...' : 'Mudar Banner (WebP/GIF)'}</span>
-                    </div>
-                  </div>
-
-                  <input
-                    ref={bannerFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleBannerUpload}
-                    className="hidden"
-                  />
-                  <input
-                    ref={avatarFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    className="hidden"
-                  />
-
-                  {/* Avatar Overlay */}
-                  <div className="p-4 pt-0 flex items-end justify-between">
-                    <div className="relative -mt-12 group cursor-pointer" onClick={() => avatarFileInputRef.current?.click()}>
-                      <div className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex items-center justify-center text-white font-bold text-3xl">
-                        {avatarUrl ? (
-                          <img src={formatAssetUrl(avatarUrl)} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span>{displayName[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
-                        )}
-                      </div>
-                      <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                        <Camera className="w-6 h-6" />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => avatarFileInputRef.current?.click()}
-                        className="px-3.5 py-1.5 rounded-xl bg-background-darkest hover:bg-white/10 text-gray-200 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Image className="w-3.5 h-3.5" />
-                        <span>Mudar Avatar</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Display Name & Status */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                      Nome de Exibição
-                    </label>
-                    <input
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder={user.username}
-                      maxLength={64}
-                      className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                      Status de Presença
-                    </label>
-                    <select
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value as any)}
-                      className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500"
-                    >
-                      <option value="online">🟢 Online</option>
-                      <option value="idle">🟡 Ausente</option>
-                      <option value="dnd">🔴 Não Perturbe</option>
-                      <option value="offline">⚪ Invisível</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Custom Status */}
-                <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Recado / Status Personalizado
-                  </label>
-                  <input
-                    type="text"
-                    value={customStatus}
-                    onChange={(e) => setCustomStatus(e.target.value)}
-                    placeholder="Definir um status personalizado..."
-                    maxLength={128}
-                    className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
-                </div>
-
-                {/* Bio / About Me */}
-                <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Sobre Mim (Bio)
-                  </label>
-                  <textarea
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    placeholder="Conte um pouco sobre você..."
-                    rows={3}
-                    maxLength={255}
-                    className="w-full bg-background-darker border border-white/10 rounded-xl p-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none"
-                  />
-                  <span className="text-[10px] text-gray-500 float-right mt-1">{bio.length}/255</span>
-                </div>
-
-                {/* Save Profile Button */}
-                <div className="pt-2 flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={isSavingProfile}
-                    className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold text-xs px-6 py-2.5 rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer"
-                  >
-                    {profileSuccess ? (
-                      <>
-                        <Check className="w-4 h-4 text-emerald-300" />
-                        <span>Perfil Atualizado!</span>
-                      </>
-                    ) : isSavingProfile ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Salvando...</span>
-                      </>
-                    ) : (
-                      'Salvar Alterações'
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* TAB 3: VOZ & VÍDEO */}
+            {/* TAB 2: VOZ & VÍDEO */}
             {activeTab === 'audio' && (
               <div className="space-y-5 animate-in fade-in">
                 {/* Input Device */}
@@ -1024,6 +1035,63 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       </div>
 
       {/* --- SUBMODALS FOR ACCOUNT EDITING --- */}
+
+      {/* 0. Edit Display Name Modal */}
+      {isEditDisplayNameOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+          <form
+            onSubmit={handleSaveDisplayName}
+            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white">Alterar Nome de Exibição</h4>
+              <button
+                type="button"
+                onClick={() => setIsEditDisplayNameOpen(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Este é o nome visível para os outros usuários nos servidores e conversas.
+            </p>
+
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                Nome de Exibição
+              </label>
+              <input
+                type="text"
+                value={newDisplayName}
+                onChange={(e) => setNewDisplayName(e.target.value)}
+                maxLength={64}
+                className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                placeholder={user.username}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsEditDisplayNameOpen(false)}
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingDisplayName}
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
+              >
+                {isSavingDisplayName ? 'Salvando...' : 'Salvar Nome'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* 1. Edit Username Modal */}
       {isEditUsernameOpen && (
