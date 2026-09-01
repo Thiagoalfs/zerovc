@@ -591,56 +591,61 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
 
                   {/* Header Row: Avatar + Name + Status */}
-                  <div className="p-4 pt-0 flex flex-col sm:flex-row sm:items-end justify-between gap-3 relative">
-                    <div className="flex items-end gap-3.5 -mt-12">
-                      {/* Avatar (Interactive / Click to Upload) */}
-                      <div
-                        className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex-shrink-0 flex items-center justify-center text-white font-bold text-3xl relative group cursor-pointer"
-                        onClick={() => avatarFileInputRef.current?.click()}
-                        title="Clique para alterar seu avatar"
-                      >
-                        {user.avatar_url ? (
-                          <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span>{user.display_name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
-                        )}
+                  <div className="px-6 pb-4 pt-0 bg-background-darker">
+                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                      <div className="flex items-end gap-4 -mt-12">
+                        {/* Avatar (Interactive / Click to Upload) */}
+                        <div
+                          className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex-shrink-0 flex items-center justify-center text-white font-bold text-3xl relative group cursor-pointer"
+                          onClick={() => avatarFileInputRef.current?.click()}
+                          title="Clique para alterar seu avatar"
+                        >
+                          {user.avatar_url ? (
+                            <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span>{user.display_name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
+                          )}
 
-                        {/* Camera Overlay on Hover */}
-                        <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-0.5">
-                          <Camera className="w-5 h-5" />
-                          <span className="text-[9px] font-bold uppercase tracking-wider">Mudar</span>
+                          {/* Camera Overlay on Hover */}
+                          <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-0.5">
+                            <Camera className="w-5 h-5" />
+                            <span className="text-[9px] font-bold uppercase tracking-wider">Mudar</span>
+                          </div>
+
+                          {/* Status Indicator Dot */}
+                          <span
+                            className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-background-darker z-10 ${
+                              user.status === 'online'
+                                ? 'bg-online'
+                                : user.status === 'idle'
+                                ? 'bg-idle'
+                                : user.status === 'dnd'
+                                ? 'bg-dnd'
+                                : 'bg-offline'
+                            }`}
+                          />
                         </div>
 
-                        {/* Status Indicator Dot */}
-                        <span
-                          className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-background-darker z-10 ${
-                            user.status === 'online'
-                              ? 'bg-online'
-                              : user.status === 'idle'
-                              ? 'bg-idle'
-                              : user.status === 'dnd'
-                              ? 'bg-dnd'
-                              : 'bg-offline'
-                          }`}
-                        />
+                        {/* Name & Username tag cleanly aligned in dark area */}
+                        <div className="pt-2 pb-0.5">
+                          <h4 className="text-lg font-bold text-white leading-tight tracking-tight">
+                            {user.display_name || user.username}
+                          </h4>
+                          <span className="text-xs text-gray-400 font-mono font-medium block mt-0.5">
+                            @{user.username}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="mb-1">
-                        <h4 className="text-base font-bold text-white flex items-center gap-1.5">
-                          <span>{user.display_name || user.username}</span>
-                        </h4>
-                        <span className="text-xs text-gray-400 font-mono">@{user.username}</span>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => avatarFileInputRef.current?.click()}
+                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white text-xs font-semibold px-4 py-2 rounded-xl border border-white/10 shadow-sm transition-all cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{isUploadingAvatar ? 'Enviando...' : 'Mudar Avatar'}</span>
+                      </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => avatarFileInputRef.current?.click()}
-                      className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl border border-white/10 shadow-sm transition-all cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>{isUploadingAvatar ? 'Enviando...' : 'Mudar Avatar'}</span>
-                    </button>
                   </div>
 
                   {/* Group 1: Informações da Conta */}
@@ -757,48 +762,29 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* Group 2: Personalização do Perfil (Status & Bio) */}
+                {/* Group 2: Personalização do Perfil (Recado & Bio) */}
                 <div className="p-5 bg-background-darker/80 rounded-3xl border border-white/5 space-y-4 shadow-lg">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
                       <Smile className="w-3.5 h-3.5 text-brand-400" />
-                      <span>Status e Recado</span>
+                      <span>Recado e Sobre Mim</span>
                     </h4>
                   </div>
 
                   <form onSubmit={handleSaveBioAndStatus} className="space-y-4">
-                    {/* Status de Presença */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                          Status de Presença
-                        </label>
-                        <select
-                          value={status}
-                          onChange={(e) => handleStatusChange(e.target.value as any)}
-                          className="w-full bg-background-darkest border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
-                        >
-                          <option value="online">🟢 Disponível (Online)</option>
-                          <option value="idle">🟡 Ausente (Idle)</option>
-                          <option value="dnd">🔴 Não Perturbe (DND)</option>
-                          <option value="offline">⚪ Invisível (Offline)</option>
-                        </select>
-                      </div>
-
-                      {/* Recado / Status Personalizado */}
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                          Recado / Status Personalizado
-                        </label>
-                        <input
-                          type="text"
-                          value={customStatus}
-                          onChange={(e) => setCustomStatus(e.target.value)}
-                          placeholder="Definir um status personalizado..."
-                          maxLength={128}
-                          className="w-full bg-background-darkest border border-white/10 rounded-xl px-3.5 py-2 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                        />
-                      </div>
+                    {/* Recado / Status Personalizado */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                        Recado / Status Personalizado
+                      </label>
+                      <input
+                        type="text"
+                        value={customStatus}
+                        onChange={(e) => setCustomStatus(e.target.value)}
+                        placeholder="Definir um status personalizado..."
+                        maxLength={128}
+                        className="w-full bg-background-darkest border border-white/10 rounded-xl px-3.5 py-2 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                      />
                     </div>
 
                     {/* Bio / Sobre Mim */}
@@ -837,7 +823,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                             <span>Salvando...</span>
                           </>
                         ) : (
-                          'Salvar Status e Bio'
+                          'Salvar Recado e Bio'
                         )}
                       </button>
                     </div>
