@@ -22,6 +22,7 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/gateway"
 	"github.com/zerovc/zerovc/backend/internal/handlers"
 	"github.com/zerovc/zerovc/backend/internal/models"
+	"github.com/zerovc/zerovc/backend/internal/ratelimit"
 	"github.com/zerovc/zerovc/backend/internal/voice"
 )
 
@@ -75,18 +76,18 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		var currentStatus string
-		_ = db.Pool.QueryRow(ctx, "SELECT status FROM users WHERE id = $1", userID).Scan(&currentStatus)
-		if currentStatus == "offline" || currentStatus == "" {
-			db.Pool.Exec(ctx, "UPDATE users SET status = 'online' WHERE id = $1", userID)
-			currentStatus = "online"
+		var savedStatus string
+		_ = db.Pool.QueryRow(ctx, "SELECT COALESCE(NULLIF(saved_status, ''), 'online') FROM users WHERE id = $1", userID).Scan(&savedStatus)
+		if savedStatus == "offline" || savedStatus == "" {
+			savedStatus = "online"
 		}
+		db.Pool.Exec(ctx, "UPDATE users SET status = $1 WHERE id = $2", savedStatus, userID)
 
 		hub.BroadcastGlobal(models.WSEvent{
 			Type: models.EventUserUpdate,
 			Data: map[string]any{
 				"id":     userID,
-				"status": currentStatus,
+				"status": savedStatus,
 			},
 		})
 	}
@@ -213,9 +214,13 @@ func main() {
 		r.Post("/api/users/me/favorite-gifs", userHandler.AddFavoriteGIF)
 		r.Delete("/api/users/me/favorite-gifs", userHandler.RemoveFavoriteGIF)
 
+		// Rate Limiters por Usuário Autenticado
+		messageLimiter := ratelimit.NewUserRateLimiter(10, 5, "Você está enviando mensagens muito rápido. Aguarde um instante.")
+		guildCreateLimiter := ratelimit.NewUserRateLimiter(5, 5.0/3600.0, "Limite de criação de servidores atingido. Tente novamente mais tarde.")
+
 		// Guilds (Protected)
 		r.Get("/api/guilds", guildHandler.List)
-		r.Post("/api/guilds", guildHandler.Create)
+		r.With(guildCreateLimiter.Middleware).Post("/api/guilds", guildHandler.Create)
 		r.Get("/api/guilds/{id}", guildHandler.GetDetails)
 		r.Patch("/api/guilds/{id}", guildHandler.Update)
 		r.Delete("/api/guilds/{id}", guildHandler.Delete)
@@ -223,6 +228,9 @@ func main() {
 		r.Post("/api/guilds/{id}/leave", guildHandler.Leave)
 		r.Post("/api/guilds/{id}/mute", guildHandler.ToggleMute)
 		r.Post("/api/guilds/{id}/invites", inviteHandler.CreateInvite)
+		r.Get("/api/guilds/{id}/audit-logs", guildHandler.ListAuditLogs)
+		r.Get("/api/guilds/{guildID}/read-states", messageHandler.GetGuildReadStates)
+		r.Get("/api/guilds/{guildID}/messages/search", messageHandler.Search)
 
 		// Guild Moderation (Protected)
 		r.Post("/api/guilds/{id}/members/{userID}/kick", guildHandler.KickMember)
@@ -235,6 +243,8 @@ func main() {
 		r.Patch("/api/channels/{id}", channelHandler.Update)
 		r.Delete("/api/channels/{id}", channelHandler.Delete)
 		r.Put("/api/guilds/{guildID}/channels/positions", channelHandler.Reorder)
+		r.Get("/api/channels/{channelID}/messages/search", messageHandler.Search)
+		r.Post("/api/channels/{channelID}/ack", messageHandler.AckChannel)
 
 		// Server Roles (Protected)
 		r.Get("/api/guilds/{guildID}/roles", roleHandler.List)
@@ -285,7 +295,7 @@ func main() {
 		// Messages (Protected)
 		r.Get("/api/channels/{channelID}/messages", messageHandler.List)
 		r.Get("/api/channels/{channelID}/pins", messageHandler.ListPinned)
-		r.Post("/api/channels/{channelID}/messages", messageHandler.Send)
+		r.With(messageLimiter.Middleware).Post("/api/channels/{channelID}/messages", messageHandler.Send)
 		r.Patch("/api/channels/{channelID}/messages/{messageID}", messageHandler.Update)
 		r.Delete("/api/channels/{channelID}/messages/{messageID}", messageHandler.Delete)
 		r.Post("/api/channels/{channelID}/messages/{messageID}/reactions", messageHandler.AddReaction)

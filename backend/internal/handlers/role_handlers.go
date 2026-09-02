@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/zerovc/zerovc/backend/internal/audit"
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
@@ -127,6 +128,12 @@ func (h *RoleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Data: role,
 	})
 
+	audit.Log(r.Context(), h.db, h.hub, guildID, userID, "ROLE_CREATE", &role.ID, map[string]any{
+		"name":        role.Name,
+		"color":       role.Color,
+		"permissions": role.Permissions,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(role)
@@ -182,6 +189,12 @@ func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Data: role,
 	})
 
+	audit.Log(r.Context(), h.db, h.hub, guildID, userID, "ROLE_UPDATE", &role.ID, map[string]any{
+		"name":        role.Name,
+		"color":       role.Color,
+		"permissions": role.Permissions,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(role)
 }
@@ -213,6 +226,8 @@ func (h *RoleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		Type: models.EventRoleDelete,
 		Data: map[string]any{"id": roleID, "guild_id": guildID},
 	})
+
+	audit.Log(r.Context(), h.db, h.hub, guildID, userID, "ROLE_DELETE", &roleID, nil)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true})
@@ -246,7 +261,8 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var rolePosition int
-	if err := h.db.Pool.QueryRow(r.Context(), "SELECT position FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&rolePosition); err != nil {
+	var roleName string
+	if err := h.db.Pool.QueryRow(r.Context(), "SELECT position, name FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&rolePosition, &roleName); err != nil {
 		http.Error(w, `{"error":"role not found"}`, http.StatusNotFound)
 		return
 	}
@@ -295,6 +311,11 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
+	audit.Log(r.Context(), h.db, h.hub, guildID, actorID, "ROLE_ASSIGN", &targetUserID, map[string]any{
+		"role_id":   roleID,
+		"role_name": roleName,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "roles": updatedRoles})
 }
@@ -327,7 +348,8 @@ func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var rolePosition int
-	if err := h.db.Pool.QueryRow(r.Context(), "SELECT position FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&rolePosition); err != nil {
+	var roleName string
+	if err := h.db.Pool.QueryRow(r.Context(), "SELECT position, name FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&rolePosition, &roleName); err != nil {
 		http.Error(w, `{"error":"role not found"}`, http.StatusNotFound)
 		return
 	}
@@ -374,6 +396,11 @@ func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
 			"user_id":  targetUserID,
 			"roles":    updatedRoles,
 		},
+	})
+
+	audit.Log(r.Context(), h.db, h.hub, guildID, actorID, "ROLE_REMOVE", &targetUserID, map[string]any{
+		"role_id":   roleID,
+		"role_name": roleName,
 	})
 
 	w.Header().Set("Content-Type", "application/json")

@@ -291,9 +291,32 @@ const (
 	EventCallIncoming           WSEventType = "CALL_INCOMING"
 	EventCallAccept             WSEventType = "CALL_ACCEPT"
 	EventCallReject             WSEventType = "CALL_REJECT"
+	EventAuditLogCreate         WSEventType = "AUDIT_LOG_CREATE"
+	EventChannelAck             WSEventType = "CHANNEL_ACK"
 )
 
 type WSEvent struct {
 	Type WSEventType `json:"type"`
 	Data any         `json:"data"`
 }
+
+type AuditLog struct {
+	ID         uuid.UUID       `json:"id"`
+	GuildID    uuid.UUID       `json:"guild_id"`
+	ActorID    uuid.UUID       `json:"actor_id"`
+	Actor      *UserPublic     `json:"actor,omitempty"`
+	ActionType string          `json:"action_type"`
+	TargetID   *uuid.UUID      `json:"target_id,omitempty"`
+	TargetUser *UserPublic     `json:"target_user,omitempty"`
+	Details    map[string]any  `json:"details"`
+	CreatedAt  time.Time       `json:"created_at"`
+}
+
+type ChannelReadState struct {
+	UserID            uuid.UUID  `json:"user_id"`
+	ChannelID         uuid.UUID  `json:"channel_id"`
+	LastReadMessageID *uuid.UUID `json:"last_read_message_id,omitempty"`
+	UnreadCount       int        `json:"unread_count"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+

@@ -75,12 +75,15 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const isOwner = activeGuild?.owner_id === user?.id;
   const canDelete = isAuthor || isOwner;
 
+  const currentUserRoles = (activeGuild?.members?.find((m) => m.id === user?.id)?.roles || []);
+
   const isMentioned =
     user &&
     (message.content.includes(`@${user.username}`) ||
       (user.display_name && message.content.includes(`@${user.display_name}`)) ||
       message.content.includes('@everyone') ||
-      message.content.includes('@here'));
+      message.content.includes('@here') ||
+      currentUserRoles.some((r) => message.content.includes(`@${r.name}`)));
 
   const formattedTime = (() => {
     try {
@@ -442,8 +445,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               const isGlobal = part === '@everyone' || part === '@here';
               const targetName = part.slice(1).toLowerCase();
 
+              // Check if mention is a role
+              const matchedRole = activeGuild?.roles?.find((r) => r.name.toLowerCase() === targetName);
+
               const memberExists =
                 isGlobal ||
+                matchedRole !== undefined ||
                 activeGuild?.members?.some(
                   (m) =>
                     m.username.toLowerCase() === targetName ||
@@ -454,11 +461,30 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 return part;
               }
 
+              const isUserInRole = matchedRole && currentUserRoles.some((r) => r.id === matchedRole.id);
               const isSelfMention =
-                user &&
-                (part === `@${user.username}` ||
-                  (user.display_name && part === `@${user.display_name}`) ||
-                  part === '@everyone');
+                isUserInRole ||
+                (user &&
+                  (part === `@${user.username}` ||
+                    (user.display_name && part === `@${user.display_name}`) ||
+                    part === '@everyone'));
+
+              if (matchedRole) {
+                return (
+                  <span
+                    key={i}
+                    className="font-semibold px-1.5 py-0.5 rounded-md text-xs inline-flex items-center gap-1 mx-0.5 border"
+                    style={{
+                      backgroundColor: `${matchedRole.color}25`,
+                      color: matchedRole.color,
+                      borderColor: `${matchedRole.color}50`,
+                    }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: matchedRole.color }} />
+                    {part}
+                  </span>
+                );
+              }
 
               return (
                 <span

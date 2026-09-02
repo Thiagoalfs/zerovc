@@ -119,6 +119,21 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const fullGuild = await api.guilds.getDetails(guildId);
       set({ activeGuild: fullGuild });
 
+      // Load read receipts for guild
+      api.guilds.getReadStates(guildId).then((readStates) => {
+        if (readStates && readStates.length > 0) {
+          set((state) => {
+            const unread = new Set(state.unreadChannels);
+            for (const rs of readStates) {
+              if (rs.unread_count > 0) {
+                unread.add(rs.channel_id);
+              }
+            }
+            return { unreadChannels: unread };
+          });
+        }
+      }).catch(() => {});
+
       if (fullGuild.channels && fullGuild.channels.length > 0) {
         const targetChannel = initialChannelId
           ? fullGuild.channels.find((c: Channel) => c.id === initialChannelId) || fullGuild.channels[0]
@@ -134,6 +149,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
   selectChannel: async (channel: Channel) => {
     const cachedMessages = get().messagesByChannel[channel.id];
+
+    // Ack channel read receipt
+    if (channel.type === 'text') {
+      api.channels.ack(channel.id).catch(() => {});
+    }
 
     set((state) => {
       const unread = new Set(state.unreadChannels);
@@ -528,12 +548,13 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         targetGuildId = state.activeGuild.id;
       }
       const isServerMuted = targetGuildId ? state.mutedGuilds.has(targetGuildId) : false;
+      const isDND = currentUser?.status === 'dnd';
 
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
         if (state.messages.some((m) => m.id === message.id)) {
           return { messagesByChannel: nextMessagesByChannel };
         }
-        if (message.author_id !== currentUser?.id && !isServerMuted) {
+        if (message.author_id !== currentUser?.id && !isServerMuted && !isDND) {
           playMessageSound(isMention);
         }
         return {
@@ -544,7 +565,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         // Mark as unread
         const unread = new Set(state.unreadChannels);
         unread.add(message.channel_id);
-        if (!isServerMuted) {
+        if (!isServerMuted && !isDND) {
           playMessageSound(isMention);
         }
 

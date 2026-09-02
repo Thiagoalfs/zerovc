@@ -17,12 +17,14 @@ import {
   Upload,
   Image as ImageIcon,
   ChevronDown,
+  ScrollText,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Permissions } from '../../types';
 import { api, formatAssetUrl } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
+import { ServerAuditLogView } from './ServerAuditLogView';
 
 interface ServerSettingsModalProps {
   isOpen: boolean;
@@ -160,7 +162,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     removeRole,
   } = useGuildStore();
 
-  const [activeTab, setActiveTab] = useState<'appearance' | 'roles' | 'members'>('appearance');
+  const [activeTab, setActiveTab] = useState<'appearance' | 'roles' | 'members' | 'audit_log'>('appearance');
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleColor, setNewRoleColor] = useState('#5865F2');
@@ -447,6 +449,18 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <Users className="w-4 h-4" />
                   <span>Membros ({members.length})</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('audit_log')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                    activeTab === 'audit_log'
+                      ? 'bg-brand-500 text-white shadow-sm'
+                      : 'text-gray-300 hover:bg-white/5'
+                  }`}
+                >
+                  <ScrollText className="w-4 h-4" />
+                  <span>Registro de Auditoria</span>
+                </button>
               </nav>
             </div>
 
@@ -481,11 +495,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   {activeTab === 'appearance' && 'Aparência do Servidor'}
                   {activeTab === 'roles' && 'Cargos e Permissões do Servidor'}
                   {activeTab === 'members' && 'Gerenciador de Membros'}
+                  {activeTab === 'audit_log' && 'Registro de Auditoria do Servidor'}
                 </h2>
                 <p className="text-xs text-gray-400">
                   {activeTab === 'appearance' && 'Personalize o nome, imagem de ícone e o banner de cabeçalho do seu servidor'}
                   {activeTab === 'roles' && 'Configure nomes, cores e permissões granulares dos cargos'}
                   {activeTab === 'members' && 'Atribua cargos aos membros do seu servidor'}
+                  {activeTab === 'audit_log' && 'Acompanhe o histórico de moderação e ações administrativas realizadas no servidor'}
                 </p>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-white p-1 cursor-pointer">
@@ -931,6 +947,12 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {activeTab === 'audit_log' && (
+              <div className="flex-1 overflow-hidden">
+                <ServerAuditLogView guildId={activeGuild.id} />
               </div>
             )}
           </div>

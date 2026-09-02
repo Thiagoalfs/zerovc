@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut } from 'electron';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
 
@@ -245,6 +245,33 @@ ipcMain.handle('get-screen-sources', async () => {
   }
 });
 
+// IPC: Global Shortcuts
+ipcMain.handle('register-global-shortcut', (_event, shortcut: string, action: string) => {
+  try {
+    if (!shortcut) return false;
+    // Unregister existing shortcut if already bound
+    if (globalShortcut.isRegistered(shortcut)) {
+      globalShortcut.unregister(shortcut);
+    }
+    const success = globalShortcut.register(shortcut, () => {
+      mainWindow?.webContents.send('global-shortcut-triggered', action);
+    });
+    return success;
+  } catch (err) {
+    console.error('Error registering global shortcut:', err);
+    return false;
+  }
+});
+
+ipcMain.handle('unregister-all-shortcuts', () => {
+  try {
+    globalShortcut.unregisterAll();
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 app.whenReady().then(() => {
   createWindow();
 
@@ -253,6 +280,10 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {
