@@ -480,6 +480,8 @@ func (h *GuildHandler) KickMember(w http.ResponseWriter, r *http.Request) {
 	if !allowed {
 		http.Error(w, `{"error":"`+msg+`"}`, http.StatusForbidden)
 		return
+	}
+
 	// Remove from guild_members, member_roles, voice_sessions
 	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID)
 	h.db.Pool.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", targetUserID)
