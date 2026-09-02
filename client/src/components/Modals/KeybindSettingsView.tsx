@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { Keyboard, Mic, Headphones, Monitor, Radio, RotateCcw, Check, Sparkles } from 'lucide-react';
+import { Keyboard, Mic, Headphones, Monitor, Radio, RotateCcw, Check, Sparkles, X } from 'lucide-react';
 import { isElectron } from '../../lib/platform';
 
 interface ShortcutConfig {
@@ -78,47 +78,55 @@ export const KeybindSettingsView: React.FC = () => {
     }
   };
 
-  const startRecording = (id: string) => {
-    setRecordingId(id);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent, shortcut: ShortcutConfig) => {
+  // Global window key listener when recording
+  useEffect(() => {
     if (!recordingId) return;
-    e.preventDefault();
-    e.stopPropagation();
 
-    // Ignore solitary modifier presses
-    if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-      return;
-    }
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    // Escape cancels recording
-    if (e.key === 'Escape') {
-      setRecordingId(null);
-      return;
-    }
+      // Ignore modifier keys by themselves
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+        return;
+      }
 
-    const parts: string[] = [];
-    if (e.ctrlKey) parts.push('Control');
-    if (e.shiftKey) parts.push('Shift');
-    if (e.altKey) parts.push('Alt');
+      // Escape cancels recording
+      if (e.key === 'Escape') {
+        setRecordingId(null);
+        return;
+      }
 
-    let keyName = e.code;
-    if (keyName.startsWith('Key')) keyName = keyName.slice(3);
-    else if (keyName.startsWith('Digit')) keyName = keyName.slice(5);
+      const parts: string[] = [];
+      if (e.ctrlKey || e.metaKey) parts.push('Control');
+      if (e.shiftKey) parts.push('Shift');
+      if (e.altKey) parts.push('Alt');
 
-    parts.push(keyName);
-    const keyCombination = parts.join('+');
+      let keyName = e.code || e.key;
+      if (keyName.startsWith('Key')) keyName = keyName.slice(3);
+      else if (keyName.startsWith('Digit')) keyName = keyName.slice(5);
+      else if (keyName === 'Space' || keyName === ' ') keyName = 'Space';
 
-    const updated = { ...bindings, [shortcut.id]: keyCombination };
-    setBindings(updated);
-    localStorage.setItem(shortcut.storageKey, keyCombination);
-    setRecordingId(null);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
+      parts.push(keyName);
+      const keyCombination = parts.join('+');
 
-    registerElectronShortcuts(updated);
-  };
+      const targetShortcut = SHORTCUTS.find((s) => s.id === recordingId);
+      if (targetShortcut) {
+        const updated = { ...bindings, [recordingId]: keyCombination };
+        setBindings(updated);
+        localStorage.setItem(targetShortcut.storageKey, keyCombination);
+        setRecordingId(null);
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 2000);
+        registerElectronShortcuts(updated);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
+    };
+  }, [recordingId, bindings]);
 
   const handleResetDefault = (shortcut: ShortcutConfig) => {
     const updated = { ...bindings, [shortcut.id]: shortcut.defaultKey };
@@ -177,7 +185,7 @@ export const KeybindSettingsView: React.FC = () => {
               key={sc.id}
               className={`p-4 rounded-2xl border transition-all ${
                 isRecording
-                  ? 'bg-brand-500/10 border-brand-500/50 shadow-lg shadow-brand-500/10'
+                  ? 'bg-brand-500/15 border-brand-500 shadow-lg shadow-brand-500/10 ring-2 ring-brand-500/30'
                   : 'bg-background-darker/60 border-white/5 hover:border-white/10'
               }`}
             >
@@ -196,21 +204,25 @@ export const KeybindSettingsView: React.FC = () => {
 
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {isRecording ? (
-                    <div
-                      tabIndex={0}
-                      autoFocus
-                      onKeyDown={(e) => handleKeyDown(e, sc)}
-                      onBlur={() => setRecordingId(null)}
-                      className="px-4 py-2 bg-brand-500 text-white text-xs font-bold rounded-xl animate-pulse cursor-pointer outline-none shadow-md shadow-brand-500/20"
-                    >
-                      Pressione as teclas... (Esc p/ cancelar)
+                    <div className="flex items-center gap-1.5">
+                      <div className="px-3.5 py-1.5 bg-brand-500 text-white text-xs font-bold rounded-xl animate-pulse shadow-md shadow-brand-500/30">
+                        Pressione as teclas...
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRecordingId(null)}
+                        className="p-1.5 text-gray-400 hover:text-white bg-black/40 hover:bg-white/10 rounded-xl border border-white/10 transition-colors cursor-pointer"
+                        title="Cancelar (Esc)"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => startRecording(sc.id)}
-                        className="px-3 py-1.5 bg-background-darkest hover:bg-black/40 border border-white/10 hover:border-brand-500/50 rounded-xl text-xs text-gray-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                        onClick={() => setRecordingId(sc.id)}
+                        className="px-3 py-1.5 bg-background-darkest hover:bg-black/40 border border-white/10 hover:border-brand-500/50 rounded-xl text-xs text-gray-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
                         title="Clique para gravar um novo atalho"
                       >
                         {formatKeyDisplay(currentKey)}
