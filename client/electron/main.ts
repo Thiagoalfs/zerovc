@@ -1,6 +1,12 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut } from 'electron';
 import path from 'path';
-const { autoUpdater } = require('electron-updater');
+
+let autoUpdater: any = null;
+try {
+  autoUpdater = require('electron-updater').autoUpdater;
+} catch (err) {
+  console.warn('[AutoUpdater] electron-updater could not be loaded:', err);
+}
 
 // Enable Hardware Acceleration & High-Performance Native Screen Capture
 app.commandLine.appendSwitch('enable-gpu-rasterization');
@@ -130,6 +136,8 @@ async function checkGitHubRepoUpdates() {
 // Auto-Updater Configuration (GitHub Releases)
 // -------------------------------------------------------------
 function setupAutoUpdater() {
+  if (!autoUpdater) return;
+
   autoUpdater.autoDownload = false; // Let user click the Update button in TitleBar
   autoUpdater.autoInstallOnAppQuit = true;
 
@@ -137,7 +145,7 @@ function setupAutoUpdater() {
     console.log('[AutoUpdater] Checking for updates on GitHub...');
   });
 
-  autoUpdater.on('update-available', (info) => {
+  autoUpdater.on('update-available', (info: any) => {
     console.log('[AutoUpdater] Update available:', info.version);
     mainWindow?.webContents.send('update-available', {
       version: info.version,
@@ -149,7 +157,7 @@ function setupAutoUpdater() {
     console.log('[AutoUpdater] Application is up to date.');
   });
 
-  autoUpdater.on('download-progress', (progressObj) => {
+  autoUpdater.on('download-progress', (progressObj: any) => {
     mainWindow?.webContents.send('update-progress', {
       percent: progressObj.percent,
       bytesPerSecond: progressObj.bytesPerSecond,
@@ -158,14 +166,14 @@ function setupAutoUpdater() {
     });
   });
 
-  autoUpdater.on('update-downloaded', (info) => {
+  autoUpdater.on('update-downloaded', (info: any) => {
     console.log('[AutoUpdater] Update downloaded:', info.version);
     mainWindow?.webContents.send('update-downloaded', {
       version: info.version,
     });
   });
 
-  autoUpdater.on('error', (err) => {
+  autoUpdater.on('error', (err: any) => {
     console.error('[AutoUpdater] Error checking/downloading update:', err);
   });
 }
@@ -193,14 +201,24 @@ ipcMain.handle('window-is-maximized', () => {
   return mainWindow?.isMaximized() ?? false;
 });
 
+ipcMain.on('check-for-updates', () => {
+  if (app.isPackaged && autoUpdater) {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }
+});
+
 ipcMain.on('start-download-update', () => {
-  autoUpdater.downloadUpdate().catch((err) => {
-    console.error('[AutoUpdater] Error on downloadUpdate:', err);
-  });
+  if (autoUpdater) {
+    autoUpdater.downloadUpdate().catch((err: any) => {
+      console.error('[AutoUpdater] Error on downloadUpdate:', err);
+    });
+  }
 });
 
 ipcMain.on('quit-and-install', () => {
-  autoUpdater.quitAndInstall(false, true);
+  if (autoUpdater) {
+    autoUpdater.quitAndInstall(false, true);
+  }
 });
 
 ipcMain.on('open-external', (_event, url) => {
