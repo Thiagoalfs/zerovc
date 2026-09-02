@@ -198,3 +198,50 @@ export interface Friend {
 }
 
 export type Friendship = Friend;
+
+export interface AuditLog {
+  id: string;
+  guild_id: string;
+  actor_id: string;
+  actor?: User;
+  action_type: string;
+  target_id?: string;
+  target_user?: User;
+  details: Record<string, any>;
+  created_at: string;
+}
+
+export interface ChannelReadState {
+  user_id: string;
+  channel_id: string;
+  last_read_message_id?: string;
+  unread_count: number;
+  updated_at: string;
+}
+
+declare global {
+  interface Window {
+    electronAPI?: {
+      isElectron: boolean;
+      platform: string;
+      getScreenSources: () => Promise<Array<{ id: string; name: string; thumbnail: string; appIcon: string | null }>>;
+      minimize: () => void;
+      maximize: () => void;
+      close: () => void;
+      isMaximized: () => Promise<boolean>;
+      checkForUpdates: () => void;
+      startDownloadUpdate: () => void;
+      quitAndInstall: () => void;
+      openExternal: (url: string) => void;
+      reloadApp: () => void;
+      registerGlobalShortcut?: (shortcut: string, action: string) => Promise<boolean>;
+      unregisterAllShortcuts?: () => Promise<boolean>;
+      onGlobalShortcut?: (callback: (action: string) => void) => () => void;
+      onRepoUpdateAvailable?: (callback: (info: any) => void) => () => void;
+      onUpdateAvailable: (callback: (info: any) => void) => () => void;
+      onUpdateProgress: (callback: (progress: any) => void) => () => void;
+      onUpdateDownloaded: (callback: (info: any) => void) => () => void;
+    };
+  }
+}
+

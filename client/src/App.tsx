@@ -274,9 +274,32 @@ export const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
+    // Electron global shortcut event listener
+    let removeShortcutListener: (() => void) | undefined;
+    if ((window as any).electronAPI?.onGlobalShortcut) {
+      removeShortcutListener = (window as any).electronAPI.onGlobalShortcut((action: string) => {
+        if (action === 'toggle-mute') {
+          useVoiceStore.getState().toggleMute();
+        } else if (action === 'toggle-deafen') {
+          useVoiceStore.getState().toggleDeafen();
+        } else if (action === 'toggle-screenshare') {
+          const vs = useVoiceStore.getState();
+          if (vs.isConnected) {
+            if (vs.isScreensharing) {
+              livekit.setScreenShareEnabled(false);
+              useVoiceStore.setState({ isScreensharing: false });
+            } else {
+              setIsScreenShareOpen(true);
+            }
+          }
+        }
+      });
+    }
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      removeShortcutListener?.();
     };
   }, []);
 
@@ -445,6 +468,16 @@ export const App: React.FC = () => {
         }
       };
 
+      const handleChannelAck = (event: any) => {
+        if (event.data?.channel_id) {
+          useGuildStore.setState((state) => {
+            const unread = new Set(state.unreadChannels);
+            unread.delete(event.data.channel_id);
+            return { unreadChannels: unread };
+          });
+        }
+      };
+
       const handleGuildUpdate = (event: any) => {
         if (event.data?.id) {
           useGuildStore.getState().handleGuildUpdateEvent(event.data);
@@ -490,6 +523,7 @@ export const App: React.FC = () => {
       socket.on('GUILD_BAN_ADD', handleGuildMemberRemove);
       socket.on('GUILD_MEMBER_UPDATE', handleGuildMemberUpdate);
       socket.on('PRESENCE_UPDATE', handlePresenceUpdate);
+      socket.on('CHANNEL_ACK', handleChannelAck);
 
       return () => {
         window.removeEventListener('popstate', onRouteEvent);
@@ -521,6 +555,7 @@ export const App: React.FC = () => {
         socket.off('GUILD_BAN_ADD', handleGuildMemberRemove);
         socket.off('GUILD_MEMBER_UPDATE', handleGuildMemberUpdate);
         socket.off('PRESENCE_UPDATE', handlePresenceUpdate);
+        socket.off('CHANNEL_ACK', handleChannelAck);
       };
     }
   }, [token, user]);

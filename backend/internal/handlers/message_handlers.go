@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/zerovc/zerovc/backend/internal/audit"
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
@@ -256,6 +257,13 @@ func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			"channel_id": channelID,
 		},
 	})
+
+	if authorID != userID {
+		audit.Log(r.Context(), h.db, h.hub, guildID, userID, "MESSAGE_DELETE_MODERATION", &authorID, map[string]any{
+			"channel_id": channelID,
+			"message_id": messageID,
+		})
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "id": messageID})
@@ -772,4 +780,200 @@ func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(messages)
 }
+
+func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	queryTerm := r.URL.Query().Get("q")
+	if len(queryTerm) < 2 {
+		http.Error(w, `{"error":"termo de busca muito curto"}`, http.StatusBadRequest)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "guildID")
+	channelIDStr := chi.URLParam(r, "channelID")
+
+	var guildID uuid.UUID
+	var channelID *uuid.UUID
+
+	if channelIDStr != "" {
+		cID, err := uuid.Parse(channelIDStr)
+		if err != nil {
+			http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+			return
+		}
+		channelID = &cID
+		// Get guild ID from channel
+		err = h.db.Pool.QueryRow(r.Context(), `SELECT guild_id FROM channels WHERE id = $1`, cID).Scan(&guildID)
+		if err != nil {
+			http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+			return
+		}
+	} else if guildIDStr != "" {
+		gID, err := uuid.Parse(guildIDStr)
+		if err != nil {
+			http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+			return
+		}
+		guildID = gID
+	} else {
+		http.Error(w, `{"error":"guildID or channelID required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify user is member of guild
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: não é membro do servidor"}`, http.StatusForbidden)
+		return
+	}
+
+	query := `
+		SELECT 
+			m.id, m.channel_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+			u.id, u.username, u.display_name, u.avatar_url, u.status
+		FROM messages m
+		INNER JOIN channels c ON c.id = m.channel_id
+		INNER JOIN users u ON u.id = m.author_id
+		WHERE c.guild_id = $1
+		  AND (m.search_vector @@ plainto_tsquery('portuguese', $2) OR m.content ILIKE '%' || $2 || '%')
+	`
+	args := []any{guildID, queryTerm}
+
+	if channelID != nil {
+		query += ` AND m.channel_id = $3`
+		args = append(args, *channelID)
+	}
+
+	query += ` ORDER BY m.created_at DESC LIMIT 50`
+
+	rows, err := h.db.Pool.Query(r.Context(), query, args...)
+	if err != nil {
+		http.Error(w, `{"error":"failed to execute search"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	results := make([]models.Message, 0)
+	for rows.Next() {
+		var m models.Message
+		var author models.UserPublic
+		var attachmentsJSON []byte
+		err := rows.Scan(
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt,
+			&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
+		)
+		if err == nil {
+			m.Author = author
+			json.Unmarshal(attachmentsJSON, &m.Attachments)
+			results = append(results, m)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
+type AckChannelRequest struct {
+	MessageID *uuid.UUID `json:"message_id"`
+}
+
+func (h *MessageHandler) AckChannel(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	channelIDStr := chi.URLParam(r, "channelID")
+	channelID, err := uuid.Parse(channelIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req AckChannelRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	var lastMsgID *uuid.UUID = req.MessageID
+	if lastMsgID == nil {
+		// Get newest message id in channel
+		var newest uuid.UUID
+		err := h.db.Pool.QueryRow(r.Context(), `SELECT id FROM messages WHERE channel_id = $1 ORDER BY created_at DESC LIMIT 1`, channelID).Scan(&newest)
+		if err == nil {
+			lastMsgID = &newest
+		}
+	}
+
+	query := `
+		INSERT INTO channel_read_states (user_id, channel_id, last_read_message_id, unread_count, updated_at)
+		VALUES ($1, $2, $3, 0, CURRENT_TIMESTAMP)
+		ON CONFLICT (user_id, channel_id) DO UPDATE
+		SET last_read_message_id = EXCLUDED.last_read_message_id,
+		    unread_count = 0,
+		    updated_at = CURRENT_TIMESTAMP
+	`
+	_, err = h.db.Pool.Exec(r.Context(), query, userID, channelID, lastMsgID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to ack channel"}`, http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.SendToUser(userID, models.WSEvent{
+		Type: models.EventChannelAck,
+		Data: map[string]any{
+			"channel_id":           channelID,
+			"last_read_message_id": lastMsgID,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "channel_id": channelID, "last_read_message_id": lastMsgID})
+}
+
+func (h *MessageHandler) GetGuildReadStates(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "guildID")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	query := `
+		SELECT crs.channel_id, crs.last_read_message_id, crs.unread_count, crs.updated_at
+		FROM channel_read_states crs
+		INNER JOIN channels c ON c.id = crs.channel_id
+		WHERE crs.user_id = $1 AND c.guild_id = $2
+	`
+	rows, err := h.db.Pool.Query(r.Context(), query, userID, guildID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch read states"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	states := make([]models.ChannelReadState, 0)
+	for rows.Next() {
+		var s models.ChannelReadState
+		s.UserID = userID
+		if err := rows.Scan(&s.ChannelID, &s.LastReadMessageID, &s.UnreadCount, &s.UpdatedAt); err == nil {
+			states = append(states, s)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(states)
+}
+
 

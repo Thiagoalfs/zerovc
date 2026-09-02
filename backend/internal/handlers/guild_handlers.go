@@ -480,8 +480,6 @@ func (h *GuildHandler) KickMember(w http.ResponseWriter, r *http.Request) {
 	if !allowed {
 		http.Error(w, `{"error":"`+msg+`"}`, http.StatusForbidden)
 		return
-	}
-
 	// Remove from guild_members, member_roles, voice_sessions
 	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID)
 	h.db.Pool.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", targetUserID)
@@ -495,6 +493,8 @@ func (h *GuildHandler) KickMember(w http.ResponseWriter, r *http.Request) {
 			"user_id":  targetUserID,
 		},
 	})
+
+	h.LogAudit(r.Context(), guildID, actorID, "MEMBER_KICK", &targetUserID, map[string]any{"reason": "Expulso por moderador"})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "user_id": targetUserID})
@@ -549,6 +549,8 @@ func (h *GuildHandler) BanMember(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
+	h.LogAudit(r.Context(), guildID, actorID, "MEMBER_BAN", &req.UserID, map[string]any{"reason": req.Reason})
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "user_id": req.UserID})
 }
@@ -587,12 +589,22 @@ func (h *GuildHandler) UnbanMember(w http.ResponseWriter, r *http.Request) {
 			rows.Close()
 		}
 		if (actorPerms&models.PermAdministrator) == 0 && (actorPerms&models.PermBanMembers) == 0 {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			http.Error(w, `{"error":"sem permissão para desbanir membros"}`, http.StatusForbidden)
 			return
 		}
 	}
 
 	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_bans WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID)
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_BAN_REMOVE",
+		Data: map[string]any{
+			"guild_id": guildID,
+			"user_id":  targetUserID,
+		},
+	})
+
+	h.LogAudit(r.Context(), guildID, actorID, "MEMBER_UNBAN", &targetUserID, nil)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "user_id": targetUserID})
@@ -646,6 +658,8 @@ func (h *GuildHandler) MuteMember(w http.ResponseWriter, r *http.Request) {
 			"muted_until": mutedUntil,
 		},
 	})
+
+	h.LogAudit(r.Context(), guildID, actorID, "MEMBER_MUTE", &targetUserID, map[string]any{"duration_seconds": req.DurationSeconds})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
@@ -865,4 +879,177 @@ func (h *GuildHandler) ToggleMute(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "guild_id": guildID, "is_muted": isMuted})
 }
+
+func (h *GuildHandler) LogAudit(ctx context.Context, guildID, actorID uuid.UUID, actionType string, targetID *uuid.UUID, details map[string]any) {
+	if details == nil {
+		details = make(map[string]any)
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		detailsJSON = []byte("{}")
+	}
+
+	var entry models.AuditLog
+	entry.GuildID = guildID
+	entry.ActorID = actorID
+	entry.ActionType = actionType
+	entry.TargetID = targetID
+	entry.Details = details
+
+	query := `
+		INSERT INTO audit_logs (guild_id, actor_id, action_type, target_id, details)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, created_at
+	`
+	err = h.db.Pool.QueryRow(ctx, query, guildID, actorID, actionType, targetID, detailsJSON).Scan(&entry.ID, &entry.CreatedAt)
+	if err != nil {
+		return
+	}
+
+	// Fetch actor details
+	var actor models.UserPublic
+	_ = h.db.Pool.QueryRow(ctx, `SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1`, actorID).Scan(
+		&actor.ID, &actor.Username, &actor.DisplayName, &actor.AvatarURL, &actor.BannerURL, &actor.Bio, &actor.Status, &actor.CustomStatus,
+	)
+	entry.Actor = &actor
+
+	// If target is a user, fetch target user details
+	if targetID != nil {
+		var tu models.UserPublic
+		err = h.db.Pool.QueryRow(ctx, `SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1`, *targetID).Scan(
+			&tu.ID, &tu.Username, &tu.DisplayName, &tu.AvatarURL, &tu.BannerURL, &tu.Bio, &tu.Status, &tu.CustomStatus,
+		)
+		if err == nil {
+			entry.TargetUser = &tu
+		}
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: models.EventAuditLogCreate,
+		Data: entry,
+	})
+}
+
+func (h *GuildHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Check if user has admin/view audit log permissions
+	var ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != ownerID {
+		var userPerms int64 = 0
+		rows, err := h.db.Pool.Query(r.Context(), `
+			SELECT gr.permissions
+			FROM guild_roles gr
+			INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+			WHERE gmr.guild_id = $1 AND gmr.user_id = $2
+		`, guildID, userID)
+		if err == nil {
+			for rows.Next() {
+				var p int64
+				if rows.Scan(&p) == nil {
+					userPerms |= p
+				}
+			}
+			rows.Close()
+		}
+
+		hasAccess := (userPerms&models.PermAdministrator) != 0 || (userPerms&models.PermManageGuild) != 0
+		if !hasAccess {
+			http.Error(w, `{"error":"você não tem permissão para visualizar o registro de auditoria"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	// Parse query params
+	actionFilter := r.URL.Query().Get("action")
+	beforeStr := r.URL.Query().Get("before")
+
+	query := `
+		SELECT 
+			a.id, a.guild_id, a.actor_id, a.action_type, a.target_id, a.details, a.created_at,
+			u.username, u.display_name, u.avatar_url, u.status,
+			tu.username, tu.display_name, tu.avatar_url, tu.status
+		FROM audit_logs a
+		INNER JOIN users u ON u.id = a.actor_id
+		LEFT JOIN users tu ON tu.id = a.target_id
+		WHERE a.guild_id = $1
+	`
+	args := []any{guildID}
+	argIdx := 2
+
+	if actionFilter != "" && actionFilter != "ALL" {
+		query += ` AND a.action_type = $` + string(rune('0'+argIdx))
+		args = append(args, actionFilter)
+		argIdx++
+	}
+
+	if beforeStr != "" {
+		if beforeTime, err := time.Parse(time.RFC3339, beforeStr); err == nil {
+			query += ` AND a.created_at < $` + string(rune('0'+argIdx))
+			args = append(args, beforeTime)
+			argIdx++
+		}
+	}
+
+	query += ` ORDER BY a.created_at DESC LIMIT 50`
+
+	rows, err := h.db.Pool.Query(r.Context(), query, args...)
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch audit logs"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	logs := make([]models.AuditLog, 0)
+	for rows.Next() {
+		var l models.AuditLog
+		var detailsJSON []byte
+		var actor models.UserPublic
+		var tuName, tuDisp, tuAv, tuSt *string
+
+		err := rows.Scan(
+			&l.ID, &l.GuildID, &l.ActorID, &l.ActionType, &l.TargetID, &detailsJSON, &l.CreatedAt,
+			&actor.Username, &actor.DisplayName, &actor.AvatarURL, &actor.Status,
+			&tuName, &tuDisp, &tuAv, &tuSt,
+		)
+		if err == nil {
+			actor.ID = l.ActorID
+			l.Actor = &actor
+			if detailsJSON != nil {
+				_ = json.Unmarshal(detailsJSON, &l.Details)
+			}
+			if l.TargetID != nil && tuName != nil {
+				l.TargetUser = &models.UserPublic{
+					ID:          *l.TargetID,
+					Username:    *tuName,
+					DisplayName: *tuDisp,
+					AvatarURL:   *tuAv,
+					Status:      *tuSt,
+				}
+			}
+			logs = append(logs, l)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(logs)
+}
+
 

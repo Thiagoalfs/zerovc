@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
 
@@ -225,6 +225,18 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ duration_seconds: durationSeconds }),
       }),
+    getAuditLogs: (guildId: string, params?: { action?: string; before?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.action) q.append('action', params.action);
+      if (params?.before) q.append('before', params.before);
+      const queryStr = q.toString() ? `?${q.toString()}` : '';
+      return request<AuditLog[]>(`/guilds/${guildId}/audit-logs${queryStr}`);
+    },
+    getReadStates: (guildId: string) => request<ChannelReadState[]>(`/guilds/${guildId}/read-states`),
+    searchMessages: (guildId: string, query: string) => {
+      const q = new URLSearchParams({ q: query });
+      return request<Message[]>(`/guilds/${guildId}/messages/search?${q.toString()}`);
+    },
   },
 
   channels: {
@@ -238,6 +250,15 @@ export const api = {
       if (before) query.append('before', before);
       return request<Message[]>(`/channels/${channelId}/messages?${query.toString()}`);
     },
+    search: (channelId: string, query: string) => {
+      const q = new URLSearchParams({ q: query });
+      return request<Message[]>(`/channels/${channelId}/messages/search?${q.toString()}`);
+    },
+    ack: (channelId: string, messageId?: string) =>
+      request<{ success: boolean; channel_id: string; last_read_message_id?: string }>(`/channels/${channelId}/ack`, {
+        method: 'POST',
+        body: JSON.stringify({ message_id: messageId }),
+      }),
     sendMessage: (channelId: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
       request<Message>(`/channels/${channelId}/messages`, {
         method: 'POST',
