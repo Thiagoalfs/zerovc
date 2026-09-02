@@ -73,7 +73,20 @@ function createWindow() {
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    // Discord Model: Load latest production build from server with offline fallback
+    const remoteUrl = 'http://zerovc.safiroko.xyz';
+    mainWindow.loadURL(remoteUrl).catch((err) => {
+      console.warn('[Electron] Remote server unavailable, loading local fallback:', err);
+      mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
+    });
+
+    // Fallback if main URL fails during navigation
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, _errorDescription, validatedURL) => {
+      if (validatedURL.startsWith(remoteUrl)) {
+        console.warn(`[Electron] Failed to load remote (${errorCode}), falling back to local files.`);
+        mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
+      }
+    });
   }
 
   mainWindow.on('closed', () => {

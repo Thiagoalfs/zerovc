@@ -186,9 +186,16 @@ func main() {
 	})
 
 	// Public Health Check
+	serverStartTime := time.Now().UTC().Format(time.RFC3339)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok","time":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
+	})
+
+	// Public Version / Build Info
+	r.Get("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"version":"1.0.0","server_time":"` + serverStartTime + `","status":"online"}`))
 	})
 
 	// Public Invite Preview
