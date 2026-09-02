@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "electron": "concurrently \"vite\" \"npm run build:electron && electron .\"",
-    "package": "npm run build && npm run build:electron && electron-builder"
+    "package": "npm run build && npm run build:electron && electron-builder --win --dir"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -54,9 +54,16 @@
       }
     ],
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
           "arch": [
             "x64"
           ]

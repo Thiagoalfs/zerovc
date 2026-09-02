@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut } from 'electron';
 import path from 'path';
-import { autoUpdater } from 'electron-updater';
+const { autoUpdater } = require('electron-updater');
 
 // Enable Hardware Acceleration & High-Performance Native Screen Capture
 app.commandLine.appendSwitch('enable-gpu-rasterization');
