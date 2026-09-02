@@ -90,13 +90,17 @@ function createWindow() {
   }, 30 * 1000);
 
   // Setup auto-updater when running in packaged mode
-  if (!isDev) {
+  if (!isDev && autoUpdater) {
     setupAutoUpdater();
     setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(() => {});
+      try {
+        autoUpdater?.checkForUpdates()?.catch(() => {});
+      } catch {}
     }, 3000);
     setInterval(() => {
-      autoUpdater.checkForUpdates().catch(() => {});
+      try {
+        autoUpdater?.checkForUpdates()?.catch(() => {});
+      } catch {}
     }, 15 * 60 * 1000);
   }
 }
