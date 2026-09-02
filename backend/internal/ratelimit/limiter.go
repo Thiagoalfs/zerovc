@@ -1,6 +1,7 @@
 ﻿package ratelimit
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -91,7 +92,9 @@ func (l *UserRateLimiter) Middleware(next http.Handler) http.Handler {
 		}
 
 		if !l.Allow(userID) {
-			http.Error(w, {"error":"+l.errorMsg+"}, http.StatusTooManyRequests)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"error":"%s"}`, l.errorMsg)))
 			return
 		}
 
