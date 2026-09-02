@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(64) DEFAULT '',
+    phone_number VARCHAR(32) DEFAULT '',
     avatar_url TEXT DEFAULT '',
     banner_url TEXT DEFAULT '',
     bio VARCHAR(255) DEFAULT '',
@@ -18,20 +19,25 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Ensure newly added columns exist
+-- Ensure newly added columns exist if table was already created
 ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(64) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(32) DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(255) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS saved_status VARCHAR(20) DEFAULT 'online';
 
 -- 2. Guilds (Servers)
 CREATE TABLE IF NOT EXISTS guilds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(64) NOT NULL,
     icon_url TEXT DEFAULT '',
+    banner_url TEXT DEFAULT '',
     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE guilds ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';
 
 -- 3. Guild Roles
 CREATE TABLE IF NOT EXISTS guild_roles (
@@ -50,9 +56,12 @@ CREATE TABLE IF NOT EXISTS guild_members (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     nickname VARCHAR(32) DEFAULT '',
     role VARCHAR(32) DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'moderator', 'member')),
+    is_muted BOOLEAN DEFAULT FALSE,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (guild_id, user_id)
 );
+
+ALTER TABLE guild_members ADD COLUMN IF NOT EXISTS is_muted BOOLEAN DEFAULT FALSE;
 
 -- 5. Guild Member Roles
 CREATE TABLE IF NOT EXISTS guild_member_roles (
@@ -67,7 +76,8 @@ CREATE TABLE IF NOT EXISTS channels (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     guild_id UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
     name VARCHAR(32) NOT NULL,
-    type VARCHAR(16) NOT NULL CHECK (type IN ('text', 'voice')),
+    type VARCHAR(16) NOT NULL CHECK (type IN ('text', 'voice', 'category')),
+    category_id UUID REFERENCES channels(id) ON DELETE SET NULL,
     topic VARCHAR(255) DEFAULT '',
     position INT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -146,13 +156,170 @@ CREATE TABLE IF NOT EXISTS friendships (
     CONSTRAINT different_friend_users CHECK (user_id <> friend_id)
 );
 
+-- 13. Message Reactions
+CREATE TABLE IF NOT EXISTS message_reactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
+    dm_message_id UUID REFERENCES dm_messages(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    emoji VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_msg_reaction ON message_reactions (message_id, user_id, emoji) WHERE message_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_reaction ON message_reactions (dm_message_id, user_id, emoji) WHERE dm_message_id IS NOT NULL;
+
+-- 14. Guild Bans
+CREATE TABLE IF NOT EXISTS guild_bans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    guild_id UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reason TEXT DEFAULT '',
+    banned_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_guild_ban UNIQUE (guild_id, user_id)
+);
+
+-- 15. User Blocks
+CREATE TABLE IF NOT EXISTS user_blocks (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, blocked_user_id)
+);
+
+-- Schema Upgrades & Columns
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS reply_to_id UUID REFERENCES dm_messages(id) ON DELETE SET NULL;
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES channels(id) ON DELETE SET NULL;
+ALTER TABLE channels DROP CONSTRAINT IF EXISTS channels_type_check;
+ALTER TABLE channels ADD CONSTRAINT channels_type_check CHECK (type IN ('text', 'voice', 'category'));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(64) DEFAULT '';
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT FALSE;
+ALTER TABLE guild_members ADD COLUMN IF NOT EXISTS muted_until TIMESTAMP WITH TIME ZONE;
+
+-- 16. Channel Role Access (Private channels)
+CREATE TABLE IF NOT EXISTS channel_role_access (
+    channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES guild_roles(id) ON DELETE CASCADE,
+    PRIMARY KEY (channel_id, role_id)
+);
+
+-- 17. DM Groups
+CREATE TABLE IF NOT EXISTS dm_groups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(64),
+    icon_url TEXT,
+    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS dm_group_members (
+    group_id UUID NOT NULL REFERENCES dm_groups(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS dm_group_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id UUID NOT NULL REFERENCES dm_groups(id) ON DELETE CASCADE,
+    author_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    attachments JSONB DEFAULT '[]'::jsonb,
+    reply_to_id UUID REFERENCES dm_group_messages(id) ON DELETE SET NULL,
+    is_pinned BOOLEAN DEFAULT FALSE,
+    is_edited BOOLEAN DEFAULT FALSE,
+    edited_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 18. User Favorite GIFs
+CREATE TABLE IF NOT EXISTS user_favorite_gifs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    gif_url TEXT NOT NULL,
+    preview_url TEXT DEFAULT '',
+    title VARCHAR(128) DEFAULT '',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, gif_url)
+);
+
+-- 19. User Blocks
+CREATE TABLE IF NOT EXISTS user_blocks (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, blocked_user_id)
+);
+
+-- 20. Audit Logs
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    guild_id UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+    actor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    action_type VARCHAR(64) NOT NULL,
+    target_id UUID,
+    details JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 21. Channel Read States (Read Receipts)
+CREATE TABLE IF NOT EXISTS channel_read_states (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    last_read_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    unread_count INT DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, channel_id)
+);
+
+-- Search vector column for messages
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS search_vector tsvector;
+
+-- Function and trigger to automatically update search_vector
+CREATE OR REPLACE FUNCTION messages_search_vector_update() RETURNS trigger AS $$
+BEGIN
+    NEW.search_vector := to_tsvector('portuguese', COALESCE(NEW.content, ''));
+    RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_messages_search_vector ON messages;
+CREATE TRIGGER trg_messages_search_vector
+BEFORE INSERT OR UPDATE OF content ON messages
+FOR EACH ROW EXECUTE FUNCTION messages_search_vector_update();
+
+-- Backfill existing messages search_vector
+UPDATE messages SET search_vector = to_tsvector('portuguese', COALESCE(content, '')) WHERE search_vector IS NULL;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_channel_created ON messages (channel_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_search_vector ON messages USING gin(search_vector);
 CREATE INDEX IF NOT EXISTS idx_dm_messages_room_created ON dm_messages (dm_room_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_group_messages_created ON dm_group_messages (group_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_group_members_user ON dm_group_members (user_id);
 CREATE INDEX IF NOT EXISTS idx_guild_members_user ON guild_members (user_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships (user_id, status);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_msg ON message_reactions (message_id);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_dm ON message_reactions (dm_message_id);
 CREATE INDEX IF NOT EXISTS idx_guild_roles_guild ON guild_roles (guild_id, position ASC);
 CREATE INDEX IF NOT EXISTS idx_channels_guild ON channels (guild_id, position);
+CREATE INDEX IF NOT EXISTS idx_channels_category_id ON channels (category_id);
+CREATE INDEX IF NOT EXISTS idx_channel_role_access_chan ON channel_role_access (channel_id);
+CREATE INDEX IF NOT EXISTS idx_channel_role_access_role ON channel_role_access (role_id);
 CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions (channel_id);
-CREATE INDEX IF NOT EXISTS idx_guild_invites_guild ON guild_invites (guild_id);
-CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships (user_id);
-CREATE INDEX IF NOT EXISTS idx_friendships_friend ON friendships (friend_id);
+CREATE INDEX IF NOT EXISTS idx_user_favorite_gifs_user ON user_favorite_gifs (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_guild_created ON audit_logs (guild_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_channel_read_states_user ON channel_read_states (user_id);
+
+-- Convert legacy relative asset paths to absolute internal CDN links
+UPDATE users SET avatar_url = 'https://zerovc.safiroko.xyz' || avatar_url WHERE avatar_url LIKE '/assets/%';
+UPDATE users SET banner_url = 'https://zerovc.safiroko.xyz' || banner_url WHERE banner_url LIKE '/assets/%';
+UPDATE guilds SET icon_url = 'https://zerovc.safiroko.xyz' || icon_url WHERE icon_url LIKE '/assets/%';
+UPDATE guilds SET banner_url = 'https://zerovc.safiroko.xyz' || banner_url WHERE banner_url LIKE '/assets/%';
+UPDATE messages SET content = REPLACE(content, '/assets/', 'https://zerovc.safiroko.xyz/assets/') WHERE content LIKE '%/assets/%' AND content NOT LIKE '%https://%assets/%' AND content NOT LIKE '%http://%assets/%';
+UPDATE dm_messages SET content = REPLACE(content, '/assets/', 'https://zerovc.safiroko.xyz/assets/') WHERE content LIKE '%/assets/%' AND content NOT LIKE '%https://%assets/%' AND content NOT LIKE '%http://%assets/%';
+UPDATE dm_group_messages SET content = REPLACE(content, '/assets/', 'https://zerovc.safiroko.xyz/assets/') WHERE content LIKE '%/assets/%' AND content NOT LIKE '%https://%assets/%' AND content NOT LIKE '%http://%assets/%';
+
+
