@@ -26,13 +26,39 @@ export const TitleBar: React.FC = () => {
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'available' | 'downloading' | 'downloaded'>('idle');
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [initialServerTime, setInitialServerTime] = useState<string | null>(null);
   const currentBuildCommit = typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : '';
+
+  // Check server version for Live Sync (Discord model)
+  const checkServerVersion = useCallback(async () => {
+    try {
+      const res = await fetch('/api/version');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.server_time) {
+          setInitialServerTime((prev) => {
+            if (prev && prev !== data.server_time) {
+              setUpdateStatus('available');
+              return prev;
+            }
+            return prev || data.server_time;
+          });
+        }
+      }
+    } catch {
+      // Ignore network errors
+    }
+  }, []);
 
   useEffect(() => {
     if (!isElectron) return;
 
     // Check initial maximized state
     window.electronAPI?.isMaximized?.().then((max) => setIsMaximized(max)).catch(() => {});
+
+    // Live Server Sync check
+    checkServerVersion();
+    const interval = setInterval(checkServerVersion, 30000);
 
     // Listen for electron-updater available release
     const unsubAvailable = window.electronAPI?.onUpdateAvailable?.(() => {
@@ -51,23 +77,24 @@ export const TitleBar: React.FC = () => {
     });
 
     return () => {
+      clearInterval(interval);
       unsubAvailable?.();
       unsubProgress?.();
       unsubDownloaded?.();
     };
-  }, [isElectron]);
+  }, [isElectron, checkServerVersion]);
 
   if (!isElectron) {
     return null;
   }
 
-  // Handle update action
+  // Handle update action (Instant Web Sync or binary install)
   const handleDirectUpdate = () => {
     if (updateStatus === 'downloaded') {
       window.electronAPI?.quitAndInstall?.();
-    } else if (updateStatus === 'available') {
-      setUpdateStatus('downloading');
-      window.electronAPI?.startDownloadUpdate?.();
+    } else {
+      // Discord Model: Instant reload with cache-bust to get the newest production bundle
+      window.location.reload();
     }
   };
 
