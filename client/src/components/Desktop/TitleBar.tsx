@@ -26,57 +26,13 @@ export const TitleBar: React.FC = () => {
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'available' | 'downloading' | 'downloaded'>('idle');
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [isMaximized, setIsMaximized] = useState(false);
-
-  // Local build commit hash from Vite define
   const currentBuildCommit = typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : '';
-
-  // Direct GitHub API checker
-  const checkGitHubDirectly = useCallback(async () => {
-    try {
-      const res = await fetch('https://api.github.com/repos/Thiagoalfs/zerovc/commits/main', {
-        headers: { 'Accept': 'application/vnd.github.v3+json' },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const latestSha = data.sha;
-        const shortSha = latestSha.substring(0, 7);
-
-        // If commit differs from current build commit, flag as update available
-        if (
-          latestSha &&
-          currentBuildCommit &&
-          !latestSha.startsWith(currentBuildCommit) &&
-          !currentBuildCommit.startsWith(shortSha)
-        ) {
-          setUpdateStatus((prev) => (prev === 'idle' ? 'available' : prev));
-        }
-      }
-    } catch {
-      // Ignore network errors on background poll
-    }
-  }, [currentBuildCommit]);
 
   useEffect(() => {
     if (!isElectron) return;
 
     // Check initial maximized state
     window.electronAPI?.isMaximized?.().then((max) => setIsMaximized(max)).catch(() => {});
-
-    // Check directly via fetch
-    checkGitHubDirectly();
-    const interval = setInterval(checkGitHubDirectly, 15000);
-
-    // Listen for electron main process repo commit notifications
-    const unsubRepo = window.electronAPI?.onRepoUpdateAvailable?.((info: RepoUpdateInfo) => {
-      if (
-        info?.latestSha &&
-        currentBuildCommit &&
-        !info.latestSha.startsWith(currentBuildCommit) &&
-        !currentBuildCommit.startsWith(info.shortSha)
-      ) {
-        setUpdateStatus((prev) => (prev === 'idle' ? 'available' : prev));
-      }
-    });
 
     // Listen for electron-updater available release
     const unsubAvailable = window.electronAPI?.onUpdateAvailable?.(() => {
@@ -95,26 +51,23 @@ export const TitleBar: React.FC = () => {
     });
 
     return () => {
-      clearInterval(interval);
-      unsubRepo?.();
       unsubAvailable?.();
       unsubProgress?.();
       unsubDownloaded?.();
     };
-  }, [isElectron, checkGitHubDirectly, currentBuildCommit]);
+  }, [isElectron]);
 
   if (!isElectron) {
     return null;
   }
 
-  // Direct one-click instant update (no confirmation modal)
+  // Handle update action
   const handleDirectUpdate = () => {
     if (updateStatus === 'downloaded') {
       window.electronAPI?.quitAndInstall?.();
-    } else if (window.electronAPI?.reloadApp) {
-      window.electronAPI.reloadApp();
-    } else {
-      window.location.reload();
+    } else if (updateStatus === 'available') {
+      setUpdateStatus('downloading');
+      window.electronAPI?.startDownloadUpdate?.();
     }
   };
 
