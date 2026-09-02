@@ -18,11 +18,14 @@ import {
   Smile,
   FileText,
   Edit3,
+  ArrowLeft,
+  Keyboard,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
 import { api, formatAssetUrl } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
+import { KeybindSettingsView } from './KeybindSettingsView';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -32,7 +35,7 @@ interface ProfileModalProps {
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   const { user, updateProfile, logout, setUser } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState<'account' | 'audio'>('account');
+  const [activeTab, setActiveTab] = useState<'account' | 'profile' | 'audio' | 'keybinds'>('account');
 
   // Crop Modal State
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -502,6 +505,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <Volume2 className="w-4 h-4" />
               <span>Voz & Vídeo</span>
             </button>
+
+            {/* Tab 4: Atalhos do Teclado */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('keybinds')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'keybinds'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
+              }`}
+            >
+              <Keyboard className="w-4 h-4" />
+              <span>Atalhos do Teclado</span>
+            </button>
           </div>
 
           {/* Bottom Logout */}
@@ -521,15 +538,32 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         <div className="flex-1 flex flex-col h-full bg-background-dark overflow-hidden">
           {/* Top Bar with Title and Close Button */}
           <div className="p-5 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
-            <div>
-              <h3 className="text-lg font-bold text-white">
-                {activeTab === 'account' && 'Minha Conta'}
-                {activeTab === 'audio' && 'Voz & Vídeo'}
-              </h3>
-              <p className="text-xs text-gray-400">
-                {activeTab === 'account' && 'Gerencie seu perfil, avatar, banner, dados de acesso e segurança.'}
-                {activeTab === 'audio' && 'Ajuste seus dispositivos de entrada, saída e sensibilidade do microfone.'}
-              </p>
+            <div className="flex items-center gap-3">
+              {activeTab === 'profile' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('account')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer border border-white/5"
+                  title="Voltar para Minha Conta"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Voltar</span>
+                </button>
+              )}
+              <div>
+                <h3 className="text-lg font-bold text-white">
+                  {activeTab === 'account' && 'Minha Conta'}
+                  {activeTab === 'profile' && 'Perfil de Usuário'}
+                  {activeTab === 'audio' && 'Voz & Vídeo'}
+                  {activeTab === 'keybinds' && 'Atalhos do Teclado'}
+                </h3>
+                <p className="text-xs text-gray-400">
+                  {activeTab === 'account' && 'Gerencie seus dados de acesso, nome de usuário, e-mail e segurança.'}
+                  {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
+                  {activeTab === 'audio' && 'Ajuste seus dispositivos de entrada, saída e sensibilidade do microfone.'}
+                  {activeTab === 'keybinds' && 'Configure atalhos rápidos e Push-to-Talk globais para controle de voz.'}
+                </p>
+              </div>
             </div>
 
             <button
@@ -1014,6 +1048,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* TAB 4: KEYBINDS */}
+            {activeTab === 'keybinds' && (
+              <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar pr-1">
+                <KeybindSettingsView />
               </div>
             )}
           </div>

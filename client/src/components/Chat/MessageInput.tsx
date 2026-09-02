@@ -53,6 +53,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       username: string;
       avatar_url?: string;
       isSpecial?: boolean;
+      isRole?: boolean;
       roleColor?: string;
     }> = [];
 
@@ -64,6 +65,23 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       list.push({ id: 'here', name: 'here', username: 'here', isSpecial: true });
     }
 
+    // Role mentions
+    if (activeGuild?.roles) {
+      for (const r of activeGuild.roles) {
+        const rName = r.name.toLowerCase();
+        if (rName.includes(q)) {
+          list.push({
+            id: r.id,
+            name: r.name,
+            username: r.name,
+            isRole: true,
+            roleColor: r.color,
+          });
+        }
+      }
+    }
+
+    // Member mentions
     if (activeGuild?.members) {
       for (const m of activeGuild.members) {
         const uName = m.username.toLowerCase();
@@ -82,7 +100,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     return list.slice(0, 8);
-  }, [mentionQuery, activeGuild?.members]);
+  }, [mentionQuery, activeGuild?.members, activeGuild?.roles]);
 
   useEffect(() => {
     if (droppedFile) {

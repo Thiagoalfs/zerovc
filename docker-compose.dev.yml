@@ -1,0 +1,24 @@
+﻿version: '3.8'
+
+services:
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: zerovc-postgres-dev
+    environment:
+      POSTGRES_USER: zerovc
+      POSTGRES_PASSWORD: zerovc_dev_password
+      POSTGRES_DB: zerovc
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zerovc -d zerovc"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata_dev:
+    driver: local

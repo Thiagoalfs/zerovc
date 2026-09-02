@@ -32,6 +32,9 @@ export interface ElectronAPI {
   quitAndInstall: () => void;
   openExternal: (url: string) => void;
   reloadApp: () => void;
+  registerGlobalShortcut: (shortcut: string, action: string) => Promise<boolean>;
+  unregisterAllShortcuts: () => Promise<boolean>;
+  onGlobalShortcut: (callback: (action: string) => void) => () => void;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
@@ -51,6 +54,13 @@ const electronAPI: ElectronAPI = {
   quitAndInstall: () => ipcRenderer.send('quit-and-install'),
   openExternal: (url: string) => ipcRenderer.send('open-external', url),
   reloadApp: () => ipcRenderer.send('reload-app'),
+  registerGlobalShortcut: (shortcut: string, action: string) => ipcRenderer.invoke('register-global-shortcut', shortcut, action),
+  unregisterAllShortcuts: () => ipcRenderer.invoke('unregister-all-shortcuts'),
+  onGlobalShortcut: (callback) => {
+    const handler = (_: any, action: string) => callback(action);
+    ipcRenderer.on('global-shortcut-triggered', handler);
+    return () => ipcRenderer.removeListener('global-shortcut-triggered', handler);
+  },
   onUpdateAvailable: (callback) => {
     const handler = (_: any, info: UpdateInfo) => callback(info);
     ipcRenderer.on('update-available', handler);

@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/zerovc/zerovc/backend/internal/audit"
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
@@ -121,6 +122,11 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Data: channel,
 	})
 
+	audit.Log(r.Context(), h.db, h.hub, guildID, userID, "CHANNEL_CREATE", &channel.ID, map[string]any{
+		"name": channel.Name,
+		"type": channel.Type,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(channel)
@@ -218,6 +224,11 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Data: channel,
 	})
 
+	audit.Log(r.Context(), h.db, h.hub, guildID, userID, "CHANNEL_UPDATE", &channel.ID, map[string]any{
+		"name":  channel.Name,
+		"topic": channel.Topic,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(channel)
 }
@@ -258,6 +269,10 @@ func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: models.EventChannelDelete,
 		Data: map[string]any{"id": channelID, "guild_id": guildID},
+	})
+
+	audit.Log(r.Context(), h.db, h.hub, guildID, userID, "CHANNEL_DELETE", &channelID, map[string]any{
+		"type": channelType,
 	})
 
 	w.Header().Set("Content-Type", "application/json")

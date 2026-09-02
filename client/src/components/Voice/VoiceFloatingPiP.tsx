@@ -83,7 +83,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   );
 
   const screenPub = targetParticipant?.getTrackPublication(Track.Source.ScreenShare);
-  const hasScreenVideoTrack = !!screenPub?.track && !screenPub.isMuted;
+  const cameraPub = targetParticipant?.getTrackPublication(Track.Source.Camera);
+  const activeVideoPub = (screenPub?.track && !screenPub.isMuted) ? screenPub : cameraPub;
+  const hasScreenVideoTrack = !!activeVideoPub?.track && !activeVideoPub.isMuted;
   const isLocal = targetParticipant?.isLocal;
 
   const currentUVol = targetParticipant ? (userVolumes[targetParticipant.identity] ?? 1) : 1;
@@ -110,13 +112,13 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   // Attach and subscribe video stream & stream audio
   useEffect(() => {
     const el = videoRef.current;
-    if (hasScreenVideoTrack && screenPub?.track && el) {
-      screenPub.track.attach(el);
+    if (hasScreenVideoTrack && activeVideoPub?.track && el) {
+      activeVideoPub.track.attach(el);
       el.play().catch(() => {});
     }
 
-    if (screenPub instanceof RemoteTrackPublication) {
-      screenPub.setSubscribed(true);
+    if (activeVideoPub instanceof RemoteTrackPublication) {
+      activeVideoPub.setSubscribed(true);
     }
 
     if (!isLocal && targetParticipant) {
@@ -124,14 +126,14 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     }
 
     return () => {
-      if (el && screenPub?.track) {
-        screenPub.track.detach(el);
+      if (el && activeVideoPub?.track) {
+        activeVideoPub.track.detach(el);
       }
       if (!isLocal && targetParticipant) {
         livekit.setStreamAudioSubscribed(targetParticipant.identity, false);
       }
     };
-  }, [screenPub?.track, hasScreenVideoTrack, isLocal, targetParticipant]);
+  }, [activeVideoPub?.track, hasScreenVideoTrack, isLocal, targetParticipant]);
 
   // Drag Handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => {

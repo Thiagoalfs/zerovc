@@ -92,6 +92,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		    banner_url = COALESCE($5, banner_url),
 		    bio = COALESCE($6, bio),
 		    status = COALESCE($7, status),
+		    saved_status = COALESCE($7, saved_status),
 		    custom_status = COALESCE($8, custom_status),
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = $9
