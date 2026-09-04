@@ -2,7 +2,14 @@ import { create } from 'zustand';
 import { User } from '../types';
 import { api } from '../lib/api';
 import { socket } from '../lib/socket';
+import { livekit } from '../lib/livekit';
 import { isElectron } from '../lib/platform';
+import { useVoiceStore } from './voiceStore';
+import { useCallStore } from './callStore';
+import { useGuildStore } from './guildStore';
+import { useDMStore } from './dmStore';
+import { useDMGroupStore } from './dmGroupStore';
+import { useFriendStore } from './friendStore';
 
 interface AuthState {
   user: User | null;
@@ -25,6 +32,96 @@ interface AuthState {
   }) => Promise<User>;
   setUser: (user: Partial<User> & { id?: string }) => void;
 }
+
+const cleanupAllStoresAndConnections = async () => {
+  try {
+    await useVoiceStore.getState().leaveVoice();
+  } catch {}
+  try {
+    await useCallStore.getState().endCall();
+  } catch {}
+  try {
+    await livekit.disconnect();
+  } catch {}
+  try {
+    socket.disconnect();
+  } catch {}
+
+  // Reset stores to clean initial state
+  useGuildStore.setState({
+    guilds: [],
+    activeGuild: null,
+    activeChannel: null,
+    messages: [],
+    unreadChannels: new Set(),
+    guildMentions: {},
+    channelMentions: {},
+    messagesByChannel: {},
+    pinnedMessagesByChannel: {},
+    isLoadingPinned: {},
+    hasMoreByChannel: {},
+    isLoadingGuilds: false,
+    isLoadingMessages: false,
+    isLoadingMoreMessages: false,
+    typingUsers: new Map(),
+  });
+
+  useDMStore.setState({
+    rooms: [],
+    activeRoom: null,
+    messages: [],
+    unreadRooms: new Set(),
+    roomUnreadCounts: {},
+    messagesByRoom: {},
+    pinnedMessagesByRoom: {},
+    isLoadingPinned: {},
+    hasMoreByRoom: {},
+    isLoadingRooms: false,
+    isLoadingMessages: false,
+    isLoadingMoreMessages: false,
+  });
+
+  useDMGroupStore.setState({
+    groups: [],
+    activeGroup: null,
+    messages: [],
+    messagesByGroup: {},
+    hasMoreByGroup: {},
+    isLoadingGroups: false,
+    isLoadingMessages: false,
+    isLoadingMoreMessages: false,
+  });
+
+  useFriendStore.setState({
+    friends: [],
+    pending: [],
+    incoming: [],
+    isLoading: false,
+    error: null,
+  });
+
+  useVoiceStore.setState({
+    currentChannelId: null,
+    isConnected: false,
+    isConnecting: false,
+    isScreensharing: false,
+    isCameraOn: false,
+    participants: [],
+    speakingUserIds: [],
+    watchedParticipantId: null,
+  });
+
+  useCallStore.setState({
+    callState: 'idle',
+    roomId: null,
+    targetUser: null,
+    incomingCaller: null,
+    isCameraOn: false,
+    isScreensharing: false,
+    participants: [],
+    speakingUserIds: [],
+  });
+};
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -78,7 +175,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('token');
       localStorage.removeItem('zerovc_token');
     }
-    socket.disconnect();
+    await cleanupAllStoresAndConnections();
     set({ user: null, token: null, isLoading: false });
   },
 
@@ -95,6 +192,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         localStorage.removeItem('token');
         localStorage.removeItem('zerovc_token');
       }
+      await cleanupAllStoresAndConnections();
       set({ user: null, token: null, isLoading: false });
     }
   },
