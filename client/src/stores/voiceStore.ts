@@ -53,6 +53,22 @@ const loadSavedStreamVolumes = (): Record<string, number> => {
   }
 };
 
+const loadSavedMuteState = (): boolean => {
+  try {
+    return localStorage.getItem('zerovc_user_muted') === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const loadSavedDeafenState = (): boolean => {
+  try {
+    return localStorage.getItem('zerovc_user_deafened') === 'true';
+  } catch {
+    return false;
+  }
+};
+
 const saveUserVolumesToStorage = (volumes: Record<string, number>) => {
   try {
     localStorage.setItem('zerovc_user_volumes', JSON.stringify(volumes));
@@ -67,13 +83,15 @@ const saveStreamVolumesToStorage = (volumes: Record<string, number>) => {
 
 const initialUserVolumes = loadSavedUserVolumes();
 const initialStreamVolumes = loadSavedStreamVolumes();
+const initialMuted = loadSavedMuteState();
+const initialDeafened = loadSavedDeafenState();
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
   currentChannelId: null,
   isConnected: false,
   isConnecting: false,
-  isMuted: false,
-  isDeafened: false,
+  isMuted: initialMuted || initialDeafened,
+  isDeafened: initialDeafened,
   isScreensharing: false,
   isCameraOn: false,
   participants: [],
@@ -99,7 +117,12 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     try {
       const res = await api.channels.joinVoice(channelId);
 
+      const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
+      const shouldDeafen = get().isDeafened;
+      const shouldMute = shouldDeafen || isPTT || get().isMuted;
+
       await livekit.connect(res.livekit_url, res.token, {
+        autoEnableMicrophone: !shouldMute,
         onParticipantsChanged: (participants) => {
           set({ participants });
           // Apply saved user & stream volumes to participants
@@ -166,11 +189,29 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       });
 
       playJoinVoiceSound();
-      const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
-      if (isPTT) {
+
+      if (shouldDeafen) {
+        await livekit.setDeafened(true);
+        await livekit.setMuted(true);
+      } else if (shouldMute) {
         await livekit.setMuted(true);
       }
-      set({ isConnected: true, isConnecting: false, isMuted: isPTT, isCameraOn: false });
+
+      set({
+        isConnected: true,
+        isConnecting: false,
+        isMuted: shouldMute,
+        isDeafened: shouldDeafen,
+        isCameraOn: false,
+      });
+
+      // Sync initial voice state with backend
+      if (shouldMute || shouldDeafen) {
+        api.channels.updateVoiceState(channelId, {
+          is_muted: shouldMute,
+          is_deafened: shouldDeafen,
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('[Voice] Failed to join voice:', err);
       set({ isConnected: false, isConnecting: false, currentChannelId: null });
@@ -202,15 +243,28 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   },
 
   toggleMute: async () => {
-    const { isMuted, currentChannelId } = get();
+    const { isMuted, isDeafened, currentChannelId } = get();
     const nextMuted = !isMuted;
+    const nextDeafened = nextMuted ? isDeafened : false;
+
+    try {
+      localStorage.setItem('zerovc_user_muted', String(nextMuted));
+      localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
+    } catch {}
 
     await livekit.setMuted(nextMuted);
-    set({ isMuted: nextMuted });
+    if (!nextMuted && isDeafened) {
+      await livekit.setDeafened(false);
+    }
+
+    set({ isMuted: nextMuted, isDeafened: nextDeafened });
 
     if (currentChannelId) {
       try {
-        await api.channels.updateVoiceState(currentChannelId, { is_muted: nextMuted });
+        await api.channels.updateVoiceState(currentChannelId, {
+          is_muted: nextMuted,
+          is_deafened: nextDeafened,
+        });
       } catch (err) {
         console.warn('[Voice] Failed to sync mute state:', err);
       }
@@ -220,15 +274,23 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   toggleDeafen: async () => {
     const { isDeafened, currentChannelId } = get();
     const nextDeafened = !isDeafened;
+    const nextMuted = nextDeafened ? true : get().isMuted;
+
+    try {
+      localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
+      if (nextDeafened) {
+        localStorage.setItem('zerovc_user_muted', 'true');
+      }
+    } catch {}
 
     await livekit.setDeafened(nextDeafened);
-    set({ isDeafened: nextDeafened, isMuted: nextDeafened ? true : get().isMuted });
+    set({ isDeafened: nextDeafened, isMuted: nextMuted });
 
     if (currentChannelId) {
       try {
         await api.channels.updateVoiceState(currentChannelId, {
           is_deafened: nextDeafened,
-          is_muted: nextDeafened ? true : get().isMuted,
+          is_muted: nextMuted,
         });
       } catch (err) {
         console.warn('[Voice] Failed to sync deafen state:', err);
