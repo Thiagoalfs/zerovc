@@ -128,8 +128,8 @@ export const App: React.FC = () => {
     const cleanPath = pathname.replace(/^\/+|\/+$/g, '');
     const segments = cleanPath ? cleanPath.split('/') : [];
 
-    // 0. Handle /invite/:code
-    if (segments.length >= 1 && segments[0] === 'invite') {
+    // 0. Handle /invite/:code or /invites/:code
+    if (segments.length >= 1 && (segments[0] === 'invite' || segments[0] === 'invites')) {
       const code = segments[1];
       if (code) {
         sessionStorage.setItem('pending_invite_code', code);
@@ -138,6 +138,7 @@ export const App: React.FC = () => {
           try {
             const res = await api.invites.join(code);
             sessionStorage.removeItem('pending_invite_code');
+            sessionStorage.removeItem('pending_redirect_path');
             await useGuildStore.getState().fetchGuilds();
             const joinedGuild = await api.guilds.getDetails(res.guild_id);
             useGuildStore.setState({ activeGuild: joinedGuild });
@@ -164,6 +165,7 @@ export const App: React.FC = () => {
                   navigateTo(`/${joinedGuild.id}/${defaultChannel.id}`, true);
                 }
                 sessionStorage.removeItem('pending_invite_code');
+                sessionStorage.removeItem('pending_redirect_path');
                 return;
               }
             } catch {}
@@ -201,11 +203,19 @@ export const App: React.FC = () => {
       return;
     }
 
-    // 2. Server & Channel: /:guildId/:channelId
-    if (segments.length >= 1) {
-      const guildId = segments[0];
-      const channelId = segments[1];
+    // 2. Server & Channel: /channels/:guildId/:channelId OR /guilds/:guildId/:channelId OR /:guildId/:channelId
+    let guildId = '';
+    let channelId = '';
 
+    if (segments[0] === 'channels' || segments[0] === 'guilds') {
+      guildId = segments[1] || '';
+      channelId = segments[2] || '';
+    } else {
+      guildId = segments[0] || '';
+      channelId = segments[1] || '';
+    }
+
+    if (guildId) {
       setIsHomeActive(false);
       try {
         const fullGuild = await api.guilds.getDetails(guildId);
@@ -230,6 +240,16 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     checkAuth();
+
+    // Capture initial route/invite before login
+    const initialRoute = getCurrentRoute();
+    const cleanPath = initialRoute.replace(/^\/+|\/+$/g, '');
+    const segments = cleanPath ? cleanPath.split('/') : [];
+    if (segments.length >= 1 && (segments[0] === 'invite' || segments[0] === 'invites') && segments[1]) {
+      sessionStorage.setItem('pending_invite_code', segments[1]);
+    } else if (cleanPath && cleanPath !== '@me' && !cleanPath.startsWith('invite')) {
+      sessionStorage.setItem('pending_redirect_path', initialRoute);
+    }
   }, []);
 
   // Push-to-Talk (PTT) Global Key Listener
@@ -306,15 +326,17 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (token && user) {
       fetchGuilds();
-      handleRoute(getCurrentRoute());
 
-      // Auto join pending invite upon login/register
+      // Check pending invite or pending redirect
       const pendingInvite = sessionStorage.getItem('pending_invite_code');
+      const pendingRedirect = sessionStorage.getItem('pending_redirect_path');
+
       if (pendingInvite) {
         api.invites
           .join(pendingInvite)
           .then(async (res) => {
             sessionStorage.removeItem('pending_invite_code');
+            sessionStorage.removeItem('pending_redirect_path');
             await fetchGuilds();
             const joinedGuild = await api.guilds.getDetails(res.guild_id);
             useGuildStore.setState({ activeGuild: joinedGuild });
@@ -340,9 +362,15 @@ export const App: React.FC = () => {
                   navigateTo(`/${joinedGuild.id}/${defaultChannel.id}`, true);
                 }
                 sessionStorage.removeItem('pending_invite_code');
+                sessionStorage.removeItem('pending_redirect_path');
               }
             } catch {}
           });
+      } else if (pendingRedirect) {
+        sessionStorage.removeItem('pending_redirect_path');
+        handleRoute(pendingRedirect);
+      } else {
+        handleRoute(getCurrentRoute());
       }
 
       const onRouteEvent = () => {

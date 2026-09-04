@@ -12,7 +12,7 @@ try {
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: '/',
   define: {
     __BUILD_COMMIT__: JSON.stringify(commitHash),
     __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
