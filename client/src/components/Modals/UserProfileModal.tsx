@@ -5,6 +5,7 @@ import { MessageSquare, Shield, Calendar, Edit3 } from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { formatAssetUrl } from '../../lib/api';
+import { UserVolumeSlider } from '../Voice/VolumeSliders';
 
 export interface UserProfilePosition {
   x: number;
@@ -211,6 +212,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <div className="pt-0.5 flex items-center gap-1.5 text-[10px] text-gray-400">
                 <Calendar className="w-3 h-3 text-gray-500" />
                 <span>Membro desde {joinDateStr}</span>
+              </div>
+            )}
+
+            {/* User Volume Slider */}
+            {!isMe && (
+              <div className="pt-2 border-t border-white/5">
+                <UserVolumeSlider userId={user.id} className="p-0" />
               </div>
             )}
           </div>

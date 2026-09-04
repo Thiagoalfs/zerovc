@@ -26,6 +26,7 @@ import { useDMStore } from '../../stores/dmStore';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { api, getApiBaseUrl, formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { UserVolumeSlider } from '../Voice/VolumeSliders';
 
 interface MessageItemProps {
   message: Message;
@@ -207,6 +208,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             await openDMWithUser(author.id);
           }
         },
+      });
+
+      items.push({ label: '', separator: true });
+      items.push({
+        label: 'Volume de Usuário',
+        customRender: <UserVolumeSlider userId={author.id} />,
       });
     }
 

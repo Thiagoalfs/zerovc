@@ -30,6 +30,7 @@ import { User, Permissions } from '../../types';
 import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { UserVolumeSlider, StreamVolumeSlider } from './VolumeSliders';
 
 interface ParticipantCardProps {
   participant: Participant;
@@ -277,63 +278,15 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     // User & Stream Volume Sliders (0 - 200%, default 100%, saved locally)
     if (!isMe) {
       items.push({ label: '', separator: true });
-      const userVol = userVolumes[targetMember.id] ?? 1;
       items.push({
         label: 'Volume de Usuário',
-        customRender: (
-          <div className="px-2.5 py-1.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-              <div className="flex items-center gap-1.5">
-                {userVol === 0 ? (
-                  <VolumeX className="w-3.5 h-3.5 text-dnd" />
-                ) : (
-                  <Volume2 className="w-3.5 h-3.5 text-gray-400" />
-                )}
-                <span>Volume de Usuário</span>
-              </div>
-              <span className="text-brand-400 font-mono text-[11px] font-bold">
-                {Math.round(userVol * 100)}%
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={0.01}
-              value={userVol}
-              onChange={(e) => setUserVolume(targetMember.id, parseFloat(e.target.value))}
-              className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-            />
-          </div>
-        ),
+        customRender: <UserVolumeSlider userId={targetMember.id} />,
       });
 
       if (isScreenSharing) {
-        const streamVol = streamVolumes[targetMember.id] ?? 1;
         items.push({
           label: 'Volume da Transmissão',
-          customRender: (
-            <div className="px-2.5 py-1.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-                <div className="flex items-center gap-1.5">
-                  <Monitor className="w-3.5 h-3.5 text-brand-400" />
-                  <span>Volume da Transmissão</span>
-                </div>
-                <span className="text-brand-400 font-mono text-[11px] font-bold">
-                  {Math.round(streamVol * 100)}%
-                </span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={2}
-                step={0.01}
-                value={streamVol}
-                onChange={(e) => setStreamVolume(targetMember.id, parseFloat(e.target.value))}
-                className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-              />
-            </div>
-          ),
+          customRender: <StreamVolumeSlider userId={targetMember.id} />,
         });
       }
     }
@@ -624,46 +577,14 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               {showVolumeSlider && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowVolumeSlider(false)} />
-                  <div className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-48 flex flex-col gap-3 animate-in fade-in zoom-in-95">
+                  <div className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-2.5 rounded-2xl shadow-2xl w-52 flex flex-col gap-2 animate-in fade-in zoom-in-95">
                     {/* User Mic Volume */}
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-                        <div className="flex items-center gap-1.5">
-                          <Volume2 className="w-3 h-3 text-gray-400" />
-                          <span>Voz</span>
-                        </div>
-                        <span className="text-brand-400 font-mono text-[11px]">{Math.round(currentUVol * 100)}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={2}
-                        step={0.05}
-                        value={currentUVol}
-                        onChange={(e) => setUserVolume(participant.identity, parseFloat(e.target.value))}
-                        className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-                      />
-                    </div>
+                    <UserVolumeSlider userId={participant.identity} label="Voz" className="p-0" />
 
                     {/* Stream Audio Volume if Screen Sharing */}
                     {isScreenSharing && (
-                      <div className="flex flex-col gap-1.5 pt-2 border-t border-white/10">
-                        <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-                          <div className="flex items-center gap-1.5">
-                            <Monitor className="w-3 h-3 text-brand-400" />
-                            <span>Transmissão</span>
-                          </div>
-                          <span className="text-brand-400 font-mono text-[11px]">{Math.round(currentSVol * 100)}%</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={2}
-                          step={0.05}
-                          value={currentSVol}
-                          onChange={(e) => setStreamVolume(participant.identity, parseFloat(e.target.value))}
-                          className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-                        />
+                      <div className="pt-2 border-t border-white/10">
+                        <StreamVolumeSlider userId={participant.identity} label="Transmissão" className="p-0" />
                       </div>
                     )}
                   </div>
