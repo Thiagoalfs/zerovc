@@ -34,13 +34,32 @@ interface CallStoreState {
   stopScreenShare: () => Promise<void>;
 }
 
+const loadSavedMuteState = (): boolean => {
+  try {
+    return localStorage.getItem('zerovc_user_muted') === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const loadSavedDeafenState = (): boolean => {
+  try {
+    return localStorage.getItem('zerovc_user_deafened') === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const initialMuted = loadSavedMuteState();
+const initialDeafened = loadSavedDeafenState();
+
 export const useCallStore = create<CallStoreState>((set, get) => ({
   callState: 'idle',
   roomId: null,
   targetUser: null,
   incomingCaller: null,
-  isMuted: false,
-  isDeafened: false,
+  isMuted: initialMuted || initialDeafened,
+  isDeafened: initialDeafened,
   isCameraOn: false,
   isScreensharing: false,
   participants: [],
@@ -52,8 +71,6 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       roomId,
       targetUser: recipient,
       incomingCaller: null,
-      isMuted: false,
-      isDeafened: false,
       isCameraOn: false,
       isScreensharing: false,
     });
@@ -95,7 +112,12 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   handleCallAccepted: async (token: string, livekitUrl: string, _roomName: string) => {
     try {
+      const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
+      const shouldDeafen = get().isDeafened;
+      const shouldMute = shouldDeafen || isPTT || get().isMuted;
+
       await livekit.connect(livekitUrl, token, {
+        autoEnableMicrophone: !shouldMute,
         onParticipantsChanged: (participants) => {
           set({ participants });
         },
@@ -125,10 +147,18 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       });
 
       playJoinVoiceSound();
+
+      if (shouldDeafen) {
+        await livekit.setDeafened(true);
+        await livekit.setMuted(true);
+      } else if (shouldMute) {
+        await livekit.setMuted(true);
+      }
+
       set({
         callState: 'connected',
-        isMuted: false,
-        isDeafened: false,
+        isMuted: shouldMute,
+        isDeafened: shouldDeafen,
         isCameraOn: false,
         isScreensharing: false,
       });
@@ -190,15 +220,37 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   },
 
   toggleMute: async () => {
-    const nextMuted = !get().isMuted;
+    const { isMuted, isDeafened } = get();
+    const nextMuted = !isMuted;
+    const nextDeafened = nextMuted ? isDeafened : false;
+
+    try {
+      localStorage.setItem('zerovc_user_muted', String(nextMuted));
+      localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
+    } catch {}
+
     await livekit.setMuted(nextMuted);
-    set({ isMuted: nextMuted });
+    if (!nextMuted && isDeafened) {
+      await livekit.setDeafened(false);
+    }
+
+    set({ isMuted: nextMuted, isDeafened: nextDeafened });
   },
 
   toggleDeafen: async () => {
-    const nextDeafened = !get().isDeafened;
+    const { isDeafened } = get();
+    const nextDeafened = !isDeafened;
+    const nextMuted = nextDeafened ? true : get().isMuted;
+
+    try {
+      localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
+      if (nextDeafened) {
+        localStorage.setItem('zerovc_user_muted', 'true');
+      }
+    } catch {}
+
     await livekit.setDeafened(nextDeafened);
-    set({ isDeafened: nextDeafened, isMuted: nextDeafened ? true : get().isMuted });
+    set({ isDeafened: nextDeafened, isMuted: nextMuted });
   },
 
   toggleCamera: async () => {

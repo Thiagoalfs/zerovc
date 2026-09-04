@@ -28,6 +28,7 @@ class LiveKitManager {
     url: string,
     token: string,
     callbacks: {
+      autoEnableMicrophone?: boolean;
       onParticipantsChanged?: (participants: Participant[]) => void;
       onSpeakingChanged?: (speakingUserIds: string[]) => void;
       onTrackUpdated?: () => void;
@@ -178,11 +179,13 @@ class LiveKitManager {
 
     await room.connect(url, token);
 
-    // Auto-enable and publish microphone track on connect
-    try {
-      await room.localParticipant.setMicrophoneEnabled(true);
-    } catch (err) {
-      console.warn('[LiveKit] Could not auto-enable microphone:', err);
+    // Auto-enable and publish microphone track on connect if not disabled
+    if (callbacks.autoEnableMicrophone !== false) {
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (err) {
+        console.warn('[LiveKit] Could not auto-enable microphone:', err);
+      }
     }
 
     updateParticipants();
