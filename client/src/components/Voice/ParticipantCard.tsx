@@ -548,6 +548,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               <Monitor className="w-3 h-3" /> AO VIVO
             </span>
           )}
+          {isScreenSharing && !isWatching && isMuted && (
+            <span className="bg-dnd/90 backdrop-blur-md text-white text-[10px] font-bold p-1 rounded-md flex items-center shadow-sm" title="Microfone Mutado">
+              <MicOff className="w-3 h-3" />
+            </span>
+          )}
         </div>
 
         {/* Top Right Unified Action Controls Bar (Hover) */}
@@ -668,20 +673,22 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           )}
         </div>
 
-        {/* Bottom Overlay Bar: Name & Mic Status */}
-        <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl flex items-center justify-between text-xs text-white z-10">
-          <span className="font-semibold truncate max-w-[140px] md:max-w-[200px]">
-            {displayName} {isLocal && '(Você)'}
-          </span>
+        {/* Bottom Overlay Bar: Name & Mic Status (Hidden when "Assistir Transmissão" is displayed to prevent overlapping) */}
+        {!(isScreenSharing && !isWatching) && (
+          <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl flex items-center justify-between text-xs text-white z-10">
+            <span className="font-semibold truncate max-w-[140px] md:max-w-[200px]">
+              {displayName} {isLocal && '(Você)'}
+            </span>
 
-          <div className="flex items-center gap-1.5">
-            {isMuted && (
-              <div className="bg-dnd/90 p-1 rounded-full text-white" title="Microfone Mutado">
-                <MicOff className="w-3 h-3" />
-              </div>
-            )}
+            <div className="flex items-center gap-1.5">
+              {isMuted && (
+                <div className="bg-dnd/90 p-1 rounded-full text-white" title="Microfone Mutado">
+                  <MicOff className="w-3 h-3" />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />
