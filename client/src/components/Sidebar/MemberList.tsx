@@ -18,6 +18,7 @@ import { useDMStore } from '../../stores/dmStore';
 import { User, Permissions } from '../../types';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { formatAssetUrl } from '../../lib/api';
+import { UserVolumeSlider } from '../Voice/VolumeSliders';
 
 interface MemberListProps {
   isOpen: boolean;
@@ -111,6 +112,11 @@ export const MemberList: React.FC<MemberListProps> = ({
                   await openDMWithUser(targetMember.id);
                 }
               },
+            },
+            { label: '', separator: true },
+            {
+              label: 'Volume de Usuário',
+              customRender: <UserVolumeSlider userId={targetMember.id} />,
             },
           ]
         : []),
