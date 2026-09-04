@@ -2,6 +2,7 @@ import {
   Room,
   RoomEvent,
   VideoPresets,
+  AudioPresets,
   Track,
   Participant,
   DisconnectReason,
@@ -259,6 +260,17 @@ class LiveKitManager {
                 mandatory: {
                   chromeMediaSource: 'desktop',
                 },
+                optional: [
+                  { echoCancellation: false },
+                  { noiseSuppression: false },
+                  { autoGainControl: false },
+                  { googEchoCancellation: false },
+                  { googAutoGainControl: false },
+                  { googNoiseSuppression: false },
+                  { googHighpassFilter: false },
+                  { googTypingNoiseDetection: false },
+                  { googAudioMirroring: false },
+                ],
               } as any)
             : false,
           video: {
@@ -295,7 +307,7 @@ class LiveKitManager {
         });
 
         // Publica o áudio do sistema (se capturado) como track separada,
-        // igual ao que o player já espera via Track.Source.ScreenShareAudio.
+        // puro sem filtros de ruído/voz (RNNoise/AGC desativados).
         const audioTrack = stream.getAudioTracks()[0];
         if (audioTrack) {
           audioTrack.onended = () => {
@@ -307,6 +319,9 @@ class LiveKitManager {
           await this.room.localParticipant.publishTrack(audioTrack, {
             name: 'screen_share_audio',
             source: Track.Source.ScreenShareAudio,
+            audioPreset: AudioPresets.musicHighQualityStereo,
+            dtx: false,
+            red: false,
           });
         }
 
@@ -333,7 +348,13 @@ class LiveKitManager {
         const pub = await this.room.localParticipant.setScreenShareEnabled(
           true,
           {
-            audio: true,
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              channelCount: 2,
+              sampleRate: 48000,
+            },
             selfBrowserSurface: 'include',
             surfaceSwitching: 'include',
             systemAudio: 'include',
@@ -346,6 +367,8 @@ class LiveKitManager {
           },
           {
             simulcast: true,
+            audioPreset: AudioPresets.musicHighQualityStereo,
+            dtx: false,
             videoEncoding: {
               maxBitrate: maxBitrate,
               maxFramerate: frameRate,
