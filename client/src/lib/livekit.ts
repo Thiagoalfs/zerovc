@@ -19,6 +19,7 @@ class LiveKitManager {
   private attachedStreamAudioElements: Map<string, HTMLMediaElement> = new Map();
   private userVolumes: Map<string, number> = new Map();
   private streamVolumes: Map<string, number> = new Map();
+  private watchedParticipantIdentities: Set<string> = new Set();
 
   getRoom(): Room | null {
     return this.room;
@@ -111,12 +112,16 @@ class LiveKitManager {
         this.attachedAudioElements.set(sid, audioEl);
 
         if (isScreenAudio) {
-          audioEl.muted = true; // Initially muted until user explicitly watches this stream!
+          const isCurrentlyWatched = this.watchedParticipantIdentities.has(participant.identity);
+          audioEl.muted = !isCurrentlyWatched;
           this.attachedStreamAudioElements.set(sid, audioEl);
           const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
           audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
           if (typeof (track as any).setVolume === 'function') {
             (track as any).setVolume(streamVol);
+          }
+          if (isCurrentlyWatched) {
+            audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
           }
         } else {
           audioEl.muted = false;
@@ -459,10 +464,21 @@ class LiveKitManager {
   }
 
   setStreamAudioSubscribed(participantIdentity: string, subscribed: boolean) {
+    if (subscribed) {
+      this.watchedParticipantIdentities.add(participantIdentity);
+    } else {
+      this.watchedParticipantIdentities.delete(participantIdentity);
+    }
+
     // 1. Mute or unmute all stream audio elements for this participant
     this.attachedStreamAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
         el.muted = !subscribed;
+        if (subscribed) {
+          const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
+          el.volume = Math.min(Math.max(streamVol, 0), 1);
+          el.play().catch((err) => console.log('[LiveKit] Stream audio play error:', err));
+        }
       }
     });
 
@@ -473,6 +489,12 @@ class LiveKitManager {
         remote.audioTrackPublications.forEach((pub) => {
           if (pub.source === Track.Source.ScreenShareAudio) {
             pub.setSubscribed(subscribed);
+            if (pub.audioTrack) {
+              const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
+              if (typeof (pub.audioTrack as any).setVolume === 'function') {
+                (pub.audioTrack as any).setVolume(streamVol);
+              }
+            }
           }
         });
       }
@@ -484,6 +506,7 @@ class LiveKitManager {
   }
 
   async disconnect() {
+    this.watchedParticipantIdentities.clear();
     this.attachedAudioElements.forEach((el) => el.remove());
     this.attachedAudioElements.clear();
     this.attachedUserAudioElements.clear();
