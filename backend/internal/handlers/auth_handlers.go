@@ -158,9 +158,24 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !auth.VerifyTOTPCode(user.TwoFactorSecret, req.Code) {
-			http.Error(w, `{"error":"código de autenticação de dois fatores inválido"}`, http.StatusUnauthorized)
-			return
+		cleanCode := strings.TrimSpace(req.Code)
+		totpValid := auth.VerifyTOTPCode(user.TwoFactorSecret, cleanCode)
+		if !totpValid {
+			// Check if it's a valid unused backup code
+			backupHash := auth.HashBackupCode(cleanCode)
+			var backupID uuid.UUID
+			err := h.db.Pool.QueryRow(r.Context(), `
+				SELECT id FROM user_2fa_backup_codes
+				WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+			`, user.ID, backupHash).Scan(&backupID)
+
+			if err == nil {
+				// Mark backup code as used
+				h.db.Pool.Exec(r.Context(), `UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1`, backupID)
+			} else {
+				http.Error(w, `{"error":"código 2FA ou código de backup inválido"}`, http.StatusUnauthorized)
+				return
+			}
 		}
 	}
 
@@ -301,9 +316,37 @@ func (h *AuthHandler) Enable2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.db.Pool.Exec(r.Context(), "UPDATE users SET two_factor_secret = $1 WHERE id = $2", req.Secret, userID)
+	codes, hashes, err := auth.GenerateBackupCodes(8)
+	if err != nil {
+		http.Error(w, `{"error":"falha ao gerar códigos de backup"}`, http.StatusInternalServerError)
+		return
+	}
+
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	_, err = tx.Exec(r.Context(), "UPDATE users SET two_factor_secret = $1 WHERE id = $2", req.Secret, userID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to save 2fa"}`, http.StatusInternalServerError)
+		return
+	}
+
+	_, _ = tx.Exec(r.Context(), "DELETE FROM user_2fa_backup_codes WHERE user_id = $1", userID)
+
+	for _, hCode := range hashes {
+		_, err := tx.Exec(r.Context(), "INSERT INTO user_2fa_backup_codes (user_id, code_hash) VALUES ($1, $2)", userID, hCode)
+		if err != nil {
+			http.Error(w, `{"error":"failed to store backup codes"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit 2fa setup"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -311,6 +354,7 @@ func (h *AuthHandler) Enable2FA(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"success":            true,
 		"two_factor_enabled": true,
+		"backup_codes":       codes,
 	})
 }
 
@@ -352,10 +396,143 @@ func (h *AuthHandler) Disable2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Delete backup codes on disable
+	_, _ = h.db.Pool.Exec(r.Context(), "DELETE FROM user_2fa_backup_codes WHERE user_id = $1", userID)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"success":            true,
 		"two_factor_enabled": false,
+	})
+}
+
+// LGPD / GDPR Endpoints
+
+func (h *AuthHandler) ExportData(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	ctx := r.Context()
+
+	// 1. User profile
+	var user models.User
+	queryUser := `SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, created_at, updated_at FROM users WHERE id = $1`
+	err := h.db.Pool.QueryRow(ctx, queryUser, userID).Scan(
+		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.CreatedAt, &user.UpdatedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// 2. Guilds joined
+	type GuildSummary struct {
+		ID       uuid.UUID `json:"id"`
+		Name     string    `json:"name"`
+		Role     string    `json:"role"`
+		JoinedAt time.Time `json:"joined_at"`
+	}
+	guilds := make([]GuildSummary, 0)
+	gRows, err := h.db.Pool.Query(ctx, `
+		SELECT g.id, g.name, gm.role, gm.joined_at
+		FROM guilds g
+		JOIN guild_members gm ON gm.guild_id = g.id
+		WHERE gm.user_id = $1
+	`, userID)
+	if err == nil {
+		defer gRows.Close()
+		for gRows.Next() {
+			var gs GuildSummary
+			if err := gRows.Scan(&gs.ID, &gs.Name, &gs.Role, &gs.JoinedAt); err == nil {
+				guilds = append(guilds, gs)
+			}
+		}
+	}
+
+	// 3. Friends
+	type FriendSummary struct {
+		FriendID uuid.UUID `json:"friend_id"`
+		Username string    `json:"username"`
+		Status   string    `json:"status"`
+	}
+	friends := make([]FriendSummary, 0)
+	fRows, err := h.db.Pool.Query(ctx, `
+		SELECT CASE WHEN f.user_id = $1 THEN f.friend_id ELSE f.user_id END,
+		       u.username, f.status
+		FROM friendships f
+		JOIN users u ON u.id = (CASE WHEN f.user_id = $1 THEN f.friend_id ELSE f.user_id END)
+		WHERE f.user_id = $1 OR f.friend_id = $1
+	`, userID)
+	if err == nil {
+		defer fRows.Close()
+		for fRows.Next() {
+			var fs FriendSummary
+			if err := fRows.Scan(&fs.FriendID, &fs.Username, &fs.Status); err == nil {
+				friends = append(friends, fs)
+			}
+		}
+	}
+
+	exportPayload := map[string]any{
+		"exported_at": time.Now().UTC(),
+		"profile": map[string]any{
+			"id":            user.ID,
+			"username":      user.Username,
+			"email":         user.Email,
+			"phone_number":  user.PhoneNumber,
+			"display_name":  user.DisplayName,
+			"avatar_url":    user.AvatarURL,
+			"banner_url":    user.BannerURL,
+			"bio":           user.Bio,
+			"custom_status": user.CustomStatus,
+			"created_at":    user.CreatedAt,
+		},
+		"guilds":  guilds,
+		"friends": friends,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="zerovc-data-export.json"`)
+	json.NewEncoder(w).Encode(exportPayload)
+}
+
+func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" {
+		http.Error(w, `{"error":"senha é obrigatória para confirmar a exclusão da conta"}`, http.StatusBadRequest)
+		return
+	}
+
+	var passwordHash string
+	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&passwordHash)
+	if err != nil || !h.auth.CheckPassword(req.Password, passwordHash) {
+		http.Error(w, `{"error":"senha incorreta"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Delete user (Cascades to guild_members, messages, voice_sessions, user_blocks, guilds owned)
+	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM users WHERE id = $1", userID)
+	if err != nil {
+		http.Error(w, `{"error":"falha ao excluir conta"}`, http.StatusInternalServerError)
+		return
+	}
+
+	clearAuthCookie(w)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"message": "sua conta foi excluída permanentemente",
 	})
 }
 

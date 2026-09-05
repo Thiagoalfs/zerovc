@@ -10,6 +10,7 @@ import { api, formatAssetUrl } from '../../lib/api';
 import { ActiveCallOverlay } from './ActiveCallOverlay';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { EmojiAndGifPicker } from '../Chat/EmojiAndGifPicker';
+import { FormattedMessage } from '../Chat/FormattedMessage';
 import { User, DMMessage } from '../../types';
 
 interface DMChatAreaProps {
@@ -620,7 +621,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             return (
               <div
                 key={msg.id}
-                className={`relative group flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-colors ${
+                id={`msg-${msg.id}`}
+                className={`relative group flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-all duration-300 ${
                   isCompact ? 'py-1 mt-1' : 'py-2 mt-3'
                 } ${isMe ? 'flex-row-reverse' : ''}`}
               >
@@ -705,7 +707,21 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                 <div className={`max-w-[85%] md:max-w-[75%] flex flex-col ${isMe ? 'items-end text-right' : 'items-start text-left'}`}>
                   {/* Reply Reference Header */}
                   {msg.reply_to && (
-                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mb-0.5 select-none opacity-80">
+                    <div
+                      onClick={() => {
+                        const targetId = `msg-${msg.reply_to?.id}`;
+                        const el = document.getElementById(targetId);
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          el.classList.add('bg-brand-500/20', 'ring-2', 'ring-brand-400');
+                          setTimeout(() => {
+                            el.classList.remove('bg-brand-500/20', 'ring-2', 'ring-brand-400');
+                          }, 1500);
+                        }
+                      }}
+                      className="flex items-center gap-1.5 text-[10px] text-gray-400 mb-0.5 select-none opacity-80 cursor-pointer hover:opacity-100 transition-opacity"
+                      title="Clique para ir até a mensagem respondida"
+                    >
                       <CornerDownRight className="w-3 h-3 text-gray-500 flex-shrink-0" />
                       <span className="font-semibold text-brand-400">
                         @{msg.reply_to.author.display_name || msg.reply_to.author.username}
@@ -734,10 +750,10 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
                   {/* Text content */}
                   {textLines.length > 0 && (
-                    <div className={`p-2.5 px-3.5 rounded-2xl text-xs leading-relaxed break-words whitespace-pre-wrap select-text shadow-sm ${
+                    <div className={`p-2.5 px-3.5 rounded-2xl text-xs leading-relaxed select-text shadow-sm ${
                       isMe ? 'bg-brand-500 text-white rounded-tr-none' : 'bg-background-light text-gray-100 rounded-tl-none'
                     }`}>
-                      {renderFormattedText(textLines.join('\n'))}
+                      <FormattedMessage content={textLines.join('\n')} />
                     </div>
                   )}
 
