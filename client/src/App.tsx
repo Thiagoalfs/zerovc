@@ -129,7 +129,6 @@ export const App: React.FC = () => {
         }
       }
       setCurrentRoute(path);
-      handleRoute(path);
       return;
     }
     if (window.location.pathname !== path) {
@@ -140,7 +139,6 @@ export const App: React.FC = () => {
       }
     }
     setCurrentRoute(path);
-    handleRoute(path);
   };
 
   const handleRoute = useCallback(async (pathname: string) => {
@@ -148,11 +146,7 @@ export const App: React.FC = () => {
     const segments = cleanPath ? cleanPath.split('/') : [];
 
     // Root / Landing / Download / Signin / Signup routes
-    if (segments.length === 0) {
-      return;
-    }
-
-    if (segments[0] === 'download') {
+    if (segments.length === 0 || segments[0] === 'download') {
       return;
     }
 
@@ -213,28 +207,28 @@ export const App: React.FC = () => {
     }
 
     // 1. Default to /@me or /@me/friends or /@me/:roomId or /@me/group/:groupId
-    if (segments.length === 0 || segments[0] === '@me') {
+    if (segments[0] === '@me') {
       setIsHomeActive(true);
       if (segments.length > 1 && segments[1]) {
         if (segments[1] === 'group' && segments[2]) {
           const groupId = segments[2];
           setHomeView('group');
-          await useDMGroupStore.getState().selectGroupById(groupId);
-          navigateTo(`/@me/group/${groupId}`, true);
+          const curGroup = useDMGroupStore.getState().activeGroup;
+          if (!curGroup || curGroup.id !== groupId) {
+            await useDMGroupStore.getState().selectGroupById(groupId);
+          }
         } else {
           const roomId = segments[1];
           setHomeView('dm');
-          const { rooms, fetchRooms, selectRoom } = useDMStore.getState();
+          const { rooms, fetchRooms, selectRoom, activeRoom } = useDMStore.getState();
           if (rooms.length === 0) await fetchRooms();
           const targetRoom = useDMStore.getState().rooms.find((r) => r.id === roomId);
-          if (targetRoom) {
+          if (targetRoom && (!activeRoom || activeRoom.id !== roomId)) {
             selectRoom(targetRoom);
           }
-          navigateTo(`/@me/${roomId}`, true);
         }
       } else {
         setHomeView('friends');
-        navigateTo('/@me', true);
       }
       return;
     }
@@ -254,16 +248,25 @@ export const App: React.FC = () => {
     if (guildId) {
       setIsHomeActive(false);
       try {
-        const fullGuild = await api.guilds.getDetails(guildId);
-        useGuildStore.setState({ activeGuild: fullGuild });
+        const { activeGuild, activeChannel } = useGuildStore.getState();
+        let currentGuild = activeGuild;
 
-        if (fullGuild.channels && fullGuild.channels.length > 0) {
+        if (!currentGuild || currentGuild.id !== guildId) {
+          currentGuild = await api.guilds.getDetails(guildId);
+          useGuildStore.setState({ activeGuild: currentGuild });
+        }
+
+        if (currentGuild && currentGuild.channels && currentGuild.channels.length > 0) {
           const targetChannel = channelId
-            ? fullGuild.channels.find((c) => c.id === channelId) || fullGuild.channels[0]
-            : fullGuild.channels.find((c) => c.type === 'text') || fullGuild.channels[0];
+            ? currentGuild.channels.find((c) => c.id === channelId) || currentGuild.channels[0]
+            : currentGuild.channels.find((c) => c.type === 'text') || currentGuild.channels[0];
 
-          useGuildStore.getState().selectChannel(targetChannel);
-          navigateTo(`/${guildId}/${targetChannel.id}`, true);
+          if (!activeChannel || activeChannel.id !== targetChannel.id) {
+            useGuildStore.getState().selectChannel(targetChannel);
+          }
+          if (!channelId) {
+            navigateTo(`/${guildId}/${targetChannel.id}`, true);
+          }
         }
       } catch (err) {
         console.error('Failed to route to guild:', err);
