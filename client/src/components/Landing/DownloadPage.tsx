@@ -59,9 +59,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             </div>
             <span className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
               Zero<span className="text-brand-400">VC</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30">
-                v1.0
-              </span>
             </span>
           </div>
 
@@ -98,11 +95,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
           2. DOWNLOAD HERO & CARD
       ------------------------------------------------------------- */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-12 md:py-20 flex flex-col items-center text-center">
-        {/* Release Pill */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-xs font-semibold text-brand-300 mb-6 backdrop-blur-sm shadow-sm">
-          <Sparkles className="w-3.5 h-3.5 text-brand-400" />
-          <span>Instalador Oficial Standalone para Windows (64-bit)</span>
-        </div>
 
         {/* Title */}
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tight leading-tight mb-4">
