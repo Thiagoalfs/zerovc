@@ -8,6 +8,7 @@ import { useCallStore } from './stores/callStore';
 import { socket } from './lib/socket';
 import { Message, VoiceSession, Channel, DMRoom } from './types';
 import { api } from './lib/api';
+import { sendNativeNotification, requestNotificationPermission } from './lib/notifications';
 import { ServerList } from './components/Sidebar/ServerList';
 import { ChannelList } from './components/Sidebar/ChannelList';
 import { DMChannelList } from './components/DM/DMChannelList';
@@ -379,9 +380,24 @@ export const App: React.FC = () => {
       window.addEventListener('popstate', onRouteEvent);
       window.addEventListener('hashchange', onRouteEvent);
 
+      // Request notification permissions gracefully on login
+      requestNotificationPermission();
+
       // WebSocket Event Subscriptions
       const handleMessageCreate = (event: any) => {
-        addMessage(event.data);
+        const msg = event.data;
+        addMessage(msg);
+
+        // Native notification if backgrounded and not author
+        const currentUserId = useAuthStore.getState().user?.id;
+        if (msg && msg.author_id !== currentUserId && typeof document !== 'undefined' && document.hidden) {
+          const authorName = msg.author?.display_name || msg.author?.username || 'Nova mensagem';
+          sendNativeNotification({
+            title: authorName,
+            body: msg.content?.slice(0, 100) || 'Enviou um anexo',
+            tag: `msg-${msg.id}`,
+          });
+        }
       };
 
       const handleMessageUpdate = (event: any) => {
@@ -393,7 +409,19 @@ export const App: React.FC = () => {
       };
 
       const handleDMMessageCreate = (event: any) => {
-        addDMMessage(event.data);
+        const msg = event.data;
+        addDMMessage(msg);
+
+        // Native notification for direct messages
+        const currentUserId = useAuthStore.getState().user?.id;
+        if (msg && msg.author_id !== currentUserId && typeof document !== 'undefined' && document.hidden) {
+          const authorName = msg.author?.display_name || msg.author?.username || 'Mensagem Direta';
+          sendNativeNotification({
+            title: authorName,
+            body: msg.content?.slice(0, 100) || 'Enviou um anexo',
+            tag: `dm-${msg.id}`,
+          });
+        }
       };
 
       const handleVoiceStateUpdate = (event: any) => {
@@ -469,7 +497,19 @@ export const App: React.FC = () => {
       };
 
       const handleGroupMessageCreate = (event: any) => {
-        useDMGroupStore.getState().handleGroupMessageCreate(event.data);
+        const msg = event.data;
+        useDMGroupStore.getState().handleGroupMessageCreate(msg);
+
+        // Native notification for group messages
+        const currentUserId = useAuthStore.getState().user?.id;
+        if (msg && msg.author_id !== currentUserId && typeof document !== 'undefined' && document.hidden) {
+          const authorName = msg.author?.display_name || msg.author?.username || 'Mensagem em Grupo';
+          sendNativeNotification({
+            title: authorName,
+            body: msg.content?.slice(0, 100) || 'Enviou um anexo',
+            tag: `group-msg-${msg.id}`,
+          });
+        }
       };
 
       const handleGuildMemberAdd = (event: any) => {

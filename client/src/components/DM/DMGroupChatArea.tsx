@@ -21,6 +21,7 @@ import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
+import { FormattedMessage } from '../Chat/FormattedMessage';
 import { User, DMGroupMessage } from '../../types';
 
 interface DMGroupChatAreaProps {
@@ -453,7 +454,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 return (
                   <div
                     key={msg.id}
-                    className={`relative group flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-colors ${
+                    id={`msg-${msg.id}`}
+                    className={`relative group flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-all duration-300 ${
                       isCompact ? 'py-1 mt-1' : 'py-2 mt-3'
                     }`}
                   >
@@ -494,8 +496,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                       )}
 
                       {textLines.length > 0 && (
-                        <div className="text-sm text-gray-200 break-words whitespace-pre-wrap select-text">
-                          {textLines.join('\n')}
+                        <div className="text-sm text-gray-200 select-text">
+                          <FormattedMessage content={textLines.join('\n')} />
                         </div>
                       )}
 

@@ -20,6 +20,11 @@ import {
   Edit3,
   ArrowLeft,
   Keyboard,
+  Key,
+  Download,
+  Copy,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
@@ -93,13 +98,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
-  // 2FA Modal
+  // 2FA Modal & Backup Codes
   const [is2FAModalOpen, setIs2FAModalOpen] = useState(false);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [secretKey, setSecretKey] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [twoFactorError, setTwoFactorError] = useState<string | null>(null);
   const [is2FALoading, setIs2FALoading] = useState(false);
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [showBackupCodesModal, setShowBackupCodesModal] = useState(false);
+  const [copiedBackupCodes, setCopiedBackupCodes] = useState(false);
+
+  // Export Data & Delete Account (LGPD/GDPR)
+  const [isExportingData, setIsExportingData] = useState(false);
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Audio / Device Fields
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
@@ -386,15 +401,62 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       if (user?.two_factor_enabled) {
         await api.auth.disable2FA({ code: totpCode.trim() });
         if (user) setUser({ ...user, two_factor_enabled: false });
+        setIs2FAModalOpen(false);
       } else {
-        await api.auth.enable2FA({ secret: secretKey || '', code: totpCode.trim() });
+        const res = await api.auth.enable2FA({ secret: secretKey || '', code: totpCode.trim() });
         if (user) setUser({ ...user, two_factor_enabled: true });
+        setIs2FAModalOpen(false);
+        if (res.backup_codes && res.backup_codes.length > 0) {
+          setBackupCodes(res.backup_codes);
+          setShowBackupCodesModal(true);
+          setCopiedBackupCodes(false);
+        }
       }
-      setIs2FAModalOpen(false);
     } catch (err: any) {
       setTwoFactorError(err.message || 'Código inválido.');
     } finally {
       setIs2FALoading(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setIsExportingData(true);
+    try {
+      const data = await api.auth.exportData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `zerovc-data-${user?.username || 'user'}-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || 'Erro ao exportar dados da conta.');
+    } finally {
+      setIsExportingData(false);
+    }
+  };
+
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteAccountError(null);
+    if (!deleteAccountPassword.trim()) {
+      setDeleteAccountError('Digite sua senha para confirmar a exclusão.');
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    try {
+      await api.auth.deleteAccount({ password: deleteAccountPassword });
+      setIsDeleteAccountOpen(false);
+      logout();
+      window.location.href = '/';
+    } catch (err: any) {
+      setDeleteAccountError(err.message || 'Senha incorreta ao tentar excluir conta.');
+    } finally {
+      setIsDeletingAccount(false);
     }
   };
 
@@ -940,6 +1002,64 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
                   </div>
                 </div>
+
+                {/* Group 4: Privacidade e Gerenciamento de Dados (LGPD / GDPR) */}
+                <div className="p-5 bg-background-darker/80 rounded-3xl border border-white/5 space-y-4 shadow-lg">
+                  <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                    <ShieldCheck className="w-3.5 h-3.5 text-brand-400" />
+                    <span>Privacidade e Gestão de Dados</span>
+                  </h4>
+
+                  {/* Export Data */}
+                  <div className="p-3.5 bg-background-darkest/80 rounded-2xl border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-white block">Exportar Meus Dados (JSON)</span>
+                      <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+                        Baixe uma cópia estruturada em JSON com todas as suas informações de perfil, servidores associados e lista de contatos.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExportData}
+                      disabled={isExportingData}
+                      className="bg-background-dark hover:bg-white/10 disabled:opacity-50 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                    >
+                      {isExportingData ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Exportando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Exportar Dados</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Delete Account (Danger Zone) */}
+                  <div className="p-3.5 bg-dnd/10 rounded-2xl border border-dnd/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-dnd block">Excluir Conta Permanentemente</span>
+                      <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
+                        Esta ação é irreversível. Todos os seus dados, mensagens, servidores próprios e amizades serão permanentemente apagados.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteAccountPassword('');
+                        setDeleteAccountError(null);
+                        setIsDeleteAccountOpen(true);
+                      }}
+                      className="bg-dnd hover:bg-dnd/80 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Excluir Conta</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1469,6 +1589,154 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 }`}
               >
                 {is2FALoading ? 'Validando...' : user.two_factor_enabled ? 'Desativar 2FA' : 'Ativar 2FA'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 6. 2FA Backup Codes Presentation Modal */}
+      {showBackupCodesModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="bg-background-darkest w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <Key className="w-4 h-4 text-emerald-400" />
+                <span>Códigos de Backup de 2FA</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowBackupCodesModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-yellow-200/90 leading-relaxed">
+                Salve estes códigos em um local seguro! Cada código só pode ser usado <strong>uma única vez</strong> para acessar sua conta caso você perca seu aplicativo autenticador.
+              </p>
+            </div>
+
+            {/* Grid of backup codes */}
+            <div className="grid grid-cols-2 gap-2 p-4 bg-background-darker rounded-2xl border border-white/5 font-mono text-center text-sm font-bold text-emerald-400 tracking-wider">
+              {backupCodes.map((code, idx) => (
+                <div key={idx} className="p-2 bg-background-darkest/60 rounded-xl border border-white/5 select-all">
+                  {code}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(backupCodes.join('\n'));
+                    setCopiedBackupCodes(true);
+                    setTimeout(() => setCopiedBackupCodes(false), 2000);
+                  }}
+                  className="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{copiedBackupCodes ? 'Copiado!' : 'Copiar'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const blob = new Blob([backupCodes.join('\n')], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `zerovc-2fa-backup-codes-${user?.username || 'user'}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Baixar .txt</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowBackupCodesModal(false)}
+                className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold px-5 py-1.5 rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Concluído
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. Delete Account Confirmation Modal */}
+      {isDeleteAccountOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
+          <form
+            onSubmit={handleDeleteAccount}
+            className="bg-background-darkest w-full max-w-md rounded-3xl p-6 border border-dnd/30 shadow-2xl space-y-4 animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-dnd flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Excluir Conta Permanentemente</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsDeleteAccountOpen(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-300 leading-relaxed">
+              Você está prestes a excluir sua conta no ZeroVC. Esta ação <strong>NÃO pode ser desfeita</strong>. Digite sua senha atual para confirmar a exclusão.
+            </p>
+
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                Sua Senha Atual
+              </label>
+              <input
+                type="password"
+                value={deleteAccountPassword}
+                onChange={(e) => setDeleteAccountPassword(e.target.value)}
+                placeholder="Digite sua senha"
+                className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-dnd"
+                autoFocus
+              />
+              {deleteAccountError && <span className="text-[11px] text-dnd block mt-1">{deleteAccountError}</span>}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteAccountOpen(false)}
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isDeletingAccount || !deleteAccountPassword.trim()}
+                className="bg-dnd hover:bg-dnd/80 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                {isDeletingAccount ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <span>Confirmar Exclusão</span>
+                )}
               </button>
             </div>
           </form>

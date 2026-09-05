@@ -13,6 +13,7 @@ class SocketClient {
   private handlers: Map<string, Set<EventHandler>> = new Map();
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isExplicitlyClosed = false;
+  private reconnectAttempts = 0;
 
   connect() {
     const baseUrl = getApiBaseUrl().replace(/^http/, 'ws');
@@ -34,6 +35,7 @@ class SocketClient {
 
       this.ws.onopen = () => {
         console.log('[Socket] Connected to ZeroVC Gateway');
+        this.reconnectAttempts = 0;
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
@@ -55,8 +57,7 @@ class SocketClient {
 
       this.ws.onclose = () => {
         if (!this.isExplicitlyClosed) {
-          console.log('[Socket] Disconnected. Reconnecting in 3s...');
-          this.reconnectTimer = setTimeout(() => this.connect(), 3000);
+          this.scheduleReconnect();
         }
       };
 
@@ -65,12 +66,28 @@ class SocketClient {
       };
     } catch (err) {
       console.error('[Socket] Connection failed:', err);
-      this.reconnectTimer = setTimeout(() => this.connect(), 3000);
+      this.scheduleReconnect();
     }
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimer) return;
+    this.reconnectAttempts++;
+    // Exponential backoff with jitter: min(15000, 1000 * 1.8^attempts) + rand(0, 1000)
+    const baseDelay = Math.min(15000, 1000 * Math.pow(1.8, Math.min(this.reconnectAttempts, 6)));
+    const jitter = Math.floor(Math.random() * 1000);
+    const delay = Math.round(baseDelay + jitter);
+
+    console.log(`[Socket] Disconnected. Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})...`);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
   }
 
   disconnect() {
     this.isExplicitlyClosed = true;
+    this.reconnectAttempts = 0;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
