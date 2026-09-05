@@ -426,31 +426,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 const prevMsg = messages[index - 1];
                 const isCompact = prevMsg && prevMsg.author_id === msg.author_id;
 
-                const lines = msg.content.split('\n');
-                const textLines: string[] = [];
-                const imageUrls: string[] = [];
-
-                for (const line of lines) {
-                  const trimmed = line.trim();
-                  if (
-                    trimmed.startsWith('data:image/') ||
-                    trimmed.startsWith('/assets/user/') ||
-                    trimmed.startsWith('/assets/guild/') ||
-                    (trimmed.startsWith('http') &&
-                      (trimmed.endsWith('.png') ||
-                        trimmed.endsWith('.jpg') ||
-                        trimmed.endsWith('.jpeg') ||
-                        trimmed.endsWith('.gif') ||
-                        trimmed.endsWith('.webp') ||
-                        trimmed.includes('/assets/user/') ||
-                        trimmed.includes('/assets/guild/')))
-                  ) {
-                    imageUrls.push(trimmed);
-                  } else {
-                    textLines.push(line);
-                  }
-                }
-
                 return (
                   <div
                     key={msg.id}
@@ -495,58 +470,12 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                         </div>
                       )}
 
-                      {textLines.length > 0 && (
-                        <div className="text-sm text-gray-200 select-text">
-                          <FormattedMessage
-                            content={textLines.join('\n')}
-                            onPreviewImage={onPreviewImage}
-                            onImageLoad={handleMediaLoad}
-                          />
-                        </div>
-                      )}
-
-                      {imageUrls.map((url, idx) => {
-                        const isGif =
-                          url.includes('.gif') ||
-                          url.includes('.webp') ||
-                          url.includes('klipy') ||
-                          url.includes('giphy') ||
-                          url.includes('tenor');
-                        const favorited = isFavorited(url);
-
-                        return (
-                          <div
-                            key={idx}
-                            className="mt-1.5 w-fit max-w-sm sm:max-w-md md:max-w-lg overflow-hidden rounded-2xl border border-white/10 shadow-md relative group/media"
-                          >
-                            <img
-                              src={formatAssetUrl(url)}
-                              alt="Anexo"
-                              onLoad={handleMediaLoad}
-                              onClick={() => onPreviewImage?.(formatAssetUrl(url))}
-                              className="max-h-[350px] max-w-full w-auto h-auto object-contain cursor-pointer hover:opacity-95 transition-opacity block"
-                            />
-
-                            {isGif && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleFavorite(url);
-                                }}
-                                className={`absolute top-2 right-2 p-1.5 rounded-xl backdrop-blur-md transition-all shadow-md cursor-pointer ${
-                                  favorited
-                                    ? 'bg-amber-500 text-white opacity-100'
-                                    : 'bg-black/60 text-white/70 hover:text-white hover:bg-black/90 opacity-0 group-hover/media:opacity-100'
-                                }`}
-                                title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
-                              >
-                                <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
+                      <FormattedMessage
+                        content={msg.content}
+                        className="text-sm text-gray-200 select-text"
+                        onPreviewImage={onPreviewImage}
+                        onImageLoad={handleMediaLoad}
+                      />
                     </div>
                   </div>
                 );

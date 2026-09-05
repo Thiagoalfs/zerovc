@@ -593,31 +593,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               }
             })();
 
-            const lines = msg.content.split('\n');
-            const textLines: string[] = [];
-            const imageUrls: string[] = [];
-
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (
-                trimmed.startsWith('data:image/') ||
-                trimmed.startsWith('/assets/user/') ||
-                trimmed.startsWith('/assets/guild/') ||
-                (trimmed.startsWith('http') &&
-                  (trimmed.endsWith('.png') ||
-                    trimmed.endsWith('.jpg') ||
-                    trimmed.endsWith('.jpeg') ||
-                    trimmed.endsWith('.gif') ||
-                    trimmed.endsWith('.webp') ||
-                    trimmed.includes('/assets/user/') ||
-                    trimmed.includes('/assets/guild/')))
-              ) {
-                imageUrls.push(trimmed);
-              } else {
-                textLines.push(line);
-              }
-            }
-
             return (
               <div
                 key={msg.id}
@@ -748,67 +723,15 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                     </div>
                   )}
 
-                  {/* Text content */}
-                  {textLines.length > 0 && (
-                    <div className={`p-2.5 px-3.5 rounded-2xl text-xs leading-relaxed select-text shadow-sm ${
+                  {/* Message content & media embeds */}
+                  <FormattedMessage
+                    content={msg.content}
+                    onPreviewImage={onPreviewImage}
+                    onImageLoad={handleMediaLoad}
+                    textClassName={`p-2.5 px-3.5 rounded-2xl text-xs leading-relaxed select-text shadow-sm ${
                       isMe ? 'bg-brand-500 text-white rounded-tr-none' : 'bg-background-light text-gray-100 rounded-tl-none'
-                    }`}>
-                      <FormattedMessage
-                        content={textLines.join('\n')}
-                        onPreviewImage={onPreviewImage}
-                        onImageLoad={handleMediaLoad}
-                      />
-                    </div>
-                  )}
-
-                  {/* Attached Images */}
-                  {imageUrls.map((url, idx) => {
-                    const isGif =
-                      url.includes('.gif') ||
-                      url.includes('.webp') ||
-                      url.includes('klipy') ||
-                      url.includes('giphy') ||
-                      url.includes('tenor');
-                    const favorited = isFavorited(url);
-
-                    return (
-                      <div
-                        key={idx}
-                        className={`mt-1.5 w-fit max-w-sm sm:max-w-md md:max-w-lg overflow-hidden rounded-2xl border border-white/10 shadow-md relative group/media ${
-                          textLines.length === 0 && isMe ? 'rounded-tr-none' : textLines.length === 0 && !isMe ? 'rounded-tl-none' : ''
-                        }`}
-                      >
-                        <img
-                          src={formatAssetUrl(url)}
-                          alt="Imagem enviada"
-                          onLoad={handleMediaLoad}
-                          className="max-h-[350px] max-w-full w-auto h-auto object-contain bg-black/40 cursor-pointer hover:opacity-95 transition-opacity block"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onPreviewImage) onPreviewImage(formatAssetUrl(url));
-                          }}
-                        />
-
-                        {isGif && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleFavorite(url);
-                            }}
-                            className={`absolute top-2 right-2 p-1.5 rounded-xl backdrop-blur-md transition-all shadow-md cursor-pointer ${
-                              favorited
-                                ? 'bg-amber-500 text-white opacity-100'
-                                : 'bg-black/60 text-white/70 hover:text-white hover:bg-black/90 opacity-0 group-hover/media:opacity-100'
-                            }`}
-                            title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
-                          >
-                            <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+                    }`}
+                  />
 
                   {/* Reactions Badges */}
                   {msg.reactions && msg.reactions.length > 0 && (
