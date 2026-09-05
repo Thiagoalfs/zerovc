@@ -127,8 +127,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
 
             <h2 className="text-2xl font-bold text-white mb-1">ZeroVC para Windows</h2>
             <div className="flex items-center gap-2 text-xs text-gray-400 mb-8 font-mono">
-              <span>Versão 1.0.0</span>
-              <span>•</span>
               <span>Windows 10 / 11 (64-bit)</span>
               <span>•</span>
               <span>Instalador Setup Wizard (.exe)</span>
