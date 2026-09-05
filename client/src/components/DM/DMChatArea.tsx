@@ -753,7 +753,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                     <div className={`p-2.5 px-3.5 rounded-2xl text-xs leading-relaxed select-text shadow-sm ${
                       isMe ? 'bg-brand-500 text-white rounded-tr-none' : 'bg-background-light text-gray-100 rounded-tl-none'
                     }`}>
-                      <FormattedMessage content={textLines.join('\n')} />
+                      <FormattedMessage
+                        content={textLines.join('\n')}
+                        onPreviewImage={onPreviewImage}
+                        onImageLoad={handleMediaLoad}
+                      />
                     </div>
                   )}
 
