@@ -702,7 +702,7 @@ export const App: React.FC = () => {
     // Web Browser routes:
     if (cleanRoute === 'download') {
       return (
-        <div className="w-screen min-h-[100dvh] flex flex-col bg-background-darkest">
+        <div className="w-screen h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest">
           <DownloadPage onNavigate={navigateTo} user={user} />
         </div>
       );
@@ -731,7 +731,7 @@ export const App: React.FC = () => {
 
     // Default Web Root (/): Landing Page
     return (
-      <div className="w-screen min-h-[100dvh] flex flex-col bg-background-darkest">
+      <div className="w-screen h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest">
         <LandingPage onNavigate={navigateTo} user={user} />
       </div>
     );
@@ -740,7 +740,7 @@ export const App: React.FC = () => {
   // Authenticated user on Web accessing root or download:
   if (!isElectron && cleanRoute === '') {
     return (
-      <div className="w-screen min-h-[100dvh] flex flex-col bg-background-darkest">
+      <div className="w-screen h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest">
         <LandingPage onNavigate={navigateTo} user={user} />
       </div>
     );
@@ -748,7 +748,7 @@ export const App: React.FC = () => {
 
   if (cleanRoute === 'download') {
     return (
-      <div className="w-screen min-h-[100dvh] flex flex-col bg-background-darkest">
+      <div className="w-screen h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest">
         <DownloadPage onNavigate={navigateTo} user={user} />
       </div>
     );
