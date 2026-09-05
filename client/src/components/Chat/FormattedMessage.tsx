@@ -6,6 +6,7 @@ import { formatAssetUrl } from '../../lib/api';
 interface FormattedMessageProps {
   content: string;
   className?: string;
+  textClassName?: string;
   onPreviewImage?: (url: string) => void;
   onImageLoad?: () => void;
 }
@@ -19,12 +20,16 @@ const isMediaUrl = (url: string) => {
     clean.endsWith('.gif') ||
     clean.endsWith('.webp') ||
     clean.endsWith('.svg') ||
+    clean.endsWith('.bmp') ||
+    clean.endsWith('.avif') ||
     url.includes('/assets/user/') ||
     url.includes('/assets/guild/') ||
     url.includes('tenor.com/view/') ||
     url.includes('giphy.com/gifs/') ||
     url.includes('media.tenor.com') ||
+    url.includes('c.tenor.com') ||
     url.includes('media.giphy.com') ||
+    url.includes('i.giphy.com') ||
     url.includes('klipy') ||
     url.startsWith('data:image/');
 
@@ -32,13 +37,16 @@ const isMediaUrl = (url: string) => {
     clean.endsWith('.mp4') ||
     clean.endsWith('.webm') ||
     clean.endsWith('.ogg') ||
-    clean.endsWith('.mov');
+    clean.endsWith('.mov') ||
+    clean.endsWith('.mkv');
 
   const isAud =
     clean.endsWith('.mp3') ||
     clean.endsWith('.wav') ||
     clean.endsWith('.ogg') ||
-    clean.endsWith('.m4a');
+    clean.endsWith('.m4a') ||
+    clean.endsWith('.aac') ||
+    clean.endsWith('.flac');
 
   return { isMedia: isImg || isVid || isAud, isImage: isImg, isVideo: isVid, isAudio: isAud };
 };
@@ -67,6 +75,7 @@ const SpoilerText: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   content,
   className = '',
+  textClassName = '',
   onPreviewImage,
   onImageLoad,
 }) => {
@@ -74,13 +83,17 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
   const { isFavorited, toggleFavorite } = useFavoriteGifStore();
 
-  // Extract all media links for Discord-like embeds below the text
+  // Extract all media links for Discord-like embeds below the text (ignoring code blocks / inline code)
+  const contentWithoutCode = content
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`\n]+`/g, '');
+
   const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|data:image\/[^\s]+)/g;
   const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
   const foundUrls = new Set<string>();
 
   let matchUrl: RegExpExecArray | null;
-  while ((matchUrl = urlRegex.exec(content)) !== null) {
+  while ((matchUrl = urlRegex.exec(contentWithoutCode)) !== null) {
     const rawUrl = matchUrl[0];
     if (!foundUrls.has(rawUrl)) {
       foundUrls.add(rawUrl);
@@ -91,41 +104,57 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     }
   }
 
+  // Remove extracted media URLs from text to display so raw link is not shown alongside the embed
+  let textToDisplay = content;
+  if (mediaEmbeds.length > 0) {
+    for (const media of mediaEmbeds) {
+      textToDisplay = textToDisplay.split(media.url).join('');
+    }
+    textToDisplay = textToDisplay.trim();
+  }
+
   // 1. Process Code blocks first (```code```)
   const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = codeBlockRegex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(renderInlineFormatting(content.substring(lastIndex, match.index), `text-${lastIndex}`));
+  if (textToDisplay.length > 0) {
+    while ((match = codeBlockRegex.exec(textToDisplay)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(renderInlineFormatting(textToDisplay.substring(lastIndex, match.index), `text-${lastIndex}`));
+      }
+      const lang = match[1];
+      const code = match[2];
+      parts.push(
+        <pre
+          key={`code-block-${match.index}`}
+          className="my-1.5 p-3 rounded-xl bg-background-darkest border border-white/10 text-xs font-mono text-gray-200 overflow-x-auto selection:bg-brand-500/30"
+        >
+          {lang && <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 select-none">{lang}</div>}
+          <code>{code}</code>
+        </pre>
+      );
+      lastIndex = match.index + match[0].length;
     }
-    const lang = match[1];
-    const code = match[2];
-    parts.push(
-      <pre
-        key={`code-block-${match.index}`}
-        className="my-1.5 p-3 rounded-xl bg-background-darkest border border-white/10 text-xs font-mono text-gray-200 overflow-x-auto selection:bg-brand-500/30"
-      >
-        {lang && <div className="text-[10px] text-gray-500 uppercase font-bold mb-1 select-none">{lang}</div>}
-        <code>{code}</code>
-      </pre>
-    );
-    lastIndex = match.index + match[0].length;
+
+    if (lastIndex < textToDisplay.length) {
+      parts.push(renderInlineFormatting(textToDisplay.substring(lastIndex), `text-${lastIndex}`));
+    }
   }
 
-  if (lastIndex < content.length) {
-    parts.push(renderInlineFormatting(content.substring(lastIndex), `text-${lastIndex}`));
-  }
+  const hasText = parts.length > 0;
+  const hasEmbeds = mediaEmbeds.length > 0;
+
+  if (!hasText && !hasEmbeds) return null;
 
   return (
     <div className={`leading-relaxed break-words ${className}`}>
-      <div>{parts}</div>
+      {hasText && <div className={textClassName}>{parts}</div>}
 
       {/* Discord-like Rich Embeds / Image / GIF / Video Previews */}
-      {mediaEmbeds.length > 0 && (
-        <div className="mt-2 space-y-2 flex flex-col items-start select-none">
+      {hasEmbeds && (
+        <div className={`${hasText ? 'mt-2' : ''} space-y-2 flex flex-col items-start select-none`}>
           {mediaEmbeds.map((media, idx) => {
             const resolvedSrc = formatAssetUrl(media.url);
             const isGif =
