@@ -106,16 +106,25 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   },
 
   joinVoice: async (channelId: string) => {
-    if (get().currentChannelId === channelId && get().isConnected) return;
+    // If already in this channel or currently connecting to it, do nothing
+    if (get().currentChannelId === channelId && (get().isConnected || get().isConnecting)) {
+      return;
+    }
 
-    if (get().currentChannelId) {
-      await get().leaveVoice();
+    const previousChannelId = get().currentChannelId;
+    if (previousChannelId && previousChannelId !== channelId) {
+      // Disconnect previous channel in background without blocking current join request
+      api.channels.leaveVoice(previousChannelId).catch(() => {});
+      livekit.disconnect().catch(() => {});
     }
 
     set({ isConnecting: true, currentChannelId: channelId });
 
     try {
       const res = await api.channels.joinVoice(channelId);
+
+      // Check if user changed mind or joined another channel while requesting
+      if (get().currentChannelId !== channelId) return;
 
       const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
       const shouldDeafen = get().isDeafened;
@@ -191,10 +200,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       playJoinVoiceSound();
 
       if (shouldDeafen) {
-        await livekit.setDeafened(true);
-        await livekit.setMuted(true);
+        livekit.setDeafened(true).catch(() => {});
+        livekit.setMuted(true).catch(() => {});
       } else if (shouldMute) {
-        await livekit.setMuted(true);
+        livekit.setMuted(true).catch(() => {});
       }
 
       set({
