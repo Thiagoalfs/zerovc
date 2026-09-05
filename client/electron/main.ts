@@ -22,9 +22,45 @@ app.commandLine.appendSwitch(
   'WindowsGraphicsCapture,WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,ZeroCopy'
 );
 
+// Base production server URL
+const REMOTE_SERVER_URL = 'https://zerovc.safiroko.xyz';
+
+// Register zerovc:// protocol
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('zerovc', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('zerovc');
+}
+
 let mainWindow: BrowserWindow | null = null;
 
-function createWindow() {
+function handleDeepLink(rawUrl: string) {
+  if (!mainWindow) return;
+  try {
+    let targetPath = '';
+    if (rawUrl.startsWith('zerovc://')) {
+      // e.g. zerovc://invite/XYZ -> /invite/XYZ
+      targetPath = rawUrl.replace('zerovc://', '/');
+      if (!targetPath.startsWith('/')) targetPath = '/' + targetPath;
+    } else if (rawUrl.startsWith(REMOTE_SERVER_URL)) {
+      targetPath = rawUrl.replace(REMOTE_SERVER_URL, '');
+    }
+
+    const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+    const baseUrl = isDev ? 'http://localhost:5173' : REMOTE_SERVER_URL;
+    const destination = `${baseUrl}${targetPath}`;
+
+    mainWindow.loadURL(destination).catch((err) => {
+      console.warn('[Electron] Failed to load deep link destination:', err);
+    });
+  } catch (err) {
+    console.error('[Electron] Error handling deep link:', err);
+  }
+}
+
+function createWindow(initialUrl?: string) {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -71,18 +107,18 @@ function createWindow() {
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL(initialUrl || 'http://localhost:5173');
   } else {
     // Discord Model: Load latest production build from server with offline fallback
-    const remoteUrl = 'https://zerovc.safiroko.xyz';
-    mainWindow.loadURL(remoteUrl).catch((err) => {
+    const targetUrl = initialUrl || REMOTE_SERVER_URL;
+    mainWindow.loadURL(targetUrl).catch((err) => {
       console.warn('[Electron] Remote server unavailable, loading local fallback:', err);
       mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
     });
 
     // Fallback if main URL fails during navigation
     mainWindow.webContents.on('did-fail-load', (_event, errorCode, _errorDescription, validatedURL) => {
-      if (validatedURL.startsWith(remoteUrl)) {
+      if (validatedURL.startsWith(REMOTE_SERVER_URL)) {
         console.warn(`[Electron] Failed to load remote (${errorCode}), falling back to local files.`);
         mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
       }
@@ -267,15 +303,56 @@ ipcMain.handle('unregister-all-shortcuts', () => {
   }
 });
 
-app.whenReady().then(() => {
-  createWindow();
+const gotTheLock = app.requestSingleInstanceLock();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, commandLine) => {
+    // Focus our window if another instance was opened
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+
+      // Find deep link in arguments
+      const urlArg = commandLine.find(
+        (arg) => arg.startsWith('zerovc://') || arg.startsWith('https://zerovc.safiroko.xyz')
+      );
+      if (urlArg) {
+        handleDeepLink(urlArg);
+      }
     }
   });
-});
+
+  app.whenReady().then(() => {
+    // Check initial deep link argument on launch
+    const urlArg = process.argv.find(
+      (arg) => arg.startsWith('zerovc://') || arg.startsWith('https://zerovc.safiroko.xyz')
+    );
+
+    let initialUrl: string | undefined = undefined;
+    if (urlArg) {
+      let targetPath = '';
+      if (urlArg.startsWith('zerovc://')) {
+        targetPath = urlArg.replace('zerovc://', '/');
+        if (!targetPath.startsWith('/')) targetPath = '/' + targetPath;
+      } else if (urlArg.startsWith(REMOTE_SERVER_URL)) {
+        targetPath = urlArg.replace(REMOTE_SERVER_URL, '');
+      }
+      const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+      const baseUrl = isDev ? 'http://localhost:5173' : REMOTE_SERVER_URL;
+      initialUrl = `${baseUrl}${targetPath}`;
+    }
+
+    createWindow(initialUrl);
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+}
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();

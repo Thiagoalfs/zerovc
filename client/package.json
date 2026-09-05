@@ -73,12 +73,22 @@
         }
       ]
     },
+    "protocols": [
+      {
+        "name": "ZeroVC",
+        "schemes": [
+          "zerovc"
+        ]
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "ZeroVC",
+      "uninstallDisplayName": "ZeroVC",
       "runAfterFinish": true
     }
   }
