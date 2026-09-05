@@ -181,7 +181,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
                   Sobre mim
                 </span>
-                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">Oi! Estou usando zerovc!</p>
+                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap"></p>
               </div>
             )}
 

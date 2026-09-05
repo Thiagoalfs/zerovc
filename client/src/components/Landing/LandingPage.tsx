@@ -44,9 +44,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             </div>
             <span className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
               Zero<span className="text-brand-400">VC</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30">
-                v1.0
-              </span>
             </span>
           </div>
 
@@ -97,17 +94,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
           2. HERO SECTION
       ------------------------------------------------------------- */}
       <section className="relative pt-20 pb-16 md:pt-28 md:pb-24 px-6 text-center max-w-5xl mx-auto flex flex-col items-center">
-        {/* Release / Feature Badge */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-gray-300 mb-8 backdrop-blur-sm shadow-sm hover:border-brand-500/40 transition-colors">
-          <Sparkles className="w-3.5 h-3.5 text-brand-400 animate-pulse" />
-          <span>ZeroVC Desktop & Web oficial já disponível</span>
-          <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
-        </div>
 
         {/* Main Headline */}
         <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white leading-[1.15] mb-6">
           Converse, jogue e conecte-se com{' '}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 via-indigo-300 to-emerald-400">
+          <span className="bg-clip-text bg-gradient-to-r from-brand-400 via-indigo-300 to-emerald-400">
             latência zero.
           </span>
         </h1>
@@ -150,7 +141,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                 <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
                 <span className="text-xs font-semibold text-gray-400 ml-2">ZeroVC — Comunidade</span>
               </div>
-              <div className="text-[11px] text-gray-500 font-mono">zerovc.safiroko.xyz</div>
             </div>
 
             {/* Mock Body */}
