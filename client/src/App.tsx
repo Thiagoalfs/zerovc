@@ -20,6 +20,8 @@ import { DMChatArea } from './components/DM/DMChatArea';
 import { DMGroupChatArea } from './components/DM/DMGroupChatArea';
 import { useDMGroupStore } from './stores/dmGroupStore';
 import { AuthScreen } from './components/Auth/AuthScreen';
+import { LandingPage } from './components/Landing/LandingPage';
+import { DownloadPage } from './components/Landing/DownloadPage';
 import { CreateServerModal } from './components/Modals/CreateServerModal';
 import { CreateChannelModal } from './components/Modals/CreateChannelModal';
 import { ScreenShareModal } from './components/Modals/ScreenShareModal';
@@ -97,12 +99,24 @@ export const App: React.FC = () => {
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
+  const isElectron =
+    typeof window !== 'undefined' &&
+    Boolean((window as any).electronAPI || (window as any).electron || navigator.userAgent.includes('Electron'));
+
   const getCurrentRoute = () => {
     if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
       return window.location.hash ? window.location.hash.replace(/^#/, '') : '/@me';
     }
     return window.location.pathname;
   };
+
+  const [currentRoute, setCurrentRoute] = useState<string>(() => {
+    const r = getCurrentRoute();
+    if (isElectron && (!r || r === '/' || r === '#/' || r === '#')) {
+      return '/signin';
+    }
+    return r;
+  });
 
   const navigateTo = (path: string, replace = false) => {
     if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
@@ -114,6 +128,8 @@ export const App: React.FC = () => {
           window.history.pushState(null, '', hashPath);
         }
       }
+      setCurrentRoute(path);
+      handleRoute(path);
       return;
     }
     if (window.location.pathname !== path) {
@@ -123,11 +139,30 @@ export const App: React.FC = () => {
         window.history.pushState(null, '', path);
       }
     }
+    setCurrentRoute(path);
+    handleRoute(path);
   };
 
   const handleRoute = useCallback(async (pathname: string) => {
     const cleanPath = pathname.replace(/^\/+|\/+$/g, '');
     const segments = cleanPath ? cleanPath.split('/') : [];
+
+    // Root / Landing / Download / Signin / Signup routes
+    if (segments.length === 0) {
+      return;
+    }
+
+    if (segments[0] === 'download') {
+      return;
+    }
+
+    if (segments[0] === 'signin' || segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'register') {
+      const { user, token } = useAuthStore.getState();
+      if (token && user) {
+        navigateTo('/@me', true);
+      }
+      return;
+    }
 
     // 0. Handle /invite/:code or /invites/:code
     if (segments.length >= 1 && (segments[0] === 'invite' || segments[0] === 'invites')) {
@@ -248,7 +283,16 @@ export const App: React.FC = () => {
     const segments = cleanPath ? cleanPath.split('/') : [];
     if (segments.length >= 1 && (segments[0] === 'invite' || segments[0] === 'invites') && segments[1]) {
       sessionStorage.setItem('pending_invite_code', segments[1]);
-    } else if (cleanPath && cleanPath !== '@me' && !cleanPath.startsWith('invite')) {
+    } else if (
+      cleanPath &&
+      cleanPath !== '@me' &&
+      cleanPath !== 'signin' &&
+      cleanPath !== 'login' &&
+      cleanPath !== 'signup' &&
+      cleanPath !== 'register' &&
+      cleanPath !== 'download' &&
+      !cleanPath.startsWith('invite')
+    ) {
       sessionStorage.setItem('pending_redirect_path', initialRoute);
     }
   }, []);
@@ -639,13 +683,73 @@ export const App: React.FC = () => {
     );
   }
 
+  const cleanRoute = currentRoute.replace(/^\/+|\/+$/g, '').split('?')[0];
+
   if (!user) {
-    return (
-      <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
-        <TitleBar />
-        <div className="flex-1 overflow-hidden">
-          <AuthScreen />
+    // Electron app: Always opens directly on AuthScreen (never the landing page)
+    if (isElectron) {
+      const isRegister = cleanRoute === 'signup' || cleanRoute === 'register';
+      return (
+        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+          <TitleBar />
+          <div className="flex-1 overflow-hidden">
+            <AuthScreen initialMode={isRegister ? 'register' : 'login'} onNavigate={navigateTo} />
+          </div>
         </div>
+      );
+    }
+
+    // Web Browser routes:
+    if (cleanRoute === 'download') {
+      return (
+        <div className="w-screen min-h-[100dvh] flex flex-col bg-background-darkest">
+          <DownloadPage onNavigate={navigateTo} user={user} />
+        </div>
+      );
+    }
+
+    if (cleanRoute === 'signup' || cleanRoute === 'register') {
+      return (
+        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+          <AuthScreen initialMode="register" onNavigate={navigateTo} />
+        </div>
+      );
+    }
+
+    if (
+      cleanRoute === 'signin' ||
+      cleanRoute === 'login' ||
+      cleanRoute.startsWith('invite') ||
+      cleanRoute.startsWith('invites')
+    ) {
+      return (
+        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+          <AuthScreen initialMode="login" onNavigate={navigateTo} />
+        </div>
+      );
+    }
+
+    // Default Web Root (/): Landing Page
+    return (
+      <div className="w-screen min-h-[100dvh] flex flex-col bg-background-darkest">
+        <LandingPage onNavigate={navigateTo} user={user} />
+      </div>
+    );
+  }
+
+  // Authenticated user on Web accessing root or download:
+  if (!isElectron && cleanRoute === '') {
+    return (
+      <div className="w-screen min-h-[100dvh] flex flex-col bg-background-darkest">
+        <LandingPage onNavigate={navigateTo} user={user} />
+      </div>
+    );
+  }
+
+  if (cleanRoute === 'download') {
+    return (
+      <div className="w-screen min-h-[100dvh] flex flex-col bg-background-darkest">
+        <DownloadPage onNavigate={navigateTo} user={user} />
       </div>
     );
   }
