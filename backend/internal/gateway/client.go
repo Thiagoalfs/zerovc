@@ -19,11 +19,20 @@ const (
 	maxMessageSize = 512 * 1024 // 512 KB
 )
 
+var allowedOrigins = map[string]bool{
+	"https://zerovc.safiroko.xyz": true,
+	"http://localhost:5173":       true,
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for dev / desktop app
+		origin := r.Header.Get("Origin")
+		if origin == "" || origin == "null" {
+			return true
+		}
+		return allowedOrigins[origin]
 	},
 }
 
@@ -81,7 +90,9 @@ func (c *Client) ReadPump() {
 					},
 				}
 				if typingData.GuildID != nil {
-					c.Hub.BroadcastToGuild(*typingData.GuildID, event)
+					if c.Hub.IsGuildMember(*typingData.GuildID, c.UserID) {
+						c.Hub.BroadcastToGuild(*typingData.GuildID, event)
+					}
 				}
 			}
 

@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/binary"
 	"fmt"
@@ -56,7 +57,7 @@ func VerifyTOTPCode(secret, code string) bool {
 	for i := int64(-1); i <= 1; i++ {
 		counter := currentCounter + i
 		expectedCode := computeTOTP(key, counter)
-		if expectedCode == cleanCode {
+		if subtle.ConstantTimeCompare([]byte(expectedCode), []byte(cleanCode)) == 1 {
 			return true
 		}
 	}

@@ -223,6 +223,7 @@ func (h *AuthHandler) ChangePhone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
+		Password    string `json:"password"`
 		PhoneNumber string `json:"phone_number"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -230,8 +231,15 @@ func (h *AuthHandler) ChangePhone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var passwordHash string
+	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&passwordHash)
+	if err != nil || !h.auth.CheckPassword(req.Password, passwordHash) {
+		http.Error(w, `{"error":"senha atual incorreta"}`, http.StatusUnauthorized)
+		return
+	}
+
 	phone := strings.TrimSpace(req.PhoneNumber)
-	_, err := h.db.Pool.Exec(r.Context(), "UPDATE users SET phone_number = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", phone, userID)
+	_, err = h.db.Pool.Exec(r.Context(), "UPDATE users SET phone_number = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", phone, userID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to update phone number"}`, http.StatusInternalServerError)
 		return

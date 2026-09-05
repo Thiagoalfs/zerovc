@@ -578,8 +578,8 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 		h.db.Pool.QueryRow(r.Context(), `
 			SELECT COALESCE(BIT_OR(r.permissions), 0)
 			FROM guild_members gm
-			JOIN member_roles mr ON mr.guild_id = gm.guild_id AND mr.user_id = gm.user_id
-			JOIN roles r ON r.id = mr.role_id
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
 			WHERE gm.guild_id = $1 AND gm.user_id = $2
 		`, guildID, adminID).Scan(&perms)
 
