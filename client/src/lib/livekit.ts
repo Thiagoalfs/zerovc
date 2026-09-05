@@ -185,13 +185,11 @@ class LiveKitManager {
 
     await room.connect(url, token);
 
-    // Auto-enable and publish microphone track on connect if not disabled
+    // Auto-enable microphone in background without blocking fast connection
     if (callbacks.autoEnableMicrophone !== false) {
-      try {
-        await room.localParticipant.setMicrophoneEnabled(true);
-      } catch (err) {
+      room.localParticipant.setMicrophoneEnabled(true).catch((err) => {
         console.warn('[LiveKit] Could not auto-enable microphone:', err);
-      }
+      });
     }
 
     updateParticipants();
