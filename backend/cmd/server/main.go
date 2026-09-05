@@ -188,8 +188,28 @@ func main() {
 	// Public Health Check
 	serverStartTime := time.Now().UTC().Format(time.RFC3339)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		dbStatus := "connected"
+		statusText := "ok"
+		httpStatus := http.StatusOK
+
+		if err := db.Pool.Ping(ctx); err != nil {
+			dbStatus = "disconnected"
+			statusText = "degraded"
+			httpStatus = http.StatusServiceUnavailable
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok","time":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
+		w.WriteHeader(httpStatus)
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":      statusText,
+			"database":    dbStatus,
+			"version":     "1.0.0",
+			"server_time": time.Now().UTC().Format(time.RFC3339),
+			"started_at":  serverStartTime,
+		})
 	})
 
 	// Public Version / Build Info
@@ -207,6 +227,8 @@ func main() {
 
 		// Current User & Profile Customization
 		r.Get("/api/auth/me", authHandler.Me)
+		r.Get("/api/auth/export-data", authHandler.ExportData)
+		r.Post("/api/auth/delete-account", authHandler.DeleteAccount)
 		r.Post("/api/auth/2fa/generate", authHandler.Generate2FA)
 		r.Post("/api/auth/2fa/enable", authHandler.Enable2FA)
 		r.Post("/api/auth/2fa/disable", authHandler.Disable2FA)
@@ -224,6 +246,8 @@ func main() {
 		// Rate Limiters por Usuário Autenticado
 		messageLimiter := ratelimit.NewUserRateLimiter(10, 5, "Você está enviando mensagens muito rápido. Aguarde um instante.")
 		guildCreateLimiter := ratelimit.NewUserRateLimiter(5, 5.0/3600.0, "Limite de criação de servidores atingido. Tente novamente mais tarde.")
+		friendRequestLimiter := ratelimit.NewUserRateLimiter(5, 5.0/60.0, "Você está enviando solicitações de amizade muito rápido. Aguarde um instante.")
+		dmGroupLimiter := ratelimit.NewUserRateLimiter(3, 3.0/60.0, "Limite de criação de grupos atingido. Aguarde um momento.")
 
 		// Guilds (Protected)
 		r.Get("/api/guilds", guildHandler.List)
@@ -265,7 +289,7 @@ func main() {
 
 		// Friends & Friend Requests (Protected)
 		r.Get("/api/friends", friendHandler.ListFriends)
-		r.Post("/api/friends/request", friendHandler.SendRequest)
+		r.With(friendRequestLimiter.Middleware).Post("/api/friends/request", friendHandler.SendRequest)
 		r.Post("/api/friends/{id}/accept", friendHandler.AcceptRequest)
 		r.Post("/api/friends/{id}/reject", friendHandler.RemoveFriend)
 
@@ -289,7 +313,7 @@ func main() {
 
 		// DM Groups (Protected - Up to 10 Members)
 		r.Get("/api/dm/groups", dmGroupHandler.ListGroups)
-		r.Post("/api/dm/groups", dmGroupHandler.CreateGroup)
+		r.With(dmGroupLimiter.Middleware).Post("/api/dm/groups", dmGroupHandler.CreateGroup)
 		r.Get("/api/dm/groups/{id}", dmGroupHandler.GetGroup)
 		r.Patch("/api/dm/groups/{id}", dmGroupHandler.UpdateGroup)
 		r.Post("/api/dm/groups/{id}/members", dmGroupHandler.AddMembers)

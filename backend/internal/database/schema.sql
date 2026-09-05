@@ -311,15 +311,16 @@ CREATE INDEX IF NOT EXISTS idx_channel_role_access_role ON channel_role_access (
 CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions (channel_id);
 CREATE INDEX IF NOT EXISTS idx_user_favorite_gifs_user ON user_favorite_gifs (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_guild_created ON audit_logs (guild_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_channel_read_states_user ON channel_read_states (user_id);
+-- 22. User 2FA Backup Codes
+CREATE TABLE IF NOT EXISTS user_2fa_backup_codes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_hash VARCHAR(64) NOT NULL,
+    used_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
--- Convert legacy relative asset paths to absolute internal CDN links
-UPDATE users SET avatar_url = 'https://zerovc.safiroko.xyz' || avatar_url WHERE avatar_url LIKE '/assets/%';
-UPDATE users SET banner_url = 'https://zerovc.safiroko.xyz' || banner_url WHERE banner_url LIKE '/assets/%';
-UPDATE guilds SET icon_url = 'https://zerovc.safiroko.xyz' || icon_url WHERE icon_url LIKE '/assets/%';
-UPDATE guilds SET banner_url = 'https://zerovc.safiroko.xyz' || banner_url WHERE banner_url LIKE '/assets/%';
-UPDATE messages SET content = REPLACE(content, '/assets/', 'https://zerovc.safiroko.xyz/assets/') WHERE content LIKE '%/assets/%' AND content NOT LIKE '%https://%assets/%' AND content NOT LIKE '%http://%assets/%';
-UPDATE dm_messages SET content = REPLACE(content, '/assets/', 'https://zerovc.safiroko.xyz/assets/') WHERE content LIKE '%/assets/%' AND content NOT LIKE '%https://%assets/%' AND content NOT LIKE '%http://%assets/%';
-UPDATE dm_group_messages SET content = REPLACE(content, '/assets/', 'https://zerovc.safiroko.xyz/assets/') WHERE content LIKE '%/assets/%' AND content NOT LIKE '%https://%assets/%' AND content NOT LIKE '%http://%assets/%';
+CREATE INDEX IF NOT EXISTS idx_user_2fa_backup_codes_user ON user_2fa_backup_codes (user_id);
+
 
 

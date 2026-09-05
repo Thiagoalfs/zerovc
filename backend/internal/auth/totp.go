@@ -4,10 +4,13 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base32"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"math/big"
 	"net/url"
 	"strings"
 	"time"
@@ -81,4 +84,34 @@ func computeTOTP(key []byte, counter int64) string {
 
 	otp := code % 1000000
 	return fmt.Sprintf("%06d", otp)
+}
+
+// HashBackupCode normaliza o código (minúsculo e sem hífens/espaços) e retorna o hash SHA-256 em hex.
+func HashBackupCode(code string) string {
+	clean := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(code), "-", ""), " ", ""))
+	h := sha256.Sum256([]byte(clean))
+	return hex.EncodeToString(h[:])
+}
+
+// GenerateBackupCodes gera N códigos de backup aleatórios legíveis (formato xxxx-xxxx) e seus respectivos hashes SHA-256.
+func GenerateBackupCodes(count int) (codes []string, hashes []string, err error) {
+	const charset = "abcdefghjkmnpqrstuvwxyz23456789" // caracteres sem ambiguidade (sem 0, O, 1, l, i)
+	codes = make([]string, count)
+	hashes = make([]string, count)
+
+	for i := 0; i < count; i++ {
+		b := make([]byte, 8)
+		for j := 0; j < 8; j++ {
+			num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+			if err != nil {
+				return nil, nil, err
+			}
+			b[j] = charset[num.Int64()]
+		}
+		formatted := fmt.Sprintf("%s-%s", string(b[:4]), string(b[4:]))
+		codes[i] = formatted
+		hashes[i] = HashBackupCode(formatted)
+	}
+
+	return codes, hashes, nil
 }

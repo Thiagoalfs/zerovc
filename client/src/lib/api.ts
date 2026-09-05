@@ -106,12 +106,18 @@ export const api = {
         method: 'POST',
       }),
     enable2FA: (data: { secret: string; code: string }) =>
-      request<{ success: boolean; two_factor_enabled: boolean }>('/auth/2fa/enable', {
+      request<{ success: boolean; two_factor_enabled: boolean; backup_codes?: string[] }>('/auth/2fa/enable', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     disable2FA: (data: { password?: string; code?: string }) =>
       request<{ success: boolean; two_factor_enabled: boolean }>('/auth/2fa/disable', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    exportData: () => request<Record<string, unknown>>('/auth/export-data'),
+    deleteAccount: (data: { password: string }) =>
+      request<{ success: boolean; message: string }>('/auth/delete-account', {
         method: 'POST',
         body: JSON.stringify(data),
       }),

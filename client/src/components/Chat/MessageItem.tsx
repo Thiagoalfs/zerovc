@@ -27,6 +27,7 @@ import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { api, getApiBaseUrl, formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserVolumeSlider } from '../Voice/VolumeSliders';
+import { FormattedMessage } from './FormattedMessage';
 
 interface MessageItemProps {
   message: Message;
@@ -517,18 +518,33 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   return (
     <>
       <div
+        id={`msg-${message.id}`}
         onContextMenu={handleContextMenu}
-        className={`relative flex flex-col px-3 md:px-4 group rounded transition-colors ${
+        className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-300 ${
           isMentioned
             ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-2 border-amber-500'
             : 'hover:bg-background-dark/40'
         } ${isCompact ? 'py-[1.5px] mt-0' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
       >
-        {/* Reply Reference Header */}
+        {/* Reply Reference Header (Clickable with smooth scroll) */}
         {message.reply_to && (
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-1 ml-9 md:ml-10 select-none opacity-80 hover:opacity-100 transition-opacity">
-            <CornerDownRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-            <span className="font-semibold text-brand-400">
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              const targetEl = document.getElementById(`msg-${message.reply_to?.id}`);
+              if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                targetEl.classList.add('bg-brand-500/25', 'ring-2', 'ring-brand-500/50');
+                setTimeout(() => {
+                  targetEl.classList.remove('bg-brand-500/25', 'ring-2', 'ring-brand-500/50');
+                }, 1500);
+              }
+            }}
+            className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-1 ml-9 md:ml-10 select-none opacity-80 hover:opacity-100 hover:text-gray-200 transition-all cursor-pointer group/reply"
+            title="Clique para ir até a mensagem respondida"
+          >
+            <CornerDownRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 group-hover/reply:text-brand-400 transition-colors" />
+            <span className="font-semibold text-brand-400 group-hover/reply:underline">
               @{message.reply_to.author.display_name || message.reply_to.author.username}
             </span>
             <span className="truncate text-gray-400 max-w-sm italic">
@@ -700,8 +716,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="text-[0.9375rem] text-gray-200 break-words leading-[1.375rem] whitespace-pre-wrap font-normal select-text">
-                {renderFormattedContent(message.content)}
+              <div className="text-[0.9375rem] text-gray-200 break-words leading-[1.375rem] font-normal select-text">
+                <FormattedMessage content={message.content} />
               </div>
             )}
 
