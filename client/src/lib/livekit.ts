@@ -183,7 +183,20 @@ class LiveKitManager {
       this.onDisconnected?.(reason);
     });
 
-    await room.connect(url, token);
+    await room.connect(url, token, {
+      autoSubscribe: true,
+      maxRetries: 3,
+      peerConnectionTimeout: 30000,
+      websocketTimeout: 20000,
+      rtcConfig: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+        iceCandidatePoolSize: 2,
+        iceTransportPolicy: 'all',
+      },
+    });
 
     // Auto-enable microphone in background without blocking fast connection
     if (callbacks.autoEnableMicrophone !== false) {

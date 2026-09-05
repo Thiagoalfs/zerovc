@@ -7,6 +7,8 @@ rtc:
   port_range_start: 50000
   port_range_end: 50050
   use_external_ip: true
+  node_ip: 162.35.97.76
+  enable_loopback_candidate: false
 
 # Keys are injected via environment variable LIVEKIT_KEYS in docker-compose.yml
 
