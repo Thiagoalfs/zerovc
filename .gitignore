@@ -4,6 +4,7 @@ dist/
 dist-electron/
 release/
 build/
+*.exe
 
 # Node dependencies
 node_modules/
