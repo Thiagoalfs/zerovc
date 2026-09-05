@@ -14,6 +14,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [useBackupCode, setUseBackupCode] = useState(false);
   const [requires2FA, setRequires2FA] = useState(false);
   const [invitePreview, setInvitePreview] = useState<{ guild_name: string; icon_url?: string; member_count: number } | null>(null);
 
@@ -57,9 +58,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLogin) {
-      const res = await login(email, password, twoFactorCode.trim() || undefined);
-      if (res?.requires_2fa) {
-        setRequires2FA(true);
+      try {
+        const codeToSend = twoFactorCode.trim() || undefined;
+        const res = await login(email, password, codeToSend);
+        if (res?.requires_2fa) {
+          setRequires2FA(true);
+        }
+      } catch {
+        // Error state handled in authStore
       }
     } else {
       const cleanUsername = username.trim();
@@ -71,7 +77,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         alert('O nome de usuário (@) deve ter entre 2 e 32 caracteres.');
         return;
       }
-      await register(cleanUsername, email, password);
+      try {
+        await register(cleanUsername, email, password);
+      } catch {
+        // Error state handled in authStore
+      }
     }
   };
 
@@ -98,14 +108,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         {/* Logo and Brand */}
         <div className="text-center mb-6">
           <div className="w-14 h-14 bg-brand-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-500/30">
-            {requires2FA ? <Shield className="w-8 h-8 text-white" /> : <MessageSquare className="w-8 h-8 text-white" />}
+            {requires2FA ? <KeyRound className="w-8 h-8 text-white" /> : <MessageSquare className="w-8 h-8 text-white" />}
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
             {requires2FA ? 'Autenticação em 2 Etapas' : 'ZeroVC'}
           </h1>
           <p className="text-sm text-gray-400 mt-1">
             {requires2FA
-              ? 'Digite o código de 6 dígitos gerado pelo seu app autenticador'
+              ? useBackupCode
+                ? 'Digite um dos seus códigos de backup de uso único'
+                : 'Digite o código de 6 dígitos gerado pelo seu app autenticador'
               : invitePreview
               ? `Junte-se ao servidor ${invitePreview.guild_name}`
               : isLogin
@@ -142,21 +154,42 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {requires2FA ? (
-            <div>
-              <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5 flex items-center gap-1">
-                <KeyRound className="w-3.5 h-3.5 text-brand-400" />
-                <span>Código 2FA (6 dígitos)</span>
-              </label>
-              <input
-                type="text"
-                required
-                maxLength={6}
-                autoFocus
-                value={twoFactorCode}
-                onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="123456"
-                className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-3 text-center text-xl tracking-widest font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
-              />
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5 flex items-center gap-1">
+                  <KeyRound className="w-3.5 h-3.5 text-brand-400" />
+                  <span>{useBackupCode ? 'Código de Backup (8 caracteres)' : 'Código 2FA (6 dígitos)'}</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  maxLength={useBackupCode ? 12 : 6}
+                  value={twoFactorCode}
+                  onChange={(e) => {
+                    if (useBackupCode) {
+                      setTwoFactorCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                    } else {
+                      setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                    }
+                  }}
+                  placeholder={useBackupCode ? 'xxxx-xxxx' : '000000'}
+                  className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-3 text-center text-xl tracking-widest font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
+                />
+              </div>
+
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseBackupCode(!useBackupCode);
+                    setTwoFactorCode('');
+                  }}
+                  className="text-xs text-brand-400 hover:text-brand-300 underline font-medium cursor-pointer"
+                >
+                  {useBackupCode ? 'Usar código do app autenticador' : 'Perdeu o autenticador? Usar código de backup'}
+                </button>
+              </div>
             </div>
           ) : (
             <>
@@ -217,7 +250,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
 
           <button
             type="submit"
-            disabled={isLoading || (requires2FA && twoFactorCode.length !== 6)}
+            disabled={isLoading || (requires2FA && (useBackupCode ? twoFactorCode.length < 8 : twoFactorCode.length !== 6))}
             className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
           >
             {isLoading
