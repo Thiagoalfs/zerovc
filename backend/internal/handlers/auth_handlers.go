@@ -1,9 +1,6 @@
 package handlers
 
 import (
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"regexp"
