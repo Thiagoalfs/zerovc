@@ -717,7 +717,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               </div>
             ) : (
               <div className="text-[0.9375rem] text-gray-200 break-words leading-[1.375rem] font-normal select-text">
-                <FormattedMessage content={message.content} />
+                <FormattedMessage
+                  content={message.content}
+                  onPreviewImage={onPreviewImage}
+                  onImageLoad={onImageLoad}
+                />
               </div>
             )}
 

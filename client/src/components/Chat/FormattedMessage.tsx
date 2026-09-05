@@ -1,9 +1,47 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
+import { Star } from 'lucide-react';
+import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
+import { formatAssetUrl } from '../../lib/api';
 
 interface FormattedMessageProps {
   content: string;
   className?: string;
+  onPreviewImage?: (url: string) => void;
+  onImageLoad?: () => void;
 }
+
+const isMediaUrl = (url: string) => {
+  const clean = url.split('?')[0].toLowerCase();
+  const isImg =
+    clean.endsWith('.png') ||
+    clean.endsWith('.jpg') ||
+    clean.endsWith('.jpeg') ||
+    clean.endsWith('.gif') ||
+    clean.endsWith('.webp') ||
+    clean.endsWith('.svg') ||
+    url.includes('/assets/user/') ||
+    url.includes('/assets/guild/') ||
+    url.includes('tenor.com/view/') ||
+    url.includes('giphy.com/gifs/') ||
+    url.includes('media.tenor.com') ||
+    url.includes('media.giphy.com') ||
+    url.includes('klipy') ||
+    url.startsWith('data:image/');
+
+  const isVid =
+    clean.endsWith('.mp4') ||
+    clean.endsWith('.webm') ||
+    clean.endsWith('.ogg') ||
+    clean.endsWith('.mov');
+
+  const isAud =
+    clean.endsWith('.mp3') ||
+    clean.endsWith('.wav') ||
+    clean.endsWith('.ogg') ||
+    clean.endsWith('.m4a');
+
+  return { isMedia: isImg || isVid || isAud, isImage: isImg, isVideo: isVid, isAudio: isAud };
+};
 
 const SpoilerText: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [revealed, setRevealed] = useState(false);
@@ -26,8 +64,32 @@ const SpoilerText: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
-export const FormattedMessage: React.FC<FormattedMessageProps> = ({ content, className = '' }) => {
+export const FormattedMessage: React.FC<FormattedMessageProps> = ({
+  content,
+  className = '',
+  onPreviewImage,
+  onImageLoad,
+}) => {
   if (!content) return null;
+
+  const { isFavorited, toggleFavorite } = useFavoriteGifStore();
+
+  // Extract all media links for Discord-like embeds below the text
+  const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|data:image\/[^\s]+)/g;
+  const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
+  const foundUrls = new Set<string>();
+
+  let matchUrl: RegExpExecArray | null;
+  while ((matchUrl = urlRegex.exec(content)) !== null) {
+    const rawUrl = matchUrl[0];
+    if (!foundUrls.has(rawUrl)) {
+      foundUrls.add(rawUrl);
+      const mediaInfo = isMediaUrl(rawUrl);
+      if (mediaInfo.isMedia) {
+        mediaEmbeds.push({ url: rawUrl, ...mediaInfo });
+      }
+    }
+  }
 
   // 1. Process Code blocks first (```code```)
   const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g;
@@ -57,7 +119,95 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({ content, cla
     parts.push(renderInlineFormatting(content.substring(lastIndex), `text-${lastIndex}`));
   }
 
-  return <div className={`leading-relaxed break-words ${className}`}>{parts}</div>;
+  return (
+    <div className={`leading-relaxed break-words ${className}`}>
+      <div>{parts}</div>
+
+      {/* Discord-like Rich Embeds / Image / GIF / Video Previews */}
+      {mediaEmbeds.length > 0 && (
+        <div className="mt-2 space-y-2 flex flex-col items-start select-none">
+          {mediaEmbeds.map((media, idx) => {
+            const resolvedSrc = formatAssetUrl(media.url);
+            const isGif =
+              resolvedSrc.includes('.gif') ||
+              resolvedSrc.includes('.webp') ||
+              resolvedSrc.includes('klipy') ||
+              resolvedSrc.includes('giphy') ||
+              resolvedSrc.includes('tenor');
+            const favorited = isFavorited(resolvedSrc);
+
+            if (media.isVideo) {
+              return (
+                <div
+                  key={idx}
+                  className="rounded-2xl overflow-hidden border border-white/10 max-w-sm sm:max-w-md md:max-w-lg bg-black/50 shadow-md"
+                >
+                  <video
+                    src={resolvedSrc}
+                    controls
+                    preload="metadata"
+                    className="max-h-[350px] max-w-full w-auto h-auto rounded-2xl block"
+                  />
+                </div>
+              );
+            }
+
+            if (media.isAudio) {
+              return (
+                <div
+                  key={idx}
+                  className="p-3 bg-background-darker rounded-2xl border border-white/10 max-w-md w-full shadow-md"
+                >
+                  <audio src={resolvedSrc} controls className="w-full h-8" />
+                </div>
+              );
+            }
+
+            // Image / GIF Preview
+            return (
+              <div
+                key={idx}
+                className="w-fit max-w-sm sm:max-w-md md:max-w-lg rounded-2xl overflow-hidden border border-white/10 relative group/media shadow-md bg-black/40"
+              >
+                <img
+                  src={resolvedSrc}
+                  alt="Mídia enviada"
+                  onLoad={() => onImageLoad?.()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onPreviewImage) {
+                      onPreviewImage(resolvedSrc);
+                    } else {
+                      window.open(resolvedSrc, '_blank');
+                    }
+                  }}
+                  className="max-h-[350px] max-w-full w-auto h-auto object-contain rounded-2xl cursor-pointer hover:opacity-95 transition-opacity block"
+                />
+
+                {isGif && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(resolvedSrc);
+                    }}
+                    className={`absolute top-2 right-2 p-1.5 rounded-xl backdrop-blur-md transition-all shadow-md cursor-pointer ${
+                      favorited
+                        ? 'bg-amber-500 text-white opacity-100'
+                        : 'bg-black/60 text-white/70 hover:text-white hover:bg-black/90 opacity-0 group-hover/media:opacity-100'
+                    }`}
+                    title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
+                  >
+                    <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 // Helper for inline tokens: Spoiler, Bold, Italic, Strikethrough, Inline Code, Links

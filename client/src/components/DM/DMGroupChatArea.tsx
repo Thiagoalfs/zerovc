@@ -497,7 +497,11 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
                       {textLines.length > 0 && (
                         <div className="text-sm text-gray-200 select-text">
-                          <FormattedMessage content={textLines.join('\n')} />
+                          <FormattedMessage
+                            content={textLines.join('\n')}
+                            onPreviewImage={onPreviewImage}
+                            onImageLoad={handleMediaLoad}
+                          />
                         </div>
                       )}
 
