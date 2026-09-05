@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Server, Settings, Check, Shield, ArrowLeft, KeyRound } from 'lucide-react';
+import { MessageSquare, Shield, ArrowLeft, KeyRound } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
-import { api, getApiBaseUrl, setApiBaseUrl, formatAssetUrl } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 
 interface AuthScreenProps {
   initialMode?: 'login' | 'register';
@@ -15,9 +15,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [requires2FA, setRequires2FA] = useState(false);
-  const [showServerConfig, setShowServerConfig] = useState(false);
-  const [serverUrl, setServerUrl] = useState(getApiBaseUrl());
-  const [serverSaved, setServerSaved] = useState(false);
   const [invitePreview, setInvitePreview] = useState<{ guild_name: string; icon_url?: string; member_count: number } | null>(null);
 
   const { login, register, isLoading, error } = useAuthStore();
@@ -78,16 +75,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
     }
   };
 
-  const handleSaveServer = (e: React.FormEvent) => {
-    e.preventDefault();
-    setApiBaseUrl(serverUrl);
-    setServerSaved(true);
-    setTimeout(() => {
-      setServerSaved(false);
-      setShowServerConfig(false);
-    }, 1200);
-  };
-
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-background-darkest select-none p-4 relative overflow-hidden">
       {/* Home Navigation Button at top left (if in browser) */}
@@ -101,17 +88,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
           <span>Início</span>
         </button>
       )}
-
-      {/* Server Config Button at top right */}
-      <button
-        onClick={() => setShowServerConfig(!showServerConfig)}
-        className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-background-dark/80 hover:bg-background-dark text-gray-400 hover:text-gray-200 text-xs px-3 py-1.5 rounded-full border border-white/10 transition-colors shadow-md backdrop-blur-sm cursor-pointer"
-        title="Configurar Servidor"
-      >
-        <Server className="w-3.5 h-3.5 text-online" />
-        <span className="truncate max-w-[200px]">{getApiBaseUrl()}</span>
-        <Settings className="w-3.5 h-3.5 ml-0.5" />
-      </button>
 
       {/* Background ambient glow */}
       <div className="absolute w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-3xl pointer-events-none -top-20 -left-20" />
@@ -154,30 +130,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
               <span className="text-[11px] text-gray-400">{invitePreview.member_count} membros</span>
             </div>
           </div>
-        )}
-
-        {/* Server URL Config Drawer */}
-        {showServerConfig && (
-          <form onSubmit={handleSaveServer} className="mb-5 p-4 bg-background-darker rounded-2xl border border-white/10 animate-in fade-in slide-in-from-top-2">
-            <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
-              URL do Servidor ZeroVC
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="http://162.35.97.76:8081"
-                className="flex-1 bg-background-dark text-white px-3 py-1.5 rounded-lg border border-white/10 text-xs font-mono focus:outline-none focus:border-brand-500"
-              />
-              <button
-                type="submit"
-                className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
-              >
-                {serverSaved ? <Check className="w-3.5 h-3.5" /> : 'Salvar'}
-              </button>
-            </div>
-          </form>
         )}
 
         {/* Error alert */}
