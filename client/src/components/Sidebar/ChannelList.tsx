@@ -87,6 +87,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     currentChannelId,
     joinVoice,
     isConnected,
+    isConnecting,
     speakingUserIds,
     userVolumes,
     streamVolumes,
@@ -129,7 +130,9 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   const handleVoiceChannelClick = (channel: Channel) => {
     selectChannel(channel);
     if (onSelectChannel) onSelectChannel(channel);
-    joinVoice(channel.id);
+    if (currentChannelId !== channel.id || (!isConnected && !isConnecting)) {
+      joinVoice(channel.id);
+    }
     onCloseMobileDrawer?.();
   };
 
