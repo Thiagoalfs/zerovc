@@ -38,7 +38,7 @@ import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const { user, token, isLoading, checkAuth, setUser } = useAuthStore();
+  const { user, token, isCheckingAuth, checkAuth, setUser } = useAuthStore();
   const {
     fetchGuilds,
     activeGuild,
@@ -672,7 +672,7 @@ export const App: React.FC = () => {
     }
   }, [token, user]);
 
-  if (isLoading) {
+  if (isCheckingAuth) {
     return (
       <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest text-gray-400">
         <TitleBar />
