@@ -13,12 +13,18 @@ FROM alpine:latest
 
 WORKDIR /app
 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Copy root certificates from builder
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /app/zerovc-server .
 
 # Copy static Web App assets into container
 COPY --from=builder /app/web ./web
+
+RUN chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 8080
 

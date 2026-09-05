@@ -18,11 +18,15 @@ export const AuthScreen: React.FC = () => {
   const { login, register, isLoading, error } = useAuthStore();
 
   useEffect(() => {
-    // Check if path has /invite/:code or stored in sessionStorage
-    const path = window.location.pathname;
+    // Check if path has /invite/:code, /invites/:code or stored in sessionStorage
+    const path = (window.location.protocol === 'file:' && window.location.hash)
+      ? window.location.hash.replace(/^#/, '')
+      : window.location.pathname;
     let code = '';
     if (path.startsWith('/invite/')) {
       code = path.split('/invite/')[1]?.split('/')[0] || '';
+    } else if (path.startsWith('/invites/')) {
+      code = path.split('/invites/')[1]?.split('/')[0] || '';
     }
     if (!code) {
       code = sessionStorage.getItem('pending_invite_code') || '';

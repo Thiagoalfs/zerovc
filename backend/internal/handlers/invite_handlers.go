@@ -158,6 +158,14 @@ func (h *InviteHandler) JoinByInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 0. Check if user is banned from this guild
+	var isBanned bool
+	banCheckQuery := `SELECT EXISTS(SELECT 1 FROM guild_bans WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), banCheckQuery, guildID, userID).Scan(&isBanned); err == nil && isBanned {
+		http.Error(w, `{"error":"Você está banido deste servidor"}`, http.StatusForbidden)
+		return
+	}
+
 	// 1. Add user to guild_members
 	joinQuery := `
 		INSERT INTO guild_members (guild_id, user_id, role)

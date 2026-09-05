@@ -195,7 +195,7 @@ func (h *FriendHandler) AcceptRequest(w http.ResponseWriter, r *http.Request) {
 	query := `
 		UPDATE friendships
 		SET status = 'accepted', updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1 AND (friend_id = $2 OR user_id = $2)
+		WHERE id = $1 AND friend_id = $2 AND status = 'pending'
 		RETURNING user_id
 	`
 	err = h.db.Pool.QueryRow(r.Context(), query, friendshipID, userID).Scan(&senderID)
