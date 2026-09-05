@@ -27,6 +27,43 @@ func NewMessageHandler(db *database.DB, hub *gateway.Hub) *MessageHandler {
 	}
 }
 
+func (h *MessageHandler) broadcastChannelEvent(ctx context.Context, guildID, channelID uuid.UUID, isPrivate bool, event models.WSEvent) {
+	if !isPrivate {
+		h.hub.BroadcastToGuild(guildID, event)
+		return
+	}
+
+	// Calculate allowed users for this private channel
+	query := `
+		SELECT DISTINCT gm.user_id
+		FROM guild_members gm
+		INNER JOIN guilds g ON g.id = gm.guild_id
+		WHERE g.id = $1 AND (
+			g.owner_id = gm.user_id
+			OR EXISTS (
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id = $2 AND gmr.guild_id = $1 AND gmr.user_id = gm.user_id
+			)
+		)
+	`
+	rows, err := h.db.Pool.Query(ctx, query, guildID, channelID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	allowedUserIDs := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var uid uuid.UUID
+		if err := rows.Scan(&uid); err == nil {
+			allowedUserIDs = append(allowedUserIDs, uid)
+		}
+	}
+
+	h.hub.BroadcastToUsers(allowedUserIDs, event)
+}
+
 type SendMessageRequest struct {
 	Content     string              `json:"content"`
 	Attachments []models.Attachment `json:"attachments"`
@@ -73,7 +110,8 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Verify channel & membership
 	var guildID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
+	var isPrivate bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
@@ -84,6 +122,23 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server to post messages"}`, http.StatusForbidden)
 		return
+	}
+
+	if isPrivate {
+		var hasAccess bool
+		privateCheckQuery := `
+			SELECT EXISTS(
+				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
+				UNION
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
+			)
+		`
+		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
+			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	// 2. Fetch author details
@@ -135,8 +190,8 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 4. Broadcast via WebSocket
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	// 4. Broadcast via WebSocket (scoped to private channel members if private)
+	h.broadcastChannelEvent(r.Context(), guildID, channelID, isPrivate, models.WSEvent{
 		Type: models.EventMessageCreate,
 		Data: msg,
 	})
@@ -173,22 +228,23 @@ func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Check author & update
 	var channelID, guildID uuid.UUID
+	var isPrivate bool
 	now := time.Now().UTC()
 	query := `
 		UPDATE messages m
 		SET content = $1, is_edited = true, edited_at = $2, updated_at = $2
 		FROM channels c
 		WHERE m.id = $3 AND m.author_id = $4 AND c.id = m.channel_id
-		RETURNING m.channel_id, c.guild_id
+		RETURNING m.channel_id, c.guild_id, c.is_private
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, req.Content, now, messageID, userID).Scan(&channelID, &guildID)
+	err = h.db.Pool.QueryRow(r.Context(), query, req.Content, now, messageID, userID).Scan(&channelID, &guildID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"message not found or you are not the author"}`, http.StatusForbidden)
 		return
 	}
 
 	// Broadcast update event
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channelID, isPrivate, models.WSEvent{
 		Type: models.EventMessageUpdate,
 		Data: map[string]any{
 			"id":         messageID,
@@ -225,14 +281,15 @@ func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	var authorID, guildID, channelID uuid.UUID
 	var ownerID uuid.UUID
+	var isPrivate bool
 	query := `
-		SELECT m.author_id, m.channel_id, c.guild_id, g.owner_id
+		SELECT m.author_id, m.channel_id, c.guild_id, g.owner_id, c.is_private
 		FROM messages m
 		INNER JOIN channels c ON c.id = m.channel_id
 		INNER JOIN guilds g ON g.id = c.guild_id
 		WHERE m.id = $1
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, messageID).Scan(&authorID, &channelID, &guildID, &ownerID)
+	err = h.db.Pool.QueryRow(r.Context(), query, messageID).Scan(&authorID, &channelID, &guildID, &ownerID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
@@ -250,7 +307,7 @@ func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Broadcast delete event
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channelID, isPrivate, models.WSEvent{
 		Type: models.EventMessageDelete,
 		Data: map[string]any{
 			"id":         messageID,
@@ -476,12 +533,13 @@ func (h *MessageHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var channelID, guildID uuid.UUID
+	var isPrivate bool
 	err = h.db.Pool.QueryRow(r.Context(), `
-		SELECT m.channel_id, c.guild_id
+		SELECT m.channel_id, c.guild_id, c.is_private
 		FROM messages m
 		JOIN channels c ON c.id = m.channel_id
 		WHERE m.id = $1
-	`, messageID).Scan(&channelID, &guildID)
+	`, messageID).Scan(&channelID, &guildID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
@@ -504,7 +562,7 @@ func (h *MessageHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channelID, isPrivate, models.WSEvent{
 		Type: models.EventMessageReactionAdd,
 		Data: map[string]any{
 			"message_id": messageID,
@@ -534,12 +592,13 @@ func (h *MessageHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var channelID, guildID uuid.UUID
+	var isPrivate bool
 	err = h.db.Pool.QueryRow(r.Context(), `
-		SELECT m.channel_id, c.guild_id
+		SELECT m.channel_id, c.guild_id, c.is_private
 		FROM messages m
 		JOIN channels c ON c.id = m.channel_id
 		WHERE m.id = $1
-	`, messageID).Scan(&channelID, &guildID)
+	`, messageID).Scan(&channelID, &guildID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
@@ -561,7 +620,7 @@ func (h *MessageHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channelID, isPrivate, models.WSEvent{
 		Type: models.EventMessageReactionRemove,
 		Data: map[string]any{
 			"message_id": messageID,
@@ -590,12 +649,13 @@ func (h *MessageHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var channelID, guildID uuid.UUID
+	var isPrivate bool
 	err = h.db.Pool.QueryRow(r.Context(), `
-		SELECT m.channel_id, c.guild_id
+		SELECT m.channel_id, c.guild_id, c.is_private
 		FROM messages m
 		JOIN channels c ON c.id = m.channel_id
 		WHERE m.id = $1
-	`, messageID).Scan(&channelID, &guildID)
+	`, messageID).Scan(&channelID, &guildID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
@@ -625,7 +685,7 @@ func (h *MessageHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
 		eventType = models.EventMessageUnpin
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channelID, isPrivate, models.WSEvent{
 		Type: eventType,
 		Data: map[string]any{
 			"message_id": messageID,
@@ -899,6 +959,20 @@ func (h *MessageHandler) AckChannel(w http.ResponseWriter, r *http.Request) {
 
 	var req AckChannelRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	var guildID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
+	if err != nil {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you must be a member of this server"}`, http.StatusForbidden)
+		return
+	}
 
 	var lastMsgID *uuid.UUID = req.MessageID
 	if lastMsgID == nil {

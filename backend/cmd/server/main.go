@@ -231,7 +231,6 @@ func main() {
 		r.Get("/api/guilds/{id}", guildHandler.GetDetails)
 		r.Patch("/api/guilds/{id}", guildHandler.Update)
 		r.Delete("/api/guilds/{id}", guildHandler.Delete)
-		r.Post("/api/guilds/{id}/join", guildHandler.Join)
 		r.Post("/api/guilds/{id}/leave", guildHandler.Leave)
 		r.Post("/api/guilds/{id}/mute", guildHandler.ToggleMute)
 		r.Post("/api/guilds/{id}/invites", inviteHandler.CreateInvite)

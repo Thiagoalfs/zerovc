@@ -31,6 +31,7 @@ type Hub struct {
 type BroadcastMessage struct {
 	GuildID   *uuid.UUID
 	ChannelID *uuid.UUID
+	UserIDs   []uuid.UUID
 	Event     models.WSEvent
 }
 
@@ -95,7 +96,21 @@ func (h *Hub) Run() {
 			}
 
 			h.mu.RLock()
-			if msg.GuildID != nil {
+			if len(msg.UserIDs) > 0 {
+				// Broadcast specifically to listed users
+				for _, uid := range msg.UserIDs {
+					if userClients, exists := h.clients[uid]; exists {
+						for c := range userClients {
+							select {
+							case c.send <- payload:
+							default:
+								close(c.send)
+								delete(userClients, c)
+							}
+						}
+					}
+				}
+			} else if msg.GuildID != nil {
 				// Broadcast only to guild members
 				if members, ok := h.guildMembers[*msg.GuildID]; ok {
 					for memberID := range members {
@@ -160,9 +175,26 @@ func (h *Hub) RemoveGuildMember(guildID uuid.UUID, userID uuid.UUID) {
 	}
 }
 
+func (h *Hub) IsGuildMember(guildID uuid.UUID, userID uuid.UUID) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if members, ok := h.guildMembers[guildID]; ok {
+		return members[userID]
+	}
+	return false
+}
+
 func (h *Hub) BroadcastToGuild(guildID uuid.UUID, event models.WSEvent) {
 	h.Broadcast <- BroadcastMessage{
 		GuildID: &guildID,
+		Event:   event,
+	}
+}
+
+func (h *Hub) BroadcastToUsers(userIDs []uuid.UUID, event models.WSEvent) {
+	h.Broadcast <- BroadcastMessage{
+		UserIDs: userIDs,
 		Event:   event,
 	}
 }

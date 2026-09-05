@@ -74,7 +74,7 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
   } else {
     // Discord Model: Load latest production build from server with offline fallback
-    const remoteUrl = 'http://zerovc.safiroko.xyz';
+    const remoteUrl = 'https://zerovc.safiroko.xyz';
     mainWindow.loadURL(remoteUrl).catch((err) => {
       console.warn('[Electron] Remote server unavailable, loading local fallback:', err);
       mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
