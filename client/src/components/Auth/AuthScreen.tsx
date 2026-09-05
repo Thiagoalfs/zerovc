@@ -3,8 +3,13 @@ import { MessageSquare, Server, Settings, Check, Shield, ArrowLeft, KeyRound } f
 import { useAuthStore } from '../../stores/authStore';
 import { api, getApiBaseUrl, setApiBaseUrl, formatAssetUrl } from '../../lib/api';
 
-export const AuthScreen: React.FC = () => {
-  const [isLogin, setIsLogin] = useState(true);
+interface AuthScreenProps {
+  initialMode?: 'login' | 'register';
+  onNavigate?: (path: string) => void;
+}
+
+export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', onNavigate }) => {
+  const [isLogin, setIsLogin] = useState(initialMode !== 'register');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,6 +21,10 @@ export const AuthScreen: React.FC = () => {
   const [invitePreview, setInvitePreview] = useState<{ guild_name: string; icon_url?: string; member_count: number } | null>(null);
 
   const { login, register, isLoading, error } = useAuthStore();
+
+  useEffect(() => {
+    setIsLogin(initialMode !== 'register');
+  }, [initialMode]);
 
   useEffect(() => {
     // Check if path has /invite/:code, /invites/:code or stored in sessionStorage
@@ -81,6 +90,18 @@ export const AuthScreen: React.FC = () => {
 
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-background-darkest select-none p-4 relative overflow-hidden">
+      {/* Home Navigation Button at top left (if in browser) */}
+      {onNavigate && (
+        <button
+          onClick={() => onNavigate('/')}
+          className="absolute top-4 left-4 z-20 flex items-center gap-1.5 bg-background-dark/80 hover:bg-background-dark text-gray-400 hover:text-gray-200 text-xs px-3.5 py-2 rounded-full border border-white/10 transition-colors shadow-md backdrop-blur-sm cursor-pointer"
+          title="Voltar para a Página Inicial"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Início</span>
+        </button>
+      )}
+
       {/* Server Config Button at top right */}
       <button
         onClick={() => setShowServerConfig(!showServerConfig)}
@@ -282,7 +303,10 @@ export const AuthScreen: React.FC = () => {
               <span>
                 Precisando de uma conta?{' '}
                 <button
-                  onClick={() => setIsLogin(false)}
+                  onClick={() => {
+                    setIsLogin(false);
+                    onNavigate?.('/signup');
+                  }}
                   className="text-brand-500 font-semibold hover:underline cursor-pointer"
                 >
                   Registre-se
@@ -292,7 +316,10 @@ export const AuthScreen: React.FC = () => {
               <span>
                 Já tem uma conta?{' '}
                 <button
-                  onClick={() => setIsLogin(true)}
+                  onClick={() => {
+                    setIsLogin(true);
+                    onNavigate?.('/signin');
+                  }}
                   className="text-brand-500 font-semibold hover:underline cursor-pointer"
                 >
                   Entrar
