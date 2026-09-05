@@ -23,7 +23,7 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) => {
   return (
-    <div className="min-h-screen bg-background-darkest text-gray-100 flex flex-col font-sans selection:bg-brand-500/30 selection:text-white overflow-x-hidden">
+    <div className="min-h-full w-full bg-background-darkest text-gray-100 flex flex-col font-sans selection:bg-brand-500/30 selection:text-white overflow-x-hidden flex-1">
       {/* Background Ambient Glows */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[450px] bg-gradient-to-b from-brand-600/15 via-brand-500/5 to-transparent blur-3xl pointer-events-none -z-10" />
       <div className="fixed top-96 -left-40 w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-[120px] pointer-events-none -z-10" />
