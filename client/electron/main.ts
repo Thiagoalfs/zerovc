@@ -22,8 +22,10 @@ app.commandLine.appendSwitch(
   'WindowsGraphicsCapture,WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,ZeroCopy'
 );
 
-// Base production server URL
+// Base production server URL and Allowed Origins
 const REMOTE_SERVER_URL = 'https://zerovc.safiroko.xyz';
+const ALLOWED_ORIGINS = ['https://zerovc.safiroko.xyz', 'http://localhost:5173'];
+const ALLOWED_DEEP_LINK_PATH_REGEX = /^\/(invite|invites|channels|@me)(\/|$)/;
 
 // Register zerovc:// protocol
 if (process.defaultApp) {
@@ -36,8 +38,7 @@ if (process.defaultApp) {
 
 let mainWindow: BrowserWindow | null = null;
 
-function handleDeepLink(rawUrl: string) {
-  if (!mainWindow) return;
+function extractValidTargetPath(rawUrl: string): string | null {
   try {
     let targetPath = '';
     if (rawUrl.startsWith('zerovc://')) {
@@ -46,7 +47,26 @@ function handleDeepLink(rawUrl: string) {
       if (!targetPath.startsWith('/')) targetPath = '/' + targetPath;
     } else if (rawUrl.startsWith(REMOTE_SERVER_URL)) {
       targetPath = rawUrl.replace(REMOTE_SERVER_URL, '');
+    } else {
+      return null;
     }
+
+    if (ALLOWED_DEEP_LINK_PATH_REGEX.test(targetPath)) {
+      return targetPath;
+    }
+    console.warn(`[Electron] Rejected invalid deep link targetPath: ${targetPath}`);
+    return null;
+  } catch (err) {
+    console.error('[Electron] Error extracting targetPath:', err);
+    return null;
+  }
+}
+
+function handleDeepLink(rawUrl: string) {
+  if (!mainWindow) return;
+  try {
+    const targetPath = extractValidTargetPath(rawUrl);
+    if (!targetPath) return;
 
     const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
     const baseUrl = isDev ? 'http://localhost:5173' : REMOTE_SERVER_URL;
@@ -75,6 +95,37 @@ function createWindow(initialUrl?: string) {
       contextIsolation: true,
       webSecurity: true,
     },
+  });
+
+  // Restrict in-window navigation to allowed origins
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.protocol === 'file:') return;
+      if (!ALLOWED_ORIGINS.includes(parsedUrl.origin)) {
+        event.preventDefault();
+        console.warn(`[Electron] Blocked will-navigate to unauthorized origin: ${parsedUrl.origin}`);
+        if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+          shell.openExternal(url);
+        }
+      }
+    } catch {
+      event.preventDefault();
+    }
+  });
+
+  // Restrict window.open / target="_blank" popups to allowed origins
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const parsedUrl = new URL(url);
+      if (ALLOWED_ORIGINS.includes(parsedUrl.origin)) {
+        return { action: 'allow' };
+      }
+      if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+        shell.openExternal(url);
+      }
+    } catch {}
+    return { action: 'deny' };
   });
 
   // Handle media permissions automatically (Microphone, Camera, Screen share)
@@ -332,16 +383,12 @@ if (!gotTheLock) {
 
     let initialUrl: string | undefined = undefined;
     if (urlArg) {
-      let targetPath = '';
-      if (urlArg.startsWith('zerovc://')) {
-        targetPath = urlArg.replace('zerovc://', '/');
-        if (!targetPath.startsWith('/')) targetPath = '/' + targetPath;
-      } else if (urlArg.startsWith(REMOTE_SERVER_URL)) {
-        targetPath = urlArg.replace(REMOTE_SERVER_URL, '');
+      const targetPath = extractValidTargetPath(urlArg);
+      if (targetPath) {
+        const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+        const baseUrl = isDev ? 'http://localhost:5173' : REMOTE_SERVER_URL;
+        initialUrl = `${baseUrl}${targetPath}`;
       }
-      const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-      const baseUrl = isDev ? 'http://localhost:5173' : REMOTE_SERVER_URL;
-      initialUrl = `${baseUrl}${targetPath}`;
     }
 
     createWindow(initialUrl);
