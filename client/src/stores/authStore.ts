@@ -14,6 +14,7 @@ import { useFriendStore } from './friendStore';
 interface AuthState {
   user: User | null;
   token: string | null;
+  isCheckingAuth: boolean;
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string, code?: string) => Promise<{ requires_2fa?: boolean } | void>;
@@ -126,7 +127,8 @@ const cleanupAllStoresAndConnections = async () => {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: isElectron() ? localStorage.getItem('token') || localStorage.getItem('zerovc_token') : null,
-  isLoading: true,
+  isCheckingAuth: true,
+  isLoading: false,
   error: null,
 
   login: async (email, password, code) => {
@@ -176,7 +178,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('zerovc_token');
     }
     await cleanupAllStoresAndConnections();
-    set({ user: null, token: null, isLoading: false });
+    set({ user: null, token: null, isCheckingAuth: false, isLoading: false });
   },
 
   checkAuth: async () => {
@@ -185,7 +187,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const token = isElectron()
         ? localStorage.getItem('token') || localStorage.getItem('zerovc_token') || 'cookie_session'
         : 'cookie_session';
-      set({ user, token, isLoading: false });
+      set({ user, token, isCheckingAuth: false, isLoading: false });
       socket.connect();
     } catch {
       if (isElectron()) {
@@ -193,7 +195,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         localStorage.removeItem('zerovc_token');
       }
       await cleanupAllStoresAndConnections();
-      set({ user: null, token: null, isLoading: false });
+      set({ user: null, token: null, isCheckingAuth: false, isLoading: false });
     }
   },
 
