@@ -80,6 +80,7 @@ services:
       LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
     volumes:
       - ../assets:/app/assets
+      - ../backend/web:/app/web
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=coolify"
