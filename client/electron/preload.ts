@@ -39,6 +39,8 @@ export interface ElectronAPI {
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
   onRepoUpdateAvailable: (callback: (info: any) => void) => () => void;
+  setMinimizeToTray: (enabled: boolean) => void;
+  getMinimizeToTray: () => Promise<boolean>;
 }
 
 const electronAPI: ElectronAPI = {
@@ -81,6 +83,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on('repo-update-available', handler);
     return () => ipcRenderer.removeListener('repo-update-available', handler);
   },
+  setMinimizeToTray: (enabled: boolean) => ipcRenderer.send('set-minimize-to-tray', enabled),
+  getMinimizeToTray: () => ipcRenderer.invoke('get-minimize-to-tray'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

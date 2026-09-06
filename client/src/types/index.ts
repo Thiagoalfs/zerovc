@@ -241,6 +241,8 @@ declare global {
       onUpdateAvailable: (callback: (info: any) => void) => () => void;
       onUpdateProgress: (callback: (progress: any) => void) => () => void;
       onUpdateDownloaded: (callback: (info: any) => void) => () => void;
+      setMinimizeToTray?: (enabled: boolean) => void;
+      getMinimizeToTray?: () => Promise<boolean>;
     };
   }
 }

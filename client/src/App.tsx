@@ -300,6 +300,17 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  // Initialize desktop preferences (e.g. Minimize to Tray)
+  useEffect(() => {
+    if (window.electronAPI?.setMinimizeToTray) {
+      try {
+        const saved = localStorage.getItem('zerovc_minimize_to_tray');
+        const enabled = saved !== null ? saved === 'true' : true;
+        window.electronAPI.setMinimizeToTray(enabled);
+      } catch {}
+    }
+  }, []);
+
   // Push-to-Talk (PTT) Global Key Listener
   useEffect(() => {
     let isPTTPressed = false;
