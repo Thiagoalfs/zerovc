@@ -25,6 +25,7 @@ import {
   Copy,
   Trash2,
   AlertTriangle,
+  Sliders,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { livekit } from '../../lib/livekit';
@@ -40,7 +41,7 @@ interface ProfileModalProps {
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   const { user, updateProfile, logout, setUser } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState<'account' | 'profile' | 'audio' | 'keybinds'>('account');
+  const [activeTab, setActiveTab] = useState<'account' | 'profile' | 'audio' | 'preferences' | 'keybinds'>('account');
 
   // Crop Modal State
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -127,6 +128,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
+
+  // Preferences State (default: true)
+  const [minimizeToTray, setMinimizeToTray] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('zerovc_minimize_to_tray');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleMinimizeToTray = (val: boolean) => {
+    setMinimizeToTray(val);
+    try {
+      localStorage.setItem('zerovc_minimize_to_tray', String(val));
+    } catch {}
+    window.electronAPI?.setMinimizeToTray?.(val);
+  };
 
   // Load media devices & sync user state
   useEffect(() => {
@@ -568,6 +587,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <span>Voz & Vídeo</span>
             </button>
 
+            {/* Tab 3: Preferências */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('preferences')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'preferences'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
+              }`}
+            >
+              <Sliders className="w-4 h-4" />
+              <span>Preferências</span>
+            </button>
+
             {/* Tab 4: Atalhos do Teclado */}
             <button
               type="button"
@@ -617,12 +650,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {activeTab === 'account' && 'Minha Conta'}
                   {activeTab === 'profile' && 'Perfil de Usuário'}
                   {activeTab === 'audio' && 'Voz & Vídeo'}
+                  {activeTab === 'preferences' && 'Preferências do Sistema'}
                   {activeTab === 'keybinds' && 'Atalhos do Teclado'}
                 </h3>
                 <p className="text-xs text-gray-400">
                   {activeTab === 'account' && 'Gerencie seus dados de acesso, nome de usuário, e-mail e segurança.'}
                   {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
                   {activeTab === 'audio' && 'Ajuste seus dispositivos de entrada, saída e sensibilidade do microfone.'}
+                  {activeTab === 'preferences' && 'Configure o comportamento da janela e integração com o sistema operacional.'}
                   {activeTab === 'keybinds' && 'Configure atalhos rápidos e Push-to-Talk globais para controle de voz.'}
                 </p>
               </div>
@@ -1166,6 +1201,54 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <span className="font-bold text-xs block mb-0.5">Push-to-Talk</span>
                       <span className="text-[11px] text-gray-400">Aperte uma tecla para transmitir seu áudio</span>
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: PREFERÊNCIAS */}
+            {activeTab === 'preferences' && (
+              <div className="space-y-6 animate-in fade-in">
+                {/* Window and Desktop Behavior */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Comportamento do Aplicativo
+                  </h4>
+
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-4">
+                    {/* Item: Manter na Gaveta / Bandeja */}
+                    <div className="flex items-center justify-between pt-1 first:pt-0">
+                      <div className="space-y-1 pr-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">
+                            Manter na bandeja do sistema ao fechar
+                          </span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30">
+                            Ativo por padrão
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 leading-relaxed max-w-xl">
+                          Ao clicar no botão de fechar (✕), o ZeroVC permanece aberto na gaveta / bandeja do sistema (próximo ao relógio) para você continuar em chamadas de voz e receber notificações sem interrupções.
+                        </p>
+                      </div>
+
+                      {/* Toggle Switch */}
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={minimizeToTray}
+                        onClick={() => handleToggleMinimizeToTray(!minimizeToTray)}
+                        className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                          minimizeToTray ? 'bg-brand-500' : 'bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                            minimizeToTray ? 'translate-x-6' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
