@@ -9,14 +9,17 @@ module.exports = {
     extend: {
       colors: {
         background: {
-          darkest: '#1e1f22',
-          darker: '#2b2d31',
-          dark: '#313338',
-          light: '#383a40',
+          darkest: 'rgb(var(--bg-darkest) / <alpha-value>)',
+          darker: 'rgb(var(--bg-darker) / <alpha-value>)',
+          dark: 'rgb(var(--bg-dark) / <alpha-value>)',
+          light: 'rgb(var(--bg-light) / <alpha-value>)',
         },
         brand: {
-          500: '#5865F2',
-          600: '#4752C4',
+          300: 'rgb(var(--brand-300) / <alpha-value>)',
+          400: 'rgb(var(--brand-400) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)',
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
+          700: 'rgb(var(--brand-700) / <alpha-value>)',
         },
         online: '#23a55a',
         idle: '#f0b232',

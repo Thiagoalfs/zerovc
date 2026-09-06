@@ -29,6 +29,7 @@ import { api, getApiBaseUrl, formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserVolumeSlider } from '../Voice/VolumeSliders';
 import { FormattedMessage } from './FormattedMessage';
+import { GifEmbed } from './GifEmbed';
 
 interface MessageItemProps {
   message: Message;
@@ -409,33 +410,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 const favorited = isFavorited(fullSrc);
 
                 return (
-                  <div key={i} className="mt-2 mb-1 w-fit max-w-sm sm:max-w-md md:max-w-lg rounded-2xl overflow-hidden border border-white/10 relative group/media">
-                    <img
-                      src={fullSrc}
-                      alt="Uploaded content"
-                      onLoad={() => onImageLoad?.()}
-                      onClick={() => onPreviewImage?.(fullSrc)}
-                      className="max-h-[350px] max-w-full w-auto h-auto object-contain rounded-2xl cursor-pointer hover:opacity-95 transition-opacity block"
-                    />
-
-                    {isGifImage && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(fullSrc);
-                        }}
-                        className={`absolute top-2 right-2 p-1.5 rounded-xl backdrop-blur-md transition-all shadow-md cursor-pointer ${
-                          favorited
-                            ? 'bg-amber-500 text-white opacity-100'
-                            : 'bg-black/60 text-white/70 hover:text-white hover:bg-black/90 opacity-0 group-hover/media:opacity-100'
-                        }`}
-                        title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
-                      >
-                        <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
-                      </button>
-                    )}
-                  </div>
+                  <GifEmbed
+                    key={i}
+                    src={fullSrc}
+                    isGif={Boolean(isGifImage)}
+                    onPreviewImage={onPreviewImage}
+                    onImageLoad={onImageLoad}
+                    className="mt-2 mb-1"
+                  />
                 );
               }
               return (
