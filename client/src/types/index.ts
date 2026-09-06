@@ -243,6 +243,8 @@ declare global {
       onUpdateDownloaded: (callback: (info: any) => void) => () => void;
       setMinimizeToTray?: (enabled: boolean) => void;
       getMinimizeToTray?: () => Promise<boolean>;
+      setAutoStart?: (enabled: boolean) => void;
+      getAutoStart?: () => Promise<boolean>;
     };
   }
 }

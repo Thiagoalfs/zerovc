@@ -41,6 +41,8 @@ export interface ElectronAPI {
   onRepoUpdateAvailable: (callback: (info: any) => void) => () => void;
   setMinimizeToTray: (enabled: boolean) => void;
   getMinimizeToTray: () => Promise<boolean>;
+  setAutoStart: (enabled: boolean) => void;
+  getAutoStart: () => Promise<boolean>;
 }
 
 const electronAPI: ElectronAPI = {
@@ -85,6 +87,8 @@ const electronAPI: ElectronAPI = {
   },
   setMinimizeToTray: (enabled: boolean) => ipcRenderer.send('set-minimize-to-tray', enabled),
   getMinimizeToTray: () => ipcRenderer.invoke('get-minimize-to-tray'),
+  setAutoStart: (enabled: boolean) => ipcRenderer.send('set-auto-start', enabled),
+  getAutoStart: () => ipcRenderer.invoke('get-auto-start'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

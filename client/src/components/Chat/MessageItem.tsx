@@ -24,6 +24,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { api, getApiBaseUrl, formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserVolumeSlider } from '../Voice/VolumeSliders';
@@ -66,6 +67,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const { openDMWithUser } = useDMStore();
   const { isFavorited, toggleFavorite } = useFavoriteGifStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+  const chatDensity = useSettingsStore((s) => s.chatDensity);
+  const isDensityCompact = chatDensity === 'compact';
 
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
@@ -524,7 +527,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           isMentioned
             ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-2 border-amber-500'
             : 'hover:bg-background-dark/40'
-        } ${isCompact ? 'py-[1.5px] mt-0' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
+        } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
       >
         {/* Reply Reference Header (Clickable with smooth scroll) */}
         {message.reply_to && (
