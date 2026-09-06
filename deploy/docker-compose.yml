@@ -32,6 +32,8 @@ services:
       - .env
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+      LIVEKIT_NODE_IP: "${LIVEKIT_NODE_IP}"
+      LIVEKIT_RTC_NODE_IP: "${LIVEKIT_NODE_IP}"
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
     ports:
