@@ -34,6 +34,8 @@ export interface ElectronAPI {
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
   onRepoUpdateAvailable?: (callback: (info: any) => void) => () => void;
+  setMinimizeToTray?: (enabled: boolean) => void;
+  getMinimizeToTray?: () => Promise<boolean>;
 }
 
 declare global {

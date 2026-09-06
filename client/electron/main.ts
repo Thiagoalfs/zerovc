@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 
 let autoUpdater: any = null;
@@ -37,6 +37,81 @@ if (process.defaultApp) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
+let minimizeToTray = true;
+
+const TRAY_ICON_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAsklEQVR4nO2XwQ3DIAxFzRfXdL5mgGSodAA6XztAI24oCsFgA5XIuyEI7yNHMhCNjrmafC6fn4bk/XpEPaammBMEreSxvdFKHnOAOoOWpz9z2dRit01i4bx+o3OgzmD4AFZSP86/kvoeGiUolasEkMjFAaRyj9WU54iLAziFUxeXwCnLswLUkLMD1JJ7RM2I26juZvTX3dCEg1a3ovB2DOoMuA8ILY4OpBbUlHu6P81oeHYF80mbLXALmwAAAABJRU5ErkJggg==';
+
+function getTrayIcon() {
+  try {
+    const iconPath = path.join(__dirname, 'tray-icon.png');
+    if (require('fs').existsSync(iconPath)) {
+      return nativeImage.createFromPath(iconPath);
+    }
+  } catch {}
+  return nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
+}
+
+function createTray() {
+  if (tray) return;
+
+  try {
+    const icon = getTrayIcon();
+    tray = new Tray(icon);
+    tray.setToolTip('ZeroVC');
+
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Abrir ZeroVC',
+        click: () => {
+          if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Sair do ZeroVC',
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]);
+
+    tray.setContextMenu(contextMenu);
+
+    tray.on('click', () => {
+      if (!mainWindow) return;
+      if (mainWindow.isVisible()) {
+        if (mainWindow.isMinimized()) {
+          mainWindow.restore();
+          mainWindow.focus();
+        } else {
+          mainWindow.focus();
+        }
+      } else {
+        mainWindow.show();
+        mainWindow.restore();
+        mainWindow.focus();
+      }
+    });
+
+    tray.on('double-click', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (err) {
+    console.error('[Electron] Failed to create system tray:', err);
+  }
+}
 
 function extractValidTargetPath(rawUrl: string): string | null {
   try {
@@ -176,6 +251,13 @@ function createWindow(initialUrl?: string) {
     });
   }
 
+  mainWindow.on('close', (event) => {
+    if (!isQuitting && minimizeToTray) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -258,7 +340,19 @@ ipcMain.on('window-maximize', () => {
 });
 
 ipcMain.on('window-close', () => {
-  mainWindow?.close();
+  if (!isQuitting && minimizeToTray) {
+    mainWindow?.hide();
+  } else {
+    mainWindow?.close();
+  }
+});
+
+ipcMain.on('set-minimize-to-tray', (_event, enabled: boolean) => {
+  minimizeToTray = !!enabled;
+});
+
+ipcMain.handle('get-minimize-to-tray', () => {
+  return minimizeToTray;
 });
 
 ipcMain.handle('window-is-maximized', () => {
@@ -392,6 +486,7 @@ if (!gotTheLock) {
     }
 
     createWindow(initialUrl);
+    createTray();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -401,12 +496,22 @@ if (!gotTheLock) {
   });
 }
 
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit();
+    if (!minimizeToTray || isQuitting) {
+      app.quit();
+    }
   }
 });
