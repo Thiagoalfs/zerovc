@@ -1,6 +1,6 @@
 {
   "name": "zerovc-client",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Ultra-fast, lightweight Discord alternative built with Electron and LiveKit WebRTC",
   "main": "dist-electron/main.js",
   "scripts": {
