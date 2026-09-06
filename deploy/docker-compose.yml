@@ -27,13 +27,12 @@ services:
     image: livekit/livekit-server:latest
     container_name: zerovc-livekit
     restart: unless-stopped
-    command: --config /etc/livekit.yaml
+    command: --config /etc/livekit.yaml --node-ip ${LIVEKIT_NODE_IP}
     env_file:
       - .env
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
-      LIVEKIT_NODE_IP: "${LIVEKIT_NODE_IP}"
-      LIVEKIT_RTC_NODE_IP: "${LIVEKIT_NODE_IP}"
+      NODE_IP: "${LIVEKIT_NODE_IP}"
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
     ports:
