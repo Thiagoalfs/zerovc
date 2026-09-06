@@ -200,7 +200,17 @@ class LiveKitManager {
 
     // Auto-enable microphone in background without blocking fast connection
     if (callbacks.autoEnableMicrophone !== false) {
-      room.localParticipant.setMicrophoneEnabled(true).catch((err) => {
+      const autoGain = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_auto_gain_control') !== 'false' : true;
+      const echoCanc = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_echo_cancellation') !== 'false' : true;
+      const noiseSupp = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_noise_suppression') !== 'false' : true;
+      const devId = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_audio_input_device') || undefined : undefined;
+
+      room.localParticipant.setMicrophoneEnabled(true, {
+        deviceId: devId,
+        autoGainControl: autoGain,
+        echoCancellation: echoCanc,
+        noiseSuppression: noiseSupp,
+      }).catch((err) => {
         console.warn('[LiveKit] Could not auto-enable microphone:', err);
       });
     }
@@ -211,7 +221,17 @@ class LiveKitManager {
 
   async setMicrophoneEnabled(enabled: boolean) {
     if (this.room) {
-      await this.room.localParticipant.setMicrophoneEnabled(enabled);
+      const autoGain = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_auto_gain_control') !== 'false' : true;
+      const echoCanc = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_echo_cancellation') !== 'false' : true;
+      const noiseSupp = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_noise_suppression') !== 'false' : true;
+      const devId = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_audio_input_device') || undefined : undefined;
+
+      await this.room.localParticipant.setMicrophoneEnabled(enabled, {
+        deviceId: devId,
+        autoGainControl: autoGain,
+        echoCancellation: echoCanc,
+        noiseSuppression: noiseSupp,
+      });
       if (enabled) {
         this.room.startAudio().catch(() => {});
       }
@@ -220,7 +240,7 @@ class LiveKitManager {
 
   async setMuted(muted: boolean) {
     if (this.room) {
-      await this.room.localParticipant.setMicrophoneEnabled(!muted);
+      await this.setMicrophoneEnabled(!muted);
     }
   }
 

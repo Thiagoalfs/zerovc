@@ -26,8 +26,30 @@ import {
   Trash2,
   AlertTriangle,
   Sliders,
+  Palette,
+  Bell,
+  Shield,
+  Play,
+  Video,
+  VideoOff,
+  Monitor,
+  Radio,
+  Tv,
+  Sun,
+  Moon,
+  VolumeX,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { useSettingsStore, ThemeMode, AccentColor, ChatDensity, ScreenshareQuality, DmPrivacy } from '../../stores/settingsStore';
+import {
+  playMessageSound,
+  playJoinVoiceSound,
+  playLeaveVoiceSound,
+  playMuteSound,
+  playUnmuteSound,
+  playDeafenSound,
+  playUndeafenSound,
+} from '../../utils/audio';
 import { livekit } from '../../lib/livekit';
 import { api, formatAssetUrl } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
@@ -41,7 +63,9 @@ interface ProfileModalProps {
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   const { user, updateProfile, logout, setUser } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState<'account' | 'profile' | 'audio' | 'preferences' | 'keybinds'>('account');
+  const [activeTab, setActiveTab] = useState<
+    'account' | 'profile' | 'privacy' | 'appearance' | 'audio' | 'notifications' | 'preferences' | 'keybinds'
+  >('account');
 
   // Crop Modal State
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -129,22 +153,80 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Preferences State (default: true)
-  const [minimizeToTray, setMinimizeToTray] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('zerovc_minimize_to_tray');
-      return saved !== null ? saved === 'true' : true;
-    } catch {
-      return true;
-    }
-  });
+  // Settings Store
+  const {
+    theme,
+    accentColor,
+    chatDensity,
+    uiZoom,
+    autoplayGifs,
+    minimizeToTray,
+    autoStart,
+    hardwareAcceleration,
+    soundsEnabled,
+    soundVolume,
+    soundChannelEvents,
+    soundMuteEvents,
+    soundMessageEvents,
+    notificationsDesktop,
+    echoCancellation,
+    noiseSuppression,
+    autoGainControl,
+    screenshareQuality,
+    dmPrivacy,
+    setTheme,
+    setAccentColor,
+    setChatDensity,
+    setUiZoom,
+    setAutoplayGifs,
+    setMinimizeToTray,
+    setAutoStart,
+    setHardwareAcceleration,
+    setSoundsEnabled,
+    setSoundVolume,
+    setSoundChannelEvents,
+    setSoundMuteEvents,
+    setSoundMessageEvents,
+    setNotificationsDesktop,
+    setEchoCancellation,
+    setNoiseSuppression,
+    setAutoGainControl,
+    setScreenshareQuality,
+    setDmPrivacy,
+  } = useSettingsStore();
 
-  const handleToggleMinimizeToTray = (val: boolean) => {
-    setMinimizeToTray(val);
+  // Video devices & camera testing
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedVideoDevice, setSelectedVideoDevice] = useState<string>('');
+  const [isTestingCamera, setIsTestingCamera] = useState(false);
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+
+  const startCameraTest = async () => {
     try {
-      localStorage.setItem('zerovc_minimize_to_tray', String(val));
-    } catch {}
-    window.electronAPI?.setMinimizeToTray?.(val);
+      setIsTestingCamera(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : true,
+      });
+      cameraStreamRef.current = stream;
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error('Failed to start camera test:', err);
+      setIsTestingCamera(false);
+    }
+  };
+
+  const stopCameraTest = () => {
+    setIsTestingCamera(false);
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+      cameraStreamRef.current = null;
+    }
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null;
+    }
   };
 
   // Load media devices & sync user state
@@ -164,13 +246,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       navigator.mediaDevices?.enumerateDevices().then((devices) => {
         const inputs = devices.filter((d) => d.kind === 'audioinput');
         const outputs = devices.filter((d) => d.kind === 'audiooutput');
+        const videos = devices.filter((d) => d.kind === 'videoinput');
         setAudioInputs(inputs);
         setAudioOutputs(outputs);
+        setVideoDevices(videos);
         if (inputs[0]) setSelectedInput(inputs[0].deviceId);
         if (outputs[0]) setSelectedOutput(outputs[0].deviceId);
+        if (videos[0]) setSelectedVideoDevice(videos[0].deviceId);
       }).catch(() => {});
     } else {
       stopMicTest();
+      stopCameraTest();
     }
   }, [isOpen, user]);
 
@@ -569,11 +655,39 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <span>Minha Conta</span>
             </button>
 
+            {/* Tab: Privacidade & Segurança */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('privacy')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'privacy'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              <span>Privacidade</span>
+            </button>
+
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 block pt-2">
               Configurações do App
             </span>
 
-            {/* Tab 2: Voz & Vídeo */}
+            {/* Tab: Aparência */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('appearance')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'appearance'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
+              }`}
+            >
+              <Palette className="w-4 h-4" />
+              <span>Aparência</span>
+            </button>
+
+            {/* Tab: Voz & Vídeo */}
             <button
               type="button"
               onClick={() => setActiveTab('audio')}
@@ -587,7 +701,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <span>Voz & Vídeo</span>
             </button>
 
-            {/* Tab 3: Preferências */}
+            {/* Tab: Notificações & Sons */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('notifications')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'notifications'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
+              }`}
+            >
+              <Bell className="w-4 h-4" />
+              <span>Notificações & Sons</span>
+            </button>
+
+            {/* Tab: Preferências */}
             <button
               type="button"
               onClick={() => setActiveTab('preferences')}
@@ -601,7 +729,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <span>Preferências</span>
             </button>
 
-            {/* Tab 4: Atalhos do Teclado */}
+            {/* Tab: Atalhos do Teclado */}
             <button
               type="button"
               onClick={() => setActiveTab('keybinds')}
@@ -649,15 +777,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <h3 className="text-lg font-bold text-white">
                   {activeTab === 'account' && 'Minha Conta'}
                   {activeTab === 'profile' && 'Perfil de Usuário'}
+                  {activeTab === 'privacy' && 'Privacidade & Segurança'}
+                  {activeTab === 'appearance' && 'Aparência & Customização'}
                   {activeTab === 'audio' && 'Voz & Vídeo'}
+                  {activeTab === 'notifications' && 'Notificações & Sons'}
                   {activeTab === 'preferences' && 'Preferências do Sistema'}
                   {activeTab === 'keybinds' && 'Atalhos do Teclado'}
                 </h3>
                 <p className="text-xs text-gray-400">
                   {activeTab === 'account' && 'Gerencie seus dados de acesso, nome de usuário, e-mail e segurança.'}
                   {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
-                  {activeTab === 'audio' && 'Ajuste seus dispositivos de entrada, saída e sensibilidade do microfone.'}
-                  {activeTab === 'preferences' && 'Configure o comportamento da janela e integração com o sistema operacional.'}
+                  {activeTab === 'privacy' && 'Controle quem pode interagir com você e suas preferências de privacidade.'}
+                  {activeTab === 'appearance' && 'Personalize temas visuais, cores de destaque, densidade e zoom.'}
+                  {activeTab === 'audio' && 'Ajuste dispositivos, microfone, webcam e filtros avançados de áudio WebRTC.'}
+                  {activeTab === 'notifications' && 'Configure sons do sistema, alertas sonoros e notificações na área de trabalho.'}
+                  {activeTab === 'preferences' && 'Configure o comportamento da janela, inicialização e integração com o sistema.'}
                   {activeTab === 'keybinds' && 'Configure atalhos rápidos e Push-to-Talk globais para controle de voz.'}
                 </p>
               </div>
@@ -1098,121 +1232,788 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               </div>
             )}
 
-            {/* TAB 2: VOZ & VÍDEO */}
-            {activeTab === 'audio' && (
-              <div className="space-y-5 animate-in fade-in">
-                {/* Input Device */}
+            {/* TAB: PRIVACIDADE & SEGURANÇA */}
+            {activeTab === 'privacy' && (
+              <div className="space-y-6 animate-in fade-in">
+                {/* DMs Section */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                    <Mic className="w-3.5 h-3.5 text-brand-400" />
-                    Dispositivo de Entrada (Microfone)
-                  </label>
-                  <select
-                    value={selectedInput}
-                    onChange={(e) => handleDeviceChange('input', e.target.value)}
-                    className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500"
-                  >
-                    {audioInputs.map((d) => (
-                      <option key={d.deviceId} value={d.deviceId}>
-                        {d.label || `Microfone (${d.deviceId.slice(0, 6)})`}
-                      </option>
-                    ))}
-                    {audioInputs.length === 0 && <option value="">Microfone Padrão do Sistema</option>}
-                  </select>
-                </div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Mensagens Diretas (DMs)
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-3">
+                    <span className="text-xs font-semibold text-white block">
+                      Quem pode enviar mensagens diretas para você:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setDmPrivacy('everyone')}
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          dmPrivacy === 'everyone'
+                            ? 'border-brand-500 bg-brand-500/10 text-white'
+                            : 'border-white/10 bg-background-darker text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs">Todos os Membros</span>
+                          {dmPrivacy === 'everyone' && <Check className="w-4 h-4 text-brand-400" />}
+                        </div>
+                        <span className="text-[11px] text-gray-400">
+                          Qualquer pessoa em servidores compartilhados pode te chamar.
+                        </span>
+                      </button>
 
-                {/* Output Device */}
-                <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                    <Volume2 className="w-3.5 h-3.5 text-brand-400" />
-                    Dispositivo de Saída (Fone / Alto-falante)
-                  </label>
-                  <select
-                    value={selectedOutput}
-                    onChange={(e) => handleDeviceChange('output', e.target.value)}
-                    className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500"
-                  >
-                    {audioOutputs.map((d) => (
-                      <option key={d.deviceId} value={d.deviceId}>
-                        {d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`}
-                      </option>
-                    ))}
-                    {audioOutputs.length === 0 && <option value="">Saída Padrão do Sistema</option>}
-                  </select>
-                </div>
-
-                {/* Mic Test Section */}
-                <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-200">Teste de Microfone</span>
-                    <button
-                      type="button"
-                      onClick={isTestingMic ? stopMicTest : startMicTest}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                        isTestingMic ? 'bg-dnd text-white' : 'bg-brand-500 text-white'
-                      }`}
-                    >
-                      {isTestingMic ? 'Parar Teste' : 'Testar Mic'}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setDmPrivacy('friends_only')}
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          dmPrivacy === 'friends_only'
+                            ? 'border-brand-500 bg-brand-500/10 text-white'
+                            : 'border-white/10 bg-background-darker text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs">Apenas Amigos</span>
+                          {dmPrivacy === 'friends_only' && <Check className="w-4 h-4 text-brand-400" />}
+                        </div>
+                        <span className="text-[11px] text-gray-400">
+                          Apenas usuários adicionados à sua lista de amigos podem te enviar DM.
+                        </span>
+                      </button>
+                    </div>
                   </div>
-
-                  {/* Level Meter */}
-                  <div className="w-full h-3 bg-background-darkest rounded-full overflow-hidden border border-white/10">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
-                      style={{ width: `${micLevel}%` }}
-                    />
-                  </div>
-                  <span className="text-[11px] text-gray-400 block">
-                    {isTestingMic
-                      ? `Nível de captação: ${micLevel}%`
-                      : 'Fale algo para verificar se o microfone está captando seu áudio.'}
-                  </span>
                 </div>
 
-                {/* Voice Mode: Activity vs PTT */}
+                {/* 2FA Status Shortcut */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
-                    Modo de Entrada
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Segurança da Conta
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-white block">Autenticação em Dois Fatores (2FA)</span>
+                      <p className="text-[11px] text-gray-400">
+                        {user.two_factor_enabled
+                          ? 'Sua conta está protegida com autenticação via código TOTP.'
+                          : 'Adicione uma camada extra de segurança à sua conta.'}
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setInputMode('activity')}
-                      className={`p-3 rounded-2xl border text-left transition-all ${
-                        inputMode === 'activity'
-                          ? 'bg-brand-500/15 border-brand-500 text-white'
-                          : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
-                      }`}
+                      onClick={() => setActiveTab('account')}
+                      className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl shadow-md transition-all cursor-pointer"
                     >
-                      <span className="font-bold text-xs block mb-0.5">Detecção de Voz</span>
-                      <span className="text-[11px] text-gray-400">Ativa o microfone automaticamente ao falar</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setInputMode('ptt')}
-                      className={`p-3 rounded-2xl border text-left transition-all ${
-                        inputMode === 'ptt'
-                          ? 'bg-brand-500/15 border-brand-500 text-white'
-                          : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      <span className="font-bold text-xs block mb-0.5">Push-to-Talk</span>
-                      <span className="text-[11px] text-gray-400">Aperte uma tecla para transmitir seu áudio</span>
+                      {user.two_factor_enabled ? 'Gerenciar 2FA' : 'Configurar 2FA'}
                     </button>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* TAB 3: PREFERÊNCIAS */}
-            {activeTab === 'preferences' && (
+            {/* TAB: APARÊNCIA & TEMA */}
+            {activeTab === 'appearance' && (
               <div className="space-y-6 animate-in fade-in">
-                {/* Window and Desktop Behavior */}
+                {/* Theme Selector */}
                 <div>
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                    Comportamento do Aplicativo
+                    Tema da Interface
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Dark Slate */}
+                    <button
+                      type="button"
+                      onClick={() => setTheme('dark')}
+                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                        theme === 'dark'
+                          ? 'border-brand-500 bg-brand-500/10 shadow-lg'
+                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Moon className="w-4 h-4 text-brand-400" />
+                        <span className="text-xs font-bold text-white">Escuro Padrão</span>
+                      </div>
+                      <div className="h-8 rounded-lg bg-[#313338] border border-white/10 flex items-center px-2 gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-brand-500" />
+                        <div className="h-1.5 w-10 bg-white/20 rounded" />
+                      </div>
+                      <span className="text-[10px] text-gray-400 block mt-2">Visual clássico ZeroVC</span>
+                    </button>
+
+                    {/* OLED Pitch Black */}
+                    <button
+                      type="button"
+                      onClick={() => setTheme('oled')}
+                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                        theme === 'oled'
+                          ? 'border-brand-500 bg-brand-500/10 shadow-lg'
+                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                        <span className="text-xs font-bold text-white">Preto OLED</span>
+                      </div>
+                      <div className="h-8 rounded-lg bg-black border border-white/20 flex items-center px-2 gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                        <div className="h-1.5 w-10 bg-white/30 rounded" />
+                      </div>
+                      <span className="text-[10px] text-gray-400 block mt-2">100% Preto para telas OLED</span>
+                    </button>
+
+                    {/* Light Mode */}
+                    <button
+                      type="button"
+                      onClick={() => setTheme('light')}
+                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                        theme === 'light'
+                          ? 'border-brand-500 bg-brand-500/10 shadow-lg'
+                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sun className="w-4 h-4 text-amber-400" />
+                        <span className="text-xs font-bold text-white">Claro Diurno</span>
+                      </div>
+                      <div className="h-8 rounded-lg bg-[#e3e5e8] border border-black/10 flex items-center px-2 gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-brand-500" />
+                        <div className="h-1.5 w-10 bg-black/20 rounded" />
+                      </div>
+                      <span className="text-[10px] text-gray-400 block mt-2">Interface clara de alto contraste</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Accent Color */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Cor de Destaque
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 flex flex-wrap gap-3 items-center">
+                    {[
+                      { id: 'indigo', name: 'Índigo', color: '#5865F2' },
+                      { id: 'purple', name: 'Roxo Elétrico', color: '#8b5cf6' },
+                      { id: 'emerald', name: 'Esmeralda', color: '#10b981' },
+                      { id: 'rose', name: 'Rosa Fúcsia', color: '#ec4899' },
+                      { id: 'cyan', name: 'Ciano Aqua', color: '#06b6d4' },
+                      { id: 'amber', name: 'Âmbar Solar', color: '#f59e0b' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setAccentColor(item.id as AccentColor)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                          accentColor === item.id
+                            ? 'border-white text-white shadow-md bg-white/10'
+                            : 'border-white/10 text-gray-400 hover:text-white bg-background-darker'
+                        }`}
+                      >
+                        <span
+                          className="w-3.5 h-3.5 rounded-full shadow-sm flex items-center justify-center"
+                          style={{ backgroundColor: item.color }}
+                        >
+                          {accentColor === item.id && <Check className="w-2.5 h-2.5 text-white" />}
+                        </span>
+                        <span>{item.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Chat Density */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Densidade de Exibição do Chat
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setChatDensity('cozy')}
+                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                        chatDensity === 'cozy'
+                          ? 'border-brand-500 bg-brand-500/10 text-white'
+                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-xs">Confortável (Padrão)</span>
+                        {chatDensity === 'cozy' && <Check className="w-4 h-4 text-brand-400" />}
+                      </div>
+                      <span className="text-[11px] text-gray-400">
+                        Visual moderno com fotos de perfil em destaque e espaçamento generoso.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setChatDensity('compact')}
+                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                        chatDensity === 'compact'
+                          ? 'border-brand-500 bg-brand-500/10 text-white'
+                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-xs">Compacto (Estilo IRC)</span>
+                        {chatDensity === 'compact' && <Check className="w-4 h-4 text-brand-400" />}
+                      </div>
+                      <span className="text-[11px] text-gray-400">
+                        Sem avatares grandes, otimizado para ler muitas mensagens por tela.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* UI Scale / Zoom */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Escala da Interface (Zoom)
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white">Nível de Zoom</span>
+                      <span className="text-xs font-bold font-mono text-brand-400">{uiZoom}%</span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min={85}
+                      max={125}
+                      step={5}
+                      value={uiZoom}
+                      onChange={(e) => setUiZoom(Number(e.target.value))}
+                      className="w-full accent-brand-500 cursor-pointer h-2 bg-background-dark rounded-lg"
+                    />
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex gap-1.5">
+                        {[90, 100, 110, 125].map((z) => (
+                          <button
+                            key={z}
+                            type="button"
+                            onClick={() => setUiZoom(z)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold transition-all cursor-pointer ${
+                              uiZoom === z ? 'bg-brand-500 text-white' : 'bg-white/5 text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            {z}%
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setUiZoom(100)}
+                        className="text-[11px] text-gray-400 hover:text-white hover:underline cursor-pointer"
+                      >
+                        Restaurar Padrão
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Media and GIFs */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Mídia & Animações
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 flex items-center justify-between">
+                    <div className="space-y-0.5 pr-4">
+                      <span className="text-xs font-bold text-white block">Reproduzir GIFs automaticamente</span>
+                      <p className="text-[11px] text-gray-400">
+                        Se desativado, GIFs só serão reproduzidos ao passar o cursor do mouse por cima.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={autoplayGifs}
+                      onClick={() => setAutoplayGifs(!autoplayGifs)}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                        autoplayGifs ? 'bg-brand-500' : 'bg-white/10'
+                      }`}
+                    >
+                      <div
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                          autoplayGifs ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: VOZ & VÍDEO */}
+            {activeTab === 'audio' && (
+              <div className="space-y-6 animate-in fade-in">
+                {/* Audio Devices */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Mic className="w-3.5 h-3.5 text-brand-400" />
+                      Dispositivo de Entrada (Microfone)
+                    </label>
+                    <select
+                      value={selectedInput}
+                      onChange={(e) => handleDeviceChange('input', e.target.value)}
+                      className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
+                    >
+                      {audioInputs.map((d) => (
+                        <option key={d.deviceId} value={d.deviceId}>
+                          {d.label || `Microfone (${d.deviceId.slice(0, 6)})`}
+                        </option>
+                      ))}
+                      {audioInputs.length === 0 && <option value="">Microfone Padrão do Sistema</option>}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Volume2 className="w-3.5 h-3.5 text-brand-400" />
+                      Dispositivo de Saída (Fone / Alto-falante)
+                    </label>
+                    <select
+                      value={selectedOutput}
+                      onChange={(e) => handleDeviceChange('output', e.target.value)}
+                      className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
+                    >
+                      {audioOutputs.map((d) => (
+                        <option key={d.deviceId} value={d.deviceId}>
+                          {d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`}
+                        </option>
+                      ))}
+                      {audioOutputs.length === 0 && <option value="">Saída Padrão do Sistema</option>}
+                    </select>
+                  </div>
+
+                  {/* Mic Test Section */}
+                  <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-gray-200 block">Teste de Microfone</span>
+                        <span className="text-[11px] text-gray-400">
+                          Fale para verificar se o microfone está captando seu áudio.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={isTestingMic ? stopMicTest : startMicTest}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                          isTestingMic ? 'bg-dnd text-white' : 'bg-brand-500 text-white'
+                        }`}
+                      >
+                        {isTestingMic ? 'Parar Teste' : 'Testar Mic'}
+                      </button>
+                    </div>
+
+                    <div className="w-full h-3 bg-background-darkest rounded-full overflow-hidden border border-white/10">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
+                        style={{ width: `${isTestingMic ? micLevel : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Voice Mode: Activity vs PTT */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                    Modo de Entrada de Voz
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('activity')}
+                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                        inputMode === 'activity'
+                          ? 'bg-brand-500/15 border-brand-500 text-white'
+                          : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-xs">Detecção de Voz</span>
+                        <Radio className="w-4 h-4 text-brand-400" />
+                      </div>
+                      <span className="text-[11px] text-gray-400">Transmite automaticamente ao falar</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setInputMode('ptt')}
+                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                        inputMode === 'ptt'
+                          ? 'bg-brand-500/15 border-brand-500 text-white'
+                          : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-xs">Push-to-Talk (PTT)</span>
+                        <Keyboard className="w-4 h-4 text-brand-400" />
+                      </div>
+                      <span className="text-[11px] text-gray-400">Transmite apenas ao segurar a tecla configurada</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* WebRTC Advanced Audio Processing Filters */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Processamento de Áudio Avançado (WebRTC)
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+                    {/* Echo Cancellation */}
+                    <div className="flex items-center justify-between pt-1 first:pt-0">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
+                        <p className="text-[11px] text-gray-400">
+                          Impede que o áudio das caixas de som retorne ao microfone criando microfonia.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={echoCancellation}
+                        onClick={() => setEchoCancellation(!echoCancellation)}
+                        className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                          echoCancellation ? 'bg-brand-500' : 'bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
+                            echoCancellation ? 'translate-x-5.5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Noise Suppression */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">Supressão de Ruído de Fundo</span>
+                        <p className="text-[11px] text-gray-400">
+                          Filtra barulhos de teclado, ventilador e ruídos estáticos do ambiente.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={noiseSuppression}
+                        onClick={() => setNoiseSuppression(!noiseSuppression)}
+                        className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                          noiseSuppression ? 'bg-brand-500' : 'bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
+                            noiseSuppression ? 'translate-x-5.5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Auto Gain Control */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
+                        <p className="text-[11px] text-gray-400">
+                          Normaliza o volume da sua voz automaticamente para que você não fique muito baixo ou estourado.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={autoGainControl}
+                        onClick={() => setAutoGainControl(!autoGainControl)}
+                        className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                          autoGainControl ? 'bg-brand-500' : 'bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
+                            autoGainControl ? 'translate-x-5.5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Webcam & Video Section with Live Preview */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Configuração de Vídeo / Câmera
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Video className="w-3.5 h-3.5 text-brand-400" />
+                        Dispositivo de Câmera / Webcam
+                      </label>
+                      <select
+                        value={selectedVideoDevice}
+                        onChange={(e) => setSelectedVideoDevice(e.target.value)}
+                        className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
+                      >
+                        {videoDevices.map((d) => (
+                          <option key={d.deviceId} value={d.deviceId}>
+                            {d.label || `Câmera (${d.deviceId.slice(0, 6)})`}
+                          </option>
+                        ))}
+                        {videoDevices.length === 0 && <option value="">Nenhuma câmera detectada</option>}
+                      </select>
+                    </div>
+
+                    {/* Video preview container */}
+                    <div className="relative rounded-2xl overflow-hidden bg-black/40 border border-white/5 min-h-[160px] flex items-center justify-center">
+                      <video
+                        ref={cameraVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={`w-full h-44 object-cover rounded-2xl ${isTestingCamera ? 'block' : 'hidden'}`}
+                      />
+                      {!isTestingCamera && (
+                        <div className="text-center p-6 text-gray-500 space-y-1">
+                          <VideoOff className="w-8 h-8 mx-auto text-gray-600 mb-1" />
+                          <span className="text-xs block text-gray-400 font-semibold">Preview de Câmera Desativado</span>
+                          <span className="text-[11px] block">Clique abaixo para testar a captura de vídeo</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={isTestingCamera ? stopCameraTest : startCameraTest}
+                      disabled={videoDevices.length === 0 && !isTestingCamera}
+                      className={`w-full py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        isTestingCamera
+                          ? 'bg-dnd text-white shadow-md'
+                          : 'bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white shadow-md'
+                      }`}
+                    >
+                      <Video className="w-3.5 h-3.5" />
+                      <span>{isTestingCamera ? 'Parar Teste de Vídeo' : 'Testar Câmera'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Default Screen Share Quality */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Transmissão de Tela Padrão
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {[
+                      { id: '720p30', label: '720p (30 FPS)', desc: 'Leve / Econômico' },
+                      { id: '1080p30', label: '1080p (30 FPS)', desc: 'Recomendado' },
+                      { id: '1080p60', label: '1080p (60 FPS)', desc: 'Fluido (Jogos)' },
+                      { id: 'source', label: 'Original', desc: 'Resolução Máxima' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setScreenshareQuality(item.id as ScreenshareQuality)}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          screenshareQuality === item.id
+                            ? 'border-brand-500 bg-brand-500/15 text-white'
+                            : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        <span className="font-bold text-xs block mb-0.5">{item.label}</span>
+                        <span className="text-[10px] text-gray-400 block">{item.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: NOTIFICAÇÕES & SONS */}
+            {activeTab === 'notifications' && (
+              <div className="space-y-6 animate-in fade-in">
+                {/* Desktop Notifications */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Notificações de Área de Trabalho
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 flex items-center justify-between">
+                    <div className="space-y-0.5 pr-4">
+                      <span className="text-xs font-bold text-white block">
+                        Exibir Notificações no Computador
+                      </span>
+                      <p className="text-[11px] text-gray-400 leading-relaxed max-w-lg">
+                        Receba avisos instantâneos na área de trabalho quando alguém enviar mensagens diretas ou mencionar você.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={notificationsDesktop}
+                      onClick={() => setNotificationsDesktop(!notificationsDesktop)}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                        notificationsDesktop ? 'bg-brand-500' : 'bg-white/10'
+                      }`}
+                    >
+                      <div
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                          notificationsDesktop ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sound Volume Slider */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Volume dos Efeitos Sonoros
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {soundVolume === 0 ? (
+                          <VolumeX className="w-4 h-4 text-gray-500" />
+                        ) : (
+                          <Volume2 className="w-4 h-4 text-brand-400" />
+                        )}
+                        <span className="text-xs font-semibold text-white">Volume dos Sons</span>
+                      </div>
+                      <span className="text-xs font-bold font-mono text-brand-400">{soundVolume}%</span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={soundVolume}
+                      onChange={(e) => setSoundVolume(Number(e.target.value))}
+                      className="w-full accent-brand-500 cursor-pointer h-2 bg-background-dark rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                {/* Individual Sound Toggles with Test Buttons */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Efeitos Sonoros do Aplicativo
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+                    {/* Voice Channel Join / Leave */}
+                    <div className="flex items-center justify-between pt-1 first:pt-0">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">Entrada e Saída de Chamadas</span>
+                        <p className="text-[11px] text-gray-400">Toca o chime ao entrar ou desconectar de um canal de voz.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playJoinVoiceSound();
+                            setTimeout(playLeaveVoiceSound, 350);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/5"
+                        >
+                          <Play className="w-3 h-3 text-brand-400" />
+                          <span>Ouvir</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={soundChannelEvents}
+                          onClick={() => setSoundChannelEvents(!soundChannelEvents)}
+                          className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                            soundChannelEvents ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
+                              soundChannelEvents ? 'translate-x-5.5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Mute / Unmute */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">Mutar e Desmutar Microfone</span>
+                        <p className="text-[11px] text-gray-400">Feedback sonoro imediato ao alternar seu microfone.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playMuteSound();
+                            setTimeout(playUnmuteSound, 250);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/5"
+                        >
+                          <Play className="w-3 h-3 text-brand-400" />
+                          <span>Ouvir</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={soundMuteEvents}
+                          onClick={() => setSoundMuteEvents(!soundMuteEvents)}
+                          className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                            soundMuteEvents ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
+                              soundMuteEvents ? 'translate-x-5.5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Messages and Mentions */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">Novas Mensagens e Menções</span>
+                        <p className="text-[11px] text-gray-400">Alerta sonoro sutil ao receber mensagens no chat.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => playMessageSound(false)}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/5"
+                        >
+                          <Play className="w-3 h-3 text-brand-400" />
+                          <span>Ouvir</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={soundMessageEvents}
+                          onClick={() => setSoundMessageEvents(!soundMessageEvents)}
+                          className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                            soundMessageEvents ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
+                              soundMessageEvents ? 'translate-x-5.5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: PREFERÊNCIAS DO SISTEMA */}
+            {activeTab === 'preferences' && (
+              <div className="space-y-6 animate-in fade-in">
+                {/* Desktop and Window Behavior */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Comportamento do Aplicativo (Desktop)
                   </h4>
 
                   <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-4">
@@ -1232,12 +2033,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         </p>
                       </div>
 
-                      {/* Toggle Switch */}
                       <button
                         type="button"
                         role="switch"
                         aria-checked={minimizeToTray}
-                        onClick={() => handleToggleMinimizeToTray(!minimizeToTray)}
+                        onClick={() => setMinimizeToTray(!minimizeToTray)}
                         className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
                           minimizeToTray ? 'bg-brand-500' : 'bg-white/10'
                         }`}
@@ -1249,12 +2049,68 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         />
                       </button>
                     </div>
+
+                    {/* Item: Iniciar com o Windows / Sistema */}
+                    <div className="flex items-center justify-between pt-4">
+                      <div className="space-y-1 pr-4">
+                        <span className="text-sm font-bold text-white block">
+                          Inicializar com o Sistema Operacional
+                        </span>
+                        <p className="text-xs text-gray-400 leading-relaxed max-w-xl">
+                          Abre o ZeroVC automaticamente ao ligar o computador (em segundo plano na bandeja), pronto para uso imediato.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={autoStart}
+                        onClick={() => setAutoStart(!autoStart)}
+                        className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                          autoStart ? 'bg-brand-500' : 'bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                            autoStart ? 'translate-x-6' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Item: Aceleração por Hardware */}
+                    <div className="flex items-center justify-between pt-4">
+                      <div className="space-y-1 pr-4">
+                        <span className="text-sm font-bold text-white block">
+                          Aceleração Gráfica por Hardware (GPU)
+                        </span>
+                        <p className="text-xs text-gray-400 leading-relaxed max-w-xl">
+                          Utiliza a placa de vídeo do computador para renderização ultra-fluida e menor consumo de processador (CPU).
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={hardwareAcceleration}
+                        onClick={() => setHardwareAcceleration(!hardwareAcceleration)}
+                        className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                          hardwareAcceleration ? 'bg-brand-500' : 'bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                            hardwareAcceleration ? 'translate-x-6' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* TAB 4: KEYBINDS */}
+            {/* TAB: ATALHOS DO TECLADO */}
             {activeTab === 'keybinds' && (
               <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar pr-1">
                 <KeybindSettingsView />

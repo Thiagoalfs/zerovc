@@ -19,6 +19,7 @@ import { FriendsView } from './components/Friends/FriendsView';
 import { DMChatArea } from './components/DM/DMChatArea';
 import { DMGroupChatArea } from './components/DM/DMGroupChatArea';
 import { useDMGroupStore } from './stores/dmGroupStore';
+import { useSettingsStore } from './stores/settingsStore';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { LandingPage } from './components/Landing/LandingPage';
 import { DownloadPage } from './components/Landing/DownloadPage';
@@ -279,6 +280,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     checkAuth();
+    useSettingsStore.getState().applyThemeToDOM();
 
     // Capture initial route/invite before login
     const initialRoute = getCurrentRoute();
@@ -300,13 +302,17 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Initialize desktop preferences (e.g. Minimize to Tray)
+  // Initialize desktop preferences (e.g. Minimize to Tray & Auto-Start)
   useEffect(() => {
-    if (window.electronAPI?.setMinimizeToTray) {
+    if (window.electronAPI) {
       try {
-        const saved = localStorage.getItem('zerovc_minimize_to_tray');
-        const enabled = saved !== null ? saved === 'true' : true;
-        window.electronAPI.setMinimizeToTray(enabled);
+        const { minimizeToTray, autoStart } = useSettingsStore.getState();
+        if (window.electronAPI.setMinimizeToTray) {
+          window.electronAPI.setMinimizeToTray(minimizeToTray);
+        }
+        if (window.electronAPI.setAutoStart) {
+          window.electronAPI.setAutoStart(autoStart);
+        }
       } catch {}
     }
   }, []);

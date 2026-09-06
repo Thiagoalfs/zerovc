@@ -355,6 +355,25 @@ ipcMain.handle('get-minimize-to-tray', () => {
   return minimizeToTray;
 });
 
+ipcMain.on('set-auto-start', (_event, enabled: boolean) => {
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: !!enabled,
+      openAsHidden: true,
+    });
+  } catch (err) {
+    console.error('[Electron] Error setting auto start:', err);
+  }
+});
+
+ipcMain.handle('get-auto-start', () => {
+  try {
+    return app.getLoginItemSettings().openAtLogin ?? false;
+  } catch {
+    return false;
+  }
+});
+
 ipcMain.handle('window-is-maximized', () => {
   return mainWindow?.isMaximized() ?? false;
 });

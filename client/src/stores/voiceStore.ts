@@ -2,7 +2,14 @@ import { create } from 'zustand';
 import { Participant, DisconnectReason } from 'livekit-client';
 import { api } from '../lib/api';
 import { livekit } from '../lib/livekit';
-import { playJoinVoiceSound, playLeaveVoiceSound } from '../utils/audio';
+import {
+  playJoinVoiceSound,
+  playLeaveVoiceSound,
+  playMuteSound,
+  playUnmuteSound,
+  playDeafenSound,
+  playUndeafenSound,
+} from '../utils/audio';
 
 interface VoiceState {
   currentChannelId: string | null;
@@ -266,6 +273,12 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       await livekit.setDeafened(false);
     }
 
+    if (nextMuted) {
+      playMuteSound();
+    } else {
+      playUnmuteSound();
+    }
+
     set({ isMuted: nextMuted, isDeafened: nextDeafened });
 
     if (currentChannelId) {
@@ -293,6 +306,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     } catch {}
 
     await livekit.setDeafened(nextDeafened);
+
+    if (nextDeafened) {
+      playDeafenSound();
+    } else {
+      playUndeafenSound();
+    }
+
     set({ isDeafened: nextDeafened, isMuted: nextMuted });
 
     if (currentChannelId) {
