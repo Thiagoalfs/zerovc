@@ -15,6 +15,7 @@ import {
   Smile,
   ChevronRight,
 } from 'lucide-react';
+import { ZeroVCLogo } from '../Common/ZeroVCLogo';
 
 interface LandingPageProps {
   onNavigate: (path: string) => void;
@@ -39,9 +40,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             onClick={() => onNavigate('/')}
             className="flex items-center gap-2.5 cursor-pointer group select-none"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 via-brand-500 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/25 group-hover:scale-105 transition-transform">
-              <Zap className="w-5 h-5 text-white fill-white" />
-            </div>
+            <ZeroVCLogo className="w-10 h-10 shadow-lg shadow-brand-500/25 group-hover:scale-105 transition-transform" />
             <span className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
               Zero<span className="text-brand-400">VC</span>
             </span>
