@@ -11,6 +11,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 interface EmojiAndGifPickerProps {
   isOpen: boolean;
@@ -83,6 +84,90 @@ const GIF_CATEGORIES = ['Todos', 'Favoritos', 'Em Alta', 'Humor', 'Jogos', 'Amor
 const MIN_PICKER_WIDTH = 384; // Standard w-96
 const MAX_PICKER_WIDTH = 768; // 2x standard size
 
+const GifPickerItem: React.FC<{
+  gif: { url: string; preview: string; title: string };
+  autoplayGifs: boolean;
+  onSelect: (url: string) => void;
+}> = ({ gif, autoplayGifs, onSelect }) => {
+  const { isFavorited, toggleFavorite } = useFavoriteGifStore();
+  const favorited = isFavorited(gif.url);
+  const [isHovered, setIsHovered] = useState(false);
+  const [frozenSrc, setFrozenSrc] = useState<string | null>(null);
+
+  const shouldPlay = autoplayGifs || isHovered;
+
+  useEffect(() => {
+    if (autoplayGifs) {
+      setFrozenSrc(null);
+      return;
+    }
+
+    let isMounted = true;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = gif.preview || gif.url;
+
+    img.onload = () => {
+      if (!isMounted) return;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 200;
+        canvas.height = img.naturalHeight || 120;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          setFrozenSrc(canvas.toDataURL('image/png'));
+        }
+      } catch {}
+    };
+
+    return () => {
+      isMounted = false;
+    };
+  }, [gif.preview, gif.url, autoplayGifs]);
+
+  const activeSrc = shouldPlay ? (gif.preview || gif.url) : (frozenSrc || gif.preview || gif.url);
+
+  return (
+    <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="relative rounded-2xl overflow-hidden group bg-background-dark border border-white/5 aspect-video cursor-pointer"
+      onClick={() => onSelect(gif.url)}
+    >
+      <img
+        src={activeSrc}
+        alt={gif.title}
+        loading="lazy"
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+      />
+
+      {!autoplayGifs && !isHovered && (
+        <div className="absolute bottom-1 left-1.5 bg-black/70 text-white/90 px-1.5 py-0.5 rounded-md text-[9px] font-bold tracking-wider uppercase border border-white/10">
+          GIF
+        </div>
+      )}
+
+      {/* Favorite Star Button */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFavorite(gif.url, gif.preview, gif.title);
+        }}
+        className={`absolute top-1.5 right-1.5 p-1 rounded-lg backdrop-blur-md transition-all shadow-md ${
+          favorited
+            ? 'bg-amber-500 text-white'
+            : 'bg-black/60 text-white/70 hover:text-white opacity-0 group-hover:opacity-100 hover:bg-black/90'
+        }`}
+        title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
+      >
+        <Star className={`w-3.5 h-3.5 ${favorited ? 'fill-current' : ''}`} />
+      </button>
+    </div>
+  );
+};
+
 export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   isOpen,
   onClose,
@@ -90,6 +175,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   onSelectGif,
   positionClass = 'bottom-16 right-4',
 }) => {
+  const autoplayGifs = useSettingsStore((s) => s.autoplayGifs);
   const [activeTab, setActiveTab] = useState<'emoji' | 'gif'>('emoji');
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [gifSearch, setGifSearch] = useState('');
@@ -380,43 +466,17 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                 </div>
               ) : (
                 <div className={`grid gap-2 ${pickerWidth >= 560 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                  {displayedGifs.map((gif, idx) => {
-                    const favorited = isFavorited(gif.url);
-                    return (
-                      <div
-                        key={`${gif.url}-${idx}`}
-                        className="relative rounded-2xl overflow-hidden group bg-background-dark border border-white/5 aspect-video cursor-pointer"
-                        onClick={() => {
-                          onSelectGif(gif.url);
-                          onClose();
-                        }}
-                      >
-                        <img
-                          src={gif.preview || gif.url}
-                          alt={gif.title}
-                          loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                        />
-
-                        {/* Favorite Star Button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(gif.url, gif.preview, gif.title);
-                          }}
-                          className={`absolute top-1.5 right-1.5 p-1 rounded-lg backdrop-blur-md transition-all shadow-md ${
-                            favorited
-                              ? 'bg-amber-500 text-white'
-                              : 'bg-black/60 text-white/70 hover:text-white opacity-0 group-hover:opacity-100 hover:bg-black/90'
-                          }`}
-                          title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
-                        >
-                          <Star className={`w-3.5 h-3.5 ${favorited ? 'fill-current' : ''}`} />
-                        </button>
-                      </div>
-                    );
-                  })}
+                  {displayedGifs.map((gif, idx) => (
+                    <GifPickerItem
+                      key={`${gif.url}-${idx}`}
+                      gif={gif}
+                      autoplayGifs={autoplayGifs}
+                      onSelect={(url) => {
+                        onSelectGif(url);
+                        onClose();
+                      }}
+                    />
+                  ))}
                 </div>
               )}
             </div>
