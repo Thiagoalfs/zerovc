@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 
 export type ThemeMode = 'dark' | 'oled' | 'light';
 export type AccentColor = 'indigo' | 'purple' | 'emerald' | 'rose' | 'cyan' | 'amber';
@@ -85,6 +85,72 @@ function getStoredNumber(key: string, defaultVal: number): number {
     return defaultVal;
   }
 }
+
+const THEME_BACKGROUNDS: Record<ThemeMode, { darkest: string; darker: string; dark: string; light: string }> = {
+  dark: {
+    darkest: '30 31 34',   // #1e1f22
+    darker: '43 45 49',    // #2b2d31
+    dark: '49 51 56',      // #313338
+    light: '56 58 64',     // #383a40
+  },
+  oled: {
+    darkest: '0 0 0',      // #000000
+    darker: '10 10 10',    // #0a0a0a
+    dark: '18 18 18',      // #121212
+    light: '28 28 28',     // #1c1c1c
+  },
+  light: {
+    darkest: '227 229 232', // #e3e5e8
+    darker: '242 243 245',  // #f2f3f5
+    dark: '255 255 255',    // #ffffff
+    light: '235 237 239',   // #ebedef
+  },
+};
+
+const ACCENT_COLORS: Record<AccentColor, { 300: string; 400: string; 500: string; 600: string; 700: string }> = {
+  indigo: {
+    300: '165 180 252',
+    400: '129 140 248',
+    500: '88 101 242',
+    600: '71 82 196',
+    700: '67 56 202',
+  },
+  purple: {
+    300: '216 180 254',
+    400: '192 132 252',
+    500: '168 85 247',
+    600: '147 51 234',
+    700: '126 34 206',
+  },
+  emerald: {
+    300: '110 231 183',
+    400: '52 211 153',
+    500: '16 185 129',
+    600: '5 150 105',
+    700: '4 120 87',
+  },
+  rose: {
+    300: '253 164 175',
+    400: '251 113 133',
+    500: '244 63 94',
+    600: '225 29 72',
+    700: '190 18 60',
+  },
+  cyan: {
+    300: '103 232 249',
+    400: '34 211 238',
+    500: '6 182 212',
+    600: '8 145 178',
+    700: '14 116 144',
+  },
+  amber: {
+    300: '252 211 77',
+    400: '251 191 36',
+    500: '245 158 11',
+    600: '217 119 6',
+    700: '180 83 9',
+  },
+};
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   theme: getStoredString<ThemeMode>('zerovc_theme', 'dark'),
@@ -213,11 +279,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   applyThemeToDOM: () => {
     if (typeof document === 'undefined') return;
-    const { theme, uiZoom } = get();
+    const { theme, accentColor, uiZoom } = get();
 
     const root = document.documentElement;
 
-    // Apply Theme dataset attribute
+    // 1. Set data-theme attribute
     root.setAttribute('data-theme', theme);
     if (theme === 'oled') {
       root.classList.add('theme-oled');
@@ -225,11 +291,28 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       root.classList.remove('theme-oled');
     }
 
-    // Apply Zoom style
-    if (uiZoom && uiZoom !== 100) {
-      root.style.zoom = `${uiZoom}%`;
+    // 2. Set Theme Background CSS Variables
+    const bg = THEME_BACKGROUNDS[theme] || THEME_BACKGROUNDS.dark;
+    root.style.setProperty('--bg-darkest', bg.darkest);
+    root.style.setProperty('--bg-darker', bg.darker);
+    root.style.setProperty('--bg-dark', bg.dark);
+    root.style.setProperty('--bg-light', bg.light);
+
+    // 3. Set Accent Color CSS Variables
+    const brand = ACCENT_COLORS[accentColor] || ACCENT_COLORS.indigo;
+    root.style.setProperty('--brand-300', brand[300]);
+    root.style.setProperty('--brand-400', brand[400]);
+    root.style.setProperty('--brand-500', brand[500]);
+    root.style.setProperty('--brand-600', brand[600]);
+    root.style.setProperty('--brand-700', brand[700]);
+
+    // 4. Set Zoom Scale (native Electron webFrame for perfect viewport sizing)
+    const zoomLevel = uiZoom || 100;
+    if (window.electronAPI?.setZoomFactor) {
+      window.electronAPI.setZoomFactor(zoomLevel / 100);
+      root.style.zoom = '';
     } else {
-      root.style.zoom = '100%';
+      root.style.zoom = zoomLevel === 100 ? '' : `${zoomLevel}%`;
     }
   },
 }));

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webFrame } from 'electron';
 
 export interface ScreenSource {
   id: string;
@@ -43,6 +43,8 @@ export interface ElectronAPI {
   getMinimizeToTray: () => Promise<boolean>;
   setAutoStart: (enabled: boolean) => void;
   getAutoStart: () => Promise<boolean>;
+  setZoomFactor: (factor: number) => void;
+  getZoomFactor: () => number;
 }
 
 const electronAPI: ElectronAPI = {
@@ -89,6 +91,8 @@ const electronAPI: ElectronAPI = {
   getMinimizeToTray: () => ipcRenderer.invoke('get-minimize-to-tray'),
   setAutoStart: (enabled: boolean) => ipcRenderer.send('set-auto-start', enabled),
   getAutoStart: () => ipcRenderer.invoke('get-auto-start'),
+  setZoomFactor: (factor: number) => webFrame.setZoomFactor(factor),
+  getZoomFactor: () => webFrame.getZoomFactor(),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

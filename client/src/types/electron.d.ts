@@ -38,6 +38,8 @@ export interface ElectronAPI {
   getMinimizeToTray?: () => Promise<boolean>;
   setAutoStart?: (enabled: boolean) => void;
   getAutoStart?: () => Promise<boolean>;
+  setZoomFactor?: (factor: number) => void;
+  getZoomFactor?: () => number;
 }
 
 declare global {
