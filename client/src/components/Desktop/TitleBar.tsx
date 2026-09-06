@@ -8,6 +8,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { UpdateInfo, UpdateProgress } from '../../types/electron';
+import { ZeroVCLogo } from '../Common/ZeroVCLogo';
 
 interface RepoUpdateInfo {
   latestSha: string;
@@ -122,9 +123,7 @@ export const TitleBar: React.FC = () => {
         className="flex items-center gap-2 text-xs font-bold text-gray-300"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <div className="w-4 h-4 rounded-md bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center shadow-sm">
-          <Sparkles className="w-2.5 h-2.5 text-white" />
-        </div>
+        <ZeroVCLogo className="w-4 h-4 shadow-sm flex-shrink-0" />
         <span className="tracking-wide text-[11px] font-semibold text-gray-300">ZeroVC</span>
         {currentBuildCommit && (
           <span className="text-[9px] text-gray-500 font-mono hidden sm:inline">

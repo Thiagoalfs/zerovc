@@ -54,6 +54,20 @@ function getTrayIcon() {
   return nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
 }
 
+function getAppIcon() {
+  try {
+    const icoPath = path.join(__dirname, 'icon.ico');
+    if (require('fs').existsSync(icoPath)) {
+      return nativeImage.createFromPath(icoPath);
+    }
+    const pngPath = path.join(__dirname, 'icon.png');
+    if (require('fs').existsSync(pngPath)) {
+      return nativeImage.createFromPath(pngPath);
+    }
+  } catch {}
+  return getTrayIcon();
+}
+
 function createTray() {
   if (tray) return;
 
@@ -162,6 +176,7 @@ function createWindow(initialUrl?: string) {
     minWidth: 940,
     minHeight: 600,
     backgroundColor: '#0d1117',
+    icon: getAppIcon(),
     frame: false, // Frameless window for Discord-style custom titlebar
     titleBarStyle: 'hidden',
     webPreferences: {
