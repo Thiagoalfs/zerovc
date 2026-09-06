@@ -395,7 +395,16 @@ func main() {
 		http.StripPrefix("/assets/guild/", http.FileServer(http.Dir(guildAssetsDir))).ServeHTTP(w, r)
 	})
 
-	// 7. Serve Web Application (Single Page Application)
+	// 7. Downloads Route
+	downloadsDir := filepath.Join(webDir, "downloads")
+	r.Get("/downloads/*", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		http.StripPrefix("/downloads/", http.FileServer(http.Dir(downloadsDir))).ServeHTTP(w, r)
+	})
+
+	// 8. Serve Web Application (Single Page Application)
 	if _, err := os.Stat(webDir); err == nil {
 		fileServer := http.FileServer(http.Dir(webDir))
 		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
@@ -417,17 +426,16 @@ func main() {
 	} else {
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"name":"ZeroVC API","status":"online","version":"1.0.0"}`))
+			w.Write([]byte(`{"name":"ZeroVC API","status":"online","version":"1.0.1"}`))
 		})
 	}
 
-	// 7. Graceful Server Lifecycle
+	// 9. Graceful Server Lifecycle (ReadHeaderTimeout avoids Slowloris without truncating downloads or WebSockets)
 	server := &http.Server{
-		Addr:         fmt.Sprintf("0.0.0.0:%s", port),
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              fmt.Sprintf("0.0.0.0:%s", port),
+		Handler:           r,
+		ReadHeaderTimeout: 15 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {
