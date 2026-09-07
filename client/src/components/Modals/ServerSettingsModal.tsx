@@ -1309,46 +1309,78 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                             Exibição de Membros
                           </label>
                           <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#111214]/60 border border-white/10">
-                              <div className="pr-4">
-                                <div className="text-sm font-medium text-white">Exibir membros deste cargo separadamente</div>
-                                <div className="text-xs text-gray-400 mt-0.5">
+                            <div
+                              onClick={() => {
+                                if (isOwner) {
+                                  handleToggleRoleHoist();
+                                }
+                              }}
+                              className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                                selectedRole.hoist
+                                  ? 'bg-[#111214]/80 border-white/15'
+                                  : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
+                              } ${isOwner ? 'cursor-pointer' : 'opacity-70'}`}
+                            >
+                              <div className="pr-4 select-none">
+                                <div className="text-sm font-semibold text-white">
+                                  Exibir membros deste cargo separadamente
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1 leading-relaxed">
                                   Membros com este cargo aparecerão em uma categoria própria na lista lateral de membros.
                                 </div>
                               </div>
                               <button
                                 type="button"
                                 disabled={!isOwner}
-                                onClick={handleToggleRoleHoist}
-                                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                                  selectedRole.hoist ? 'bg-brand-500' : 'bg-white/10'
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleRoleHoist();
+                                }}
+                                className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
+                                  selectedRole.hoist ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
                                 } disabled:opacity-50`}
                               >
                                 <div
-                                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
                                     selectedRole.hoist ? 'translate-x-5' : 'translate-x-0'
                                   }`}
                                 />
                               </button>
                             </div>
 
-                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#111214]/60 border border-white/10">
-                              <div className="pr-4">
-                                <div className="text-sm font-medium text-white">Permitir menção deste cargo (@cargo)</div>
-                                <div className="text-xs text-gray-400 mt-0.5">
-                                  Permite que qualquer pessoa notifique todos os membros com este cargo no chat.
+                            <div
+                              onClick={() => {
+                                if (isOwner) {
+                                  handleToggleRoleMentionable();
+                                }
+                              }}
+                              className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                                selectedRole.mentionable
+                                  ? 'bg-[#111214]/80 border-white/15'
+                                  : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
+                              } ${isOwner ? 'cursor-pointer' : 'opacity-70'}`}
+                            >
+                              <div className="pr-4 select-none">
+                                <div className="text-sm font-semibold text-white">
+                                  Permitir que qualquer um @mencione este cargo
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1 leading-relaxed">
+                                  Permite que membros enviem mensagens com @cargo para notificar todos com este cargo.
                                 </div>
                               </div>
                               <button
                                 type="button"
                                 disabled={!isOwner}
-                                onClick={handleToggleRoleMentionable}
-                                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                                  selectedRole.mentionable ? 'bg-brand-500' : 'bg-white/10'
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleRoleMentionable();
+                                }}
+                                className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
+                                  selectedRole.mentionable ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
                                 } disabled:opacity-50`}
                               >
                                 <div
-                                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
                                     selectedRole.mentionable ? 'translate-x-5' : 'translate-x-0'
                                   }`}
                                 />
@@ -1383,33 +1415,41 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                           handleTogglePermission(perm.flag);
                                         }
                                       }}
-                                      className={`flex items-start justify-between p-3.5 rounded-xl border transition-all ${
+                                      className={`flex items-start justify-between p-4 rounded-xl border transition-all ${
                                         perm.isMaster
                                           ? 'bg-amber-500/10 border-amber-500/30'
+                                          : isChecked
+                                          ? 'bg-[#111214]/80 border-white/15'
                                           : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
                                       } ${isOwner ? 'cursor-pointer' : 'opacity-70'}`}
                                     >
-                                      <div className="pr-4">
-                                        <div className="text-sm font-medium text-white flex items-center gap-2">
+                                      <div className="pr-4 select-none">
+                                        <div className="text-sm font-semibold text-white flex items-center gap-2">
                                           <span>{perm.name}</span>
                                           {perm.isMaster && (
-                                            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full">
+                                            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-medium">
                                               Mestre
                                             </span>
                                           )}
                                         </div>
-                                        <div className="text-xs text-gray-400 mt-1">{perm.description}</div>
+                                        <div className="text-xs text-gray-400 mt-1 leading-relaxed">{perm.description}</div>
                                       </div>
 
                                       <button
                                         type="button"
                                         disabled={!isOwner || (isRoleAdmin && perm.flag !== Permissions.ADMINISTRATOR)}
-                                        className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors ${
-                                          isChecked ? 'bg-emerald-500' : 'bg-white/10'
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (isOwner && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
+                                            handleTogglePermission(perm.flag);
+                                          }
+                                        }}
+                                        className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
+                                          isChecked ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
                                         } disabled:opacity-50`}
                                       >
                                         <div
-                                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
                                             isChecked ? 'translate-x-5' : 'translate-x-0'
                                           }`}
                                         />
