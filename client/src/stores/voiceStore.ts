@@ -13,6 +13,7 @@ import {
 
 interface VoiceState {
   currentChannelId: string | null;
+  currentGuildId: string | null;
   isConnected: boolean;
   isConnecting: boolean;
   isMuted: boolean;
@@ -27,7 +28,7 @@ interface VoiceState {
   watchedParticipantId: string | null;
 
   setWatchedParticipant: (identity: string | null) => void;
-  joinVoice: (channelId: string) => Promise<void>;
+  joinVoice: (channelId: string, guildId?: string) => Promise<void>;
   leaveVoice: () => Promise<void>;
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
@@ -95,6 +96,7 @@ const initialDeafened = loadSavedDeafenState();
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
   currentChannelId: null,
+  currentGuildId: null,
   isConnected: false,
   isConnecting: false,
   isMuted: initialMuted || initialDeafened,
@@ -112,7 +114,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     set({ watchedParticipantId: identity });
   },
 
-  joinVoice: async (channelId: string) => {
+  joinVoice: async (channelId: string, guildId?: string) => {
     // If already in this channel or currently connecting to it, do nothing
     if (get().currentChannelId === channelId && (get().isConnected || get().isConnecting)) {
       return;
@@ -125,7 +127,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       livekit.disconnect().catch(() => {});
     }
 
-    set({ isConnecting: true, currentChannelId: channelId });
+    set({ isConnecting: true, currentChannelId: channelId, currentGuildId: guildId || null });
 
     try {
       const res = await api.channels.joinVoice(channelId);
@@ -230,7 +232,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       }
     } catch (err) {
       console.error('[Voice] Failed to join voice:', err);
-      set({ isConnected: false, isConnecting: false, currentChannelId: null });
+      set({ isConnected: false, isConnecting: false, currentChannelId: null, currentGuildId: null });
     }
   },
 
@@ -248,6 +250,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     await livekit.disconnect();
     set({
       currentChannelId: null,
+      currentGuildId: null,
       isConnected: false,
       isConnecting: false,
       isScreensharing: false,
