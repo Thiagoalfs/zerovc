@@ -29,6 +29,8 @@ type CreateRoleRequest struct {
 	Name        string `json:"name"`
 	Color       string `json:"color"`
 	Permissions int64  `json:"permissions"`
+	Hoist       bool   `json:"hoist"`
+	Mentionable bool   `json:"mentionable"`
 }
 
 type UpdateRoleRequest struct {
@@ -36,6 +38,13 @@ type UpdateRoleRequest struct {
 	Color       *string `json:"color,omitempty"`
 	Position    *int    `json:"position,omitempty"`
 	Permissions *int64  `json:"permissions,omitempty"`
+	Hoist       *bool   `json:"hoist,omitempty"`
+	Mentionable *bool   `json:"mentionable,omitempty"`
+}
+
+type ReorderRoleItem struct {
+	ID       uuid.UUID `json:"id"`
+	Position int       `json:"position"`
 }
 
 func (h *RoleHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +68,7 @@ func (h *RoleHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `SELECT id, guild_id, name, color, position, permissions, created_at FROM guild_roles WHERE guild_id = $1 ORDER BY position ASC, created_at ASC`
+	query := `SELECT id, guild_id, name, color, position, permissions, COALESCE(hoist, false), COALESCE(mentionable, false), created_at FROM guild_roles WHERE guild_id = $1 ORDER BY position ASC, created_at ASC`
 	rows, err := h.db.Pool.Query(r.Context(), query, guildID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to list roles"}`, http.StatusInternalServerError)
@@ -70,7 +79,7 @@ func (h *RoleHandler) List(w http.ResponseWriter, r *http.Request) {
 	roles := make([]models.Role, 0)
 	for rows.Next() {
 		var role models.Role
-		if err := rows.Scan(&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.CreatedAt); err == nil {
+		if err := rows.Scan(&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.Hoist, &role.Mentionable, &role.CreatedAt); err == nil {
 			roles = append(roles, role)
 		}
 	}
@@ -111,12 +120,12 @@ func (h *RoleHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var role models.Role
 	query := `
-		INSERT INTO guild_roles (guild_id, name, color, permissions)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, guild_id, name, color, position, permissions, created_at
+		INSERT INTO guild_roles (guild_id, name, color, permissions, hoist, mentionable)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, guild_id, name, color, position, permissions, COALESCE(hoist, false), COALESCE(mentionable, false), created_at
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, guildID, req.Name, req.Color, req.Permissions).Scan(
-		&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.CreatedAt,
+	err = h.db.Pool.QueryRow(r.Context(), query, guildID, req.Name, req.Color, req.Permissions, req.Hoist, req.Mentionable).Scan(
+		&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.Hoist, &role.Mentionable, &role.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create role"}`, http.StatusInternalServerError)
@@ -132,6 +141,8 @@ func (h *RoleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"name":        role.Name,
 		"color":       role.Color,
 		"permissions": role.Permissions,
+		"hoist":       role.Hoist,
+		"mentionable": role.Mentionable,
 	})
 
 	w.Header().Set("Content-Type", "application/json")
@@ -172,12 +183,14 @@ func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		SET name = COALESCE($1, name),
 		    color = COALESCE($2, color),
 		    position = COALESCE($3, position),
-		    permissions = COALESCE($4, permissions)
-		WHERE id = $5
-		RETURNING id, guild_id, name, color, position, permissions, created_at
+		    permissions = COALESCE($4, permissions),
+		    hoist = COALESCE($5, hoist),
+		    mentionable = COALESCE($6, mentionable)
+		WHERE id = $7
+		RETURNING id, guild_id, name, color, position, permissions, COALESCE(hoist, false), COALESCE(mentionable, false), created_at
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Color, req.Position, req.Permissions, roleID).Scan(
-		&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.CreatedAt,
+	err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Color, req.Position, req.Permissions, req.Hoist, req.Mentionable, roleID).Scan(
+		&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.Hoist, &role.Mentionable, &role.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to update role"}`, http.StatusInternalServerError)
@@ -193,10 +206,85 @@ func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"name":        role.Name,
 		"color":       role.Color,
 		"permissions": role.Permissions,
+		"hoist":       role.Hoist,
+		"mentionable": role.Mentionable,
 	})
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(role)
+}
+
+func (h *RoleHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "guildID")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != ownerID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageRoles) == 0 {
+			http.Error(w, `{"error":"forbidden: sem permissão para reordenar cargos"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	var items []ReorderRoleItem
+	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	for _, item := range items {
+		h.db.Pool.Exec(r.Context(), "UPDATE guild_roles SET position = $1 WHERE id = $2 AND guild_id = $3", item.Position, item.ID, guildID)
+	}
+
+	// Fetch updated roles list
+	q := `SELECT id, guild_id, name, color, position, permissions, COALESCE(hoist, false), COALESCE(mentionable, false), created_at FROM guild_roles WHERE guild_id = $1 ORDER BY position ASC, created_at ASC`
+	rows, err := h.db.Pool.Query(r.Context(), q, guildID)
+	updatedRoles := make([]models.Role, 0)
+	if err == nil {
+		for rows.Next() {
+			var role models.Role
+			if rows.Scan(&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.Hoist, &role.Mentionable, &role.CreatedAt) == nil {
+				updatedRoles = append(updatedRoles, role)
+			}
+		}
+		rows.Close()
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_ROLES_REORDER",
+		Data: map[string]any{
+			"guild_id": guildID,
+			"roles":    updatedRoles,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedRoles)
 }
 
 func (h *RoleHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -286,7 +374,7 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 	// Fetch updated roles for member and broadcast
 	var updatedRoles []models.Role
 	rRows, rErr := h.db.Pool.Query(r.Context(), `
-		SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, gr.created_at
+		SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, COALESCE(gr.hoist, false), COALESCE(gr.mentionable, false), gr.created_at
 		FROM guild_roles gr
 		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
 		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
@@ -295,7 +383,7 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 	if rErr == nil {
 		for rRows.Next() {
 			var r models.Role
-			if rRows.Scan(&r.ID, &r.GuildID, &r.Name, &r.Color, &r.Position, &r.Permissions, &r.CreatedAt) == nil {
+			if rRows.Scan(&r.ID, &r.GuildID, &r.Name, &r.Color, &r.Position, &r.Permissions, &r.Hoist, &r.Mentionable, &r.CreatedAt) == nil {
 				updatedRoles = append(updatedRoles, r)
 			}
 		}
@@ -373,7 +461,7 @@ func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
 	// Fetch updated roles for member and broadcast
 	var updatedRoles []models.Role
 	rRows, rErr := h.db.Pool.Query(r.Context(), `
-		SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, gr.created_at
+		SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, COALESCE(gr.hoist, false), COALESCE(gr.mentionable, false), gr.created_at
 		FROM guild_roles gr
 		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
 		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
@@ -382,7 +470,7 @@ func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
 	if rErr == nil {
 		for rRows.Next() {
 			var r models.Role
-			if rRows.Scan(&r.ID, &r.GuildID, &r.Name, &r.Color, &r.Position, &r.Permissions, &r.CreatedAt) == nil {
+			if rRows.Scan(&r.ID, &r.GuildID, &r.Name, &r.Color, &r.Position, &r.Permissions, &r.Hoist, &r.Mentionable, &r.CreatedAt) == nil {
 				updatedRoles = append(updatedRoles, r)
 			}
 		}

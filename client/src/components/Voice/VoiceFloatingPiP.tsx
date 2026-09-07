@@ -197,8 +197,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       const width = container?.offsetWidth || 320;
       const height = container?.offsetHeight || 220;
 
+      const TOP_BOUNDARY = 44; // TitleBar (32px) + 12px margin
       const clampedX = Math.max(10, Math.min(window.innerWidth - width - 10, newX));
-      const clampedY = Math.max(10, Math.min(window.innerHeight - height - 10, newY));
+      const clampedY = Math.max(TOP_BOUNDARY, Math.min(window.innerHeight - height - 10, newY));
 
       setDragPos({ x: clampedX, y: clampedY });
     }
@@ -219,7 +220,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       const centerY = currentY + height / 2;
 
       const screenMidX = window.innerWidth / 2;
-      const screenMidY = window.innerHeight / 2;
+      const screenMidY = (window.innerHeight + 44) / 2;
 
       let nearestCorner: PiPCorner = 'bottom-right';
       if (centerX < screenMidX) {
@@ -304,14 +305,14 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     onOpenUserProfile?.(targetUser, { x: e.clientX, y: e.clientY });
   };
 
-  // Corner positioning CSS
+  // Corner positioning CSS (ensuring top corners are below the 32px TitleBar)
   const getCornerClass = () => {
     if (dragPos) return '';
     switch (corner) {
       case 'top-left':
-        return 'top-4 left-4';
+        return 'top-12 left-4';
       case 'top-right':
-        return 'top-4 right-4';
+        return 'top-12 right-4';
       case 'bottom-left':
         return 'bottom-4 left-4';
       case 'bottom-right':

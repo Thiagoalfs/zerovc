@@ -67,20 +67,24 @@ type Role struct {
 	Color       string    `json:"color"`
 	Position    int       `json:"position"`
 	Permissions int64     `json:"permissions"`
+	Hoist       bool      `json:"hoist"`
+	Mentionable bool      `json:"mentionable"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Guild struct {
-	ID        uuid.UUID    `json:"id"`
-	Name      string       `json:"name"`
-	IconURL   string       `json:"icon_url"`
-	BannerURL string       `json:"banner_url"`
-	OwnerID   uuid.UUID    `json:"owner_id"`
-	Channels  []Channel    `json:"channels,omitempty"`
-	Members   []UserPublic `json:"members,omitempty"`
-	Roles     []Role       `json:"roles,omitempty"`
-	CreatedAt time.Time    `json:"created_at"`
-	UpdatedAt time.Time    `json:"updated_at"`
+	ID              uuid.UUID    `json:"id"`
+	Name            string       `json:"name"`
+	IconURL         string       `json:"icon_url"`
+	BannerURL       string       `json:"banner_url"`
+	OwnerID         uuid.UUID    `json:"owner_id"`
+	SystemChannelID *uuid.UUID   `json:"system_channel_id,omitempty"`
+	Channels        []Channel    `json:"channels,omitempty"`
+	Members         []UserPublic `json:"members,omitempty"`
+	Roles           []Role       `json:"roles,omitempty"`
+	Emojis          []GuildEmoji `json:"emojis,omitempty"`
+	CreatedAt       time.Time    `json:"created_at"`
+	UpdatedAt       time.Time    `json:"updated_at"`
 }
 
 type GuildMember struct {
@@ -189,6 +193,16 @@ type GuildInvite struct {
 	CreatorID uuid.UUID   `json:"creator_id"`
 	Creator   *UserPublic `json:"creator,omitempty"`
 	Uses      int         `json:"uses"`
+	CreatedAt time.Time   `json:"created_at"`
+}
+
+type GuildEmoji struct {
+	ID        uuid.UUID   `json:"id"`
+	GuildID   uuid.UUID   `json:"guild_id"`
+	Name      string      `json:"name"`
+	ImageURL  string      `json:"image_url"`
+	CreatorID uuid.UUID   `json:"creator_id"`
+	Creator   *UserPublic `json:"creator,omitempty"`
 	CreatedAt time.Time   `json:"created_at"`
 }
 
