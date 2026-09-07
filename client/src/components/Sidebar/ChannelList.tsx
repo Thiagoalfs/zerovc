@@ -41,7 +41,8 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 interface ChannelListProps {
   isHomeActive: boolean;
   onSelectChannel?: (channel: Channel) => void;
-  onOpenCreateChannel: (type: 'text' | 'voice' | 'category', categoryId?: string) => void;
+  onOpenCreateChannel: (type?: 'text' | 'voice', categoryId?: string) => void;
+  onOpenCreateCategory: () => void;
   onOpenInviteModal: () => void;
   onOpenSettings: () => void;
   onOpenServerSettings?: () => void;
@@ -57,6 +58,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   isHomeActive,
   onSelectChannel,
   onOpenCreateChannel,
+  onOpenCreateCategory,
   onOpenInviteModal,
   onOpenSettings,
   onOpenServerSettings,
@@ -201,6 +203,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
   // Right-Click Context Menus
   const handleChannelContextMenu = (e: React.MouseEvent, channel: Channel) => {
+    e.preventDefault();
+    e.stopPropagation();
     const isText = channel.type === 'text';
     const isUnread = unreadChannels.has(channel.id);
 
@@ -243,6 +247,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   };
 
   const handleCategoryContextMenu = (e: React.MouseEvent, category: Channel) => {
+    e.preventDefault();
+    e.stopPropagation();
     const isCollapsed = !!collapsedCategories[category.id];
 
     const items: ContextMenuItem[] = [
@@ -282,37 +288,23 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   };
 
   const handleSidebarContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (!isOwner) return;
 
     const items: ContextMenuItem[] = [
       {
-        label: 'Criar Canal de Texto',
-        icon: <Hash className="w-4 h-4" />,
+        label: 'Criar Canal',
+        icon: <Plus className="w-4 h-4" />,
         onClick: () => onOpenCreateChannel('text'),
-      },
-      {
-        label: 'Criar Canal de Voz',
-        icon: <Volume2 className="w-4 h-4" />,
-        onClick: () => onOpenCreateChannel('voice'),
       },
       {
         label: 'Criar Categoria',
         icon: <FolderPlus className="w-4 h-4" />,
-        onClick: () => onOpenCreateChannel('category'),
+        onClick: () => onOpenCreateCategory(),
       },
-      ...(onOpenServerSettings
-        ? [
-            { label: '', separator: true },
-            {
-              label: 'Configurações do Servidor',
-              icon: <Settings className="w-4 h-4" />,
-              onClick: () => onOpenServerSettings(),
-            },
-          ]
-        : []),
     ];
 
-    openContextMenu(e, items, activeGuild?.name || 'Servidor');
+    openContextMenu(e, items);
   };
 
   const handleVoiceMemberContextMenu = (
@@ -862,7 +854,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                       <button
                         onClick={() => {
                           setIsDropdownOpen(false);
-                          onOpenCreateChannel('category');
+                          onOpenCreateCategory();
                         }}
                         className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-300 hover:bg-white/5 transition-colors cursor-pointer"
                       >

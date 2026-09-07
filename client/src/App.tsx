@@ -25,6 +25,7 @@ import { LandingPage } from './components/Landing/LandingPage';
 import { DownloadPage } from './components/Landing/DownloadPage';
 import { CreateServerModal } from './components/Modals/CreateServerModal';
 import { CreateChannelModal } from './components/Modals/CreateChannelModal';
+import { CreateCategoryModal } from './components/Modals/CreateCategoryModal';
 import { ScreenShareModal } from './components/Modals/ScreenShareModal';
 import { ProfileModal } from './components/Modals/ProfileModal';
 import { ServerSettingsModal } from './components/Modals/ServerSettingsModal';
@@ -72,7 +73,8 @@ export const App: React.FC = () => {
   const [isCreateServerOpen, setIsCreateServerOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
-  const [createChannelType, setCreateChannelType] = useState<'text' | 'voice' | 'category'>('text');
+  const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false);
+  const [createChannelType, setCreateChannelType] = useState<'text' | 'voice'>('text');
   const [createChannelCategoryId, setCreateChannelCategoryId] = useState<string | undefined>(undefined);
   const [isScreenShareOpen, setIsScreenShareOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -853,9 +855,13 @@ export const App: React.FC = () => {
               }
             }}
             onOpenCreateChannel={(type, categoryId) => {
-              setCreateChannelType(type);
+              setCreateChannelType(type || 'text');
               setCreateChannelCategoryId(categoryId);
               setIsCreateChannelOpen(true);
+              setIsMobileDrawerOpen(false);
+            }}
+            onOpenCreateCategory={() => {
+              setIsCreateCategoryOpen(true);
               setIsMobileDrawerOpen(false);
             }}
             onOpenInviteModal={() => {
@@ -1010,6 +1016,11 @@ export const App: React.FC = () => {
           setIsCreateChannelOpen(false);
           setCreateChannelCategoryId(undefined);
         }}
+      />
+
+      <CreateCategoryModal
+        isOpen={isCreateCategoryOpen}
+        onClose={() => setIsCreateCategoryOpen(false)}
       />
 
       <ScreenShareModal
