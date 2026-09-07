@@ -2220,35 +2220,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </button>
                   </div>
                 </div>
-
-                {/* Default Screen Share Quality */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                    Transmissão de Tela Padrão
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    {[
-                      { id: '720p30', label: '720p (30 FPS)', desc: 'Leve / Econômico' },
-                      { id: '1080p30', label: '1080p (30 FPS)', desc: 'Recomendado' },
-                      { id: '1080p60', label: '1080p (60 FPS)', desc: 'Fluido (Jogos)' },
-                      { id: 'source', label: 'Original', desc: 'Resolução Máxima' },
-                    ].map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setScreenshareQuality(item.id as ScreenshareQuality)}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                          screenshareQuality === item.id
-                            ? 'border-brand-500 bg-brand-500/15 text-white'
-                            : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
-                        }`}
-                      >
-                        <span className="font-bold text-xs block mb-0.5">{item.label}</span>
-                        <span className="text-[10px] text-gray-400 block">{item.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
             )}
 

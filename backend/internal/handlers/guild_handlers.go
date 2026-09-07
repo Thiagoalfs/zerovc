@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -127,7 +128,7 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT g.id, g.name, g.icon_url, COALESCE(g.banner_url, ''), g.owner_id, g.created_at, g.updated_at
+		SELECT g.id, g.name, g.icon_url, COALESCE(g.banner_url, ''), g.owner_id, g.system_channel_id, g.created_at, g.updated_at
 		FROM guilds g
 		INNER JOIN guild_members gm ON gm.guild_id = g.id
 		WHERE gm.user_id = $1
@@ -143,7 +144,7 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 	guilds := make([]models.Guild, 0)
 	for rows.Next() {
 		var g models.Guild
-		if err := rows.Scan(&g.ID, &g.Name, &g.IconURL, &g.BannerURL, &g.OwnerID, &g.CreatedAt, &g.UpdatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.IconURL, &g.BannerURL, &g.OwnerID, &g.SystemChannelID, &g.CreatedAt, &g.UpdatedAt); err != nil {
 			continue
 		}
 		guilds = append(guilds, g)
@@ -177,9 +178,9 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Get Guild
 	var guild models.Guild
-	guildQuery := `SELECT id, name, icon_url, COALESCE(banner_url, ''), owner_id, created_at, updated_at FROM guilds WHERE id = $1`
+	guildQuery := `SELECT id, name, icon_url, COALESCE(banner_url, ''), owner_id, system_channel_id, created_at, updated_at FROM guilds WHERE id = $1`
 	err = h.db.Pool.QueryRow(r.Context(), guildQuery, guildID).Scan(
-		&guild.ID, &guild.Name, &guild.IconURL, &guild.BannerURL, &guild.OwnerID, &guild.CreatedAt, &guild.UpdatedAt,
+		&guild.ID, &guild.Name, &guild.IconURL, &guild.BannerURL, &guild.OwnerID, &guild.SystemChannelID, &guild.CreatedAt, &guild.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
@@ -187,16 +188,46 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Get Roles
-	rQuery := `SELECT id, guild_id, name, color, position, permissions, created_at FROM guild_roles WHERE guild_id = $1 ORDER BY position ASC, created_at ASC`
+	rQuery := `SELECT id, guild_id, name, color, position, permissions, COALESCE(hoist, false), COALESCE(mentionable, false), created_at FROM guild_roles WHERE guild_id = $1 ORDER BY position ASC, created_at ASC`
 	rRows, err := h.db.Pool.Query(r.Context(), rQuery, guildID)
 	if err == nil {
 		for rRows.Next() {
 			var role models.Role
-			if scanErr := rRows.Scan(&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.CreatedAt); scanErr == nil {
+			if scanErr := rRows.Scan(&role.ID, &role.GuildID, &role.Name, &role.Color, &role.Position, &role.Permissions, &role.Hoist, &role.Mentionable, &role.CreatedAt); scanErr == nil {
 				guild.Roles = append(guild.Roles, role)
 			}
 		}
 		rRows.Close()
+	}
+
+	// 3.1 Get Emojis
+	emQuery := `
+		SELECT ge.id, ge.guild_id, ge.name, ge.image_url, ge.creator_id, ge.created_at,
+		       u.username, u.display_name, u.avatar_url, u.status
+		FROM guild_emojis ge
+		LEFT JOIN users u ON u.id = ge.creator_id
+		WHERE ge.guild_id = $1
+		ORDER BY ge.created_at DESC
+	`
+	emRows, err := h.db.Pool.Query(r.Context(), emQuery, guildID)
+	if err == nil {
+		for emRows.Next() {
+			var em models.GuildEmoji
+			var u models.UserPublic
+			var uname, udisp, uav, ust *string
+			if scanErr := emRows.Scan(&em.ID, &em.GuildID, &em.Name, &em.ImageURL, &em.CreatorID, &em.CreatedAt, &uname, &udisp, &uav, &ust); scanErr == nil {
+				if uname != nil {
+					u.ID = em.CreatorID
+					u.Username = *uname
+					if udisp != nil { u.DisplayName = *udisp }
+					if uav != nil { u.AvatarURL = *uav }
+					if ust != nil { u.Status = *ust }
+					em.Creator = &u
+				}
+				guild.Emojis = append(guild.Emojis, em)
+			}
+		}
+		emRows.Close()
 	}
 
 	// 4. Get User's Role IDs and Check Admin
@@ -306,7 +337,7 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 
 				// Query roles for member
 				roleQuery := `
-					SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, gr.created_at
+					SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, COALESCE(gr.hoist, false), COALESCE(gr.mentionable, false), gr.created_at
 					FROM guild_roles gr
 					INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
 					WHERE gmr.guild_id = $1 AND gmr.user_id = $2
@@ -316,7 +347,7 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 				if mrErr == nil {
 					for mrRows.Next() {
 						var mr models.Role
-						if mrScan := mrRows.Scan(&mr.ID, &mr.GuildID, &mr.Name, &mr.Color, &mr.Position, &mr.Permissions, &mr.CreatedAt); mrScan == nil {
+						if mrScan := mrRows.Scan(&mr.ID, &mr.GuildID, &mr.Name, &mr.Color, &mr.Position, &mr.Permissions, &mr.Hoist, &mr.Mentionable, &mr.CreatedAt); mrScan == nil {
 							u.Roles = append(u.Roles, mr)
 						}
 					}
@@ -672,9 +703,11 @@ func (h *GuildHandler) MuteMember(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateGuildRequest struct {
-	Name      *string `json:"name,omitempty"`
-	IconURL   *string `json:"icon_url,omitempty"`
-	BannerURL *string `json:"banner_url,omitempty"`
+	Name               *string    `json:"name,omitempty"`
+	IconURL            *string    `json:"icon_url,omitempty"`
+	BannerURL          *string    `json:"banner_url,omitempty"`
+	SystemChannelID    *uuid.UUID `json:"system_channel_id,omitempty"`
+	ClearSystemChannel *bool      `json:"clear_system_channel,omitempty"`
 }
 
 func (h *GuildHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -722,18 +755,50 @@ func (h *GuildHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var guild models.Guild
-	updateQuery := `
-		UPDATE guilds
-		SET name = COALESCE($1, name),
-		    icon_url = COALESCE($2, icon_url),
-		    banner_url = COALESCE($3, banner_url),
-		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $4
-		RETURNING id, name, icon_url, COALESCE(banner_url, ''), owner_id, created_at, updated_at
-	`
-	err = h.db.Pool.QueryRow(r.Context(), updateQuery, req.Name, req.IconURL, req.BannerURL, guildID).Scan(
-		&guild.ID, &guild.Name, &guild.IconURL, &guild.BannerURL, &guild.OwnerID, &guild.CreatedAt, &guild.UpdatedAt,
-	)
+	var updateQuery string
+
+	if req.ClearSystemChannel != nil && *req.ClearSystemChannel {
+		updateQuery = `
+			UPDATE guilds
+			SET name = COALESCE($1, name),
+			    icon_url = COALESCE($2, icon_url),
+			    banner_url = COALESCE($3, banner_url),
+			    system_channel_id = NULL,
+			    updated_at = CURRENT_TIMESTAMP
+			WHERE id = $4
+			RETURNING id, name, icon_url, COALESCE(banner_url, ''), owner_id, system_channel_id, created_at, updated_at
+		`
+		err = h.db.Pool.QueryRow(r.Context(), updateQuery, req.Name, req.IconURL, req.BannerURL, guildID).Scan(
+			&guild.ID, &guild.Name, &guild.IconURL, &guild.BannerURL, &guild.OwnerID, &guild.SystemChannelID, &guild.CreatedAt, &guild.UpdatedAt,
+		)
+	} else if req.SystemChannelID != nil {
+		updateQuery = `
+			UPDATE guilds
+			SET name = COALESCE($1, name),
+			    icon_url = COALESCE($2, icon_url),
+			    banner_url = COALESCE($3, banner_url),
+			    system_channel_id = $4,
+			    updated_at = CURRENT_TIMESTAMP
+			WHERE id = $5
+			RETURNING id, name, icon_url, COALESCE(banner_url, ''), owner_id, system_channel_id, created_at, updated_at
+		`
+		err = h.db.Pool.QueryRow(r.Context(), updateQuery, req.Name, req.IconURL, req.BannerURL, req.SystemChannelID, guildID).Scan(
+			&guild.ID, &guild.Name, &guild.IconURL, &guild.BannerURL, &guild.OwnerID, &guild.SystemChannelID, &guild.CreatedAt, &guild.UpdatedAt,
+		)
+	} else {
+		updateQuery = `
+			UPDATE guilds
+			SET name = COALESCE($1, name),
+			    icon_url = COALESCE($2, icon_url),
+			    banner_url = COALESCE($3, banner_url),
+			    updated_at = CURRENT_TIMESTAMP
+			WHERE id = $4
+			RETURNING id, name, icon_url, COALESCE(banner_url, ''), owner_id, system_channel_id, created_at, updated_at
+		`
+		err = h.db.Pool.QueryRow(r.Context(), updateQuery, req.Name, req.IconURL, req.BannerURL, guildID).Scan(
+			&guild.ID, &guild.Name, &guild.IconURL, &guild.BannerURL, &guild.OwnerID, &guild.SystemChannelID, &guild.CreatedAt, &guild.UpdatedAt,
+		)
+	}
 	if err != nil {
 		http.Error(w, `{"error":"failed to update guild"}`, http.StatusInternalServerError)
 		return
@@ -1053,5 +1118,309 @@ func (h *GuildHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(logs)
 }
+
+type TransferOwnershipRequest struct {
+	NewOwnerID uuid.UUID `json:"new_owner_id"`
+}
+
+func (h *GuildHandler) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req TransferOwnershipRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.NewOwnerID == uuid.Nil {
+		http.Error(w, `{"error":"new_owner_id is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 1. Verify caller is current owner
+	var currentOwnerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&currentOwnerID)
+	if err != nil || currentOwnerID != userID {
+		http.Error(w, `{"error":"apenas o dono atual pode transferir a posse do servidor"}`, http.StatusForbidden)
+		return
+	}
+
+	if req.NewOwnerID == userID {
+		http.Error(w, `{"error":"você já é o dono do servidor"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 2. Verify target is a member of the guild
+	var isMember bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, req.NewOwnerID).Scan(&isMember)
+	if err != nil || !isMember {
+		http.Error(w, `{"error":"o novo dono precisa ser membro do servidor"}`, http.StatusBadRequest)
+		return
+	}
+
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"falha ao iniciar transação"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// Update guild owner_id
+	_, err = tx.Exec(r.Context(), "UPDATE guilds SET owner_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", req.NewOwnerID, guildID)
+	if err != nil {
+		http.Error(w, `{"error":"falha ao transferir servidor"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Update guild_members roles
+	_, _ = tx.Exec(r.Context(), "UPDATE guild_members SET role = 'owner' WHERE guild_id = $1 AND user_id = $2", guildID, req.NewOwnerID)
+	_, _ = tx.Exec(r.Context(), "UPDATE guild_members SET role = 'admin' WHERE guild_id = $1 AND user_id = $2", guildID, userID)
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"falha ao confirmar transferência"}`, http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_UPDATE",
+		Data: map[string]any{
+			"id":       guildID,
+			"owner_id": req.NewOwnerID,
+		},
+	})
+
+	h.LogAudit(r.Context(), guildID, userID, "GUILD_OWNERSHIP_TRANSFER", &req.NewOwnerID, map[string]any{
+		"previous_owner_id": userID,
+		"new_owner_id":      req.NewOwnerID,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "owner_id": req.NewOwnerID})
+}
+
+type CreateEmojiRequest struct {
+	Name     string `json:"name"`
+	ImageURL string `json:"image_url"`
+}
+
+func (h *GuildHandler) ListEmojis(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var isMember bool
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, userID).Scan(&isMember)
+	if !isMember {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	query := `
+		SELECT ge.id, ge.guild_id, ge.name, ge.image_url, ge.creator_id, ge.created_at,
+		       u.username, u.display_name, u.avatar_url, u.status
+		FROM guild_emojis ge
+		LEFT JOIN users u ON u.id = ge.creator_id
+		WHERE ge.guild_id = $1
+		ORDER BY ge.created_at DESC
+	`
+	rows, err := h.db.Pool.Query(r.Context(), query, guildID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch emojis"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	emojis := make([]models.GuildEmoji, 0)
+	for rows.Next() {
+		var em models.GuildEmoji
+		var u models.UserPublic
+		var uname, udisp, uav, ust *string
+		if err := rows.Scan(
+			&em.ID, &em.GuildID, &em.Name, &em.ImageURL, &em.CreatorID, &em.CreatedAt,
+			&uname, &udisp, &uav, &ust,
+		); err == nil {
+			if uname != nil {
+				u.ID = em.CreatorID
+				u.Username = *uname
+				if udisp != nil {
+					u.DisplayName = *udisp
+				}
+				if uav != nil {
+					u.AvatarURL = *uav
+				}
+				if ust != nil {
+					u.Status = *ust
+				}
+				em.Creator = &u
+			}
+			emojis = append(emojis, em)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(emojis)
+}
+
+func (h *GuildHandler) CreateEmoji(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify manage guild / admin / owner
+	var ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != ownerID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
+			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar emojis"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	var req CreateEmojiRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" || req.ImageURL == "" {
+		http.Error(w, `{"error":"name and image_url are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Clean name (alphanumeric and underscores, max 32 chars)
+	cleanName := strings.TrimSpace(req.Name)
+	cleanName = strings.Trim(cleanName, ":")
+	if len(cleanName) > 32 {
+		cleanName = cleanName[:32]
+	}
+
+	var emoji models.GuildEmoji
+	insertQuery := `
+		INSERT INTO guild_emojis (guild_id, name, image_url, creator_id)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, guild_id, name, image_url, creator_id, created_at
+	`
+	err = h.db.Pool.QueryRow(r.Context(), insertQuery, guildID, cleanName, req.ImageURL, userID).Scan(
+		&emoji.ID, &emoji.GuildID, &emoji.Name, &emoji.ImageURL, &emoji.CreatorID, &emoji.CreatedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"failed to create emoji"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var creator models.UserPublic
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, username, display_name, avatar_url, status FROM users WHERE id = $1`, userID).Scan(
+		&creator.ID, &creator.Username, &creator.DisplayName, &creator.AvatarURL, &creator.Status,
+	)
+	emoji.Creator = &creator
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_EMOJI_CREATE",
+		Data: emoji,
+	})
+
+	h.LogAudit(r.Context(), guildID, userID, "EMOJI_CREATE", &emoji.ID, map[string]any{"name": emoji.Name})
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(emoji)
+}
+
+func (h *GuildHandler) DeleteEmoji(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	emojiIDStr := chi.URLParam(r, "emojiID")
+	guildID, _ := uuid.Parse(guildIDStr)
+	emojiID, err := uuid.Parse(emojiIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid emoji id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify manage guild / admin / owner
+	var ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != ownerID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
+			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar emojis"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	var emojiName string
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT name FROM guild_emojis WHERE id = $1 AND guild_id = $2", emojiID, guildID).Scan(&emojiName)
+
+	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM guild_emojis WHERE id = $1 AND guild_id = $2", emojiID, guildID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to delete emoji"}`, http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_EMOJI_DELETE",
+		Data: map[string]any{
+			"guild_id": guildID,
+			"id":       emojiID,
+		},
+	})
+
+	h.LogAudit(r.Context(), guildID, userID, "EMOJI_DELETE", &emojiID, map[string]any{"name": emojiName})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "id": emojiID})
+}
+
 
 

@@ -50,7 +50,19 @@ export interface Role {
   color: string;
   position: number;
   permissions: number;
+  hoist?: boolean;
+  mentionable?: boolean;
   created_at?: string;
+}
+
+export interface GuildEmoji {
+  id: string;
+  guild_id: string;
+  name: string;
+  image_url: string;
+  creator_id: string;
+  creator?: User;
+  created_at: string;
 }
 
 export interface Guild {
@@ -59,9 +71,11 @@ export interface Guild {
   icon_url?: string;
   banner_url?: string;
   owner_id: string;
+  system_channel_id?: string;
   channels?: Channel[];
   members?: User[];
   roles?: Role[];
+  emojis?: GuildEmoji[];
   created_at: string;
 }
 
