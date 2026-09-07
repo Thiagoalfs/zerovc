@@ -131,7 +131,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     selectChannel(channel);
     if (onSelectChannel) onSelectChannel(channel);
     if (currentChannelId !== channel.id || (!isConnected && !isConnecting)) {
-      joinVoice(channel.id);
+      joinVoice(channel.id, channel.guild_id || activeGuild?.id);
     }
     onCloseMobileDrawer?.();
   };
