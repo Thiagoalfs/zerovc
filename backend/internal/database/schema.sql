@@ -322,5 +322,19 @@ CREATE TABLE IF NOT EXISTS user_2fa_backup_codes (
 
 CREATE INDEX IF NOT EXISTS idx_user_2fa_backup_codes_user ON user_2fa_backup_codes (user_id);
 
+-- 23. Server Settings Enhancements
+ALTER TABLE guilds ADD COLUMN IF NOT EXISTS system_channel_id UUID REFERENCES channels(id) ON DELETE SET NULL;
+ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS hoist BOOLEAN DEFAULT FALSE;
+ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS mentionable BOOLEAN DEFAULT FALSE;
 
+-- 24. Guild Emojis
+CREATE TABLE IF NOT EXISTS guild_emojis (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    guild_id UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+    name VARCHAR(32) NOT NULL,
+    image_url TEXT NOT NULL,
+    creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
+CREATE INDEX IF NOT EXISTS idx_guild_emojis_guild ON guild_emojis (guild_id, created_at DESC);

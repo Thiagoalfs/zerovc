@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
 
@@ -183,10 +183,15 @@ export const api = {
         body: JSON.stringify(data),
       }),
     getDetails: (id: string) => request<Guild>(`/guilds/${id}`),
-    update: (id: string, data: { name?: string; icon_url?: string; banner_url?: string }) =>
+    update: (id: string, data: { name?: string; icon_url?: string; banner_url?: string; system_channel_id?: string; clear_system_channel?: boolean }) =>
       request<Guild>(`/guilds/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
+      }),
+    transferOwnership: (guildId: string, newOwnerId: string) =>
+      request<{ success: boolean; owner_id: string }>(`/guilds/${guildId}/transfer-ownership`, {
+        method: 'POST',
+        body: JSON.stringify({ new_owner_id: newOwnerId }),
       }),
     delete: (id: string) =>
       request<{ success: boolean; guild_id: string }>(`/guilds/${id}`, {
@@ -209,9 +214,24 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    createInvite: (guildId: string) =>
-      request<GuildInvite>(`/guilds/${guildId}/invites`, {
+    getInvites: (guildId: string) => request<GuildInvite[]>(`/guilds/${guildId}/invites`),
+    createInvite: (guildId: string, forceNew = false) =>
+      request<GuildInvite>(`/guilds/${guildId}/invites${forceNew ? '?new=true' : ''}`, {
         method: 'POST',
+      }),
+    deleteInvite: (guildId: string, code: string) =>
+      request<{ success: boolean; code: string }>(`/guilds/${guildId}/invites/${code}`, {
+        method: 'DELETE',
+      }),
+    getEmojis: (guildId: string) => request<GuildEmoji[]>(`/guilds/${guildId}/emojis`),
+    createEmoji: (guildId: string, data: { name: string; image_url: string }) =>
+      request<GuildEmoji>(`/guilds/${guildId}/emojis`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    deleteEmoji: (guildId: string, emojiId: string) =>
+      request<{ success: boolean; id: string }>(`/guilds/${guildId}/emojis/${emojiId}`, {
+        method: 'DELETE',
       }),
     kickMember: (guildId: string, userId: string) =>
       request<{ success: boolean; user_id: string }>(`/guilds/${guildId}/members/${userId}/kick`, {
@@ -334,15 +354,20 @@ export const api = {
 
   roles: {
     list: (guildId: string) => request<Role[]>(`/guilds/${guildId}/roles`),
-    create: (guildId: string, data: { name: string; color: string; permissions?: number }) =>
+    create: (guildId: string, data: { name: string; color: string; permissions?: number; hoist?: boolean; mentionable?: boolean }) =>
       request<Role>(`/guilds/${guildId}/roles`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    update: (guildId: string, roleId: string, data: { name?: string; color?: string; permissions?: number; position?: number }) =>
+    update: (guildId: string, roleId: string, data: { name?: string; color?: string; permissions?: number; position?: number; hoist?: boolean; mentionable?: boolean }) =>
       request<Role>(`/guilds/${guildId}/roles/${roleId}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
+      }),
+    reorder: (guildId: string, roles: Array<{ id: string; position: number }>) =>
+      request<Role[]>(`/guilds/${guildId}/roles/positions`, {
+        method: 'PUT',
+        body: JSON.stringify(roles),
       }),
     delete: (guildId: string, roleId: string) =>
       request<{ success: boolean }>(`/guilds/${guildId}/roles/${roleId}`, {

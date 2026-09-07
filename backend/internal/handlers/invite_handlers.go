@@ -64,14 +64,22 @@ func (h *InviteHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Check if an active invite already exists for this guild
+	// 2. Check if an active invite already exists for this guild (unless ?new=true requested)
 	var invite models.GuildInvite
-	existingQuery := `SELECT code, guild_id, creator_id, uses, created_at FROM guild_invites WHERE guild_id = $1 ORDER BY created_at DESC LIMIT 1`
-	err = h.db.Pool.QueryRow(r.Context(), existingQuery, guildID).Scan(&invite.Code, &invite.GuildID, &invite.CreatorID, &invite.Uses, &invite.CreatedAt)
-	if err == nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(invite)
-		return
+	forceNew := r.URL.Query().Get("new") == "true"
+	if !forceNew {
+		existingQuery := `SELECT code, guild_id, creator_id, uses, created_at FROM guild_invites WHERE guild_id = $1 ORDER BY created_at DESC LIMIT 1`
+		err = h.db.Pool.QueryRow(r.Context(), existingQuery, guildID).Scan(&invite.Code, &invite.GuildID, &invite.CreatorID, &invite.Uses, &invite.CreatedAt)
+		if err == nil {
+			var creator models.UserPublic
+			_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, username, display_name, avatar_url, status FROM users WHERE id = $1`, invite.CreatorID).Scan(
+				&creator.ID, &creator.Username, &creator.DisplayName, &creator.AvatarURL, &creator.Status,
+			)
+			invite.Creator = &creator
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(invite)
+			return
+		}
 	}
 
 	// 3. Generate exactly 10-character hash code
@@ -94,9 +102,135 @@ func (h *InviteHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var creator models.UserPublic
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, username, display_name, avatar_url, status FROM users WHERE id = $1`, userID).Scan(
+		&creator.ID, &creator.Username, &creator.DisplayName, &creator.AvatarURL, &creator.Status,
+	)
+	invite.Creator = &creator
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(invite)
+}
+
+// List all active invites for a guild
+func (h *InviteHandler) ListGuildInvites(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var isMember bool
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, userID).Scan(&isMember)
+	if !isMember {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	query := `
+		SELECT gi.code, gi.guild_id, gi.creator_id, gi.uses, gi.created_at,
+		       u.username, u.display_name, u.avatar_url, u.status
+		FROM guild_invites gi
+		LEFT JOIN users u ON u.id = gi.creator_id
+		WHERE gi.guild_id = $1
+		ORDER BY gi.created_at DESC
+	`
+	rows, err := h.db.Pool.Query(r.Context(), query, guildID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to list invites"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	invites := make([]models.GuildInvite, 0)
+	for rows.Next() {
+		var inv models.GuildInvite
+		var u models.UserPublic
+		var uname, udisp, uav, ust *string
+		if err := rows.Scan(&inv.Code, &inv.GuildID, &inv.CreatorID, &inv.Uses, &inv.CreatedAt, &uname, &udisp, &uav, &ust); err == nil {
+			if uname != nil {
+				u.ID = inv.CreatorID
+				u.Username = *uname
+				if udisp != nil {
+					u.DisplayName = *udisp
+				}
+				if uav != nil {
+					u.AvatarURL = *uav
+				}
+				if ust != nil {
+					u.Status = *ust
+				}
+				inv.Creator = &u
+			}
+			invites = append(invites, inv)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(invites)
+}
+
+// Delete / Revoke invite
+func (h *InviteHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	code := chi.URLParam(r, "code")
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify owner or admin or creator
+	var creatorID, ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT gi.creator_id, g.owner_id
+		FROM guild_invites gi
+		INNER JOIN guilds g ON g.id = gi.guild_id
+		WHERE gi.code = $1 AND gi.guild_id = $2
+	`, code, guildID).Scan(&creatorID, &ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"convite não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != ownerID && userID != creatorID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
+			http.Error(w, `{"error":"forbidden: sem permissão para revogar convite"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM guild_invites WHERE code = $1 AND guild_id = $2", code, guildID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to delete invite"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "code": code})
 }
 
 // Get invite details preview by 10-character code

@@ -28,7 +28,8 @@ interface GuildState {
   loadMoreMessages: (channelId: string) => Promise<void>;
   fetchPinnedMessages: (channelId: string) => Promise<void>;
   createGuild: (name: string, iconUrl?: string) => Promise<Guild>;
-  updateGuild: (guildId: string, data: { name?: string; icon_url?: string; banner_url?: string }) => Promise<void>;
+  updateGuild: (guildId: string, data: { name?: string; icon_url?: string; banner_url?: string; system_channel_id?: string; clear_system_channel?: boolean }) => Promise<void>;
+  transferOwnership: (guildId: string, newOwnerId: string) => Promise<void>;
   deleteGuild: (guildId: string) => Promise<void>;
   leaveGuild: (guildId: string) => Promise<void>;
   toggleMuteGuild: (guildId: string) => Promise<void>;
@@ -62,8 +63,9 @@ interface GuildState {
   setTyping: (channelId: string, userId: string) => void;
 
   // Roles
-  createRole: (guildId: string, name: string, color: string, permissions?: number) => Promise<Role>;
-  updateRole: (guildId: string, roleId: string, data: { name?: string; color?: string; permissions?: number }) => Promise<void>;
+  createRole: (guildId: string, name: string, color: string, permissions?: number, hoist?: boolean, mentionable?: boolean) => Promise<Role>;
+  updateRole: (guildId: string, roleId: string, data: { name?: string; color?: string; permissions?: number; position?: number; hoist?: boolean; mentionable?: boolean }) => Promise<void>;
+  reorderRoles: (guildId: string, roles: Array<{ id: string; position: number }>) => Promise<void>;
   deleteRole: (guildId: string, roleId: string) => Promise<void>;
   assignRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
   removeRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
@@ -267,7 +269,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     return guild;
   },
 
-  updateGuild: async (guildId: string, data: { name?: string; icon_url?: string; banner_url?: string }) => {
+  updateGuild: async (guildId: string, data: { name?: string; icon_url?: string; banner_url?: string; system_channel_id?: string; clear_system_channel?: boolean }) => {
     const updated = await api.guilds.update(guildId, data);
     set((state) => {
       const guilds = state.guilds.map((g) => (g.id === guildId ? { ...g, ...updated } : g));
@@ -281,6 +283,15 @@ export const useGuildStore = create<GuildState>((set, get) => ({
               roles: state.activeGuild.roles,
             }
           : state.activeGuild;
+      return { guilds, activeGuild };
+    });
+  },
+
+  transferOwnership: async (guildId: string, newOwnerId: string) => {
+    await api.guilds.transferOwnership(guildId, newOwnerId);
+    set((state) => {
+      const guilds = state.guilds.map((g) => (g.id === guildId ? { ...g, owner_id: newOwnerId } : g));
+      const activeGuild = state.activeGuild?.id === guildId ? { ...state.activeGuild, owner_id: newOwnerId } : state.activeGuild;
       return { guilds, activeGuild };
     });
   },
@@ -883,8 +894,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }, 4000);
   },
 
-  createRole: async (guildId: string, name: string, color: string, permissions = 0) => {
-    const role = await api.roles.create(guildId, { name, color, permissions });
+  createRole: async (guildId: string, name: string, color: string, permissions = 0, hoist = false, mentionable = false) => {
+    const role = await api.roles.create(guildId, { name, color, permissions, hoist, mentionable });
     set((state) => {
       if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
       const roles = [...(state.activeGuild.roles || []), role];
@@ -899,6 +910,14 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
       const roles = (state.activeGuild.roles || []).map((r) => (r.id === roleId ? { ...r, ...updated } : r));
       return { activeGuild: { ...state.activeGuild, roles } };
+    });
+  },
+
+  reorderRoles: async (guildId: string, rolesList: Array<{ id: string; position: number }>) => {
+    const updatedRoles = await api.roles.reorder(guildId, rolesList);
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      return { activeGuild: { ...state.activeGuild, roles: updatedRoles } };
     });
   },
 
