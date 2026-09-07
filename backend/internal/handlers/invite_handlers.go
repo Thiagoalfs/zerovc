@@ -311,6 +311,16 @@ func (h *InviteHandler) JoinByInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 1.1 Assign @everyone role to new member
+	assignEveryoneQuery := `
+		INSERT INTO guild_member_roles (guild_id, user_id, role_id)
+		SELECT $1, $2, id
+		FROM guild_roles
+		WHERE guild_id = $1 AND name = '@everyone'
+		ON CONFLICT DO NOTHING
+	`
+	h.db.Pool.Exec(r.Context(), assignEveryoneQuery, guildID, userID)
+
 	// 2. Increment invite uses count
 	h.db.Pool.Exec(r.Context(), "UPDATE guild_invites SET uses = uses + 1 WHERE code = $1", code)
 

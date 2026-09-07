@@ -270,8 +270,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     if (activeGuild && targetMember && (isCurrentOwner || isMe || (!isTargetOwner && isHierarchyAllowed))) {
       // Change Roles Submenu
       if (canManageRoles && guildRoles.length > 0) {
-        items.push({ label: '', separator: true });
-        const roleSubItems: ContextMenuItem[] = guildRoles.map((role) => {
+        const roleSubItems: ContextMenuItem[] = guildRoles
+          .filter((role) => role.name !== '@everyone')
+          .map((role) => {
           const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
           return {
             label: role.name,

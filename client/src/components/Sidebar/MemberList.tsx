@@ -124,8 +124,9 @@ export const MemberList: React.FC<MemberListProps> = ({
 
     // Change Roles Submenu (allowed if has permission and hierarchy allows or is self)
     if (canManageRoles && guildRoles.length > 0 && (isCurrentOwner || isMe || isHierarchyAllowed)) {
-      items.push({ label: '', separator: true });
-      const roleSubItems: ContextMenuItem[] = guildRoles.map((role) => {
+      const roleSubItems: ContextMenuItem[] = guildRoles
+        .filter((role) => role.name !== '@everyone')
+        .map((role) => {
         const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
         return {
           label: role.name,
