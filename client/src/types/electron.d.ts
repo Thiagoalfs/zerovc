@@ -40,6 +40,9 @@ export interface ElectronAPI {
   getAutoStart?: () => Promise<boolean>;
   setZoomFactor?: (factor: number) => void;
   getZoomFactor?: () => number;
+  getGpuInfo?: () => Promise<any>;
+  setFullScreen?: (flag: boolean) => void;
+  isFullScreen?: () => Promise<boolean>;
 }
 
 declare global {

@@ -38,9 +38,25 @@ import {
   Sun,
   Moon,
   VolumeX,
+  ChevronDown,
+  Brain,
+  Globe,
+  Activity,
+  Zap,
+  Gauge,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
-import { useSettingsStore, ThemeMode, AccentColor, ChatDensity, ScreenshareQuality, DmPrivacy } from '../../stores/settingsStore';
+import {
+  useSettingsStore,
+  ThemeMode,
+  AccentColor,
+  ChatDensity,
+  ScreenshareQuality,
+  DmPrivacy,
+  AudioProcessingMode,
+  RNNoiseLevel,
+} from '../../stores/settingsStore';
+import { audioProcessor } from '../../lib/audioProcessor';
 import {
   playMessageSound,
   playJoinVoiceSound,
@@ -169,6 +185,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     soundMuteEvents,
     soundMessageEvents,
     notificationsDesktop,
+    audioProcessingMode,
+    rnnoiseLevel,
+    vadSensitivity,
+    vadHangover,
     echoCancellation,
     noiseSuppression,
     autoGainControl,
@@ -188,12 +208,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setSoundMuteEvents,
     setSoundMessageEvents,
     setNotificationsDesktop,
+    setAudioProcessingMode,
+    setRnnoiseLevel,
+    setVadSensitivity,
+    setVadHangover,
     setEchoCancellation,
     setNoiseSuppression,
     setAutoGainControl,
     setScreenshareQuality,
     setDmPrivacy,
   } = useSettingsStore();
+
+  // Audio Processing Dropdown & Live VAD state
+  const [isProcDropdownOpen, setIsProcDropdownOpen] = useState(false);
+  const [vadLiveState, setVadLiveState] = useState({
+    isSpeaking: false,
+    volume: 0,
+    speechProbability: 0,
+    gateOpen: false,
+  });
 
   // Video devices & camera testing
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
@@ -565,38 +598,35 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     }
   };
 
-  // Mic test logic
+  // Mic test logic with real-time AudioProcessor (WebRTC / RNNoise / Silero VAD)
   const startMicTest = async () => {
     try {
+      setIsTestingMic(true);
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: selectedInput ? { exact: selectedInput } : undefined },
+        audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
       });
       micStreamRef.current = stream;
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioCtx;
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
 
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
+      audioProcessor.setVadCallback((data) => {
+        setMicLevel(data.volume);
+        setVadLiveState(data);
+      });
 
-      const checkLevel = () => {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
-        }
-        const avg = sum / bufferLength;
-        setMicLevel(Math.min(100, Math.round((avg / 128) * 100)));
-        animFrameRef.current = requestAnimationFrame(checkLevel);
-      };
-
-      checkLevel();
-      setIsTestingMic(true);
+      const track = stream.getAudioTracks()[0];
+      if (track) {
+        await audioProcessor.processMicrophoneTrack(track, {
+          mode: audioProcessingMode,
+          rnnoiseLevel,
+          vadSensitivity,
+          vadHangover,
+          echoCancellation,
+          noiseSuppression,
+          autoGainControl,
+        });
+      }
     } catch (err) {
       console.error('Failed to start mic test:', err);
+      setIsTestingMic(false);
     }
   };
 
@@ -606,17 +636,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       micStreamRef.current.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
     }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
+    audioProcessor.setVadCallback(null);
+    audioProcessor.cleanup();
     setIsTestingMic(false);
     setMicLevel(0);
+    setVadLiveState({ isSpeaking: false, volume: 0, speechProbability: 0, gateOpen: false });
   };
 
   const handleDeviceChange = async (type: 'input' | 'output', deviceId: string) => {
     if (type === 'input') {
       setSelectedInput(deviceId);
+      try {
+        localStorage.setItem('zerovc_audio_input_device', deviceId);
+      } catch {}
       await livekit.setAudioInputDevice(deviceId);
       if (isTestingMic) {
         stopMicTest();
@@ -624,6 +656,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       }
     } else {
       setSelectedOutput(deviceId);
+      try {
+        localStorage.setItem('zerovc_audio_output_device', deviceId);
+      } catch {}
       await livekit.setAudioOutputDevice(deviceId);
     }
   };
@@ -655,7 +690,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <span>Minha Conta</span>
             </button>
 
-            {/* Tab: Privacidade & Segurança */}
+            {/* Tab: Privacidade e Segurança */}
             <button
               type="button"
               onClick={() => setActiveTab('privacy')}
@@ -666,7 +701,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               }`}
             >
               <Shield className="w-4 h-4" />
-              <span>Privacidade</span>
+              <span>Privacidade e Segurança</span>
             </button>
 
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 block pt-2">
@@ -758,9 +793,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         </div>
 
         {/* Right Main Content Area */}
-        <div className="flex-1 flex flex-col h-full bg-background-dark overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 bg-background-dark/95">
           {/* Top Bar with Title and Close Button */}
-          <div className="p-5 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
+          <div className="h-16 px-6 border-b border-white/5 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
               {activeTab === 'profile' && (
                 <button
@@ -777,7 +812,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <h3 className="text-lg font-bold text-white">
                   {activeTab === 'account' && 'Minha Conta'}
                   {activeTab === 'profile' && 'Perfil de Usuário'}
-                  {activeTab === 'privacy' && 'Privacidade & Segurança'}
+                  {activeTab === 'privacy' && 'Privacidade e Segurança'}
                   {activeTab === 'appearance' && 'Aparência & Customização'}
                   {activeTab === 'audio' && 'Voz & Vídeo'}
                   {activeTab === 'notifications' && 'Notificações & Sons'}
@@ -785,9 +820,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {activeTab === 'keybinds' && 'Atalhos do Teclado'}
                 </h3>
                 <p className="text-xs text-gray-400">
-                  {activeTab === 'account' && 'Gerencie seus dados de acesso, nome de usuário, e-mail e segurança.'}
+                  {activeTab === 'account' && 'Personalize seu perfil, avatar, banner, nome de exibição e recado.'}
                   {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
-                  {activeTab === 'privacy' && 'Controle quem pode interagir com você e suas preferências de privacidade.'}
+                  {activeTab === 'privacy' && 'Gerencie credenciais de acesso, e-mail, senha, autenticação 2FA, sessões ativas e dados.'}
                   {activeTab === 'appearance' && 'Personalize temas visuais, cores de destaque, densidade e zoom.'}
                   {activeTab === 'audio' && 'Ajuste dispositivos, microfone, webcam e filtros avançados de áudio WebRTC.'}
                   {activeTab === 'notifications' && 'Configure sons do sistema, alertas sonoros e notificações na área de trabalho.'}
@@ -876,19 +911,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                             <Camera className="w-5 h-5" />
                             <span className="text-[9px] font-bold uppercase tracking-wider">Mudar</span>
                           </div>
-
-                          {/* Status Indicator Dot */}
-                          <span
-                            className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-background-darker z-10 ${
-                              user.status === 'online'
-                                ? 'bg-online'
-                                : user.status === 'idle'
-                                ? 'bg-idle'
-                                : user.status === 'dnd'
-                                ? 'bg-dnd'
-                                : 'bg-offline'
-                            }`}
-                          />
                         </div>
 
                         {/* Name & Username tag cleanly aligned in dark area */}
@@ -951,38 +973,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           setNewUsername(user.username);
                           setUsernameError(null);
                           setIsEditUsernameOpen(true);
-                        }}
-                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
-                      >
-                        Editar
-                      </button>
-                    </div>
-
-                    {/* Email row */}
-                    <div className="flex items-center justify-between py-1 border-b border-white/5">
-                      <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                          E-mail
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-200 font-mono">{getMaskedEmail(user.email)}</span>
-                          <button
-                            type="button"
-                            onClick={() => setRevealEmail(!revealEmail)}
-                            className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
-                          >
-                            {revealEmail ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                            <span>{revealEmail ? 'Ocultar' : 'Revelar e-mail'}</span>
-                          </button>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewEmail(user.email || '');
-                          setEmailError(null);
-                          setEmailCurrentPassword('');
-                          setIsEditEmailOpen(true);
                         }}
                         className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
                       >
@@ -1094,151 +1084,143 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
                   </form>
                 </div>
-
-                {/* Group 3: Senha e Autenticação */}
-                <div className="p-5 bg-background-darker/80 rounded-3xl border border-white/5 space-y-4 shadow-lg">
-                  <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                    <Lock className="w-3.5 h-3.5 text-brand-400" />
-                    <span>Senha e Autenticação</span>
-                  </h4>
-
-                  {/* Password row */}
-                  <div className="p-3.5 bg-background-darkest/80 rounded-2xl border border-white/5 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-white block">Senha da Conta</span>
-                      <span className="text-xs text-gray-500 font-mono tracking-widest">••••••••••••••••</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPasswordError(null);
-                        setPasswordSuccess(false);
-                        setCurrentPassword('');
-                        setNewPassword('');
-                        setConfirmPassword('');
-                        setIsChangePasswordOpen(true);
-                      }}
-                      className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
-                    >
-                      Mudar Senha
-                    </button>
-                  </div>
-
-                  {/* 2FA Card */}
-                  <div className="p-3.5 bg-background-darkest/80 rounded-2xl border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white">Autenticação de Dois Fatores (2FA)</span>
-                        <span
-                          className={`text-[9px] font-bold px-2 py-0.2 rounded-full border ${
-                            user.two_factor_enabled
-                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                              : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                          }`}
-                        >
-                          {user.two_factor_enabled ? 'ATIVADO' : 'DESATIVADO'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
-                        Proteja sua conta adicionando uma etapa de confirmação via código TOTP (Google Authenticator / Authy).
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleOpen2FAModal}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer self-start sm:self-auto ${
-                        user.two_factor_enabled
-                          ? 'bg-dnd/10 hover:bg-dnd/20 text-dnd border-dnd/30'
-                          : 'bg-brand-500 hover:bg-brand-600 text-white border-transparent'
-                      }`}
-                    >
-                      {user.two_factor_enabled ? 'Desativar 2FA' : 'Habilitar 2FA'}
-                    </button>
-                  </div>
-
-                  {/* Active Session Info */}
-                  <div className="p-3.5 bg-background-darkest/80 rounded-2xl border border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
-                        <Laptop className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-white block">Sessão Atual</span>
-                        <span className="text-[11px] text-gray-400">ZeroVC Desktop • Online agora</span>
-                      </div>
-                    </div>
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
-                  </div>
-                </div>
-
-                {/* Group 4: Privacidade e Gerenciamento de Dados (LGPD / GDPR) */}
-                <div className="p-5 bg-background-darker/80 rounded-3xl border border-white/5 space-y-4 shadow-lg">
-                  <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                    <ShieldCheck className="w-3.5 h-3.5 text-brand-400" />
-                    <span>Privacidade e Gestão de Dados</span>
-                  </h4>
-
-                  {/* Export Data */}
-                  <div className="p-3.5 bg-background-darkest/80 rounded-2xl border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-bold text-white block">Exportar Meus Dados (JSON)</span>
-                      <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
-                        Baixe uma cópia estruturada em JSON com todas as suas informações de perfil, servidores associados e lista de contatos.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleExportData}
-                      disabled={isExportingData}
-                      className="bg-background-dark hover:bg-white/10 disabled:opacity-50 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
-                    >
-                      {isExportingData ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Exportando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Exportar Dados</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Delete Account (Danger Zone) */}
-                  <div className="p-3.5 bg-dnd/10 rounded-2xl border border-dnd/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-bold text-dnd block">Excluir Conta Permanentemente</span>
-                      <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
-                        Esta ação é irreversível. Todos os seus dados, mensagens, servidores próprios e amizades serão permanentemente apagados.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeleteAccountPassword('');
-                        setDeleteAccountError(null);
-                        setIsDeleteAccountOpen(true);
-                      }}
-                      className="bg-dnd hover:bg-dnd/80 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Excluir Conta</span>
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
 
-            {/* TAB: PRIVACIDADE & SEGURANÇA */}
+            {/* TAB: PRIVACIDADE E SEGURANÇA */}
             {activeTab === 'privacy' && (
               <div className="space-y-6 animate-in fade-in">
-                {/* DMs Section */}
+                {/* 1. Credenciais de Acesso (E-mail & Senha) */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                    Mensagens Diretas (DMs)
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Key className="w-3.5 h-3.5 text-brand-400" />
+                    <span>Credenciais de Acesso</span>
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+                    {/* E-mail */}
+                    <div className="flex items-center justify-between pt-1 first:pt-0">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                          Endereço de E-mail
+                        </span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-gray-200 font-mono">{getMaskedEmail(user.email)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setRevealEmail(!revealEmail)}
+                            className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            {revealEmail ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            <span>{revealEmail ? 'Ocultar' : 'Revelar e-mail'}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewEmail(user.email || '');
+                          setEmailError(null);
+                          setEmailCurrentPassword('');
+                          setIsEditEmailOpen(true);
+                        }}
+                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                      >
+                        Editar
+                      </button>
+                    </div>
+
+                    {/* Senha */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                          Senha da Conta
+                        </span>
+                        <span className="text-xs text-gray-500 font-mono tracking-widest block mt-0.5">••••••••••••••••</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPasswordError(null);
+                          setPasswordSuccess(false);
+                          setCurrentPassword('');
+                          setNewPassword('');
+                          setConfirmPassword('');
+                          setIsChangePasswordOpen(true);
+                        }}
+                        className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
+                      >
+                        Mudar Senha
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Autenticação & Sessões (2FA & Sessão Atual) */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <ShieldCheck className="w-3.5 h-3.5 text-brand-400" />
+                    <span>Autenticação & Sessões</span>
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+                    {/* 2FA */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 first:pt-0">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white">Autenticação de Dois Fatores (2FA)</span>
+                          <span
+                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                              user.two_factor_enabled
+                                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                            }`}
+                          >
+                            {user.two_factor_enabled ? 'ATIVADO' : 'DESATIVADO'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+                          Proteja sua conta adicionando uma etapa de confirmação via código TOTP (Google Authenticator / Authy).
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleOpen2FAModal}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer self-start sm:self-auto ${
+                          user.two_factor_enabled
+                            ? 'bg-dnd/10 hover:bg-dnd/20 text-dnd border-dnd/30'
+                            : 'bg-brand-500 hover:bg-brand-600 text-white border-transparent'
+                        }`}
+                      >
+                        {user.two_factor_enabled ? 'Desativar 2FA' : 'Habilitar 2FA'}
+                      </button>
+                    </div>
+
+                    {/* Sessão Atual */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
+                          <Laptop className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white">Sessão Atual</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                              Dispositivo Atual
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-gray-400">ZeroVC Desktop • Online agora</span>
+                        </div>
+                      </div>
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Mensagens Diretas (DMs) */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Lock className="w-3.5 h-3.5 text-brand-400" />
+                    <span>Mensagens Diretas (DMs)</span>
                   </h4>
                   <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-3">
                     <span className="text-xs font-semibold text-white block">
@@ -1284,27 +1266,64 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* 2FA Status Shortcut */}
+                {/* 4. Gestão de Dados e Conta (LGPD / GDPR) */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                    Segurança da Conta
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-brand-400" />
+                    <span>Gestão de Dados e Conta (LGPD)</span>
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-bold text-white block">Autenticação em Dois Fatores (2FA)</span>
-                      <p className="text-[11px] text-gray-400">
-                        {user.two_factor_enabled
-                          ? 'Sua conta está protegida com autenticação via código TOTP.'
-                          : 'Adicione uma camada extra de segurança à sua conta.'}
-                      </p>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+                    {/* Export Data */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 first:pt-0">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-white block">Exportar Meus Dados (JSON)</span>
+                        <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+                          Baixe uma cópia estruturada em JSON com todas as suas informações de perfil, servidores associados e lista de contatos.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleExportData}
+                        disabled={isExportingData}
+                        className="bg-background-dark hover:bg-white/10 disabled:opacity-50 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                      >
+                        {isExportingData ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Exportando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Exportar Dados</span>
+                          </>
+                        )}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('account')}
-                      className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl shadow-md transition-all cursor-pointer"
-                    >
-                      {user.two_factor_enabled ? 'Gerenciar 2FA' : 'Configurar 2FA'}
-                    </button>
+
+                    {/* Delete Account (Danger Zone) */}
+                    <div className="pt-3.5">
+                      <div className="p-3.5 bg-dnd/10 rounded-2xl border border-dnd/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-bold text-dnd block">Excluir Conta Permanentemente</span>
+                          <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
+                            Esta ação é irreversível. Todos os seus dados, mensagens, servidores próprios e amizades serão permanentemente apagados.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeleteAccountPassword('');
+                            setDeleteAccountError(null);
+                            setIsDeleteAccountOpen(true);
+                          }}
+                          className="bg-dnd hover:bg-dnd/80 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Excluir Conta</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1655,86 +1674,491 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* WebRTC Advanced Audio Processing Filters */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                    Processamento de Áudio Avançado (WebRTC)
-                  </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
-                    {/* Echo Cancellation */}
-                    <div className="flex items-center justify-between pt-1 first:pt-0">
-                      <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
-                        <p className="text-[11px] text-gray-400">
-                          Impede que o áudio das caixas de som retorne ao microfone criando microfonia.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={echoCancellation}
-                        onClick={() => setEchoCancellation(!echoCancellation)}
-                        className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
-                          echoCancellation ? 'bg-brand-500' : 'bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
-                            echoCancellation ? 'translate-x-5.5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
+                {/* Audio Processing Mode Dropdown & Interactive Sub-Settings */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sliders className="w-3.5 h-3.5 text-brand-400" />
+                      Processamento de Áudio
+                    </label>
+                    <span className="text-[10px] font-bold text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-md border border-brand-500/20">
+                      {audioProcessingMode === 'rnnoise_silero'
+                        ? 'IA Dupla Camada'
+                        : audioProcessingMode === 'rnnoise'
+                        ? 'RNNoise IA'
+                        : 'WebRTC Clássico'}
+                    </span>
+                  </div>
 
-                    {/* Noise Suppression */}
-                    <div className="flex items-center justify-between pt-3.5">
-                      <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Supressão de Ruído de Fundo</span>
-                        <p className="text-[11px] text-gray-400">
-                          Filtra barulhos de teclado, ventilador e ruídos estáticos do ambiente.
-                        </p>
+                  {/* Custom Modern Dropdown */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsProcDropdownOpen(!isProcDropdownOpen)}
+                      className="w-full bg-background-darkest/95 hover:bg-background-darkest border border-white/10 hover:border-white/20 p-3.5 rounded-2xl flex items-center justify-between transition-all cursor-pointer shadow-lg group"
+                    >
+                      <div className="flex items-center gap-3 text-left">
+                        <div className="w-9 h-9 rounded-xl bg-brand-500/15 border border-brand-500/30 flex items-center justify-center flex-shrink-0 text-brand-400 group-hover:scale-105 transition-transform">
+                          {audioProcessingMode === 'rnnoise_silero' ? (
+                            <Brain className="w-5 h-5 text-brand-400" />
+                          ) : audioProcessingMode === 'rnnoise' ? (
+                            <Zap className="w-5 h-5 text-amber-400" />
+                          ) : (
+                            <Globe className="w-5 h-5 text-blue-400" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white block">
+                              {audioProcessingMode === 'rnnoise_silero'
+                                ? 'RNNoise + Silero VAD (IA Avançada)'
+                                : audioProcessingMode === 'rnnoise'
+                                ? 'RNNoise (IA)'
+                                : 'WebRTC Padrão'}
+                            </span>
+                            {audioProcessingMode === 'rnnoise_silero' && (
+                              <span className="bg-brand-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded uppercase">
+                                Recomendado
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-gray-400 line-clamp-1">
+                            {audioProcessingMode === 'rnnoise_silero'
+                              ? 'Filtro espectral neural com portão de voz inteligente (silêncio total)'
+                              : audioProcessingMode === 'rnnoise'
+                              ? 'Rede neural em tempo real para eliminação de ruídos e cliques'
+                              : 'Filtros tradicionais nativos do navegador'}
+                          </span>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={noiseSuppression}
-                        onClick={() => setNoiseSuppression(!noiseSuppression)}
-                        className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
-                          noiseSuppression ? 'bg-brand-500' : 'bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
-                            noiseSuppression ? 'translate-x-5.5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
 
-                    {/* Auto Gain Control */}
-                    <div className="flex items-center justify-between pt-3.5">
-                      <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
-                        <p className="text-[11px] text-gray-400">
-                          Normaliza o volume da sua voz automaticamente para que você não fique muito baixo ou estourado.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={autoGainControl}
-                        onClick={() => setAutoGainControl(!autoGainControl)}
-                        className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
-                          autoGainControl ? 'bg-brand-500' : 'bg-white/10'
+                      <ChevronDown
+                        className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 ${
+                          isProcDropdownOpen ? 'rotate-180' : ''
                         }`}
-                      >
+                      />
+                    </button>
+
+                    {/* Dropdown Menu Options */}
+                    {isProcDropdownOpen && (
+                      <>
                         <div
-                          className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
-                            autoGainControl ? 'translate-x-5.5' : 'translate-x-0'
-                          }`}
+                          className="fixed inset-0 z-40"
+                          onClick={() => setIsProcDropdownOpen(false)}
                         />
-                      </button>
-                    </div>
+                        <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-background-darkest/95 backdrop-blur-md border border-white/10 p-2 rounded-2xl shadow-2xl space-y-1 animate-in fade-in zoom-in-95">
+                          {/* Option 1: WebRTC */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAudioProcessingMode('webrtc');
+                              setIsProcDropdownOpen(false);
+                            }}
+                            className={`w-full p-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                              audioProcessingMode === 'webrtc'
+                                ? 'bg-brand-500/20 border border-brand-500/40 text-white'
+                                : 'hover:bg-white/5 text-gray-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
+                                <Globe className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold block">WebRTC Padrão</span>
+                                <span className="text-[11px] text-gray-400">
+                                  Filtros nativos clássicos (baixo consumo de CPU)
+                                </span>
+                              </div>
+                            </div>
+                            {audioProcessingMode === 'webrtc' && (
+                              <Check className="w-4 h-4 text-brand-400" />
+                            )}
+                          </button>
+
+                          {/* Option 2: RNNoise */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAudioProcessingMode('rnnoise');
+                              setIsProcDropdownOpen(false);
+                            }}
+                            className={`w-full p-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                              audioProcessingMode === 'rnnoise'
+                                ? 'bg-brand-500/20 border border-brand-500/40 text-white'
+                                : 'hover:bg-white/5 text-gray-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400">
+                                <Zap className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold block">RNNoise (IA)</span>
+                                <span className="text-[11px] text-gray-400">
+                                  Rede neural contínua para ventiladores, teclados e ruídos
+                                </span>
+                              </div>
+                            </div>
+                            {audioProcessingMode === 'rnnoise' && (
+                              <Check className="w-4 h-4 text-brand-400" />
+                            )}
+                          </button>
+
+                          {/* Option 3: RNNoise + Silero VAD */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAudioProcessingMode('rnnoise_silero');
+                              setIsProcDropdownOpen(false);
+                            }}
+                            className={`w-full p-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                              audioProcessingMode === 'rnnoise_silero'
+                                ? 'bg-brand-500/20 border border-brand-500/40 text-white'
+                                : 'hover:bg-white/5 text-gray-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-brand-500/20 flex items-center justify-center text-brand-400">
+                                <Brain className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-bold block">RNNoise + Silero VAD</span>
+                                  <span className="bg-brand-500 text-white text-[8px] font-bold px-1 rounded uppercase">
+                                    Recomendado
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-gray-400">
+                                  Filtro neural espectral com portão de voz (silêncio total sem falar)
+                                </span>
+                              </div>
+                            </div>
+                            {audioProcessingMode === 'rnnoise_silero' && (
+                              <Check className="w-4 h-4 text-brand-400" />
+                            )}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Interactive Sub-Settings Panel based on selected mode */}
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-4">
+                    {/* MODE 1: WEBRTC STANDARD */}
+                    {audioProcessingMode === 'webrtc' && (
+                      <div className="divide-y divide-white/5 space-y-3.5 animate-in fade-in duration-150">
+                        {/* Echo Cancellation */}
+                        <div className="flex items-center justify-between pt-1 first:pt-0">
+                          <div className="space-y-0.5 pr-4">
+                            <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
+                            <p className="text-[11px] text-gray-400">
+                              Impede que o áudio das caixas de som retorne ao microfone criando microfonia.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={echoCancellation}
+                            onClick={() => setEchoCancellation(!echoCancellation)}
+                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                              echoCancellation ? 'bg-brand-500' : 'bg-white/10'
+                            }`}
+                          >
+                            <div
+                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                echoCancellation ? 'translate-x-6' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        {/* Noise Suppression */}
+                        <div className="flex items-center justify-between pt-3.5">
+                          <div className="space-y-0.5 pr-4">
+                            <span className="text-xs font-bold text-white block">Supressão de Ruído de Fundo</span>
+                            <p className="text-[11px] text-gray-400">
+                              Filtra ruídos estáticos contínuos do ambiente.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={noiseSuppression}
+                            onClick={() => setNoiseSuppression(!noiseSuppression)}
+                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                              noiseSuppression ? 'bg-brand-500' : 'bg-white/10'
+                            }`}
+                          >
+                            <div
+                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                noiseSuppression ? 'translate-x-6' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        {/* Auto Gain Control */}
+                        <div className="flex items-center justify-between pt-3.5">
+                          <div className="space-y-0.5 pr-4">
+                            <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
+                            <p className="text-[11px] text-gray-400">
+                              Normaliza o volume da voz automaticamente.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={autoGainControl}
+                            onClick={() => setAutoGainControl(!autoGainControl)}
+                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                              autoGainControl ? 'bg-brand-500' : 'bg-white/10'
+                            }`}
+                          >
+                            <div
+                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                autoGainControl ? 'translate-x-6' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* MODE 2: RNNOISE (IA) */}
+                    {audioProcessingMode === 'rnnoise' && (
+                      <div className="space-y-4 animate-in fade-in duration-150">
+                        {/* RNNoise Aggressiveness Level */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <Gauge className="w-3.5 h-3.5 text-amber-400" />
+                              Intensidade da Supressão de Ruído (IA)
+                            </span>
+                            <span className="text-[11px] text-amber-400 font-bold uppercase">
+                              {rnnoiseLevel === 'light' ? 'Leve (70%)' : rnnoiseLevel === 'aggressive' ? 'Agressivo (140%)' : 'Equilibrado (100%)'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            {(['light', 'balanced', 'aggressive'] as RNNoiseLevel[]).map((lvl) => (
+                              <button
+                                key={lvl}
+                                type="button"
+                                onClick={() => setRnnoiseLevel(lvl)}
+                                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                                  rnnoiseLevel === lvl
+                                    ? 'bg-amber-500/20 border-amber-500 text-white shadow-sm'
+                                    : 'bg-background-darker border-white/5 text-gray-400 hover:text-white hover:bg-white/5'
+                                }`}
+                              >
+                                {lvl === 'light' ? 'Leve' : lvl === 'balanced' ? 'Equilibrado' : 'Agressivo'}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-[11px] text-gray-400 mt-2">
+                            {rnnoiseLevel === 'light'
+                              ? 'Preserva 100% dos tons e nuances da voz, ideal para ambientes silenciosos.'
+                              : rnnoiseLevel === 'aggressive'
+                              ? 'Filtra ruídos pesados e cliques altos de teclado mecânico.'
+                              : 'Equilíbrio perfeito entre clareza vocal e remoção profunda de ruídos.'}
+                          </p>
+                        </div>
+
+                        <div className="pt-3 border-t border-white/5 divide-y divide-white/5 space-y-3.5">
+                          {/* Echo Cancellation */}
+                          <div className="flex items-center justify-between pt-1 first:pt-0">
+                            <div className="space-y-0.5 pr-4">
+                              <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
+                              <p className="text-[11px] text-gray-400">
+                                Impede microfonia ao usar caixas de som.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={echoCancellation}
+                              onClick={() => setEchoCancellation(!echoCancellation)}
+                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                                echoCancellation ? 'bg-brand-500' : 'bg-white/10'
+                              }`}
+                            >
+                              <div
+                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                  echoCancellation ? 'translate-x-6' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+
+                          {/* Auto Gain Control */}
+                          <div className="flex items-center justify-between pt-3.5">
+                            <div className="space-y-0.5 pr-4">
+                              <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
+                              <p className="text-[11px] text-gray-400">
+                                Estabiliza o ganho para não estourar.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={autoGainControl}
+                              onClick={() => setAutoGainControl(!autoGainControl)}
+                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                                autoGainControl ? 'bg-brand-500' : 'bg-white/10'
+                              }`}
+                            >
+                              <div
+                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                  autoGainControl ? 'translate-x-6' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* MODE 3: RNNOISE + SILERO VAD (IA AVANÇADA) */}
+                    {audioProcessingMode === 'rnnoise_silero' && (
+                      <div className="space-y-4 animate-in fade-in duration-150">
+                        {/* Live VAD Intelligent Gate Status Banner */}
+                        <div className="p-3 bg-background-darker/90 rounded-xl border border-white/10 flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            {isTestingMic ? (
+                              vadLiveState.gateOpen ? (
+                                <span className="relative flex h-3 w-3">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                                </span>
+                              ) : (
+                                <span className="h-3 w-3 rounded-full bg-gray-500 inline-block" />
+                              )
+                            ) : (
+                              <Activity className="w-4 h-4 text-brand-400" />
+                            )}
+                            <div>
+                              <span className="text-xs font-bold text-white block">
+                                {isTestingMic
+                                  ? vadLiveState.gateOpen
+                                    ? 'Portão de Voz Aberto • Transmitindo'
+                                    : 'Silêncio Absoluto • Fundo Isolado (0 dB)'
+                                  : 'Portão Neural Inteligente Ativo'}
+                              </span>
+                              <span className="text-[10px] text-gray-400">
+                                {isTestingMic
+                                  ? `Probabilidade de voz: ${Math.round(vadLiveState.speechProbability * 100)}%`
+                                  : 'Corta 100% de respirações e barulhos residuais ao parar de falar'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className="text-[10px] font-mono font-bold text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-md border border-brand-500/20">
+                            Silero VAD
+                          </span>
+                        </div>
+
+                        {/* VAD Sensitivity Slider */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
+                            <span>Sensibilidade do Portão de Fala</span>
+                            <span className="text-brand-400 font-mono font-bold">
+                              {Math.round(vadSensitivity * 100)}%
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0.1"
+                            max="0.9"
+                            step="0.05"
+                            value={vadSensitivity}
+                            onChange={(e) => setVadSensitivity(parseFloat(e.target.value))}
+                            className="w-full accent-brand-500 h-1.5 bg-background-darker rounded-lg cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[10px] text-gray-500">
+                            <span>Falar Firme (10%)</span>
+                            <span>Equilibrada (50%)</span>
+                            <span>Alta Sensibilidade (90%)</span>
+                          </div>
+                        </div>
+
+                        {/* VAD Hangover (ms) Slider */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
+                            <span>Tempo de Liberação Suave (Hangover)</span>
+                            <span className="text-brand-400 font-mono font-bold">
+                              {vadHangover} ms
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min="100"
+                            max="500"
+                            step="25"
+                            value={vadHangover}
+                            onChange={(e) => setVadHangover(parseInt(e.target.value, 10))}
+                            className="w-full accent-brand-500 h-1.5 bg-background-darker rounded-lg cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[10px] text-gray-500">
+                            <span>Corte Rápido (100ms)</span>
+                            <span>Suave Padrão (250ms)</span>
+                            <span>Frases Longas (500ms)</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-white/5 divide-y divide-white/5 space-y-3.5">
+                          {/* Echo Cancellation */}
+                          <div className="flex items-center justify-between pt-1 first:pt-0">
+                            <div className="space-y-0.5 pr-4">
+                              <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
+                              <p className="text-[11px] text-gray-400">
+                                Impede microfonia e retorno de caixas de som.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={echoCancellation}
+                              onClick={() => setEchoCancellation(!echoCancellation)}
+                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                                echoCancellation ? 'bg-brand-500' : 'bg-white/10'
+                              }`}
+                            >
+                              <div
+                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                  echoCancellation ? 'translate-x-6' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+
+                          {/* Auto Gain Control */}
+                          <div className="flex items-center justify-between pt-3.5">
+                            <div className="space-y-0.5 pr-4">
+                              <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
+                              <p className="text-[11px] text-gray-400">
+                                Normaliza o ganho automaticamente.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={autoGainControl}
+                              onClick={() => setAutoGainControl(!autoGainControl)}
+                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                                autoGainControl ? 'bg-brand-500' : 'bg-white/10'
+                              }`}
+                            >
+                              <div
+                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                  autoGainControl ? 'translate-x-6' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1921,13 +2345,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           role="switch"
                           aria-checked={soundChannelEvents}
                           onClick={() => setSoundChannelEvents(!soundChannelEvents)}
-                          className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
                             soundChannelEvents ? 'bg-brand-500' : 'bg-white/10'
                           }`}
                         >
                           <div
-                            className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
-                              soundChannelEvents ? 'translate-x-5.5' : 'translate-x-0'
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              soundChannelEvents ? 'translate-x-6' : 'translate-x-0'
                             }`}
                           />
                         </button>
@@ -1957,13 +2381,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           role="switch"
                           aria-checked={soundMuteEvents}
                           onClick={() => setSoundMuteEvents(!soundMuteEvents)}
-                          className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
                             soundMuteEvents ? 'bg-brand-500' : 'bg-white/10'
                           }`}
                         >
                           <div
-                            className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
-                              soundMuteEvents ? 'translate-x-5.5' : 'translate-x-0'
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              soundMuteEvents ? 'translate-x-6' : 'translate-x-0'
                             }`}
                           />
                         </button>
@@ -1990,13 +2414,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           role="switch"
                           aria-checked={soundMessageEvents}
                           onClick={() => setSoundMessageEvents(!soundMessageEvents)}
-                          className={`w-11 h-5.5 flex items-center rounded-full p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
                             soundMessageEvents ? 'bg-brand-500' : 'bg-white/10'
                           }`}
                         >
                           <div
-                            className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
-                              soundMessageEvents ? 'translate-x-5.5' : 'translate-x-0'
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              soundMessageEvents ? 'translate-x-6' : 'translate-x-0'
                             }`}
                           />
                         </button>

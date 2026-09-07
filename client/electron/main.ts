@@ -19,7 +19,7 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch(
   'enable-features',
-  'WindowsGraphicsCapture,WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,ZeroCopy'
+  'WindowsGraphicsCapture,WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,ZeroCopy,MediaFoundationVideoEncodeAcceleration,MediaFoundationD3D11VideoCapture,VaapiVideoEncoder'
 );
 
 // Base production server URL and Allowed Origins
@@ -46,9 +46,19 @@ const TRAY_ICON_DATA_URL =
 
 function getTrayIcon() {
   try {
-    const iconPath = path.join(__dirname, 'tray-icon.png');
-    if (require('fs').existsSync(iconPath)) {
-      return nativeImage.createFromPath(iconPath);
+    const candidates = [
+      path.join(__dirname, 'tray-icon.png'),
+      path.join(__dirname, 'icon.png'),
+      path.join(__dirname, '..', 'electron', 'tray-icon.png'),
+      path.join(__dirname, '..', 'dist', 'icon.png'),
+      path.join(__dirname, '..', 'public', 'icon.png'),
+      path.join(process.resourcesPath, 'tray-icon.png'),
+      path.join(process.resourcesPath, 'icon.png'),
+    ];
+    for (const c of candidates) {
+      if (require('fs').existsSync(c)) {
+        return nativeImage.createFromPath(c);
+      }
     }
   } catch {}
   return nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
@@ -56,13 +66,29 @@ function getTrayIcon() {
 
 function getAppIcon() {
   try {
-    const icoPath = path.join(__dirname, 'icon.ico');
-    if (require('fs').existsSync(icoPath)) {
-      return nativeImage.createFromPath(icoPath);
+    const icoCandidates = [
+      path.join(__dirname, 'icon.ico'),
+      path.join(__dirname, '..', 'electron', 'icon.ico'),
+      path.join(__dirname, '..', 'public', 'favicon.ico'),
+      path.join(__dirname, '..', 'dist', 'favicon.ico'),
+      path.join(process.resourcesPath, 'icon.ico'),
+    ];
+    for (const c of icoCandidates) {
+      if (require('fs').existsSync(c)) {
+        return nativeImage.createFromPath(c);
+      }
     }
-    const pngPath = path.join(__dirname, 'icon.png');
-    if (require('fs').existsSync(pngPath)) {
-      return nativeImage.createFromPath(pngPath);
+    const pngCandidates = [
+      path.join(__dirname, 'icon.png'),
+      path.join(__dirname, '..', 'electron', 'icon.png'),
+      path.join(__dirname, '..', 'dist', 'icon.png'),
+      path.join(__dirname, '..', 'public', 'icon.png'),
+      path.join(process.resourcesPath, 'icon.png'),
+    ];
+    for (const c of pngCandidates) {
+      if (require('fs').existsSync(c)) {
+        return nativeImage.createFromPath(c);
+      }
     }
   } catch {}
   return getTrayIcon();
@@ -391,6 +417,28 @@ ipcMain.handle('get-auto-start', () => {
 
 ipcMain.handle('window-is-maximized', () => {
   return mainWindow?.isMaximized() ?? false;
+});
+
+ipcMain.on('window-set-fullscreen', (_event, flag: boolean) => {
+  mainWindow?.setFullScreen(!!flag);
+});
+
+ipcMain.handle('window-is-fullscreen', () => {
+  return mainWindow?.isFullScreen() ?? false;
+});
+
+ipcMain.handle('get-gpu-info', async () => {
+  try {
+    const basic = await app.getGPUInfo('basic');
+    const features = app.getGPUFeatureStatus();
+    return {
+      basic,
+      features,
+    };
+  } catch (err) {
+    console.warn('[Electron] Could not retrieve GPU info:', err);
+    return null;
+  }
 });
 
 ipcMain.on('check-for-updates', () => {

@@ -76,7 +76,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
         <div className="px-6 py-4 flex items-center justify-between border-b border-white/5">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-gray-100 lowercase tracking-wide">
-              selecionar janela ou tela
+              Selecione janela ou tela
             </h2>
           </div>
           <button
@@ -237,7 +237,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
             </div>
           </div>
 
-          {/* System Audio Toggle Row */}
+          {/* Audio Toggle Row */}
           <button
             type="button"
             onClick={() => setIncludeAudio((prev) => !prev)}
@@ -249,9 +249,18 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
           >
             <div className="flex items-center gap-2.5">
               <Volume2 className={`w-4 h-4 ${includeAudio ? 'text-brand-400' : 'text-gray-500'}`} />
-              <span className="text-sm font-medium lowercase tracking-wide">
-                compartilhar som do sistema
-              </span>
+              <div className="flex flex-col text-left">
+                <span className="text-sm font-medium lowercase tracking-wide">
+                  {selectedSourceId?.startsWith('window:')
+                    ? 'Compartilhar áudio da janela'
+                    : 'Compartilhar som do sistema'}
+                </span>
+                <span className="text-[11px] text-gray-400 font-normal">
+                  {selectedSourceId?.startsWith('window:')
+                    ? 'Transmite somente o som gerado por este aplicativo'
+                    : 'Transmite todo o áudio do computador'}
+                </span>
+              </div>
             </div>
 
             {/* Toggle Switch */}
