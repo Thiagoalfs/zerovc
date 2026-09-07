@@ -251,14 +251,10 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
               <Volume2 className={`w-4 h-4 ${includeAudio ? 'text-brand-400' : 'text-gray-500'}`} />
               <div className="flex flex-col text-left">
                 <span className="text-sm font-medium lowercase tracking-wide">
-                  {selectedSourceId?.startsWith('window:')
-                    ? 'Compartilhar áudio da janela'
-                    : 'Compartilhar som do sistema'}
+                  Compartilhar áudio
                 </span>
                 <span className="text-[11px] text-gray-400 font-normal">
-                  {selectedSourceId?.startsWith('window:')
-                    ? 'Transmite somente o som gerado por este aplicativo'
-                    : 'Transmite todo o áudio do computador'}
+                  Transmite o som do computador (jogos, vídeos e mídia) durante a transmissão
                 </span>
               </div>
             </div>
