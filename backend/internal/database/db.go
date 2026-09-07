@@ -54,6 +54,10 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	// Clean up any stale voice sessions on server startup
 	db.Pool.Exec(ctx, "DELETE FROM voice_sessions")
 
+	// Ensure guild_roles columns exist
+	db.Pool.Exec(ctx, "ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS hoist BOOLEAN DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS mentionable BOOLEAN DEFAULT FALSE")
+
 	log.Println("Database schema migration executed successfully")
 	return nil
 }
