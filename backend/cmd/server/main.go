@@ -279,6 +279,8 @@ func main() {
 		r.Post("/api/guilds/{guildID}/channels", channelHandler.Create)
 		r.Patch("/api/channels/{id}", channelHandler.Update)
 		r.Delete("/api/channels/{id}", channelHandler.Delete)
+		r.Put("/api/channels/{id}/permissions/{roleID}", channelHandler.UpdatePermissionOverwrite)
+		r.Delete("/api/channels/{id}/permissions/{roleID}", channelHandler.DeletePermissionOverwrite)
 		r.Put("/api/guilds/{guildID}/channels/positions", channelHandler.Reorder)
 		r.Get("/api/channels/{channelID}/messages/search", messageHandler.Search)
 		r.Post("/api/channels/{channelID}/ack", messageHandler.AckChannel)

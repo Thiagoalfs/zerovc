@@ -15,6 +15,9 @@ export const Permissions = {
   SPEAK_VOICE: 1 << 11, // 2048: Falar em Voz
   MUTE_VOICE: 1 << 12, // 4096: Silenciar Outros em Voz
   DEAFEN_VOICE: 1 << 13, // 8192: Ensurdecer Outros em Voz
+
+  VIEW_CHANNEL: 1 << 14, // 16384: Ver Canal
+  STREAM_VOICE: 1 << 15, // 32768: Transmitir Tela / Vídeo
 } as const;
 
 export interface User {
@@ -79,6 +82,13 @@ export interface Guild {
   created_at: string;
 }
 
+export interface ChannelPermissionOverwrite {
+  channel_id: string;
+  role_id: string;
+  allow: number;
+  deny: number;
+}
+
 export interface Channel {
   id: string;
   guild_id: string;
@@ -89,6 +99,7 @@ export interface Channel {
   position: number;
   is_private?: boolean;
   role_ids?: string[];
+  permission_overwrites?: ChannelPermissionOverwrite[];
   voice_sessions?: VoiceSession[];
   created_at: string;
 }

@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
 
@@ -299,10 +299,19 @@ export const api = {
       request<{ success: boolean }>(`/channels/${channelId}/messages/${messageId}`, {
         method: 'DELETE',
       }),
-    update: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean }) =>
+    update: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean; is_private?: boolean; role_ids?: string[]; permission_overwrites?: ChannelPermissionOverwrite[] }) =>
       request<Channel>(`/channels/${channelId}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
+      }),
+    updatePermissionOverwrite: (channelId: string, roleId: string, data: { allow: number; deny: number }) =>
+      request<Channel>(`/channels/${channelId}/permissions/${roleId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    deletePermissionOverwrite: (channelId: string, roleId: string) =>
+      request<Channel>(`/channels/${channelId}/permissions/${roleId}`, {
+        method: 'DELETE',
       }),
     delete: (channelId: string) =>
       request<{ success: boolean }>(`/channels/${channelId}`, {

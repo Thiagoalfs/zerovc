@@ -115,7 +115,18 @@ const (
 	PermSpeakVoice     int64 = 1 << 11 // 2048: Falar em Canais de Voz
 	PermMuteVoice      int64 = 1 << 12 // 4096: Silenciar Membros em Voz
 	PermDeafenVoice    int64 = 1 << 13 // 8192: Ensurdecer Membros em Voz
+
+	// Permissões Avançadas de Canal
+	PermViewChannel    int64 = 1 << 14 // 16384: Ver Canal
+	PermStreamVoice    int64 = 1 << 15 // 32768: Transmitir Tela / Vídeo em Voz
 )
+
+type ChannelPermissionOverwrite struct {
+	ChannelID uuid.UUID `json:"channel_id"`
+	RoleID    uuid.UUID `json:"role_id"`
+	Allow     int64     `json:"allow"`
+	Deny      int64     `json:"deny"`
+}
 
 type ChannelType string
 
@@ -126,17 +137,18 @@ const (
 )
 
 type Channel struct {
-	ID            uuid.UUID      `json:"id"`
-	GuildID       uuid.UUID      `json:"guild_id"`
-	Name          string         `json:"name"`
-	Type          ChannelType    `json:"type"`
-	CategoryID    *uuid.UUID     `json:"category_id,omitempty"`
-	Topic         string         `json:"topic"`
-	Position      int            `json:"position"`
-	IsPrivate     bool           `json:"is_private"`
-	RoleIDs       []uuid.UUID    `json:"role_ids,omitempty"`
-	VoiceSessions []VoiceSession `json:"voice_sessions,omitempty"`
-	CreatedAt     time.Time      `json:"created_at"`
+	ID                   uuid.UUID                    `json:"id"`
+	GuildID              uuid.UUID                    `json:"guild_id"`
+	Name                 string                       `json:"name"`
+	Type                 ChannelType                  `json:"type"`
+	CategoryID           *uuid.UUID                   `json:"category_id,omitempty"`
+	Topic                string                       `json:"topic"`
+	Position             int                          `json:"position"`
+	IsPrivate            bool                         `json:"is_private"`
+	RoleIDs              []uuid.UUID                  `json:"role_ids,omitempty"`
+	PermissionOverwrites []ChannelPermissionOverwrite `json:"permission_overwrites,omitempty"`
+	VoiceSessions        []VoiceSession               `json:"voice_sessions,omitempty"`
+	CreatedAt            time.Time                    `json:"created_at"`
 }
 
 type Attachment struct {

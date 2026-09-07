@@ -338,3 +338,24 @@ CREATE TABLE IF NOT EXISTS guild_emojis (
 );
 
 CREATE INDEX IF NOT EXISTS idx_guild_emojis_guild ON guild_emojis (guild_id, created_at DESC);
+
+-- 25. Channel Permission Overwrites
+CREATE TABLE IF NOT EXISTS channel_permission_overwrites (
+    channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES guild_roles(id) ON DELETE CASCADE,
+    allow BIGINT DEFAULT 0,
+    deny BIGINT DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (channel_id, role_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_channel_perm_overwrites_chan ON channel_permission_overwrites (channel_id);
+CREATE INDEX IF NOT EXISTS idx_channel_perm_overwrites_role ON channel_permission_overwrites (role_id);
+
+-- Backfill @everyone role for existing guilds that do not have one
+INSERT INTO guild_roles (guild_id, name, color, position, permissions)
+SELECT g.id, '@everyone', '#99aab5', 9999, 3712
+FROM guilds g
+WHERE NOT EXISTS (
+    SELECT 1 FROM guild_roles r WHERE r.guild_id = g.id AND r.name = '@everyone'
+);

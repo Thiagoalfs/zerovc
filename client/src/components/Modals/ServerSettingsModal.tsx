@@ -79,6 +79,11 @@ const PERMISSION_GROUPS: { category: string; icon: React.ReactNode; permissions:
         isMaster: true,
       },
       {
+        flag: Permissions.VIEW_CHANNEL,
+        name: 'Ver Canais',
+        description: 'Permite que membros vejam canais por padrão no servidor.',
+      },
+      {
         flag: Permissions.MANAGE_GUILD,
         name: 'Gerenciar Servidor',
         description: 'Permite alterar o nome do servidor, ícone, banner e configurações gerais.',
@@ -150,6 +155,11 @@ const PERMISSION_GROUPS: { category: string; icon: React.ReactNode; permissions:
         flag: Permissions.SPEAK_VOICE,
         name: 'Falar em Voz',
         description: 'Permite ativar o microfone e transmitir áudio nos canais de voz.',
+      },
+      {
+        flag: Permissions.STREAM_VOICE,
+        name: 'Transmitir Tela e Vídeo',
+        description: 'Permite compartilhar a tela ou transmitir vídeo nos canais de voz.',
       },
       {
         flag: Permissions.MUTE_VOICE,
@@ -513,6 +523,12 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleDeleteRole = async (roleId: string) => {
+    const targetRole = roles.find((r) => r.id === roleId);
+    if (targetRole?.name === '@everyone') {
+      alert('O cargo @everyone é o cargo padrão do servidor e não pode ser excluído.');
+      return;
+    }
+
     if (confirm('Tem certeza que deseja excluir este cargo?')) {
       try {
         await deleteRole(activeGuild.id, roleId);
@@ -1110,7 +1126,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                         .sort((a, b) => a.position - b.position)
                         .map((role, idx) => {
                           const isSelected = (selectedRoleId === role.id) || (!selectedRoleId && idx === 0);
-                          const memberCount = members.filter((m) => m.roles && m.roles.some((r) => r.id === role.id)).length;
+                          const isEveryone = role.name === '@everyone';
+                          const memberCount = isEveryone
+                            ? members.length
+                            : members.filter((m) => m.roles && m.roles.some((r) => r.id === role.id)).length;
 
                           return (
                             <div
@@ -1127,12 +1146,19 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                   className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm"
                                   style={{ backgroundColor: role.color || '#99AAB5' }}
                                 />
-                                <span className="truncate font-medium">{role.name}</span>
+                                <span className="truncate font-medium">
+                                  {role.name}
+                                </span>
+                                {isEveryone && (
+                                  <span className="text-[10px] bg-surface-700 text-surface-300 px-1.5 py-0.5 rounded font-mono">
+                                    Padrão
+                                  </span>
+                                )}
                               </div>
 
                               <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
                                 <span className="text-[11px] text-surface-500 mr-1">{memberCount}</span>
-                                {isOwner && (
+                                {isOwner && !isEveryone && (
                                   <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                                     <button
                                       type="button"
@@ -1145,7 +1171,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                     </button>
                                     <button
                                       type="button"
-                                      disabled={idx === roles.length - 1 || isReorderingRoles}
+                                      disabled={idx === roles.length - 1 || isReorderingRoles || roles[idx + 1]?.name === '@everyone'}
                                       onClick={() => handleMoveRoleHierarchy(role.id, 'down')}
                                       className="p-1 rounded text-surface-400 hover:text-white hover:bg-surface-700 disabled:opacity-20"
                                       title="Descer na Hierarquia"
@@ -1192,6 +1218,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                             style={{ backgroundColor: selectedRole.color || '#99AAB5' }}
                           />
                           <h2 className="text-base font-bold text-white">{selectedRole.name}</h2>
+                          {selectedRole.name === '@everyone' && (
+                            <span className="text-[10px] bg-surface-700 text-surface-200 px-2 py-0.5 rounded-full font-medium">
+                              Cargo Base de Todos
+                            </span>
+                          )}
                           {selectedRole.hoist && (
                             <span className="text-[10px] bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-full font-medium">
                               Separado
@@ -1204,7 +1235,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                           )}
                         </div>
 
-                        {isOwner && (
+                        {isOwner && selectedRole.name !== '@everyone' && (
                           <button
                             onClick={() => handleDeleteRole(selectedRole.id)}
                             className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
@@ -1226,9 +1257,14 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                             defaultValue={selectedRole.name}
                             key={selectedRole.id + selectedRole.name}
                             onBlur={(e) => handleUpdateRoleName(e.target.value)}
-                            disabled={!isOwner}
+                            disabled={!isOwner || selectedRole.name === '@everyone'}
                             className="w-full px-4 py-2 bg-surface-900 border border-surface-700 rounded-xl text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
                           />
+                          {selectedRole.name === '@everyone' && (
+                            <p className="text-xs text-surface-500">
+                              O cargo @everyone representa as permissões padrão atribuídas a todos os membros do servidor.
+                            </p>
+                          )}
                         </div>
 
                         {/* Role Color */}
