@@ -13,7 +13,19 @@ import {
   Volume2,
   VolumeX,
   GripHorizontal,
+  User as UserIcon,
+  MessageSquare,
+  Shield,
+  UserMinus,
+  Ban,
+  Check,
+  Clock,
 } from 'lucide-react';
+import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { UserVolumeSlider, StreamVolumeSlider } from './VolumeSliders';
+import { Permissions } from '../../types';
+import { api } from '../../lib/api';
+import { useDMStore } from '../../stores/dmStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -33,7 +45,23 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   onOpenUserProfile,
 }) => {
   const { user } = useAuthStore();
-  const { activeGuild, guilds, selectGuild, selectChannel } = useGuildStore();
+  const {
+    activeGuild,
+    guilds,
+    selectGuild,
+    selectChannel,
+    kickMember,
+    banMember,
+    muteMember,
+    assignRole,
+    removeRole,
+  } = useGuildStore();
+  const { openDMWithUser } = useDMStore();
+  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+
+  const isElectron =
+    typeof window !== 'undefined' &&
+    (!!window.electronAPI?.isElectron || navigator.userAgent.includes('Electron'));
   const {
     currentChannelId,
     isConnected,
@@ -57,16 +85,12 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
 
-  // Keep fullscreen state in sync with ESC key and OS window events
+  // Keep fullscreen state in sync with ESC key
   useEffect(() => {
     if (!isFullscreen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsFullscreen(false);
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
-        window.electronAPI?.setFullScreen?.(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -282,21 +306,221 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
   const toggleFullscreen = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setIsFullscreen((prev) => {
-      const next = !prev;
-      if (next) {
-        if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        }
-        window.electronAPI?.setFullScreen?.(true);
-      } else {
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
-        window.electronAPI?.setFullScreen?.(false);
+    setIsFullscreen((prev) => !prev);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!activeGuild || !user || !targetParticipant) return;
+
+    const targetMember: User = targetUser;
+    const isMe = targetMember.id === user.id;
+    const isTargetOwner = targetMember.id === activeGuild.owner_id;
+    const isCurrentOwner = activeGuild.owner_id === user.id;
+
+    const currentUserRoles = activeGuild.members?.find((m) => m.id === user.id)?.roles || [];
+    let currentUserPerms = 0;
+    let currentUserHighestPos = 999999;
+    currentUserRoles.forEach((r) => {
+      currentUserPerms |= Number(r.permissions || 0);
+      if (r.position < currentUserHighestPos) {
+        currentUserHighestPos = r.position;
       }
-      return next;
     });
+
+    const hasAdmin = isCurrentOwner || (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
+    const canManageRoles = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_ROLES) !== 0;
+    const canKick = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.KICK_MEMBERS) !== 0;
+    const canBan = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.BAN_MEMBERS) !== 0;
+    const canMute = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_MEMBERS) !== 0;
+
+    let targetHighestPos = 999999;
+    (targetMember.roles || []).forEach((r) => {
+      if (r.position < targetHighestPos) {
+        targetHighestPos = r.position;
+      }
+    });
+
+    const isHierarchyAllowed = isCurrentOwner || isMe || currentUserHighestPos < targetHighestPos;
+    const guildRoles = activeGuild.roles || [];
+
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Ver Perfil',
+        icon: <UserIcon className="w-4 h-4" />,
+        onClick: () => onOpenUserProfile?.(targetMember, { x: e.clientX, y: e.clientY }),
+      },
+      ...(!isMe
+        ? [
+            {
+              label: 'Enviar Mensagem',
+              icon: <MessageSquare className="w-4 h-4" />,
+              onClick: async () => {
+                await openDMWithUser(targetMember.id);
+              },
+            },
+          ]
+        : []),
+    ];
+
+    if (currentChannelId && (canMute || isCurrentOwner || hasAdmin)) {
+      items.push({ label: '', separator: true });
+      items.push({
+        label: isMuted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
+        icon: isMuted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
+        onClick: async () => {
+          await api.channels.adminUpdateVoiceState(currentChannelId, targetMember.id, {
+            is_muted: !isMuted,
+          });
+        },
+      });
+
+      items.push({
+        label: 'Ensurdecer na Call',
+        icon: <Headphones className="w-4 h-4 text-amber-400" />,
+        onClick: async () => {
+          await api.channels.adminUpdateVoiceState(currentChannelId, targetMember.id, {
+            is_deafened: true,
+          });
+        },
+      });
+
+      if (!isMe) {
+        items.push({
+          label: 'Desconectar da Call',
+          icon: <PhoneOff className="w-4 h-4 text-dnd" />,
+          onClick: async () => {
+            await api.channels.adminUpdateVoiceState(currentChannelId, targetMember.id, {
+              disconnect: true,
+            });
+          },
+        });
+      }
+    }
+
+    if (!isMe) {
+      items.push({ label: '', separator: true });
+      items.push({
+        label: 'Volume de Usuário',
+        customRender: <UserVolumeSlider userId={targetMember.id} />,
+      });
+
+      if (hasScreenVideoTrack) {
+        items.push({
+          label: 'Volume da Transmissão',
+          customRender: <StreamVolumeSlider userId={targetMember.id} />,
+        });
+      }
+    }
+
+    if (canManageRoles && guildRoles.length > 0 && (isCurrentOwner || isMe || isHierarchyAllowed)) {
+      const roleSubItems: ContextMenuItem[] = guildRoles
+        .filter((role) => role.name !== '@everyone')
+        .map((role) => {
+        const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
+        return {
+          label: role.name,
+          icon: hasRole ? (
+            <Check className="w-3.5 h-3.5 text-online" />
+          ) : (
+            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
+          ),
+          onClick: async () => {
+            if (hasRole) {
+              await removeRole(activeGuild.id, targetMember.id, role.id);
+            } else {
+              await assignRole(activeGuild.id, targetMember.id, role.id);
+            }
+          },
+        };
+      });
+
+      items.push({
+        label: 'Alterar Cargos',
+        icon: <Shield className="w-4 h-4 text-brand-400" />,
+        subItems: roleSubItems,
+      });
+    }
+
+    if (canMute && (isCurrentOwner || isMe || isHierarchyAllowed)) {
+      const isServerMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
+
+      const muteSubItems: ContextMenuItem[] = [
+        {
+          label: '15 minutos',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
+        },
+        {
+          label: '1 hora',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
+        },
+        {
+          label: '24 horas',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
+        },
+        {
+          label: '1 semana',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
+        },
+        {
+          label: 'Permanente',
+          icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
+        },
+        ...(isServerMuted
+          ? [
+              { label: '', separator: true },
+              {
+                label: 'Remover Silenciamento',
+                icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
+                onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
+              },
+            ]
+          : []),
+      ];
+
+      items.push({
+        label: isServerMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
+        icon: <VolumeX className={`w-4 h-4 ${isServerMuted ? 'text-dnd' : 'text-gray-400'}`} />,
+        subItems: muteSubItems,
+      });
+    }
+
+    if (!isMe && !isTargetOwner && isHierarchyAllowed) {
+      if (canKick) {
+        items.push({
+          label: `Expulsar ${targetMember.display_name || targetMember.username}`,
+          icon: <UserMinus className="w-4 h-4" />,
+          variant: 'danger',
+          onClick: async () => {
+            if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
+              await kickMember(activeGuild.id, targetMember.id);
+            }
+          },
+        });
+      }
+
+      if (canBan) {
+        items.push({
+          label: `Banir ${targetMember.display_name || targetMember.username}`,
+          icon: <Ban className="w-4 h-4" />,
+          variant: 'danger',
+          onClick: async () => {
+            const reason = prompt(`Motivo do banimento para ${targetMember.display_name || targetMember.username} (opcional):`);
+            if (reason !== null) {
+              await banMember(activeGuild.id, targetMember.id, reason);
+            }
+          },
+        });
+      }
+    }
+
+    openContextMenu(e, items, targetMember.display_name || targetMember.username);
   };
 
   const handleOpenUserProfile = (e: React.MouseEvent) => {
@@ -325,6 +549,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     <>
       <div
         ref={containerRef}
+      onContextMenu={handleContextMenu}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -556,15 +781,18 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       </div>
     </div>
 
-    {/* Fullscreen Video Portal */}
+    <ContextMenu menu={menu} onClose={closeContextMenu} />
+
+    {/* Fullscreen Video Portal (Respects TitleBar in Electron) */}
     {isFullscreen &&
       createPortal(
         <div
+          onContextMenu={handleContextMenu}
           onDoubleClick={(e) => {
             e.stopPropagation();
             toggleFullscreen();
           }}
-          className="fixed inset-0 z-[99999] bg-black flex items-center justify-center select-none"
+          className={`fixed ${isElectron ? 'top-8' : 'top-0'} inset-x-0 bottom-0 z-[45] bg-black flex items-center justify-center select-none`}
         >
           <video
             ref={(el) => {
@@ -573,6 +801,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                 el.play().catch(() => {});
               }
             }}
+            onContextMenu={handleContextMenu}
             autoPlay
             playsInline
             className="w-full h-full object-contain bg-black cursor-default"
@@ -595,6 +824,45 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             </div>
 
             <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-2 py-1.5 rounded-xl border border-white/10 shadow-lg pointer-events-auto">
+              {/* Fullscreen Volume Controls Popover */}
+              {!isLocal && targetParticipant && (
+                <div className="relative flex items-center">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowVolume(!showVolume);
+                    }}
+                    className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                    title="Ajustar volumes"
+                  >
+                    {currentUVol === 0 && (!hasScreenVideoTrack || currentSVol === 0) ? (
+                      <VolumeX className="w-4 h-4 text-dnd" />
+                    ) : (
+                      <Volume2 className="w-4 h-4" />
+                    )}
+                    <span className="text-xs hidden sm:inline">Volume</span>
+                  </button>
+
+                  {showVolume && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowVolume(false); }} />
+                      <div
+                        className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-60 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 pointer-events-auto"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <UserVolumeSlider userId={targetParticipant.identity} label="Volume de Voz" className="p-0" />
+                        {hasScreenVideoTrack && (
+                          <div className="pt-2 border-t border-white/10">
+                            <StreamVolumeSlider userId={targetParticipant.identity} label="Volume da Transmissão" className="p-0" />
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {!isLocal && (
                 <button
                   type="button"
