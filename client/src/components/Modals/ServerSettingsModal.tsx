@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Shield,
@@ -634,20 +634,18 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   // 5. Members Filter & Actions
-  const filteredMembers = useMemo(() => {
-    return members.filter((m) => {
-      const matchesSearch =
-        !memberSearchQuery.trim() ||
-        m.username.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-        (m.display_name && m.display_name.toLowerCase().includes(memberSearchQuery.toLowerCase()));
+  const filteredMembers = members.filter((m) => {
+    const matchesSearch =
+      !memberSearchQuery.trim() ||
+      m.username?.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+      (m.display_name && m.display_name.toLowerCase().includes(memberSearchQuery.toLowerCase()));
 
-      const matchesRole =
-        selectedRoleFilter === 'all' ||
-        (m.roles && m.roles.some((r) => r.id === selectedRoleFilter));
+    const matchesRole =
+      selectedRoleFilter === 'all' ||
+      (m.roles && m.roles.some((r) => r.id === selectedRoleFilter));
 
-      return matchesSearch && matchesRole;
-    });
-  }, [members, memberSearchQuery, selectedRoleFilter]);
+    return matchesSearch && matchesRole;
+  });
 
   const handleToggleMemberRole = async (memberId: string, roleId: string, hasRole: boolean) => {
     try {
