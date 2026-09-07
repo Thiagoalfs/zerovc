@@ -692,17 +692,19 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           <div className="pl-6 pr-2 py-1 space-y-0.5">
             {channel.voice_sessions.map((vs) => {
               const isSpeaking = speakingUserIds.includes(vs.user_id);
-              const targetUser: User =
-                activeGuild?.members?.find((m) => m.id === vs.user_id) ||
-                vs.user || {
-                  id: vs.user_id,
-                  username: 'Usuário',
-                  status: 'online',
-                };
+              const guildMember = activeGuild?.members?.find((m) => m.id === vs.user_id);
+              const targetUser: User = {
+                id: vs.user_id,
+                username: guildMember?.username || vs.user?.username || 'Usuário',
+                display_name: guildMember?.display_name || vs.user?.display_name || '',
+                avatar_url: guildMember?.avatar_url || vs.user?.avatar_url || '',
+                status: guildMember?.status || vs.user?.status || 'online',
+                roles: guildMember?.roles || vs.user?.roles || [],
+              };
 
               return (
                 <div
-                  key={vs.id}
+                  key={vs.id || vs.user_id}
                   onClick={(e) => {
                     e.stopPropagation();
                     onSelectUser?.(targetUser, { x: e.clientX, y: e.clientY });

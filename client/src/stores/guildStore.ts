@@ -843,25 +843,42 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       if (!state.activeGuild || !state.activeGuild.channels) return state;
 
+      const targetUserId = session?.user_id || userId;
+      const targetChannelId = session?.channel_id || channelId;
+
       const channels = state.activeGuild.channels.map((channel) => {
-        if (action === 'join' && session && channel.id === session.channel_id) {
-          const sessions = channel.voice_sessions || [];
-          const exists = sessions.some((s) => s.user_id === session.user_id);
-          if (exists) {
-            return {
-              ...channel,
-              voice_sessions: sessions.map((s) => (s.user_id === session.user_id ? session : s)),
-            };
+        if (action === 'join' && session) {
+          if (channel.id === session.channel_id) {
+            const sessions = channel.voice_sessions || [];
+            const exists = sessions.some((s) => s.user_id === session.user_id);
+            if (exists) {
+              return {
+                ...channel,
+                voice_sessions: sessions.map((s) =>
+                  s.user_id === session.user_id ? { ...s, ...session, user: session.user || s.user } : s
+                ),
+              };
+            }
+            return { ...channel, voice_sessions: [...sessions, session] };
+          } else {
+            // Clean up from other voice channels in same server when moving
+            const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== session.user_id);
+            return { ...channel, voice_sessions: sessions };
           }
-          return { ...channel, voice_sessions: [...sessions, session] };
-        } else if (action === 'leave' && channelId && userId && channel.id === channelId) {
-          const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== userId);
-          return { ...channel, voice_sessions: sessions };
-        } else if (action === 'state' && session && channel.id === session.channel_id) {
-          const sessions = (channel.voice_sessions || []).map((s) =>
-            s.user_id === session.user_id ? session : s
-          );
-          return { ...channel, voice_sessions: sessions };
+        } else if (action === 'leave' && targetUserId) {
+          if (!targetChannelId || channel.id === targetChannelId) {
+            const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
+            return { ...channel, voice_sessions: sessions };
+          }
+          return channel;
+        } else if ((action === 'update' || action === 'state') && session) {
+          if (channel.id === session.channel_id) {
+            const sessions = (channel.voice_sessions || []).map((s) =>
+              s.user_id === session.user_id ? { ...s, ...session, user: session.user || s.user } : s
+            );
+            return { ...channel, voice_sessions: sessions };
+          }
+          return channel;
         }
         return channel;
       });

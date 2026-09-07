@@ -325,12 +325,14 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if ch.Type == models.ChannelTypeVoice {
+					ch.VoiceSessions = make([]models.VoiceSession, 0)
 					vQuery := `
 						SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, vs.is_screensharing, vs.joined_at,
-						       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
+						       u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, '')
 						FROM voice_sessions vs
 						INNER JOIN users u ON u.id = vs.user_id
 						WHERE vs.channel_id = $1
+						ORDER BY vs.joined_at ASC
 					`
 					vRows, vErr := h.db.Pool.Query(r.Context(), vQuery, ch.ID)
 					if vErr == nil {
@@ -354,7 +356,7 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 
 	// 5. Get Members with Roles
 	memQuery := `
-		SELECT u.id, u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
+		SELECT u.id, u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, '')
 		FROM users u
 		INNER JOIN guild_members gm ON gm.user_id = u.id
 		WHERE gm.guild_id = $1
