@@ -38,13 +38,14 @@ type CreateChannelRequest struct {
 }
 
 type UpdateChannelRequest struct {
-	Name          *string     `json:"name,omitempty"`
-	Topic         *string     `json:"topic,omitempty"`
-	Position      *int        `json:"position,omitempty"`
-	CategoryID    *uuid.UUID  `json:"category_id,omitempty"`
-	ClearCategory *bool       `json:"clear_category,omitempty"`
-	IsPrivate     *bool       `json:"is_private,omitempty"`
-	RoleIDs       []uuid.UUID `json:"role_ids,omitempty"`
+	Name                 *string                              `json:"name,omitempty"`
+	Topic                *string                              `json:"topic,omitempty"`
+	Position             *int                                 `json:"position,omitempty"`
+	CategoryID           *uuid.UUID                           `json:"category_id,omitempty"`
+	ClearCategory        *bool                                `json:"clear_category,omitempty"`
+	IsPrivate            *bool                                `json:"is_private,omitempty"`
+	RoleIDs              []uuid.UUID                          `json:"role_ids,omitempty"`
+	PermissionOverwrites *[]models.ChannelPermissionOverwrite `json:"permission_overwrites,omitempty"`
 }
 
 type ReorderChannelItem struct {
@@ -217,6 +218,32 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 			h.db.Pool.Exec(r.Context(), "INSERT INTO channel_role_access (channel_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", channelID, roleID)
 		}
 		channel.RoleIDs = req.RoleIDs
+	}
+
+	// Update permission overwrites if provided
+	if req.PermissionOverwrites != nil {
+		h.db.Pool.Exec(r.Context(), "DELETE FROM channel_permission_overwrites WHERE channel_id = $1", channelID)
+		for _, ow := range *req.PermissionOverwrites {
+			if ow.Allow != 0 || ow.Deny != 0 {
+				h.db.Pool.Exec(r.Context(), `
+					INSERT INTO channel_permission_overwrites (channel_id, role_id, allow, deny)
+					VALUES ($1, $2, $3, $4)
+					ON CONFLICT (channel_id, role_id) DO UPDATE SET allow = EXCLUDED.allow, deny = EXCLUDED.deny
+				`, channelID, ow.RoleID, ow.Allow, ow.Deny)
+			}
+		}
+	}
+
+	// Always load permission overwrites into channel object
+	owRows, owErr := h.db.Pool.Query(r.Context(), "SELECT channel_id, role_id, allow, deny FROM channel_permission_overwrites WHERE channel_id = $1", channelID)
+	if owErr == nil {
+		for owRows.Next() {
+			var ow models.ChannelPermissionOverwrite
+			if owRows.Scan(&ow.ChannelID, &ow.RoleID, &ow.Allow, &ow.Deny) == nil {
+				channel.PermissionOverwrites = append(channel.PermissionOverwrites, ow)
+			}
+		}
+		owRows.Close()
 	}
 
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
@@ -647,3 +674,174 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(session)
 }
+
+type SetPermissionOverwriteRequest struct {
+	Allow int64 `json:"allow"`
+	Deny  int64 `json:"deny"`
+}
+
+func (h *ChannelHandler) UpdatePermissionOverwrite(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	channelIDStr := chi.URLParam(r, "id")
+	channelID, err := uuid.Parse(channelIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+
+	roleIDStr := chi.URLParam(r, "roleID")
+	roleID, err := uuid.Parse(roleIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid role id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var guildID, ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT c.guild_id, g.owner_id FROM channels c INNER JOIN guilds g ON g.id = c.guild_id WHERE c.id = $1", channelID).Scan(&guildID, &ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if ownerID != userID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageChannels) == 0 && (perms&models.PermManageRoles) == 0 {
+			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar permissões do canal"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	var req SetPermissionOverwriteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Allow == 0 && req.Deny == 0 {
+		h.db.Pool.Exec(r.Context(), "DELETE FROM channel_permission_overwrites WHERE channel_id = $1 AND role_id = $2", channelID, roleID)
+	} else {
+		query := `
+			INSERT INTO channel_permission_overwrites (channel_id, role_id, allow, deny)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (channel_id, role_id)
+			DO UPDATE SET allow = EXCLUDED.allow, deny = EXCLUDED.deny
+		`
+		_, err = h.db.Pool.Exec(r.Context(), query, channelID, roleID, req.Allow, req.Deny)
+		if err != nil {
+			http.Error(w, `{"error":"failed to update permission overwrite"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Fetch updated channel
+	var channel models.Channel
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, guild_id, name, type, category_id, topic, position, is_private, created_at FROM channels WHERE id = $1", channelID).Scan(
+		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+	)
+
+	// Fetch overwrites
+	owRows, _ := h.db.Pool.Query(r.Context(), "SELECT channel_id, role_id, allow, deny FROM channel_permission_overwrites WHERE channel_id = $1", channelID)
+	if owRows != nil {
+		for owRows.Next() {
+			var ow models.ChannelPermissionOverwrite
+			if owRows.Scan(&ow.ChannelID, &ow.RoleID, &ow.Allow, &ow.Deny) == nil {
+				channel.PermissionOverwrites = append(channel.PermissionOverwrites, ow)
+			}
+		}
+		owRows.Close()
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: models.EventChannelUpdate,
+		Data: channel,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(channel)
+}
+
+func (h *ChannelHandler) DeletePermissionOverwrite(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	channelIDStr := chi.URLParam(r, "id")
+	channelID, err := uuid.Parse(channelIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid channel id"}`, http.StatusBadRequest)
+		return
+	}
+
+	roleIDStr := chi.URLParam(r, "roleID")
+	roleID, err := uuid.Parse(roleIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid role id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var guildID, ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT c.guild_id, g.owner_id FROM channels c INNER JOIN guilds g ON g.id = c.guild_id WHERE c.id = $1", channelID).Scan(&guildID, &ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if ownerID != userID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageChannels) == 0 && (perms&models.PermManageRoles) == 0 {
+			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar permissões do canal"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	h.db.Pool.Exec(r.Context(), "DELETE FROM channel_permission_overwrites WHERE channel_id = $1 AND role_id = $2", channelID, roleID)
+
+	// Fetch updated channel
+	var channel models.Channel
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, guild_id, name, type, category_id, topic, position, is_private, created_at FROM channels WHERE id = $1", channelID).Scan(
+		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+	)
+
+	// Fetch overwrites
+	owRows, _ := h.db.Pool.Query(r.Context(), "SELECT channel_id, role_id, allow, deny FROM channel_permission_overwrites WHERE channel_id = $1", channelID)
+	if owRows != nil {
+		for owRows.Next() {
+			var ow models.ChannelPermissionOverwrite
+			if owRows.Scan(&ow.ChannelID, &ow.RoleID, &ow.Allow, &ow.Deny) == nil {
+				channel.PermissionOverwrites = append(channel.PermissionOverwrites, ow)
+			}
+		}
+		owRows.Close()
+	}
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: models.EventChannelUpdate,
+		Data: channel,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(channel)
+}

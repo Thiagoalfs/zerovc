@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Channel, Guild, Message, Role, VoiceSession, User } from '../types';
+import { Channel, Guild, Message, Role, VoiceSession, User, ChannelPermissionOverwrite } from '../types';
 import { api } from '../lib/api';
 import { playMessageSound } from '../utils/audio';
 import { useAuthStore } from './authStore';
@@ -38,7 +38,7 @@ interface GuildState {
   handleGuildUpdateEvent: (guild: Guild) => void;
   handleGuildDeleteEvent: (guildId: string) => void;
   createChannel: (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string, categoryId?: string, isPrivate?: boolean, roleIds?: string[]) => Promise<Channel>;
-  updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean }) => Promise<void>;
+  updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean; is_private?: boolean; role_ids?: string[]; permission_overwrites?: ChannelPermissionOverwrite[] }) => Promise<void>;
   deleteChannel: (channelId: string) => Promise<void>;
   reorderChannels: (guildId: string, payload: string[] | Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }>) => Promise<void>;
 
