@@ -359,3 +359,11 @@ FROM guilds g
 WHERE NOT EXISTS (
     SELECT 1 FROM guild_roles r WHERE r.guild_id = g.id AND r.name = '@everyone'
 );
+
+-- Backfill @everyone role in guild_member_roles for all existing guild members
+INSERT INTO guild_member_roles (guild_id, user_id, role_id)
+SELECT gm.guild_id, gm.user_id, gr.id
+FROM guild_members gm
+JOIN guild_roles gr ON gr.guild_id = gm.guild_id AND gr.name = '@everyone'
+ON CONFLICT (guild_id, user_id, role_id) DO NOTHING;
+
