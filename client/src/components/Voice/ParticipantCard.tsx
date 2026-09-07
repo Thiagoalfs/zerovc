@@ -30,6 +30,7 @@ import { useDMStore } from '../../stores/dmStore';
 import { User, Permissions } from '../../types';
 import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
+import { getDominantColorFromImage, generateColorFromName } from '../../lib/colorExtractor';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from './VolumeSliders';
 
@@ -72,6 +73,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [dominantBg, setDominantBg] = useState<string>('#2b2d31');
   const [, setTrackUpdateTick] = useState(0);
 
   // Re-render immediately when LiveKit participant track status changes
@@ -207,6 +209,20 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   };
 
   const displayName = participant.name || participant.identity;
+
+  useEffect(() => {
+    let isMounted = true;
+    if (avatarUrl) {
+      getDominantColorFromImage(formatAssetUrl(avatarUrl), displayName).then((color) => {
+        if (isMounted) setDominantBg(color);
+      });
+    } else {
+      setDominantBg(generateColorFromName(displayName || participant.identity));
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [avatarUrl, displayName, participant.identity]);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -452,10 +468,13 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             toggleFullscreen();
           }
         }}
-        className={`relative bg-background-darkest rounded-2xl overflow-hidden flex flex-col items-center justify-center min-h-[180px] aspect-video border-2 transition-all duration-200 group cursor-pointer ${
+        style={{
+          backgroundColor: (isScreenSharing && isWatching) || hasCameraVideoTrack ? '#000000' : dominantBg,
+        }}
+        className={`relative rounded-2xl overflow-hidden flex flex-col items-center justify-center w-full h-full min-h-[140px] aspect-video border-2 transition-all duration-150 group cursor-pointer ${
           isSpeaking
-            ? 'border-online shadow-lg shadow-online/20 ring-2 ring-online/40'
-            : 'border-white/5 hover:border-white/15'
+            ? 'border-[#23a55a] shadow-[0_0_12px_rgba(35,165,90,0.35)] ring-1 ring-[#23a55a]'
+            : 'border-transparent hover:border-white/10'
         }`}
       >
         {/* 1. If screen sharing and watching: render live screen video */}
@@ -519,19 +538,10 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           </div>
         ) : (
           /* 4. Default Voice Participant Avatar View */
-          <div className="flex flex-col items-center justify-center gap-2">
-            <div
-              style={
-                isSpeaking
-                  ? { boxShadow: '0 0 0 3px #23a55a' }
-                  : undefined
-              }
-              className={`w-16 h-16 md:w-20 md:h-20 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-xl shadow-lg transition-transform ${
-                isSpeaking ? 'scale-105' : ''
-              }`}
-            >
+          <div className="flex flex-col items-center justify-center">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-xl sm:text-2xl shadow-xl select-none bg-black/20">
               {avatarUrl ? (
-                <img src={formatAssetUrl(avatarUrl)} alt={displayName} className="w-full h-full rounded-full object-cover" />
+                <img src={formatAssetUrl(avatarUrl)} alt={displayName} className="w-full h-full object-cover" />
               ) : (
                 <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
               )}
@@ -645,20 +655,13 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           )}
         </div>
 
-        {/* Bottom Overlay Bar: Name & Mic Status */}
+        {/* Bottom-left Discord-style Name Pill */}
         {!(isScreenSharing && !isWatching) && (
-          <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl flex items-center justify-between text-xs text-white z-10 pointer-events-none">
-            <span className="font-semibold truncate max-w-[140px] md:max-w-[200px]">
-              {displayName} {isLocal && '(Você)'}
-            </span>
-
-            <div className="flex items-center gap-1.5">
-              {isMuted && (
-                <div className="bg-dnd/90 p-1 rounded-full text-white" title="Microfone Mutado">
-                  <MicOff className="w-3 h-3" />
-                </div>
-              )}
-            </div>
+          <div className="absolute bottom-2.5 left-2.5 bg-[#111214]/85 backdrop-blur-md px-2.5 py-1 rounded-md flex items-center gap-1.5 text-xs font-semibold text-white shadow-md max-w-[85%] z-20 pointer-events-none">
+            <span className="truncate">{displayName} {isLocal && '(Você)'}</span>
+            {isMuted && (
+              <MicOff className="w-3.5 h-3.5 text-dnd flex-shrink-0" />
+            )}
           </div>
         )}
       </div>
