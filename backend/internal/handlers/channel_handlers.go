@@ -552,6 +552,13 @@ func (h *ChannelHandler) UpdateVoiceState(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	var u models.UserPublic
+	h.db.Pool.QueryRow(r.Context(), `
+		SELECT id, username, COALESCE(display_name, ''), COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(status, 'offline'), COALESCE(custom_status, '')
+		FROM users WHERE id = $1
+	`, session.UserID).Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus)
+	session.User = u
+
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: models.EventVoiceStateUpdate,
 		Data: map[string]any{
@@ -661,6 +668,13 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 		http.Error(w, `{"error":"participant is not in this voice channel"}`, http.StatusNotFound)
 		return
 	}
+
+	var u models.UserPublic
+	h.db.Pool.QueryRow(r.Context(), `
+		SELECT id, username, COALESCE(display_name, ''), COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(status, 'offline'), COALESCE(custom_status, '')
+		FROM users WHERE id = $1
+	`, session.UserID).Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus)
+	session.User = u
 
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: models.EventVoiceStateUpdate,
