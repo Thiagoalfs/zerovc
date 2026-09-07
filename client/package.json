@@ -6,21 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:electron": "tsc -p tsconfig.electron.json && node -e \"const fs=require('fs'); ['icon.ico','icon.png','tray-icon.png'].forEach(f=>{ if(fs.existsSync('electron/'+f)) fs.copyFileSync('electron/'+f, 'dist-electron/'+f); })\"",
     "electron": "concurrently \"vite\" \"npm run build:electron && electron .\"",
     "package": "npm run build && npm run build:electron && electron-builder --win nsis",
     "package:dir": "npm run build && npm run build:electron && electron-builder --win --dir"
   },
   "dependencies": {
-    "clsx": "^2.1.1",
-    "date-fns": "^3.6.0",
-    "electron-updater": "^6.8.9",
-    "livekit-client": "^2.1.2",
-    "lucide-react": "^0.372.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "tailwind-merge": "^2.3.0",
-    "zustand": "^4.5.2"
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
@@ -28,30 +20,39 @@
     "@types/react-dom": "^18.2.25",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
+    "clsx": "^2.1.1",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
+    "date-fns": "^3.6.0",
     "electron": "^30.0.1",
     "electron-builder": "^24.13.3",
+    "livekit-client": "^2.1.2",
+    "lucide-react": "^0.372.0",
     "postcss": "^8.4.38",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^2.3.0",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.5",
-    "vite": "^5.2.10"
+    "vite": "^5.2.10",
+    "zustand": "^4.5.2"
   },
   "build": {
     "appId": "com.zerovc.app",
     "productName": "ZeroVC",
+    "compression": "maximum",
+    "asar": true,
     "directories": {
       "output": "release"
     },
     "icon": "electron/icon.png",
     "files": [
       "dist/**/*",
+      "!dist/downloads/**",
       "dist-electron/**/*",
-      "electron/icon.ico",
-      "electron/icon.png",
-      "electron/tray-icon.png",
-      "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/**",
+      "!**/*.map"
     ],
     "publish": [
       {

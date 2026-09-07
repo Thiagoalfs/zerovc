@@ -8,6 +8,95 @@ import {
   DisconnectReason,
 } from 'livekit-client';
 
+export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
+
+export interface GpuDetectionResult {
+  vendor: GpuVendor;
+  name: string;
+  hardwareAcceleration: boolean;
+  preferredCodec: 'h264' | 'vp9' | 'vp8';
+}
+
+export async function detectGpuVendor(): Promise<GpuDetectionResult> {
+  let detectedVendor: GpuVendor = 'unknown';
+  let deviceName = 'Generic Graphics Device';
+  let hwAcceleration = true;
+
+  try {
+    // 1. Electron Native GPU Info
+    if (typeof window !== 'undefined' && window.electronAPI?.getGpuInfo) {
+      const info = await window.electronAPI.getGpuInfo();
+      const devices = info?.basic?.gpuDevice;
+      if (Array.isArray(devices) && devices.length > 0) {
+        for (const dev of devices) {
+          const vId = dev.vendorId;
+          const str = `${dev.driverVendor || ''} ${dev.deviceString || ''} ${dev.driverVersion || ''}`.toLowerCase();
+
+          if (vId === 0x10de || str.includes('nvidia') || str.includes('geforce') || str.includes('quadro') || str.includes('rtx') || str.includes('gtx')) {
+            detectedVendor = 'nvidia';
+            deviceName = dev.deviceString || 'NVIDIA GPU';
+            break;
+          } else if (vId === 0x1002 || vId === 0x1022 || str.includes('amd') || str.includes('radeon') || str.includes('advanced micro') || str.includes('rx ')) {
+            detectedVendor = 'amd';
+            deviceName = dev.deviceString || 'AMD Radeon GPU';
+            break;
+          } else if (vId === 0x8086 || str.includes('intel') || str.includes('arc') || str.includes('iris') || str.includes('uhd')) {
+            detectedVendor = 'intel';
+            deviceName = dev.deviceString || 'Intel GPU';
+            break;
+          } else if (vId === 0x106b || str.includes('apple') || str.includes('m1') || str.includes('m2') || str.includes('m3')) {
+            detectedVendor = 'apple';
+            deviceName = dev.deviceString || 'Apple Silicon GPU';
+            break;
+          }
+        }
+      }
+      if (info?.features) {
+        hwAcceleration = info.features.video_encode === 'enabled' || info.features.video_encode === 'enabled_readback';
+      }
+    }
+
+    // 2. WebGL Fallback detection (works in all modern browsers)
+    if (detectedVendor === 'unknown' && typeof document !== 'undefined') {
+      const canvas = document.createElement('canvas');
+      const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+      if (gl) {
+        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+        if (ext) {
+          const renderer = (gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '').toLowerCase();
+          if (renderer.includes('nvidia') || renderer.includes('geforce') || renderer.includes('quadro') || renderer.includes('rtx') || renderer.includes('gtx')) {
+            detectedVendor = 'nvidia';
+            deviceName = renderer;
+          } else if (renderer.includes('amd') || renderer.includes('radeon') || renderer.includes('ati ') || renderer.includes('rx ')) {
+            detectedVendor = 'amd';
+            deviceName = renderer;
+          } else if (renderer.includes('intel') || renderer.includes('iris') || renderer.includes('uhd') || renderer.includes('arc')) {
+            detectedVendor = 'intel';
+            deviceName = renderer;
+          } else if (renderer.includes('apple') || renderer.includes('m1') || renderer.includes('m2') || renderer.includes('m3') || renderer.includes('metal')) {
+            detectedVendor = 'apple';
+            deviceName = renderer;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[LiveKit] GPU Detection warning:', e);
+  }
+
+  // H.264 uses native hardware encoder on all vendors (NVENC for NVIDIA, AMF for AMD, QSV for Intel, VideoToolbox for Apple)
+  const preferredCodec: 'h264' | 'vp9' | 'vp8' = hwAcceleration ? 'h264' : 'vp8';
+
+  console.log(`[LiveKit GPU] Detected: ${detectedVendor.toUpperCase()} (${deviceName}) | Hardware Acceleration: ${hwAcceleration} | Codec: ${preferredCodec}`);
+
+  return {
+    vendor: detectedVendor,
+    name: deviceName,
+    hardwareAcceleration: hwAcceleration,
+    preferredCodec,
+  };
+}
+
 class LiveKitManager {
   private room: Room | null = null;
   private onParticipantsChanged?: (participants: Participant[]) => void;
@@ -274,28 +363,37 @@ class LiveKitManager {
         }
       })();
 
+      // Discord-style optimized bitrate curves
       const maxBitrate = (() => {
-        if (res === '480p') return frameRate === 15 ? 600_000 : frameRate === 30 ? 1_200_000 : 2_000_000;
-        if (res === '1080p') return frameRate === 15 ? 3_000_000 : frameRate === 30 ? 6_000_000 : 10_000_000;
-        return frameRate === 15 ? 1_500_000 : frameRate === 30 ? 3_000_000 : 5_500_000;
+        if (res === '480p') return frameRate === 15 ? 500_000 : frameRate === 30 ? 1_000_000 : 1_800_000;
+        if (res === '1080p') return frameRate === 15 ? 2_500_000 : frameRate === 30 ? 3_500_000 : 6_000_000;
+        return frameRate === 15 ? 1_200_000 : frameRate === 30 ? 1_800_000 : 3_500_000;
       })();
 
+      const gpu = await detectGpuVendor();
+      const selectedCodec = gpu.preferredCodec;
+
       if (sourceId && (window as any).electronAPI) {
-        // Electron Screen Capture API with Hardware Accelerated WGC & Framerate constraints
+        const isWindowCapture = sourceId.startsWith('window:');
+
+        // Electron Screen Capture API with Hardware Accelerated WGC & Flexible Framerate constraints
         const stream = await navigator.mediaDevices.getUserMedia({
-          // Áudio do sistema (loopback) via a mesma API legada do Electron.
-          // Funciona de forma confiável só no Windows — é limitação do Chromium/Electron,
-          // não do nosso código. No macOS/Linux normalmente vem sem faixa de áudio.
+          // Audio loopback (specific window process audio or full system loopback with app voice cancellation)
           audio: config?.includeAudio
             ? ({
                 mandatory: {
                   chromeMediaSource: 'desktop',
+                  ...(isWindowCapture ? { chromeMediaSourceId: sourceId } : {}),
                 },
                 optional: [
-                  { echoCancellation: false },
+                  { restrictOwnAudio: true },
+                  { suppressLocalAudioPlayback: false },
+                  { echoCancellation: true },
+                  { googEchoCancellation: true },
+                  { googEchoCancellation2: true },
+                  { googDAEchoCancellation: true },
                   { noiseSuppression: false },
                   { autoGainControl: false },
-                  { googEchoCancellation: false },
                   { googAutoGainControl: false },
                   { googNoiseSuppression: false },
                   { googHighpassFilter: false },
@@ -309,13 +407,16 @@ class LiveKitManager {
             mandatory: {
               chromeMediaSource: 'desktop',
               chromeMediaSourceId: sourceId,
-              minWidth: dims.width,
               maxWidth: dims.width,
-              minHeight: dims.height,
               maxHeight: dims.height,
-              minFrameRate: frameRate,
               maxFrameRate: frameRate,
             },
+            // @ts-ignore
+            optional: [
+              { width: { ideal: dims.width } },
+              { height: { ideal: dims.height } },
+              { frameRate: { ideal: frameRate } },
+            ],
           },
         });
 
@@ -326,10 +427,13 @@ class LiveKitManager {
           this.onScreenShareEnded?.();
         };
 
+        // Publish track with simulcast: false to save ~65% GPU/CPU overhead
         const pub = await this.room.localParticipant.publishTrack(videoTrack, {
           name: 'screen_share',
           source: Track.Source.ScreenShare,
-          simulcast: true,
+          simulcast: false,
+          videoCodec: selectedCodec,
+          backupCodec: false,
           videoEncoding: {
             maxBitrate: maxBitrate,
             maxFramerate: frameRate,
@@ -337,8 +441,7 @@ class LiveKitManager {
           },
         });
 
-        // Publica o áudio do sistema (se capturado) como track separada,
-        // puro sem filtros de ruído/voz (RNNoise/AGC desativados).
+        // Publish captured system audio as dedicated high-fidelity stereo track
         const audioTrack = stream.getAudioTracks()[0];
         if (audioTrack) {
           audioTrack.onended = () => {
@@ -356,7 +459,7 @@ class LiveKitManager {
           });
         }
 
-        // Set WebRTC degradationPreference to maintain 60 FPS or detail
+        // Set WebRTC degradationPreference to maintain framerate for games or resolution for text
         try {
           const sender = (pub?.track as any)?.sender as RTCRtpSender | undefined;
           if (sender && typeof sender.getParameters === 'function') {
@@ -380,12 +483,14 @@ class LiveKitManager {
           true,
           {
             audio: {
-              echoCancellation: false,
+              echoCancellation: true,
               noiseSuppression: false,
               autoGainControl: false,
+              restrictOwnAudio: true,
+              suppressLocalAudioPlayback: false,
               channelCount: 2,
               sampleRate: 48000,
-            },
+            } as any,
             selfBrowserSurface: 'include',
             surfaceSwitching: 'include',
             systemAudio: 'include',
@@ -397,7 +502,9 @@ class LiveKitManager {
             contentHint: frameRate >= 60 ? 'motion' : 'detail',
           },
           {
-            simulcast: true,
+            simulcast: false,
+            videoCodec: selectedCodec,
+            backupCodec: false,
             audioPreset: AudioPresets.musicHighQualityStereo,
             dtx: false,
             videoEncoding: {
