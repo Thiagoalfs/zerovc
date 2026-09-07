@@ -42,13 +42,15 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     }
   };
 
-  const getGridColsClass = () => {
+  const getCardSizeClass = () => {
     const count = participants.length;
-    if (count <= 1) return 'grid-cols-1 max-w-2xl';
-    if (count <= 2) return 'grid-cols-1 sm:grid-cols-2 max-w-4xl';
-    if (count <= 4) return 'grid-cols-2 max-w-4xl';
-    if (count <= 6) return 'grid-cols-2 md:grid-cols-3 max-w-6xl';
-    return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 max-w-7xl';
+    if (count <= 1) return 'w-full max-w-3xl max-h-[75vh]';
+    if (count === 2) return 'w-full sm:w-[calc(50%-0.6rem)] max-w-2xl max-h-[65vh]';
+    if (count <= 4) return 'w-full sm:w-[calc(50%-0.6rem)] max-w-xl max-h-[42vh]';
+    if (count === 5) return 'w-full sm:w-[calc(50%-0.6rem)] max-w-lg max-h-[32vh]';
+    if (count === 6) return 'w-full sm:w-[calc(33.333%-0.75rem)] max-w-md max-h-[40vh]';
+    if (count <= 9) return 'w-full sm:w-[calc(33.333%-0.75rem)] max-w-md max-h-[30vh]';
+    return 'w-full sm:w-[calc(33.333%-0.75rem)] md:w-[calc(25%-0.75rem)] max-w-sm max-h-[25vh]';
   };
 
   return (
@@ -71,7 +73,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
         </div>
       </div>
 
-      {/* Main Voice / Video Grid */}
+      {/* Main Voice / Video Dynamic Grid */}
       <div className="flex-1 overflow-y-auto p-3 md:p-6 flex items-center justify-center">
         {isConnecting ? (
           <div className="flex flex-col items-center gap-3 text-gray-400">
@@ -84,14 +86,18 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
             <span className="text-sm">Nenhum participante conectado</span>
           </div>
         ) : (
-          <div className={`w-full grid gap-3 md:gap-4 ${getGridColsClass()}`}>
+          <div className="w-full h-full max-h-full flex flex-wrap items-center justify-center content-center gap-3 md:gap-4 max-w-7xl mx-auto">
             {participants.map((p) => (
-              <ParticipantCard
+              <div
                 key={p.sid || p.identity}
-                participant={p}
-                onOpenUserProfile={onOpenUserProfile}
-                onOpenDM={onOpenDM}
-              />
+                className={`aspect-video flex items-center justify-center flex-shrink-0 ${getCardSizeClass()}`}
+              >
+                <ParticipantCard
+                  participant={p}
+                  onOpenUserProfile={onOpenUserProfile}
+                  onOpenDM={onOpenDM}
+                />
+              </div>
             ))}
           </div>
         )}
