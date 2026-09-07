@@ -94,16 +94,18 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   });
   const hasMovedSignificantlyRef = useRef(false);
 
-  // Find target participant to display
-  const targetParticipant = participants.find(
-    (p) =>
-      p.identity === watchedParticipantId ||
-      (p.isLocal && isScreensharing && (!watchedParticipantId || watchedParticipantId === user?.id))
-  );
+  // Find target participant to display (ONLY if someone is sharing screen)
+  const activeScreenParticipant =
+    (watchedParticipantId ? participants.find((p) => p.identity === watchedParticipantId) : null) ||
+    participants.find((p) => {
+      const pub = p.getTrackPublication(Track.Source.ScreenShare);
+      return pub && pub.track && !pub.isMuted;
+    }) ||
+    (isScreensharing ? participants.find((p) => p.isLocal) : null);
 
+  const targetParticipant = activeScreenParticipant;
   const screenPub = targetParticipant?.getTrackPublication(Track.Source.ScreenShare);
-  const cameraPub = targetParticipant?.getTrackPublication(Track.Source.Camera);
-  const activeVideoPub = (screenPub?.track && !screenPub.isMuted) ? screenPub : cameraPub;
+  const activeVideoPub = (screenPub?.track && !screenPub.isMuted) ? screenPub : null;
   const hasScreenVideoTrack = !!activeVideoPub?.track && !activeVideoPub.isMuted;
   const isLocal = targetParticipant?.isLocal;
 
@@ -243,13 +245,36 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
   const displayName = targetParticipant.name || targetParticipant.identity;
 
-  const handleOpenVoiceRoom = () => {
+  const handleOpenVoiceRoom = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     if (hasMovedSignificantlyRef.current) return;
-    if (voiceChannel && parentGuild) {
+
+    const curChId = currentChannelId || voiceChannel?.id;
+    let curGId = parentGuild?.id || useVoiceStore.getState().currentGuildId;
+
+    if (!curGId && curChId) {
+      const foundGuild = guilds.find((g) => g.channels?.some((c) => c.id === curChId));
+      if (foundGuild) {
+        curGId = foundGuild.id;
+      }
+    }
+
+    if (curChId && curGId) {
       if (onNavigateToVoiceChannel) {
-        onNavigateToVoiceChannel(voiceChannel.id, parentGuild.id);
+        onNavigateToVoiceChannel(curChId, curGId);
       } else {
-        selectGuild(parentGuild.id, voiceChannel.id);
+        await selectGuild(curGId, curChId);
+      }
+    } else if (curChId) {
+      const activeG = useGuildStore.getState().activeGuild;
+      if (activeG) {
+        if (onNavigateToVoiceChannel) {
+          onNavigateToVoiceChannel(curChId, activeG.id);
+        } else {
+          await selectGuild(activeG.id, curChId);
+        }
       }
     }
   };
@@ -388,26 +413,27 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
         {/* Center Hover Click Overlay */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-          <div className="bg-background-darkest/90 border border-white/10 px-3 py-1.5 rounded-xl text-xs font-semibold text-white flex items-center gap-1.5 shadow-xl">
-            <Monitor className="w-3.5 h-3.5 text-brand-400" />
-            <span>Clique para abrir a call</span>
+          <div className="bg-background-darkest/95 border border-white/10 px-3.5 py-2 rounded-xl text-xs font-semibold text-white flex items-center gap-2 shadow-2xl backdrop-blur-md">
+            <Monitor className="w-4 h-4 text-brand-400" />
+            <span>Clique aqui para voltar para a call</span>
           </div>
         </div>
       </div>
 
       {/* Bottom Voice Control Bar */}
       <div className="p-2.5 px-3 bg-background-darker/90 border-t border-white/5 flex items-center justify-between">
-        <div
+        <button
+          type="button"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={handleOpenUserProfile}
-          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0"
-          title="Clique para ver perfil do usuário em call"
+          onClick={handleOpenVoiceRoom}
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0 text-left"
+          title="Clique aqui para voltar para a call"
         >
           <div className="w-2 h-2 rounded-full bg-online animate-pulse flex-shrink-0" />
           <span className="text-xs font-semibold text-gray-200 truncate hover:underline hover:text-white">
             {displayName} • #{voiceChannel?.name || 'Voz'}
           </span>
-        </div>
+        </button>
 
         <div
           className="flex items-center gap-1.5 flex-shrink-0"
