@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Participant, Track, RemoteTrackPublication } from 'livekit-client';
+import { createPortal } from 'react-dom';
+import { Participant, Track, RemoteTrackPublication, ParticipantEvent } from 'livekit-client';
 import {
   MicOff,
   Mic,
@@ -71,6 +72,50 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [, setTrackUpdateTick] = useState(0);
+
+  // Re-render immediately when LiveKit participant track status changes
+  useEffect(() => {
+    const handleUpdate = () => {
+      setTrackUpdateTick((t) => t + 1);
+    };
+
+    participant.on(ParticipantEvent.TrackSubscribed, handleUpdate);
+    participant.on(ParticipantEvent.TrackUnsubscribed, handleUpdate);
+    participant.on(ParticipantEvent.TrackMuted, handleUpdate);
+    participant.on(ParticipantEvent.TrackUnmuted, handleUpdate);
+    participant.on(ParticipantEvent.TrackPublished, handleUpdate);
+    participant.on(ParticipantEvent.TrackUnpublished, handleUpdate);
+    participant.on(ParticipantEvent.IsSpeakingChanged, handleUpdate);
+    participant.on(ParticipantEvent.ParticipantMetadataChanged, handleUpdate);
+
+    return () => {
+      participant.off(ParticipantEvent.TrackSubscribed, handleUpdate);
+      participant.off(ParticipantEvent.TrackUnsubscribed, handleUpdate);
+      participant.off(ParticipantEvent.TrackMuted, handleUpdate);
+      participant.off(ParticipantEvent.TrackUnmuted, handleUpdate);
+      participant.off(ParticipantEvent.TrackPublished, handleUpdate);
+      participant.off(ParticipantEvent.TrackUnpublished, handleUpdate);
+      participant.off(ParticipantEvent.IsSpeakingChanged, handleUpdate);
+      participant.off(ParticipantEvent.ParticipantMetadataChanged, handleUpdate);
+    };
+  }, [participant]);
+
+  // Keep fullscreen state in sync with ESC key and OS window events
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        window.electronAPI?.setFullScreen?.(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
 
   const isSpeaking = speakingUserIds.includes(participant.identity);
   const isLocal = participant.isLocal;
@@ -158,14 +203,21 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   };
 
   const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
-    }
+    setIsFullscreen((prev) => {
+      const next = !prev;
+      if (next) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+        window.electronAPI?.setFullScreen?.(true);
+      } else {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        window.electronAPI?.setFullScreen?.(false);
+      }
+      return next;
+    });
   };
 
   const displayName = participant.name || participant.identity;
@@ -407,6 +459,12 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
       <div
         ref={containerRef}
         onContextMenu={handleContextMenu}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          if ((isScreenSharing && isWatching) || hasCameraVideoTrack) {
+            toggleFullscreen();
+          }
+        }}
         className={`relative bg-background-darkest rounded-2xl overflow-hidden flex flex-col items-center justify-center min-h-[180px] aspect-video border-2 transition-all duration-200 group cursor-pointer ${
           isSpeaking
             ? 'border-online shadow-lg shadow-online/20 ring-2 ring-online/40'
@@ -510,8 +568,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
         {/* Top Right Unified Action Controls Bar (Hover) */}
         <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 shadow-lg">
-          {/* Watch / Stop Live Controls & Fullscreen */}
-          {isScreenSharing && isWatching && hasScreenVideoTrack && (
+          {/* Watch / Stop Live Controls */}
+          {isScreenSharing && isWatching && (
             <>
               {!isLocal ? (
                 <button
@@ -540,19 +598,22 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                   <span className="text-[11px] hidden sm:inline">Parar Live</span>
                 </button>
               )}
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFullscreen();
-                }}
-                className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 transition-colors cursor-pointer"
-                title={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
-              >
-                {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              </button>
             </>
+          )}
+
+          {/* Fullscreen Button for Screen Share OR Camera Stream */}
+          {((isScreenSharing && isWatching) || hasCameraVideoTrack) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
+              className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 transition-colors cursor-pointer"
+              title="Tela cheia"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
           )}
 
           {/* Volume Sliders for Remote participants */}
@@ -613,6 +674,103 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
       </div>
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />
+
+      {/* Fullscreen Video Portal */}
+      {isFullscreen &&
+        createPortal(
+          <div
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              toggleFullscreen();
+            }}
+            className="fixed inset-0 z-[99999] bg-black flex items-center justify-center select-none"
+          >
+            <video
+              ref={(el) => {
+                if (el) {
+                  const track = (isScreenSharing && isWatching && screenPub?.track) || (hasCameraVideoTrack && cameraPub?.track);
+                  if (track) {
+                    track.attach(el);
+                    el.play().catch(() => {});
+                  }
+                }
+              }}
+              autoPlay
+              playsInline
+              className="w-full h-full object-contain bg-black cursor-default"
+            />
+
+            {/* Top Fullscreen Controls Overlay */}
+            <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
+              <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 shadow-lg pointer-events-auto">
+                <div className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white overflow-hidden">
+                  {avatarUrl ? (
+                    <img src={formatAssetUrl(avatarUrl)} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    displayName?.[0]?.toUpperCase() || 'U'
+                  )}
+                </div>
+                <span className="text-sm font-semibold text-white">{displayName}</span>
+                {isScreenSharing && (
+                  <span className="bg-brand-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Monitor className="w-3 h-3" /> AO VIVO
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-2 py-1.5 rounded-xl border border-white/10 shadow-lg pointer-events-auto">
+                {isScreenSharing && isWatching && (
+                  <>
+                    {!isLocal ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFullscreen();
+                          handleToggleWatch(false);
+                        }}
+                        className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                        title="Parar de assistir transmissão"
+                      >
+                        <EyeOff className="w-4 h-4" />
+                        <span className="text-xs hidden sm:inline">Parar de Ver</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFullscreen();
+                          stopScreenShare();
+                        }}
+                        className="p-1.5 text-dnd hover:bg-dnd/20 rounded-lg text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                        title="Encerrar compartilhamento"
+                      >
+                        <Monitor className="w-4 h-4" />
+                        <span className="text-xs hidden sm:inline">Parar Live</span>
+                      </button>
+                    )}
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
+                  className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                  title="Sair da tela cheia (ESC)"
+                >
+                  <Minimize2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Sair da Tela Cheia</span>
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </>
   );
 };
+

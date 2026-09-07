@@ -6,6 +6,9 @@ export type ChatDensity = 'cozy' | 'compact';
 export type ScreenshareQuality = '720p30' | '1080p30' | '1080p60' | 'source';
 export type DmPrivacy = 'everyone' | 'friends_only';
 
+export type AudioProcessingMode = 'webrtc' | 'rnnoise' | 'rnnoise_silero';
+export type RNNoiseLevel = 'light' | 'balanced' | 'aggressive';
+
 interface SettingsState {
   // Theme & Appearance
   theme: ThemeMode;
@@ -27,7 +30,11 @@ interface SettingsState {
   soundMessageEvents: boolean;
   notificationsDesktop: boolean;
 
-  // Audio / WebRTC Filters
+  // Audio Processing Modes & Filters
+  audioProcessingMode: AudioProcessingMode;
+  rnnoiseLevel: RNNoiseLevel;
+  vadSensitivity: number;
+  vadHangover: number;
   echoCancellation: boolean;
   noiseSuppression: boolean;
   autoGainControl: boolean;
@@ -51,6 +58,10 @@ interface SettingsState {
   setSoundMuteEvents: (enabled: boolean) => void;
   setSoundMessageEvents: (enabled: boolean) => void;
   setNotificationsDesktop: (enabled: boolean) => void;
+  setAudioProcessingMode: (mode: AudioProcessingMode) => void;
+  setRnnoiseLevel: (level: RNNoiseLevel) => void;
+  setVadSensitivity: (sensitivity: number) => void;
+  setVadHangover: (hangover: number) => void;
   setEchoCancellation: (enabled: boolean) => void;
   setNoiseSuppression: (enabled: boolean) => void;
   setAutoGainControl: (enabled: boolean) => void;
@@ -170,6 +181,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   soundMessageEvents: getStoredBoolean('zerovc_sound_message_events', true),
   notificationsDesktop: getStoredBoolean('zerovc_notifications_desktop', true),
 
+  // Audio Processing Modes & Filters
+  audioProcessingMode: getStoredString<AudioProcessingMode>('zerovc_audio_proc_mode', 'rnnoise_silero'),
+  rnnoiseLevel: getStoredString<RNNoiseLevel>('zerovc_rnnoise_level', 'balanced'),
+  vadSensitivity: getStoredNumber('zerovc_vad_sensitivity', 0.5),
+  vadHangover: getStoredNumber('zerovc_vad_hangover', 250),
   echoCancellation: getStoredBoolean('zerovc_echo_cancellation', true),
   noiseSuppression: getStoredBoolean('zerovc_noise_suppression', true),
   autoGainControl: getStoredBoolean('zerovc_auto_gain_control', true),
@@ -250,6 +266,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setNotificationsDesktop: (notificationsDesktop) => {
     localStorage.setItem('zerovc_notifications_desktop', String(notificationsDesktop));
     set({ notificationsDesktop });
+  },
+
+  setAudioProcessingMode: (audioProcessingMode) => {
+    localStorage.setItem('zerovc_audio_proc_mode', audioProcessingMode);
+    set({ audioProcessingMode });
+  },
+
+  setRnnoiseLevel: (rnnoiseLevel) => {
+    localStorage.setItem('zerovc_rnnoise_level', rnnoiseLevel);
+    set({ rnnoiseLevel });
+  },
+
+  setVadSensitivity: (vadSensitivity) => {
+    localStorage.setItem('zerovc_vad_sensitivity', String(vadSensitivity));
+    set({ vadSensitivity });
+  },
+
+  setVadHangover: (vadHangover) => {
+    localStorage.setItem('zerovc_vad_hangover', String(vadHangover));
+    set({ vadHangover });
   },
 
   setEchoCancellation: (echoCancellation) => {

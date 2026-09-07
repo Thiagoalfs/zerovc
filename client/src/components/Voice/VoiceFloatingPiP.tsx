@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Track, RemoteTrackPublication } from 'livekit-client';
 import {
   Monitor,
   Maximize2,
+  Minimize2,
   EyeOff,
   Mic,
   MicOff,
@@ -52,7 +54,24 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
+
+  // Keep fullscreen state in sync with ESC key and OS window events
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        window.electronAPI?.setFullScreen?.(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
 
   // Drag and Snap Corner state
   const [corner, setCorner] = useState<PiPCorner>(() => {
@@ -235,17 +254,23 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     }
   };
 
-  const toggleFullscreen = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const videoEl = videoRef.current;
-    if (!videoEl) return;
-    if (!document.fullscreenElement) {
-      if (videoEl.requestFullscreen) {
-        videoEl.requestFullscreen().catch(() => {});
+  const toggleFullscreen = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setIsFullscreen((prev) => {
+      const next = !prev;
+      if (next) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+        window.electronAPI?.setFullScreen?.(true);
+      } else {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        window.electronAPI?.setFullScreen?.(false);
       }
-    } else {
-      document.exitFullscreen().catch(() => {});
-    }
+      return next;
+    });
   };
 
   const handleOpenUserProfile = (e: React.MouseEvent) => {
@@ -271,8 +296,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   };
 
   return (
-    <div
-      ref={containerRef}
+    <>
+      <div
+        ref={containerRef}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -502,5 +528,79 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
         </div>
       </div>
     </div>
+
+    {/* Fullscreen Video Portal */}
+    {isFullscreen &&
+      createPortal(
+        <div
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            toggleFullscreen();
+          }}
+          className="fixed inset-0 z-[99999] bg-black flex items-center justify-center select-none"
+        >
+          <video
+            ref={(el) => {
+              if (el && activeVideoPub?.track) {
+                activeVideoPub.track.attach(el);
+                el.play().catch(() => {});
+              }
+            }}
+            autoPlay
+            playsInline
+            className="w-full h-full object-contain bg-black cursor-default"
+          />
+
+          {/* Top Fullscreen Controls Overlay */}
+          <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
+            <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 shadow-lg pointer-events-auto">
+              <div className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white overflow-hidden">
+                {targetUser.avatar_url ? (
+                  <img src={formatAssetUrl(targetUser.avatar_url)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  displayName?.[0]?.toUpperCase() || 'U'
+                )}
+              </div>
+              <span className="text-sm font-semibold text-white">{displayName}</span>
+              <span className="bg-brand-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                <Monitor className="w-3 h-3" /> AO VIVO
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-2 py-1.5 rounded-xl border border-white/10 shadow-lg pointer-events-auto">
+              {!isLocal && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                    setWatchedParticipant(null);
+                  }}
+                  className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                  title="Fechar transmissão"
+                >
+                  <EyeOff className="w-4 h-4" />
+                  <span className="text-xs hidden sm:inline">Fechar Stream</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFullscreen();
+                }}
+                className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                title="Sair da tela cheia (ESC)"
+              >
+                <Minimize2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Sair da Tela Cheia</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+  </>
   );
 };

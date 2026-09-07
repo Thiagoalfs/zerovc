@@ -45,11 +45,17 @@ export interface ElectronAPI {
   getAutoStart: () => Promise<boolean>;
   setZoomFactor: (factor: number) => void;
   getZoomFactor: () => number;
+  getGpuInfo: () => Promise<any>;
+  setFullScreen: (flag: boolean) => void;
+  isFullScreen: () => Promise<boolean>;
 }
 
 const electronAPI: ElectronAPI = {
   isElectron: true,
   platform: process.platform,
+  getGpuInfo: () => ipcRenderer.invoke('get-gpu-info'),
+  setFullScreen: (flag: boolean) => ipcRenderer.send('window-set-fullscreen', flag),
+  isFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
