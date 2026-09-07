@@ -101,16 +101,16 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     };
   }, [participant]);
 
-  // Keep fullscreen state in sync with ESC key and OS window events
+  const isElectron =
+    typeof window !== 'undefined' &&
+    (!!window.electronAPI?.isElectron || navigator.userAgent.includes('Electron'));
+
+  // Keep fullscreen state in sync with ESC key
   useEffect(() => {
     if (!isFullscreen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsFullscreen(false);
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
-        window.electronAPI?.setFullScreen?.(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -203,21 +203,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   };
 
   const toggleFullscreen = () => {
-    setIsFullscreen((prev) => {
-      const next = !prev;
-      if (next) {
-        if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        }
-        window.electronAPI?.setFullScreen?.(true);
-      } else {
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
-        window.electronAPI?.setFullScreen?.(false);
-      }
-      return next;
-    });
+    setIsFullscreen((prev) => !prev);
   };
 
   const displayName = participant.name || participant.identity;
@@ -629,7 +615,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                 className="p-1 rounded text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                 title="Ajustar volumes"
               >
-                {currentUVol === 0 ? (
+                {currentUVol === 0 && (!isScreenSharing || currentSVol === 0) ? (
                   <VolumeX className="w-3.5 h-3.5 text-dnd" />
                 ) : (
                   <Volume2 className="w-3.5 h-3.5" />
@@ -638,15 +624,18 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
               {showVolumeSlider && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowVolumeSlider(false)} />
-                  <div className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-2.5 rounded-2xl shadow-2xl w-52 flex flex-col gap-2 animate-in fade-in zoom-in-95">
+                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowVolumeSlider(false); }} />
+                  <div
+                    className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-56 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 pointer-events-auto"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {/* User Mic Volume */}
-                    <UserVolumeSlider userId={participant.identity} label="Voz" className="p-0" />
+                    <UserVolumeSlider userId={participant.identity} label="Volume de Voz" className="p-0" />
 
                     {/* Stream Audio Volume if Screen Sharing */}
                     {isScreenSharing && (
                       <div className="pt-2 border-t border-white/10">
-                        <StreamVolumeSlider userId={participant.identity} label="Transmissão" className="p-0" />
+                        <StreamVolumeSlider userId={participant.identity} label="Volume da Transmissão" className="p-0" />
                       </div>
                     )}
                   </div>
@@ -656,9 +645,9 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           )}
         </div>
 
-        {/* Bottom Overlay Bar: Name & Mic Status (Hidden when "Assistir Transmissão" is displayed to prevent overlapping) */}
+        {/* Bottom Overlay Bar: Name & Mic Status */}
         {!(isScreenSharing && !isWatching) && (
-          <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl flex items-center justify-between text-xs text-white z-10">
+          <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl flex items-center justify-between text-xs text-white z-10 pointer-events-none">
             <span className="font-semibold truncate max-w-[140px] md:max-w-[200px]">
               {displayName} {isLocal && '(Você)'}
             </span>
@@ -676,15 +665,16 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />
 
-      {/* Fullscreen Video Portal */}
+      {/* Fullscreen Video Portal (Respects TitleBar in Electron) */}
       {isFullscreen &&
         createPortal(
           <div
+            onContextMenu={handleContextMenu}
             onDoubleClick={(e) => {
               e.stopPropagation();
               toggleFullscreen();
             }}
-            className="fixed inset-0 z-[99999] bg-black flex items-center justify-center select-none"
+            className={`fixed ${isElectron ? 'top-8' : 'top-0'} inset-x-0 bottom-0 z-[45] bg-black flex items-center justify-center select-none`}
           >
             <video
               ref={(el) => {
@@ -696,6 +686,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                   }
                 }
               }}
+              onContextMenu={handleContextMenu}
               autoPlay
               playsInline
               className="w-full h-full object-contain bg-black cursor-default"
@@ -720,6 +711,45 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               </div>
 
               <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-2 py-1.5 rounded-xl border border-white/10 shadow-lg pointer-events-auto">
+                {/* Fullscreen Volume Controls Popover */}
+                {!isLocal && (
+                  <div className="relative flex items-center">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowVolumeSlider(!showVolumeSlider);
+                      }}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                      title="Ajustar volumes"
+                    >
+                      {currentUVol === 0 && (!isScreenSharing || currentSVol === 0) ? (
+                        <VolumeX className="w-4 h-4 text-dnd" />
+                      ) : (
+                        <Volume2 className="w-4 h-4" />
+                      )}
+                      <span className="text-xs hidden sm:inline">Volume</span>
+                    </button>
+
+                    {showVolumeSlider && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowVolumeSlider(false); }} />
+                        <div
+                          className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-60 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 pointer-events-auto"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <UserVolumeSlider userId={participant.identity} label="Volume de Voz" className="p-0" />
+                          {isScreenSharing && (
+                            <div className="pt-2 border-t border-white/10">
+                              <StreamVolumeSlider userId={participant.identity} label="Volume da Transmissão" className="p-0" />
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {isScreenSharing && isWatching && (
                   <>
                     {!isLocal ? (
