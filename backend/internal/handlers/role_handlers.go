@@ -448,6 +448,11 @@ func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if roleName == "@everyone" {
+		http.Error(w, `{"error":"o cargo @everyone não pode ser removido dos membros"}`, http.StatusBadRequest)
+		return
+	}
+
 	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, actorID)
 	if err != nil {
 		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)

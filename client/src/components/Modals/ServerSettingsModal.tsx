@@ -1716,7 +1716,9 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                           {/* Member Roles & Quick Actions */}
                           <div className="flex items-center gap-3">
                             <div className="hidden sm:flex flex-wrap items-center gap-1.5 max-w-md justify-end">
-                              {memberRoles.map((r) => (
+                              {memberRoles
+                                .filter((r) => r.name !== '@everyone')
+                                .map((r) => (
                                 <span
                                   key={r.id}
                                   className="text-[11px] px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1.5"
@@ -1752,7 +1754,9 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                       Cargos
                                     </div>
                                     <div className="max-h-36 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
-                                      {roles.map((r) => {
+                                      {roles
+                                        .filter((r) => r.name !== '@everyone')
+                                        .map((r) => {
                                         const hasThisRole = memberRoles.some((mr) => mr.id === r.id);
                                         return (
                                           <button

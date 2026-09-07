@@ -78,12 +78,25 @@ func (h *GuildHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2.1 Create @everyone base role
+	var everyoneRoleID uuid.UUID
 	everyoneRoleQuery := `
 		INSERT INTO guild_roles (guild_id, name, color, position, permissions)
 		VALUES ($1, '@everyone', '#99aab5', 9999, 3712)
+		RETURNING id
 	`
-	if _, err := tx.Exec(r.Context(), everyoneRoleQuery, guild.ID); err != nil {
+	if err := tx.QueryRow(r.Context(), everyoneRoleQuery, guild.ID).Scan(&everyoneRoleID); err != nil {
 		http.Error(w, `{"error":"failed to create @everyone role"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 2.2 Assign @everyone role to owner
+	assignEveryoneQuery := `
+		INSERT INTO guild_member_roles (guild_id, user_id, role_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT DO NOTHING
+	`
+	if _, err := tx.Exec(r.Context(), assignEveryoneQuery, guild.ID, userID, everyoneRoleID); err != nil {
+		http.Error(w, `{"error":"failed to assign @everyone role to owner"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -408,6 +421,16 @@ func (h *GuildHandler) Join(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to join guild"}`, http.StatusInternalServerError)
 		return
 	}
+
+	// Assign @everyone role to new member
+	assignEveryoneQuery := `
+		INSERT INTO guild_member_roles (guild_id, user_id, role_id)
+		SELECT $1, $2, id
+		FROM guild_roles
+		WHERE guild_id = $1 AND name = '@everyone'
+		ON CONFLICT DO NOTHING
+	`
+	h.db.Pool.Exec(r.Context(), assignEveryoneQuery, guildID, userID)
 
 	h.hub.AddGuildMember(guildID, userID)
 
