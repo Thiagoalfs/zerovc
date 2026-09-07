@@ -302,9 +302,15 @@ func (h *RoleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var guildID, ownerID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT r.guild_id, g.owner_id FROM guild_roles r INNER JOIN guilds g ON g.id = r.guild_id WHERE r.id = $1", roleID).Scan(&guildID, &ownerID)
+	var roleName string
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT r.guild_id, g.owner_id, r.name FROM guild_roles r INNER JOIN guilds g ON g.id = r.guild_id WHERE r.id = $1", roleID).Scan(&guildID, &ownerID, &roleName)
 	if err != nil || ownerID != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	if roleName == "@everyone" {
+		http.Error(w, `{"error":"o cargo @everyone não pode ser excluído"}`, http.StatusBadRequest)
 		return
 	}
 

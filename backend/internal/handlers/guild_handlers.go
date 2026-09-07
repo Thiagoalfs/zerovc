@@ -77,6 +77,16 @@ func (h *GuildHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 2.1 Create @everyone base role
+	everyoneRoleQuery := `
+		INSERT INTO guild_roles (guild_id, name, color, position, permissions)
+		VALUES ($1, '@everyone', '#99aab5', 9999, 3712)
+	`
+	if _, err := tx.Exec(r.Context(), everyoneRoleQuery, guild.ID); err != nil {
+		http.Error(w, `{"error":"failed to create @everyone role"}`, http.StatusInternalServerError)
+		return
+	}
+
 	// 3. Create default Text Channel (#geral)
 	textChannelQuery := `
 		INSERT INTO channels (guild_id, name, type, position)
@@ -286,6 +296,19 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 					if !hasChannelAccess {
 						continue
 					}
+				}
+
+				// Load permission overwrites for this channel
+				owQuery := `SELECT channel_id, role_id, allow, deny FROM channel_permission_overwrites WHERE channel_id = $1`
+				owRows, owErr := h.db.Pool.Query(r.Context(), owQuery, ch.ID)
+				if owErr == nil {
+					for owRows.Next() {
+						var ow models.ChannelPermissionOverwrite
+						if owRows.Scan(&ow.ChannelID, &ow.RoleID, &ow.Allow, &ow.Deny) == nil {
+							ch.PermissionOverwrites = append(ch.PermissionOverwrites, ow)
+						}
+					}
+					owRows.Close()
 				}
 
 				if ch.Type == models.ChannelTypeVoice {
