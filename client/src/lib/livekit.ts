@@ -378,12 +378,11 @@ class LiveKitManager {
 
         // Electron Screen Capture API with Hardware Accelerated WGC & Flexible Framerate constraints
         const stream = await navigator.mediaDevices.getUserMedia({
-          // Audio loopback (specific window process audio or full system loopback with app voice cancellation)
+          // Audio loopback (system loopback with echo cancellation and high-fidelity music settings)
           audio: config?.includeAudio
             ? ({
                 mandatory: {
                   chromeMediaSource: 'desktop',
-                  ...(isWindowCapture ? { chromeMediaSourceId: sourceId } : {}),
                 },
                 optional: [
                   { restrictOwnAudio: true },
