@@ -260,7 +260,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
       ...(isOwner
         ? [
             {
-              label: 'Criar Canal Aqui',
+              label: 'Criar Canal',
               icon: <Plus className="w-4 h-4" />,
               onClick: () => onOpenCreateChannel('text', category.id),
             },
