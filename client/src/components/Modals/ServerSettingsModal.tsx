@@ -313,8 +313,16 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const textChannels = (activeGuild.channels || []).filter((c) => c.type === 'text');
   const voiceChannels = (activeGuild.channels || []).filter((c) => c.type === 'voice');
   const onlineMembersCount = members.filter((m) => m.status && m.status !== 'offline').length;
+  const initials = (activeGuild.name || '')
+    .trim()
+    .split(/\s+/)
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 3)
+    .toUpperCase() || 'SRV';
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
+  const isRoleAdmin = selectedRole ? (Number(selectedRole.permissions || 0) & Permissions.ADMINISTRATOR) !== 0 : false;
 
   // 1. Overview Actions
   const handleSaveOverview = async (e: React.FormEvent) => {
@@ -710,14 +718,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       setIsDeleting(false);
     }
   };
-
-  const isRoleAdmin = selectedRole ? (Number(selectedRole.permissions || 0) & Permissions.ADMINISTRATOR) !== 0 : false;
-  const initials = activeGuild.name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 3)
-    .toUpperCase();
 
   return (
     <>
