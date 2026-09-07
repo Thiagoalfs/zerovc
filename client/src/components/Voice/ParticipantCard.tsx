@@ -711,7 +711,55 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               </div>
 
               <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-2 py-1.5 rounded-xl border border-white/10 shadow-lg pointer-events-auto">
-                {/* Fullscreen Volume Controls Popover */}
+                {/* 1. Stop Watching / Stop Screen Share (Keeps label) */}
+                {isScreenSharing && isWatching && (
+                  <>
+                    {!isLocal ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFullscreen();
+                          handleToggleWatch(false);
+                        }}
+                        className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 text-xs flex items-center gap-1.5 font-medium transition-colors cursor-pointer"
+                        title="Parar de assistir transmissão"
+                      >
+                        <EyeOff className="w-4 h-4" />
+                        <span className="text-xs">Parar de Ver</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFullscreen();
+                          stopScreenShare();
+                        }}
+                        className="p-1.5 text-dnd hover:bg-dnd/20 rounded-lg text-xs flex items-center gap-1.5 font-medium transition-colors cursor-pointer"
+                        title="Encerrar compartilhamento"
+                      >
+                        <Monitor className="w-4 h-4" />
+                        <span className="text-xs">Parar Live</span>
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {/* 2. Fullscreen Toggle (Icon Only) */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
+                  className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center text-xs"
+                  title="Sair da tela cheia (ESC)"
+                >
+                  <Minimize2 className="w-4 h-4" />
+                </button>
+
+                {/* 3. Fullscreen Volume Controls Popover (Icon Only) */}
                 {!isLocal && (
                   <div className="relative flex items-center">
                     <button
@@ -720,7 +768,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                         e.stopPropagation();
                         setShowVolumeSlider(!showVolumeSlider);
                       }}
-                      className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center text-xs"
                       title="Ajustar volumes"
                     >
                       {currentUVol === 0 && (!isScreenSharing || currentSVol === 0) ? (
@@ -728,7 +776,6 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                       ) : (
                         <Volume2 className="w-4 h-4" />
                       )}
-                      <span className="text-xs hidden sm:inline">Volume</span>
                     </button>
 
                     {showVolumeSlider && (
@@ -749,53 +796,6 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                     )}
                   </div>
                 )}
-
-                {isScreenSharing && isWatching && (
-                  <>
-                    {!isLocal ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFullscreen();
-                          handleToggleWatch(false);
-                        }}
-                        className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
-                        title="Parar de assistir transmissão"
-                      >
-                        <EyeOff className="w-4 h-4" />
-                        <span className="text-xs hidden sm:inline">Parar de Ver</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFullscreen();
-                          stopScreenShare();
-                        }}
-                        className="p-1.5 text-dnd hover:bg-dnd/20 rounded-lg text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
-                        title="Encerrar compartilhamento"
-                      >
-                        <Monitor className="w-4 h-4" />
-                        <span className="text-xs hidden sm:inline">Parar Live</span>
-                      </button>
-                    )}
-                  </>
-                )}
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFullscreen();
-                  }}
-                  className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-1 text-xs"
-                  title="Sair da tela cheia (ESC)"
-                >
-                  <Minimize2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Sair da Tela Cheia</span>
-                </button>
               </div>
             </div>
           </div>,
