@@ -35,6 +35,7 @@ import { UserProfileModal } from './components/Modals/UserProfileModal';
 import { ImageModal } from './components/Modals/ImageModal';
 import { IncomingCallModal } from './components/DM/IncomingCallModal';
 import { TitleBar } from './components/Desktop/TitleBar';
+import { ErrorBoundary } from './components/Common/ErrorBoundary';
 import { livekit } from './lib/livekit';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
@@ -1060,16 +1061,20 @@ export const App: React.FC = () => {
         onClose={() => setPreviewImageUrl(null)}
       />
 
-      <ServerSettingsModal
-        isOpen={isServerSettingsOpen}
-        onClose={() => setIsServerSettingsOpen(false)}
-      />
+      <ErrorBoundary>
+        <ServerSettingsModal
+          isOpen={isServerSettingsOpen}
+          onClose={() => setIsServerSettingsOpen(false)}
+        />
+      </ErrorBoundary>
 
-      <ChannelSettingsModal
-        channel={channelToEdit}
-        isOpen={!!channelToEdit}
-        onClose={() => setChannelToEdit(null)}
-      />
+      <ErrorBoundary>
+        <ChannelSettingsModal
+          channel={channelToEdit}
+          isOpen={!!channelToEdit}
+          onClose={() => setChannelToEdit(null)}
+        />
+      </ErrorBoundary>
 
       {/* Global Incoming Call Popup */}
       <IncomingCallModal />
