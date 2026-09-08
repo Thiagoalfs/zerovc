@@ -234,15 +234,18 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 select-none animate-in fade-in duration-150"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 select-none overflow-y-auto animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      <div className="bg-background-darkest w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-150">
+      <div className="bg-background-darkest w-full max-w-lg max-h-[92dvh] my-auto rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-150">
         
         {/* Modal Header */}
-        <div className="p-5 pb-3 flex items-center justify-between border-b border-white/5">
+        <div className="p-4 sm:p-5 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-white tracking-tight">
               {modalTitle}
@@ -258,7 +261,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
         </div>
 
         {/* Modal Body / Crop Viewport */}
-        <div className="p-6 flex flex-col items-center justify-center bg-black/30">
+        <div className="p-4 sm:p-6 flex flex-col items-center justify-center bg-black/30 overflow-y-auto no-scrollbar flex-1">
           <div
             ref={containerRef}
             onWheel={handleWheel}
@@ -266,7 +269,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            className="relative overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center cursor-grab active:cursor-grabbing shadow-inner"
+            className="relative overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center cursor-grab active:cursor-grabbing shadow-inner max-w-[calc(100vw-48px)]"
             style={{
               width: `${viewportSize.width}px`,
               height: `${viewportSize.height}px`,

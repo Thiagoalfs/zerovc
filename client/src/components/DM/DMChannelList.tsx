@@ -215,8 +215,10 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   return (
     <>
       <div
-        style={{ width: `${channelListWidth}px` }}
-        className="bg-background-darker flex flex-col h-full select-none border-r border-black/20 relative flex-shrink-0 max-w-[calc(100vw-72px)]"
+        style={{
+          width: typeof window !== 'undefined' && window.innerWidth < 768 ? 'calc(100vw - 72px)' : `${channelListWidth}px`,
+        }}
+        className="bg-background-darker flex flex-col h-full select-none border-r border-black/20 relative flex-1 md:flex-none"
       >
         {/* Header */}
         <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm">
@@ -326,12 +328,9 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                         <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-background-darker ${getStatusColor(recipient?.status)}`} />
                       </div>
 
-                      <div className="flex flex-col text-left truncate flex-1 min-w-0">
+                      <div className="flex items-center text-left truncate flex-1 min-w-0">
                         <span className={`truncate text-[14.5px] font-medium ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
                           {recipient?.display_name || recipient?.username}
-                        </span>
-                        <span className="text-[11px] text-gray-400 truncate">
-                          @{recipient?.username}
                         </span>
                       </div>
 
@@ -347,9 +346,6 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
             )}
           </div>
         </div>
-
-        {/* User Footer */}
-        <UserBar onOpenSettings={onOpenSettings} onOpenScreenShare={onOpenScreenShare} />
 
         {/* Resizer Handle */}
         <SidebarResizer />

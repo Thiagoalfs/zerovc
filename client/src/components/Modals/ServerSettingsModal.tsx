@@ -33,6 +33,8 @@ import {
   CheckCircle2,
   Calendar,
   Pencil,
+  ArrowLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -197,6 +199,15 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   } = useGuildStore();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'roles' | 'emojis' | 'invites' | 'members' | 'audit_log'>('overview');
+
+  // Mobile full-screen drilldown navigation state ('menu' -> 'content')
+  const [mobileView, setMobileView] = useState<'menu' | 'content'>('menu');
+
+  useEffect(() => {
+    if (isOpen) {
+      setMobileView('menu');
+    }
+  }, [isOpen]);
 
   // Overview State
   const [guildName, setGuildName] = useState('');
@@ -768,24 +779,265 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in">
-        <div className="flex w-full max-w-5xl h-[88vh] bg-[#18191c] rounded-2xl shadow-2xl border border-white/10 overflow-hidden text-gray-200">
+      <div
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-0 md:p-4 overflow-hidden animate-fade-in"
+      >
+        {/* Unified Container (Full-screen on mobile, centered card on desktop) */}
+        <div className="flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-[#18191c] rounded-none md:rounded-2xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200">
           
-          {/* SIDEBAR TABS */}
-          <div className="w-64 bg-[#111214] border-r border-white/10 flex flex-col p-4 shrink-0 select-none">
+          {/* ======================================================== */}
+          {/* MOBILE MENU VIEW (Visible only on mobile when mobileView === 'menu') */}
+          {/* ======================================================== */}
+          {mobileView === 'menu' && (
+            <div className="flex md:hidden flex-col w-full h-full bg-[#18191c] overflow-hidden">
+              {/* Mobile Header */}
+              <div className="px-4 py-3.5 border-b border-white/10 bg-[#111214] flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors"
+                    title="Fechar"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  <h2 className="text-base font-bold text-white">Configurações do Servidor</h2>
+                </div>
+              </div>
+
+              {/* Mobile Navigation List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y no-scrollbar">
+                {/* Server Mini Card */}
+                <div
+                  onClick={() => {
+                    setActiveTab('overview');
+                    setMobileView('content');
+                  }}
+                  className="p-3.5 bg-[#1e1f22] rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer active:bg-white/5 transition-colors shadow-sm"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-2xl bg-[#111214] border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow">
+                      {activeGuild.icon_url ? (
+                        <img src={formatAssetUrl(activeGuild.icon_url)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{activeGuild.name.slice(0, 2).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-white truncate flex items-center gap-1.5">
+                        <span className="truncate">{activeGuild.name}</span>
+                        {isOwner && <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                      </h3>
+                      <p className="text-xs text-gray-400 truncate">
+                        {members.length} membros • {onlineMembersCount} online
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-500 shrink-0" />
+                </div>
+
+                {/* Group 1: Configurações do Servidor */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
+                    Configurações do Servidor
+                  </span>
+                  <div className="bg-[#1e1f22] rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
+                    {/* Visão Geral */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('overview');
+                        setMobileView('content');
+                      }}
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                          <SettingsIcon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">Visão Geral</div>
+                          <div className="text-xs text-gray-400">Identidade visual, ícone, banner e boas-vindas</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                    </button>
+
+                    {/* Cargos */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('roles');
+                        setMobileView('content');
+                      }}
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                          <Shield className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">Cargos</div>
+                          <div className="text-xs text-gray-400">{roles.length} cargos • Hierarquia e permissões</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                    </button>
+
+                    {/* Emojis */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('emojis');
+                        setMobileView('content');
+                      }}
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                          <Smile className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">Emojis</div>
+                          <div className="text-xs text-gray-400">{emojisList.length} de 50 slots customizados</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                    </button>
+
+                    {/* Convites */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('invites');
+                        setMobileView('content');
+                      }}
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                          <LinkIcon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">Convites</div>
+                          <div className="text-xs text-gray-400">{invitesList.length} links de convite ativos</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                    </button>
+
+                    {/* Membros */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('members');
+                        setMobileView('content');
+                      }}
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                          <Users className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">Membros</div>
+                          <div className="text-xs text-gray-400">{members.length} membros do servidor</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                    </button>
+
+                    {/* Auditoria */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('audit_log');
+                        setMobileView('content');
+                      }}
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                          <ScrollText className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">Auditoria</div>
+                          <div className="text-xs text-gray-400">Histórico de ações e moderação</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Group 2: Ações de Dono (Se for Owner) */}
+                {isOwner && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
+                      Ações do Dono
+                    </span>
+                    <div className="bg-[#1e1f22] rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
+                      <button
+                        type="button"
+                        onClick={() => setIsTransferModalOpen(true)}
+                        className="w-full flex items-center justify-between p-3.5 text-left hover:bg-amber-500/10 active:bg-amber-500/20 text-amber-400 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                            <Crown className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold">Transferir Posse</div>
+                            <div className="text-xs text-amber-400/70">Passar controle para outro membro</div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-amber-400/50 shrink-0" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsDeleteModalOpen(true)}
+                        className="w-full flex items-center justify-between p-3.5 text-left hover:bg-red-500/10 active:bg-red-500/20 text-red-400 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2 rounded-xl bg-red-500/10 text-red-400">
+                            <Trash2 className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold">Excluir Servidor</div>
+                            <div className="text-xs text-red-400/70">Apagar permanentemente este servidor</div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-red-400/50 shrink-0" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* DESKTOP SIDEBAR TABS (Visible on md: and above) */}
+          {/* ======================================================== */}
+          <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar">
             <div className="px-3 py-2 mb-4">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono truncate">
                 {activeGuild.name}
               </h2>
               <div className="text-[11px] text-gray-500 mt-0.5">Configurações do Servidor</div>
             </div>
 
-            <nav className="flex-1 space-y-1">
+            <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
               <button
+                type="button"
                 onClick={() => setActiveTab('overview')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'overview'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
@@ -794,10 +1046,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('roles')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'roles'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
@@ -809,10 +1062,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('emojis')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'emojis'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
@@ -824,22 +1078,24 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('invites')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'invites'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
                 <LinkIcon className="w-4 h-4 shrink-0" />
-                <span>Links de Convite</span>
+                <span>Convites</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('members')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'members'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
@@ -851,42 +1107,78 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('audit_log')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'audit_log'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
                 <ScrollText className="w-4 h-4 shrink-0" />
-                <span>Registro de Auditoria</span>
+                <span>Auditoria</span>
               </button>
             </nav>
 
             {isOwner && (
-              <div className="pt-4 border-t border-white/10 space-y-1.5">
+              <div className="pt-4 border-t border-white/10 flex flex-col gap-1.5 flex-shrink-0">
                 <button
+                  type="button"
                   onClick={() => setIsTransferModalOpen(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-amber-400 hover:bg-amber-500/10 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer"
                 >
                   <Crown className="w-4 h-4" />
                   <span>Transferir Posse</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsDeleteModalOpen(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Excluir Servidor</span>
+                  <span>Excluir</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* MAIN CONTENT AREA */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-[#18191c] relative">
-            {/* TOP HEADER */}
-            <div className="flex items-center justify-between px-8 py-5 border-b border-white/10 shrink-0 bg-[#1e1f22]/40">
+          {/* ======================================================== */}
+          {/* MAIN CONTENT AREA (Visible on desktop OR on mobile when mobileView === 'content') */}
+          {/* ======================================================== */}
+          <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden bg-[#18191c] relative min-w-0 min-h-0`}>
+            
+            {/* Mobile Drilldown Top Bar (Back Arrow + Title + Close) */}
+            <div className="flex md:hidden items-center justify-between px-4 py-3.5 border-b border-white/10 bg-[#111214] flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileView('menu')}
+                  className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                  <span>Voltar</span>
+                </button>
+              </div>
+              <h2 className="text-sm font-bold text-white truncate max-w-[180px]">
+                {activeTab === 'overview' && 'Visão Geral'}
+                {activeTab === 'roles' && 'Cargos'}
+                {activeTab === 'emojis' && 'Emojis'}
+                {activeTab === 'invites' && 'Convites'}
+                {activeTab === 'members' && 'Membros'}
+                {activeTab === 'audit_log' && 'Auditoria'}
+              </h2>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Desktop Top Header */}
+            <div className="hidden md:flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-[#1e1f22]/40">
               <div>
                 <h1 className="text-lg font-bold text-white flex items-center gap-2">
                   {activeTab === 'overview' && 'Visão Geral do Servidor'}
@@ -915,7 +1207,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             </div>
 
             {/* TAB CONTENTS */}
-            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 no-scrollbar md:custom-scrollbar overscroll-contain touch-pan-y min-h-0">
 
               {/* TAB 1: VISÃO GERAL */}
               {activeTab === 'overview' && (
@@ -1146,9 +1438,9 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
               {/* TAB 2: CARGOS (ROLES) */}
               {activeTab === 'roles' && (
-                <div className="flex gap-6 h-[68vh] animate-fade-in">
+                <div className="flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 h-auto md:h-[68vh] animate-fade-in">
                   {/* Roles Sidebar / Hierarchy List */}
-                  <div className="w-72 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-3 shrink-0">
+                  <div className="w-full md:w-72 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-3 shrink-0 max-h-56 md:max-h-none">
                     <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 px-2">
                       <span className="text-xs font-bold uppercase text-gray-400 font-mono">
                         Cargos ({roles.length})
@@ -1167,7 +1459,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       )}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar min-h-0 touch-pan-y">
                       {roles
                         .slice()
                         .sort((a, b) => a.position - b.position)
@@ -1257,7 +1549,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
                   {/* Role Details Editor */}
                   {selectedRole ? (
-                    <div className="flex-1 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-6 overflow-hidden">
+                    <div className="flex-1 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-4 sm:p-6 overflow-hidden min-h-0">
                       <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
                         <div className="flex items-center gap-3">
                           <span
@@ -1293,7 +1585,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                         )}
                       </div>
 
-                      <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-2 custom-scrollbar">
+                      <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-2 custom-scrollbar touch-pan-y min-h-0">
                         {/* Role Name */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
@@ -2012,8 +2304,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
       {/* MODAL 3: MUTE / TIMEOUT DURATION */}
       {muteModalUser && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-[#1e1f22] rounded-2xl border border-white/10 shadow-2xl p-6 text-gray-200">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMuteModalUser(null);
+          }}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+        >
+          <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-white/10 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
             <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
               <Clock className="w-5 h-5 text-amber-400" />
               <span>Silenciar @{muteModalUser.username}</span>
@@ -2026,42 +2323,42 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(15 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors"
+                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
               >
                 15 Minutos
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(60 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors"
+                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
               >
                 1 Hora
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(24 * 60 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors"
+                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
               >
                 24 Horas (1 Dia)
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(7 * 24 * 60 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors"
+                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
               >
                 7 Dias (1 Semana)
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(-1)}
-                className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl text-xs font-semibold text-center border border-red-500/30 transition-colors"
+                className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl text-xs font-semibold text-center border border-red-500/30 transition-colors cursor-pointer"
               >
                 Permanente
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(0)}
-                className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-xl text-xs font-semibold text-center border border-emerald-500/30 transition-colors"
+                className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-xl text-xs font-semibold text-center border border-emerald-500/30 transition-colors cursor-pointer"
               >
                 Remover Silêncio
               </button>
@@ -2071,7 +2368,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               <button
                 type="button"
                 onClick={() => setMuteModalUser(null)}
-                className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium"
+                className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
               >
                 Cancelar
               </button>
@@ -2082,8 +2379,16 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
       {/* MODAL 4: BAN MEMBER WITH REASON */}
       {banModalUser && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-[#1e1f22] rounded-2xl border border-red-500/30 shadow-2xl p-6 text-gray-200">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setBanModalUser(null);
+              setBanReason('');
+            }
+          }}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+        >
+          <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-red-500/30 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
             <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
               <Ban className="w-5 h-5 text-red-500" />
               <span>Banir @{banModalUser.username}</span>
@@ -2113,13 +2418,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     setBanModalUser(null);
                     setBanReason('');
                   }}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium"
+                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-colors"
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-colors cursor-pointer"
                 >
                   Confirmar Banimento
                 </button>
@@ -2131,8 +2436,18 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
       {/* MODAL 5: TRANSFER OWNERSHIP */}
       {isTransferModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-lg bg-[#1e1f22] rounded-2xl border border-amber-500/40 shadow-2xl p-6 text-gray-200">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsTransferModalOpen(false);
+              setTransferTargetUser(null);
+              setTransferConfirmText('');
+              setTransferAcknowledge(false);
+            }
+          }}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+        >
+          <div className="w-full max-w-lg max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-amber-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400">
                 <Crown className="w-6 h-6" />
@@ -2245,7 +2560,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     setTransferConfirmText('');
                     setTransferAcknowledge(false);
                   }}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium"
+                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -2257,7 +2572,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     !transferAcknowledge ||
                     transferConfirmText.trim() !== activeGuild.name.trim()
                   }
-                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-amber-600/20 transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-amber-600/20 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isTransferring ? 'Transferindo...' : 'Confirmar Transferência'}
                 </button>
@@ -2269,8 +2584,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
       {/* MODAL 6: DELETE GUILD */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-[#1e1f22] rounded-2xl border border-red-500/40 shadow-2xl p-6 text-gray-200">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsDeleteModalOpen(false);
+          }}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+        >
+          <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-red-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 rounded-xl bg-red-500/15 text-red-500">
                 <Trash2 className="w-6 h-6" />
@@ -2309,14 +2629,14 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 <button
                   type="button"
                   onClick={() => setIsDeleteModalOpen(false)}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium"
+                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isDeleting || deleteConfirmText.trim() !== activeGuild.name.trim()}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isDeleting ? 'Excluindo...' : 'Excluir Servidor'}
                 </button>
