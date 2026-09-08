@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Image processing utilities for ZeroVC:
  * - WebP conversion for static images (PNG, JPG, BMP)
  * - GIF preservation for animated avatars/banners
@@ -92,6 +92,7 @@ export interface CropParameters {
   viewportSize: { width: number; height: number }; // pixel dimensions of the crop window
   outputSize: { width: number; height: number }; // target output dimensions (e.g. 512x512)
   originalFile: File;
+  baseScale?: number; // base scale factor that normalizes natural image size to viewport
 }
 
 export async function cropImageToWebP(
@@ -117,32 +118,44 @@ export async function cropImageToWebP(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
-  // Clear background
+  // Clear background (supports transparent avatar background)
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Translate to center of canvas
+  const imgWidth = imageSource.naturalWidth || imageSource.width || 1;
+  const imgHeight = imageSource.naturalHeight || imageSource.height || 1;
+
+  const isRotated90 = (rotation / 90) % 2 !== 0;
+  const effectiveWidth = isRotated90 ? imgHeight : imgWidth;
+  const effectiveHeight = isRotated90 ? imgWidth : imgHeight;
+
+  // Base scale: covers the viewport at zoom = 1
+  const baseScale =
+    params.baseScale ??
+    Math.max(
+      viewportSize.width / effectiveWidth,
+      viewportSize.height / effectiveHeight
+    );
+
+  // Calculate scale factor between viewport and output resolution
+  const outputScale = outputSize.width / viewportSize.width;
+
+  // 1. Translate to center of canvas
   ctx.save();
   ctx.translate(canvas.width / 2, canvas.height / 2);
 
-  // Apply rotation
+  // 2. Apply screen pan translated to canvas resolution
+  ctx.translate(pan.x * outputScale, pan.y * outputScale);
+
+  // 3. Apply rotation
   if (rotation !== 0) {
     ctx.rotate((rotation * Math.PI) / 180);
   }
 
-  // Calculate scale factor between viewport and output resolution
-  const scaleRatio = outputSize.width / viewportSize.width;
-
-  // Apply scale (zoom + resolution multiplier)
-  const finalScale = zoom * scaleRatio;
+  // 4. Apply scale (baseScale * zoom * outputScale)
+  const finalScale = baseScale * zoom * outputScale;
   ctx.scale(finalScale, finalScale);
 
-  // Apply pan translated to scale
-  ctx.translate(pan.x / zoom, pan.y / zoom);
-
-  // Draw image centered
-  const imgWidth = imageSource.naturalWidth || imageSource.width;
-  const imgHeight = imageSource.naturalHeight || imageSource.height;
-
+  // 5. Draw image centered
   ctx.drawImage(imageSource, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
 
   ctx.restore();
