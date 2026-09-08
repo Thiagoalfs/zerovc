@@ -1285,12 +1285,12 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                 key={c}
                                 type="button"
                                 onClick={() => handleUpdateRoleColor(c)}
-                                disabled={!isOwner}
+                                disabled={!canManageRoles}
                                 className={`w-7 h-7 rounded-full transition-transform flex items-center justify-center ${
                                   selectedRole.color?.toLowerCase() === c.toLowerCase()
                                     ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-[#111214]'
                                     : 'hover:scale-105'
-                                }`}
+                                } disabled:opacity-50`}
                                 style={{ backgroundColor: c }}
                               >
                                 {selectedRole.color?.toLowerCase() === c.toLowerCase() && (
@@ -1304,7 +1304,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                 value={selectedRole.color || '#5865F2'}
                                 onChange={(e) => handleUpdateRoleColor(e.target.value)}
                                 disabled={!canManageRoles}
-                                className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
+                                className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer disabled:opacity-50"
                                 title="Cor personalizada"
                               />
                               <span className="text-xs font-mono text-gray-400">{selectedRole.color || '#5865F2'}</span>
@@ -1320,7 +1320,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                           <div className="space-y-3">
                             <div
                               onClick={() => {
-                                if (canManageRoles) {
+                                if (canManageRoles && selectedRole.name !== '@everyone') {
                                   handleToggleRoleHoist();
                                 }
                               }}
@@ -1328,26 +1328,28 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                 selectedRole.hoist
                                   ? 'bg-[#111214]/80 border-white/15'
                                   : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
-                              } ${canManageRoles ? 'cursor-pointer' : 'opacity-70'}`}
+                              } ${canManageRoles && selectedRole.name !== '@everyone' ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
                             >
                               <div className="pr-4 select-none">
                                 <div className="text-sm font-semibold text-white">
                                   Exibir membros deste cargo separadamente
                                 </div>
                                 <div className="text-xs text-gray-400 mt-1 leading-relaxed">
-                                  Membros com este cargo aparecerão em uma categoria própria na lista lateral de membros.
+                                  {selectedRole.name === '@everyone'
+                                    ? 'O cargo @everyone engloba todos os membros e não pode ser exibido separadamente.'
+                                    : 'Membros com este cargo aparecerão em uma categoria própria na lista lateral de membros.'}
                                 </div>
                               </div>
                               <button
                                 type="button"
-                                disabled={!canManageRoles}
+                                disabled={!canManageRoles || selectedRole.name === '@everyone'}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleToggleRoleHoist();
                                 }}
                                 className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
                                   selectedRole.hoist ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
-                                } disabled:opacity-50`}
+                                } disabled:opacity-40 disabled:cursor-not-allowed`}
                               >
                                 <div
                                   className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
@@ -1367,7 +1369,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                 selectedRole.mentionable
                                   ? 'bg-[#111214]/80 border-white/15'
                                   : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
-                              } ${canManageRoles ? 'cursor-pointer' : 'opacity-70'}`}
+                              } ${canManageRoles ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
                             >
                               <div className="pr-4 select-none">
                                 <div className="text-sm font-semibold text-white">
@@ -1386,7 +1388,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                 }}
                                 className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
                                   selectedRole.mentionable ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
-                                } disabled:opacity-50`}
+                                } disabled:opacity-40 disabled:cursor-not-allowed`}
                               >
                                 <div
                                   className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
