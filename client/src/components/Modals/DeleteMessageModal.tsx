@@ -26,11 +26,16 @@ export const DeleteMessageModal: React.FC<DeleteMessageModalProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!isDeleting) {
+          onConfirm();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, onConfirm, isDeleting]);
 
   if (!isOpen || !message) return null;
 
