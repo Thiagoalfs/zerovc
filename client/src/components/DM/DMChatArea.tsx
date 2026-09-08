@@ -737,6 +737,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                     content={msg.content}
                     onPreviewImage={onPreviewImage}
                     onImageLoad={handleMediaLoad}
+                    onOpenUserProfile={onOpenUserProfile}
                     textClassName={`p-2.5 px-3.5 rounded-2xl text-xs leading-relaxed select-text shadow-sm ${
                       isFailed
                         ? 'bg-red-500/20 text-red-200 border border-red-500/30'

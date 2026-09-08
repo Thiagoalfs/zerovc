@@ -5,6 +5,9 @@ import { formatAssetUrl } from '../../lib/api';
 import { GifEmbed } from './GifEmbed';
 
 import { useGuildStore } from '../../stores/guildStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useDMStore } from '../../stores/dmStore';
+import { User, Permissions } from '../../types';
 import { isPureEmojiMessage, replaceEmojiShortcodes } from '../../utils/emojis';
 
 interface FormattedMessageProps {
@@ -13,6 +16,8 @@ interface FormattedMessageProps {
   textClassName?: string;
   onPreviewImage?: (url: string) => void;
   onImageLoad?: () => void;
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
+  onOpenUserContextMenu?: (e: React.MouseEvent, user: User) => void;
 }
 
 const isMediaUrl = (url: string) => {
@@ -82,12 +87,17 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   textClassName = '',
   onPreviewImage,
   onImageLoad,
+  onOpenUserProfile,
+  onOpenUserContextMenu,
 }) => {
   if (!content) return null;
 
   const { isFavorited } = useFavoriteGifStore();
   const { activeGuild } = useGuildStore();
+  const { user: currentUser } = useAuthStore();
   const guildEmojis = activeGuild?.emojis;
+  const guildMembers = activeGuild?.members || [];
+  const guildRoles = activeGuild?.roles || [];
 
   const isJumboji = isPureEmojiMessage(content);
 
@@ -135,7 +145,12 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
             textToDisplay.substring(lastIndex, match.index),
             `text-${lastIndex}`,
             isJumboji,
-            guildEmojis
+            guildEmojis,
+            guildMembers,
+            guildRoles,
+            currentUser,
+            onOpenUserProfile,
+            onOpenUserContextMenu
           )
         );
       }
@@ -159,7 +174,12 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
           textToDisplay.substring(lastIndex),
           `text-${lastIndex}`,
           isJumboji,
-          guildEmojis
+          guildEmojis,
+          guildMembers,
+          guildRoles,
+          currentUser,
+          onOpenUserProfile,
+          onOpenUserContextMenu
         )
       );
     }
@@ -235,18 +255,23 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   );
 };
 
-// Helper for inline tokens: Spoiler, Bold, Italic, Strikethrough, Inline Code, Custom Emojis, Shortcodes, Links
+// Helper for inline tokens: Spoiler, Bold, Italic, Strikethrough, Inline Code, Custom Emojis, Shortcodes, Links, Mentions
 function renderInlineFormatting(
   text: string,
   keyPrefix: string,
   isJumboji = false,
-  guildEmojis?: any[]
+  guildEmojis?: any[],
+  guildMembers?: User[],
+  guildRoles?: any[],
+  currentUser?: User | null,
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void,
+  onOpenUserContextMenu?: (e: React.MouseEvent, user: User) => void
 ): React.ReactNode {
   // First convert uncompleted standard shortcodes like :thumbsup: in text if needed
   const normalizedText = replaceEmojiShortcodes(text, guildEmojis);
 
   const tokenRegex =
-    /(\|\|[\s\S]+?\|\||`[^`\n]+`|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|<:[a-zA-Z0-9_+-]+:[^>]+>|https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g;
+    /(\|\|[\s\S]+?\|\||`[^`\n]+`|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|<:[a-zA-Z0-9_+-]+:[^>]+>|https?:\/\/[^\s<]+[^<.,:;"')\]\s]|@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
 
   const elements: React.ReactNode[] = [];
   let lastIdx = 0;
@@ -285,7 +310,17 @@ function renderInlineFormatting(
       const inner = token.substring(2, token.length - 2);
       elements.push(
         <SpoilerText key={k}>
-          {renderInlineFormatting(inner, `${k}-sp`, isJumboji, guildEmojis)}
+          {renderInlineFormatting(
+            inner,
+            `${k}-sp`,
+            isJumboji,
+            guildEmojis,
+            guildMembers,
+            guildRoles,
+            currentUser,
+            onOpenUserProfile,
+            onOpenUserContextMenu
+          )}
         </SpoilerText>
       );
     } else if (token.startsWith('`') && token.endsWith('`') && token.length >= 2) {
@@ -302,14 +337,34 @@ function renderInlineFormatting(
       const inner = token.substring(2, token.length - 2);
       elements.push(
         <strong key={k} className="font-bold text-white">
-          {renderInlineFormatting(inner, `${k}-b`, isJumboji, guildEmojis)}
+          {renderInlineFormatting(
+            inner,
+            `${k}-b`,
+            isJumboji,
+            guildEmojis,
+            guildMembers,
+            guildRoles,
+            currentUser,
+            onOpenUserProfile,
+            onOpenUserContextMenu
+          )}
         </strong>
       );
     } else if (token.startsWith('~~') && token.endsWith('~~') && token.length >= 4) {
       const inner = token.substring(2, token.length - 2);
       elements.push(
         <del key={k} className="line-through text-gray-400">
-          {renderInlineFormatting(inner, `${k}-s`, isJumboji, guildEmojis)}
+          {renderInlineFormatting(
+            inner,
+            `${k}-s`,
+            isJumboji,
+            guildEmojis,
+            guildMembers,
+            guildRoles,
+            currentUser,
+            onOpenUserProfile,
+            onOpenUserContextMenu
+          )}
         </del>
       );
     } else if (
@@ -319,7 +374,17 @@ function renderInlineFormatting(
       const inner = token.substring(1, token.length - 1);
       elements.push(
         <em key={k} className="italic text-gray-200">
-          {renderInlineFormatting(inner, `${k}-i`, isJumboji, guildEmojis)}
+          {renderInlineFormatting(
+            inner,
+            `${k}-i`,
+            isJumboji,
+            guildEmojis,
+            guildMembers,
+            guildRoles,
+            currentUser,
+            onOpenUserProfile,
+            onOpenUserContextMenu
+          )}
         </em>
       );
     } else if (token.startsWith('http://') || token.startsWith('https://')) {
@@ -335,6 +400,85 @@ function renderInlineFormatting(
           {token}
         </a>
       );
+    } else if (token.startsWith('@')) {
+      const isGlobal = token === '@everyone' || token === '@here';
+      const targetName = token.slice(1).toLowerCase();
+
+      // Check for matching role
+      const matchedRole = guildRoles?.find((r) => r.name.toLowerCase() === targetName);
+
+      // Check for matching member
+      const matchedMember = guildMembers?.find(
+        (m) =>
+          m.username.toLowerCase() === targetName ||
+          (m.display_name && m.display_name.toLowerCase() === targetName)
+      );
+
+      const currentUserRoles = currentUser && guildMembers
+        ? (guildMembers.find((m) => m.id === currentUser.id)?.roles || [])
+        : [];
+
+      const isUserInRole = matchedRole && currentUserRoles.some((r) => r.id === matchedRole.id);
+      const isSelfMention =
+        isUserInRole ||
+        (currentUser &&
+          (token.toLowerCase() === `@${currentUser.username.toLowerCase()}` ||
+            (currentUser.display_name && token.toLowerCase() === `@${currentUser.display_name.toLowerCase()}`) ||
+            token === '@everyone'));
+
+      if (matchedRole) {
+        elements.push(
+          <span
+            key={k}
+            className="font-medium px-1.5 py-0.5 rounded-md text-[13px] inline-flex items-center gap-1 mx-0.5 cursor-pointer transition-all duration-150 select-none hover:brightness-110 active:scale-95"
+            style={{
+              backgroundColor: `${matchedRole.color || '#5865F2'}22`,
+              color: matchedRole.color || '#8EA1E1',
+              border: `1px solid ${matchedRole.color || '#5865F2'}44`,
+            }}
+            title={`Cargo @${matchedRole.name}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: matchedRole.color || '#5865F2' }}
+            />
+            <span>{token}</span>
+          </span>
+        );
+      } else if (matchedMember || isGlobal) {
+        const roleColor = matchedMember?.roles?.[0]?.color;
+        elements.push(
+          <span
+            key={k}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (matchedMember) {
+                onOpenUserProfile?.(matchedMember, { x: e.clientX, y: e.clientY });
+              }
+            }}
+            onContextMenu={(e) => {
+              if (matchedMember && onOpenUserContextMenu) {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenUserContextMenu(e, matchedMember);
+              }
+            }}
+            className={`font-semibold px-1.5 py-0.5 rounded-md text-[13px] inline-flex items-center gap-1 mx-0.5 transition-all duration-150 select-none ${
+              matchedMember ? 'cursor-pointer active:scale-95' : 'cursor-default'
+            } ${
+              isSelfMention
+                ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 hover:text-amber-200 border border-amber-500/30'
+                : 'bg-brand-500/20 text-brand-300 hover:bg-brand-500/35 hover:text-white border border-brand-500/20'
+            }`}
+            title={matchedMember ? `Ver perfil de @${matchedMember.username}` : undefined}
+          >
+            <span>{token}</span>
+          </span>
+        );
+      } else {
+        elements.push(token);
+      }
     } else {
       elements.push(token);
     }
