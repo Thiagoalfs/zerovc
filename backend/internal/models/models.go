@@ -199,13 +199,16 @@ type VoiceSession struct {
 }
 
 type GuildInvite struct {
-	Code      string      `json:"code"`
-	GuildID   uuid.UUID   `json:"guild_id"`
-	Guild     *Guild      `json:"guild,omitempty"`
-	CreatorID uuid.UUID   `json:"creator_id"`
-	Creator   *UserPublic `json:"creator,omitempty"`
-	Uses      int         `json:"uses"`
-	CreatedAt time.Time   `json:"created_at"`
+	Code       string      `json:"code"`
+	GuildID    uuid.UUID   `json:"guild_id"`
+	Guild      *Guild      `json:"guild,omitempty"`
+	CreatorID  uuid.UUID   `json:"creator_id"`
+	Creator    *UserPublic `json:"creator,omitempty"`
+	Uses       int         `json:"uses"`
+	MaxUses    int         `json:"max_uses"`
+	ExpiresAt  *time.Time  `json:"expires_at"`
+	IsExisting bool        `json:"is_existing,omitempty"`
+	CreatedAt  time.Time   `json:"created_at"`
 }
 
 type GuildEmoji struct {
