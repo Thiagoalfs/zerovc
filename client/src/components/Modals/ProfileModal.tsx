@@ -406,9 +406,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const handleSaveUsername = async (e: React.FormEvent) => {
     e.preventDefault();
     setUsernameError(null);
-    const trimmed = newUsername.trim();
-    if (!/^[a-zA-Z0-9]{2,32}$/.test(trimmed)) {
-      setUsernameError('O @ deve conter apenas letras e números (2 a 32 caracteres), sem espaços ou símbolos.');
+    const trimmed = newUsername.trim().toLowerCase();
+    if (!/^[a-z0-9_]{2,32}$/.test(trimmed)) {
+      setUsernameError('O @ deve conter apenas letras minúsculas, números e sublinhado (_) (2 a 32 caracteres), sem espaços, acentos, maiúsculas ou símbolos.');
       return;
     }
 
@@ -2593,7 +2593,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </div>
 
             <p className="text-xs text-gray-400">
-              Digite seu novo identificador <strong>@</strong>. Permitido apenas letras e números, sem espaços ou símbolos.
+              Digite seu novo identificador <strong>@</strong>. Permitido apenas letras minúsculas, números e sublinhado (_), sem espaços, acentos, maiúsculas ou símbolos.
             </p>
 
             <div>
@@ -2606,11 +2606,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   type="text"
                   value={newUsername}
                   onChange={(e) => {
-                    setNewUsername(e.target.value.replace(/[^a-zA-Z0-9]/g, ''));
+                    setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
                     setUsernameError(null);
                   }}
                   maxLength={32}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
+                  className="w-full bg-background-darker border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono lowercase"
                   placeholder="novo_usuario"
                   autoFocus
                 />
