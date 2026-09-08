@@ -666,13 +666,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   if (!isOpen || !user) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in select-none">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-2 sm:p-4 overflow-y-auto animate-in fade-in select-none"
+    >
       {/* Unified Fixed Container */}
-      <div className="bg-background-dark w-full max-w-5xl h-[680px] rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row relative animate-in zoom-in-95">
+      <div className="bg-background-dark w-full max-w-5xl h-[92dvh] md:h-[680px] max-h-[92dvh] my-auto rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row relative animate-in zoom-in-95">
         {/* Left Sidebar */}
-        <div className="w-full md:w-60 bg-background-darker p-4 flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/5 flex-shrink-0">
-          <div className="space-y-1">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-2 block">
+        <div className="w-full md:w-60 bg-background-darker p-3 md:p-4 flex flex-row md:flex-col justify-between border-b md:border-b-0 md:border-r border-white/5 flex-shrink-0 overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar">
+          <div className="flex flex-row md:flex-col items-center md:items-stretch gap-1.5 md:gap-1 flex-shrink-0">
+            <span className="hidden md:block text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-2">
               Configurações de Usuário
             </span>
 
@@ -680,7 +685,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('account')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'account'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -694,7 +699,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('privacy')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'privacy'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -704,7 +709,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <span>Privacidade e Segurança</span>
             </button>
 
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 block pt-2">
+            <span className="hidden md:block text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 pt-2">
               Configurações do App
             </span>
 
@@ -712,7 +717,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('appearance')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'appearance'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -726,7 +731,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('audio')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'audio'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -740,7 +745,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('notifications')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'notifications'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -754,7 +759,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('preferences')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'preferences'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -768,7 +773,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('keybinds')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'keybinds'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -780,11 +785,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           </div>
 
           {/* Bottom Logout */}
-          <div className="pt-3 border-t border-white/5">
+          <div className="pt-0 md:pt-3 border-t-0 md:border-t border-white/5 flex-shrink-0">
             <button
               type="button"
               onClick={logout}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-2xl text-xs font-semibold text-dnd hover:bg-dnd/10 transition-colors cursor-pointer"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-2xl text-xs font-semibold text-dnd hover:bg-dnd/10 transition-colors cursor-pointer whitespace-nowrap"
             >
               <LogOut className="w-4 h-4" />
               <span>Sair da Conta</span>
@@ -795,7 +800,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* Right Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 bg-background-dark/95">
           {/* Top Bar with Title and Close Button */}
-          <div className="h-16 px-6 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+          <div className="min-h-14 sm:h-16 px-4 sm:px-6 py-2 border-b border-white/5 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
               {activeTab === 'profile' && (
                 <button
@@ -2519,17 +2524,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
       {/* 0. Edit Display Name Modal */}
       {isEditDisplayNameOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsEditDisplayNameOpen(false);
+          }}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+        >
           <form
             onSubmit={handleSaveDisplayName}
-            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Alterar Nome de Exibição</h4>
               <button
                 type="button"
                 onClick={() => setIsEditDisplayNameOpen(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2558,7 +2568,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setIsEditDisplayNameOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
               >
                 Cancelar
               </button>
@@ -2576,17 +2586,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
       {/* 1. Edit Username Modal */}
       {isEditUsernameOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsEditUsernameOpen(false);
+          }}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+        >
           <form
             onSubmit={handleSaveUsername}
-            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Alterar Nome de Usuário</h4>
               <button
                 type="button"
                 onClick={() => setIsEditUsernameOpen(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2622,14 +2637,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setIsEditUsernameOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isSavingUsername}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md"
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
               >
                 {isSavingUsername ? 'Salvando...' : 'Salvar @'}
               </button>
@@ -2640,17 +2655,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
       {/* 2. Edit Email Modal */}
       {isEditEmailOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsEditEmailOpen(false);
+          }}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+        >
           <form
             onSubmit={handleSaveEmail}
-            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Alterar E-mail</h4>
               <button
                 type="button"
                 onClick={() => setIsEditEmailOpen(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2691,14 +2711,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setIsEditEmailOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isSavingEmail}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md"
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
               >
                 {isSavingEmail ? 'Salvando...' : 'Salvar E-mail'}
               </button>
@@ -2709,10 +2729,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
       {/* 3. Edit Phone Modal */}
       {isEditPhoneOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsEditPhoneOpen(false);
+          }}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+        >
           <form
             onSubmit={handleSavePhone}
-            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">
@@ -2721,7 +2746,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setIsEditPhoneOpen(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2753,14 +2778,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setIsEditPhoneOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isSavingPhone}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md"
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
               >
                 {isSavingPhone ? 'Salvando...' : 'Salvar Telefone'}
               </button>
@@ -2771,17 +2796,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
       {/* 4. Change Password Modal */}
       {isChangePasswordOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsChangePasswordOpen(false);
+          }}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+        >
           <form
             onSubmit={handleSavePassword}
-            className="bg-background-darkest w-full max-w-sm rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Mudar Senha</h4>
               <button
                 type="button"
                 onClick={() => setIsChangePasswordOpen(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2836,14 +2866,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setIsChangePasswordOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isSavingPassword || passwordSuccess}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md"
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
               >
                 {isSavingPassword ? 'Salvando...' : 'Salvar Nova Senha'}
               </button>
@@ -2854,10 +2884,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
       {/* 5. 2FA Modal */}
       {is2FAModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIs2FAModalOpen(false);
+          }}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+        >
           <form
             onSubmit={handleToggle2FA}
-            className="bg-background-darkest w-full max-w-md rounded-3xl p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
@@ -2867,7 +2902,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setIs2FAModalOpen(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2875,7 +2910,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
             {!user.two_factor_enabled && qrCodeData && (
               <div className="flex flex-col items-center p-3 bg-white rounded-2xl">
-                <img src={qrCodeData} alt="2FA QR Code" className="w-44 h-44 object-contain" />
+                <img src={qrCodeData} alt="2FA QR Code" className="w-36 h-36 sm:w-44 sm:h-44 object-contain" />
                 {secretKey && (
                   <span className="text-[10px] text-gray-800 font-mono select-all mt-1">
                     Chave manual: {secretKey}
@@ -2909,14 +2944,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setIs2FAModalOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white"
+                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={is2FALoading || totpCode.length < 6}
-                className={`text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md transition-all ${
+                className={`text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md transition-all cursor-pointer ${
                   user.two_factor_enabled
                     ? 'bg-dnd hover:bg-dnd/80 text-white'
                     : 'bg-brand-500 hover:bg-brand-600 text-white'
@@ -2931,8 +2966,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
       {/* 6. 2FA Backup Codes Presentation Modal */}
       {showBackupCodesModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
-          <div className="bg-background-darkest w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowBackupCodesModal(false);
+          }}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+        >
+          <div className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-6 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
                 <Key className="w-4 h-4 text-emerald-400" />
@@ -2941,7 +2981,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setShowBackupCodesModal(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2955,7 +2995,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </div>
 
             {/* Grid of backup codes */}
-            <div className="grid grid-cols-2 gap-2 p-4 bg-background-darker rounded-2xl border border-white/5 font-mono text-center text-sm font-bold text-emerald-400 tracking-wider">
+            <div className="grid grid-cols-2 gap-2 p-3 sm:p-4 bg-background-darker rounded-2xl border border-white/5 font-mono text-center text-xs sm:text-sm font-bold text-emerald-400 tracking-wider">
               {backupCodes.map((code, idx) => (
                 <div key={idx} className="p-2 bg-background-darkest/60 rounded-xl border border-white/5 select-all">
                   {code}
@@ -3012,10 +3052,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
       {/* 7. Delete Account Confirmation Modal */}
       {isDeleteAccountOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsDeleteAccountOpen(false);
+          }}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+        >
           <form
             onSubmit={handleDeleteAccount}
-            className="bg-background-darkest w-full max-w-md rounded-3xl p-6 border border-dnd/30 shadow-2xl space-y-4 animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-6 border border-dnd/30 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-dnd flex items-center gap-2">
@@ -3025,7 +3070,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setIsDeleteAccountOpen(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

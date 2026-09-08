@@ -300,10 +300,15 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 select-none">
-      <div className="bg-background-darkest w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 select-none overflow-y-auto animate-in fade-in duration-150"
+    >
+      <div className="bg-background-darkest w-full max-w-2xl max-h-[92dvh] my-auto flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95">
         {/* Header */}
-        <div className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-background-darker/60 flex-shrink-0">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 bg-background-darker/60 flex-shrink-0">
           <div className="flex items-center gap-2.5">
             {isCategory ? (
               <Folder className="w-5 h-5 text-brand-400" />
@@ -313,23 +318,27 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               <Volume2 className="w-5 h-5 text-online" />
             )}
             <div>
-              <h2 className="text-base font-bold text-white leading-tight">
+              <h2 className="text-sm sm:text-base font-bold text-white leading-tight">
                 {isCategory ? `Categoria: ${channel.name}` : `#${channel.name}`}
               </h2>
               <p className="text-[11px] text-gray-400">Configurações do Canal</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-white/5 px-6 gap-2 bg-background-darker/30 flex-shrink-0">
+        <div className="flex border-b border-white/5 px-4 sm:px-6 gap-2 bg-background-darker/30 flex-shrink-0 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer flex-shrink-0 ${
               activeTab === 'overview'
                 ? 'border-brand-500 text-white'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -342,7 +351,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('permissions')}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer flex-shrink-0 ${
               activeTab === 'permissions'
                 ? 'border-brand-500 text-white'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -372,7 +381,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         )}
 
         {/* Body Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 no-scrollbar">
           {/* TAB 1: Visão Geral */}
           {activeTab === 'overview' && (
             <div className="space-y-4">
@@ -434,14 +443,14 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
           {/* TAB 2: Permissões de Cargos */}
           {activeTab === 'permissions' && (
-            <div className="flex flex-col md:flex-row gap-5 min-h-[380px]">
+            <div className="flex flex-col md:flex-row gap-4 sm:gap-5 min-h-0 md:min-h-[380px]">
               {/* Left Column: Roles list selector */}
-              <div className="w-full md:w-52 flex flex-col gap-1.5 shrink-0 pr-2 border-r border-white/5">
+              <div className="w-full md:w-52 flex flex-col gap-1.5 shrink-0 pr-0 md:pr-2 border-b md:border-b-0 md:border-r border-white/5 pb-3 md:pb-0">
                 <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-1">
                   Cargos do Servidor
                 </span>
 
-                <div className="space-y-1 overflow-y-auto max-h-72 md:max-h-96 pr-1 no-scrollbar">
+                <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto max-h-none md:max-h-96 gap-1.5 md:gap-1 pr-0 md:pr-1 no-scrollbar">
                   {roles.map((role) => {
                     const isSelected = selectedRole?.id === role.id;
                     const isEveryone = role.name === '@everyone';
@@ -451,10 +460,10 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                       <div
                         key={role.id}
                         onClick={() => setSelectedRoleId(role.id)}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium cursor-pointer transition-all ${
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium cursor-pointer transition-all flex-shrink-0 ${
                           isSelected
                             ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
-                            : 'text-gray-300 hover:bg-white/5'
+                            : 'text-gray-300 hover:bg-white/5 bg-background-darker/60 md:bg-transparent'
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate min-w-0">

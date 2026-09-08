@@ -768,24 +768,30 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in">
-        <div className="flex w-full max-w-5xl h-[88vh] bg-[#18191c] rounded-2xl shadow-2xl border border-white/10 overflow-hidden text-gray-200">
+      <div
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto animate-fade-in"
+      >
+        <div className="flex flex-col md:flex-row w-full max-w-5xl h-[92dvh] md:h-[88vh] max-h-[92dvh] my-auto bg-[#18191c] rounded-2xl shadow-2xl border border-white/10 overflow-hidden text-gray-200">
           
           {/* SIDEBAR TABS */}
-          <div className="w-64 bg-[#111214] border-r border-white/10 flex flex-col p-4 shrink-0 select-none">
-            <div className="px-3 py-2 mb-4">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+          <div className="w-full md:w-64 bg-[#111214] border-b md:border-b-0 md:border-r border-white/10 flex flex-row md:flex-col p-3 md:p-4 shrink-0 select-none overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar">
+            <div className="hidden md:block px-3 py-2 mb-4">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono truncate">
                 {activeGuild.name}
               </h2>
               <div className="text-[11px] text-gray-500 mt-0.5">Configurações do Servidor</div>
             </div>
 
-            <nav className="flex-1 space-y-1">
+            <nav className="flex flex-row md:flex-col items-center md:items-stretch gap-1.5 md:gap-1 flex-1 flex-shrink-0">
               <button
+                type="button"
                 onClick={() => setActiveTab('overview')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2.5 sm:gap-3 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex-shrink-0 whitespace-nowrap cursor-pointer ${
                   activeTab === 'overview'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-0 md:border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
@@ -794,90 +800,97 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('roles')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2.5 sm:gap-3 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex-shrink-0 whitespace-nowrap cursor-pointer ${
                   activeTab === 'roles'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-0 md:border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
                 <Shield className="w-4 h-4 shrink-0" />
                 <span>Cargos</span>
-                <span className="ml-auto text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400">
+                <span className="ml-auto text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400 hidden sm:inline-block">
                   {roles.length}
                 </span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('emojis')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2.5 sm:gap-3 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex-shrink-0 whitespace-nowrap cursor-pointer ${
                   activeTab === 'emojis'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-0 md:border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
                 <Smile className="w-4 h-4 shrink-0" />
                 <span>Emojis</span>
-                <span className="ml-auto text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400">
+                <span className="ml-auto text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400 hidden sm:inline-block">
                   {emojisList.length}
                 </span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('invites')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2.5 sm:gap-3 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex-shrink-0 whitespace-nowrap cursor-pointer ${
                   activeTab === 'invites'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-0 md:border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
                 <LinkIcon className="w-4 h-4 shrink-0" />
-                <span>Links de Convite</span>
+                <span>Convites</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('members')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2.5 sm:gap-3 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex-shrink-0 whitespace-nowrap cursor-pointer ${
                   activeTab === 'members'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-0 md:border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
                 <Users className="w-4 h-4 shrink-0" />
                 <span>Membros</span>
-                <span className="ml-auto text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400">
+                <span className="ml-auto text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400 hidden sm:inline-block">
                   {members.length}
                 </span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('audit_log')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2.5 sm:gap-3 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex-shrink-0 whitespace-nowrap cursor-pointer ${
                   activeTab === 'audit_log'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-0 md:border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
                 <ScrollText className="w-4 h-4 shrink-0" />
-                <span>Registro de Auditoria</span>
+                <span>Auditoria</span>
               </button>
             </nav>
 
             {isOwner && (
-              <div className="pt-4 border-t border-white/10 space-y-1.5">
+              <div className="pt-0 md:pt-4 border-t-0 md:border-t border-white/10 flex flex-row md:flex-col gap-1.5 flex-shrink-0">
                 <button
+                  type="button"
                   onClick={() => setIsTransferModalOpen(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-amber-400 hover:bg-amber-500/10 transition-colors"
+                  className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs font-medium text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer"
                 >
                   <Crown className="w-4 h-4" />
-                  <span>Transferir Posse</span>
+                  <span className="hidden sm:inline">Transferir Posse</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsDeleteModalOpen(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                  className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Excluir Servidor</span>
+                  <span className="hidden sm:inline">Excluir</span>
                 </button>
               </div>
             )}
@@ -886,7 +899,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           {/* MAIN CONTENT AREA */}
           <div className="flex-1 flex flex-col overflow-hidden bg-[#18191c] relative">
             {/* TOP HEADER */}
-            <div className="flex items-center justify-between px-8 py-5 border-b border-white/10 shrink-0 bg-[#1e1f22]/40">
+            <div className="flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-[#1e1f22]/40">
               <div>
                 <h1 className="text-lg font-bold text-white flex items-center gap-2">
                   {activeTab === 'overview' && 'Visão Geral do Servidor'}
@@ -915,7 +928,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             </div>
 
             {/* TAB CONTENTS */}
-            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 no-scrollbar md:custom-scrollbar">
 
               {/* TAB 1: VISÃO GERAL */}
               {activeTab === 'overview' && (
@@ -2012,8 +2025,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
       {/* MODAL 3: MUTE / TIMEOUT DURATION */}
       {muteModalUser && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-[#1e1f22] rounded-2xl border border-white/10 shadow-2xl p-6 text-gray-200">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMuteModalUser(null);
+          }}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+        >
+          <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-white/10 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
             <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
               <Clock className="w-5 h-5 text-amber-400" />
               <span>Silenciar @{muteModalUser.username}</span>
@@ -2026,42 +2044,42 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(15 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors"
+                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
               >
                 15 Minutos
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(60 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors"
+                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
               >
                 1 Hora
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(24 * 60 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors"
+                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
               >
                 24 Horas (1 Dia)
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(7 * 24 * 60 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors"
+                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
               >
                 7 Dias (1 Semana)
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(-1)}
-                className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl text-xs font-semibold text-center border border-red-500/30 transition-colors"
+                className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl text-xs font-semibold text-center border border-red-500/30 transition-colors cursor-pointer"
               >
                 Permanente
               </button>
               <button
                 type="button"
                 onClick={() => handleMuteMemberWithDuration(0)}
-                className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-xl text-xs font-semibold text-center border border-emerald-500/30 transition-colors"
+                className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-xl text-xs font-semibold text-center border border-emerald-500/30 transition-colors cursor-pointer"
               >
                 Remover Silêncio
               </button>
@@ -2071,7 +2089,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               <button
                 type="button"
                 onClick={() => setMuteModalUser(null)}
-                className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium"
+                className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
               >
                 Cancelar
               </button>
@@ -2082,8 +2100,16 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
       {/* MODAL 4: BAN MEMBER WITH REASON */}
       {banModalUser && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-[#1e1f22] rounded-2xl border border-red-500/30 shadow-2xl p-6 text-gray-200">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setBanModalUser(null);
+              setBanReason('');
+            }
+          }}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+        >
+          <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-red-500/30 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
             <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
               <Ban className="w-5 h-5 text-red-500" />
               <span>Banir @{banModalUser.username}</span>
@@ -2113,13 +2139,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     setBanModalUser(null);
                     setBanReason('');
                   }}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium"
+                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-colors"
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-colors cursor-pointer"
                 >
                   Confirmar Banimento
                 </button>
@@ -2131,8 +2157,18 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
       {/* MODAL 5: TRANSFER OWNERSHIP */}
       {isTransferModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-lg bg-[#1e1f22] rounded-2xl border border-amber-500/40 shadow-2xl p-6 text-gray-200">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsTransferModalOpen(false);
+              setTransferTargetUser(null);
+              setTransferConfirmText('');
+              setTransferAcknowledge(false);
+            }
+          }}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+        >
+          <div className="w-full max-w-lg max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-amber-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400">
                 <Crown className="w-6 h-6" />
@@ -2245,7 +2281,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     setTransferConfirmText('');
                     setTransferAcknowledge(false);
                   }}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium"
+                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -2257,7 +2293,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     !transferAcknowledge ||
                     transferConfirmText.trim() !== activeGuild.name.trim()
                   }
-                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-amber-600/20 transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-amber-600/20 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isTransferring ? 'Transferindo...' : 'Confirmar Transferência'}
                 </button>
@@ -2269,8 +2305,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
       {/* MODAL 6: DELETE GUILD */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-[#1e1f22] rounded-2xl border border-red-500/40 shadow-2xl p-6 text-gray-200">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsDeleteModalOpen(false);
+          }}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+        >
+          <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-red-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 rounded-xl bg-red-500/15 text-red-500">
                 <Trash2 className="w-6 h-6" />
@@ -2309,14 +2350,14 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 <button
                   type="button"
                   onClick={() => setIsDeleteModalOpen(false)}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium"
+                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isDeleting || deleteConfirmText.trim() !== activeGuild.name.trim()}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isDeleting ? 'Excluindo...' : 'Excluir Servidor'}
                 </button>

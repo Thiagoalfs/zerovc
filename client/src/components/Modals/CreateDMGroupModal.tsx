@@ -72,22 +72,26 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
     >
-      <div className="bg-background-dark w-full max-w-md max-h-[90vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-6 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
+        <div className="p-4 sm:p-6 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-brand-400" />
-            <h2 className="text-lg font-bold text-white">Criar Grupo de DM</h2>
+            <h2 className="text-base sm:text-lg font-bold text-white">Criar Grupo de DM</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white cursor-pointer p-1 rounded-lg hover:bg-white/5 transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-white cursor-pointer p-1 rounded-lg hover:bg-white/5 transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleCreate} className="p-6 space-y-4 overflow-y-auto flex-1 no-scrollbar">
+        <form onSubmit={handleCreate} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 no-scrollbar">
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg">{error}</div>}
 
           {/* Group Name Input */}

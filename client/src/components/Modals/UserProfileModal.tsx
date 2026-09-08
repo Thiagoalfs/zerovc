@@ -108,20 +108,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     <>
       {/* Invisible/Subtle Backdrop: Closes on outside click */}
       <div
-        className="fixed inset-0 z-50 bg-black/20 sm:bg-transparent"
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs sm:bg-black/20"
         onClick={(e) => {
           e.stopPropagation();
           onClose();
         }}
       />
 
-      {/* Floating Popover Card */}
+      {/* Floating Popover Card / Centered on Mobile */}
       <div
         style={popoverStyle}
         onClick={(e) => e.stopPropagation()}
-        className={`fixed z-50 bg-background-darkest rounded-3xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col ${
+        className={`fixed z-50 bg-background-darkest rounded-3xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[92dvh] overflow-y-auto no-scrollbar ${
           !position || (typeof window !== 'undefined' && window.innerWidth < 640)
-            ? 'inset-x-4 bottom-6 top-auto max-w-sm mx-auto'
+            ? 'inset-x-4 top-1/2 -translate-y-1/2 sm:translate-y-0 sm:top-auto sm:inset-x-auto max-w-sm mx-auto'
             : ''
         }`}
       >
