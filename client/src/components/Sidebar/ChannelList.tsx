@@ -626,7 +626,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             setDragOverTarget(null);
           }}
           onContextMenu={(e) => handleChannelContextMenu(e, channel)}
-          className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all relative ${
+          className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
             isOwner ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
             isDragOver ? 'border-t-2 border-brand-500 bg-brand-500/10' : ''
@@ -652,7 +652,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
           <button
             onClick={() => (isText ? handleChannelClick(channel) : handleVoiceChannelClick(channel))}
-            className="flex items-center gap-1.5 truncate flex-1 text-left min-w-0"
+            className="flex items-center gap-2 truncate flex-1 text-left min-w-0"
           >
             {isText ? (
               <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
@@ -661,7 +661,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 className={`w-4 h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400'}`}
               />
             )}
-            <span className="truncate">{channel.name}</span>
+            <span className="truncate font-medium">{channel.name}</span>
             {channel.is_private && (
               <span title="Canal Privado">
                 <Lock className="w-3 h-3 text-gray-400 flex-shrink-0 ml-0.5" />
@@ -713,7 +713,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     onSelectUser?.(targetUser, { x: e.clientX, y: e.clientY });
                   }}
                   onContextMenu={(e) => handleVoiceMemberContextMenu(e, channel, vs, targetUser)}
-                  className="flex items-center justify-between py-1 px-1.5 rounded-lg hover:bg-background-light/40 text-xs text-gray-300 cursor-pointer transition-colors group/voice-member"
+                  className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-background-light/40 text-[13.5px] text-gray-300 cursor-pointer transition-colors group/voice-member"
                   title="Clique com botão esquerdo para perfil ou direito para opções"
                 >
                   <div className="flex items-center gap-2 truncate">
@@ -723,7 +723,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                           ? { boxShadow: '0 0 0 2px #23a55a' }
                           : undefined
                       }
-                      className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all flex-shrink-0"
+                      className="w-5.5 h-5.5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all flex-shrink-0"
                     >
                       {targetUser.avatar_url ? (
                         <img
@@ -739,7 +739,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         </span>
                       )}
                     </div>
-                    <span className={`truncate ${isSpeaking ? 'text-white font-semibold' : ''}`}>
+                    <span className={`truncate font-medium ${isSpeaking ? 'text-white font-semibold' : 'text-gray-300'}`}>
                       {targetUser.display_name || targetUser.username || 'Usuário'}
                     </span>
                   </div>
