@@ -308,6 +308,14 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   if (!isOpen || !activeGuild) return null;
 
   const isOwner = activeGuild.owner_id === user?.id;
+  const currentMember = (activeGuild.members || []).find((m) => m.id === user?.id);
+  const currentUserRoles = currentMember?.roles || [];
+  let currentUserPerms = 0;
+  currentUserRoles.forEach((r) => {
+    currentUserPerms |= Number(r.permissions || 0);
+  });
+  const hasAdmin = (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
+  const canManageRoles = isOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_ROLES) !== 0;
   const roles = activeGuild.roles || [];
   const members = activeGuild.members || [];
   const textChannels = (activeGuild.channels || []).filter((c) => c.type === 'text');
@@ -426,7 +434,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   // 2. Roles Actions
   const handleCreateRole = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoleName.trim()) return;
+    if (!newRoleName.trim() || !canManageRoles) return;
 
     setIsCreatingRole(true);
     try {
@@ -441,7 +449,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleUpdateRoleColor = async (color: string) => {
-    if (!selectedRole) return;
+    if (!selectedRole || !canManageRoles) return;
     try {
       await updateRole(activeGuild.id, selectedRole.id, { color });
     } catch (err) {
@@ -450,7 +458,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleUpdateRoleName = async (name: string) => {
-    if (!selectedRole || !name.trim()) return;
+    if (!selectedRole || !name.trim() || !canManageRoles) return;
     try {
       await updateRole(activeGuild.id, selectedRole.id, { name });
     } catch (err) {
@@ -459,25 +467,25 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleToggleRoleHoist = async () => {
-    if (!selectedRole || !isOwner) return;
+    if (!selectedRole || !canManageRoles) return;
     try {
-      await updateRole(activeGuild.id, selectedRole.id, { hoist: !selectedRole.hoist });
+      await updateRole(activeGuild.id, selectedRole.id, { hoist: !Boolean(selectedRole.hoist) });
     } catch (err) {
       console.error('Failed to toggle hoist:', err);
     }
   };
 
   const handleToggleRoleMentionable = async () => {
-    if (!selectedRole || !isOwner) return;
+    if (!selectedRole || !canManageRoles) return;
     try {
-      await updateRole(activeGuild.id, selectedRole.id, { mentionable: !selectedRole.mentionable });
+      await updateRole(activeGuild.id, selectedRole.id, { mentionable: !Boolean(selectedRole.mentionable) });
     } catch (err) {
       console.error('Failed to toggle mentionable:', err);
     }
   };
 
   const handleMoveRoleHierarchy = async (roleId: string, direction: 'up' | 'down') => {
-    if (!isOwner || isReorderingRoles) return;
+    if (!canManageRoles || isReorderingRoles) return;
     const sortedRoles = [...roles].sort((a, b) => a.position - b.position);
     const currentIndex = sortedRoles.findIndex((r) => r.id === roleId);
     if (currentIndex === -1) return;
@@ -501,15 +509,15 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleTogglePermission = async (flag: number) => {
-    if (!selectedRole || !isOwner) return;
+    if (!selectedRole || !canManageRoles) return;
 
     const currentPermissions = Number(selectedRole.permissions || 0);
-    const hasAdmin = (currentPermissions & Permissions.ADMINISTRATOR) !== 0;
+    const hasAdminPerm = (currentPermissions & Permissions.ADMINISTRATOR) !== 0;
 
     let newPermissions: number;
 
     if (flag === Permissions.ADMINISTRATOR) {
-      if (hasAdmin) {
+      if (hasAdminPerm) {
         newPermissions = currentPermissions & ~Permissions.ADMINISTRATOR;
       } else {
         newPermissions = currentPermissions | Permissions.ADMINISTRATOR;
@@ -531,6 +539,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleDeleteRole = async (roleId: string) => {
+    if (!canManageRoles) return;
     const targetRole = roles.find((r) => r.id === roleId);
     if (targetRole?.name === '@everyone') {
       alert('O cargo @everyone é o cargo padrão do servidor e não pode ser excluído.');
@@ -1156,7 +1165,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
                               <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
                                 <span className="text-[11px] text-gray-500 mr-1">{memberCount}</span>
-                                {isOwner && !isEveryone && (
+                                {canManageRoles && !isEveryone && (
                                   <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                                     <button
                                       type="button"
@@ -1184,7 +1193,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                         })}
                     </div>
 
-                    {isOwner && (
+                    {canManageRoles && (
                       <form onSubmit={handleCreateRole} className="mt-3 pt-3 border-t border-white/10 space-y-2">
                         <div className="flex gap-2">
                           <input
@@ -1233,7 +1242,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                           )}
                         </div>
 
-                        {isOwner && selectedRole.name !== '@everyone' && (
+                        {canManageRoles && selectedRole.name !== '@everyone' && (
                           <button
                             onClick={() => handleDeleteRole(selectedRole.id)}
                             className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
@@ -1255,7 +1264,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                             defaultValue={selectedRole.name}
                             key={selectedRole.id + selectedRole.name}
                             onBlur={(e) => handleUpdateRoleName(e.target.value)}
-                            disabled={!isOwner || selectedRole.name === '@everyone'}
+                            disabled={!canManageRoles || selectedRole.name === '@everyone'}
                             className="w-full px-4 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
                           />
                           {selectedRole.name === '@everyone' && (
@@ -1294,7 +1303,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                 type="color"
                                 value={selectedRole.color || '#5865F2'}
                                 onChange={(e) => handleUpdateRoleColor(e.target.value)}
-                                disabled={!isOwner}
+                                disabled={!canManageRoles}
                                 className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer"
                                 title="Cor personalizada"
                               />
@@ -1311,7 +1320,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                           <div className="space-y-3">
                             <div
                               onClick={() => {
-                                if (isOwner) {
+                                if (canManageRoles) {
                                   handleToggleRoleHoist();
                                 }
                               }}
@@ -1319,7 +1328,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                 selectedRole.hoist
                                   ? 'bg-[#111214]/80 border-white/15'
                                   : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
-                              } ${isOwner ? 'cursor-pointer' : 'opacity-70'}`}
+                              } ${canManageRoles ? 'cursor-pointer' : 'opacity-70'}`}
                             >
                               <div className="pr-4 select-none">
                                 <div className="text-sm font-semibold text-white">
@@ -1331,7 +1340,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                               </div>
                               <button
                                 type="button"
-                                disabled={!isOwner}
+                                disabled={!canManageRoles}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleToggleRoleHoist();
@@ -1350,7 +1359,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
                             <div
                               onClick={() => {
-                                if (isOwner) {
+                                if (canManageRoles) {
                                   handleToggleRoleMentionable();
                                 }
                               }}
@@ -1358,7 +1367,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                 selectedRole.mentionable
                                   ? 'bg-[#111214]/80 border-white/15'
                                   : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
-                              } ${isOwner ? 'cursor-pointer' : 'opacity-70'}`}
+                              } ${canManageRoles ? 'cursor-pointer' : 'opacity-70'}`}
                             >
                               <div className="pr-4 select-none">
                                 <div className="text-sm font-semibold text-white">
@@ -1370,7 +1379,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                               </div>
                               <button
                                 type="button"
-                                disabled={!isOwner}
+                                disabled={!canManageRoles}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleToggleRoleMentionable();
@@ -1411,7 +1420,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                     <div
                                       key={perm.flag}
                                       onClick={() => {
-                                        if (isOwner && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
+                                        if (canManageRoles && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
                                           handleTogglePermission(perm.flag);
                                         }
                                       }}
@@ -1421,7 +1430,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                           : isChecked
                                           ? 'bg-[#111214]/80 border-white/15'
                                           : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
-                                      } ${isOwner ? 'cursor-pointer' : 'opacity-70'}`}
+                                      } ${canManageRoles ? 'cursor-pointer' : 'opacity-70'}`}
                                     >
                                       <div className="pr-4 select-none">
                                         <div className="text-sm font-semibold text-white flex items-center gap-2">
