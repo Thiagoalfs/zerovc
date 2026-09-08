@@ -1,11 +1,29 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageSquare, PlusCircle, SendHorizontal, Smile, X, Menu, Reply, CornerDownRight, Search, Phone, Loader2, UploadCloud, FileText, Star, Pin, AlertCircle, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  MessageSquare,
+  PlusCircle,
+  SendHorizontal,
+  Smile,
+  X,
+  Menu,
+  Reply,
+  CornerDownRight,
+  Search,
+  Phone,
+  Loader2,
+  UploadCloud,
+  FileText,
+  Pin,
+  AlertCircle,
+  RotateCcw,
+  Copy,
+} from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
-import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { ActiveCallOverlay } from './ActiveCallOverlay';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
@@ -19,7 +37,6 @@ interface DMChatAreaProps {
   onPreviewImage?: (url: string) => void;
 }
 
-const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
 const QUICK_EMOJIS = ['👍', '❤️', '🔥', '😂', '🎉', '👀', '✨', '💀'];
 const MAX_CHARS = 2000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
@@ -45,7 +62,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     loadMoreMessages,
   } = useDMStore();
   const { startCall, callState } = useCallStore();
-  const { isFavorited, toggleFavorite } = useFavoriteGifStore();
+  const chatDensity = useSettingsStore((s) => s.chatDensity);
+  const isDensityCompact = chatDensity === 'compact';
 
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -66,6 +84,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       fetchPinnedMessages(activeRoom.id);
     }
   }, [showPinnedOnly, activeRoom?.id]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number | null>(null);
@@ -133,7 +152,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     }
   };
 
-  // Reset initial load flag on room change
   useEffect(() => {
     if (activeRoom?.id !== prevRoomIdRef.current) {
       prevRoomIdRef.current = activeRoom?.id || null;
@@ -170,9 +188,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       scrollToBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
       setTimeout(() => scrollToBottom(true), 300);
-      setTimeout(() => scrollToBottom(true), 600);
     }
-  }, [messages, searchQuery]);
+  }, [messages]);
 
   const handleMediaLoad = () => {
     const container = scrollContainerRef.current;
@@ -193,91 +210,111 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (activeRoom?.id && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [activeRoom?.id]);
-
-  useEffect(() => {
-    if (replyingTo && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [replyingTo]);
-
-  if (!activeRoom) {
-    return (
-      <div className="flex-1 bg-background-dark flex flex-col items-center justify-center text-gray-500 font-medium p-4 select-none">
-        {onOpenMobileDrawer && (
-          <button
-            onClick={onOpenMobileDrawer}
-            className="md:hidden mb-4 bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2"
-          >
-            <Menu className="w-4 h-4" />
-            <span>Abrir Conversas e Servidores</span>
-          </button>
-        )}
-        <MessageSquare className="w-12 h-12 text-gray-600 mb-3" />
-        <span className="text-sm">Selecione uma conversa para começar</span>
-      </div>
-    );
-  }
-
-  const recipient = activeRoom.recipient;
-
-  const getStatusColor = (s?: string) => {
-    switch (s) {
-      case 'online': return 'bg-online';
-      case 'idle': return 'bg-idle';
-      case 'dnd': return 'bg-dnd';
-      default: return 'bg-offline';
-    }
-  };
-
-  const handleSend = async () => {
-    if (isUploading) return;
-    let finalContent = content.trim();
-
-    // Check 2,000 character limit on raw text
-    if (finalContent.length > MAX_CHARS) {
+  const processFile = (file: File) => {
+    if (file.size > MAX_FILE_BYTES) {
       setLimitAlert({
-        title: 'Limite de Caracteres Excedido',
-        message: 'O limite de tamanho de mensagem é 2.000 caracteres',
-        detail: `${finalContent.length.toLocaleString('pt-BR')} / 2.000 caracteres`,
+        title: 'Arquivo muito grande',
+        message: 'O tamanho máximo permitido para envio de arquivos é de 20 MB.',
+        detail: `Seu arquivo possui ${(file.size / (1024 * 1024)).toFixed(1)} MB.`,
       });
       return;
     }
 
-    if (!finalContent && !selectedFile) return;
+    setSelectedFile(file);
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => setSelectedImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedImagePreview(null);
+    }
+  };
 
-    const fileToUpload = selectedFile;
-    const replyId = replyingTo?.id;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+    e.target.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            processFile(file);
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+    }
+  };
+
+  const handleSelectEmoji = (emoji: string) => {
+    setContent((prev) => prev + emoji);
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
+  };
+
+  const handleSelectGif = async (gifUrl: string) => {
+    setShowEmojiPicker(false);
+    try {
+      await sendMessage(gifUrl, undefined, replyingTo?.id);
+      setReplyingTo(null);
+    } catch (err: any) {
+      console.error('Failed to send GIF:', err);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!content.trim() && !selectedFile) return;
+
+    if (content.length > MAX_CHARS) {
+      setLimitAlert({
+        title: 'Mensagem muito longa',
+        message: `O limite de caracteres por mensagem é de ${MAX_CHARS.toLocaleString('pt-BR')}.`,
+        detail: `Sua mensagem atual possui ${content.length.toLocaleString('pt-BR')} caracteres (${(content.length - MAX_CHARS).toLocaleString('pt-BR')} acima do limite).`,
+      });
+      return;
+    }
+
+    const textToSend = content.trim();
+    const replyIdToSend = replyingTo?.id;
 
     setContent('');
-    setSelectedFile(null);
-    setSelectedImagePreview(null);
-    setShowEmojiPicker(false);
     setReplyingTo(null);
+
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
-    try {
-      if (fileToUpload) {
-        setIsUploading(true);
-        const uploaded = await api.upload.attachment(fileToUpload);
-        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
-      }
+    if (selectedFile) {
+      setIsUploading(true);
+      try {
+        const uploadRes = await api.upload.attachment(selectedFile);
+        setSelectedFile(null);
+        setSelectedImagePreview(null);
+        setIsUploading(false);
 
-      await sendMessage(finalContent, undefined, replyId);
-    } catch (err: any) {
-      console.error('Failed to send DM message/file:', err);
-      setLimitAlert({
-        title: 'Erro ao Enviar Mensagem',
-        message: err.message || 'Não foi possível enviar a mensagem/imagem.',
-      });
-    } finally {
-      setIsUploading(false);
+        const attachmentPayload = [
+          {
+            url: uploadRes.url,
+            filename: uploadRes.filename,
+            size: uploadRes.size,
+          },
+        ];
+
+        await sendMessage(textToSend, attachmentPayload, replyIdToSend);
+      } catch (err: any) {
+        setIsUploading(false);
+        alert(err.message || 'Falha ao enviar arquivo');
+      }
+    } else {
+      await sendMessage(textToSend, undefined, replyIdToSend);
     }
   };
 
@@ -285,9 +322,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
-    } else if (e.key === 'Escape' && replyingTo) {
-      e.preventDefault();
-      setReplyingTo(null);
     }
   };
 
@@ -297,90 +331,28 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
   };
 
-  const handleSelectEmoji = (emoji: string) => {
-    setContent((prev) => prev + emoji);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  };
-
-  const handleSelectGif = async (gifUrl: string) => {
-    setShowEmojiPicker(false);
-    await sendMessage(gifUrl, undefined, replyingTo?.id);
-    setReplyingTo(null);
-  };
-
-  const processFile = (file: File) => {
-    if (file.size > MAX_FILE_BYTES) {
-      setLimitAlert({
-        title: 'Arquivo Muito Grande',
-        message: 'O limite de imagens/vídeos/arquivos é de 20 MB',
-        detail: `Tamanho do arquivo: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
-      });
-      return;
-    }
-
-    setSelectedFile(file);
-
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setSelectedImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setSelectedImagePreview(null);
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === 'file') {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) {
-          processFile(file);
-          break;
-        }
-      }
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    processFile(file);
-    e.target.value = '';
-  };
-
-  const renderFormattedText = (text: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
-
-    return parts.map((part, i) => {
-      if (part.match(urlRegex)) {
-        return (
-          <a
-            key={i}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-brand-300 underline break-all font-medium"
+  if (!activeRoom) {
+    return (
+      <div className="flex-1 bg-background-dark flex flex-col items-center justify-center text-gray-500 font-medium p-4 select-none">
+        {onOpenMobileDrawer && (
+          <button
+            onClick={onOpenMobileDrawer}
+            className="md:hidden mb-4 bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 cursor-pointer shadow-md"
           >
-            {part}
-          </a>
-        );
-      }
-      return part;
-    });
-  };
+            <Menu className="w-4 h-4" />
+            <span>Abrir Conversas</span>
+          </button>
+        )}
+        <MessageSquare className="w-12 h-12 text-gray-600 mb-2" />
+        <span className="text-gray-400">Selecione uma conversa para começar</span>
+      </div>
+    );
+  }
+
+  const recipient = activeRoom.recipient;
 
   const baseMessages = showPinnedOnly
-    ? (activeRoom ? pinnedMessagesByRoom[activeRoom.id] || [] : [])
+    ? pinnedMessagesByRoom[activeRoom.id] || []
     : messages;
 
   const displayedMessages = baseMessages.filter((msg) => {
@@ -393,6 +365,19 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     return true;
   });
 
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'online':
+        return 'bg-online';
+      case 'idle':
+        return 'bg-idle';
+      case 'dnd':
+        return 'bg-dnd';
+      default:
+        return 'bg-offline';
+    }
+  };
+
   return (
     <div
       onDragEnter={handleDragEnter}
@@ -401,7 +386,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       onDrop={handleDrop}
       className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden relative select-none"
     >
-      {/* Drag & Drop Files Overlay */}
       {isDraggingFile && (
         <div className="absolute inset-3 z-50 bg-background-darkest/90 backdrop-blur-md border-2 border-dashed border-brand-500 rounded-3xl flex flex-col items-center justify-center gap-3 p-6 animate-in fade-in zoom-in-95 pointer-events-none shadow-2xl">
           <div className="w-16 h-16 rounded-2xl bg-brand-500/20 text-brand-400 flex items-center justify-center shadow-inner animate-bounce">
@@ -414,10 +398,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       )}
 
-      {/* Active Call Overlay if calling or connected */}
       <ActiveCallOverlay />
 
-      {/* DM Chat Header */}
       <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10">
         <div className="flex items-center gap-2.5 truncate">
           {onOpenMobileDrawer && (
@@ -430,7 +412,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             </button>
           )}
 
-          {/* Recipient Avatar */}
           <div
             onClick={() => recipient && onOpenUserProfile?.(recipient)}
             className="relative w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 cursor-pointer hover:opacity-85 transition-opacity"
@@ -446,18 +427,17 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
           <div
             onClick={() => recipient && onOpenUserProfile?.(recipient)}
-            className="flex flex-col truncate cursor-pointer group"
+            className="flex items-baseline gap-1.5 truncate cursor-pointer group"
             title="Ver perfil"
           >
-            <span className="font-bold text-gray-100 text-sm truncate group-hover:text-brand-400 transition-colors">
+            <span className="font-bold text-gray-100 text-sm md:text-base truncate group-hover:text-brand-400 transition-colors">
               {recipient?.display_name || recipient?.username}
             </span>
-            <span className="text-[10px] text-gray-400 truncate">@{recipient?.username}</span>
+            <span className="text-xs text-gray-400 truncate">@{recipient?.username}</span>
           </div>
         </div>
 
-        {/* Header Right Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2">
           <button
             onClick={handleStartCall}
             disabled={callState !== 'idle'}
@@ -467,7 +447,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             <Phone className="w-5 h-5" />
           </button>
 
-          {/* Pinned Messages Toggle */}
           <button
             onClick={() => setShowPinnedOnly(!showPinnedOnly)}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
@@ -513,7 +492,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       </div>
 
-      {/* Pinned or Search Active Notice Banner */}
       {(showPinnedOnly || searchQuery) && (
         <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
           <span>
@@ -533,13 +511,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       )}
 
-      {/* DM Messages Feed */}
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-0.5 no-scrollbar"
+        className="flex-1 overflow-y-auto px-2 md:px-4 py-2 no-scrollbar"
       >
-        {/* Loading older messages indicator */}
         {isLoadingMoreMessages && (
           <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
             <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
@@ -547,32 +523,55 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           </div>
         )}
 
-        {/* Recipient Intro Hero Card (show only when reached the absolute top) */}
-        {!searchQuery && hasMoreByRoom[activeRoom.id] === false && (
-          <div className="p-6 my-4 bg-background-darker/60 rounded-2xl border border-white/5 flex flex-col items-center text-center">
-            <div className="w-20 h-20 rounded-full bg-brand-500 flex items-center justify-center text-2xl font-bold text-white shadow-xl mb-3 overflow-hidden">
+        {!showPinnedOnly && !searchQuery && hasMoreByRoom[activeRoom.id] === false && (
+          <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-brand-500 flex items-center justify-center text-3xl font-bold text-white shadow-xl mb-3 overflow-hidden">
               {recipient?.avatar_url ? (
                 <img src={formatAssetUrl(recipient.avatar_url)} alt="" className="w-full h-full object-cover" />
               ) : (
                 <span>{recipient?.display_name?.[0]?.toUpperCase() || recipient?.username[0]?.toUpperCase() || 'U'}</span>
               )}
             </div>
-            <h2 className="text-xl font-bold text-white">{recipient?.display_name || recipient?.username}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">@{recipient?.username}</p>
+            <h2 className="text-xl md:text-2xl font-bold text-white mb-1">{recipient?.display_name || recipient?.username}</h2>
+            <p className="text-xs md:text-sm text-gray-400 mb-2">@{recipient?.username}</p>
             {recipient?.bio && (
-              <p className="text-xs text-gray-300 mt-2 max-w-md italic">"{recipient.bio}"</p>
+              <p className="text-xs md:text-sm text-gray-300 max-w-lg mb-2 italic">"{recipient.bio}"</p>
             )}
-            <span className="text-[11px] text-gray-500 mt-3">
-              Este é o início da sua história de mensagens diretas com @{recipient?.username}.
-            </span>
+            <p className="text-xs md:text-sm text-gray-400">
+              Este é o início da sua história de mensagens diretas com <strong className="text-gray-200">@{recipient?.username}</strong>.
+            </p>
           </div>
         )}
 
-        {isLoadingMessages ? (
-          <div className="flex justify-center py-6 text-xs text-gray-500">Carregando mensagens...</div>
+        {isLoadingMessages || (showPinnedOnly && isLoadingPinned[activeRoom.id]) ? (
+          <div className="flex justify-center items-center gap-2 py-10 text-sm text-gray-500">
+            <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+            <span>{showPinnedOnly ? 'Carregando mensagens fixadas...' : 'Carregando mensagens...'}</span>
+          </div>
+        ) : displayedMessages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 select-none">
+            {showPinnedOnly ? (
+              <>
+                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-amber-400">
+                  <Pin className="w-6 h-6" />
+                </div>
+                <span className="text-sm font-semibold text-gray-300">Nenhuma mensagem fixada</span>
+                <span className="text-xs text-gray-500">Fixe mensagens importantes para consultá-las facilmente.</span>
+              </>
+            ) : searchQuery ? (
+              <>
+                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-400">
+                  <Search className="w-6 h-6" />
+                </div>
+                <span className="text-sm font-semibold text-gray-300">Nenhum resultado encontrado</span>
+                <span className="text-xs text-gray-500">Tente buscar por termos diferentes ou verifique a ortografia.</span>
+              </>
+            ) : (
+              <span>Nenhuma mensagem ainda. Diga oi!</span>
+            )}
+          </div>
         ) : (
           displayedMessages.map((msg, index) => {
-            const isMe = msg.author_id === user?.id;
             const prevMsg = index > 0 ? displayedMessages[index - 1] : null;
             const isCompact = (() => {
               if (!prevMsg) return false;
@@ -585,9 +584,17 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               return diffMs >= 0 && diffMs <= 5 * 60 * 1000;
             })();
 
-            const timeStr = (() => {
+            const formattedTime = (() => {
               try {
-                return format(new Date(msg.created_at), 'dd/MM HH:mm', { locale: ptBR });
+                return format(new Date(msg.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+              } catch {
+                return '';
+              }
+            })();
+
+            const shortTime = (() => {
+              try {
+                return format(new Date(msg.created_at), 'HH:mm', { locale: ptBR });
               } catch {
                 return '';
               }
@@ -600,213 +607,222 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               <div
                 key={msg.id}
                 id={`msg-${msg.id}`}
-                className={`relative group flex gap-3 px-3 rounded-xl transition-all duration-200 ${
+                className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 ${
                   isFailed
-                    ? 'bg-red-500/10 border-l-2 border-red-500'
-                    : 'hover:bg-background-darkest/40'
-                } ${isCompact ? 'py-1 mt-1' : 'py-2 mt-3'} ${
-                  isMe ? 'flex-row-reverse' : ''
-                } ${isSending ? 'opacity-65 select-none' : ''}`}
+                    ? 'bg-red-500/10 hover:bg-red-500/15 border-l-2 border-red-500 text-red-200'
+                    : isSending
+                    ? 'opacity-65 select-none'
+                    : 'hover:bg-background-dark/40'
+                } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
               >
-                {/* Quick action bar */}
-                {!isSending && !isFailed && (
-                  <div
-                    className={`absolute -top-2.5 ${
-                      isMe ? 'left-4' : 'right-4'
-                    } hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-0.5 shadow-lg z-10 animate-in fade-in zoom-in-95`}
-                  >
-                    <div className="relative">
-                      <button
-                        onClick={() => setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id)}
-                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                        title="Reagir"
-                      >
-                        <Smile className="w-3.5 h-3.5" />
-                      </button>
-
-                      {activeReactionMsgId === msg.id && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setActiveReactionMsgId(null)} />
-                          <div className="absolute bottom-full mb-1 right-0 z-50 bg-background-darker rounded-xl p-1 shadow-2xl border border-white/10 flex items-center gap-1 animate-in fade-in zoom-in-95">
-                            {QUICK_EMOJIS.map((emoji) => (
-                              <button
-                                key={emoji}
-                                onClick={() => {
-                                  toggleReaction(msg.id, emoji);
-                                  setActiveReactionMsgId(null);
-                                }}
-                                className="w-6 h-6 flex items-center justify-center hover:bg-white/10 rounded-lg text-sm transition-transform active:scale-125"
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => setReplyingTo(msg)}
-                      className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                      title="Responder"
-                    >
-                      <Reply className="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      onClick={() => togglePin(msg.id)}
-                      className={`p-1 rounded transition-colors ${
-                        msg.is_pinned
-                          ? 'text-amber-400 hover:bg-amber-400/20'
-                          : 'text-gray-400 hover:text-white hover:bg-white/10'
-                      }`}
-                      title={msg.is_pinned ? 'Desafixar mensagem' : 'Fixar mensagem'}
-                    >
-                      <Pin className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Avatar */}
-                {!isCompact ? (
+                {msg.reply_to && (
                   <div
                     onClick={(e) => {
                       e.stopPropagation();
-                      msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
+                      const targetEl = document.getElementById(`msg-${msg.reply_to?.id}`);
+                      if (targetEl) {
+                        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetEl.classList.add('bg-brand-500/25', 'ring-2', 'ring-brand-500/50');
+                        setTimeout(() => {
+                          targetEl.classList.remove('bg-brand-500/25', 'ring-2', 'ring-brand-500/50');
+                        }, 1500);
+                      }
                     }}
-                    className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-85 transition-opacity"
-                    title="Ver perfil"
+                    className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-1 ml-9 md:ml-10 select-none opacity-80 hover:opacity-100 hover:text-gray-200 transition-all cursor-pointer group/reply"
+                    title="Clique para ir até a mensagem respondida"
                   >
-                    {msg.author?.avatar_url ? (
-                      <img src={formatAssetUrl(msg.author.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      <span>{msg.author?.display_name?.[0]?.toUpperCase() || msg.author?.username?.[0]?.toUpperCase() || 'U'}</span>
-                    )}
+                    <CornerDownRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 group-hover/reply:text-brand-400 transition-colors" />
+                    <span className="font-semibold text-brand-400 group-hover/reply:underline">
+                      @{msg.reply_to.author.display_name || msg.reply_to.author.username}
+                    </span>
+                    <span className="truncate text-gray-400 max-w-sm italic">
+                      "{msg.reply_to.content}"
+                    </span>
                   </div>
-                ) : (
-                  <div className="w-8 flex-shrink-0" />
                 )}
 
-                {/* Message Bubble & Images */}
-                <div className={`max-w-[85%] md:max-w-[75%] flex flex-col ${isMe ? 'items-end text-right' : 'items-start text-left'}`}>
-                  {/* Reply Reference Header */}
-                  {msg.reply_to && (
-                    <div
-                      onClick={() => {
-                        const targetId = `msg-${msg.reply_to?.id}`;
-                        const el = document.getElementById(targetId);
-                        if (el) {
-                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          el.classList.add('bg-brand-500/20', 'ring-2', 'ring-brand-400');
-                          setTimeout(() => {
-                            el.classList.remove('bg-brand-500/20', 'ring-2', 'ring-brand-400');
-                          }, 1500);
-                        }
-                      }}
-                      className="flex items-center gap-1.5 text-[10px] text-gray-400 mb-0.5 select-none opacity-80 cursor-pointer hover:opacity-100 transition-opacity"
-                      title="Clique para ir até a mensagem respondida"
-                    >
-                      <CornerDownRight className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                      <span className="font-semibold text-brand-400">
-                        @{msg.reply_to.author.display_name || msg.reply_to.author.username}
-                      </span>
-                      <span className="truncate text-gray-400 max-w-xs italic">
-                        "{msg.reply_to.content}"
-                      </span>
-                    </div>
-                  )}
+                <div className="flex gap-3 md:gap-4 relative">
+                  {!isSending && !isFailed && (
+                    <div className="absolute -top-3 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
+                      <div className="relative">
+                        <button
+                          onClick={() => setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id)}
+                          className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                          title="Reagir"
+                        >
+                          <Smile className="w-3.5 h-3.5" />
+                        </button>
 
-                  {!isCompact && (
-                    <div className="flex items-baseline gap-2 mb-1">
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
-                        }}
-                        className="text-xs font-semibold text-gray-200 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
-                        title="Ver perfil"
-                      >
-                        {msg.author?.display_name || msg.author?.username}
-                      </span>
-                      <span className="text-[10px] text-gray-500">{timeStr}</span>
-                    </div>
-                  )}
+                        {activeReactionMsgId === msg.id && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setActiveReactionMsgId(null)} />
+                            <div className="absolute bottom-full mb-2 right-0 z-50 bg-background-darker rounded-xl p-1.5 shadow-2xl border border-white/10 flex items-center gap-1 animate-in fade-in zoom-in-95">
+                              {QUICK_EMOJIS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => {
+                                    toggleReaction(msg.id, emoji);
+                                    setActiveReactionMsgId(null);
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center hover:bg-white/10 rounded-lg text-base transition-transform active:scale-125 cursor-pointer"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
 
-                  {/* Message content & media embeds */}
-                  <FormattedMessage
-                    content={msg.content}
-                    onPreviewImage={onPreviewImage}
-                    onImageLoad={handleMediaLoad}
-                    onOpenUserProfile={onOpenUserProfile}
-                    textClassName={`p-2.5 px-3.5 rounded-2xl text-xs leading-relaxed select-text shadow-sm ${
-                      isFailed
-                        ? 'bg-red-500/20 text-red-200 border border-red-500/30'
-                        : isMe
-                        ? isSending
-                          ? 'bg-brand-600/70 text-white/80 rounded-tr-none'
-                          : 'bg-brand-500 text-white rounded-tr-none'
-                        : 'bg-background-light text-gray-100 rounded-tl-none'
-                    }`}
-                  />
-
-                  {/* Failed Sending Error Bar with Retry */}
-                  {isFailed && (
-                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-red-400">
-                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                      <span>{msg.error || 'Falha ao enviar.'}</span>
                       <button
-                        type="button"
-                        onClick={async () => {
-                          useDMStore.setState((s) => ({
-                            messages: s.messages.filter((m) => m.id !== msg.id),
-                            messagesByRoom: {
-                              ...s.messagesByRoom,
-                              [activeRoom.id]: (s.messagesByRoom[activeRoom.id] || []).filter((m) => m.id !== msg.id),
-                            },
-                          }));
-                          await sendMessage(msg.content, msg.attachments, msg.reply_to_id);
-                        }}
-                        className="flex items-center gap-0.5 text-red-300 hover:text-white underline font-semibold cursor-pointer ml-1"
+                        onClick={() => setReplyingTo(msg)}
+                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                        title="Responder"
                       >
-                        <RotateCcw className="w-2.5 h-2.5" />
-                        <span>Tentar novamente</span>
+                        <Reply className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => togglePin(msg.id)}
+                        className={`p-1 rounded transition-colors cursor-pointer ${
+                          msg.is_pinned
+                            ? 'text-amber-400 hover:bg-amber-400/20'
+                            : 'text-gray-400 hover:text-white hover:bg-white/10'
+                        }`}
+                        title={msg.is_pinned ? 'Desafixar mensagem' : 'Fixar mensagem'}
+                      >
+                        <Pin className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => navigator.clipboard.writeText(msg.content)}
+                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                        title="Copiar Texto"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}
 
-                  {/* Reactions Badges */}
-                  {!isSending && !isFailed && msg.reactions && msg.reactions.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5 select-none">
-                      {msg.reactions.map((rx) => {
-                        const hasReacted = user && rx.user_ids.includes(user.id);
-                        return (
-                          <button
-                            key={rx.emoji}
-                            onClick={() => toggleReaction(msg.id, rx.emoji)}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-xs font-semibold border transition-all active:scale-95 ${
-                              hasReacted
-                                ? 'bg-brand-500/30 border-brand-500 text-white'
-                                : 'bg-background-darkest border-white/10 text-gray-300 hover:bg-white/5'
-                            }`}
-                          >
-                            <span>{rx.emoji}</span>
-                            <span className="text-[10px]">{rx.count}</span>
-                          </button>
-                        );
-                      })}
+                  {isCompact ? (
+                    <div className="w-9 md:w-10 flex-shrink-0 text-right select-none text-[10px] text-gray-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity leading-[1.375rem] pr-1">
+                      {shortTime}
+                    </div>
+                  ) : (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
+                      }}
+                      className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white flex-shrink-0 mt-0.5 shadow-sm text-sm overflow-hidden cursor-pointer hover:opacity-85 transition-opacity"
+                      title="Ver perfil"
+                    >
+                      {msg.author?.avatar_url ? (
+                        <img
+                          src={formatAssetUrl(msg.author.avatar_url)}
+                          alt={msg.author.username}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span>
+                          {msg.author?.display_name?.[0]?.toUpperCase() ||
+                            msg.author?.username?.[0]?.toUpperCase() ||
+                            'U'}
+                        </span>
+                      )}
                     </div>
                   )}
+
+                  <div className="flex-1 min-w-0">
+                    {!isCompact && (
+                      <div className="flex items-baseline gap-2 mb-0.5 select-none">
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
+                          }}
+                          className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
+                          title="Ver perfil"
+                        >
+                          {msg.author?.display_name || msg.author?.username || 'Usuário'}
+                        </span>
+                        <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>
+                        {msg.is_pinned && (
+                          <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1">
+                            <Pin className="w-2.5 h-2.5" /> Fixada
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
+                      isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
+                    }`}>
+                      <FormattedMessage
+                        content={msg.content}
+                        onPreviewImage={onPreviewImage}
+                        onImageLoad={handleMediaLoad}
+                        onOpenUserProfile={onOpenUserProfile}
+                      />
+                    </div>
+
+                    {isFailed && (
+                      <div className="mt-1.5 flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="flex-1 truncate">{msg.error || 'Falha ao enviar mensagem.'}</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            useDMStore.setState((s) => ({
+                              messages: s.messages.filter((m) => m.id !== msg.id),
+                              messagesByRoom: {
+                                ...s.messagesByRoom,
+                                [activeRoom.id]: (s.messagesByRoom[activeRoom.id] || []).filter((m) => m.id !== msg.id),
+                              },
+                            }));
+                            await sendMessage(msg.content, msg.attachments, msg.reply_to_id);
+                          }}
+                          className="flex items-center gap-1 text-red-300 hover:text-white underline font-semibold cursor-pointer"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Tentar novamente</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {!isSending && !isFailed && msg.reactions && msg.reactions.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 select-none">
+                        {msg.reactions.map((rx) => {
+                          const hasReacted = user && rx.user_ids.includes(user.id);
+                          return (
+                            <button
+                              key={rx.emoji}
+                              onClick={() => toggleReaction(msg.id, rx.emoji)}
+                              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold border transition-all active:scale-95 cursor-pointer ${
+                                hasReacted
+                                  ? 'bg-brand-500/20 border-brand-500/50 text-brand-300'
+                                  : 'bg-background-darkest/60 border-white/5 text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                              }`}
+                            >
+                              <span>{rx.emoji}</span>
+                              <span className="text-[11px] font-bold">{rx.count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Replying Banner */}
       {replyingTo && (
-        <div className="px-4 py-2 bg-background-darkest border-t border-white/10 flex items-center justify-between text-xs text-gray-300 animate-in fade-in slide-in-from-bottom-1">
+        <div className="px-4 py-1.5 bg-background-darkest border-t border-white/5 flex items-center justify-between text-xs text-gray-300 animate-in fade-in slide-in-from-bottom-1 select-none">
           <div className="flex items-center gap-2 truncate">
             <Reply className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
             <span className="text-gray-400">Respondendo a</span>
@@ -819,7 +835,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           </div>
           <button
             onClick={() => setReplyingTo(null)}
-            className="p-1 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+            className="p-1 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors cursor-pointer"
             title="Cancelar resposta"
           >
             <X className="w-3.5 h-3.5" />
@@ -827,9 +843,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       )}
 
-      {/* Selected Image / File Preview */}
       {selectedFile && (
-        <div className="mx-4 mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in">
+        <div className="mx-4 mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in select-none">
           <div className="flex items-center gap-2.5">
             {selectedImagePreview ? (
               <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-xl border border-white/10 flex-shrink-0" />
@@ -861,7 +876,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       )}
 
-      {/* Emoji & Klipy GIF Picker */}
       <EmojiAndGifPicker
         isOpen={showEmojiPicker}
         onClose={() => setShowEmojiPicker(false)}
@@ -878,58 +892,57 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         className="hidden"
       />
 
-      {/* Message Input Box */}
-      <div className="p-3 md:p-4 bg-background-darker border-t border-black/20 flex items-center gap-2">
-        {/* Upload Button */}
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
-          className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
-          title="Anexar arquivo ou imagem (até 20 MB)"
-        >
-          <PlusCircle className="w-5 h-5" />
-        </button>
+      <div className="p-3 md:p-4 pt-0 select-none">
+        <div className="bg-background-light/40 hover:bg-background-light/60 focus-within:bg-background-light/60 focus-within:ring-1 focus-within:ring-brand-500/50 rounded-xl px-3 py-2.5 flex items-center gap-2 transition-all border border-white/5">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
+            title="Anexar arquivo ou imagem (até 20 MB)"
+          >
+            <PlusCircle className="w-5 h-5" />
+          </button>
 
-        {/* Text Input */}
-        <div className="flex-1 bg-background-darkest rounded-2xl px-4 py-2 border border-white/5 focus-within:border-brand-500/50 flex items-center gap-2">
           <textarea
             ref={textareaRef}
             value={content}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={replyingTo ? `Respondendo a @${replyingTo.author.username}...` : `Conversar com @${recipient?.username || 'amigo'}`}
+            placeholder={
+              replyingTo
+                ? `Respondendo a @${replyingTo.author.username}...`
+                : `Conversar com @${recipient?.display_name || recipient?.username || 'amigo'}`
+            }
             rows={1}
             disabled={isUploading}
-            className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1 max-h-36 leading-relaxed font-normal no-scrollbar"
+            className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-0.5 max-h-36 leading-relaxed font-normal no-scrollbar"
           />
 
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className={`p-1 rounded-full hover:bg-white/5 transition-colors cursor-pointer ${
-              showEmojiPicker ? 'text-brand-500' : 'text-gray-400 hover:text-white'
+              showEmojiPicker ? 'text-brand-400' : 'text-gray-400 hover:text-white'
             }`}
-            title="Inserir Emoji"
+            title="Inserir Emoji ou GIF"
           >
             <Smile className="w-5 h-5" />
           </button>
-        </div>
 
-        {/* Send Button */}
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={(!content.trim() && !selectedFile) || isUploading}
-          className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white p-2.5 rounded-2xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0 cursor-pointer"
-          title="Enviar Mensagem"
-        >
-          {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <SendHorizontal className="w-5 h-5" />}
-        </button>
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={(!content.trim() && !selectedFile) || isUploading}
+            className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white p-1.5 rounded-lg transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0 cursor-pointer"
+            title="Enviar Mensagem"
+          >
+            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
 
-      {/* 2k Char / 20MB Limit Modal */}
       {limitAlert && (
         <LimitAlertModal
           isOpen={true}
