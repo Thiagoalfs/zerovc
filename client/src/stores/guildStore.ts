@@ -69,6 +69,9 @@ interface GuildState {
   deleteRole: (guildId: string, roleId: string) => Promise<void>;
   assignRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
   removeRole: (guildId: string, userId: string, roleId: string) => Promise<void>;
+  handleRoleCreateEvent: (role: Role) => void;
+  handleRoleUpdateEvent: (role: Role) => void;
+  handleRoleDeleteEvent: (guildId: string, roleId: string) => void;
 
   // Moderation
   kickMember: (guildId: string, userId: string) => Promise<void>;
@@ -922,10 +925,52 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   },
 
   updateRole: async (guildId: string, roleId: string, data) => {
-    const updated = await api.roles.update(guildId, roleId, data);
+    // Optimistic local update
     set((state) => {
       if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
-      const roles = (state.activeGuild.roles || []).map((r) => (r.id === roleId ? { ...r, ...updated } : r));
+      const roles = (state.activeGuild.roles || []).map((r) => (r.id === roleId ? { ...r, ...data } : r));
+      return { activeGuild: { ...state.activeGuild, roles } };
+    });
+
+    try {
+      const updated = await api.roles.update(guildId, roleId, data);
+      set((state) => {
+        if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+        const roles = (state.activeGuild.roles || []).map((r) => (r.id === roleId ? { ...r, ...updated } : r));
+        return { activeGuild: { ...state.activeGuild, roles } };
+      });
+    } catch (err) {
+      console.error('Failed to update role via API:', err);
+      try {
+        const fullGuild = await api.guilds.getDetails(guildId);
+        set({ activeGuild: fullGuild });
+      } catch {}
+      throw err;
+    }
+  },
+
+  handleRoleCreateEvent: (role: Role) => {
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== role.guild_id) return state;
+      const exists = (state.activeGuild.roles || []).some((r) => r.id === role.id);
+      if (exists) return state;
+      const roles = [...(state.activeGuild.roles || []), role];
+      return { activeGuild: { ...state.activeGuild, roles } };
+    });
+  },
+
+  handleRoleUpdateEvent: (role: Role) => {
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== role.guild_id) return state;
+      const roles = (state.activeGuild.roles || []).map((r) => (r.id === role.id ? { ...r, ...role } : r));
+      return { activeGuild: { ...state.activeGuild, roles } };
+    });
+  },
+
+  handleRoleDeleteEvent: (guildId: string, roleId: string) => {
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const roles = (state.activeGuild.roles || []).filter((r) => r.id !== roleId);
       return { activeGuild: { ...state.activeGuild, roles } };
     });
   },

@@ -631,6 +631,24 @@ export const App: React.FC = () => {
         }
       };
 
+      const handleRoleCreate = (event: any) => {
+        if (event.data?.id) {
+          useGuildStore.getState().handleRoleCreateEvent(event.data);
+        }
+      };
+
+      const handleRoleUpdate = (event: any) => {
+        if (event.data?.id) {
+          useGuildStore.getState().handleRoleUpdateEvent(event.data);
+        }
+      };
+
+      const handleRoleDelete = (event: any) => {
+        if (event.data?.role_id && event.data?.guild_id) {
+          useGuildStore.getState().handleRoleDeleteEvent(event.data.guild_id, event.data.role_id);
+        }
+      };
+
       socket.on('MESSAGE_CREATE', handleMessageCreate);
       socket.on('MESSAGE_UPDATE', handleMessageUpdate);
       socket.on('MESSAGE_DELETE', handleMessageDelete);
@@ -659,6 +677,9 @@ export const App: React.FC = () => {
       socket.on('GUILD_MEMBER_UPDATE', handleGuildMemberUpdate);
       socket.on('PRESENCE_UPDATE', handlePresenceUpdate);
       socket.on('CHANNEL_ACK', handleChannelAck);
+      socket.on('ROLE_CREATE', handleRoleCreate);
+      socket.on('ROLE_UPDATE', handleRoleUpdate);
+      socket.on('ROLE_DELETE', handleRoleDelete);
 
       return () => {
         window.removeEventListener('popstate', onRouteEvent);
@@ -691,6 +712,9 @@ export const App: React.FC = () => {
         socket.off('GUILD_MEMBER_UPDATE', handleGuildMemberUpdate);
         socket.off('PRESENCE_UPDATE', handlePresenceUpdate);
         socket.off('CHANNEL_ACK', handleChannelAck);
+        socket.off('ROLE_CREATE', handleRoleCreate);
+        socket.off('ROLE_UPDATE', handleRoleUpdate);
+        socket.off('ROLE_DELETE', handleRoleDelete);
       };
     }
   }, [token, user]);
