@@ -5,13 +5,13 @@ WORKDIR /app
 
 # Cache Go dependencies layer
 COPY go.mod go.sum ./
-COPY vendor/ ./vendor/
+RUN go mod download || go mod tidy
 
 # Copy backend source code
 COPY . .
 
-# Compile static Go binary using vendored dependencies
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o zerovc-server ./cmd/server/main.go
+# Compile static Go binary
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o zerovc-server ./cmd/server/main.go
 
 # Minimal runtime container
 FROM alpine:latest
