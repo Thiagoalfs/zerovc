@@ -421,7 +421,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <div className="p-3 md:p-4 bg-background-dark relative">
+    <div className="px-3 md:px-4 pb-3 md:pb-4 pt-0 bg-background-dark relative">
       {/* Emoji Autocomplete Suggestions Popup */}
       {emojiSuggestions.length > 0 && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
