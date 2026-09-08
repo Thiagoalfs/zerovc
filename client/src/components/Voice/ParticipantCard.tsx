@@ -471,7 +471,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         style={{
           backgroundColor: (isScreenSharing && isWatching) || hasCameraVideoTrack ? '#000000' : dominantBg,
         }}
-        className={`relative rounded-2xl overflow-hidden flex flex-col items-center justify-center w-full h-full min-h-[140px] aspect-video border-2 transition-all duration-150 group cursor-pointer ${
+        className={`relative rounded-2xl overflow-hidden flex flex-col items-center justify-center w-full h-full min-h-0 aspect-video border-2 transition-all duration-150 group cursor-pointer ${
           isSpeaking
             ? 'border-[#23a55a] shadow-[0_0_12px_rgba(35,165,90,0.35)] ring-1 ring-[#23a55a]'
             : 'border-transparent hover:border-white/10'
