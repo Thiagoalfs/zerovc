@@ -828,7 +828,7 @@ func (h *DMHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	if len(msgIDs) > 0 {
 		reactionsQuery := `
 			SELECT dm_message_id, emoji, user_id
-			FROM dm_message_reactions
+			FROM message_reactions
 			WHERE dm_message_id = ANY($1)
 		`
 		rxRows, err := h.db.Pool.Query(r.Context(), reactionsQuery, msgIDs)

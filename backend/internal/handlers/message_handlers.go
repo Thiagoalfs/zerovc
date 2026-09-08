@@ -1020,7 +1020,8 @@ func (h *MessageHandler) AckChannel(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
 	var guildID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
+	var isPrivate bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
@@ -1031,6 +1032,23 @@ func (h *MessageHandler) AckChannel(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server"}`, http.StatusForbidden)
 		return
+	}
+
+	if isPrivate {
+		var hasAccess bool
+		privateCheckQuery := `
+			SELECT EXISTS(
+				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
+				UNION
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
+			)
+		`
+		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
+			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	var lastMsgID *uuid.UUID = req.MessageID
