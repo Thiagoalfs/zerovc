@@ -33,6 +33,7 @@ export interface User {
   custom_status?: string;
   roles?: Role[];
   two_factor_enabled?: boolean;
+  email_verified?: boolean;
   muted_until?: string;
   created_at?: string;
 }

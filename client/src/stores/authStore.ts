@@ -17,8 +17,10 @@ interface AuthState {
   isCheckingAuth: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string, code?: string) => Promise<{ requires_2fa?: boolean } | void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, code?: string) => Promise<{ requires_2fa?: boolean; requires_verification?: boolean; email?: string } | void>;
+  register: (username: string, email: string, password: string) => Promise<{ requires_verification?: boolean; email?: string } | void>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
+  clearError: () => void;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   updateProfile: (data: {
@@ -131,6 +133,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: false,
   error: null,
 
+  clearError: () => set({ error: null }),
+
   login: async (email, password, code) => {
     set({ isLoading: true, error: null });
     try {
@@ -138,6 +142,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (res.requires_2fa) {
         set({ isLoading: false });
         return { requires_2fa: true };
+      }
+      if (res.requires_verification) {
+        set({ isLoading: false });
+        return { requires_verification: true, email: res.email || email };
       }
       if (res.token && res.user) {
         if (isElectron()) {
@@ -157,14 +165,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await api.auth.register({ username, email, password });
-      if (res.token && isElectron()) {
-        localStorage.setItem('token', res.token);
-        localStorage.setItem('zerovc_token', res.token);
+      if (res.requires_verification) {
+        set({ isLoading: false });
+        return { requires_verification: true, email: res.email || email };
       }
-      set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
-      socket.connect();
+      if (res.token && res.user) {
+        if (isElectron()) {
+          localStorage.setItem('token', res.token);
+          localStorage.setItem('zerovc_token', res.token);
+        }
+        set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
+        socket.connect();
+      }
     } catch (err: any) {
       set({ error: err.message || 'Falha ao criar conta', isLoading: false });
+      throw err;
+    }
+  },
+
+  verifyEmail: async (email, code) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await api.auth.verifyEmail({ email, code });
+      if (res.token && res.user) {
+        if (isElectron()) {
+          localStorage.setItem('token', res.token);
+          localStorage.setItem('zerovc_token', res.token);
+        }
+        set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
+        socket.connect();
+      }
+    } catch (err: any) {
+      set({ error: err.message || 'Código de verificação inválido ou expirado', isLoading: false });
       throw err;
     }
   },

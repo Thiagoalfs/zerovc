@@ -247,17 +247,6 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             <h3 className="text-base font-bold text-white tracking-tight">
               {modalTitle}
             </h3>
-            {isAnimatedGif ? (
-              <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-semibold border border-purple-500/30 flex items-center gap-1">
-                <Film className="w-3 h-3" />
-                <span>GIF Animado</span>
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 text-[10px] font-semibold border border-brand-500/30 flex items-center gap-1">
-                <Sparkles className="w-3 h-3" />
-                <span>WebP</span>
-              </span>
-            )}
           </div>
           <button
             type="button"
