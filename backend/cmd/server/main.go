@@ -264,6 +264,7 @@ func main() {
 		r.Post("/api/guilds/{id}/transfer-ownership", guildHandler.TransferOwnership)
 		r.Get("/api/guilds/{id}/emojis", guildHandler.ListEmojis)
 		r.Post("/api/guilds/{id}/emojis", guildHandler.CreateEmoji)
+		r.Patch("/api/guilds/{id}/emojis/{emojiID}", guildHandler.UpdateEmoji)
 		r.Delete("/api/guilds/{id}/emojis/{emojiID}", guildHandler.DeleteEmoji)
 		r.Get("/api/guilds/{id}/audit-logs", guildHandler.ListAuditLogs)
 		r.Get("/api/guilds/{guildID}/read-states", messageHandler.GetGuildReadStates)

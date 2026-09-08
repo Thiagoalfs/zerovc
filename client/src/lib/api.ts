@@ -245,6 +245,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    updateEmoji: (guildId: string, emojiId: string, data: { name: string }) =>
+      request<GuildEmoji>(`/guilds/${guildId}/emojis/${emojiId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
     deleteEmoji: (guildId: string, emojiId: string) =>
       request<{ success: boolean; id: string }>(`/guilds/${guildId}/emojis/${emojiId}`, {
         method: 'DELETE',

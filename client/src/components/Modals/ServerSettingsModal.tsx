@@ -32,12 +32,14 @@ import {
   Sparkles,
   CheckCircle2,
   Calendar,
+  Pencil,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Permissions, Role, GuildEmoji, GuildInvite, User } from '../../types';
 import { api, formatAssetUrl, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
+import { convertToWebP } from '../../utils/image';
 import { ImageCropModal } from './ImageCropModal';
 import { ServerAuditLogView } from './ServerAuditLogView';
 
@@ -220,6 +222,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const [emojiPreviewUrl, setEmojiPreviewUrl] = useState<string>('');
   const [emojiName, setEmojiName] = useState('');
   const [emojiError, setEmojiError] = useState('');
+  const [isConvertingWebP, setIsConvertingWebP] = useState(false);
+  const [emojiToEdit, setEmojiToEdit] = useState<GuildEmoji | null>(null);
+  const [editEmojiName, setEditEmojiName] = useState('');
+  const [isUpdatingEmoji, setIsUpdatingEmoji] = useState(false);
+  const [editEmojiError, setEditEmojiError] = useState('');
   const emojiInputRef = useRef<HTMLInputElement>(null);
 
   // Invites State
@@ -560,7 +567,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   // 3. Emojis Actions
-  const handleSelectEmojiFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSelectEmojiFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -569,13 +576,25 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       return;
     }
 
-    setEmojiFile(file);
-    setEmojiPreviewUrl(URL.createObjectURL(file));
-    const autoName = file.name.split('.')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    setEmojiName(autoName.slice(0, 32));
-    setEmojiError('');
-    setEmojiUploadModalOpen(true);
-    if (emojiInputRef.current) emojiInputRef.current.value = '';
+    try {
+      setIsConvertingWebP(true);
+      // Convert static images to WebP maintaining transparent background & high quality
+      const webpFile = await convertToWebP(file, { quality: 0.95, maxWidth: 512, maxHeight: 512 });
+      setEmojiFile(webpFile);
+      setEmojiPreviewUrl(URL.createObjectURL(webpFile));
+      const autoName = file.name.split('.')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      setEmojiName(autoName.slice(0, 32));
+      setEmojiError('');
+      setEmojiUploadModalOpen(true);
+    } catch (err: any) {
+      console.error('Error preparing emoji file:', err);
+      setEmojiFile(file);
+      setEmojiPreviewUrl(URL.createObjectURL(file));
+      setEmojiUploadModalOpen(true);
+    } finally {
+      setIsConvertingWebP(false);
+      if (emojiInputRef.current) emojiInputRef.current.value = '';
+    }
   };
 
   const handleConfirmUploadEmoji = async (e: React.FormEvent) => {
@@ -599,6 +618,32 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       setEmojiError(err.message || 'Falha ao carregar emoji');
     } finally {
       setIsUploadingEmoji(false);
+    }
+  };
+
+  const handleOpenEditEmojiModal = (emoji: GuildEmoji) => {
+    setEmojiToEdit(emoji);
+    setEditEmojiName(emoji.name);
+    setEditEmojiError('');
+  };
+
+  const handleConfirmEditEmojiName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emojiToEdit || !editEmojiName.trim()) return;
+
+    setIsUpdatingEmoji(true);
+    setEditEmojiError('');
+    try {
+      const updated = await api.guilds.updateEmoji(activeGuild.id, emojiToEdit.id, {
+        name: editEmojiName.trim(),
+      });
+      setEmojisList((prev) => prev.map((em) => (em.id === updated.id ? updated : em)));
+      setEmojiToEdit(null);
+      setEditEmojiName('');
+    } catch (err: any) {
+      setEditEmojiError(err.message || 'Falha ao renomear emoji');
+    } finally {
+      setIsUpdatingEmoji(false);
     }
   };
 
@@ -1553,16 +1598,26 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                                   navigator.clipboard.writeText(`:${em.name}:`);
                                   alert(`:${em.name}: copiado para a área de transferência!`);
                                 }}
-                                className="p-1 text-gray-400 hover:text-white rounded"
+                                className="p-1 text-gray-400 hover:text-white rounded transition-colors cursor-pointer"
                                 title="Copiar código"
                               >
                                 <Copy className="w-3.5 h-3.5" />
                               </button>
-                              {isOwner && (
+                              {(isOwner || hasAdmin) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditEmojiModal(em)}
+                                  className="p-1 text-gray-400 hover:text-brand-400 rounded transition-colors cursor-pointer"
+                                  title="Renomear Emoji"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {(isOwner || hasAdmin) && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteEmoji(em.id, em.name)}
-                                  className="p-1 text-red-400 hover:text-red-300 rounded"
+                                  className="p-1 text-red-400 hover:text-red-300 rounded transition-colors cursor-pointer"
                                   title="Excluir Emoji"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -1965,9 +2020,79 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 <button
                   type="submit"
                   disabled={isUploadingEmoji || !emojiName.trim()}
-                  className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition-colors"
+                  className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   {isUploadingEmoji ? 'Enviando...' : 'Salvar Emoji'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2.1: EDIT EMOJI NAME */}
+      {emojiToEdit && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-[#1e1f22] rounded-2xl border border-white/10 shadow-2xl p-6 text-gray-200 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-brand-400" />
+              <span>Editar Nome do Emoji</span>
+            </h3>
+            <p className="text-xs text-gray-400 mb-5">
+              Altere o atalho que os membros usam para digitar este emoji no chat.
+            </p>
+
+            {editEmojiError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs">
+                {editEmojiError}
+              </div>
+            )}
+
+            <form onSubmit={handleConfirmEditEmojiName} className="space-y-4">
+              <div className="w-24 h-24 mx-auto rounded-2xl bg-[#111214] border border-white/10 flex items-center justify-center p-3 overflow-hidden shadow-inner">
+                <img
+                  src={formatAssetUrl(emojiToEdit.image_url)}
+                  alt={emojiToEdit.name}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+                  Nome do Emoji
+                </label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-gray-400 font-mono text-sm">:</span>
+                  <input
+                    type="text"
+                    value={editEmojiName}
+                    onChange={(e) => setEditEmojiName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
+                    placeholder="novo_nome"
+                    maxLength={32}
+                    autoFocus
+                    className="w-full pl-7 pr-7 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-brand-500"
+                  />
+                  <span className="absolute right-3 text-gray-400 font-mono text-sm">:</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmojiToEdit(null);
+                    setEditEmojiName('');
+                  }}
+                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingEmoji || !editEmojiName.trim() || editEmojiName.trim() === emojiToEdit.name}
+                  className="px-5 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all cursor-pointer"
+                >
+                  {isUpdatingEmoji ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
               </div>
             </form>
