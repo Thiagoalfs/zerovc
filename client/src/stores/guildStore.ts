@@ -993,11 +993,76 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   },
 
   assignRole: async (guildId: string, userId: string, roleId: string) => {
-    await api.roles.assign(guildId, userId, roleId);
+    // Optimistic local update
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const targetRole = (state.activeGuild.roles || []).find((r) => r.id === roleId);
+      if (!targetRole) return state;
+      const members = (state.activeGuild.members || []).map((m) => {
+        if (m.id === userId) {
+          const currentRoles = m.roles || [];
+          if (currentRoles.some((r) => r.id === roleId)) return m;
+          return { ...m, roles: [...currentRoles, targetRole] };
+        }
+        return m;
+      });
+      return { activeGuild: { ...state.activeGuild, members } };
+    });
+
+    try {
+      const res = await api.roles.assign(guildId, userId, roleId);
+      if (res && res.roles) {
+        set((state) => {
+          if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+          const members = (state.activeGuild.members || []).map((m) =>
+            m.id === userId ? { ...m, roles: res.roles } : m
+          );
+          return { activeGuild: { ...state.activeGuild, members } };
+        });
+      }
+    } catch (err) {
+      console.error('Failed to assign role:', err);
+      try {
+        const fullGuild = await api.guilds.getDetails(guildId);
+        set({ activeGuild: fullGuild });
+      } catch {}
+      throw err;
+    }
   },
 
   removeRole: async (guildId: string, userId: string, roleId: string) => {
-    await api.roles.remove(guildId, userId, roleId);
+    // Optimistic local update
+    set((state) => {
+      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+      const members = (state.activeGuild.members || []).map((m) => {
+        if (m.id === userId) {
+          const currentRoles = m.roles || [];
+          return { ...m, roles: currentRoles.filter((r) => r.id !== roleId) };
+        }
+        return m;
+      });
+      return { activeGuild: { ...state.activeGuild, members } };
+    });
+
+    try {
+      const res = await api.roles.remove(guildId, userId, roleId);
+      if (res && res.roles) {
+        set((state) => {
+          if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
+          const members = (state.activeGuild.members || []).map((m) =>
+            m.id === userId ? { ...m, roles: res.roles } : m
+          );
+          return { activeGuild: { ...state.activeGuild, members } };
+        });
+      }
+    } catch (err) {
+      console.error('Failed to remove role:', err);
+      try {
+        const fullGuild = await api.guilds.getDetails(guildId);
+        set({ activeGuild: fullGuild });
+      } catch {}
+      throw err;
+    }
   },
 
   kickMember: async (guildId: string, userId: string) => {
