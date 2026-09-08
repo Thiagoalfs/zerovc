@@ -179,7 +179,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   onSelectGif,
   positionClass = 'bottom-16 right-4',
 }) => {
-  const { activeGuild } = useGuildStore();
+  const { activeGuild, guilds } = useGuildStore();
   const autoplayGifs = useSettingsStore((s) => s.autoplayGifs);
   const [activeTab, setActiveTab] = useState<'emoji' | 'gif'>('emoji');
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
@@ -286,13 +286,36 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
     return () => clearTimeout(timer);
   }, [activeTab, activeCategory, gifSearch]);
 
+  const allServerEmojis = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+    if (activeGuild?.emojis) {
+      for (const e of activeGuild.emojis) {
+        if (!seen.has(e.id)) {
+          seen.add(e.id);
+          list.push(e);
+        }
+      }
+    }
+    for (const g of guilds) {
+      if (g.emojis) {
+        for (const e of g.emojis) {
+          if (!seen.has(e.id)) {
+            seen.add(e.id);
+            list.push(e);
+          }
+        }
+      }
+    }
+    return list;
+  }, [activeGuild?.emojis, guilds]);
+
   // Filtered Emojis
   const filteredServerEmojis = useMemo(() => {
-    const list = activeGuild?.emojis || [];
-    if (!emojiSearch.trim()) return list;
+    if (!emojiSearch.trim()) return allServerEmojis;
     const q = emojiSearch.trim().toLowerCase().replace(/^:|:$/g, '');
-    return list.filter((e) => e.name.toLowerCase().includes(q));
-  }, [activeGuild?.emojis, emojiSearch]);
+    return allServerEmojis.filter((e) => e.name.toLowerCase().includes(q));
+  }, [allServerEmojis, emojiSearch]);
 
   const filteredStandardEmojis = useMemo(() => {
     if (!emojiSearch.trim()) {

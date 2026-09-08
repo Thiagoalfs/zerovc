@@ -1470,5 +1470,93 @@ func (h *GuildHandler) DeleteEmoji(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "id": emojiID})
 }
 
+type UpdateEmojiRequest struct {
+	Name string `json:"name"`
+}
+
+func (h *GuildHandler) UpdateEmoji(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	emojiIDStr := chi.URLParam(r, "emojiID")
+	guildID, _ := uuid.Parse(guildIDStr)
+	emojiID, err := uuid.Parse(emojiIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid emoji id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify manage guild / admin / owner
+	var ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != ownerID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
+			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar emojis"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	var req UpdateEmojiRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+		http.Error(w, `{"error":"name is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	cleanName := strings.TrimSpace(req.Name)
+	cleanName = strings.Trim(cleanName, ":")
+	if len(cleanName) > 32 {
+		cleanName = cleanName[:32]
+	}
+
+	var emoji models.GuildEmoji
+	updateQuery := `
+		UPDATE guild_emojis
+		SET name = $1
+		WHERE id = $2 AND guild_id = $3
+		RETURNING id, guild_id, name, image_url, creator_id, created_at
+	`
+	err = h.db.Pool.QueryRow(r.Context(), updateQuery, cleanName, emojiID, guildID).Scan(
+		&emoji.ID, &emoji.GuildID, &emoji.Name, &emoji.ImageURL, &emoji.CreatorID, &emoji.CreatedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update emoji"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var creator models.UserPublic
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, username, display_name, avatar_url, status FROM users WHERE id = $1`, emoji.CreatorID).Scan(
+		&creator.ID, &creator.Username, &creator.DisplayName, &creator.AvatarURL, &creator.Status,
+	)
+	emoji.Creator = &creator
+
+	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+		Type: "GUILD_EMOJI_UPDATE",
+		Data: emoji,
+	})
+
+	h.LogAudit(r.Context(), guildID, userID, "EMOJI_UPDATE", &emojiID, map[string]any{"name": emoji.Name})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(emoji)
+}
+
 
 
