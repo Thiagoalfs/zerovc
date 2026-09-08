@@ -143,7 +143,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       <div className="h-[52px] px-2 flex items-center justify-between bg-background-darkest/60">
         <div
           onClick={() => setShowStatusMenu(!showStatusMenu)}
-          className="flex items-center gap-2 p-1 rounded-xl hover:bg-background-light/50 cursor-pointer max-w-[130px] transition-colors"
+          className="flex items-center gap-2 p-1 rounded-xl hover:bg-background-light/50 cursor-pointer flex-1 min-w-0 mr-1 transition-colors"
         >
           {/* Avatar */}
           <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
@@ -160,11 +160,11 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             />
           </div>
 
-          <div className="flex flex-col truncate">
-            <span className="text-xs font-semibold text-gray-100 truncate leading-tight">
+          <div className="flex flex-col truncate min-w-0">
+            <span className="text-[13.5px] font-semibold text-gray-100 truncate leading-tight">
               {user?.display_name || user?.username || 'Usuário'}
             </span>
-            <span className="text-[10px] text-gray-400 truncate leading-tight">
+            <span className="text-[11px] text-gray-400 truncate leading-tight">
               {user?.custom_status || getStatusLabel(user?.status)}
             </span>
           </div>
