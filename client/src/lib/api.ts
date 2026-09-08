@@ -383,11 +383,11 @@ export const api = {
         method: 'DELETE',
       }),
     assign: (guildId: string, userId: string, roleId: string) =>
-      request<{ success: boolean }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+      request<{ success: boolean; roles: Role[] }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
         method: 'POST',
       }),
     remove: (guildId: string, userId: string, roleId: string) =>
-      request<{ success: boolean }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+      request<{ success: boolean; roles: Role[] }>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
         method: 'DELETE',
       }),
   },
