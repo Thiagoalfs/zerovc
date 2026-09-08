@@ -649,6 +649,24 @@ export const App: React.FC = () => {
         }
       };
 
+      const handleGuildEmojiCreate = (event: any) => {
+        if (event.data?.id) {
+          useGuildStore.getState().handleEmojiCreateEvent(event.data);
+        }
+      };
+
+      const handleGuildEmojiUpdate = (event: any) => {
+        if (event.data?.id) {
+          useGuildStore.getState().handleEmojiUpdateEvent(event.data);
+        }
+      };
+
+      const handleGuildEmojiDelete = (event: any) => {
+        if (event.data) {
+          useGuildStore.getState().handleEmojiDeleteEvent(event.data);
+        }
+      };
+
       socket.on('MESSAGE_CREATE', handleMessageCreate);
       socket.on('MESSAGE_UPDATE', handleMessageUpdate);
       socket.on('MESSAGE_DELETE', handleMessageDelete);
@@ -680,6 +698,9 @@ export const App: React.FC = () => {
       socket.on('ROLE_CREATE', handleRoleCreate);
       socket.on('ROLE_UPDATE', handleRoleUpdate);
       socket.on('ROLE_DELETE', handleRoleDelete);
+      socket.on('GUILD_EMOJI_CREATE', handleGuildEmojiCreate);
+      socket.on('GUILD_EMOJI_UPDATE', handleGuildEmojiUpdate);
+      socket.on('GUILD_EMOJI_DELETE', handleGuildEmojiDelete);
 
       return () => {
         window.removeEventListener('popstate', onRouteEvent);
@@ -715,6 +736,9 @@ export const App: React.FC = () => {
         socket.off('ROLE_CREATE', handleRoleCreate);
         socket.off('ROLE_UPDATE', handleRoleUpdate);
         socket.off('ROLE_DELETE', handleRoleDelete);
+        socket.off('GUILD_EMOJI_CREATE', handleGuildEmojiCreate);
+        socket.off('GUILD_EMOJI_UPDATE', handleGuildEmojiUpdate);
+        socket.off('GUILD_EMOJI_DELETE', handleGuildEmojiDelete);
       };
     }
   }, [token, user]);

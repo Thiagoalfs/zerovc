@@ -31,7 +31,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   droppedFile,
   onClearDroppedFile,
 }) => {
-  const { activeGuild } = useGuildStore();
+  const { activeGuild, guilds } = useGuildStore();
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -52,6 +52,30 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingTime = useRef<number>(0);
+
+  const allAvailableEmojis = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+    if (activeGuild?.emojis) {
+      for (const e of activeGuild.emojis) {
+        if (!seen.has(e.name.toLowerCase())) {
+          seen.add(e.name.toLowerCase());
+          list.push(e);
+        }
+      }
+    }
+    for (const g of guilds) {
+      if (g.emojis) {
+        for (const e of g.emojis) {
+          if (!seen.has(e.name.toLowerCase())) {
+            seen.add(e.name.toLowerCase());
+            list.push(e);
+          }
+        }
+      }
+    }
+    return list;
+  }, [activeGuild?.emojis, guilds]);
 
   // Compute filtered mention suggestions
   const mentionSuggestions = useMemo(() => {
@@ -115,8 +139,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   // Compute filtered emoji suggestions
   const emojiSuggestions = useMemo(() => {
     if (emojiQuery === null) return [];
-    return searchEmojiSuggestions(emojiQuery, activeGuild?.emojis, activeGuild?.name, 8);
-  }, [emojiQuery, activeGuild?.emojis, activeGuild?.name]);
+    return searchEmojiSuggestions(emojiQuery, allAvailableEmojis, activeGuild?.name, 8);
+  }, [emojiQuery, allAvailableEmojis, activeGuild?.name]);
 
   useEffect(() => {
     if (droppedFile) {
@@ -185,7 +209,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   const handleSend = async () => {
     if (isUploading) return;
-    let finalContent = replaceEmojiShortcodes(content.trim(), activeGuild?.emojis);
+    let finalContent = replaceEmojiShortcodes(content.trim(), allAvailableEmojis);
 
     // Check 2,000 character limit on raw text
     if (finalContent.length > MAX_CHARS) {
@@ -307,8 +331,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const cursor = e.target.selectionStart || val.length;
     const textBefore = val.slice(0, cursor);
 
-    // Detect @ mention query at cursor
-    const mentionMatch = textBefore.match(/@([a-zA-Z0-9_.-]*)$/);
+    // Detect @ mention query at cursor (e.g. "@" or "@usr" at start or after whitespace)
+    const mentionMatch = textBefore.match(/(?:^|\s)@([a-zA-Z0-9_.-]*)$/);
     if (mentionMatch) {
       setMentionQuery(mentionMatch[1]);
       setMentionCursorPos(cursor);
@@ -471,7 +495,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 }`}
               >
                 {item.isSpecial ? (
-                  <div className="w-6 h-6 rounded-full bg-brand-500/30 flex items-center justify-center text-xs font-bold text-brand-300">
+                  <div className="w-6 h-6 rounded-full bg-brand-500/30 flex items-center justify-center text-xs font-bold text-brand-300 flex-shrink-0">
+                    @
+                  </div>
+                ) : item.isRole ? (
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 border"
+                    style={{
+                      backgroundColor: `${item.roleColor || '#5865F2'}22`,
+                      color: item.roleColor || '#5865F2',
+                      borderColor: `${item.roleColor || '#5865F2'}55`,
+                    }}
+                  >
                     @
                   </div>
                 ) : (
@@ -490,8 +525,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                   >
                     {item.name}
                   </span>
-                  {!item.isSpecial && (
+                  {!item.isSpecial && !item.isRole && (
                     <span className="text-[10px] text-gray-500 truncate">@{item.username}</span>
+                  )}
+                  {item.isRole && (
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-white/5 text-gray-400 border border-white/10 uppercase font-mono">
+                      Cargo
+                    </span>
                   )}
                 </div>
               </button>

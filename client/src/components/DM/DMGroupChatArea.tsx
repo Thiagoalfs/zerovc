@@ -482,6 +482,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                           className="text-sm select-text"
                           onPreviewImage={onPreviewImage}
                           onImageLoad={handleMediaLoad}
+                          onOpenUserProfile={onOpenUserProfile}
                         />
                       </div>
 

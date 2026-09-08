@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Channel, Guild, Message, Role, VoiceSession, User, ChannelPermissionOverwrite } from '../types';
+import { Channel, Guild, Message, Role, VoiceSession, User, ChannelPermissionOverwrite, GuildEmoji } from '../types';
 import { api } from '../lib/api';
 import { playMessageSound } from '../utils/audio';
 import { useAuthStore } from './authStore';
@@ -72,6 +72,11 @@ interface GuildState {
   handleRoleCreateEvent: (role: Role) => void;
   handleRoleUpdateEvent: (role: Role) => void;
   handleRoleDeleteEvent: (guildId: string, roleId: string) => void;
+
+  // Emojis
+  handleEmojiCreateEvent: (emoji: GuildEmoji) => void;
+  handleEmojiUpdateEvent: (emoji: GuildEmoji) => void;
+  handleEmojiDeleteEvent: (data: { guild_id: string; id: string }) => void;
 
   // Moderation
   kickMember: (guildId: string, userId: string) => Promise<void>;
@@ -1089,6 +1094,63 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
       const roles = (state.activeGuild.roles || []).filter((r) => r.id !== roleId);
       return { activeGuild: { ...state.activeGuild, roles } };
+    });
+  },
+
+  handleEmojiCreateEvent: (emoji: GuildEmoji) => {
+    set((state) => {
+      const nextGuilds = state.guilds.map((g) => {
+        if (g.id === emoji.guild_id) {
+          const exists = (g.emojis || []).some((e) => e.id === emoji.id);
+          const emojis = exists ? g.emojis : [emoji, ...(g.emojis || [])];
+          return { ...g, emojis };
+        }
+        return g;
+      });
+
+      if (!state.activeGuild || state.activeGuild.id !== emoji.guild_id) {
+        return { guilds: nextGuilds };
+      }
+      const exists = (state.activeGuild.emojis || []).some((e) => e.id === emoji.id);
+      if (exists) return { guilds: nextGuilds };
+      const emojis = [emoji, ...(state.activeGuild.emojis || [])];
+      return { guilds: nextGuilds, activeGuild: { ...state.activeGuild, emojis } };
+    });
+  },
+
+  handleEmojiUpdateEvent: (emoji: GuildEmoji) => {
+    set((state) => {
+      const nextGuilds = state.guilds.map((g) => {
+        if (g.id === emoji.guild_id) {
+          const emojis = (g.emojis || []).map((e) => (e.id === emoji.id ? { ...e, ...emoji } : e));
+          return { ...g, emojis };
+        }
+        return g;
+      });
+
+      if (!state.activeGuild || state.activeGuild.id !== emoji.guild_id) {
+        return { guilds: nextGuilds };
+      }
+      const emojis = (state.activeGuild.emojis || []).map((e) => (e.id === emoji.id ? { ...e, ...emoji } : e));
+      return { guilds: nextGuilds, activeGuild: { ...state.activeGuild, emojis } };
+    });
+  },
+
+  handleEmojiDeleteEvent: (data: { guild_id: string; id: string }) => {
+    set((state) => {
+      const nextGuilds = state.guilds.map((g) => {
+        if (g.id === data.guild_id) {
+          const emojis = (g.emojis || []).filter((e) => e.id !== data.id);
+          return { ...g, emojis };
+        }
+        return g;
+      });
+
+      if (!state.activeGuild || state.activeGuild.id !== data.guild_id) {
+        return { guilds: nextGuilds };
+      }
+      const emojis = (state.activeGuild.emojis || []).filter((e) => e.id !== data.id);
+      return { guilds: nextGuilds, activeGuild: { ...state.activeGuild, emojis } };
     });
   },
 

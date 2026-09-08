@@ -188,6 +188,190 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     }
   };
 
+  const handleUserContextMenu = (e: React.MouseEvent, targetUser: User) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isMe = targetUser.id === user?.id;
+    const isTargetOwner = activeGuild ? targetUser.id === activeGuild.owner_id : false;
+    const isCurrentOwner = activeGuild ? activeGuild.owner_id === user?.id : false;
+    const guildRoles = activeGuild?.roles || [];
+
+    // Calculate current user's permissions and position
+    const currentUserRoles = activeGuild?.members?.find((m) => m.id === user?.id)?.roles || [];
+    let currentUserPerms = 0;
+    let currentUserHighestPos = 999999;
+    currentUserRoles.forEach((r) => {
+      currentUserPerms |= Number(r.permissions || 0);
+      if (r.position < currentUserHighestPos) {
+        currentUserHighestPos = r.position;
+      }
+    });
+
+    const hasAdmin = isCurrentOwner || (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
+    const canManageRoles = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_ROLES) !== 0;
+    const canKick = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.KICK_MEMBERS) !== 0;
+    const canBan = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.BAN_MEMBERS) !== 0;
+    const canMute = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_MEMBERS) !== 0;
+
+    // Calculate target member's highest position
+    const targetMember = activeGuild?.members?.find((m) => m.id === targetUser.id);
+    let targetHighestPos = 999999;
+    (targetMember?.roles || []).forEach((r) => {
+      if (r.position < targetHighestPos) {
+        targetHighestPos = r.position;
+      }
+    });
+
+    const isHierarchyAllowed = isCurrentOwner || currentUserHighestPos < targetHighestPos;
+
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Ver Perfil',
+        icon: <UserIcon className="w-4 h-4" />,
+        onClick: () => onOpenUserProfile?.(targetUser, { x: e.clientX, y: e.clientY }),
+      },
+    ];
+
+    if (!isMe) {
+      items.push({
+        label: 'Enviar Mensagem',
+        icon: <MessageSquare className="w-4 h-4" />,
+        onClick: async () => {
+          if (onOpenDM) {
+            onOpenDM(targetUser.id);
+          } else {
+            await openDMWithUser(targetUser.id);
+          }
+        },
+      });
+
+      items.push({ label: '', separator: true });
+      items.push({
+        label: 'Volume de Usuário',
+        customRender: <UserVolumeSlider userId={targetUser.id} />,
+      });
+    }
+
+    items.push({
+      label: 'Copiar ID do Usuário',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(targetUser.id),
+    });
+
+    // Server Member Moderation Actions
+    if (activeGuild && targetMember && (isCurrentOwner || isMe || (!isTargetOwner && isHierarchyAllowed))) {
+      // Change Roles Submenu
+      if (canManageRoles && guildRoles.length > 0) {
+        const roleSubItems: ContextMenuItem[] = guildRoles
+          .filter((role) => role.name !== '@everyone')
+          .map((role) => {
+            const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
+            return {
+              label: role.name,
+              icon: hasRole ? (
+                <Check className="w-3.5 h-3.5 text-online" />
+              ) : (
+                <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
+              ),
+              onClick: async () => {
+                if (hasRole) {
+                  await removeRole(activeGuild.id, targetMember.id, role.id);
+                } else {
+                  await assignRole(activeGuild.id, targetMember.id, role.id);
+                }
+              },
+            };
+          });
+
+        items.push({
+          label: 'Alterar Cargos',
+          icon: <Shield className="w-4 h-4 text-brand-400" />,
+          subItems: roleSubItems,
+        });
+      }
+
+      // Timeout / Mute Submenu
+      if (canMute) {
+        const isMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
+        const muteSubItems: ContextMenuItem[] = [
+          {
+            label: 'Por 60 segundos',
+            onClick: () => muteMember(activeGuild.id, targetMember.id, 60),
+          },
+          {
+            label: 'Por 5 minutos',
+            onClick: () => muteMember(activeGuild.id, targetMember.id, 300),
+          },
+          {
+            label: 'Por 1 hora',
+            onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
+          },
+          {
+            label: 'Por 1 dia',
+            onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
+          },
+          { label: '', separator: true },
+          {
+            label: 'Remover Silenciamento',
+            onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
+          },
+        ];
+
+        items.push({
+          label: isMuted ? 'Membro Silenciado' : 'Silenciar Membro',
+          icon: <VolumeX className="w-4 h-4 text-amber-400" />,
+          subItems: muteSubItems,
+        });
+      }
+
+      // Kick & Ban (only for other members)
+      if (!isMe && !isTargetOwner && isHierarchyAllowed) {
+        if (canKick) {
+          items.push({
+            label: `Expulsar ${targetMember.display_name || targetMember.username}`,
+            icon: <UserMinus className="w-4 h-4 text-amber-400" />,
+            variant: 'danger',
+            onClick: () => {
+              if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
+                kickMember(activeGuild.id, targetMember.id);
+              }
+            },
+          });
+        }
+
+        if (canBan) {
+          items.push({
+            label: `Banir ${targetMember.display_name || targetMember.username}`,
+            icon: <Ban className="w-4 h-4 text-dnd" />,
+            variant: 'danger',
+            onClick: () => {
+              if (confirm(`Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor?`)) {
+                banMember(activeGuild.id, targetMember.id);
+              }
+            },
+          });
+        }
+      }
+    }
+
+    if (!isMe) {
+      items.push({ label: '', separator: true });
+      items.push({
+        label: 'Bloquear Usuário',
+        icon: <UserX className="w-4 h-4 text-dnd" />,
+        variant: 'danger',
+        onClick: async () => {
+          if (confirm(`Deseja bloquear @${targetUser.username}? Você não receberá mais mensagens diretas deste usuário.`)) {
+            await api.users.block(targetUser.id);
+          }
+        },
+      });
+    }
+
+    openContextMenu(e, items, `@${targetUser.username}`);
+  };
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -750,6 +934,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   content={message.content}
                   onPreviewImage={onPreviewImage}
                   onImageLoad={onImageLoad}
+                  onOpenUserProfile={onOpenUserProfile}
+                  onOpenUserContextMenu={handleUserContextMenu}
                 />
               </div>
             )}

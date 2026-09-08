@@ -32,12 +32,14 @@ import {
   Sparkles,
   CheckCircle2,
   Calendar,
+  Pencil,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Permissions, Role, GuildEmoji, GuildInvite, User } from '../../types';
 import { api, formatAssetUrl, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
+import { convertToWebP } from '../../utils/image';
 import { ImageCropModal } from './ImageCropModal';
 import { ServerAuditLogView } from './ServerAuditLogView';
 
@@ -215,11 +217,9 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const [emojisList, setEmojisList] = useState<GuildEmoji[]>([]);
   const [isLoadingEmojis, setIsLoadingEmojis] = useState(false);
   const [isUploadingEmoji, setIsUploadingEmoji] = useState(false);
-  const [emojiUploadModalOpen, setEmojiUploadModalOpen] = useState(false);
-  const [emojiFile, setEmojiFile] = useState<File | null>(null);
-  const [emojiPreviewUrl, setEmojiPreviewUrl] = useState<string>('');
-  const [emojiName, setEmojiName] = useState('');
   const [emojiError, setEmojiError] = useState('');
+  const [savingEmojiId, setSavingEmojiId] = useState<string | null>(null);
+  const [copiedEmojiId, setCopiedEmojiId] = useState<string | null>(null);
   const emojiInputRef = useRef<HTMLInputElement>(null);
 
   // Invites State
@@ -286,6 +286,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     try {
       const data = await api.guilds.getEmojis(activeGuild.id);
       setEmojisList(data || []);
+      useGuildStore.setState((state) => {
+        if (!state.activeGuild || state.activeGuild.id !== activeGuild.id) return state;
+        return { activeGuild: { ...state.activeGuild, emojis: data || [] } };
+      });
     } catch (err) {
       console.error('Failed to load emojis:', err);
     } finally {
@@ -316,6 +320,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     currentUserPerms |= Number(r.permissions || 0);
   });
   const hasAdmin = (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
+  const canManageGuild = isOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_GUILD) !== 0;
   const canManageRoles = isOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_ROLES) !== 0;
   const roles = activeGuild.roles || [];
   const members = activeGuild.members || [];
@@ -560,45 +565,74 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   // 3. Emojis Actions
-  const handleSelectEmojiFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSelectEmojiFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
       alert('A imagem do emoji deve ter no máximo 2MB.');
+      if (emojiInputRef.current) emojiInputRef.current.value = '';
       return;
     }
-
-    setEmojiFile(file);
-    setEmojiPreviewUrl(URL.createObjectURL(file));
-    const autoName = file.name.split('.')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    setEmojiName(autoName.slice(0, 32));
-    setEmojiError('');
-    setEmojiUploadModalOpen(true);
-    if (emojiInputRef.current) emojiInputRef.current.value = '';
-  };
-
-  const handleConfirmUploadEmoji = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!emojiFile || !emojiName.trim()) return;
 
     setIsUploadingEmoji(true);
     setEmojiError('');
     try {
-      const uploadRes = await api.upload.attachment(emojiFile);
+      // 1. Convert static images to WebP maintaining transparent background & high quality
+      let fileToUpload: File;
+      try {
+        fileToUpload = await convertToWebP(file, { quality: 0.95, maxWidth: 512, maxHeight: 512 });
+      } catch (convErr) {
+        console.warn('WebP conversion fallback to original file:', convErr);
+        fileToUpload = file;
+      }
+
+      // 2. Auto-generate name from original file name
+      const baseName = file.name.replace(/\.[^/.]+$/, '').toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 32);
+      const derivedName = baseName.length >= 2 ? baseName : `emoji_${Date.now().toString().slice(-4)}`;
+
+      // 3. Upload attachment
+      const uploadRes = await api.upload.attachment(fileToUpload);
+
+      // 4. Create emoji in guild
       const newEmoji = await api.guilds.createEmoji(activeGuild.id, {
-        name: emojiName.trim(),
+        name: derivedName,
         image_url: uploadRes.url,
       });
-      setEmojisList((prev) => [newEmoji, ...prev]);
-      setEmojiUploadModalOpen(false);
-      setEmojiFile(null);
-      setEmojiPreviewUrl('');
-      setEmojiName('');
+
+      setEmojisList((prev) => [newEmoji, ...prev.filter((em) => em.id !== newEmoji.id)]);
+      useGuildStore.getState().handleEmojiCreateEvent(newEmoji);
     } catch (err: any) {
+      console.error('Failed to upload emoji:', err);
       setEmojiError(err.message || 'Falha ao carregar emoji');
     } finally {
       setIsUploadingEmoji(false);
+      if (emojiInputRef.current) emojiInputRef.current.value = '';
+    }
+  };
+
+  const handleInlineRename = async (emojiId: string, rawName: string, originalName: string) => {
+    const sanitized = rawName.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 32);
+    if (!sanitized || sanitized === originalName) {
+      // Refresh state to keep input synced with current name
+      setEmojisList((prev) => [...prev]);
+      return;
+    }
+
+    setSavingEmojiId(emojiId);
+    setEmojiError('');
+    try {
+      const updated = await api.guilds.updateEmoji(activeGuild.id, emojiId, {
+        name: sanitized,
+      });
+      setEmojisList((prev) => prev.map((em) => (em.id === updated.id ? updated : em)));
+      useGuildStore.getState().handleEmojiUpdateEvent(updated);
+    } catch (err: any) {
+      console.error('Failed to rename emoji:', err);
+      setEmojiError(err.message || 'Falha ao renomear emoji');
+      setEmojisList((prev) => [...prev]);
+    } finally {
+      setSavingEmojiId(null);
     }
   };
 
@@ -607,6 +641,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     try {
       await api.guilds.deleteEmoji(activeGuild.id, emojiId);
       setEmojisList((prev) => prev.filter((em) => em.id !== emojiId));
+      useGuildStore.getState().handleEmojiDeleteEvent({ guild_id: activeGuild.id, id: emojiId });
     } catch (err: any) {
       alert(err.message || 'Erro ao remover emoji');
     }
@@ -1495,7 +1530,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     <div>
                       <h3 className="text-sm font-bold text-white">Slots de Emojis do Servidor</h3>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {emojisList.length} de 50 slots utilizados
+                        {emojisList.length} de 50 slots utilizados • Clique no nome para renomear
                       </p>
                     </div>
                     <div>
@@ -1509,20 +1544,42 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <button
                         type="button"
                         onClick={() => emojiInputRef.current?.click()}
-                        disabled={!isOwner && !user}
-                        className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2"
+                        disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
+                        className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer"
                       >
-                        <Upload className="w-4 h-4" />
-                        <span>Carregar Emoji</span>
+                        {isUploadingEmoji ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" />
+                            <span>Carregando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4" />
+                            <span>Carregar Emoji</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
+
+                  {emojiError && (
+                    <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center justify-between animate-fade-in">
+                      <span>{emojiError}</span>
+                      <button
+                        type="button"
+                        onClick={() => setEmojiError('')}
+                        className="p-1 hover:text-white rounded transition-colors cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
 
                   {isLoadingEmojis ? (
                     <div className="flex items-center justify-center py-16 text-gray-400">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500" />
                     </div>
-                  ) : emojisList.length === 0 ? (
+                  ) : emojisList.length === 0 && !isUploadingEmoji ? (
                     <div className="text-center py-16 px-4 rounded-2xl bg-[#1e1f22]/60 border border-white/10">
                       <Smile className="w-12 h-12 stroke-1 text-gray-500 mx-auto mb-3" />
                       <h4 className="text-base font-semibold text-white">Nenhum emoji personalizado ainda</h4>
@@ -1532,49 +1589,91 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                      {emojisList.map((em) => (
-                        <div
-                          key={em.id}
-                          className="p-3.5 rounded-2xl bg-[#1e1f22] border border-white/10 hover:border-white/15 transition-all flex flex-col group relative"
-                        >
-                          <div className="w-full h-24 rounded-xl bg-[#111214] flex items-center justify-center p-2 mb-2.5 overflow-hidden">
-                            <img
-                              src={formatAssetUrl(em.image_url)}
-                              alt={em.name}
-                              className="max-h-full max-w-full object-contain"
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-white truncate font-mono">:{em.name}:</span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(`:${em.name}:`);
-                                  alert(`:${em.name}: copiado para a área de transferência!`);
-                                }}
-                                className="p-1 text-gray-400 hover:text-white rounded"
-                                title="Copiar código"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </button>
-                              {isOwner && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteEmoji(em.id, em.name)}
-                                  className="p-1 text-red-400 hover:text-red-300 rounded"
-                                  title="Excluir Emoji"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                      {isUploadingEmoji && (
+                        <div className="p-3.5 rounded-2xl bg-[#1e1f22]/60 border border-brand-500/40 animate-pulse flex flex-col items-center justify-center min-h-[165px]">
+                          <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-500/20 border-t-brand-500 mb-2" />
+                          <span className="text-xs text-brand-400 font-medium">Enviando emoji...</span>
+                        </div>
+                      )}
+
+                      {emojisList.map((em) => {
+                        const isSaving = savingEmojiId === em.id;
+                        const isCopied = copiedEmojiId === em.id;
+                        return (
+                          <div
+                            key={em.id}
+                            className="p-3.5 rounded-2xl bg-[#1e1f22] border border-white/10 hover:border-white/15 transition-all flex flex-col group relative"
+                          >
+                            <div className="w-full h-24 rounded-xl bg-[#111214] flex items-center justify-center p-2 mb-2.5 overflow-hidden">
+                              <img
+                                src={formatAssetUrl(em.image_url)}
+                                alt={em.name}
+                                className="max-h-full max-w-full object-contain select-none"
+                              />
+                            </div>
+
+                            {/* Inline Rename Box */}
+                            <div className="space-y-1.5 flex-1 flex flex-col justify-between">
+                              <div className="flex items-center bg-[#111214] border border-white/10 focus-within:border-brand-500 rounded-lg px-2 py-1 transition-all">
+                                <span className="text-gray-500 font-mono text-xs select-none">:</span>
+                                <input
+                                  type="text"
+                                  defaultValue={em.name}
+                                  key={`${em.id}-${em.name}`}
+                                  disabled={(!isOwner && !hasAdmin && !canManageGuild) || isSaving}
+                                  onBlur={(e) => handleInlineRename(em.id, e.target.value, em.name)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      (e.target as HTMLInputElement).blur();
+                                    }
+                                  }}
+                                  maxLength={32}
+                                  className="bg-transparent text-xs text-white font-mono w-full px-1 focus:outline-none disabled:opacity-75"
+                                  placeholder="nome_do_emoji"
+                                />
+                                <span className="text-gray-500 font-mono text-xs select-none">:</span>
+                                {isSaving && (
+                                  <div className="animate-spin rounded-full h-3 w-3 border border-brand-400 border-t-transparent ml-1 shrink-0" />
+                                )}
+                              </div>
+
+                              <div className="flex items-center justify-between pt-1">
+                                <span className="text-[10px] text-gray-500 truncate max-w-[80px]" title={em.creator ? `@${em.creator.username}` : ''}>
+                                  {em.creator ? `@${em.creator.username}` : ''}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(`:${em.name}:`);
+                                      setCopiedEmojiId(em.id);
+                                      setTimeout(() => setCopiedEmojiId(null), 2000);
+                                    }}
+                                    className="p-1 text-gray-400 hover:text-white rounded transition-colors cursor-pointer"
+                                    title="Copiar código :nome:"
+                                  >
+                                    {isCopied ? (
+                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                    ) : (
+                                      <Copy className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                  {(isOwner || hasAdmin || canManageGuild) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteEmoji(em.id, em.name)}
+                                      className="p-1 text-red-400 hover:text-red-300 rounded transition-colors cursor-pointer"
+                                      title="Excluir Emoji"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </div>
-                          {em.creator && (
-                            <span className="text-[10px] text-gray-500 mt-1">Por @{em.creator.username}</span>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1909,71 +2008,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         />
       )}
 
-      {/* MODAL 2: UPLOAD EMOJI */}
-      {emojiUploadModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-[#1e1f22] rounded-2xl border border-white/10 shadow-2xl p-6 text-gray-200">
-            <h3 className="text-base font-bold text-white mb-1">Carregar Novo Emoji</h3>
-            <p className="text-xs text-gray-400 mb-5">
-              Escolha um nome para seu emoji personalizado. Membros digitarão :nome: no chat.
-            </p>
 
-            {emojiError && (
-              <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs">
-                {emojiError}
-              </div>
-            )}
-
-            <form onSubmit={handleConfirmUploadEmoji} className="space-y-4">
-              <div className="w-24 h-24 mx-auto rounded-2xl bg-[#111214] border border-white/10 flex items-center justify-center p-3 overflow-hidden shadow-inner">
-                {emojiPreviewUrl ? (
-                  <img src={emojiPreviewUrl} alt="Preview" className="max-h-full max-w-full object-contain" />
-                ) : (
-                  <Smile className="w-8 h-8 text-gray-500" />
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                  Nome do Emoji
-                </label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-gray-400 font-mono text-sm">:</span>
-                  <input
-                    type="text"
-                    value={emojiName}
-                    onChange={(e) => setEmojiName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
-                    placeholder="nome_do_emoji"
-                    maxLength={32}
-                    className="w-full pl-7 pr-7 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-brand-500"
-                  />
-                  <span className="absolute right-3 text-gray-400 font-mono text-sm">:</span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmojiUploadModalOpen(false);
-                    setEmojiFile(null);
-                  }}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUploadingEmoji || !emojiName.trim()}
-                  className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition-colors"
-                >
-                  {isUploadingEmoji ? 'Enviando...' : 'Salvar Emoji'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* MODAL 3: MUTE / TIMEOUT DURATION */}
       {muteModalUser && (
