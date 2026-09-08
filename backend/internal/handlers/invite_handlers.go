@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"math/big"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -64,25 +66,60 @@ func (h *InviteHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Check if an active invite already exists for this guild (unless ?new=true requested)
+	// 2. Check if an active, non-expired invite already exists for this user in this guild (unless ?new=true requested)
 	var invite models.GuildInvite
 	forceNew := r.URL.Query().Get("new") == "true"
 	if !forceNew {
-		existingQuery := `SELECT code, guild_id, creator_id, uses, created_at FROM guild_invites WHERE guild_id = $1 ORDER BY created_at DESC LIMIT 1`
-		err = h.db.Pool.QueryRow(r.Context(), existingQuery, guildID).Scan(&invite.Code, &invite.GuildID, &invite.CreatorID, &invite.Uses, &invite.CreatedAt)
+		existingQuery := `
+			SELECT code, guild_id, creator_id, uses, max_uses, expires_at, created_at
+			FROM guild_invites
+			WHERE guild_id = $1 AND creator_id = $2
+			  AND (expires_at IS NULL OR expires_at > NOW())
+			  AND (max_uses = 0 OR uses < max_uses)
+			ORDER BY created_at DESC
+			LIMIT 1
+		`
+		err = h.db.Pool.QueryRow(r.Context(), existingQuery, guildID, userID).Scan(
+			&invite.Code, &invite.GuildID, &invite.CreatorID, &invite.Uses, &invite.MaxUses, &invite.ExpiresAt, &invite.CreatedAt,
+		)
 		if err == nil {
 			var creator models.UserPublic
 			_ = h.db.Pool.QueryRow(r.Context(), `SELECT id, username, display_name, avatar_url, status FROM users WHERE id = $1`, invite.CreatorID).Scan(
 				&creator.ID, &creator.Username, &creator.DisplayName, &creator.AvatarURL, &creator.Status,
 			)
 			invite.Creator = &creator
+			invite.IsExisting = true
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(invite)
 			return
 		}
 	}
 
-	// 3. Generate exactly 10-character hash code
+	// 3. Parse options for new invite (max_age, max_uses)
+	var req struct {
+		MaxAge  int `json:"max_age"`  // in seconds (0 = never, 21600 = 6h, 86400 = 1d, 604800 = 7d, 2592000 = 30d)
+		MaxUses int `json:"max_uses"` // 0 = unlimited, 1, 5, 10, 25, 50
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if req.MaxAge == 0 && r.URL.Query().Get("max_age") != "" {
+		if val, err := strconv.Atoi(r.URL.Query().Get("max_age")); err == nil {
+			req.MaxAge = val
+		}
+	}
+	if req.MaxUses == 0 && r.URL.Query().Get("max_uses") != "" {
+		if val, err := strconv.Atoi(r.URL.Query().Get("max_uses")); err == nil {
+			req.MaxUses = val
+		}
+	}
+
+	var expiresAt *time.Time
+	if req.MaxAge > 0 {
+		exp := time.Now().Add(time.Duration(req.MaxAge) * time.Second)
+		expiresAt = &exp
+	}
+
+	// 4. Generate exactly 10-character hash code
 	code, err := generateInviteCode(10)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate invite code"}`, http.StatusInternalServerError)
@@ -90,12 +127,12 @@ func (h *InviteHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	insertQuery := `
-		INSERT INTO guild_invites (code, guild_id, creator_id)
-		VALUES ($1, $2, $3)
-		RETURNING code, guild_id, creator_id, uses, created_at
+		INSERT INTO guild_invites (code, guild_id, creator_id, max_uses, expires_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING code, guild_id, creator_id, uses, max_uses, expires_at, created_at
 	`
-	err = h.db.Pool.QueryRow(r.Context(), insertQuery, code, guildID, userID).Scan(
-		&invite.Code, &invite.GuildID, &invite.CreatorID, &invite.Uses, &invite.CreatedAt,
+	err = h.db.Pool.QueryRow(r.Context(), insertQuery, code, guildID, userID, req.MaxUses, expiresAt).Scan(
+		&invite.Code, &invite.GuildID, &invite.CreatorID, &invite.Uses, &invite.MaxUses, &invite.ExpiresAt, &invite.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to save invite"}`, http.StatusInternalServerError)
@@ -107,6 +144,7 @@ func (h *InviteHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		&creator.ID, &creator.Username, &creator.DisplayName, &creator.AvatarURL, &creator.Status,
 	)
 	invite.Creator = &creator
+	invite.IsExisting = false
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -136,7 +174,7 @@ func (h *InviteHandler) ListGuildInvites(w http.ResponseWriter, r *http.Request)
 	}
 
 	query := `
-		SELECT gi.code, gi.guild_id, gi.creator_id, gi.uses, gi.created_at,
+		SELECT gi.code, gi.guild_id, gi.creator_id, gi.uses, gi.max_uses, gi.expires_at, gi.created_at,
 		       u.username, u.display_name, u.avatar_url, u.status
 		FROM guild_invites gi
 		LEFT JOIN users u ON u.id = gi.creator_id
@@ -155,7 +193,7 @@ func (h *InviteHandler) ListGuildInvites(w http.ResponseWriter, r *http.Request)
 		var inv models.GuildInvite
 		var u models.UserPublic
 		var uname, udisp, uav, ust *string
-		if err := rows.Scan(&inv.Code, &inv.GuildID, &inv.CreatorID, &inv.Uses, &inv.CreatedAt, &uname, &udisp, &uav, &ust); err == nil {
+		if err := rows.Scan(&inv.Code, &inv.GuildID, &inv.CreatorID, &inv.Uses, &inv.MaxUses, &inv.ExpiresAt, &inv.CreatedAt, &uname, &udisp, &uav, &ust); err == nil {
 			if uname != nil {
 				u.ID = inv.CreatorID
 				u.Username = *uname
@@ -246,7 +284,7 @@ func (h *InviteHandler) GetInvite(w http.ResponseWriter, r *http.Request) {
 	var memberCount int
 
 	query := `
-		SELECT gi.code, gi.guild_id, gi.creator_id, gi.uses, gi.created_at,
+		SELECT gi.code, gi.guild_id, gi.creator_id, gi.uses, gi.max_uses, gi.expires_at, gi.created_at,
 		       g.id, g.name, g.icon_url, g.owner_id,
 		       (SELECT COUNT(*) FROM guild_members gm WHERE gm.guild_id = g.id) as member_count
 		FROM guild_invites gi
@@ -254,11 +292,20 @@ func (h *InviteHandler) GetInvite(w http.ResponseWriter, r *http.Request) {
 		WHERE gi.code = $1
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, code).Scan(
-		&invite.Code, &invite.GuildID, &invite.CreatorID, &invite.Uses, &invite.CreatedAt,
+		&invite.Code, &invite.GuildID, &invite.CreatorID, &invite.Uses, &invite.MaxUses, &invite.ExpiresAt, &invite.CreatedAt,
 		&guild.ID, &guild.Name, &guild.IconURL, &guild.OwnerID, &memberCount,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"invite not found or expired"}`, http.StatusNotFound)
+		return
+	}
+
+	if invite.ExpiresAt != nil && invite.ExpiresAt.Before(time.Now()) {
+		http.Error(w, `{"error":"Este convite expirou"}`, http.StatusGone)
+		return
+	}
+	if invite.MaxUses > 0 && invite.Uses >= invite.MaxUses {
+		http.Error(w, `{"error":"Este convite atingiu o limite máximo de utilizações"}`, http.StatusGone)
 		return
 	}
 
@@ -286,9 +333,20 @@ func (h *InviteHandler) JoinByInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var guildID uuid.UUID
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM guild_invites WHERE code = $1", code).Scan(&guildID)
+	var uses, maxUses int
+	var expiresAt *time.Time
+	err := h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, uses, max_uses, expires_at FROM guild_invites WHERE code = $1", code).Scan(&guildID, &uses, &maxUses, &expiresAt)
 	if err != nil {
 		http.Error(w, `{"error":"invalid or expired invite code"}`, http.StatusNotFound)
+		return
+	}
+
+	if expiresAt != nil && expiresAt.Before(time.Now()) {
+		http.Error(w, `{"error":"Este convite expirou"}`, http.StatusForbidden)
+		return
+	}
+	if maxUses > 0 && uses >= maxUses {
+		http.Error(w, `{"error":"Este convite atingiu o limite máximo de utilizações"}`, http.StatusForbidden)
 		return
 	}
 
