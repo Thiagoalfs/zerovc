@@ -771,7 +771,10 @@ func (h *AuthHandler) Disable2FA(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 		Code     string `json:"code"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" || req.Code == "" {
+		http.Error(w, `{"error":"senha e código 2FA são obrigatórios para desativar a autenticação de dois fatores"}`, http.StatusBadRequest)
+		return
+	}
 
 	var passwordHash, secret string
 	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&passwordHash, &secret)
@@ -780,16 +783,27 @@ func (h *AuthHandler) Disable2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	valid := false
-	if req.Password != "" && h.auth.CheckPassword(req.Password, passwordHash) {
-		valid = true
-	} else if req.Code != "" && secret != "" && auth.VerifyTOTPCode(secret, req.Code) {
-		valid = true
+	if !h.auth.CheckPassword(req.Password, passwordHash) {
+		http.Error(w, `{"error":"senha incorreta"}`, http.StatusUnauthorized)
+		return
 	}
 
-	if !valid {
-		http.Error(w, `{"error":"senha ou código 2FA incorreto"}`, http.StatusUnauthorized)
-		return
+	cleanCode := strings.TrimSpace(req.Code)
+	totpValid := secret != "" && auth.VerifyTOTPCode(secret, cleanCode)
+	if !totpValid {
+		backupHash := auth.HashBackupCode(cleanCode)
+		var backupID uuid.UUID
+		err := h.db.Pool.QueryRow(r.Context(), `
+			SELECT id FROM user_2fa_backup_codes
+			WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+		`, userID, backupHash).Scan(&backupID)
+
+		if err == nil {
+			h.db.Pool.Exec(r.Context(), "UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1", backupID)
+		} else {
+			http.Error(w, `{"error":"código 2FA ou de backup incorreto"}`, http.StatusUnauthorized)
+			return
+		}
 	}
 
 	_, err = h.db.Pool.Exec(r.Context(), "UPDATE users SET two_factor_secret = '' WHERE id = $1", userID)
@@ -910,17 +924,38 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Password string `json:"password"`
+		Code     string `json:"code,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" {
 		http.Error(w, `{"error":"senha é obrigatória para confirmar a exclusão da conta"}`, http.StatusBadRequest)
 		return
 	}
 
-	var passwordHash string
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&passwordHash)
+	var passwordHash, twoFactorSecret string
+	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&passwordHash, &twoFactorSecret)
 	if err != nil || !h.auth.CheckPassword(req.Password, passwordHash) {
 		http.Error(w, `{"error":"senha incorreta"}`, http.StatusUnauthorized)
 		return
+	}
+
+	if twoFactorSecret != "" {
+		cleanCode := strings.TrimSpace(req.Code)
+		if cleanCode == "" {
+			http.Error(w, `{"error":"código 2FA obrigatório para confirmar exclusão"}`, http.StatusUnauthorized)
+			return
+		}
+		if !auth.VerifyTOTPCode(twoFactorSecret, cleanCode) {
+			backupHash := auth.HashBackupCode(cleanCode)
+			var backupID uuid.UUID
+			err := h.db.Pool.QueryRow(r.Context(), `
+				SELECT id FROM user_2fa_backup_codes
+				WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+			`, userID, backupHash).Scan(&backupID)
+			if err != nil {
+				http.Error(w, `{"error":"código 2FA ou backup incorreto"}`, http.StatusUnauthorized)
+				return
+			}
+		}
 	}
 
 	// Delete user (Cascades to guild_members, messages, voice_sessions, user_blocks, guilds owned)
@@ -948,6 +983,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`
+		Code            string `json:"code,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
@@ -959,11 +995,31 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var currentHash string
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&currentHash)
+	var currentHash, twoFactorSecret string
+	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&currentHash, &twoFactorSecret)
 	if err != nil || !h.auth.CheckPassword(req.CurrentPassword, currentHash) {
 		http.Error(w, `{"error":"senha atual incorreta"}`, http.StatusUnauthorized)
 		return
+	}
+
+	if twoFactorSecret != "" {
+		cleanCode := strings.TrimSpace(req.Code)
+		if cleanCode == "" {
+			http.Error(w, `{"error":"código 2FA obrigatório para alterar a senha"}`, http.StatusUnauthorized)
+			return
+		}
+		if !auth.VerifyTOTPCode(twoFactorSecret, cleanCode) {
+			backupHash := auth.HashBackupCode(cleanCode)
+			var backupID uuid.UUID
+			err := h.db.Pool.QueryRow(r.Context(), `
+				SELECT id FROM user_2fa_backup_codes
+				WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+			`, userID, backupHash).Scan(&backupID)
+			if err != nil {
+				http.Error(w, `{"error":"código 2FA ou backup incorreto"}`, http.StatusUnauthorized)
+				return
+			}
+		}
 	}
 
 	newHash, err := h.auth.HashPassword(req.NewPassword)

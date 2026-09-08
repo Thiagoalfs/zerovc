@@ -260,6 +260,7 @@ func main() {
 		guildCreateLimiter := ratelimit.NewUserRateLimiter(5, 5.0/3600.0, "Limite de criação de servidores atingido. Tente novamente mais tarde.")
 		friendRequestLimiter := ratelimit.NewUserRateLimiter(5, 5.0/60.0, "Você está enviando solicitações de amizade muito rápido. Aguarde um instante.")
 		dmGroupLimiter := ratelimit.NewUserRateLimiter(3, 3.0/60.0, "Limite de criação de grupos atingido. Aguarde um momento.")
+		uploadLimiter := ratelimit.NewUserRateLimiter(15, 15.0/60.0, "Você está enviando arquivos muito rápido. Aguarde um instante.")
 
 		// Guilds (Protected)
 		r.Get("/api/guilds", guildHandler.List)
@@ -361,11 +362,11 @@ func main() {
 		r.Post("/api/channels/{channelID}/members/{userID}/voice-state", channelHandler.AdminUpdateVoiceState)
 
 		// Upload Endpoints (Protected)
-		r.Post("/api/upload/avatar", uploadHandler.UploadAvatar)
-		r.Post("/api/upload/guild-icon", uploadHandler.UploadGuildIcon)
-		r.Post("/api/upload/guild-banner", uploadHandler.UploadGuildBanner)
-		r.Post("/api/upload/banner", uploadHandler.UploadBanner)
-		r.Post("/api/upload/attachment", uploadHandler.UploadAttachment)
+		r.With(uploadLimiter.Middleware).Post("/api/upload/avatar", uploadHandler.UploadAvatar)
+		r.With(uploadLimiter.Middleware).Post("/api/upload/guild-icon", uploadHandler.UploadGuildIcon)
+		r.With(uploadLimiter.Middleware).Post("/api/upload/guild-banner", uploadHandler.UploadGuildBanner)
+		r.With(uploadLimiter.Middleware).Post("/api/upload/banner", uploadHandler.UploadBanner)
+		r.With(uploadLimiter.Middleware).Post("/api/upload/attachment", uploadHandler.UploadAttachment)
 
 		// WebSocket Gateway (Protected)
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
