@@ -16,6 +16,8 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useDMStore } from '../../stores/dmStore';
 import { User, Permissions } from '../../types';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { formatAssetUrl } from '../../lib/api';
 import { UserVolumeSlider } from '../Voice/VolumeSliders';
@@ -44,6 +46,7 @@ export const MemberList: React.FC<MemberListProps> = ({
   const { user: currentUser } = useAuthStore();
   const { openDMWithUser } = useDMStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+  const memberListWidth = useSettingsStore((s) => s.memberListWidth);
 
   if (!isOpen || !activeGuild) return null;
 
@@ -377,7 +380,13 @@ export const MemberList: React.FC<MemberListProps> = ({
       />
 
       {/* Member Sidebar / Drawer */}
-      <div className="fixed md:static inset-y-0 right-0 z-50 md:z-0 w-64 md:w-60 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none animate-in slide-in-from-right duration-200 md:animate-none">
+      <div
+        style={{ width: `${memberListWidth}px` }}
+        className="fixed md:static inset-y-0 right-0 z-50 md:z-0 w-64 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none animate-in slide-in-from-right duration-200 md:animate-none relative flex-shrink-0 max-w-[calc(100vw-72px)]"
+      >
+        {/* Resizer Handle */}
+        <SidebarResizer side="left" target="memberList" />
+
         {/* Mobile Header */}
         <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 md:hidden">
           <h2 className="text-sm font-bold text-white uppercase tracking-wider">Membros do Servidor</h2>

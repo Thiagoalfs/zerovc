@@ -267,7 +267,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       {/* Center Chat View */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Channel Header */}
-        <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-10">
+        <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
           <div className="flex items-center gap-2 truncate">
             {/* Mobile Hamburger Drawer Toggle */}
             {onOpenMobileDrawer && (

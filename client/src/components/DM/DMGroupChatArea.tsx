@@ -370,7 +370,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       )}
 
       {/* Group Header */}
-      <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10">
+      <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
         <div className="flex items-center gap-2.5 truncate">
           {onOpenMobileDrawer && (
             <button

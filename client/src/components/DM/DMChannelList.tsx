@@ -326,12 +326,9 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                         <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-background-darker ${getStatusColor(recipient?.status)}`} />
                       </div>
 
-                      <div className="flex flex-col text-left truncate flex-1 min-w-0">
+                      <div className="flex items-center text-left truncate flex-1 min-w-0">
                         <span className={`truncate text-[14.5px] font-medium ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
                           {recipient?.display_name || recipient?.username}
-                        </span>
-                        <span className="text-[11px] text-gray-400 truncate">
-                          @{recipient?.username}
                         </span>
                       </div>
 

@@ -1,16 +1,30 @@
 import React, { useCallback, useRef } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 
-export const SidebarResizer: React.FC = () => {
+interface SidebarResizerProps {
+  side?: 'left' | 'right';
+  target?: 'channelList' | 'memberList';
+}
+
+export const SidebarResizer: React.FC<SidebarResizerProps> = ({
+  side = 'right',
+  target = 'channelList',
+}) => {
   const channelListWidth = useSettingsStore((s) => s.channelListWidth);
   const setChannelListWidth = useSettingsStore((s) => s.setChannelListWidth);
+  const memberListWidth = useSettingsStore((s) => s.memberListWidth);
+  const setMemberListWidth = useSettingsStore((s) => s.setMemberListWidth);
+
+  const currentWidth = target === 'memberList' ? memberListWidth : channelListWidth;
+  const setWidth = target === 'memberList' ? setMemberListWidth : setChannelListWidth;
+
   const isDraggingRef = useRef(false);
 
   const startResize = useCallback(
     (clientX: number) => {
       isDraggingRef.current = true;
       const startX = clientX;
-      const startWidth = channelListWidth;
+      const startWidth = currentWidth;
 
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
@@ -19,7 +33,8 @@ export const SidebarResizer: React.FC = () => {
         if (!isDraggingRef.current) return;
         const currentX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
         const deltaX = currentX - startX;
-        setChannelListWidth(startWidth + deltaX);
+        const newWidth = side === 'left' ? startWidth - deltaX : startWidth + deltaX;
+        setWidth(newWidth);
       };
 
       const handlePointerUp = () => {
@@ -37,7 +52,7 @@ export const SidebarResizer: React.FC = () => {
       window.addEventListener('touchmove', handlePointerMove, { passive: true });
       window.addEventListener('touchend', handlePointerUp);
     },
-    [channelListWidth, setChannelListWidth]
+    [currentWidth, setWidth, side]
   );
 
   return (
@@ -51,11 +66,11 @@ export const SidebarResizer: React.FC = () => {
           startResize(e.touches[0].clientX);
         }
       }}
-      onDoubleClick={() => setChannelListWidth(240)}
-      className="absolute top-0 right-0 w-2 h-full cursor-col-resize hover:bg-brand-500/20 active:bg-brand-500/30 transition-colors z-30 select-none group hidden md:flex items-center justify-center"
-      title="Arraste para redimensionar a barra lateral (duplo clique para restaurar 240px)"
-    >
-      <div className="w-0.5 h-8 rounded-full bg-white/20 group-hover:bg-brand-400 group-hover:h-12 group-active:bg-brand-400 transition-all duration-150" />
-    </div>
+      onDoubleClick={() => setWidth(240)}
+      className={`absolute top-0 ${
+        side === 'left' ? 'left-0 -ml-1.5' : 'right-0 -mr-1.5'
+      } w-3 h-full cursor-col-resize z-30 select-none hidden md:block`}
+      title="Arraste para redimensionar (duplo clique para restaurar 240px)"
+    />
   );
 };

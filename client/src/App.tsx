@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuthStore } from './stores/authStore';
 import { useGuildStore } from './stores/guildStore';
 import { useFriendStore } from './stores/friendStore';
@@ -102,6 +102,57 @@ export const App: React.FC = () => {
       localStorage.setItem('zerovc_server_members_open', String(open));
     } catch {}
   };
+
+  // Mobile swipe gestures
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      const target = e.target as HTMLElement;
+      if (
+        target.closest('input[type=range]') ||
+        target.closest('textarea') ||
+        target.closest('input[type=text]') ||
+        target.closest('.cursor-col-resize')
+      ) {
+        return;
+      }
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now(),
+      };
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.changedTouches.length === 0) return;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const deltaX = endX - touchStartRef.current.x;
+    const deltaY = endY - touchStartRef.current.y;
+    const deltaTime = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3 && deltaTime < 800) {
+      if (deltaX > 0) {
+        // Swipe Left -> Right: open channellist or close memberlist
+        if (isMemberListOpen && !isHomeActive) {
+          handleToggleMemberList(false);
+        } else if (!isMobileDrawerOpen) {
+          setIsMobileDrawerOpen(true);
+        }
+      } else {
+        // Swipe Right -> Left: close channellist or open memberlist
+        if (isMobileDrawerOpen) {
+          setIsMobileDrawerOpen(false);
+        } else if (!isHomeActive && activeGuild && !isMemberListOpen) {
+          handleToggleMemberList(true);
+        }
+      }
+    }
+  };
+
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
@@ -869,7 +920,11 @@ export const App: React.FC = () => {
   return (
     <div className="w-screen h-[100dvh] flex flex-col bg-background-dark overflow-hidden select-none relative">
       <TitleBar />
-      <div className="flex-1 flex w-full h-full overflow-hidden relative">
+      <div
+        className="flex-1 flex w-full h-full overflow-hidden relative"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Mobile Left Drawer Backdrop */}
         {isMobileDrawerOpen && (
           <div
