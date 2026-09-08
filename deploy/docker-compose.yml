@@ -83,7 +83,7 @@ services:
       RESEND_FROM_EMAIL: "${RESEND_FROM_EMAIL}"
       APP_URL: "${APP_URL}"
     volumes:
-      - ../assets:/app/assets
+      - assets_data:/app/assets
       - ../backend/web:/app/web
     labels:
       - "traefik.enable=true"
@@ -107,6 +107,7 @@ services:
 
 volumes:
   pgdata:
+  assets_data:
 
 networks:
   zerovc-net:
