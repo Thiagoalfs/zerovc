@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   X,
   ZoomIn,
@@ -30,6 +30,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   onCancel,
 }) => {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [zoom, setZoom] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -52,11 +53,39 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
     ? { width: 1200, height: 480 }
     : { width: 512, height: 512 };
 
+  // Dimensions & scale normalization
+  const naturalWidth = imageDimensions.width || imgRef.current?.naturalWidth || 1;
+  const naturalHeight = imageDimensions.height || imgRef.current?.naturalHeight || 1;
+
+  const isRotated90 = (rotation / 90) % 2 !== 0;
+  const effectiveWidth = isRotated90 ? naturalHeight : naturalWidth;
+  const effectiveHeight = isRotated90 ? naturalWidth : naturalHeight;
+
+  // Scale to cover the viewport completely at zoom = 1
+  const coverScale = Math.max(
+    viewportSize.width / effectiveWidth,
+    viewportSize.height / effectiveHeight
+  );
+
+  // Scale where the entire image fits inside the viewport (contain)
+  const containScale = Math.min(
+    viewportSize.width / effectiveWidth,
+    viewportSize.height / effectiveHeight
+  );
+
+  // Ratio of contain / cover scale (<= 1)
+  const containRatio = coverScale > 0 ? containScale / coverScale : 1;
+
+  // Minimum zoom allows viewing the entire image (or at least 0.2)
+  const minZoom = Math.max(0.1, Math.min(0.5, Number((containRatio * 0.9).toFixed(2))));
+  const maxZoom = 3;
+
   // Load and reset image when file changes or modal opens
   useEffect(() => {
     if (isOpen && file) {
       const url = URL.createObjectURL(file);
       setImageSrc(url);
+      setImageDimensions({ width: 0, height: 0 });
       setZoom(1);
       setRotation(0);
       setPan({ x: 0, y: 0 });
@@ -74,8 +103,8 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY * -0.0015;
-    setZoom((prev) => Math.min(Math.max(prev + delta, 0.5), 3));
-  }, []);
+    setZoom((prev) => Math.min(Math.max(prev + delta, minZoom), maxZoom));
+  }, [minZoom, maxZoom]);
 
   // Mouse drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -145,6 +174,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
           viewportSize,
           outputSize,
           originalFile: file,
+          baseScale: coverScale,
         });
         onConfirm(croppedFile);
       }
@@ -234,9 +264,16 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
               src={imageSrc}
               alt="Crop Preview"
               draggable={false}
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                setImageDimensions({
+                  width: img.naturalWidth,
+                  height: img.naturalHeight,
+                });
+              }}
               className="max-w-none pointer-events-none transition-transform duration-75"
               style={{
-                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
+                transform: `translate(${pan.x}px, ${pan.y}px) rotate(${rotation}deg) scale(${coverScale * zoom})`,
                 transformOrigin: 'center center',
               }}
             />
@@ -257,8 +294,8 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             <div className="flex items-center gap-3 px-2">
               <button
                 type="button"
-                onClick={() => setZoom((prev) => Math.max(prev - 0.15, 0.5))}
-                className="text-gray-400 hover:text-white transition-colors"
+                onClick={() => setZoom((prev) => Math.max(prev - 0.15, minZoom))}
+                className="text-gray-400 hover:text-white transition-colors cursor-pointer"
                 title="Diminuir Zoom"
               >
                 <ZoomOut className="w-4 h-4" />
@@ -266,8 +303,8 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
 
               <input
                 type="range"
-                min="0.5"
-                max="3"
+                min={minZoom}
+                max={maxZoom}
                 step="0.01"
                 value={zoom}
                 onChange={(e) => setZoom(parseFloat(e.target.value))}
@@ -276,8 +313,8 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => setZoom((prev) => Math.min(prev + 0.15, 3))}
-                className="text-gray-400 hover:text-white transition-colors"
+                onClick={() => setZoom((prev) => Math.min(prev + 0.15, maxZoom))}
+                className="text-gray-400 hover:text-white transition-colors cursor-pointer"
                 title="Aumentar Zoom"
               >
                 <ZoomIn className="w-4 h-4" />
