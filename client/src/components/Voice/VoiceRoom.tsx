@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff } from 'lucide-react';
 import { Channel, User } from '../../types';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -35,6 +35,24 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     stopScreenShare,
   } = useVoiceStore();
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setDimensions({ width, height });
+      }
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const handleScreenShareClick = () => {
     if (isScreensharing) {
       stopScreenShare();
@@ -43,60 +61,65 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     }
   };
 
-  // Discord-style automatic row partitioning: never causes scroll, nested seamlessly
-  const participantRows = useMemo(() => {
+  // Discord-style exact 16:9 adaptive grid calculator
+  const stageLayout = useMemo(() => {
     const count = participants.length;
-    if (count === 0) return [];
-    if (count === 1) return [[participants[0]]];
-    if (count === 2) return [[participants[0], participants[1]]];
-    if (count === 3) return [[participants[0], participants[1], participants[2]]];
-    if (count === 4) return [
-      [participants[0], participants[1]],
-      [participants[2], participants[3]],
-    ];
-    if (count === 5) return [
-      [participants[0], participants[1], participants[2]],
-      [participants[3], participants[4]],
-    ];
-    if (count === 6) return [
-      [participants[0], participants[1], participants[2]],
-      [participants[3], participants[4], participants[5]],
-    ];
-    if (count === 7) return [
-      [participants[0], participants[1], participants[2], participants[3]],
-      [participants[4], participants[5], participants[6]],
-    ];
-    if (count === 8) return [
-      [participants[0], participants[1], participants[2], participants[3]],
-      [participants[4], participants[5], participants[6], participants[7]],
-    ];
-    if (count === 9) return [
-      [participants[0], participants[1], participants[2]],
-      [participants[3], participants[4], participants[5]],
-      [participants[6], participants[7], participants[8]],
-    ];
-    if (count === 10) return [
-      [participants[0], participants[1], participants[2], participants[3]],
-      [participants[4], participants[5], participants[6]],
-      [participants[7], participants[8], participants[9]],
-    ];
-    if (count <= 12) {
-      const numRows = 3;
-      const perRow = Math.ceil(count / numRows);
-      const rows: (typeof participants)[] = [];
-      for (let i = 0; i < count; i += perRow) {
-        rows.push(participants.slice(i, i + perRow));
+    if (count === 0 || dimensions.width === 0 || dimensions.height === 0) {
+      return { cardWidth: 0, cardHeight: 0, rows: [] };
+    }
+
+    const W = dimensions.width;
+    const H = dimensions.height;
+    const gap = W < 640 ? 8 : 16;
+    const paddingX = W < 640 ? 12 : 24;
+    const paddingY = H < 640 ? 12 : 24;
+
+    const availableW = Math.max(80, W - paddingX * 2);
+    const availableH = Math.max(80, H - paddingY * 2);
+    const targetAspect = 16 / 9;
+
+    let bestCols = 1;
+    let bestCardW = 0;
+    let bestCardH = 0;
+    let maxArea = 0;
+
+    const maxColsToTry = Math.min(count, 8);
+    for (let c = 1; c <= maxColsToTry; c++) {
+      const r = Math.ceil(count / c);
+      const slotW = (availableW - (c - 1) * gap) / c;
+      const slotH = (availableH - (r - 1) * gap) / r;
+
+      if (slotW <= 0 || slotH <= 0) continue;
+
+      let w = slotW;
+      let h = w / targetAspect;
+
+      if (h > slotH) {
+        h = slotH;
+        w = h * targetAspect;
       }
-      return rows;
+
+      const area = w * h;
+      if (area > maxArea) {
+        maxArea = area;
+        bestCols = c;
+        bestCardW = Math.floor(w);
+        bestCardH = Math.floor(h);
+      }
     }
-    const numRows = 4;
-    const perRow = Math.ceil(count / numRows);
+
+    // Partition participants across rows based on bestCols
     const rows: (typeof participants)[] = [];
-    for (let i = 0; i < count; i += perRow) {
-      rows.push(participants.slice(i, i + perRow));
+    for (let i = 0; i < count; i += bestCols) {
+      rows.push(participants.slice(i, i + bestCols));
     }
-    return rows;
-  }, [participants]);
+
+    return {
+      cardWidth: bestCardW,
+      cardHeight: bestCardH,
+      rows,
+    };
+  }, [participants, dimensions]);
 
   return (
     <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden select-none">
@@ -118,8 +141,11 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
         </div>
       </div>
 
-      {/* Main Voice / Video Dynamic Nested Layout (No Scrollbars) */}
-      <div className="flex-1 min-h-0 min-w-0 p-3 md:p-5 flex items-center justify-center overflow-hidden">
+      {/* Main Voice / Video Dynamic Stage (Strictly fits without scrollbars) */}
+      <div
+        ref={containerRef}
+        className="flex-1 min-h-0 min-w-0 flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden relative"
+      >
         {isConnecting ? (
           <div className="flex flex-col items-center gap-3 text-gray-400">
             <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
@@ -131,18 +157,22 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
             <span className="text-sm">Nenhum participante conectado</span>
           </div>
         ) : (
-          <div className="w-full h-full min-h-0 min-w-0 flex flex-col items-center justify-center gap-3 md:gap-4 max-w-7xl mx-auto overflow-hidden">
-            {participantRows.map((row, rIdx) => (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 sm:gap-3 md:gap-4 overflow-hidden">
+            {stageLayout.rows.map((row, rIdx) => (
               <div
                 key={rIdx}
-                className="w-full flex-1 min-h-0 min-w-0 flex items-center justify-center gap-3 md:gap-4"
+                className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4 flex-shrink-0"
+                style={{
+                  height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
+                }}
               >
                 {row.map((p) => (
                   <div
                     key={p.sid || p.identity}
-                    className="h-full max-h-full aspect-video flex-shrink min-w-0 min-h-0 flex items-center justify-center"
+                    className="flex items-center justify-center flex-shrink-0"
                     style={{
-                      maxWidth: `calc(${100 / row.length}% - 0.75rem)`,
+                      width: stageLayout.cardWidth > 0 ? `${stageLayout.cardWidth}px` : 'auto',
+                      height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
                     }}
                   >
                     <ParticipantCard
