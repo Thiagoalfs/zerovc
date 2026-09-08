@@ -108,10 +108,15 @@ export const App: React.FC = () => {
     Boolean((window as any).electronAPI || (window as any).electron || navigator.userAgent.includes('Electron'));
 
   const getCurrentRoute = () => {
-    if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
-      return window.location.hash ? window.location.hash.replace(/^#/, '') : '/@me';
+    if (typeof window === 'undefined') return '/';
+    // Se houver hash router (ex: #/reset-password?token=... ou #/signin)
+    if (window.location.hash) {
+      return window.location.hash.replace(/^#/, '');
     }
-    return window.location.pathname;
+    if (window.location.protocol === 'file:') {
+      return '/@me';
+    }
+    return window.location.pathname + window.location.search;
   };
 
   const [currentRoute, setCurrentRoute] = useState<string>(() => {
@@ -285,6 +290,15 @@ export const App: React.FC = () => {
     checkAuth();
     useSettingsStore.getState().applyThemeToDOM();
 
+    const onRouteEvent = () => {
+      const nextRoute = getCurrentRoute();
+      setCurrentRoute(nextRoute);
+      handleRoute(nextRoute);
+    };
+
+    window.addEventListener('popstate', onRouteEvent);
+    window.addEventListener('hashchange', onRouteEvent);
+
     // Capture initial route/invite before login
     const initialRoute = getCurrentRoute();
     const cleanPath = initialRoute.replace(/^\/+|\/+$/g, '');
@@ -303,7 +317,12 @@ export const App: React.FC = () => {
     ) {
       sessionStorage.setItem('pending_redirect_path', initialRoute);
     }
-  }, []);
+
+    return () => {
+      window.removeEventListener('popstate', onRouteEvent);
+      window.removeEventListener('hashchange', onRouteEvent);
+    };
+  }, [handleRoute]);
 
   // Initialize desktop preferences (e.g. Minimize to Tray & Auto-Start)
   useEffect(() => {
@@ -440,12 +459,6 @@ export const App: React.FC = () => {
       } else {
         handleRoute(getCurrentRoute());
       }
-
-      const onRouteEvent = () => {
-        handleRoute(getCurrentRoute());
-      };
-      window.addEventListener('popstate', onRouteEvent);
-      window.addEventListener('hashchange', onRouteEvent);
 
       // Request notification permissions gracefully on login
       requestNotificationPermission();
@@ -703,8 +716,6 @@ export const App: React.FC = () => {
       socket.on('GUILD_EMOJI_DELETE', handleGuildEmojiDelete);
 
       return () => {
-        window.removeEventListener('popstate', onRouteEvent);
-        window.removeEventListener('hashchange', onRouteEvent);
         socket.off('MESSAGE_CREATE', handleMessageCreate);
         socket.off('MESSAGE_UPDATE', handleMessageUpdate);
         socket.off('MESSAGE_DELETE', handleMessageDelete);

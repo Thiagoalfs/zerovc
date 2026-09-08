@@ -127,8 +127,8 @@ func (s *Service) SendVerificationEmail(ctx context.Context, toEmail, username, 
               </p>
               
               <!-- Code Box -->
-              <div style="background-color: #0c0d12; border: 2px dashed #6366f1; border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 24px;">
-                <span style="font-family: 'Courier New', monospace; font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #818cf8;">
+              <div style="background-color: #0c0d12; border: 2px dashed #6366f1; border-radius: 14px; padding: 18px 24px; text-align: center; margin-bottom: 24px;">
+                <span style="font-family: 'Courier New', monospace; font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #818cf8;">
                   %s
                 </span>
               </div>
@@ -159,7 +159,7 @@ func (s *Service) SendVerificationEmail(ctx context.Context, toEmail, username, 
 
 // SendPasswordResetEmail envia o link seguro para redefinição de senha
 func (s *Service) SendPasswordResetEmail(ctx context.Context, toEmail, username, token string) error {
-	resetLink := fmt.Sprintf("%s/#/reset-password?token=%s", s.appURL, token)
+	resetLink := fmt.Sprintf("%s/reset-password?token=%s", s.appURL, token)
 	subject := "Redefinição de Senha - ZeroVC"
 
 	html := fmt.Sprintf(`
@@ -178,7 +178,7 @@ func (s *Service) SendPasswordResetEmail(ctx context.Context, toEmail, username,
           <!-- Header -->
           <tr>
             <td style="padding: 35px 35px 20px 35px; text-align: center; border-bottom: 1px solid #232431;">
-              <h1 style="margin: 0; font-size: 26px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">
                 <span style="color: #6366f1;">Zero</span>VC
               </h1>
               <p style="margin: 6px 0 0 0; font-size: 13px; color: #8a8d9b;">Redefinição de Acesso</p>
