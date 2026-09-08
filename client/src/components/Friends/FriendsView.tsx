@@ -205,36 +205,37 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
   return (
     <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden select-none">
       {/* Top Header with Responsive Scrolling Tabs */}
-      <div className="h-12 border-b border-black/20 px-3 md:px-6 flex items-center gap-3 md:gap-6 shadow-sm z-10 overflow-x-auto no-scrollbar">
+      <div className="h-12 border-b border-black/20 px-2 sm:px-4 md:px-6 flex items-center gap-1.5 sm:gap-3 md:gap-6 shadow-sm z-10 overflow-x-auto no-scrollbar">
         {onOpenMobileDrawer && (
           <button
             onClick={onOpenMobileDrawer}
-            className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 rounded hover:bg-white/10 transition-colors flex-shrink-0"
+            className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-0.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0"
             title="Menu de Servidores"
           >
             <Menu className="w-5 h-5" />
           </button>
         )}
 
-        <div className="flex items-center gap-2 text-gray-200 font-bold pr-3 border-r border-white/10 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 text-gray-200 font-bold pr-2 sm:pr-3 border-r border-white/10 flex-shrink-0">
           <Users className="w-5 h-5 text-gray-400" />
           <span className="hidden sm:inline">Amigos</span>
         </div>
 
-        <div className="flex items-center gap-2 text-xs md:text-sm flex-shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 text-xs md:text-sm flex-nowrap flex-shrink-0">
           <button
             onClick={() => setActiveTab('online')}
-            className={`px-2.5 py-1 rounded-md font-medium whitespace-nowrap transition-colors ${
-              activeTab === 'online' ? 'bg-background-light text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            className={`px-2 sm:px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors ${
+              activeTab === 'online' ? 'bg-background-light text-white font-semibold' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
             }`}
           >
-            Disponível ({onlineFriends.length})
+            <span className="hidden sm:inline">Disponível</span>
+            <span className="sm:hidden">Online</span> ({onlineFriends.length})
           </button>
 
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-2.5 py-1 rounded-md font-medium whitespace-nowrap transition-colors ${
-              activeTab === 'all' ? 'bg-background-light text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            className={`px-2 sm:px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors ${
+              activeTab === 'all' ? 'bg-background-light text-white font-semibold' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
             }`}
           >
             Todos ({friends.length})
@@ -242,8 +243,8 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
 
           <button
             onClick={() => setActiveTab('pending')}
-            className={`relative px-2.5 py-1 rounded-md font-medium whitespace-nowrap transition-colors ${
-              activeTab === 'pending' ? 'bg-background-light text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            className={`relative px-2 sm:px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors ${
+              activeTab === 'pending' ? 'bg-background-light text-white font-semibold' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
             }`}
           >
             <span>Pendentes</span>
@@ -256,8 +257,8 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
 
           <button
             onClick={() => setActiveTab('add')}
-            className={`px-2.5 py-1 rounded-md font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'add' ? 'bg-online/20 text-online' : 'bg-online text-white hover:bg-online/90'
+            className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 flex-shrink-0 ${
+              activeTab === 'add' ? 'bg-online/20 text-online border border-online/40' : 'bg-online text-white hover:bg-online/90 shadow-sm'
             }`}
           >
             <UserPlus className="w-3.5 h-3.5" />

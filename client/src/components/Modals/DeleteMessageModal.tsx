@@ -56,17 +56,17 @@ export const DeleteMessageModal: React.FC<DeleteMessageModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="bg-background-dark w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col text-gray-200"
+        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col text-gray-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-5 pb-3">
+        <div className="p-4 sm:p-5 pb-3 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
               <span>Excluir mensagem</span>
             </h2>
             <button
@@ -83,7 +83,7 @@ export const DeleteMessageModal: React.FC<DeleteMessageModalProps> = ({
         </div>
 
         {/* Message Preview Box */}
-        <div className="px-5 py-2">
+        <div className="px-4 sm:px-5 py-2 overflow-y-auto no-scrollbar flex-1">
           <div className="bg-background-darkest/90 rounded-2xl p-3 border border-white/5 shadow-inner flex items-start gap-3">
             {/* Author Avatar */}
             <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-sm flex-shrink-0 overflow-hidden shadow-md">

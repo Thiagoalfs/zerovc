@@ -133,22 +133,22 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="bg-background-dark w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
+        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 pb-2 flex items-center justify-between relative">
+        <div className="p-4 sm:p-6 pb-2 flex items-center justify-between relative flex-shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <h2 className="text-base sm:text-xl font-bold text-white flex items-center gap-2">
               <Users className="w-5 h-5 text-brand-500" />
-              Convidar amigos para {activeGuild.name}
+              Convidar amigos
             </h2>
             <p className="text-xs text-gray-400 mt-1">
-              Envie o link de convite para que seus amigos possam entrar diretamente no servidor.
+              Envie o link de convite para amigos entrarem em {activeGuild.name}.
             </p>
           </div>
           <button
@@ -161,7 +161,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto no-scrollbar flex-1">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-8 text-sm text-gray-400 gap-2">
               <RefreshCw className="w-5 h-5 animate-spin text-brand-500" />
