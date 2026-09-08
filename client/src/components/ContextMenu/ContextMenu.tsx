@@ -1,4 +1,4 @@
-import React, { useRef, useLayoutEffect, useState } from 'react';
+import React, { useRef, useLayoutEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronRight } from 'lucide-react';
 import { ContextMenuState } from './useContextMenu';
@@ -8,14 +8,39 @@ interface ContextMenuProps {
   onClose: () => void;
 }
 
-export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
+const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void }> = ({ menu, onClose }) => {
   const menuRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
-  const [submenuSide, setSubmenuSide] = useState<'right' | 'left'>('right');
 
+  // 1. Calculate initial clamped position synchronously so frame 0 renders directly at cursor
+  const initialPosition = useMemo(() => {
+    const approxWidth = 220;
+    const approxHeight = Math.min(350, (menu.items.length * 36) + (menu.title ? 40 : 0));
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 1080;
+
+    let x = menu.x;
+    let y = menu.y;
+
+    if (x + approxWidth > vw - 10) {
+      x = Math.max(10, vw - approxWidth - 10);
+    }
+    if (y + approxHeight > vh - 10) {
+      y = Math.max(10, vh - approxHeight - 10);
+    }
+
+    return { x, y };
+  }, [menu.x, menu.y, menu.items.length, menu.title]);
+
+  const [position, setPosition] = useState<{ x: number; y: number }>(initialPosition);
+  const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
+  const [submenuSide, setSubmenuSide] = useState<'right' | 'left'>(() => {
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1920;
+    return menu.x + 220 + 200 > vw - 10 ? 'left' : 'right';
+  });
+
+  // 2. Exact bounding box adjustment on layout paint
   useLayoutEffect(() => {
-    if (!menu || !menuRef.current) return;
+    if (!menuRef.current) return;
 
     const menuEl = menuRef.current;
     const rect = menuEl.getBoundingClientRect();
@@ -35,7 +60,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
       adjustedY = Math.max(10, viewportHeight - rect.height - 10);
     }
 
-    // Determine if submenus have room to open on the right (approx 200px submenu)
+    // Determine if submenus have room to open on the right
     if (adjustedX + rect.width + 200 > viewportWidth - 10) {
       setSubmenuSide('left');
     } else {
@@ -43,11 +68,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
     }
 
     setPosition({ x: adjustedX, y: adjustedY });
-  }, [menu]);
+  }, [menu.x, menu.y]);
 
-  if (!menu) return null;
-
-  const content = (
+  return (
     <div className="fixed inset-0 z-[99999] pointer-events-auto">
       {/* Invisible backdrop to dismiss on click outside */}
       <div
@@ -69,8 +92,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
         style={{
           top: `${position.y}px`,
           left: `${position.x}px`,
+          transition: 'none',
         }}
-        className="fixed z-[100000] min-w-[200px] max-w-[280px] bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 text-gray-200 select-none animate-in fade-in zoom-in-95 duration-100 font-sans"
+        className="fixed z-[100000] min-w-[200px] max-w-[280px] bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 text-gray-200 select-none animate-in fade-in zoom-in-95 duration-75 font-sans"
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -226,6 +250,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
       </div>
     </div>
   );
+};
 
-  return createPortal(content, document.body);
+export const ContextMenu: React.FC<ContextMenuProps> = ({ menu, onClose }) => {
+  if (!menu) return null;
+
+  return createPortal(
+    <ContextMenuContent
+      key={`${menu.x}-${menu.y}-${menu.title || ''}-${menu.items.length}`}
+      menu={menu}
+      onClose={onClose}
+    />,
+    document.body
+  );
 };
