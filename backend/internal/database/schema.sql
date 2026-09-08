@@ -25,6 +25,30 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(32) DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(255) DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS saved_status VARCHAR(20) DEFAULT 'online';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+
+-- Email Verifications (6-digit registration codes)
+CREATE TABLE IF NOT EXISTS email_verifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL,
+    code_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_email_verif_user ON email_verifications(user_id);
+
+-- Password Resets (Secure tokens for forgot-password flow)
+CREATE TABLE IF NOT EXISTS password_resets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    used_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_pass_reset_token ON password_resets(token_hash);
+CREATE INDEX IF NOT EXISTS idx_pass_reset_user ON password_resets(user_id);
 
 -- 2. Guilds (Servers)
 CREATE TABLE IF NOT EXISTS guilds (
