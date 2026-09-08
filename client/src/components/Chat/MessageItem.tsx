@@ -30,6 +30,8 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserVolumeSlider } from '../Voice/VolumeSliders';
 import { FormattedMessage } from './FormattedMessage';
 import { GifEmbed } from './GifEmbed';
+import { DeleteMessageModal } from '../Modals/DeleteMessageModal';
+import { AlertCircle, RotateCcw } from 'lucide-react';
 
 interface MessageItemProps {
   message: Message;
@@ -70,6 +72,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     muteMember,
     assignRole,
     removeRole,
+    sendMessage,
+    removeMessageFromStore,
   } = useGuildStore();
   const { openDMWithUser } = useDMStore();
   const { isFavorited, toggleFavorite } = useFavoriteGifStore();
@@ -91,8 +95,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const [editContent, setEditContent] = useState(message.content);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleRetrySend = async () => {
+    removeMessageFromStore(message.id);
+    await sendMessage(message.content, message.reply_to_id);
+  };
 
   // Sync editContent with message.content whenever edit mode is opened
   useEffect(() => {
@@ -286,7 +296,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         label: 'Excluir Mensagem',
         icon: <Trash2 className="w-4 h-4" />,
         variant: 'danger',
-        onClick: handleDelete,
+        onClick: () => setIsDeleteModalOpen(true),
       });
     }
 
@@ -525,14 +535,21 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     });
   };
 
+  const isSending = message.status === 'sending';
+  const isFailed = message.status === 'failed';
+
   return (
     <>
       <div
         id={`msg-${message.id}`}
-        onContextMenu={handleContextMenu}
-        className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-300 ${
-          isMentioned
+        onContextMenu={isSending || isFailed ? undefined : handleContextMenu}
+        className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 ${
+          isFailed
+            ? 'bg-red-500/10 hover:bg-red-500/15 border-l-2 border-red-500 text-red-200'
+            : isMentioned
             ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-2 border-amber-500'
+            : isSending
+            ? 'opacity-65 select-none'
             : 'hover:bg-background-dark/40'
         } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
       >
@@ -566,7 +583,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         {/* Main Message Row */}
         <div className="flex gap-3 md:gap-4 relative">
           {/* Quick Action Floating Bar on Hover */}
-          {!isEditing && (
+          {!isEditing && !isSending && !isFailed && (
             <div className="absolute -top-3 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
               {/* Reaction Popover Toggle */}
               <div className="relative">
@@ -631,7 +648,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
               {canDelete && (
                 <button
-                  onClick={handleDelete}
+                  onClick={() => setIsDeleteModalOpen(true)}
                   disabled={isDeleting}
                   className="p-1 rounded text-gray-400 hover:text-dnd hover:bg-dnd/20 transition-colors cursor-pointer"
                   title="Excluir Mensagem"
@@ -726,7 +743,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="text-[0.9375rem] text-gray-200 break-words leading-[1.375rem] font-normal select-text">
+              <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
+                isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
+              }`}>
                 <FormattedMessage
                   content={message.content}
                   onPreviewImage={onPreviewImage}
@@ -735,8 +754,32 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               </div>
             )}
 
+            {/* Failed sending banner with Retry and Delete */}
+            {isFailed && (
+              <div className="mt-1.5 flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="flex-1 truncate">{message.error || 'Falha ao enviar mensagem.'}</span>
+                <button
+                  type="button"
+                  onClick={handleRetrySend}
+                  className="flex items-center gap-1 text-red-300 hover:text-white font-semibold underline cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Tentar novamente</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeMessageFromStore(message.id)}
+                  className="p-0.5 hover:text-white text-red-400 cursor-pointer"
+                  title="Excluir rascunho com falha"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* Reactions Bar */}
-            {message.reactions && message.reactions.length > 0 && (
+            {!isSending && !isFailed && message.reactions && message.reactions.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {message.reactions.map((reaction) => {
                   const hasReacted = user && reaction.user_ids.includes(user.id);
@@ -763,6 +806,25 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
       {/* Message & User Context Menu */}
       <ContextMenu menu={menu} onClose={closeContextMenu} />
+
+      {/* Delete Message Confirmation Modal */}
+      <DeleteMessageModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        message={message}
+        isDeleting={isDeleting}
+        onConfirm={async () => {
+          try {
+            setIsDeleting(true);
+            await deleteMessage(message.id);
+            setIsDeleteModalOpen(false);
+          } catch (err) {
+            console.error('Failed to delete message:', err);
+          } finally {
+            setIsDeleting(false);
+          }
+        }}
+      />
     </>
   );
 };
