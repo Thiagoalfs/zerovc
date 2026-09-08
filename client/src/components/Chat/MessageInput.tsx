@@ -188,9 +188,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const textBefore = text.slice(0, emojiCursorPos);
     const textAfter = text.slice(emojiCursorPos);
 
-    // If custom server emoji, insert <:name:imageUrl>, otherwise unicode emoji character
+    // If custom server emoji, insert :name:, otherwise unicode emoji character
     const replacement = item.isCustom
-      ? `<:${item.name}:${item.imageUrl}> `
+      ? `:${item.name}: `
       : `${item.unicode} `;
 
     const newTextBefore = textBefore.replace(/:([a-zA-Z0-9_+-]*)$/, replacement);

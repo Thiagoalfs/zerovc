@@ -265,7 +265,7 @@ export const EMOJI_DATABASE: EmojiDefinition[] = [
 ];
 
 // Quick shortcode to Unicode lookup map
-const SHORTCODE_TO_UNICODE: Map<string, string> = new Map();
+export const SHORTCODE_TO_UNICODE: Map<string, string> = new Map();
 for (const entry of EMOJI_DATABASE) {
   for (const sc of entry.shortcodes) {
     SHORTCODE_TO_UNICODE.set(sc.toLowerCase(), entry.unicode);
@@ -373,10 +373,9 @@ export function replaceEmojiShortcodes(
 
     const cleanCode = (code || '').toLowerCase();
 
-    // Check custom server emojis first
+    // Custom server emojis should remain clean shortcodes :name:
     if (customMap.has(cleanCode)) {
-      const custom = customMap.get(cleanCode)!;
-      return `<:${custom.name}:${custom.image_url}>`;
+      return match;
     }
 
     // Check standard emojis
@@ -392,20 +391,36 @@ export function replaceEmojiShortcodes(
 /**
  * Check if the text consists exclusively of 1 to 4 emojis (for Jumboji display)
  */
-export function isPureEmojiMessage(content: string): boolean {
+export function isPureEmojiMessage(content: string, guildEmojis?: GuildEmoji[]): boolean {
   if (!content) return false;
   const trimmed = content.trim();
 
-  // Pattern for custom emoji tag <:name:url>
+  // Pattern for custom emoji tag <:name:url> or :name:
   const customEmojiTagRegex = /^<:[a-zA-Z0-9_+-]+:[^>]+>$/;
+  const shortcodeRegex = /^:([a-zA-Z0-9_+-]+):$/;
 
   // Split by whitespace
   const tokens = trimmed.split(/\s+/).filter(Boolean);
   if (tokens.length === 0 || tokens.length > 5) return false;
 
+  const customSet = new Set<string>();
+  if (guildEmojis) {
+    for (const ge of guildEmojis) {
+      customSet.add(ge.name.toLowerCase());
+    }
+  }
+
   for (const token of tokens) {
     if (customEmojiTagRegex.test(token)) {
       continue;
+    }
+
+    const scMatch = token.match(shortcodeRegex);
+    if (scMatch) {
+      const code = scMatch[1].toLowerCase();
+      if (customSet.has(code) || SHORTCODE_TO_UNICODE.has(code)) {
+        continue;
+      }
     }
 
     // Check if token is a standard emoji (using unicode regex or database)

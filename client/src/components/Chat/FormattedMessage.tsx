@@ -8,7 +8,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useDMStore } from '../../stores/dmStore';
 import { User, Permissions, GuildEmoji } from '../../types';
-import { isPureEmojiMessage, replaceEmojiShortcodes } from '../../utils/emojis';
+import { isPureEmojiMessage, replaceEmojiShortcodes, SHORTCODE_TO_UNICODE } from '../../utils/emojis';
 
 interface FormattedMessageProps {
   content: string;
@@ -121,12 +121,13 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   const guildMembers = activeGuild?.members || [];
   const guildRoles = activeGuild?.roles || [];
 
-  const isJumboji = isPureEmojiMessage(content);
+  const isJumboji = isPureEmojiMessage(content, guildEmojis);
 
-  // Extract all media links for Discord-like embeds below the text (ignoring code blocks / inline code)
+  // Extract all media links for Discord-like embeds below the text (ignoring code blocks / inline code / emoji tags)
   const contentWithoutCode = content
     .replace(/```[\s\S]*?```/g, '')
-    .replace(/`[^`\n]+`/g, '');
+    .replace(/`[^`\n]+`/g, '')
+    .replace(/<:[a-zA-Z0-9_+-]+:[^>]+>/g, '');
 
   const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|data:image\/[^\s]+)/g;
   const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
@@ -282,27 +283,31 @@ function renderInlineFormatting(
   text: string,
   keyPrefix: string,
   isJumboji = false,
-  guildEmojis?: any[],
+  guildEmojis?: GuildEmoji[],
   guildMembers?: User[],
   guildRoles?: any[],
   currentUser?: User | null,
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void,
   onOpenUserContextMenu?: (e: React.MouseEvent, user: User) => void
 ): React.ReactNode {
-  // First convert uncompleted standard shortcodes like :thumbsup: in text if needed
-  const normalizedText = replaceEmojiShortcodes(text, guildEmojis);
+  const customMap = new Map<string, GuildEmoji>();
+  if (guildEmojis) {
+    for (const ge of guildEmojis) {
+      customMap.set(ge.name.toLowerCase(), ge);
+    }
+  }
 
   const tokenRegex =
-    /(\|\|[\s\S]+?\|\||`[^`\n]+`|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|<:[a-zA-Z0-9_+-]+:[^>]+>|https?:\/\/[^\s<]+[^<.,:;"')\]\s]|@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
+    /(\|\|[\s\S]+?\|\||`[^`\n]+`|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|<:[a-zA-Z0-9_+-]+:[^>]+>|:([a-zA-Z0-9_+-]+):|https?:\/\/[^\s<]+[^<.,:;"')\]\s]|@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
 
   const elements: React.ReactNode[] = [];
   let lastIdx = 0;
   let m: RegExpExecArray | null;
   let count = 0;
 
-  while ((m = tokenRegex.exec(normalizedText)) !== null) {
+  while ((m = tokenRegex.exec(text)) !== null) {
     if (m.index > lastIdx) {
-      elements.push(normalizedText.substring(lastIdx, m.index));
+      elements.push(text.substring(lastIdx, m.index));
     }
 
     const token = m[0];
@@ -327,6 +332,30 @@ function renderInlineFormatting(
         );
       } else {
         elements.push(token);
+      }
+    } else if (token.startsWith(':') && token.endsWith(':') && token.length > 2) {
+      const cleanName = token.slice(1, -1).toLowerCase();
+      const customEmoji = customMap.get(cleanName);
+      if (customEmoji) {
+        elements.push(
+          <img
+            key={k}
+            src={formatAssetUrl(customEmoji.image_url)}
+            alt={`:${customEmoji.name}:`}
+            title={`:${customEmoji.name}:`}
+            draggable={false}
+            className={`${
+              isJumboji ? 'h-12 w-12 inline-block' : 'h-6 w-6 inline-block'
+            } align-middle object-contain mx-0.5 select-none`}
+          />
+        );
+      } else {
+        const unicode = SHORTCODE_TO_UNICODE.get(cleanName);
+        if (unicode) {
+          elements.push(unicode);
+        } else {
+          elements.push(token);
+        }
       }
     } else if (token.startsWith('||') && token.endsWith('||') && token.length >= 4) {
       const inner = token.substring(2, token.length - 2);
@@ -508,8 +537,8 @@ function renderInlineFormatting(
     lastIdx = m.index + token.length;
   }
 
-  if (lastIdx < normalizedText.length) {
-    elements.push(normalizedText.substring(lastIdx));
+  if (lastIdx < text.length) {
+    elements.push(text.substring(lastIdx));
   }
 
   return <React.Fragment key={keyPrefix}>{elements}</React.Fragment>;

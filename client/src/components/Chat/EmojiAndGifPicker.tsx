@@ -466,7 +466,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                           type="button"
                           title={`:${emoji.name}:`}
                           onClick={() => {
-                            onSelectEmoji(`<:${emoji.name}:${imgUrl}>`);
+                            onSelectEmoji(`:${emoji.name}: `);
                             onClose();
                           }}
                           className="w-10 h-10 flex items-center justify-center p-1.5 hover:bg-white/10 rounded-2xl transition-all active:scale-125 cursor-pointer hover:scale-110 group/emj"
