@@ -209,6 +209,9 @@ export interface GuildInvite {
   creator_id: string;
   creator?: User;
   uses: number;
+  max_uses?: number;
+  expires_at?: string | null;
+  is_existing?: boolean;
   created_at: string;
 }
 

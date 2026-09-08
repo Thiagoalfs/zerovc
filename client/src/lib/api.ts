@@ -215,10 +215,26 @@ export const api = {
         body: JSON.stringify(data),
       }),
     getInvites: (guildId: string) => request<GuildInvite[]>(`/guilds/${guildId}/invites`),
-    createInvite: (guildId: string, forceNew = false) =>
-      request<GuildInvite>(`/guilds/${guildId}/invites${forceNew ? '?new=true' : ''}`, {
+    createInvite: (
+      guildId: string,
+      options?: boolean | { forceNew?: boolean; max_age?: number; max_uses?: number }
+    ) => {
+      const isBool = typeof options === 'boolean';
+      const forceNew = isBool ? options : options?.forceNew;
+      const maxAge = !isBool ? options?.max_age : undefined;
+      const maxUses = !isBool ? options?.max_uses : undefined;
+
+      const params = new URLSearchParams();
+      if (forceNew) params.append('new', 'true');
+      if (maxAge !== undefined) params.append('max_age', String(maxAge));
+      if (maxUses !== undefined) params.append('max_uses', String(maxUses));
+
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      return request<GuildInvite>(`/guilds/${guildId}/invites${qs}`, {
         method: 'POST',
-      }),
+        body: JSON.stringify({ max_age: maxAge, max_uses: maxUses }),
+      });
+    },
     deleteInvite: (guildId: string, code: string) =>
       request<{ success: boolean; code: string }>(`/guilds/${guildId}/invites/${code}`, {
         method: 'DELETE',
