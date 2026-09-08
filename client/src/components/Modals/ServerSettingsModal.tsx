@@ -36,7 +36,8 @@ import {
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Permissions, Role, GuildEmoji, GuildInvite, User } from '../../types';
-import { api, formatAssetUrl } from '../../lib/api';
+import { api, formatAssetUrl, getApiBaseUrl } from '../../lib/api';
+import { copyToClipboard } from '../../utils/clipboard';
 import { ImageCropModal } from './ImageCropModal';
 import { ServerAuditLogView } from './ServerAuditLogView';
 
@@ -624,12 +625,16 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     }
   };
 
-  const handleCopyInviteLink = (code: string) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://zerovc.safiroko.xyz';
+  const handleCopyInviteLink = async (code: string) => {
+    const origin = (typeof window !== 'undefined' && window.location.origin && window.location.origin.startsWith('http') && !window.location.origin.includes('localhost:5173'))
+      ? window.location.origin
+      : getApiBaseUrl();
     const link = `${origin}/invite/${code}`;
-    navigator.clipboard.writeText(link);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2500);
+    const ok = await copyToClipboard(link);
+    if (ok) {
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2500);
+    }
   };
 
   const handleRevokeInvite = async (code: string) => {
