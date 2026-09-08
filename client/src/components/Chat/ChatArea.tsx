@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Hash, Users, Menu, Pin, Search, X, UploadCloud } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
+import { useAuthStore } from '../../stores/authStore';
 import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
 import { MemberList } from '../Sidebar/MemberList';
@@ -23,6 +24,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   isMemberListOpen,
   onToggleMemberList,
 }) => {
+  const { user } = useAuthStore();
   const {
     activeChannel,
     messages,
@@ -46,12 +48,24 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     return typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
   });
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const dragCounterRef = useRef<number>(0);
+
+  const handleEditLastMessage = () => {
+    if (!user || !displayedMessages || displayedMessages.length === 0) return;
+    for (let i = displayedMessages.length - 1; i >= 0; i--) {
+      const msg = displayedMessages[i];
+      if (msg.author_id === user.id) {
+        setEditingMessageId(msg.id);
+        break;
+      }
+    }
+  };
 
   // Fetch pinned messages from backend whenever showPinnedOnly is toggled or channel changes
   useEffect(() => {
@@ -422,6 +436,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   key={message.id}
                   message={message}
                   isCompact={isCompact}
+                  isEditing={editingMessageId === message.id}
+                  onStartEdit={() => setEditingMessageId(message.id)}
+                  onStopEdit={() => setEditingMessageId(null)}
                   onOpenUserProfile={onOpenUserProfile}
                   onOpenDM={onOpenDM}
                   onPreviewImage={onPreviewImage}
@@ -451,6 +468,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
           onSendMessage={sendMessage}
+          onEditLastMessage={handleEditLastMessage}
           droppedFile={droppedFile}
           onClearDroppedFile={() => setDroppedFile(null)}
         />
