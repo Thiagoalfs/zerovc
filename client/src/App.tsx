@@ -787,6 +787,30 @@ export const App: React.FC = () => {
       );
     }
 
+    if (cleanRoute === 'forgot-password') {
+      return (
+        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+          <AuthScreen initialMode="forgot_password" onNavigate={navigateTo} />
+        </div>
+      );
+    }
+
+    if (cleanRoute === 'reset-password') {
+      return (
+        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+          <AuthScreen initialMode="reset_password" onNavigate={navigateTo} />
+        </div>
+      );
+    }
+
+    if (cleanRoute === 'verify-email') {
+      return (
+        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+          <AuthScreen initialMode="verify_email" onNavigate={navigateTo} />
+        </div>
+      );
+    }
+
     if (
       cleanRoute === 'signin' ||
       cleanRoute === 'login' ||

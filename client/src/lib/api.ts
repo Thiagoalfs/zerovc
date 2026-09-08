@@ -87,12 +87,37 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 export const api = {
   auth: {
     register: (data: { username: string; email: string; password: string }) =>
-      request<{ token: string; user: User }>('/auth/register', {
+      request<{ token?: string; requires_verification?: boolean; email?: string; user?: User }>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    verifyEmail: (data: { email: string; code: string }) =>
+      request<{ token: string; user: User }>('/auth/verify-email', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    resendVerification: (data: { email: string }) =>
+      request<{ message: string }>('/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    forgotPassword: (data: { email: string }) =>
+      request<{ message: string }>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    verifyResetToken: (data: { token: string }) =>
+      request<{ valid: boolean; username: string; requires_2fa: boolean }>('/auth/verify-reset-token', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    resetPassword: (data: { token: string; new_password: string; code?: string }) =>
+      request<{ message: string }>('/auth/reset-password', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     login: (data: { email: string; password: string; code?: string }) =>
-      request<{ token?: string; requires_2fa?: boolean; user?: User }>('/auth/login', {
+      request<{ token?: string; requires_2fa?: boolean; requires_verification?: boolean; email?: string; user?: User }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(data),
       }),

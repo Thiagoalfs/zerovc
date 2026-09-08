@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
+	"github.com/zerovc/zerovc/backend/internal/email"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
 	"github.com/zerovc/zerovc/backend/internal/handlers"
 	"github.com/zerovc/zerovc/backend/internal/models"
@@ -133,8 +134,13 @@ func main() {
 
 	go hub.Run()
 
-	// 4. Initialize Handlers
-	authHandler := handlers.NewAuthHandler(db, authService)
+	// 4. Initialize Services & Handlers
+	resendAPIKey := getEnv("RESEND_API_KEY", "")
+	resendFromEmail := getEnv("RESEND_FROM_EMAIL", "ZeroVC <noreply@safiroko.xyz>")
+	appURL := getEnv("APP_URL", "https://zerovc.safiroko.xyz")
+	emailService := email.NewService(resendAPIKey, resendFromEmail, appURL)
+
+	authHandler := handlers.NewAuthHandler(db, authService, emailService)
 	userHandler := handlers.NewUserHandler(db, hub)
 	guildHandler := handlers.NewGuildHandler(db, hub)
 	channelHandler := handlers.NewChannelHandler(db, hub, livekitService)
@@ -180,8 +186,13 @@ func main() {
 
 	// Public Auth Endpoints — rate limit só aqui dentro
 	r.Route("/api/auth", func(r chi.Router) {
-		r.Use(httprate.LimitByIP(5, time.Minute))
+		r.Use(httprate.LimitByIP(10, time.Minute))
 		r.Post("/register", authHandler.Register)
+		r.Post("/verify-email", authHandler.VerifyEmail)
+		r.Post("/resend-verification", authHandler.ResendVerification)
+		r.Post("/forgot-password", authHandler.ForgotPassword)
+		r.Post("/verify-reset-token", authHandler.VerifyResetToken)
+		r.Post("/reset-password", authHandler.ResetPassword)
 		r.Post("/login", authHandler.Login)
 		r.Post("/logout", authHandler.Logout)
 	})

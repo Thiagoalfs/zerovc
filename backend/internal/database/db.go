@@ -66,6 +66,9 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	db.Pool.Exec(ctx, "UPDATE users SET username = LOWER(username)")
 	db.Pool.Exec(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))")
 
+	// Ensure email_verified column exists
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE")
+
 	log.Println("Database schema migration executed successfully")
 	return nil
 }

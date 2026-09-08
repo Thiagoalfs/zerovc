@@ -15,6 +15,7 @@ type User struct {
 	PasswordHash     string    `json:"-"`
 	TwoFactorSecret  string    `json:"-"`
 	TwoFactorEnabled bool      `json:"two_factor_enabled"`
+	EmailVerified    bool      `json:"email_verified"`
 	AvatarURL        string    `json:"avatar_url"`
 	BannerURL        string    `json:"banner_url"`
 	Bio              string    `json:"bio"`
@@ -34,6 +35,7 @@ type UserPublic struct {
 	Status           string    `json:"status"`
 	CustomStatus     string    `json:"custom_status"`
 	TwoFactorEnabled bool      `json:"two_factor_enabled"`
+	EmailVerified    bool      `json:"email_verified"`
 	Roles            []Role    `json:"roles,omitempty"`
 }
 
@@ -57,6 +59,7 @@ func (u *User) ToPublic() UserPublic {
 		Status:           u.Status,
 		CustomStatus:     u.CustomStatus,
 		TwoFactorEnabled: u.TwoFactorSecret != "",
+		EmailVerified:    u.EmailVerified,
 	}
 }
 
