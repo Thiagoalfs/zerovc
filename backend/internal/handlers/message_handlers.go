@@ -902,12 +902,21 @@ func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
 		INNER JOIN channels c ON c.id = m.channel_id
 		INNER JOIN users u ON u.id = m.author_id
 		WHERE c.guild_id = $1
+		  AND (
+		    c.is_private = false
+		    OR EXISTS (SELECT 1 FROM guilds g WHERE g.id = c.guild_id AND g.owner_id = $3)
+		    OR EXISTS (
+		      SELECT 1 FROM channel_role_access cra
+		      INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+		      WHERE cra.channel_id = c.id AND gmr.guild_id = c.guild_id AND gmr.user_id = $3
+		    )
+		  )
 		  AND (m.search_vector @@ plainto_tsquery('portuguese', $2) OR m.content ILIKE '%' || $2 || '%')
 	`
-	args := []any{guildID, queryTerm}
+	args := []any{guildID, queryTerm, userID}
 
 	if channelID != nil {
-		query += ` AND m.channel_id = $3`
+		query += ` AND m.channel_id = $4`
 		args = append(args, *channelID)
 	}
 
