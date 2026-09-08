@@ -60,6 +60,75 @@ type ReorderChannelsRequest struct {
 	ChannelIDs []uuid.UUID          `json:"channel_ids,omitempty"`
 }
 
+func (h *ChannelHandler) checkChannelPermissions(ctx context.Context, guildID, userID uuid.UUID) (bool, string) {
+	var ownerID uuid.UUID
+	err := h.db.Pool.QueryRow(ctx, "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	if err != nil {
+		return false, "servidor não encontrado"
+	}
+	if userID == ownerID {
+		return true, ""
+	}
+
+	var perms int64
+	h.db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(BIT_OR(r.permissions), 0)
+		FROM guild_members gm
+		JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+		JOIN guild_roles r ON r.id = gmr.role_id
+		WHERE gm.guild_id = $1 AND gm.user_id = $2
+	`, guildID, userID).Scan(&perms)
+
+	if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageChannels) == 0 {
+		return false, "você não tem permissão para gerenciar canais"
+	}
+	return true, ""
+}
+
+func (h *ChannelHandler) broadcastChannelEvent(ctx context.Context, guildID, channelID uuid.UUID, isPrivate bool, event models.WSEvent) {
+	if !isPrivate {
+		h.hub.BroadcastToGuild(guildID, event)
+		return
+	}
+
+	query := `
+		SELECT DISTINCT gm.user_id
+		FROM guild_members gm
+		INNER JOIN guilds g ON g.id = gm.guild_id
+		WHERE g.id = $1 AND (
+			g.owner_id = gm.user_id
+			OR EXISTS (
+				SELECT 1 FROM guild_roles gr
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+				WHERE gmr.guild_id = $1 AND gmr.user_id = gm.user_id
+				  AND (gr.permissions & $3) != 0
+			)
+			OR EXISTS (
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id = $2 AND gmr.guild_id = $1 AND gmr.user_id = gm.user_id
+			)
+		)
+	`
+	rows, err := h.db.Pool.Query(ctx, query, guildID, channelID, models.PermAdministrator)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	allowedUserIDs := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var uid uuid.UUID
+		if err := rows.Scan(&uid); err == nil {
+			allowedUserIDs = append(allowedUserIDs, uid)
+		}
+	}
+
+	if len(allowedUserIDs) > 0 {
+		h.hub.BroadcastToUsers(allowedUserIDs, event)
+	}
+}
+
 func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -74,10 +143,9 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var isMember bool
-	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
-	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
-		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+	allowed, msg := h.checkChannelPermissions(r.Context(), guildID, userID)
+	if !allowed {
+		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
 		return
 	}
 
@@ -118,7 +186,7 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		channel.RoleIDs = req.RoleIDs
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channel.ID, channel.IsPrivate, models.WSEvent{
 		Type: models.EventChannelCreate,
 		Data: channel,
 	})
@@ -147,10 +215,17 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var guildID, ownerID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT c.guild_id, g.owner_id FROM channels c INNER JOIN guilds g ON g.id = c.guild_id WHERE c.id = $1", channelID).Scan(&guildID, &ownerID)
-	if err != nil || ownerID != userID {
-		http.Error(w, `{"error":"forbidden: only server owner can edit channels"}`, http.StatusForbidden)
+	var guildID uuid.UUID
+	var isPrivate bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate)
+	if err != nil {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+
+	allowed, msg := h.checkChannelPermissions(r.Context(), guildID, userID)
+	if !allowed {
+		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
 		return
 	}
 
@@ -246,7 +321,7 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		owRows.Close()
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channel.ID, channel.IsPrivate, models.WSEvent{
 		Type: models.EventChannelUpdate,
 		Data: channel,
 	})
@@ -274,11 +349,18 @@ func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var guildID, ownerID uuid.UUID
+	var guildID uuid.UUID
 	var channelType models.ChannelType
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT c.guild_id, g.owner_id, c.type FROM channels c INNER JOIN guilds g ON g.id = c.guild_id WHERE c.id = $1", channelID).Scan(&guildID, &ownerID, &channelType)
-	if err != nil || ownerID != userID {
-		http.Error(w, `{"error":"forbidden: only server owner can delete channels"}`, http.StatusForbidden)
+	var isPrivate bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, type, is_private FROM channels WHERE id = $1", channelID).Scan(&guildID, &channelType, &isPrivate)
+	if err != nil {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+
+	allowed, msg := h.checkChannelPermissions(r.Context(), guildID, userID)
+	if !allowed {
+		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
 		return
 	}
 
@@ -293,7 +375,7 @@ func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channelID, isPrivate, models.WSEvent{
 		Type: models.EventChannelDelete,
 		Data: map[string]any{"id": channelID, "guild_id": guildID},
 	})
@@ -320,10 +402,9 @@ func (h *ChannelHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var isMember bool
-	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
-	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
-		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+	allowed, msg := h.checkChannelPermissions(r.Context(), guildID, userID)
+	if !allowed {
+		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
 		return
 	}
 
@@ -778,7 +859,7 @@ func (h *ChannelHandler) UpdatePermissionOverwrite(w http.ResponseWriter, r *htt
 		owRows.Close()
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channel.ID, channel.IsPrivate, models.WSEvent{
 		Type: models.EventChannelUpdate,
 		Data: channel,
 	})
@@ -851,7 +932,7 @@ func (h *ChannelHandler) DeletePermissionOverwrite(w http.ResponseWriter, r *htt
 		owRows.Close()
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
+	h.broadcastChannelEvent(r.Context(), guildID, channel.ID, channel.IsPrivate, models.WSEvent{
 		Type: models.EventChannelUpdate,
 		Data: channel,
 	})

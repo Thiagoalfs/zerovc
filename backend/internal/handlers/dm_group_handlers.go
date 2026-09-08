@@ -279,6 +279,26 @@ func (h *DMGroupHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check blocks between added users and existing members
+	for _, mID := range req.MemberIDs {
+		if mID == uuid.Nil {
+			continue
+		}
+		var isBlocked bool
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT EXISTS(
+				SELECT 1 FROM user_blocks ub
+				INNER JOIN dm_group_members dgm ON dgm.group_id = $1
+				WHERE (ub.user_id = $2 AND ub.blocked_user_id = dgm.user_id)
+				   OR (ub.user_id = dgm.user_id AND ub.blocked_user_id = $2)
+			)
+		`, groupID, mID).Scan(&isBlocked)
+		if isBlocked {
+			http.Error(w, `{"error":"não é possível adicionar usuários com bloqueio ativo no grupo"}`, http.StatusForbidden)
+			return
+		}
+	}
+
 	for _, mID := range req.MemberIDs {
 		if mID != uuid.Nil {
 			h.db.Pool.Exec(r.Context(), "INSERT INTO dm_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", groupID, mID)
