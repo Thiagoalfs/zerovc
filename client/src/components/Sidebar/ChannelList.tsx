@@ -35,7 +35,9 @@ import { useVoiceStore } from '../../stores/voiceStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useDMStore } from '../../stores/dmStore';
 import { api, formatAssetUrl } from '../../lib/api';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { UserBar } from './UserBar';
+import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
 interface ChannelListProps {
@@ -96,6 +98,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     setUserVolume,
     setStreamVolume,
   } = useVoiceStore();
+  const channelListWidth = useSettingsStore((s) => s.channelListWidth);
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
@@ -767,7 +770,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     <>
       <div
         onContextMenu={handleSidebarContextMenu}
-        className="w-60 bg-background-darker flex flex-col h-full border-r border-black/20 select-none flex-shrink-0 relative"
+        style={{ width: `${channelListWidth}px` }}
+        className="bg-background-darker flex flex-col h-full border-r border-black/20 select-none flex-shrink-0 relative max-w-[calc(100vw-72px)]"
       >
         {/* Server Header or Home Header */}
         {isHomeActive ? (
@@ -1001,6 +1005,9 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
         {/* User Status Bar */}
         <UserBar onOpenSettings={onOpenSettings} onOpenScreenShare={onOpenScreenShare} />
+
+        {/* Resizer Handle */}
+        <SidebarResizer />
       </div>
 
       {/* Context Menu Component */}
