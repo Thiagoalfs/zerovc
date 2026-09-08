@@ -7,7 +7,9 @@ import { useFriendStore } from '../../stores/friendStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
 import { DMRoom, DMGroup, User } from '../../types';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { UserBar } from '../Sidebar/UserBar';
+import { SidebarResizer } from '../Sidebar/SidebarResizer';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -43,6 +45,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   const { startCall } = useCallStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
+  const channelListWidth = useSettingsStore((s) => s.channelListWidth);
 
   useEffect(() => {
     fetchRooms();
@@ -211,7 +214,10 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
 
   return (
     <>
-      <div className="w-60 bg-background-darker flex flex-col h-full select-none border-r border-black/20">
+      <div
+        style={{ width: `${channelListWidth}px` }}
+        className="bg-background-darker flex flex-col h-full select-none border-r border-black/20 relative flex-shrink-0 max-w-[calc(100vw-72px)]"
+      >
         {/* Header */}
         <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm">
           <span className="font-bold text-gray-100 text-sm">Mensagens Diretas</span>
@@ -344,6 +350,9 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
 
         {/* User Footer */}
         <UserBar onOpenSettings={onOpenSettings} onOpenScreenShare={onOpenScreenShare} />
+
+        {/* Resizer Handle */}
+        <SidebarResizer />
       </div>
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />
