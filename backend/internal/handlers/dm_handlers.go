@@ -420,8 +420,13 @@ func (h *DMHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user1ID, user2ID uuid.UUID
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
-	if err != nil || (user1ID != userID && user2ID != userID) {
+	err := h.db.Pool.QueryRow(r.Context(), `
+		SELECT r.user1_id, r.user2_id
+		FROM dm_messages m
+		INNER JOIN dm_rooms r ON r.id = m.dm_room_id
+		WHERE m.id = $1 AND r.id = $2 AND (r.user1_id = $3 OR r.user2_id = $3)
+	`, messageID, roomID, userID).Scan(&user1ID, &user2ID)
+	if err != nil {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -479,8 +484,13 @@ func (h *DMHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user1ID, user2ID uuid.UUID
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
-	if err != nil || (user1ID != userID && user2ID != userID) {
+	err := h.db.Pool.QueryRow(r.Context(), `
+		SELECT r.user1_id, r.user2_id
+		FROM dm_messages m
+		INNER JOIN dm_rooms r ON r.id = m.dm_room_id
+		WHERE m.id = $1 AND r.id = $2 AND (r.user1_id = $3 OR r.user2_id = $3)
+	`, messageID, roomID, userID).Scan(&user1ID, &user2ID)
+	if err != nil {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}

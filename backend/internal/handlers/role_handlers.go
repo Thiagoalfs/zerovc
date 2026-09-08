@@ -102,28 +102,15 @@ func (h *RoleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify owner or admin or manage roles
-	var ownerID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
 	if err != nil {
 		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
 		return
 	}
 
-	if userID != ownerID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageRoles) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para criar cargos"}`, http.StatusForbidden)
-			return
-		}
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageRoles) == 0 {
+		http.Error(w, `{"error":"forbidden: sem permissão para criar cargos"}`, http.StatusForbidden)
+		return
 	}
 
 	var req CreateRoleRequest
@@ -132,6 +119,12 @@ func (h *RoleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Color == "" {
 		req.Color = "#5865F2"
+	}
+
+	// A non-admin cannot create a role with PermAdministrator
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (req.Permissions&models.PermAdministrator) != 0 {
+		http.Error(w, `{"error":"forbidden: apenas administradores podem criar cargos com permissão de administrador"}`, http.StatusForbidden)
+		return
 	}
 
 	var role models.Role
@@ -180,32 +173,41 @@ func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var guildID, ownerID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT r.guild_id, g.owner_id FROM guild_roles r INNER JOIN guilds g ON g.id = r.guild_id WHERE r.id = $1", roleID).Scan(&guildID, &ownerID)
+	var guildID uuid.UUID
+	var rolePosition int
+	var currentPerms int64
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, position, permissions FROM guild_roles WHERE id = $1", roleID).Scan(&guildID, &rolePosition, &currentPerms)
 	if err != nil {
 		http.Error(w, `{"error":"role not found"}`, http.StatusNotFound)
 		return
 	}
 
-	if userID != ownerID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageRoles) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar cargos"}`, http.StatusForbidden)
-			return
-		}
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+	if allowed, msg := actorCtx.canAssignRolePosition(rolePosition); !allowed {
+		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
+		return
 	}
 
 	var req UpdateRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	// If updating permissions, cannot grant PermAdministrator if not owner/admin
+	if req.Permissions != nil && !actorCtx.IsOwner && !actorCtx.HasAdmin {
+		if (*req.Permissions & models.PermAdministrator) != 0 {
+			http.Error(w, `{"error":"forbidden: apenas administradores podem conceder permissão de administrador"}`, http.StatusForbidden)
+			return
+		}
+	}
+	// If updating position, cannot place it equal or above own max pos
+	if req.Position != nil && !actorCtx.IsOwner && *req.Position <= actorCtx.MaxPos {
+		http.Error(w, `{"error":"forbidden: você não pode mover um cargo para uma posição igual ou superior à sua"}`, http.StatusForbidden)
 		return
 	}
 
@@ -260,33 +262,33 @@ func (h *RoleHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ownerID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
 	if err != nil {
 		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
 		return
 	}
-
-	if userID != ownerID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageRoles) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para reordenar cargos"}`, http.StatusForbidden)
-			return
-		}
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageRoles) == 0 {
+		http.Error(w, `{"error":"forbidden: sem permissão para reordenar cargos"}`, http.StatusForbidden)
+		return
 	}
 
 	var items []ReorderRoleItem
 	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
 		return
+	}
+
+	// If not owner, ensure actor cannot reorder roles at or above their max pos
+	if !actorCtx.IsOwner {
+		for _, item := range items {
+			var origPos int
+			if err := h.db.Pool.QueryRow(r.Context(), "SELECT position FROM guild_roles WHERE id = $1 AND guild_id = $2", item.ID, guildID).Scan(&origPos); err == nil {
+				if origPos <= actorCtx.MaxPos || item.Position <= actorCtx.MaxPos {
+					http.Error(w, `{"error":"forbidden: você não pode alterar a posição de cargos iguais ou superiores ao seu"}`, http.StatusForbidden)
+					return
+				}
+			}
+		}
 	}
 
 	for _, item := range items {
@@ -333,32 +335,27 @@ func (h *RoleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var guildID, ownerID uuid.UUID
+	var guildID uuid.UUID
 	var roleName string
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT r.guild_id, g.owner_id, r.name FROM guild_roles r INNER JOIN guilds g ON g.id = r.guild_id WHERE r.id = $1", roleID).Scan(&guildID, &ownerID, &roleName)
+	var rolePosition int
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT r.guild_id, r.name, r.position FROM guild_roles r WHERE r.id = $1", roleID).Scan(&guildID, &roleName, &rolePosition)
 	if err != nil {
 		http.Error(w, `{"error":"role not found"}`, http.StatusNotFound)
 		return
 	}
 
-	if userID != ownerID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageRoles) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para deletar cargos"}`, http.StatusForbidden)
-			return
-		}
-	}
-
 	if roleName == "@everyone" {
 		http.Error(w, `{"error":"o cargo @everyone não pode ser excluído"}`, http.StatusBadRequest)
+		return
+	}
+
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"guild not found"}`, http.StatusNotFound)
+		return
+	}
+	if allowed, msg := actorCtx.canAssignRolePosition(rolePosition); !allowed {
+		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
 		return
 	}
 

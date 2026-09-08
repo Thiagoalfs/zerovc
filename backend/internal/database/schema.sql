@@ -33,10 +33,12 @@ CREATE TABLE IF NOT EXISTS email_verifications (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     email VARCHAR(255) NOT NULL,
     code_hash VARCHAR(255) NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_email_verif_user ON email_verifications(user_id);
+ALTER TABLE email_verifications ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
 
 -- Password Resets (Secure tokens for forgot-password flow)
 CREATE TABLE IF NOT EXISTS password_resets (

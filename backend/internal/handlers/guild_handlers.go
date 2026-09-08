@@ -1039,10 +1039,35 @@ func (h *GuildHandler) LogAudit(ctx context.Context, guildID, actorID uuid.UUID,
 		}
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
-		Type: models.EventAuditLogCreate,
-		Data: entry,
-	})
+	// Broadcast only to users with PermAdministrator or PermManageGuild (or guild owner)
+	rows, err := h.db.Pool.Query(ctx, `
+		SELECT DISTINCT gm.user_id
+		FROM guild_members gm
+		LEFT JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+		LEFT JOIN guild_roles gr ON gr.id = gmr.role_id
+		INNER JOIN guilds g ON g.id = gm.guild_id
+		WHERE gm.guild_id = $1
+		  AND (gm.user_id = g.owner_id OR (gr.permissions & ($2 | $3)) != 0)
+	`, guildID, models.PermAdministrator, models.PermManageGuild)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var allowedIDs []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err == nil {
+			allowedIDs = append(allowedIDs, id)
+		}
+	}
+
+	if len(allowedIDs) > 0 {
+		h.hub.BroadcastToUsers(allowedIDs, models.WSEvent{
+			Type: models.EventAuditLogCreate,
+			Data: entry,
+		})
+	}
 }
 
 func (h *GuildHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
