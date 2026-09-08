@@ -24,6 +24,7 @@ import { AuthScreen } from './components/Auth/AuthScreen';
 import { LandingPage } from './components/Landing/LandingPage';
 import { DownloadPage } from './components/Landing/DownloadPage';
 import { CreateServerModal } from './components/Modals/CreateServerModal';
+import { CreateDMGroupModal } from './components/Modals/CreateDMGroupModal';
 import { CreateChannelModal } from './components/Modals/CreateChannelModal';
 import { CreateCategoryModal } from './components/Modals/CreateCategoryModal';
 import { ScreenShareModal } from './components/Modals/ScreenShareModal';
@@ -72,6 +73,7 @@ export const App: React.FC = () => {
 
   // Modals
   const [isCreateServerOpen, setIsCreateServerOpen] = useState(false);
+  const [isCreateDMGroupOpen, setIsCreateDMGroupOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
   const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false);
@@ -928,6 +930,10 @@ export const App: React.FC = () => {
             }
             onOpenSettings={() => setIsProfileModalOpen(true)}
             onOpenScreenShare={() => setIsScreenShareOpen(true)}
+            onOpenCreateGroup={() => {
+              setIsCreateDMGroupOpen(true);
+              setIsMobileDrawerOpen(false);
+            }}
             onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
           />
         ) : (
@@ -1085,6 +1091,17 @@ export const App: React.FC = () => {
       <CreateServerModal
         isOpen={isCreateServerOpen}
         onClose={() => setIsCreateServerOpen(false)}
+      />
+
+      <CreateDMGroupModal
+        isOpen={isCreateDMGroupOpen}
+        onClose={() => setIsCreateDMGroupOpen(false)}
+        onGroupCreated={(groupId) => {
+          setIsHomeActive(true);
+          setHomeView('group');
+          navigateTo(`/@me/group/${groupId}`);
+          useDMGroupStore.getState().selectGroupById(groupId);
+        }}
       />
 
       <InviteModal
