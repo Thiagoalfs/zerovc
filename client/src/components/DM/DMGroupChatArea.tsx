@@ -13,16 +13,18 @@ import {
   Loader2,
   UploadCloud,
   FileText,
-  Star,
+  Smile,
   AlertCircle,
   RotateCcw,
+  Copy,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useAuthStore } from '../../stores/authStore';
-import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
+import { EmojiAndGifPicker } from '../Chat/EmojiAndGifPicker';
 import { FormattedMessage } from '../Chat/FormattedMessage';
 import { User, DMGroupMessage } from '../../types';
 
@@ -51,9 +53,11 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     hasMoreByGroup,
     loadMoreMessages,
   } = useDMGroupStore();
-  const { isFavorited, toggleFavorite } = useFavoriteGifStore();
+  const chatDensity = useSettingsStore((s) => s.chatDensity);
+  const isDensityCompact = chatDensity === 'compact';
 
   const [content, setContent] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -166,7 +170,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       scrollToBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
       setTimeout(() => scrollToBottom(true), 300);
-      setTimeout(() => scrollToBottom(true), 600);
     }
   }, [messages]);
 
@@ -189,68 +192,107 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (activeGroup?.id && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [activeGroup?.id]);
-
-  if (!activeGroup) {
-    return (
-      <div className="flex-1 bg-background-dark flex flex-col items-center justify-center text-gray-500 font-medium p-4 select-none">
-        <Users className="w-12 h-12 text-gray-600 mb-3" />
-        <span className="text-sm">Selecione um grupo para conversar</span>
-      </div>
-    );
-  }
-
-  const groupName =
-    activeGroup.name ||
-    activeGroup.members
-      ?.filter((m) => m.id !== user?.id)
-      ?.map((m) => m.display_name || m.username)
-      ?.join(', ') ||
-    'Grupo';
-
-  const handleSend = async () => {
-    if (isUploading) return;
-    let finalContent = content.trim();
-
-    if (finalContent.length > MAX_CHARS) {
+  const processFile = (file: File) => {
+    if (file.size > MAX_FILE_BYTES) {
       setLimitAlert({
-        title: 'Limite de Caracteres Excedido',
-        message: 'O limite de tamanho de mensagem é 2.000 caracteres',
-        detail: `${finalContent.length.toLocaleString('pt-BR')} / 2.000 caracteres`,
+        title: 'Arquivo muito grande',
+        message: 'O limite de arquivos é de 20 MB.',
+        detail: `Tamanho: ${(file.size / (1024 * 1024)).toFixed(1)} MB.`,
       });
       return;
     }
 
-    if (!finalContent && !selectedFile) return;
+    setSelectedFile(file);
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => setSelectedImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedImagePreview(null);
+    }
+  };
 
-    const fileToUpload = selectedFile;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+    e.target.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            processFile(file);
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+    }
+  };
+
+  const handleSelectEmoji = (emoji: string) => {
+    setContent((prev) => prev + emoji);
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
+  };
+
+  const handleSelectGif = async (gifUrl: string) => {
+    setShowEmojiPicker(false);
+    try {
+      await sendMessage(gifUrl);
+    } catch (err: any) {
+      console.error('Failed to send GIF:', err);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!content.trim() && !selectedFile) return;
+
+    if (content.length > MAX_CHARS) {
+      setLimitAlert({
+        title: 'Mensagem muito longa',
+        message: `O limite de caracteres por mensagem é de ${MAX_CHARS.toLocaleString('pt-BR')}.`,
+        detail: `Sua mensagem atual possui ${content.length.toLocaleString('pt-BR')} caracteres.`,
+      });
+      return;
+    }
+
+    const textToSend = content.trim();
+
     setContent('');
-    setSelectedFile(null);
-    setSelectedImagePreview(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
-    try {
-      if (fileToUpload) {
-        setIsUploading(true);
-        const uploaded = await api.upload.attachment(fileToUpload);
-        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
-      }
+    if (selectedFile) {
+      setIsUploading(true);
+      try {
+        const uploadRes = await api.upload.attachment(selectedFile);
+        setSelectedFile(null);
+        setSelectedImagePreview(null);
+        setIsUploading(false);
 
-      await sendMessage(finalContent);
-    } catch (err: any) {
-      console.error('Failed to send group message/file:', err);
-      setLimitAlert({
-        title: 'Erro ao Enviar Mensagem',
-        message: err.message || 'Não foi possível enviar a mensagem/imagem.',
-      });
-    } finally {
-      setIsUploading(false);
+        const attachmentPayload = [
+          {
+            url: uploadRes.url,
+            filename: uploadRes.filename,
+            size: uploadRes.size,
+          },
+        ];
+
+        await sendMessage(textToSend, attachmentPayload);
+      } catch (err: any) {
+        setIsUploading(false);
+        alert(err.message || 'Falha ao enviar arquivo');
+      }
+    } else {
+      await sendMessage(textToSend);
     }
   };
 
@@ -261,68 +303,50 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   };
 
-  const processFile = (file: File) => {
-    if (file.size > MAX_FILE_BYTES) {
-      setLimitAlert({
-        title: 'Arquivo Muito Grande',
-        message: 'O limite de imagens/vídeos/arquivos é de 20 MB',
-        detail: `Tamanho do arquivo: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
-      });
-      return;
-    }
-
-    setSelectedFile(file);
-
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setSelectedImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setSelectedImagePreview(null);
-    }
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
   };
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === 'file') {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) {
-          processFile(file);
-          break;
-        }
+  const handleJoinVoice = async () => {
+    if (!activeGroup) return;
+    if (isInGroupVoice) {
+      await livekit.disconnect();
+      setIsInGroupVoice(false);
+    } else {
+      try {
+        const res = await api.dmGroups.getVoiceToken(activeGroup.id);
+        await livekit.connect(res.livekit_url, res.token, {});
+        setIsInGroupVoice(true);
+      } catch (err: any) {
+        alert(err.message || 'Falha ao conectar na chamada em grupo');
       }
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    processFile(file);
-    e.target.value = '';
-  };
+  if (!activeGroup) {
+    return (
+      <div className="flex-1 bg-background-dark flex flex-col items-center justify-center text-gray-500 font-medium p-4 select-none">
+        {onOpenMobileDrawer && (
+          <button
+            onClick={onOpenMobileDrawer}
+            className="md:hidden mb-4 bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 cursor-pointer shadow-md"
+          >
+            <Menu className="w-4 h-4" />
+            <span>Abrir Conversas</span>
+          </button>
+        )}
+        <Users className="w-12 h-12 text-gray-600 mb-2" />
+        <span className="text-gray-400">Selecione um grupo para começar</span>
+      </div>
+    );
+  }
 
-  const handleJoinVoice = async () => {
-    if (isInGroupVoice) {
-      await livekit.disconnect();
-      setIsInGroupVoice(false);
-      return;
-    }
-
-    try {
-      const res = await api.dmGroups.getVoiceToken(activeGroup.id);
-      await livekit.connect(res.livekit_url, res.token, {});
-      setIsInGroupVoice(true);
-    } catch (err: any) {
-      alert(err.message || 'Falha ao conectar no canal de voz');
-    }
-  };
+  const groupName =
+    activeGroup.name ||
+    activeGroup.members?.map((m) => m.display_name || m.username).join(', ') ||
+    'Grupo';
 
   return (
     <div
@@ -352,40 +376,39 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             <button
               onClick={onOpenMobileDrawer}
               className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
+              title="Menu Lateral"
             >
               <Menu className="w-5 h-5" />
             </button>
           )}
 
-          <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+          <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
             <Users className="w-4 h-4" />
           </div>
 
-          <div className="flex flex-col truncate">
-            <span className="font-bold text-gray-100 text-sm truncate">{groupName}</span>
-            <span className="text-[10px] text-gray-400">
+          <div className="flex items-baseline gap-2 truncate">
+            <span className="font-bold text-gray-100 text-sm md:text-base truncate">{groupName}</span>
+            <span className="text-xs text-gray-400 truncate hidden sm:inline">
               {activeGroup.members?.length || 0} membros
             </span>
           </div>
         </div>
 
         {/* Header Right Actions */}
-        <div className="flex items-center gap-2">
-          {/* Voice Call Button */}
+        <div className="flex items-center gap-1 md:gap-2">
           <button
             onClick={handleJoinVoice}
-            className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold ${
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
               isInGroupVoice
                 ? 'bg-dnd text-white hover:bg-rose-700'
-                : 'text-gray-300 hover:text-white hover:bg-white/10'
+                : 'text-gray-400 hover:text-online hover:bg-white/5'
             }`}
             title={isInGroupVoice ? 'Sair da Chamada' : 'Entrar na Chamada em Grupo'}
           >
-            {isInGroupVoice ? <PhoneOff className="w-4 h-4" /> : <Phone className="w-4 h-4 text-online" />}
+            {isInGroupVoice ? <PhoneOff className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
             <span className="hidden sm:inline">{isInGroupVoice ? 'Desconectar' : 'Ligar'}</span>
           </button>
 
-          {/* Members Toggle */}
           <button
             onClick={() => {
               const next = !showMemberList;
@@ -394,8 +417,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 localStorage.setItem('zerovc_server_members_open', String(next));
               } catch {}
             }}
-            className={`p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors cursor-pointer ${
-              showMemberList ? 'text-white bg-white/10' : ''
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              showMemberList ? 'text-brand-400 bg-white/10' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
             }`}
             title="Membros do Grupo"
           >
@@ -411,9 +434,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-4 space-y-0.5 no-scrollbar"
+            className="flex-1 overflow-y-auto px-2 md:px-4 py-2 no-scrollbar"
           >
-            {/* Loading older messages indicator */}
             {isLoadingMoreMessages && (
               <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
                 <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
@@ -421,12 +443,57 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               </div>
             )}
 
+            {/* Group Welcome Hero */}
+            {hasMoreByGroup[activeGroup.id] === false && (
+              <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-brand-600 flex items-center justify-center text-white shadow-xl mb-3">
+                  <Users className="w-8 h-8 md:w-10 md:h-10" />
+                </div>
+                <h2 className="text-xl md:text-2xl font-bold text-white mb-1">{groupName}</h2>
+                <p className="text-xs md:text-sm text-gray-400">
+                  Este é o início do grupo <strong className="text-gray-200">{groupName}</strong>.
+                </p>
+              </div>
+            )}
+
             {isLoadingMessages ? (
-              <div className="flex justify-center py-6 text-xs text-gray-500">Carregando mensagens...</div>
+              <div className="flex justify-center items-center gap-2 py-10 text-sm text-gray-500">
+                <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+                <span>Carregando mensagens...</span>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 select-none">
+                <span>Nenhuma mensagem ainda no grupo. Diga oi!</span>
+              </div>
             ) : (
               messages.map((msg, index) => {
                 const prevMsg = messages[index - 1];
-                const isCompact = prevMsg && prevMsg.author_id === msg.author_id;
+                const isCompact = (() => {
+                  if (!prevMsg) return false;
+                  if (prevMsg.author_id !== msg.author_id) return false;
+                  const prevTime = new Date(prevMsg.created_at).getTime();
+                  const currTime = new Date(msg.created_at).getTime();
+                  if (isNaN(prevTime) || isNaN(currTime)) return false;
+                  const diffMs = currTime - prevTime;
+                  return diffMs >= 0 && diffMs <= 5 * 60 * 1000;
+                })();
+
+                const formattedTime = (() => {
+                  try {
+                    return format(new Date(msg.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+                  } catch {
+                    return '';
+                  }
+                })();
+
+                const shortTime = (() => {
+                  try {
+                    return format(new Date(msg.created_at), 'HH:mm', { locale: ptBR });
+                  } catch {
+                    return '';
+                  }
+                })();
+
                 const isSending = msg.status === 'sending';
                 const isFailed = msg.status === 'failed';
 
@@ -434,82 +501,108 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                   <div
                     key={msg.id}
                     id={`msg-${msg.id}`}
-                    className={`relative group flex gap-3 px-3 rounded-xl transition-all duration-200 ${
+                    className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 ${
                       isFailed
-                        ? 'bg-red-500/10 border-l-2 border-red-500'
-                        : 'hover:bg-background-darkest/40'
-                    } ${isCompact ? 'py-1 mt-1' : 'py-2 mt-3'} ${isSending ? 'opacity-65 select-none' : ''}`}
+                        ? 'bg-red-500/10 hover:bg-red-500/15 border-l-2 border-red-500 text-red-200'
+                        : isSending
+                        ? 'opacity-65 select-none'
+                        : 'hover:bg-background-dark/40'
+                    } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
                   >
-                    {!isCompact ? (
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
-                        }}
-                        className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-85"
-                      >
-                        {msg.author?.avatar_url ? (
-                          <img src={formatAssetUrl(msg.author.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
-                        ) : (
-                          <span>{msg.author?.display_name?.[0]?.toUpperCase() || msg.author?.username?.[0]?.toUpperCase() || 'U'}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="w-8 flex-shrink-0" />
-                    )}
-
-                    <div className="flex-1 min-w-0">
-                      {!isCompact && (
-                        <div className="flex items-center gap-2 mb-1">
-                          <span
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
-                            }}
-                            className="text-sm font-semibold text-white hover:underline cursor-pointer"
-                          >
-                            {msg.author?.display_name || msg.author?.username}
-                          </span>
-                          <span className="text-[10px] text-gray-500">
-                            {format(new Date(msg.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className={isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'}>
-                        <FormattedMessage
-                          content={msg.content}
-                          className="text-sm select-text"
-                          onPreviewImage={onPreviewImage}
-                          onImageLoad={handleMediaLoad}
-                          onOpenUserProfile={onOpenUserProfile}
-                        />
-                      </div>
-
-                      {/* Failed Sending Error Bar with Retry */}
-                      {isFailed && (
-                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-red-400">
-                          <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                          <span>{msg.error || 'Falha ao enviar.'}</span>
+                    <div className="flex gap-3 md:gap-4 relative">
+                      {!isSending && !isFailed && (
+                        <div className="absolute -top-3 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
                           <button
-                            type="button"
-                            onClick={async () => {
-                              useDMGroupStore.setState((s) => ({
-                                messages: s.messages.filter((m) => m.id !== msg.id),
-                                messagesByGroup: {
-                                  ...s.messagesByGroup,
-                                  [activeGroup.id]: (s.messagesByGroup[activeGroup.id] || []).filter((m) => m.id !== msg.id),
-                                },
-                              }));
-                              await sendMessage(msg.content, msg.attachments, msg.reply_to_id);
-                            }}
-                            className="flex items-center gap-0.5 text-red-300 hover:text-white underline font-semibold cursor-pointer ml-1"
+                            onClick={() => navigator.clipboard.writeText(msg.content)}
+                            className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                            title="Copiar Texto"
                           >
-                            <RotateCcw className="w-2.5 h-2.5" />
-                            <span>Tentar novamente</span>
+                            <Copy className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       )}
+
+                      {isCompact ? (
+                        <div className="w-9 md:w-10 flex-shrink-0 text-right select-none text-[10px] text-gray-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity leading-[1.375rem] pr-1">
+                          {shortTime}
+                        </div>
+                      ) : (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
+                          }}
+                          className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white flex-shrink-0 mt-0.5 shadow-sm text-sm overflow-hidden cursor-pointer hover:opacity-85 transition-opacity"
+                          title="Ver perfil"
+                        >
+                          {msg.author?.avatar_url ? (
+                            <img
+                              src={formatAssetUrl(msg.author.avatar_url)}
+                              alt={msg.author.username}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>
+                              {msg.author?.display_name?.[0]?.toUpperCase() ||
+                                msg.author?.username?.[0]?.toUpperCase() ||
+                                'U'}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex-1 min-w-0">
+                        {!isCompact && (
+                          <div className="flex items-baseline gap-2 mb-0.5 select-none">
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                msg.author && onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY });
+                              }}
+                              className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
+                              title="Ver perfil"
+                            >
+                              {msg.author?.display_name || msg.author?.username || 'Usuário'}
+                            </span>
+                            <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>
+                          </div>
+                        )}
+
+                        <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
+                          isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
+                        }`}>
+                          <FormattedMessage
+                            content={msg.content}
+                            onPreviewImage={onPreviewImage}
+                            onImageLoad={handleMediaLoad}
+                            onOpenUserProfile={onOpenUserProfile}
+                          />
+                        </div>
+
+                        {isFailed && (
+                          <div className="mt-1.5 flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20">
+                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span className="flex-1 truncate">{msg.error || 'Falha ao enviar mensagem.'}</span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                useDMGroupStore.setState((s) => ({
+                                  messages: s.messages.filter((m) => m.id !== msg.id),
+                                  messagesByGroup: {
+                                    ...s.messagesByGroup,
+                                    [activeGroup.id]: (s.messagesByGroup[activeGroup.id] || []).filter((m) => m.id !== msg.id),
+                                  },
+                                }));
+                                await sendMessage(msg.content, msg.attachments, msg.reply_to_id);
+                              }}
+                              className="flex items-center gap-1 text-red-300 hover:text-white underline font-semibold cursor-pointer"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Tentar novamente</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -520,7 +613,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
           {/* Selected Image / File Preview */}
           {selectedFile && (
-            <div className="mx-4 mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in">
+            <div className="mx-4 mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in select-none">
               <div className="flex items-center gap-2.5">
                 {selectedImagePreview ? (
                   <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-xl border border-white/10 flex-shrink-0" />
@@ -552,6 +645,14 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             </div>
           )}
 
+          <EmojiAndGifPicker
+            isOpen={showEmojiPicker}
+            onClose={() => setShowEmojiPicker(false)}
+            onSelectEmoji={handleSelectEmoji}
+            onSelectGif={handleSelectGif}
+            positionClass="bottom-20 right-4"
+          />
+
           <input
             ref={fileInputRef}
             type="file"
@@ -561,13 +662,13 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           />
 
           {/* Input Bar */}
-          <div className="p-3 md:p-4 bg-background-dark">
-            <div className="bg-background-darkest rounded-2xl p-2 border border-white/10 flex items-center gap-2">
+          <div className="p-3 md:p-4 pt-0 select-none">
+            <div className="bg-background-light/40 hover:bg-background-light/60 focus-within:bg-background-light/60 focus-within:ring-1 focus-within:ring-brand-500/50 rounded-xl px-3 py-2.5 flex items-center gap-2 transition-all border border-white/5">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50"
+                className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
                 title="Anexar arquivo ou imagem (até 20 MB)"
               >
                 <PlusCircle className="w-5 h-5" />
@@ -575,21 +676,32 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
               <textarea
                 ref={textareaRef}
-                rows={1}
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
+                onChange={handleInput}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                disabled={isUploading}
                 placeholder={`Conversar em ${groupName}...`}
-                className="flex-1 bg-transparent text-white px-2 py-1 focus:outline-none resize-none text-sm no-scrollbar max-h-32"
+                rows={1}
+                disabled={isUploading}
+                className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-0.5 max-h-36 leading-relaxed font-normal no-scrollbar"
               />
+
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className={`p-1 rounded-full hover:bg-white/5 transition-colors cursor-pointer ${
+                  showEmojiPicker ? 'text-brand-400' : 'text-gray-400 hover:text-white'
+                }`}
+                title="Inserir Emoji ou GIF"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
 
               <button
                 type="button"
                 onClick={handleSend}
                 disabled={(!content.trim() && !selectedFile) || isUploading}
-                className="p-2 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white transition-all cursor-pointer flex-shrink-0"
+                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white p-1.5 rounded-lg transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0 cursor-pointer"
                 title="Enviar Mensagem"
               >
                 {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}

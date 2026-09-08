@@ -28,7 +28,8 @@ pgdata/
 *.db
 
 # Uploaded assets
-assets/
+/assets/
+
 
 
 
