@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react';
 import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff } from 'lucide-react';
 import { Channel, User } from '../../types';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -42,21 +43,65 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     }
   };
 
-  const getCardSizeClass = () => {
+  // Discord-style automatic row partitioning: never causes scroll, nested seamlessly
+  const participantRows = useMemo(() => {
     const count = participants.length;
-    if (count <= 1) return 'w-full max-w-3xl max-h-[75vh]';
-    if (count === 2) return 'w-full sm:w-[calc(50%-0.6rem)] max-w-2xl max-h-[65vh]';
-    if (count <= 4) return 'w-full sm:w-[calc(50%-0.6rem)] max-w-xl max-h-[42vh]';
-    if (count === 5) return 'w-full sm:w-[calc(50%-0.6rem)] max-w-lg max-h-[32vh]';
-    if (count === 6) return 'w-full sm:w-[calc(33.333%-0.75rem)] max-w-md max-h-[40vh]';
-    if (count <= 9) return 'w-full sm:w-[calc(33.333%-0.75rem)] max-w-md max-h-[30vh]';
-    return 'w-full sm:w-[calc(33.333%-0.75rem)] md:w-[calc(25%-0.75rem)] max-w-sm max-h-[25vh]';
-  };
+    if (count === 0) return [];
+    if (count === 1) return [[participants[0]]];
+    if (count === 2) return [[participants[0], participants[1]]];
+    if (count === 3) return [[participants[0], participants[1], participants[2]]];
+    if (count === 4) return [
+      [participants[0], participants[1]],
+      [participants[2], participants[3]],
+    ];
+    if (count === 5) return [
+      [participants[0], participants[1], participants[2]],
+      [participants[3], participants[4]],
+    ];
+    if (count === 6) return [
+      [participants[0], participants[1], participants[2]],
+      [participants[3], participants[4], participants[5]],
+    ];
+    if (count === 7) return [
+      [participants[0], participants[1], participants[2], participants[3]],
+      [participants[4], participants[5], participants[6]],
+    ];
+    if (count === 8) return [
+      [participants[0], participants[1], participants[2], participants[3]],
+      [participants[4], participants[5], participants[6], participants[7]],
+    ];
+    if (count === 9) return [
+      [participants[0], participants[1], participants[2]],
+      [participants[3], participants[4], participants[5]],
+      [participants[6], participants[7], participants[8]],
+    ];
+    if (count === 10) return [
+      [participants[0], participants[1], participants[2], participants[3]],
+      [participants[4], participants[5], participants[6]],
+      [participants[7], participants[8], participants[9]],
+    ];
+    if (count <= 12) {
+      const numRows = 3;
+      const perRow = Math.ceil(count / numRows);
+      const rows: (typeof participants)[] = [];
+      for (let i = 0; i < count; i += perRow) {
+        rows.push(participants.slice(i, i + perRow));
+      }
+      return rows;
+    }
+    const numRows = 4;
+    const perRow = Math.ceil(count / numRows);
+    const rows: (typeof participants)[] = [];
+    for (let i = 0; i < count; i += perRow) {
+      rows.push(participants.slice(i, i + perRow));
+    }
+    return rows;
+  }, [participants]);
 
   return (
     <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden select-none">
       {/* Voice Room Header */}
-      <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10">
+      <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10 flex-shrink-0">
         <div className="flex items-center gap-2 truncate">
           {onOpenMobileDrawer && (
             <button
@@ -73,8 +118,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
         </div>
       </div>
 
-      {/* Main Voice / Video Dynamic Grid */}
-      <div className="flex-1 overflow-y-auto p-3 md:p-6 flex items-center justify-center">
+      {/* Main Voice / Video Dynamic Nested Layout (No Scrollbars) */}
+      <div className="flex-1 min-h-0 min-w-0 p-3 md:p-5 flex items-center justify-center overflow-hidden">
         {isConnecting ? (
           <div className="flex flex-col items-center gap-3 text-gray-400">
             <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
@@ -86,17 +131,27 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
             <span className="text-sm">Nenhum participante conectado</span>
           </div>
         ) : (
-          <div className="w-full h-full max-h-full flex flex-wrap items-center justify-center content-center gap-3 md:gap-4 max-w-7xl mx-auto">
-            {participants.map((p) => (
+          <div className="w-full h-full min-h-0 min-w-0 flex flex-col items-center justify-center gap-3 md:gap-4 max-w-7xl mx-auto overflow-hidden">
+            {participantRows.map((row, rIdx) => (
               <div
-                key={p.sid || p.identity}
-                className={`aspect-video flex items-center justify-center flex-shrink-0 ${getCardSizeClass()}`}
+                key={rIdx}
+                className="w-full flex-1 min-h-0 min-w-0 flex items-center justify-center gap-3 md:gap-4"
               >
-                <ParticipantCard
-                  participant={p}
-                  onOpenUserProfile={onOpenUserProfile}
-                  onOpenDM={onOpenDM}
-                />
+                {row.map((p) => (
+                  <div
+                    key={p.sid || p.identity}
+                    className="h-full max-h-full aspect-video flex-shrink min-w-0 min-h-0 flex items-center justify-center"
+                    style={{
+                      maxWidth: `calc(${100 / row.length}% - 0.75rem)`,
+                    }}
+                  >
+                    <ParticipantCard
+                      participant={p}
+                      onOpenUserProfile={onOpenUserProfile}
+                      onOpenDM={onOpenDM}
+                    />
+                  </div>
+                ))}
               </div>
             ))}
           </div>
