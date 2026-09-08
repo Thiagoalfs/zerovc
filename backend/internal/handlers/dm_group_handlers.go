@@ -62,9 +62,9 @@ func (h *DMGroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		totalMembers = append(totalMembers, mID)
 	}
 
-	// Enforce 10 members maximum limit
-	if len(totalMembers) > 10 {
-		http.Error(w, `{"error":"grupos de DM podem ter no máximo 10 membros"}`, http.StatusBadRequest)
+	// Enforce 15 members maximum limit
+	if len(totalMembers) > 15 {
+		http.Error(w, `{"error":"grupos de DM podem ter no máximo 15 membros"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -274,8 +274,8 @@ func (h *DMGroupHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 	var currentCount int
 	h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm_group_members WHERE group_id = $1", groupID).Scan(&currentCount)
 
-	if currentCount+len(req.MemberIDs) > 10 {
-		http.Error(w, `{"error":"o grupo não pode ultrapassar 10 membros"}`, http.StatusBadRequest)
+	if currentCount+len(req.MemberIDs) > 15 {
+		http.Error(w, `{"error":"o grupo não pode ultrapassar 15 membros"}`, http.StatusBadRequest)
 		return
 	}
 
