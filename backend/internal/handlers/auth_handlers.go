@@ -13,7 +13,7 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/models"
 )
 
-var validUsernameRegex = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+var validUsernameRegex = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 type AuthHandler struct {
 	db   *database.DB
@@ -75,11 +75,19 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Username = strings.TrimSpace(req.Username)
+	req.Username = strings.TrimSpace(strings.ToLower(req.Username))
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
 	if len(req.Username) < 2 || len(req.Username) > 32 || !validUsernameRegex.MatchString(req.Username) {
-		http.Error(w, `{"error":"O nome de usuário (@) deve conter apenas letras e números (2 a 32 caracteres), sem espaços ou símbolos"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"O nome de usuário (@) deve conter apenas letras minúsculas, números ou sublinhado (_) (2 a 32 caracteres), sem espaços, acentos, maiúsculas ou caracteres especiais"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Case-insensitive check if username already exists
+	var usernameExists bool
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username) = LOWER($1))", req.Username).Scan(&usernameExists)
+	if usernameExists {
+		http.Error(w, `{"error":"Este nome de usuário (@) já está em uso por outra conta"}`, http.StatusConflict)
 		return
 	}
 

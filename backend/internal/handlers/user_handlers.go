@@ -14,7 +14,7 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/models"
 )
 
-var validProfileUsernameRegex = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+var validProfileUsernameRegex = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 type UserHandler struct {
 	db  *database.DB
@@ -54,9 +54,9 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	// Validate username if provided
 	if req.Username != nil {
-		un := strings.TrimSpace(*req.Username)
+		un := strings.TrimSpace(strings.ToLower(*req.Username))
 		if len(un) < 2 || len(un) > 32 || !validProfileUsernameRegex.MatchString(un) {
-			http.Error(w, `{"error":"O nome de usuário (@) deve conter apenas letras e números (2 a 32 caracteres), sem espaços ou símbolos"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"O nome de usuário (@) deve conter apenas letras minúsculas, números ou sublinhado (_) (2 a 32 caracteres), sem espaços, acentos, maiúsculas ou caracteres especiais"}`, http.StatusBadRequest)
 			return
 		}
 		*req.Username = un

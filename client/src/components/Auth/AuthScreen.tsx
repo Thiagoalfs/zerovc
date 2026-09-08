@@ -68,9 +68,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         // Error state handled in authStore
       }
     } else {
-      const cleanUsername = username.trim();
-      if (!/^[a-zA-Z0-9]+$/.test(cleanUsername)) {
-        alert('O nome de usuário (@) deve conter apenas letras e números, sem espaços ou símbolos.');
+      const cleanUsername = username.trim().toLowerCase();
+      if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
+        alert('O nome de usuário (@) deve conter apenas letras minúsculas, números e sublinhado (_), sem espaços, acentos, maiúsculas ou símbolos.');
         return;
       }
       if (cleanUsername.length < 2 || cleanUsername.length > 32) {
@@ -78,7 +78,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         return;
       }
       try {
-        await register(cleanUsername, email, password);
+        await register(cleanUsername, email.trim().toLowerCase(), password);
       } catch {
         // Error state handled in authStore
       }
@@ -207,13 +207,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                       required
                       maxLength={32}
                       value={username}
-                      onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                       placeholder="usuario"
-                      className="w-full bg-background-darker border border-white/10 rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
+                      className="w-full bg-background-darker border border-white/10 rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono lowercase"
                     />
                   </div>
                   <span className="text-[10px] text-gray-400 mt-1 block">
-                    Apenas letras e números (sem espaços ou símbolos)
+                    Apenas letras minúsculas, números e _ (sem espaços, maiúsculas ou símbolos)
                   </span>
                 </div>
               )}
