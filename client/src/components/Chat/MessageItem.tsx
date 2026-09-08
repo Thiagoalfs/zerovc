@@ -34,6 +34,9 @@ import { GifEmbed } from './GifEmbed';
 interface MessageItemProps {
   message: Message;
   isCompact?: boolean;
+  isEditing?: boolean;
+  onStartEdit?: () => void;
+  onStopEdit?: () => void;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   onOpenDM?: (userId: string) => void;
   onPreviewImage?: (url: string) => void;
@@ -46,6 +49,9 @@ const QUICK_EMOJIS = ['👍', '❤️', '🔥', '😂', '🎉', '👀', '✨', '
 export const MessageItem: React.FC<MessageItemProps> = ({
   message,
   isCompact = false,
+  isEditing: propIsEditing,
+  onStartEdit,
+  onStopEdit,
   onOpenUserProfile,
   onOpenDM,
   onPreviewImage,
@@ -71,11 +77,29 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const chatDensity = useSettingsStore((s) => s.chatDensity);
   const isDensityCompact = chatDensity === 'compact';
 
-  const [isEditing, setIsEditing] = useState(false);
+  const [localIsEditing, setLocalIsEditing] = useState(false);
+  const isEditing = propIsEditing !== undefined ? propIsEditing : localIsEditing;
+
+  const setIsEditing = (val: boolean) => {
+    setLocalIsEditing(val);
+    if (val) {
+      onStartEdit?.();
+    } else {
+      onStopEdit?.();
+    }
+  };
+
   const [editContent, setEditContent] = useState(message.content);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync editContent with message.content whenever edit mode is opened
+  useEffect(() => {
+    if (isEditing) {
+      setEditContent(message.content);
+    }
+  }, [isEditing, message.content]);
 
   const isAuthor = user?.id === message.author_id;
   const isOwner = activeGuild?.owner_id === user?.id;

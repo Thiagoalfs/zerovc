@@ -9,9 +9,13 @@ import {
   X,
   Check,
   Loader2,
+  Server,
 } from 'lucide-react';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useGuildStore } from '../../stores/guildStore';
+import { formatAssetUrl } from '../../lib/api';
+import { EMOJI_DATABASE } from '../../utils/emojis';
 
 interface EmojiAndGifPickerProps {
   isOpen: boolean;
@@ -175,9 +179,11 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   onSelectGif,
   positionClass = 'bottom-16 right-4',
 }) => {
+  const { activeGuild } = useGuildStore();
   const autoplayGifs = useSettingsStore((s) => s.autoplayGifs);
   const [activeTab, setActiveTab] = useState<'emoji' | 'gif'>('emoji');
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
+  const [emojiSearch, setEmojiSearch] = useState('');
   const [gifSearch, setGifSearch] = useState('');
   const [klipyGifs, setKlipyGifs] = useState<Array<{ url: string; preview: string; title: string }>>([]);
   const [isLoadingGifs, setIsLoadingGifs] = useState(false);
@@ -280,6 +286,27 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
     return () => clearTimeout(timer);
   }, [activeTab, activeCategory, gifSearch]);
 
+  // Filtered Emojis
+  const filteredServerEmojis = useMemo(() => {
+    const list = activeGuild?.emojis || [];
+    if (!emojiSearch.trim()) return list;
+    const q = emojiSearch.trim().toLowerCase().replace(/^:|:$/g, '');
+    return list.filter((e) => e.name.toLowerCase().includes(q));
+  }, [activeGuild?.emojis, emojiSearch]);
+
+  const filteredStandardEmojis = useMemo(() => {
+    if (!emojiSearch.trim()) {
+      return EMOJI_DATABASE;
+    }
+    const q = emojiSearch.trim().toLowerCase().replace(/^:|:$/g, '');
+    return EMOJI_DATABASE.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.shortcodes.some((s) => s.toLowerCase().includes(q)) ||
+        e.keywords?.some((k) => k.toLowerCase().includes(q))
+    );
+  }, [emojiSearch]);
+
   const displayedGifs = useMemo(() => {
     if (activeCategory === 'Favoritos') {
       return favoriteGifs.map((f) => ({
@@ -373,23 +400,97 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
 
         {/* Tab 1: Emojis */}
         {activeTab === 'emoji' && (
-          <div className="flex-1 p-3 overflow-y-auto no-scrollbar">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2 px-1">
-              Todos os Emojis
-            </span>
-            <div className={`grid gap-2 ${pickerWidth >= 640 ? 'grid-cols-10' : pickerWidth >= 500 ? 'grid-cols-8' : 'grid-cols-6'}`}>
-              {COMMON_EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => {
-                    onSelectEmoji(emoji);
-                  }}
-                  className="w-11 h-11 flex items-center justify-center text-2xl hover:bg-white/10 rounded-2xl transition-all active:scale-125 cursor-pointer hover:scale-110"
-                >
-                  {emoji}
-                </button>
-              ))}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Emoji Search Bar */}
+            <div className="p-3 pb-2">
+              <div className="relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={emojiSearch}
+                  onChange={(e) => setEmojiSearch(e.target.value)}
+                  placeholder="Pesquisar emojis (:exemplo:)..."
+                  className="w-full bg-background-darker text-white text-xs pl-9 pr-8 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-brand-500 placeholder-gray-500"
+                />
+                {emojiSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setEmojiSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Emojis Scroll Area */}
+            <div className="flex-1 p-3 pt-1 overflow-y-auto no-scrollbar space-y-4">
+              {/* Server Custom Emojis Section */}
+              {filteredServerEmojis.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-2 px-1">
+                    <Server className="w-3.5 h-3.5" />
+                    <span>{activeGuild?.name ? `Emojis de ${activeGuild.name}` : 'Emojis do Servidor'}</span>
+                    <span className="text-gray-500 font-normal">({filteredServerEmojis.length})</span>
+                  </div>
+                  <div className={`grid gap-2 ${pickerWidth >= 640 ? 'grid-cols-10' : pickerWidth >= 500 ? 'grid-cols-8' : 'grid-cols-6'}`}>
+                    {filteredServerEmojis.map((emoji) => {
+                      const imgUrl = emoji.image_url;
+                      return (
+                        <button
+                          key={emoji.id}
+                          type="button"
+                          title={`:${emoji.name}:`}
+                          onClick={() => {
+                            onSelectEmoji(`<:${emoji.name}:${imgUrl}>`);
+                            onClose();
+                          }}
+                          className="w-10 h-10 flex items-center justify-center p-1.5 hover:bg-white/10 rounded-2xl transition-all active:scale-125 cursor-pointer hover:scale-110 group/emj"
+                        >
+                          <img
+                            src={formatAssetUrl(imgUrl)}
+                            alt={emoji.name}
+                            className="w-full h-full object-contain"
+                            loading="lazy"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Standard Unicode Emojis */}
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1 flex items-center justify-between">
+                  <span>Emojis Padrão</span>
+                  {emojiSearch && (
+                    <span className="text-gray-500 font-normal">({filteredStandardEmojis.length} encontrados)</span>
+                  )}
+                </div>
+                {filteredStandardEmojis.length === 0 && filteredServerEmojis.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-gray-400">
+                    Nenhum emoji encontrado para "{emojiSearch}".
+                  </div>
+                ) : (
+                  <div className={`grid gap-1.5 ${pickerWidth >= 640 ? 'grid-cols-10' : pickerWidth >= 500 ? 'grid-cols-8' : 'grid-cols-6'}`}>
+                    {filteredStandardEmojis.map((emoji, idx) => (
+                      <button
+                        key={`${emoji.unicode}-${idx}`}
+                        type="button"
+                        title={`:${emoji.shortcodes[0] || emoji.name}:`}
+                        onClick={() => {
+                          onSelectEmoji(emoji.unicode);
+                        }}
+                        className="w-10 h-10 flex items-center justify-center text-2xl hover:bg-white/10 rounded-2xl transition-all active:scale-125 cursor-pointer hover:scale-110"
+                      >
+                        {emoji.unicode}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

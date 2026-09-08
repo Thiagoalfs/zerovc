@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
@@ -6,12 +6,14 @@ import { api, formatAssetUrl } from '../../lib/api';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { EmojiAndGifPicker } from './EmojiAndGifPicker';
 import { useGuildStore } from '../../stores/guildStore';
+import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
 
 interface MessageInputProps {
   channel: Channel;
   replyingTo?: Message | null;
   onCancelReply?: () => void;
   onSendMessage: (content: string, replyToId?: string) => Promise<void>;
+  onEditLastMessage?: () => void;
   droppedFile?: File | null;
   onClearDroppedFile?: () => void;
 }
@@ -25,6 +27,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   replyingTo,
   onCancelReply,
   onSendMessage,
+  onEditLastMessage,
   droppedFile,
   onClearDroppedFile,
 }) => {
@@ -35,9 +38,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
+  
+  // Mentions (@) Autocomplete State
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionCursorPos, setMentionCursorPos] = useState<number>(0);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState<number>(0);
+
+  // Emoji (:) Autocomplete State
+  const [emojiQuery, setEmojiQuery] = useState<string | null>(null);
+  const [emojiCursorPos, setEmojiCursorPos] = useState<number>(0);
+  const [selectedEmojiIndex, setSelectedEmojiIndex] = useState<number>(0);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +112,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     return list.slice(0, 8);
   }, [mentionQuery, activeGuild?.members, activeGuild?.roles]);
 
+  // Compute filtered emoji suggestions
+  const emojiSuggestions = useMemo(() => {
+    if (emojiQuery === null) return [];
+    return searchEmojiSuggestions(emojiQuery, activeGuild?.emojis, activeGuild?.name, 8);
+  }, [emojiQuery, activeGuild?.emojis, activeGuild?.name]);
+
   useEffect(() => {
     if (droppedFile) {
       processFile(droppedFile);
@@ -142,9 +158,34 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }, 10);
   };
 
+  const insertEmoji = (item: EmojiSuggestion) => {
+    if (!textareaRef.current) return;
+    const text = content;
+    const textBefore = text.slice(0, emojiCursorPos);
+    const textAfter = text.slice(emojiCursorPos);
+
+    // If custom server emoji, insert <:name:imageUrl>, otherwise unicode emoji character
+    const replacement = item.isCustom
+      ? `<:${item.name}:${item.imageUrl}> `
+      : `${item.unicode} `;
+
+    const newTextBefore = textBefore.replace(/:([a-zA-Z0-9_+-]*)$/, replacement);
+    const newContent = newTextBefore + textAfter;
+    setContent(newContent);
+    setEmojiQuery(null);
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPos = newTextBefore.length;
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
+  };
+
   const handleSend = async () => {
     if (isUploading) return;
-    let finalContent = content.trim();
+    let finalContent = replaceEmojiShortcodes(content.trim(), activeGuild?.emojis);
 
     // Check 2,000 character limit on raw text
     if (finalContent.length > MAX_CHARS) {
@@ -166,6 +207,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setSelectedImagePreview(null);
     setShowEmojiPicker(false);
     setMentionQuery(null);
+    setEmojiQuery(null);
     onCancelReply?.();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -191,6 +233,31 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 1. Emoji Suggestions Navigation
+    if (emojiSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedEmojiIndex((prev) => (prev + 1) % emojiSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedEmojiIndex((prev) => (prev - 1 + emojiSuggestions.length) % emojiSuggestions.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertEmoji(emojiSuggestions[selectedEmojiIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setEmojiQuery(null);
+        return;
+      }
+    }
+
+    // 2. Mention Suggestions Navigation
     if (mentionSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -214,6 +281,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
+    // 3. ArrowUp Shortcut to edit user's last message when input is empty (Discord feature)
+    if (e.key === 'ArrowUp' && !content.trim() && !selectedFile && !replyingTo) {
+      e.preventDefault();
+      onEditLastMessage?.();
+      return;
+    }
+
+    // 4. Normal Enter to Send
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       await handleSend();
@@ -229,17 +304,28 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     e.target.style.height = 'auto';
     e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
 
-    // Detect @ mention query at cursor
     const cursor = e.target.selectionStart || val.length;
     const textBefore = val.slice(0, cursor);
-    const match = textBefore.match(/@([a-zA-Z0-9_.-]*)$/);
 
-    if (match) {
-      setMentionQuery(match[1]);
+    // Detect @ mention query at cursor
+    const mentionMatch = textBefore.match(/@([a-zA-Z0-9_.-]*)$/);
+    if (mentionMatch) {
+      setMentionQuery(mentionMatch[1]);
       setMentionCursorPos(cursor);
       setSelectedMentionIndex(0);
+      setEmojiQuery(null);
     } else {
       setMentionQuery(null);
+
+      // Detect : emoji query at cursor (e.g. ":th" or ":fire")
+      const emojiMatch = textBefore.match(/(?:^|\s):([a-zA-Z0-9_+-]*)$/);
+      if (emojiMatch) {
+        setEmojiQuery(emojiMatch[1]);
+        setEmojiCursorPos(cursor);
+        setSelectedEmojiIndex(0);
+      } else {
+        setEmojiQuery(null);
+      }
     }
 
     const now = Date.now();
@@ -312,6 +398,60 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   return (
     <div className="p-3 md:p-4 bg-background-dark relative">
+      {/* Emoji Autocomplete Suggestions Popup */}
+      {emojiSuggestions.length > 0 && (
+        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
+          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Smile className="w-3.5 h-3.5 text-brand-400" />
+              <span>Emojis correspondentes ({emojiSuggestions.length})</span>
+            </span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
+          </div>
+          <div className="space-y-0.5">
+            {emojiSuggestions.map((item, idx) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => insertEmoji(item)}
+                onMouseEnter={() => setSelectedEmojiIndex(idx)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer ${
+                  selectedEmojiIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                {item.isCustom ? (
+                  <div className="w-7 h-7 rounded-lg bg-background-darker flex items-center justify-center p-0.5 flex-shrink-0 border border-white/10">
+                    <img
+                      src={formatAssetUrl(item.imageUrl || '')}
+                      alt={item.name}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-7 h-7 flex items-center justify-center text-xl flex-shrink-0 select-none">
+                    {item.unicode}
+                  </div>
+                )}
+                <div className="flex items-center justify-between min-w-0 flex-1">
+                  <span className="font-semibold text-xs text-gray-200 truncate">
+                    {item.shortcode}
+                  </span>
+                  {item.isCustom ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-brand-500/20 text-brand-300 border border-brand-500/30 flex-shrink-0">
+                      {item.guildName}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-gray-500 truncate">
+                      {item.name}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Mention Autocomplete Suggestions Popup */}
       {mentionSuggestions.length > 0 && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">

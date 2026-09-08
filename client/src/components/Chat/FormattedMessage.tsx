@@ -4,6 +4,9 @@ import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { formatAssetUrl } from '../../lib/api';
 import { GifEmbed } from './GifEmbed';
 
+import { useGuildStore } from '../../stores/guildStore';
+import { isPureEmojiMessage, replaceEmojiShortcodes } from '../../utils/emojis';
+
 interface FormattedMessageProps {
   content: string;
   className?: string;
@@ -82,7 +85,11 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 }) => {
   if (!content) return null;
 
-  const { isFavorited, toggleFavorite } = useFavoriteGifStore();
+  const { isFavorited } = useFavoriteGifStore();
+  const { activeGuild } = useGuildStore();
+  const guildEmojis = activeGuild?.emojis;
+
+  const isJumboji = isPureEmojiMessage(content);
 
   // Extract all media links for Discord-like embeds below the text (ignoring code blocks / inline code)
   const contentWithoutCode = content
@@ -123,7 +130,14 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   if (textToDisplay.length > 0) {
     while ((match = codeBlockRegex.exec(textToDisplay)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(renderInlineFormatting(textToDisplay.substring(lastIndex, match.index), `text-${lastIndex}`));
+        parts.push(
+          renderInlineFormatting(
+            textToDisplay.substring(lastIndex, match.index),
+            `text-${lastIndex}`,
+            isJumboji,
+            guildEmojis
+          )
+        );
       }
       const lang = match[1];
       const code = match[2];
@@ -140,7 +154,14 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     }
 
     if (lastIndex < textToDisplay.length) {
-      parts.push(renderInlineFormatting(textToDisplay.substring(lastIndex), `text-${lastIndex}`));
+      parts.push(
+        renderInlineFormatting(
+          textToDisplay.substring(lastIndex),
+          `text-${lastIndex}`,
+          isJumboji,
+          guildEmojis
+        )
+      );
     }
   }
 
@@ -151,7 +172,11 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
   return (
     <div className={`leading-relaxed break-words ${className}`}>
-      {hasText && <div className={textClassName}>{parts}</div>}
+      {hasText && (
+        <div className={`${textClassName} ${isJumboji ? 'text-3xl sm:text-4xl leading-normal' : ''}`}>
+          {parts}
+        </div>
+      )}
 
       {/* Discord-like Rich Embeds / Image / GIF / Video Previews */}
       {hasEmbeds && (
@@ -164,7 +189,6 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
               resolvedSrc.includes('klipy') ||
               resolvedSrc.includes('giphy') ||
               resolvedSrc.includes('tenor');
-            const favorited = isFavorited(resolvedSrc);
 
             if (media.isVideo) {
               return (
@@ -211,49 +235,93 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   );
 };
 
-// Helper for inline tokens: Spoiler, Bold, Italic, Strikethrough, Inline Code, Links
-function renderInlineFormatting(text: string, keyPrefix: string): React.ReactNode {
-  // Regex parsing hierarchy:
-  // 1. ||spoiler||
-  // 2. `inline code`
-  // 3. **bold**
-  // 4. ~~strike~~
-  // 5. *italic* or _italic_
-  // 6. URLs (https?://...)
-  const tokenRegex = /(\|\|[\s\S]+?\|\||`[^`\n]+`|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g;
+// Helper for inline tokens: Spoiler, Bold, Italic, Strikethrough, Inline Code, Custom Emojis, Shortcodes, Links
+function renderInlineFormatting(
+  text: string,
+  keyPrefix: string,
+  isJumboji = false,
+  guildEmojis?: any[]
+): React.ReactNode {
+  // First convert uncompleted standard shortcodes like :thumbsup: in text if needed
+  const normalizedText = replaceEmojiShortcodes(text, guildEmojis);
+
+  const tokenRegex =
+    /(\|\|[\s\S]+?\|\||`[^`\n]+`|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|<:[a-zA-Z0-9_+-]+:[^>]+>|https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g;
 
   const elements: React.ReactNode[] = [];
   let lastIdx = 0;
   let m: RegExpExecArray | null;
   let count = 0;
 
-  while ((m = tokenRegex.exec(text)) !== null) {
+  while ((m = tokenRegex.exec(normalizedText)) !== null) {
     if (m.index > lastIdx) {
-      elements.push(text.substring(lastIdx, m.index));
+      elements.push(normalizedText.substring(lastIdx, m.index));
     }
 
     const token = m[0];
     const k = `${keyPrefix}-${count++}`;
 
-    if (token.startsWith('||') && token.endsWith('||') && token.length >= 4) {
+    if (token.startsWith('<:') && token.endsWith('>')) {
+      const matchCustom = token.match(/^<:([a-zA-Z0-9_+-]+):([^>]+)>$/);
+      if (matchCustom) {
+        const emojiName = matchCustom[1];
+        const emojiUrl = matchCustom[2];
+        elements.push(
+          <img
+            key={k}
+            src={formatAssetUrl(emojiUrl)}
+            alt={`:${emojiName}:`}
+            title={`:${emojiName}:`}
+            draggable={false}
+            className={`${
+              isJumboji ? 'h-12 w-12 inline-block' : 'h-6 w-6 inline-block'
+            } align-middle object-contain mx-0.5 select-none`}
+          />
+        );
+      } else {
+        elements.push(token);
+      }
+    } else if (token.startsWith('||') && token.endsWith('||') && token.length >= 4) {
       const inner = token.substring(2, token.length - 2);
-      elements.push(<SpoilerText key={k}>{renderInlineFormatting(inner, `${k}-sp`)}</SpoilerText>);
+      elements.push(
+        <SpoilerText key={k}>
+          {renderInlineFormatting(inner, `${k}-sp`, isJumboji, guildEmojis)}
+        </SpoilerText>
+      );
     } else if (token.startsWith('`') && token.endsWith('`') && token.length >= 2) {
       const inner = token.substring(1, token.length - 1);
       elements.push(
-        <code key={k} className="px-1.5 py-0.5 rounded-md bg-background-darkest border border-white/10 font-mono text-[12px] text-brand-300">
+        <code
+          key={k}
+          className="px-1.5 py-0.5 rounded-md bg-background-darkest border border-white/10 font-mono text-[12px] text-brand-300"
+        >
           {inner}
         </code>
       );
     } else if (token.startsWith('**') && token.endsWith('**') && token.length >= 4) {
       const inner = token.substring(2, token.length - 2);
-      elements.push(<strong key={k} className="font-bold text-white">{renderInlineFormatting(inner, `${k}-b`)}</strong>);
+      elements.push(
+        <strong key={k} className="font-bold text-white">
+          {renderInlineFormatting(inner, `${k}-b`, isJumboji, guildEmojis)}
+        </strong>
+      );
     } else if (token.startsWith('~~') && token.endsWith('~~') && token.length >= 4) {
       const inner = token.substring(2, token.length - 2);
-      elements.push(<del key={k} className="line-through text-gray-400">{renderInlineFormatting(inner, `${k}-s`)}</del>);
-    } else if ((token.startsWith('*') && token.endsWith('*') && token.length >= 2) || (token.startsWith('_') && token.endsWith('_') && token.length >= 2)) {
+      elements.push(
+        <del key={k} className="line-through text-gray-400">
+          {renderInlineFormatting(inner, `${k}-s`, isJumboji, guildEmojis)}
+        </del>
+      );
+    } else if (
+      (token.startsWith('*') && token.endsWith('*') && token.length >= 2) ||
+      (token.startsWith('_') && token.endsWith('_') && token.length >= 2)
+    ) {
       const inner = token.substring(1, token.length - 1);
-      elements.push(<em key={k} className="italic text-gray-200">{renderInlineFormatting(inner, `${k}-i`)}</em>);
+      elements.push(
+        <em key={k} className="italic text-gray-200">
+          {renderInlineFormatting(inner, `${k}-i`, isJumboji, guildEmojis)}
+        </em>
+      );
     } else if (token.startsWith('http://') || token.startsWith('https://')) {
       elements.push(
         <a
@@ -274,8 +342,8 @@ function renderInlineFormatting(text: string, keyPrefix: string): React.ReactNod
     lastIdx = m.index + token.length;
   }
 
-  if (lastIdx < text.length) {
-    elements.push(text.substring(lastIdx));
+  if (lastIdx < normalizedText.length) {
+    elements.push(normalizedText.substring(lastIdx));
   }
 
   return <React.Fragment key={keyPrefix}>{elements}</React.Fragment>;
