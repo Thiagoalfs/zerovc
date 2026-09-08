@@ -138,6 +138,9 @@ export interface Message {
   edited_at?: string;
   created_at: string;
   updated_at: string;
+  status?: 'sending' | 'sent' | 'failed';
+  tempId?: string;
+  error?: string;
 }
 
 export interface DMRoom {
@@ -163,6 +166,9 @@ export interface DMMessage {
   is_edited?: boolean;
   edited_at?: string;
   created_at: string;
+  status?: 'sending' | 'sent' | 'failed';
+  tempId?: string;
+  error?: string;
 }
 
 export interface DMGroup {
@@ -189,6 +195,9 @@ export interface DMGroupMessage {
   is_edited?: boolean;
   edited_at?: string;
   created_at: string;
+  status?: 'sending' | 'sent' | 'failed';
+  tempId?: string;
+  error?: string;
 }
 
 export interface VoiceSession {

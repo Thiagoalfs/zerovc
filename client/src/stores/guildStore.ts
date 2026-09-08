@@ -484,11 +484,105 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   },
 
   sendMessage: async (content: string, replyToId?: string) => {
-    const { activeChannel } = get();
+    const { activeChannel, messages } = get();
     if (!activeChannel) return;
-    const msg = await api.channels.sendMessage(activeChannel.id, { content, reply_to_id: replyToId });
-    if (msg) {
-      get().addMessage(msg);
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
+
+    let replyInfo = undefined;
+    if (replyToId) {
+      const parentMsg = messages.find((m) => m.id === replyToId);
+      if (parentMsg) {
+        replyInfo = {
+          id: parentMsg.id,
+          author: parentMsg.author,
+          content: parentMsg.content,
+        };
+      }
+    }
+
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const tempMessage: Message = {
+      id: tempId,
+      tempId,
+      channel_id: activeChannel.id,
+      author_id: currentUser.id,
+      author: currentUser,
+      content,
+      reply_to_id: replyToId,
+      reply_to: replyInfo,
+      attachments: [],
+      reactions: [],
+      is_pinned: false,
+      status: 'sending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    // 1. Add immediately to local state (optimistic)
+    set((state) => {
+      if (state.activeChannel?.id !== activeChannel.id) return state;
+      const chMsgs = state.messagesByChannel[activeChannel.id] || [];
+      return {
+        messages: [...state.messages, tempMessage],
+        messagesByChannel: {
+          ...state.messagesByChannel,
+          [activeChannel.id]: [...chMsgs, tempMessage],
+        },
+      };
+    });
+
+    try {
+      // 2. Send to backend API
+      const confirmedMsg = await api.channels.sendMessage(activeChannel.id, { content, reply_to_id: replyToId });
+      const readyMsg: Message = { ...confirmedMsg, status: 'sent', tempId };
+
+      set((state) => {
+        const replaceTemp = (list: Message[]) => {
+          const idx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
+          if (idx !== -1) {
+            const copy = [...list];
+            copy[idx] = readyMsg;
+            return copy;
+          }
+          if (!list.some((m) => m.id === confirmedMsg.id)) {
+            return [...list, readyMsg];
+          }
+          return list;
+        };
+
+        const nextByChannel = { ...state.messagesByChannel };
+        if (nextByChannel[activeChannel.id]) {
+          nextByChannel[activeChannel.id] = replaceTemp(nextByChannel[activeChannel.id]);
+        }
+
+        return {
+          messages: state.activeChannel?.id === activeChannel.id ? replaceTemp(state.messages) : state.messages,
+          messagesByChannel: nextByChannel,
+        };
+      });
+    } catch (err: any) {
+      console.error('Failed to send channel message:', err);
+      // 3. Mark as failed
+      set((state) => {
+        const markFailed = (list: Message[]) =>
+          list.map((m) =>
+            m.id === tempId || m.tempId === tempId
+              ? { ...m, status: 'failed' as const, error: err.message || 'Falha ao enviar' }
+              : m
+          );
+
+        const nextByChannel = { ...state.messagesByChannel };
+        if (nextByChannel[activeChannel.id]) {
+          nextByChannel[activeChannel.id] = markFailed(nextByChannel[activeChannel.id]);
+        }
+
+        return {
+          messages: state.activeChannel?.id === activeChannel.id ? markFailed(state.messages) : state.messages,
+          messagesByChannel: nextByChannel,
+        };
+      });
+      throw err;
     }
   },
 
@@ -542,8 +636,20 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
     set((state) => {
       const channelMsgs = state.messagesByChannel[message.channel_id] || [];
-      const alreadyHas = channelMsgs.some((m) => m.id === message.id);
-      const updatedChannelMsgs = alreadyHas ? channelMsgs : [...channelMsgs, message];
+      // If we already have this message or need to replace an optimistic pending message
+      const existingExactIdx = channelMsgs.findIndex((m) => m.id === message.id);
+      const tempMatchIdx = channelMsgs.findIndex(
+        (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+      );
+
+      let updatedChannelMsgs = [...channelMsgs];
+      if (existingExactIdx !== -1) {
+        updatedChannelMsgs[existingExactIdx] = { ...updatedChannelMsgs[existingExactIdx], ...message, status: 'sent' };
+      } else if (tempMatchIdx !== -1) {
+        updatedChannelMsgs[tempMatchIdx] = { ...message, status: 'sent' };
+      } else {
+        updatedChannelMsgs.push({ ...message, status: 'sent' });
+      }
 
       const nextMessagesByChannel = {
         ...state.messagesByChannel,
@@ -565,14 +671,25 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const isDND = currentUser?.status === 'dnd';
 
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
-        if (state.messages.some((m) => m.id === message.id)) {
-          return { messagesByChannel: nextMessagesByChannel };
+        const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
+        const activeTempIdx = state.messages.findIndex(
+          (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+        );
+
+        let nextMessages = [...state.messages];
+        if (activeExactIdx !== -1) {
+          nextMessages[activeExactIdx] = { ...nextMessages[activeExactIdx], ...message, status: 'sent' };
+        } else if (activeTempIdx !== -1) {
+          nextMessages[activeTempIdx] = { ...message, status: 'sent' };
+        } else {
+          nextMessages.push({ ...message, status: 'sent' });
         }
+
         if (message.author_id !== currentUser?.id && !isServerMuted && !isDND) {
           playMessageSound(isMention);
         }
         return {
-          messages: [...state.messages, message],
+          messages: nextMessages,
           messagesByChannel: nextMessagesByChannel,
         };
       } else {

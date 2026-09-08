@@ -145,25 +145,103 @@ export const useDMStore = create<DMState>((set, get) => ({
   },
 
   sendMessage: async (content: string, attachments?: any[], replyToId?: string) => {
-    const { activeRoom } = get();
+    const { activeRoom, messages } = get();
     if (!activeRoom) return;
-    const msg = await api.dms.sendMessage(activeRoom.id, { content, attachments, reply_to_id: replyToId });
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
 
-    // Instantly append if active
+    let replyInfo = undefined;
+    if (replyToId) {
+      const parentMsg = messages.find((m) => m.id === replyToId);
+      if (parentMsg) {
+        replyInfo = {
+          id: parentMsg.id,
+          author: parentMsg.author,
+          content: parentMsg.content,
+        };
+      }
+    }
+
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const tempMsg: DMMessage = {
+      id: tempId,
+      tempId,
+      dm_room_id: activeRoom.id,
+      author_id: currentUser.id,
+      author: currentUser,
+      content,
+      attachments: attachments || [],
+      reply_to_id: replyToId,
+      reply_to: replyInfo,
+      reactions: [],
+      is_pinned: false,
+      status: 'sending',
+      created_at: new Date().toISOString(),
+    };
+
+    // 1. Instantly append optimistically
     set((state) => {
       if (state.activeRoom?.id !== activeRoom.id) return state;
       const roomMsgs = state.messagesByRoom[activeRoom.id] || [];
-      const alreadyHas = roomMsgs.some((m) => m.id === msg.id);
-      const updated = alreadyHas ? roomMsgs : [...roomMsgs, msg];
-
       return {
-        messages: state.messages.some((m) => m.id === msg.id) ? state.messages : [...state.messages, msg],
+        messages: [...state.messages, tempMsg],
         messagesByRoom: {
           ...state.messagesByRoom,
-          [activeRoom.id]: updated,
+          [activeRoom.id]: [...roomMsgs, tempMsg],
         },
       };
     });
+
+    try {
+      const confirmedMsg = await api.dms.sendMessage(activeRoom.id, { content, attachments, reply_to_id: replyToId });
+      const readyMsg: DMMessage = { ...confirmedMsg, status: 'sent', tempId };
+
+      set((state) => {
+        const replaceTemp = (list: DMMessage[]) => {
+          const idx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
+          if (idx !== -1) {
+            const copy = [...list];
+            copy[idx] = readyMsg;
+            return copy;
+          }
+          if (!list.some((m) => m.id === confirmedMsg.id)) {
+            return [...list, readyMsg];
+          }
+          return list;
+        };
+
+        const nextByRoom = { ...state.messagesByRoom };
+        if (nextByRoom[activeRoom.id]) {
+          nextByRoom[activeRoom.id] = replaceTemp(nextByRoom[activeRoom.id]);
+        }
+
+        return {
+          messages: state.activeRoom?.id === activeRoom.id ? replaceTemp(state.messages) : state.messages,
+          messagesByRoom: nextByRoom,
+        };
+      });
+    } catch (err: any) {
+      console.error('Failed to send DM message:', err);
+      set((state) => {
+        const markFailed = (list: DMMessage[]) =>
+          list.map((m) =>
+            m.id === tempId || m.tempId === tempId
+              ? { ...m, status: 'failed' as const, error: err.message || 'Falha ao enviar' }
+              : m
+          );
+
+        const nextByRoom = { ...state.messagesByRoom };
+        if (nextByRoom[activeRoom.id]) {
+          nextByRoom[activeRoom.id] = markFailed(nextByRoom[activeRoom.id]);
+        }
+
+        return {
+          messages: state.activeRoom?.id === activeRoom.id ? markFailed(state.messages) : state.messages,
+          messagesByRoom: nextByRoom,
+        };
+      });
+      throw err;
+    }
   },
 
   toggleReaction: async (messageId: string, emoji: string) => {
@@ -187,8 +265,19 @@ export const useDMStore = create<DMState>((set, get) => ({
     const currentUser = useAuthStore.getState().user;
     set((state) => {
       const roomMsgs = state.messagesByRoom[message.dm_room_id] || [];
-      const alreadyHas = roomMsgs.some((m) => m.id === message.id);
-      const updatedRoomMsgs = alreadyHas ? roomMsgs : [...roomMsgs, message];
+      const existingExactIdx = roomMsgs.findIndex((m) => m.id === message.id);
+      const tempMatchIdx = roomMsgs.findIndex(
+        (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+      );
+
+      let updatedRoomMsgs = [...roomMsgs];
+      if (existingExactIdx !== -1) {
+        updatedRoomMsgs[existingExactIdx] = { ...updatedRoomMsgs[existingExactIdx], ...message, status: 'sent' };
+      } else if (tempMatchIdx !== -1) {
+        updatedRoomMsgs[tempMatchIdx] = { ...message, status: 'sent' };
+      } else {
+        updatedRoomMsgs.push({ ...message, status: 'sent' });
+      }
 
       const nextMessagesByRoom = {
         ...state.messagesByRoom,
@@ -196,14 +285,25 @@ export const useDMStore = create<DMState>((set, get) => ({
       };
 
       if (state.activeRoom && state.activeRoom.id === message.dm_room_id) {
-        if (state.messages.some((m) => m.id === message.id)) {
-          return { messagesByRoom: nextMessagesByRoom };
+        const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
+        const activeTempIdx = state.messages.findIndex(
+          (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+        );
+
+        let nextMessages = [...state.messages];
+        if (activeExactIdx !== -1) {
+          nextMessages[activeExactIdx] = { ...nextMessages[activeExactIdx], ...message, status: 'sent' };
+        } else if (activeTempIdx !== -1) {
+          nextMessages[activeTempIdx] = { ...message, status: 'sent' };
+        } else {
+          nextMessages.push({ ...message, status: 'sent' });
         }
+
         if (message.author_id !== currentUser?.id) {
           playMessageSound(false);
         }
         return {
-          messages: [...state.messages, message],
+          messages: nextMessages,
           messagesByRoom: nextMessagesByRoom,
         };
       } else {
