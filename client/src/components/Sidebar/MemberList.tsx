@@ -80,13 +80,53 @@ export const MemberList: React.FC<MemberListProps> = ({
     return !st || st === 'offline';
   });
 
+  // Helper to get roles with live metadata from activeGuild.roles
+  const getMemberLiveRoles = (member: User) => {
+    return (member.roles || []).map((r) => {
+      const liveRole = guildRoles.find((gr) => gr.id === r.id);
+      return liveRole ? { ...r, ...liveRole } : r;
+    });
+  };
+
+  // Helper to find a member's highest hoisted role
+  const getMemberHighestHoistedRole = (member: User) => {
+    const liveRoles = getMemberLiveRoles(member);
+    const hoisted = liveRoles
+      .filter((r) => r.name !== '@everyone' && Boolean(r.hoist))
+      .sort((a, b) => a.position - b.position);
+    return hoisted.length > 0 ? hoisted[0] : null;
+  };
+
+  // Sorted list of all hoisted roles
+  const sortedHoistedRoles = [...guildRoles]
+    .filter((r) => r.name !== '@everyone' && Boolean(r.hoist))
+    .sort((a, b) => a.position - b.position);
+
+  // Group online members by their highest hoisted role
+  const hoistedGroups: Array<{ role: typeof guildRoles[0]; members: User[] }> = sortedHoistedRoles
+    .map((role) => {
+      const roleMembers = onlineMembers.filter((m) => {
+        const highestHoisted = getMemberHighestHoistedRole(m);
+        return highestHoisted?.id === role.id;
+      });
+      return { role, members: roleMembers };
+    })
+    .filter((g) => g.members.length > 0);
+
+  // Members without a hoisted role (or whose roles are not hoisted)
+  const generalOnlineMembers = onlineMembers.filter((m) => {
+    const highestHoisted = getMemberHighestHoistedRole(m);
+    return !highestHoisted;
+  });
+
   const handleMemberContextMenu = (e: React.MouseEvent, targetMember: User) => {
     const isMe = targetMember.id === currentUser?.id;
     const isTargetOwner = targetMember.id === activeGuild.owner_id;
 
     // Calculate target's highest role position
     let targetHighestPos = 999999;
-    (targetMember.roles || []).forEach((r) => {
+    const targetLiveRoles = getMemberLiveRoles(targetMember);
+    targetLiveRoles.forEach((r) => {
       if (r.position < targetHighestPos) {
         targetHighestPos = r.position;
       }
@@ -238,9 +278,17 @@ export const MemberList: React.FC<MemberListProps> = ({
     const isMe = m.id === currentUser?.id;
     const user = isMe && currentUser ? { ...m, ...currentUser } : m;
     const isOwner = user.id === activeGuild.owner_id;
-    const topRole = user.roles && user.roles.length > 0 ? user.roles[0] : null;
+    const liveRoles = getMemberLiveRoles(user);
+    const sortedRoles = liveRoles
+      .filter((r) => r.name !== '@everyone')
+      .sort((a, b) => a.position - b.position);
+    const topRole = sortedRoles.length > 0 ? sortedRoles[0] : null;
     const isOffline = !user.status || user.status === 'offline';
     const isMuted = user.muted_until && new Date(user.muted_until) > new Date();
+
+    const roleColor = topRole && topRole.color && topRole.color !== '#99aab5' && topRole.color !== '#99AAB5'
+      ? topRole.color
+      : null;
 
     return (
       <div
@@ -281,8 +329,8 @@ export const MemberList: React.FC<MemberListProps> = ({
                 isOwner ? 'font-semibold' : ''
               } ${isOffline ? 'text-gray-400' : ''}`}
               style={
-                !isOffline && topRole
-                  ? { color: topRole.color }
+                !isOffline && roleColor
+                  ? { color: roleColor }
                   : !isOffline && isOwner
                   ? { color: '#5865F2' }
                   : isOffline
@@ -309,8 +357,8 @@ export const MemberList: React.FC<MemberListProps> = ({
             <p className="text-[11px] text-gray-400 truncate">{user.custom_status}</p>
           ) : topRole ? (
             <span
-              className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-white/5 truncate max-w-fit block"
-              style={{ color: topRole.color }}
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white/5 truncate max-w-fit block"
+              style={{ color: roleColor || topRole.color || '#99aab5' }}
             >
               {topRole.name}
             </span>
@@ -338,21 +386,41 @@ export const MemberList: React.FC<MemberListProps> = ({
           </button>
         </div>
 
-        {/* Online Section */}
-        <div className="mb-4">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 mb-2">
-            DISPONÍVEL — {onlineMembers.length}
-          </h3>
-          <div className="space-y-0.5">
-            {onlineMembers.map(renderMember)}
+        {/* Hoisted Role Sections */}
+        {hoistedGroups.map((group) => (
+          <div key={group.role.id} className="mb-4">
+            <h3
+              className="text-xs font-bold uppercase tracking-wider px-2 mb-2 flex items-center justify-between"
+              style={{ color: group.role.color && group.role.color !== '#99aab5' && group.role.color !== '#99AAB5' ? group.role.color : '#949ba4' }}
+            >
+              <span className="truncate">{group.role.name}</span>
+              <span className="text-[11px] opacity-75 font-mono">({group.members.length})</span>
+            </h3>
+            <div className="space-y-0.5">
+              {group.members.map(renderMember)}
+            </div>
           </div>
-        </div>
+        ))}
+
+        {/* General Online Section */}
+        {generalOnlineMembers.length > 0 && (
+          <div className="mb-4">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
+              <span>DISPONÍVEL</span>
+              <span className="text-[11px] text-gray-500 font-mono">({generalOnlineMembers.length})</span>
+            </h3>
+            <div className="space-y-0.5">
+              {generalOnlineMembers.map(renderMember)}
+            </div>
+          </div>
+        )}
 
         {/* Offline Section */}
         {offlineMembers.length > 0 && (
           <div>
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2 mb-2">
-              INDISPONÍVEL — {offlineMembers.length}
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
+              <span>INDISPONÍVEL</span>
+              <span className="text-[11px] text-gray-600 font-mono">({offlineMembers.length})</span>
             </h3>
             <div className="space-y-0.5 opacity-70">
               {offlineMembers.map(renderMember)}
