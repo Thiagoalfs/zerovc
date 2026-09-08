@@ -27,3 +27,8 @@ pgdata/
 *.sqlite
 *.db
 
+# Uploaded assets
+assets/
+
+
+
