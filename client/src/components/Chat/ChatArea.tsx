@@ -453,14 +453,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
 
         {/* Typing Indicator */}
-        <div className="h-5 px-3 md:px-4 text-xs text-gray-400 flex items-center">
-          {isSomeoneTyping && (
-            <div className="flex items-center gap-1.5 animate-pulse">
-              <span className="font-semibold text-gray-300">Alguém</span>
-              <span>está digitando...</span>
-            </div>
-          )}
-        </div>
+        {isSomeoneTyping && (
+          <div className="h-5 px-3 md:px-4 text-xs text-gray-400 flex items-center gap-1.5 animate-pulse">
+            <span className="font-semibold text-gray-300">Alguém</span>
+            <span>está digitando...</span>
+          </div>
+        )}
 
         {/* Message Input */}
         <MessageInput
