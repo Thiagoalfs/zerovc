@@ -364,9 +364,14 @@ export function replaceEmojiShortcodes(
     }
   }
 
-  // Match :shortcode: (excluding inside URLs or code blocks)
-  return text.replace(/:([a-zA-Z0-9_+-]+):/g, (match, code) => {
-    const cleanCode = code.toLowerCase();
+  // Match either existing custom emoji tag <:name:url> OR standalone :name:
+  return text.replace(/(<:[a-zA-Z0-9_+-]+:[^>]+>)|:([a-zA-Z0-9_+-]+):/g, (match, existingTag, code) => {
+    // If it's already an formatted custom emoji tag <:name:url>, leave it intact!
+    if (existingTag) {
+      return existingTag;
+    }
+
+    const cleanCode = (code || '').toLowerCase();
 
     // Check custom server emojis first
     if (customMap.has(cleanCode)) {

@@ -31,7 +31,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   droppedFile,
   onClearDroppedFile,
 }) => {
-  const { activeGuild } = useGuildStore();
+  const { activeGuild, guilds } = useGuildStore();
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -52,6 +52,30 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingTime = useRef<number>(0);
+
+  const allAvailableEmojis = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+    if (activeGuild?.emojis) {
+      for (const e of activeGuild.emojis) {
+        if (!seen.has(e.name.toLowerCase())) {
+          seen.add(e.name.toLowerCase());
+          list.push(e);
+        }
+      }
+    }
+    for (const g of guilds) {
+      if (g.emojis) {
+        for (const e of g.emojis) {
+          if (!seen.has(e.name.toLowerCase())) {
+            seen.add(e.name.toLowerCase());
+            list.push(e);
+          }
+        }
+      }
+    }
+    return list;
+  }, [activeGuild?.emojis, guilds]);
 
   // Compute filtered mention suggestions
   const mentionSuggestions = useMemo(() => {
@@ -115,8 +139,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   // Compute filtered emoji suggestions
   const emojiSuggestions = useMemo(() => {
     if (emojiQuery === null) return [];
-    return searchEmojiSuggestions(emojiQuery, activeGuild?.emojis, activeGuild?.name, 8);
-  }, [emojiQuery, activeGuild?.emojis, activeGuild?.name]);
+    return searchEmojiSuggestions(emojiQuery, allAvailableEmojis, activeGuild?.name, 8);
+  }, [emojiQuery, allAvailableEmojis, activeGuild?.name]);
 
   useEffect(() => {
     if (droppedFile) {
@@ -185,7 +209,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   const handleSend = async () => {
     if (isUploading) return;
-    let finalContent = replaceEmojiShortcodes(content.trim(), activeGuild?.emojis);
+    let finalContent = replaceEmojiShortcodes(content.trim(), allAvailableEmojis);
 
     // Check 2,000 character limit on raw text
     if (finalContent.length > MAX_CHARS) {

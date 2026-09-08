@@ -286,6 +286,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     try {
       const data = await api.guilds.getEmojis(activeGuild.id);
       setEmojisList(data || []);
+      useGuildStore.setState((state) => {
+        if (!state.activeGuild || state.activeGuild.id !== activeGuild.id) return state;
+        return { activeGuild: { ...state.activeGuild, emojis: data || [] } };
+      });
     } catch (err) {
       console.error('Failed to load emojis:', err);
     } finally {
@@ -597,6 +601,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       });
 
       setEmojisList((prev) => [newEmoji, ...prev.filter((em) => em.id !== newEmoji.id)]);
+      useGuildStore.getState().handleEmojiCreateEvent(newEmoji);
     } catch (err: any) {
       console.error('Failed to upload emoji:', err);
       setEmojiError(err.message || 'Falha ao carregar emoji');
@@ -621,6 +626,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         name: sanitized,
       });
       setEmojisList((prev) => prev.map((em) => (em.id === updated.id ? updated : em)));
+      useGuildStore.getState().handleEmojiUpdateEvent(updated);
     } catch (err: any) {
       console.error('Failed to rename emoji:', err);
       setEmojiError(err.message || 'Falha ao renomear emoji');
@@ -635,6 +641,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     try {
       await api.guilds.deleteEmoji(activeGuild.id, emojiId);
       setEmojisList((prev) => prev.filter((em) => em.id !== emojiId));
+      useGuildStore.getState().handleEmojiDeleteEvent({ guild_id: activeGuild.id, id: emojiId });
     } catch (err: any) {
       alert(err.message || 'Erro ao remover emoji');
     }

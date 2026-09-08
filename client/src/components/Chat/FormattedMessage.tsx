@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Star } from 'lucide-react';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { formatAssetUrl } from '../../lib/api';
@@ -7,7 +7,7 @@ import { GifEmbed } from './GifEmbed';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useDMStore } from '../../stores/dmStore';
-import { User, Permissions } from '../../types';
+import { User, Permissions, GuildEmoji } from '../../types';
 import { isPureEmojiMessage, replaceEmojiShortcodes } from '../../utils/emojis';
 
 interface FormattedMessageProps {
@@ -93,9 +93,31 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   if (!content) return null;
 
   const { isFavorited } = useFavoriteGifStore();
-  const { activeGuild } = useGuildStore();
+  const { activeGuild, guilds } = useGuildStore();
   const { user: currentUser } = useAuthStore();
-  const guildEmojis = activeGuild?.emojis;
+  const guildEmojis = useMemo(() => {
+    const list: GuildEmoji[] = [];
+    const seen = new Set<string>();
+    if (activeGuild?.emojis) {
+      for (const e of activeGuild.emojis) {
+        if (!seen.has(e.name.toLowerCase())) {
+          seen.add(e.name.toLowerCase());
+          list.push(e);
+        }
+      }
+    }
+    for (const g of guilds) {
+      if (g.emojis) {
+        for (const e of g.emojis) {
+          if (!seen.has(e.name.toLowerCase())) {
+            seen.add(e.name.toLowerCase());
+            list.push(e);
+          }
+        }
+      }
+    }
+    return list;
+  }, [activeGuild?.emojis, guilds]);
   const guildMembers = activeGuild?.members || [];
   const guildRoles = activeGuild?.roles || [];
 
