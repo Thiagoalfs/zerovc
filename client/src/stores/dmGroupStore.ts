@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
+import { useAuthStore } from './authStore';
 import { DMGroup, DMGroupMessage, User } from '../types';
 
 interface DMGroupState {
@@ -169,33 +170,106 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   },
 
   sendMessage: async (content: string, attachments?: any[], replyToId?: string) => {
-    const { activeGroup } = get();
+    const { activeGroup, messages } = get();
     if (!activeGroup) return;
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
+
+    let replyInfo = undefined;
+    if (replyToId) {
+      const parentMsg = messages.find((m) => m.id === replyToId);
+      if (parentMsg) {
+        replyInfo = {
+          id: parentMsg.id,
+          author: parentMsg.author,
+          content: parentMsg.content,
+        };
+      }
+    }
+
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const tempMsg: DMGroupMessage = {
+      id: tempId,
+      tempId,
+      group_id: activeGroup.id,
+      author_id: currentUser.id,
+      author: currentUser,
+      content,
+      attachments: attachments || [],
+      reply_to_id: replyToId,
+      reply_to: replyInfo,
+      reactions: [],
+      is_pinned: false,
+      status: 'sending',
+      created_at: new Date().toISOString(),
+    };
+
+    set((state) => {
+      if (state.activeGroup?.id !== activeGroup.id) return state;
+      const groupMsgs = state.messagesByGroup[activeGroup.id] || [];
+      return {
+        messages: [...state.messages, tempMsg],
+        messagesByGroup: {
+          ...state.messagesByGroup,
+          [activeGroup.id]: [...groupMsgs, tempMsg],
+        },
+      };
+    });
 
     try {
-      const msg = await api.dmGroups.sendMessage(activeGroup.id, {
+      const confirmedMsg = await api.dmGroups.sendMessage(activeGroup.id, {
         content,
         attachments,
         reply_to_id: replyToId,
       });
+      const readyMsg: DMGroupMessage = { ...confirmedMsg, status: 'sent', tempId };
 
       set((state) => {
         if (state.activeGroup?.id !== activeGroup.id) return state;
+        const replaceTemp = (list: DMGroupMessage[]) => {
+          const idx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
+          if (idx !== -1) {
+            const copy = [...list];
+            copy[idx] = readyMsg;
+            return copy;
+          }
+          if (!list.some((m) => m.id === confirmedMsg.id)) {
+            return [...list, readyMsg];
+          }
+          return list;
+        };
+
         const groupMsgs = state.messagesByGroup[activeGroup.id] || [];
-        const exists = groupMsgs.some((m) => m.id === msg.id);
-        const updatedGroupMsgs = exists ? groupMsgs : [...groupMsgs, msg];
+        const nextGroupMsgs = replaceTemp(groupMsgs);
 
         return {
-          messages: state.messages.some((m) => m.id === msg.id) ? state.messages : [...state.messages, msg],
+          messages: replaceTemp(state.messages),
           messagesByGroup: {
             ...state.messagesByGroup,
-            [activeGroup.id]: updatedGroupMsgs,
+            [activeGroup.id]: nextGroupMsgs,
           },
-          groups: state.groups.map((g) => (g.id === activeGroup.id ? { ...g, last_message: msg } : g)),
+          groups: state.groups.map((g) => (g.id === activeGroup.id ? { ...g, last_message: readyMsg } : g)),
         };
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to send group message:', err);
+      set((state) => {
+        const markFailed = (list: DMGroupMessage[]) =>
+          list.map((m) =>
+            m.id === tempId || m.tempId === tempId
+              ? { ...m, status: 'failed' as const, error: err.message || 'Falha ao enviar' }
+              : m
+          );
+
+        const groupMsgs = state.messagesByGroup[activeGroup.id] || [];
+        return {
+          messages: markFailed(state.messages),
+          messagesByGroup: {
+            ...state.messagesByGroup,
+            [activeGroup.id]: markFailed(groupMsgs),
+          },
+        };
+      });
       throw err;
     }
   },
@@ -203,15 +277,37 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   handleGroupMessageCreate: (message: DMGroupMessage) => {
     set((state) => {
       const groupMsgs = state.messagesByGroup[message.group_id] || [];
-      const alreadyHas = groupMsgs.some((m) => m.id === message.id);
-      const updatedGroupMsgs = alreadyHas ? groupMsgs : [...groupMsgs, message];
+      const existingExactIdx = groupMsgs.findIndex((m) => m.id === message.id);
+      const tempMatchIdx = groupMsgs.findIndex(
+        (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+      );
+
+      let updatedGroupMsgs = [...groupMsgs];
+      if (existingExactIdx !== -1) {
+        updatedGroupMsgs[existingExactIdx] = { ...updatedGroupMsgs[existingExactIdx], ...message, status: 'sent' };
+      } else if (tempMatchIdx !== -1) {
+        updatedGroupMsgs[tempMatchIdx] = { ...message, status: 'sent' };
+      } else {
+        updatedGroupMsgs.push({ ...message, status: 'sent' });
+      }
 
       const isCurrentActive = state.activeGroup?.id === message.group_id;
-      const updatedMessages = isCurrentActive
-        ? state.messages.some((m) => m.id === message.id)
-          ? state.messages
-          : [...state.messages, message]
-        : state.messages;
+      let updatedMessages = state.messages;
+      if (isCurrentActive) {
+        const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
+        const activeTempIdx = state.messages.findIndex(
+          (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+        );
+        let nextMsgs = [...state.messages];
+        if (activeExactIdx !== -1) {
+          nextMsgs[activeExactIdx] = { ...nextMsgs[activeExactIdx], ...message, status: 'sent' };
+        } else if (activeTempIdx !== -1) {
+          nextMsgs[activeTempIdx] = { ...message, status: 'sent' };
+        } else {
+          nextMsgs.push({ ...message, status: 'sent' });
+        }
+        updatedMessages = nextMsgs;
+      }
 
       const updatedGroups = state.groups.map((g) =>
         g.id === message.group_id ? { ...g, last_message: message } : g

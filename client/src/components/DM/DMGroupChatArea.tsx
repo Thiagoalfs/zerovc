@@ -14,6 +14,8 @@ import {
   UploadCloud,
   FileText,
   Star,
+  AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -425,14 +427,18 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               messages.map((msg, index) => {
                 const prevMsg = messages[index - 1];
                 const isCompact = prevMsg && prevMsg.author_id === msg.author_id;
+                const isSending = msg.status === 'sending';
+                const isFailed = msg.status === 'failed';
 
                 return (
                   <div
                     key={msg.id}
                     id={`msg-${msg.id}`}
-                    className={`relative group flex gap-3 px-3 rounded-xl hover:bg-background-darkest/40 transition-all duration-300 ${
-                      isCompact ? 'py-1 mt-1' : 'py-2 mt-3'
-                    }`}
+                    className={`relative group flex gap-3 px-3 rounded-xl transition-all duration-200 ${
+                      isFailed
+                        ? 'bg-red-500/10 border-l-2 border-red-500'
+                        : 'hover:bg-background-darkest/40'
+                    } ${isCompact ? 'py-1 mt-1' : 'py-2 mt-3'} ${isSending ? 'opacity-65 select-none' : ''}`}
                   >
                     {!isCompact ? (
                       <div
@@ -470,12 +476,39 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                         </div>
                       )}
 
-                      <FormattedMessage
-                        content={msg.content}
-                        className="text-sm text-gray-200 select-text"
-                        onPreviewImage={onPreviewImage}
-                        onImageLoad={handleMediaLoad}
-                      />
+                      <div className={isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'}>
+                        <FormattedMessage
+                          content={msg.content}
+                          className="text-sm select-text"
+                          onPreviewImage={onPreviewImage}
+                          onImageLoad={handleMediaLoad}
+                        />
+                      </div>
+
+                      {/* Failed Sending Error Bar with Retry */}
+                      {isFailed && (
+                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-red-400">
+                          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                          <span>{msg.error || 'Falha ao enviar.'}</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              useDMGroupStore.setState((s) => ({
+                                messages: s.messages.filter((m) => m.id !== msg.id),
+                                messagesByGroup: {
+                                  ...s.messagesByGroup,
+                                  [activeGroup.id]: (s.messagesByGroup[activeGroup.id] || []).filter((m) => m.id !== msg.id),
+                                },
+                              }));
+                              await sendMessage(msg.content, msg.attachments, msg.reply_to_id);
+                            }}
+                            className="flex items-center gap-0.5 text-red-300 hover:text-white underline font-semibold cursor-pointer ml-1"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            <span>Tentar novamente</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
