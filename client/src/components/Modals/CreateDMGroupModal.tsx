@@ -38,8 +38,8 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
     if (selectedFriendIds.includes(friendId)) {
       setSelectedFriendIds(selectedFriendIds.filter((id) => id !== friendId));
     } else {
-      if (selectedFriendIds.length >= 9) {
-        setError('Você pode adicionar no máximo 9 amigos (10 pessoas no total).');
+      if (selectedFriendIds.length >= 14) {
+        setError('Você pode adicionar no máximo 14 amigos (15 pessoas no total).');
         return;
       }
       setError('');
@@ -111,7 +111,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
                 Selecione Amigos
               </label>
               <span className="text-[11px] text-gray-400">
-                {selectedFriendIds.length} / 9 selecionados
+                {selectedFriendIds.length} / 14 selecionados
               </span>
             </div>
 
