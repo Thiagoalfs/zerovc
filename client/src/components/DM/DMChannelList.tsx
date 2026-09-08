@@ -8,7 +8,6 @@ import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
 import { DMRoom, DMGroup, User } from '../../types';
 import { UserBar } from '../Sidebar/UserBar';
-import { CreateDMGroupModal } from '../Modals/CreateDMGroupModal';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -19,6 +18,7 @@ interface DMChannelListProps {
   onSelectRoom?: (room: DMRoom) => void;
   onSelectGroup?: (group: DMGroup) => void;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
+  onOpenCreateGroup?: () => void;
   onOpenSettings: () => void;
   onOpenScreenShare: () => void;
   onCloseMobileDrawer?: () => void;
@@ -30,6 +30,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   onSelectRoom,
   onSelectGroup,
   onOpenUserProfile,
+  onOpenCreateGroup,
   onOpenSettings,
   onOpenScreenShare,
   onCloseMobileDrawer,
@@ -41,7 +42,6 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   const { friends, fetchFriends, sendRequest, removeFriend } = useFriendStore();
   const { startCall } = useCallStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
-  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -241,7 +241,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                 Grupos
               </span>
               <button
-                onClick={() => setIsCreateGroupOpen(true)}
+                onClick={onOpenCreateGroup}
                 className="text-gray-400 hover:text-white p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
                 title="Criar Grupo de DM"
               >
@@ -345,15 +345,6 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
         {/* User Footer */}
         <UserBar onOpenSettings={onOpenSettings} onOpenScreenShare={onOpenScreenShare} />
       </div>
-
-      {/* Create Group Modal */}
-      <CreateDMGroupModal
-        isOpen={isCreateGroupOpen}
-        onClose={() => setIsCreateGroupOpen(false)}
-        onGroupCreated={(groupId) => {
-          // Handled via store select
-        }}
-      />
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />
     </>
