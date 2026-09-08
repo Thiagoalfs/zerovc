@@ -475,6 +475,11 @@ func (h *DMGroupHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.Content) > 2000 {
+		http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
+		return
+	}
+
 	attachBytes, _ := json.Marshal(req.Attachments)
 
 	var msg models.DMGroupMessage
