@@ -844,46 +844,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('preferences');
-                      setMobileView('content');
-                    }}
-                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Sliders className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Preferências</div>
-                        <div className="text-xs text-gray-400">Configurações de sistema e comportamento</div>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('keybinds');
-                      setMobileView('content');
-                    }}
-                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Keyboard className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Atalhos do Teclado</div>
-                        <div className="text-xs text-gray-400">Push-to-Talk e atalhos rápidos</div>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
-                  </button>
                 </div>
               </div>
 
