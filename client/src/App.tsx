@@ -191,7 +191,7 @@ export const App: React.FC = () => {
     const startX = e.touches[0].clientX;
     const startY = e.touches[0].clientY;
     const winWidth = typeof window !== 'undefined' ? window.innerWidth : 360;
-    const leftWidth = Math.min(312, winWidth - 48);
+    const leftWidth = winWidth; // Full width on mobile
     const rightWidth = winWidth; // Full width on mobile
 
     touchStateRef.current = {
@@ -1134,7 +1134,7 @@ export const App: React.FC = () => {
                 ? 'none'
                 : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
-          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex flex-col h-full bg-background-darkest ${
+          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex flex-col h-full w-full md:w-auto bg-background-darkest ${
             dragState?.drawer === 'left'
               ? ''
               : isMobileDrawerOpen

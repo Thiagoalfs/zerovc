@@ -770,8 +770,10 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     <>
       <div
         onContextMenu={handleSidebarContextMenu}
-        style={{ width: `${channelListWidth}px` }}
-        className="bg-background-darker flex flex-col h-full border-r border-black/20 select-none flex-shrink-0 relative max-w-[calc(100vw-72px)]"
+        style={{
+          width: typeof window !== 'undefined' && window.innerWidth < 768 ? 'calc(100vw - 72px)' : `${channelListWidth}px`,
+        }}
+        className="bg-background-darker flex flex-col h-full border-r border-black/20 select-none flex-1 md:flex-none relative"
       >
         {/* Server Header or Home Header */}
         {isHomeActive ? (
