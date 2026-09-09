@@ -50,25 +50,31 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-4">
-      <div className="bg-background-dark w-full max-w-md flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+    >
+      <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-6 pb-2 relative flex-shrink-0">
+        <div className="p-4 sm:p-6 pb-2 relative flex-shrink-0">
           <button
+            type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 cursor-pointer"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 cursor-pointer p-1 rounded-lg hover:bg-white/5 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2">
             <FolderPlus className="w-5 h-5 text-brand-400" />
-            <h2 className="text-xl font-bold text-white">Criar Categoria</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-white">Criar Categoria</h2>
           </div>
           <p className="text-xs text-gray-400 mt-1 truncate">em {activeGuild.name}</p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto no-scrollbar flex-1">
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-md">{error}</div>}
 
           {/* Name Field */}

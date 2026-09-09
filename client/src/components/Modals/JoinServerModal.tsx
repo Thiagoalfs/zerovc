@@ -49,24 +49,33 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-4">
-      <div className="bg-background-dark w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+    >
+      <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-6 pb-2 text-center relative">
-          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-200">
+        <div className="p-4 sm:p-6 pb-2 text-center relative flex-shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
           <div className="w-12 h-12 bg-online/10 text-online rounded-2xl flex items-center justify-center mx-auto mb-2">
             <Compass className="w-6 h-6" />
           </div>
-          <h2 className="text-xl font-bold text-white">Entrar em um Servidor</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-white">Entrar em um Servidor</h2>
           <p className="text-xs text-gray-400 mt-1">
             Digite o código de 10 caracteres ou o link de convite que você recebeu.
           </p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto no-scrollbar flex-1">
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg font-medium">{error}</div>}
 
           <div>
@@ -84,13 +93,17 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
           </div>
 
           <div className="flex justify-between items-center pt-2">
-            <button type="button" onClick={onClose} className="text-sm text-gray-300 hover:underline">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-sm text-gray-300 hover:underline cursor-pointer"
+            >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isLoading || !inputCode.trim()}
-              className="bg-online hover:bg-online/90 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-colors"
+              className="bg-online hover:bg-online/90 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-colors cursor-pointer"
             >
               {isLoading ? 'Entrando...' : 'Entrar no Servidor'}
             </button>

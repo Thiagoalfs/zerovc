@@ -69,6 +69,9 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	// Ensure email_verified column exists
 	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE")
 
+	// Ensure email_verifications attempts column exists
+	db.Pool.Exec(ctx, "ALTER TABLE email_verifications ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0")
+
 	log.Println("Database schema migration executed successfully")
 	return nil
 }

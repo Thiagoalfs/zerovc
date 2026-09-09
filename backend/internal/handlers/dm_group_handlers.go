@@ -62,9 +62,9 @@ func (h *DMGroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		totalMembers = append(totalMembers, mID)
 	}
 
-	// Enforce 10 members maximum limit
-	if len(totalMembers) > 10 {
-		http.Error(w, `{"error":"grupos de DM podem ter no máximo 10 membros"}`, http.StatusBadRequest)
+	// Enforce 15 members maximum limit
+	if len(totalMembers) > 15 {
+		http.Error(w, `{"error":"grupos de DM podem ter no máximo 15 membros"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -274,9 +274,29 @@ func (h *DMGroupHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 	var currentCount int
 	h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm_group_members WHERE group_id = $1", groupID).Scan(&currentCount)
 
-	if currentCount+len(req.MemberIDs) > 10 {
-		http.Error(w, `{"error":"o grupo não pode ultrapassar 10 membros"}`, http.StatusBadRequest)
+	if currentCount+len(req.MemberIDs) > 15 {
+		http.Error(w, `{"error":"o grupo não pode ultrapassar 15 membros"}`, http.StatusBadRequest)
 		return
+	}
+
+	// Check blocks between added users and existing members
+	for _, mID := range req.MemberIDs {
+		if mID == uuid.Nil {
+			continue
+		}
+		var isBlocked bool
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT EXISTS(
+				SELECT 1 FROM user_blocks ub
+				INNER JOIN dm_group_members dgm ON dgm.group_id = $1
+				WHERE (ub.user_id = $2 AND ub.blocked_user_id = dgm.user_id)
+				   OR (ub.user_id = dgm.user_id AND ub.blocked_user_id = $2)
+			)
+		`, groupID, mID).Scan(&isBlocked)
+		if isBlocked {
+			http.Error(w, `{"error":"não é possível adicionar usuários com bloqueio ativo no grupo"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	for _, mID := range req.MemberIDs {
@@ -452,6 +472,11 @@ func (h *DMGroupHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Content == "" && len(req.Attachments) == 0) {
 		http.Error(w, `{"error":"content required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Content) > 2000 {
+		http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
 		return
 	}
 

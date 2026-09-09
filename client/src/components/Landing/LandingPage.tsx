@@ -23,6 +23,16 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) => {
+  const [os, setOs] = React.useState<'android' | 'windows' | 'ios' | 'other'>('windows');
+
+  React.useEffect(() => {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    if (/android/i.test(ua)) setOs('android');
+    else if (/iphone|ipad|ipod/i.test(ua)) setOs('ios');
+    else if (/windows|win32|win64/i.test(ua)) setOs('windows');
+    else setOs('other');
+  }, []);
+
   return (
     <div className="min-h-screen w-full bg-background-darkest text-gray-100 flex flex-col font-sans selection:bg-brand-500/30 selection:text-white">
       {/* Background Ambient Glows */}
@@ -115,7 +125,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-base shadow-xl shadow-brand-600/35 hover:shadow-brand-500/45 hover:-translate-y-1 transition-all cursor-pointer group"
           >
             <Download className="w-5 h-5 group-hover:translate-y-0.5 transition-transform" />
-            <span>Baixar para Windows (Setup)</span>
+            <span>
+              {os === 'android' && 'Baixar para Android (.apk)'}
+              {os === 'windows' && 'Baixar para Windows (Setup)'}
+              {os === 'ios' && 'Instalar no iOS (PWA)'}
+              {os === 'other' && 'Baixar o Aplicativo'}
+            </span>
           </button>
 
           <button

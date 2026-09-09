@@ -145,7 +145,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             <div className="flex items-center gap-1">
               <button
                 onClick={handleScreenShareClick}
-                className={`p-1.5 rounded hover:bg-background-light transition-colors cursor-pointer ${
+                className={`hidden md:inline-flex p-1.5 rounded hover:bg-background-light transition-colors cursor-pointer ${
                   isScreensharing ? 'text-online bg-online/10' : 'text-gray-300'
                 }`}
                 title={isScreensharing ? 'Opções de Compartilhamento' : 'Transmitir Tela'}
@@ -166,22 +166,25 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       )}
 
       {/* User Info and Controls */}
-      <div className="h-[60px] md:h-[52px] px-2.5 md:px-2 flex items-center justify-between bg-background-darkest/60 gap-1.5 border-t border-white/5">
-        {/* User Card - Clicking this whole container opens settings */}
+      <div
+        onClick={() => {
+          if (typeof window !== 'undefined' && window.innerWidth < 768) {
+            onOpenSettings();
+          }
+        }}
+        className="h-[60px] md:h-[56px] px-2.5 flex items-center justify-between bg-background-darkest/95 border-t border-white/5 cursor-pointer md:cursor-default"
+      >
         <div
-          onClick={onOpenSettings}
-          className="flex-1 flex items-center gap-2 p-1.5 md:p-1 rounded-xl hover:bg-background-light/50 cursor-pointer min-w-0 transition-colors group/usercard"
+          onClick={(e) => {
+            if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+              setShowStatusMenu(!showStatusMenu);
+            }
+          }}
+          className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 mr-1.5 transition-colors group/usercard"
           title="Editar Meu Perfil e Configurações"
         >
-          {/* Avatar with Status Popover trigger */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowStatusMenu(!showStatusMenu);
-            }}
-            className="relative w-9 h-9 md:w-8 md:h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
-            title="Alterar Status"
-          >
+          {/* Avatar */}
+          <div className="relative w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm">
             {user?.avatar_url ? (
               <img src={formatAssetUrl(user.avatar_url)} alt={user.username} className="w-full h-full rounded-full object-cover" />
             ) : (
@@ -189,39 +192,38 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             )}
             {/* Status dot */}
             <div
-              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background-darkest ${getStatusColor(
+              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background-darkest ${getStatusColor(
                 user?.status
               )}`}
             />
           </div>
 
-          <div className="flex flex-col min-w-0 flex-1 justify-center">
+          <div className="flex flex-col truncate min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold text-gray-100 truncate leading-tight group-hover/usercard:text-brand-300 transition-colors">
+              <span className="text-[14px] font-bold text-white truncate leading-tight group-hover/usercard:text-brand-300 transition-colors">
                 {user?.display_name || user?.username || 'Usuário'}
               </span>
-              {/* Decorative settings gear on mobile for visual affordance */}
               <Settings className="w-3.5 h-3.5 text-gray-400 group-hover/usercard:text-brand-400 md:hidden flex-shrink-0 transition-transform group-hover/usercard:rotate-45" />
             </div>
-            <span className="text-[10px] text-gray-400 truncate leading-tight mt-0.5">
+            <span className="text-[12px] text-gray-400 truncate leading-tight mt-0.5">
               {user?.custom_status || getStatusLabel(user?.status)}
             </span>
           </div>
         </div>
 
-        {/* Action Buttons (Voice/Mute controls + Desktop settings button) */}
-        <div className="flex items-center text-gray-400 flex-shrink-0">
+        {/* Action Buttons */}
+        <div className="hidden md:flex items-center gap-0.5 text-gray-400">
           <button
             onClick={(e) => {
               e.stopPropagation();
               toggleMute();
             }}
-            className={`p-2 md:p-1.5 rounded-lg md:rounded hover:bg-background-light hover:text-gray-200 transition-colors ${
-              isMuted ? 'text-dnd hover:text-dnd' : ''
+            className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
+              isMuted ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
             }`}
             title={isMuted ? 'Desmutar' : 'Mutar'}
           >
-            {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {isMuted ? <MicOff className="w-[18px] h-[18px]" /> : <Mic className="w-[18px] h-[18px]" />}
           </button>
 
           <button
@@ -229,12 +231,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               e.stopPropagation();
               toggleDeafen();
             }}
-            className={`p-2 md:p-1.5 rounded-lg md:rounded hover:bg-background-light hover:text-gray-200 transition-colors ${
-              isDeafened ? 'text-dnd hover:text-dnd' : ''
+            className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
+              isDeafened ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
             }`}
             title={isDeafened ? 'Ensurdecer' : 'Desensurdecer'}
           >
-            <Headphones className="w-4 h-4" />
+            <Headphones className="w-[18px] h-[18px]" />
           </button>
 
           <button
@@ -242,10 +244,10 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               e.stopPropagation();
               onOpenSettings();
             }}
-            className="hidden md:flex p-1.5 rounded hover:bg-background-light hover:text-gray-200 transition-colors"
-            title="Editar Meu Perfil"
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer"
+            title="Configurações de Usuário"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>

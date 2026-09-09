@@ -233,3 +233,68 @@ func (s *Service) SendPasswordResetEmail(ctx context.Context, toEmail, username,
 
 	return s.sendEmail(ctx, toEmail, subject, html)
 }
+
+// SendEmailChangedNotice envia um aviso para o e-mail antigo informando que o e-mail da conta foi alterado
+func (s *Service) SendEmailChangedNotice(ctx context.Context, toEmail, username, newEmail string) error {
+	subject := "Aviso de Segurança: E-mail da sua conta ZeroVC foi alterado"
+
+	html := fmt.Sprintf(`
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-mail da Conta Alterado</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0c0d12; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #e1e3e8;">
+  <table width="100%%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0c0d12; padding: 40px 15px;">
+    <tr>
+      <td align="center">
+        <table width="100%%" border="0" cellspacing="0" cellpadding="0" style="max-width: 520px; background-color: #15161e; border: 1px solid #282937; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 35px 35px 20px 35px; text-align: center; border-bottom: 1px solid #232431;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">
+                <span style="color: #6366f1;">Zero</span>VC
+              </h1>
+              <p style="margin: 6px 0 0 0; font-size: 13px; color: #8a8d9b;">Aviso de Segurança</p>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding: 30px 35px;">
+              <h2 style="margin: 0 0 12px 0; font-size: 18px; color: #ffffff; font-weight: 700;">Olá, @%s!</h2>
+              <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #a4a7b5;">
+                Informamos que o endereço de e-mail associado à sua conta no ZeroVC foi alterado para <strong>%s</strong>.
+              </p>
+              
+              <div style="padding: 14px 18px; background-color: #241416; border-left: 3px solid #ef4444; border-radius: 8px; margin-bottom: 24px;">
+                <p style="margin: 0; font-size: 13px; color: #fca5a5; line-height: 1.5;">
+                  ⚠️ <strong>Não foi você quem fez essa alteração?</strong><br>
+                  Se você não reconhece esta troca, sua conta pode ter sido comprometida. Entre em contato com o suporte imediatamente e redefina sua senha.
+                </p>
+              </div>
+
+              <p style="margin: 0; font-size: 12px; color: #6b6f82; line-height: 1.5; text-align: center;">
+                Este é um aviso automático de segurança para proteger a sua conta.
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 35px; background-color: #0f1016; text-align: center; border-top: 1px solid #1f202c;">
+              <p style="margin: 0; font-size: 11px; color: #585c6d;">
+                &copy; 2026 ZeroVC. Todos os direitos reservados.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`, username, newEmail)
+
+	return s.sendEmail(ctx, toEmail, subject, html)
+}
