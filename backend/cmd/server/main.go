@@ -322,6 +322,8 @@ func main() {
 		r.Get("/api/dms/{roomID}/messages", dmHandler.ListMessages)
 		r.Get("/api/dms/{roomID}/pins", dmHandler.ListPinned)
 		r.Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)
+		r.Patch("/api/dms/{roomID}/messages/{messageID}", dmHandler.UpdateMessage)
+		r.Delete("/api/dms/{roomID}/messages/{messageID}", dmHandler.DeleteMessage)
 		r.Post("/api/dms/{roomID}/messages/{messageID}/reactions", dmHandler.AddReaction)
 		r.Delete("/api/dms/{roomID}/messages/{messageID}/reactions/{emoji}", dmHandler.RemoveReaction)
 		r.Post("/api/dms/{roomID}/messages/{messageID}/pin", dmHandler.TogglePin)
@@ -343,6 +345,8 @@ func main() {
 		r.Delete("/api/dm/groups/{id}/members/{userID}", dmGroupHandler.RemoveMember)
 		r.Get("/api/dm/groups/{id}/messages", dmGroupHandler.ListMessages)
 		r.Post("/api/dm/groups/{id}/messages", dmGroupHandler.SendMessage)
+		r.Patch("/api/dm/groups/{id}/messages/{messageID}", dmGroupHandler.UpdateMessage)
+		r.Delete("/api/dm/groups/{id}/messages/{messageID}", dmGroupHandler.DeleteMessage)
 		r.Post("/api/dm/groups/{id}/voice-token", dmGroupHandler.JoinVoice)
 
 		// Messages (Protected)

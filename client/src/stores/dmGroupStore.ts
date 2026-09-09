@@ -22,7 +22,12 @@ interface DMGroupState {
   addMembers: (groupId: string, memberIds: string[]) => Promise<void>;
   removeMember: (groupId: string, userId: string) => Promise<void>;
   sendMessage: (content: string, attachments?: any[], replyToId?: string) => Promise<void>;
+  editMessage: (messageId: string, content: string) => Promise<void>;
+  deleteMessage: (messageId: string) => Promise<void>;
+  removeMessageFromStore: (messageId: string, groupId?: string) => void;
   handleGroupMessageCreate: (message: DMGroupMessage) => void;
+  handleGroupMessageUpdate: (message: DMGroupMessage) => void;
+  handleGroupMessageDelete: (data: { message_id?: string; id?: string; group_id?: string }) => void;
 }
 
 export const useDMGroupStore = create<DMGroupState>((set, get) => ({
@@ -320,6 +325,65 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           [message.group_id]: updatedGroupMsgs,
         },
         groups: updatedGroups,
+      };
+    });
+  },
+
+  editMessage: async (messageId: string, content: string) => {
+    const { activeGroup } = get();
+    if (!activeGroup) return;
+    const updated = await api.dmGroups.updateMessage(activeGroup.id, messageId, { content });
+    get().handleGroupMessageUpdate(updated);
+  },
+
+  deleteMessage: async (messageId: string) => {
+    const { activeGroup } = get();
+    if (!activeGroup) return;
+    await api.dmGroups.deleteMessage(activeGroup.id, messageId);
+    get().handleGroupMessageDelete({ message_id: messageId, group_id: activeGroup.id });
+  },
+
+  removeMessageFromStore: (messageId: string, groupId?: string) => {
+    get().handleGroupMessageDelete({ message_id: messageId, group_id: groupId });
+  },
+
+  handleGroupMessageUpdate: (message: DMGroupMessage) => {
+    set((state) => {
+      const updateMsgList = (list: DMGroupMessage[]) =>
+        list.map((m) => (m.id === message.id ? { ...m, ...message, is_edited: true } : m));
+
+      const nextByGroup = { ...state.messagesByGroup };
+      if (nextByGroup[message.group_id]) {
+        nextByGroup[message.group_id] = updateMsgList(nextByGroup[message.group_id]);
+      }
+
+      return {
+        messages: state.activeGroup?.id === message.group_id ? updateMsgList(state.messages) : state.messages,
+        messagesByGroup: nextByGroup,
+      };
+    });
+  },
+
+  handleGroupMessageDelete: (data: { message_id?: string; id?: string; group_id?: string }) => {
+    const msgId = data.message_id || data.id;
+    if (!msgId) return;
+    const groupId = data.group_id || get().activeGroup?.id;
+
+    set((state) => {
+      const removeMsg = (list: DMGroupMessage[]) => list.filter((m) => m.id !== msgId && m.tempId !== msgId);
+
+      const nextByGroup = { ...state.messagesByGroup };
+      if (groupId && nextByGroup[groupId]) {
+        nextByGroup[groupId] = removeMsg(nextByGroup[groupId]);
+      } else {
+        for (const gId in nextByGroup) {
+          nextByGroup[gId] = removeMsg(nextByGroup[gId]);
+        }
+      }
+
+      return {
+        messages: removeMsg(state.messages),
+        messagesByGroup: nextByGroup,
       };
     });
   },

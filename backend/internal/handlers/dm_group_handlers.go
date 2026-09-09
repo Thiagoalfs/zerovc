@@ -582,3 +582,167 @@ func (h *DMGroupHandler) getGroupMembers(ctx context.Context, groupID uuid.UUID)
 	}
 	return members
 }
+
+func (h *DMGroupHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	groupIDStr := chi.URLParam(r, "id")
+	groupID, err := uuid.Parse(groupIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid group id"}`, http.StatusBadRequest)
+		return
+	}
+
+	messageIDStr := chi.URLParam(r, "messageID")
+	messageID, err := uuid.Parse(messageIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var isMember bool
+	h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2)", groupID, userID).Scan(&isMember)
+	if !isMember {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	var authorID, ownerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT m.author_id, g.owner_id
+		FROM dm_group_messages m
+		INNER JOIN dm_groups g ON g.id = m.group_id
+		WHERE m.id = $1 AND m.group_id = $2
+	`, messageID, groupID).Scan(&authorID, &ownerID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != authorID && userID != ownerID {
+		http.Error(w, `{"error":"forbidden: only message author or group owner can delete"}`, http.StatusForbidden)
+		return
+	}
+
+	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM dm_group_messages WHERE id = $1 AND group_id = $2", messageID, groupID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to delete message"}`, http.StatusInternalServerError)
+		return
+	}
+
+	members := h.getGroupMembers(r.Context(), groupID)
+	deletePayload := map[string]any{
+		"id":         messageID,
+		"message_id": messageID,
+		"group_id":   groupID,
+	}
+
+	for _, m := range members {
+		h.hub.SendToUser(m.ID, models.WSEvent{
+			Type: "GROUP_MESSAGE_DELETE",
+			Data: deletePayload,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true})
+}
+
+func (h *DMGroupHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	groupIDStr := chi.URLParam(r, "id")
+	groupID, err := uuid.Parse(groupIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid group id"}`, http.StatusBadRequest)
+		return
+	}
+
+	messageIDStr := chi.URLParam(r, "messageID")
+	messageID, err := uuid.Parse(messageIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Content == "" {
+		http.Error(w, `{"error":"content required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Content) > 2000 {
+		http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
+		return
+	}
+
+	var authorID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id FROM dm_group_messages WHERE id = $1 AND group_id = $2", messageID, groupID).Scan(&authorID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if userID != authorID {
+		http.Error(w, `{"error":"forbidden: only author can edit message"}`, http.StatusForbidden)
+		return
+	}
+
+	now := time.Now().UTC()
+	_, err = h.db.Pool.Exec(r.Context(), `
+		UPDATE dm_group_messages
+		SET content = $1, is_edited = true, edited_at = $2
+		WHERE id = $3 AND group_id = $4
+	`, req.Content, now, messageID, groupID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update message"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var msg models.DMGroupMessage
+	var rawAttach []byte
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT id, group_id, author_id, content, attachments, reply_to_id, is_pinned, is_edited, edited_at, created_at
+		FROM dm_group_messages
+		WHERE id = $1
+	`, messageID).Scan(
+		&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &rawAttach, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"failed to retrieve updated message"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(rawAttach) > 0 {
+		json.Unmarshal(rawAttach, &msg.Attachments)
+	}
+	if msg.Attachments == nil {
+		msg.Attachments = make([]models.Attachment, 0)
+	}
+
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1", userID).Scan(
+		&msg.Author.ID, &msg.Author.Username, &msg.Author.DisplayName, &msg.Author.AvatarURL, &msg.Author.BannerURL, &msg.Author.Bio, &msg.Author.Status, &msg.Author.CustomStatus,
+	)
+
+	members := h.getGroupMembers(r.Context(), groupID)
+	for _, m := range members {
+		h.hub.SendToUser(m.ID, models.WSEvent{
+			Type: "GROUP_MESSAGE_UPDATE",
+			Data: msg,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(msg)
+}
+

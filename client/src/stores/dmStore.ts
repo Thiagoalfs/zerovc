@@ -24,11 +24,16 @@ interface DMState {
   fetchPinnedMessages: (roomId: string) => Promise<void>;
   openDMWithUser: (recipientId: string) => Promise<DMRoom>;
   sendMessage: (content: string, attachments?: any[], replyToId?: string) => Promise<void>;
+  editMessage: (messageId: string, content: string) => Promise<void>;
+  deleteMessage: (messageId: string) => Promise<void>;
+  removeMessageFromStore: (messageId: string, roomId?: string) => void;
   toggleReaction: (messageId: string, emoji: string) => Promise<void>;
   togglePin: (messageId: string) => Promise<void>;
   addMessage: (message: DMMessage) => void;
   handleDMReactionEvent: (data: { message_id: string; dm_room_id: string; user_id: string; emoji: string; is_add: boolean }) => void;
   handlePinEvent: (data: { message_id: string; room_id: string; is_pinned: boolean }) => void;
+  handleDMMessageUpdateEvent: (message: DMMessage) => void;
+  handleDMMessageDeleteEvent: (data: { message_id?: string; id?: string; room_id?: string; dm_room_id?: string }) => void;
 }
 
 export const useDMStore = create<DMState>((set, get) => ({
@@ -447,6 +452,71 @@ export const useDMStore = create<DMState>((set, get) => ({
       return {
         messages: state.activeRoom?.id === room_id ? updateMsgList(state.messages) : state.messages,
         messagesByRoom: nextMessagesByRoom,
+        pinnedMessagesByRoom: nextPinnedByRoom,
+      };
+    });
+  },
+
+  editMessage: async (messageId: string, content: string) => {
+    const { activeRoom } = get();
+    if (!activeRoom) return;
+    const updated = await api.dms.updateMessage(activeRoom.id, messageId, { content });
+    get().handleDMMessageUpdateEvent(updated);
+  },
+
+  deleteMessage: async (messageId: string) => {
+    const { activeRoom } = get();
+    if (!activeRoom) return;
+    await api.dms.deleteMessage(activeRoom.id, messageId);
+    get().handleDMMessageDeleteEvent({ message_id: messageId, room_id: activeRoom.id });
+  },
+
+  removeMessageFromStore: (messageId: string, roomId?: string) => {
+    get().handleDMMessageDeleteEvent({ message_id: messageId, room_id: roomId });
+  },
+
+  handleDMMessageUpdateEvent: (message: DMMessage) => {
+    set((state) => {
+      const updateMsgList = (list: DMMessage[]) =>
+        list.map((m) => (m.id === message.id ? { ...m, ...message, is_edited: true } : m));
+
+      const nextByRoom = { ...state.messagesByRoom };
+      if (nextByRoom[message.dm_room_id]) {
+        nextByRoom[message.dm_room_id] = updateMsgList(nextByRoom[message.dm_room_id]);
+      }
+
+      return {
+        messages: state.activeRoom?.id === message.dm_room_id ? updateMsgList(state.messages) : state.messages,
+        messagesByRoom: nextByRoom,
+      };
+    });
+  },
+
+  handleDMMessageDeleteEvent: (data: { message_id?: string; id?: string; room_id?: string; dm_room_id?: string }) => {
+    const msgId = data.message_id || data.id;
+    if (!msgId) return;
+    const roomId = data.room_id || data.dm_room_id || get().activeRoom?.id;
+
+    set((state) => {
+      const removeMsg = (list: DMMessage[]) => list.filter((m) => m.id !== msgId && m.tempId !== msgId);
+
+      const nextByRoom = { ...state.messagesByRoom };
+      if (roomId && nextByRoom[roomId]) {
+        nextByRoom[roomId] = removeMsg(nextByRoom[roomId]);
+      } else {
+        for (const rId in nextByRoom) {
+          nextByRoom[rId] = removeMsg(nextByRoom[rId]);
+        }
+      }
+
+      const nextPinnedByRoom = { ...state.pinnedMessagesByRoom };
+      if (roomId && nextPinnedByRoom[roomId]) {
+        nextPinnedByRoom[roomId] = removeMsg(nextPinnedByRoom[roomId]);
+      }
+
+      return {
+        messages: removeMsg(state.messages),
+        messagesByRoom: nextByRoom,
         pinnedMessagesByRoom: nextPinnedByRoom,
       };
     });
