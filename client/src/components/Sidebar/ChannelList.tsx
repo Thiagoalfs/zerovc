@@ -777,17 +777,17 @@ export const ChannelList: React.FC<ChannelListProps> = ({
       >
         {/* Server Header or Home Header */}
         {isHomeActive ? (
-          <div className="h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm">
+          <div className="h-14 md:h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm flex-shrink-0">
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-brand-500" />
-              <span className="truncate">Painel de Amigos</span>
+              <Users className="w-5 h-5 md:w-4 md:h-4 text-brand-500" />
+              <span className="truncate text-[17px] md:text-base">Painel de Amigos</span>
             </div>
             {onCloseMobileDrawer && (
               <button
                 onClick={onCloseMobileDrawer}
-                className="md:hidden text-gray-400 hover:text-white p-1"
+                className="md:hidden text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             )}
           </div>
@@ -809,7 +809,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               className={`w-full px-4 border-b border-black/20 flex justify-between font-bold text-gray-100 shadow-sm transition-all group cursor-pointer text-left relative overflow-hidden ${
                 activeGuild?.banner_url
                   ? 'h-36 pt-3.5 items-start hover:brightness-105'
-                  : 'h-12 items-center hover:bg-white/5'
+                  : 'h-14 md:h-12 items-center hover:bg-white/5'
               }`}
             >
               {/* Gradient overlay for banner readability */}
@@ -817,11 +817,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/35 to-transparent pointer-events-none" />
               )}
 
-              <span className="truncate max-w-[170px] text-sm md:text-base font-bold text-white group-hover:text-gray-100 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+              <span className="truncate max-w-[200px] md:max-w-[170px] text-[17px] md:text-base font-bold text-white group-hover:text-gray-100 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                 {activeGuild?.name || 'Servidor'}
               </span>
               <ChevronDown
-                className={`w-4 h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
+                className={`w-5 h-5 md:w-4 md:h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
                   isDropdownOpen ? 'rotate-180 text-brand-400' : ''
                 }`}
               />
