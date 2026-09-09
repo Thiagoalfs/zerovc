@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Zap,
   Download,
   Globe,
   Radio,
@@ -14,6 +13,12 @@ import {
   Sliders,
   Smile,
   ChevronRight,
+  ChevronDown,
+  Hash,
+  Volume2,
+  Mic,
+  Settings,
+  Plus,
 } from 'lucide-react';
 import { ZeroVCLogo } from '../Common/ZeroVCLogo';
 
@@ -146,118 +151,210 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             3. PRODUCT SHOWCASE MOCKUP
         ------------------------------------------------------------- */}
         <div className="w-full max-w-5xl rounded-3xl p-2 bg-gradient-to-b from-white/15 via-white/5 to-transparent border border-white/10 shadow-2xl shadow-black/80">
-          <div className="w-full bg-[#0d1117] rounded-2xl overflow-hidden border border-white/5 flex flex-col aspect-[16/10] sm:aspect-[16/9] relative text-left shadow-inner">
+          <div className="w-full bg-[#1e1f22] rounded-2xl overflow-hidden border border-white/5 flex flex-col aspect-[16/10] sm:aspect-[16/9] relative text-left shadow-inner">
             {/* Mock Titlebar */}
-            <div className="h-9 bg-[#090d12] border-b border-white/5 px-4 flex items-center justify-between select-none">
+            <div className="h-9 bg-[#1e1f22] border-b border-black/30 px-4 flex items-center justify-between select-none">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-rose-500/80" />
-                <div className="w-3 h-3 rounded-full bg-amber-500/80" />
-                <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
+                <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
+                <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
+                <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
                 <span className="text-xs font-semibold text-gray-400 ml-2">ZeroVC — Comunidade</span>
               </div>
             </div>
 
             {/* Mock Body */}
             <div className="flex-1 flex overflow-hidden">
-              {/* Guilds bar */}
-              <div className="w-14 bg-[#090d12] p-2 flex flex-col items-center gap-2 border-r border-white/5">
-                <div className="w-10 h-10 rounded-2xl bg-brand-600 flex items-center justify-center text-white shadow-md">
-                  <Zap className="w-5 h-5 fill-current" />
-                </div>
-                <div className="w-6 h-0.5 bg-white/10 rounded-full my-1" />
-                <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-xs font-bold text-gray-300">
-                  ZC
-                </div>
-                <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-xs font-bold text-gray-300">
-                  🎮
-                </div>
-              </div>
-
-              {/* Channels Sidebar */}
-              <div className="w-48 bg-[#10151c] p-3 hidden sm:flex flex-col justify-between border-r border-white/5">
-                <div className="space-y-3">
-                  <div className="text-xs font-bold text-white px-2 uppercase tracking-wider">ZeroVC HQ</div>
-                  <div className="space-y-1 text-xs">
-                    <div className="p-1.5 rounded-lg bg-white/10 text-white font-medium flex items-center gap-1.5">
-                      <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
-                      <span># geral</span>
-                    </div>
-                    <div className="p-1.5 rounded-lg text-gray-400 hover:text-white flex items-center gap-1.5">
-                      <MessageSquare className="w-3.5 h-3.5 text-gray-500" />
-                      <span># novidades</span>
-                    </div>
-                    <div className="pt-2 text-[10px] font-bold text-gray-500 uppercase px-2">Canais de Voz</div>
-                    <div className="p-1.5 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-medium flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Radio className="w-3.5 h-3.5" />
-                        <span>Sala Principal</span>
+              {/* Sidebars Left Column (ServerList + ChannelList + Unified UserBar) */}
+              <div className="hidden sm:flex flex-col h-full bg-[#1e1f22] border-r border-black/30 flex-shrink-0">
+                {/* Top: ServerList & ChannelList */}
+                <div className="flex-1 flex overflow-hidden">
+                  {/* Guilds bar */}
+                  <div className="w-16 bg-[#1e1f22] py-3 flex flex-col items-center gap-2 select-none border-r border-black/10">
+                    <div className="relative group flex items-center justify-center">
+                      <div className="absolute -left-3 w-1.5 h-8 bg-white rounded-r-full" />
+                      <div className="w-11 h-11 rounded-2xl bg-brand-600 flex items-center justify-center text-white shadow-md shadow-brand-600/30">
+                        <ZeroVCLogo className="w-6 h-6" />
                       </div>
-                      <span className="text-[10px] font-mono">3/∞</span>
+                    </div>
+                    <div className="w-8 h-0.5 bg-white/10 rounded-full my-1" />
+                    <div className="w-11 h-11 rounded-2xl bg-[#2b2d31] hover:bg-brand-500 hover:text-white transition-all flex items-center justify-center text-xs font-bold text-gray-200">
+                      ZC
+                    </div>
+                    <div className="w-11 h-11 rounded-2xl bg-[#2b2d31] hover:bg-brand-500 transition-all flex items-center justify-center text-base">
+                      🎮
                     </div>
                   </div>
-                </div>
 
-                <div className="p-2 rounded-xl bg-background-darkest/70 border border-white/5 flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white">
-                    U
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-white truncate">Você</div>
-                    <div className="text-[10px] text-emerald-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> Online
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Main Chat Area Mockup */}
-              <div className="flex-1 bg-[#0d1117] flex flex-col justify-between p-4">
-                <div className="space-y-3">
-                  <div className="flex gap-3 items-start">
-                    <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                      A
-                    </div>
+                  {/* Channels Sidebar */}
+                  <div className="w-52 bg-[#2b2d31] flex flex-col justify-between overflow-hidden">
                     <div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-semibold text-white">Alexandre</span>
-                        <span className="text-[10px] text-gray-500">Hoje às 11:42</span>
+                      {/* Server Header */}
+                      <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between font-bold text-gray-100 shadow-sm text-sm">
+                        <span className="truncate">ZeroVC HQ</span>
+                        <ChevronDown className="w-4 h-4 text-gray-400" />
                       </div>
-                      <div className="text-xs text-gray-300 mt-0.5">
-                        O ZeroVC tá rodando liso demais! A voz não tem atraso nenhum 🚀
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="flex gap-3 items-start">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                      M
-                    </div>
-                    <div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-semibold text-white">Marina</span>
-                        <span className="text-[10px] text-gray-500">Hoje às 11:43</span>
-                      </div>
-                      <div className="text-xs text-gray-300 mt-0.5">
-                        E o compartilhamento de tela a 60fps ficou perfeito pro gameplay!
-                      </div>
-                      {/* Fake Rich Media Preview */}
-                      <div className="mt-2 p-2 rounded-xl bg-white/5 border border-white/10 w-fit flex items-center gap-3">
-                        <Monitor className="w-5 h-5 text-brand-400" />
+                      {/* Channels list */}
+                      <div className="p-2 space-y-3">
                         <div>
-                          <div className="text-xs font-semibold text-white">Stream: CS2 Highlights</div>
-                          <div className="text-[10px] text-gray-400">1080p @ 60 FPS • 0% perda</div>
+                          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 mb-1">
+                            Canais de Texto
+                          </div>
+                          <div className="space-y-0.5 text-xs font-medium">
+                            <div className="px-2.5 py-1.5 rounded-lg bg-white/10 text-white flex items-center gap-2 shadow-sm">
+                              <Hash className="w-4 h-4 text-gray-300" />
+                              <span className="font-semibold">geral</span>
+                            </div>
+                            <div className="px-2.5 py-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Hash className="w-4 h-4 text-gray-500" />
+                                <span>novidades</span>
+                              </div>
+                              <span className="w-2 h-2 rounded-full bg-brand-500" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 mb-1">
+                            Canais de Voz
+                          </div>
+                          <div className="space-y-0.5 text-xs">
+                            <div className="px-2.5 py-1.5 rounded-lg text-online bg-online/10 border border-online/20 font-medium flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Volume2 className="w-4 h-4 text-online" />
+                                <span>Sala Principal</span>
+                              </div>
+                              <span className="text-[10px] font-mono font-bold bg-online/20 px-1.5 py-0.5 rounded text-online">3/∞</span>
+                            </div>
+                            {/* Connected voice participants preview */}
+                            <div className="pl-6 pt-1 space-y-1">
+                              <div className="flex items-center gap-1.5 text-[11px] text-gray-300">
+                                <div className="w-4 h-4 rounded-full bg-indigo-500 ring-1 ring-online flex items-center justify-center text-[9px] font-bold text-white">A</div>
+                                <span className="truncate">Alexandre</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[11px] text-gray-300">
+                                <div className="w-4 h-4 rounded-full bg-emerald-500 ring-1 ring-online flex items-center justify-center text-[9px] font-bold text-white">M</div>
+                                <span className="truncate">Marina</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Fake Input */}
-                <div className="h-10 bg-[#161b22] rounded-xl border border-white/10 px-3 flex items-center justify-between text-xs text-gray-400 select-none">
-                  <span>Conversar em #geral...</span>
-                  <div className="flex items-center gap-2 text-gray-500">
-                    <Smile className="w-4 h-4" />
-                    <Sparkles className="w-4 h-4" />
+                {/* Unified UserBar Footer */}
+                <div className="h-14 px-2.5 flex items-center justify-between bg-[#1e1f22] border-t border-black/20 text-xs">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                      <span>U</span>
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-online border-2 border-[#1e1f22]" />
+                    </div>
+                    <div className="flex flex-col min-w-0 flex-1 truncate">
+                      <span className="font-bold text-white truncate leading-tight">Você</span>
+                      <span className="text-[11px] text-gray-400 truncate leading-tight">Disponível</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-0.5 text-gray-400 flex-shrink-0">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors">
+                      <Mic className="w-4 h-4" />
+                    </div>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors">
+                      <Headphones className="w-4 h-4" />
+                    </div>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors">
+                      <Settings className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Chat Area Mockup */}
+              <div className="flex-1 bg-[#313338] flex flex-col justify-between overflow-hidden">
+                {/* Chat Header */}
+                <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm flex-shrink-0">
+                  <div className="flex items-center gap-2 truncate">
+                    <Hash className="w-5 h-5 text-gray-400" />
+                    <span className="font-bold text-gray-100 text-sm">geral</span>
+                    <span className="text-gray-600 hidden sm:inline">|</span>
+                    <span className="text-xs text-gray-400 hidden sm:inline truncate">Canal principal da comunidade</span>
+                  </div>
+                </div>
+
+                {/* Messages List */}
+                <div className="flex-1 p-4 space-y-4 overflow-hidden">
+                  {/* Message 1 */}
+                  <div className="flex gap-3 items-start">
+                    <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm">
+                      A
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs font-bold text-white">Alexandre</span>
+                        <span className="text-[10px] text-gray-400">Hoje às 11:42</span>
+                      </div>
+                      <div className="text-xs text-gray-200 mt-0.5 leading-relaxed">
+                        O ZeroVC tá rodando liso demais! A voz não tem atraso nenhum 🚀
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Message 2 */}
+                  <div className="flex gap-3 items-start">
+                    <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm">
+                      M
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs font-bold text-white">Marina</span>
+                        <span className="text-[10px] text-gray-400">Hoje às 11:43</span>
+                      </div>
+                      <div className="text-xs text-gray-200 mt-0.5 leading-relaxed">
+                        E o compartilhamento de tela a 60fps ficou perfeito pro gameplay!
+                      </div>
+
+                      {/* Modern Embed Preview */}
+                      <div className="mt-2.5 max-w-sm rounded-xl bg-[#2b2d31] border border-white/10 p-3 flex flex-col gap-2 shadow-lg">
+                        <div className="flex items-center gap-2 text-[11px] text-brand-400 font-bold uppercase tracking-wider">
+                          <Monitor className="w-3.5 h-3.5" />
+                          <span>Transmissão ao Vivo • 60 FPS</span>
+                        </div>
+                        <div className="text-xs font-bold text-white">CS2 Highlights & Clutch Moments</div>
+                        <div className="text-[11px] text-gray-400">1080p @ 60 FPS • Áudio do Sistema • 0% de perda de pacotes</div>
+                      </div>
+
+                      {/* Reactions */}
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-brand-500/20 border border-brand-500/40 text-brand-300 text-[11px] font-bold">
+                          <span>🔥</span>
+                          <span>4</span>
+                        </div>
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px] font-medium">
+                          <span>🚀</span>
+                          <span>6</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chat Input Bar */}
+                <div className="p-4 pt-0">
+                  <div className="h-11 bg-[#383a40] rounded-xl px-3 flex items-center justify-between text-xs text-gray-400 select-none shadow-sm">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-gray-300 hover:text-white cursor-pointer">
+                        <Plus className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="truncate">Conversar em #geral...</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-gray-400">
+                      <span className="text-[10px] font-bold bg-white/10 px-1.5 py-0.5 rounded text-gray-300">GIF</span>
+                      <Smile className="w-4 h-4 hover:text-white cursor-pointer" />
+                      <Sparkles className="w-4 h-4 hover:text-brand-400 text-brand-400 cursor-pointer" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -391,9 +488,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
       <footer className="mt-auto border-t border-white/5 py-10 px-6 bg-[#090d12] text-sm text-gray-400">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-xl bg-brand-600 flex items-center justify-center text-white">
-              <Zap className="w-4 h-4 fill-white" />
-            </div>
+            <ZeroVCLogo className="w-7 h-7 shadow-md shadow-brand-500/25 flex-shrink-0" />
             <span className="font-bold text-white">ZeroVC</span>
             <span className="text-xs text-gray-500">© 2026 • Todos os direitos reservados</span>
           </div>
