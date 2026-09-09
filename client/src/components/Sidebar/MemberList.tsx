@@ -377,7 +377,7 @@ export const MemberList: React.FC<MemberListProps> = ({
       />
 
       {/* Member Sidebar / Drawer */}
-      <div className="fixed md:static inset-y-0 right-0 z-50 md:z-0 w-64 md:w-60 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none animate-in slide-in-from-right duration-200 md:animate-none">
+      <div className="fixed md:static inset-y-0 right-0 z-50 md:z-0 w-64 md:w-60 flex-shrink-0 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none animate-in slide-in-from-right duration-200 md:animate-none">
         {/* Mobile Header */}
         <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 md:hidden">
           <h2 className="text-sm font-bold text-white uppercase tracking-wider">Membros do Servidor</h2>

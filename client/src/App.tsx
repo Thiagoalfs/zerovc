@@ -878,7 +878,7 @@ export const App: React.FC = () => {
 
         {/* 1 & 2. Sidebars */}
         <div
-          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex h-full transition-transform duration-200 ease-in-out ${
+          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex-shrink-0 flex h-full transition-transform duration-200 ease-in-out ${
             isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
           }`}
         >
@@ -988,7 +988,7 @@ export const App: React.FC = () => {
       </div>
 
       {/* 3. Main Stage */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
+      <div className="flex-1 flex flex-col h-full overflow-hidden w-full min-w-0 relative">
         {isHomeActive ? (
           homeView === 'friends' ? (
             <FriendsView
