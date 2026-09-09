@@ -249,6 +249,17 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface LinkMetadata {
+  url: string;
+  title?: string;
+  description?: string;
+  site_name?: string;
+  image_url?: string;
+  favicon?: string;
+  theme_color?: string;
+  media_type?: string;
+}
+
 export interface ChannelReadState {
   user_id: string;
   channel_id: string;
