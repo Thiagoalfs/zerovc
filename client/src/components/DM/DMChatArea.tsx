@@ -717,7 +717,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden relative select-none min-h-0"
+      className="flex-1 w-full min-w-0 bg-background-dark flex flex-col h-full overflow-hidden relative select-none min-h-0"
     >
       {isDraggingFile && (
         <div className="absolute inset-3 z-50 bg-background-darkest/90 backdrop-blur-md border-2 border-dashed border-brand-500 rounded-3xl flex flex-col items-center justify-center gap-3 p-6 animate-in fade-in zoom-in-95 pointer-events-none shadow-2xl">

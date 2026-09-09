@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Compass, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useGuildStore } from '../../stores/guildStore';
@@ -13,6 +13,17 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const { fetchGuilds, selectGuild } = useGuildStore();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 

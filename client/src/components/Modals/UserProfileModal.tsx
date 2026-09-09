@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MessageSquare, Shield, Calendar, Edit3 } from 'lucide-react';
@@ -29,6 +29,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onEditOwnProfile,
 }) => {
   const { user: currentUser } = useAuthStore();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const popoverStyle: React.CSSProperties = useMemo(() => {
     if (!position || typeof window === 'undefined' || window.innerWidth < 640) {

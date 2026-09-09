@@ -87,6 +87,17 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
     }
   }, [channel, isOpen, activeGuild]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !channel || !activeGuild) return null;
 
   const isCategory = channel.type === 'category';
