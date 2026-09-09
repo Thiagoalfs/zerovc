@@ -20,15 +20,35 @@ export interface ContextMenuState {
   title?: string;
 }
 
+export type ContextMenuEvent =
+  | React.MouseEvent
+  | React.TouchEvent
+  | MouseEvent
+  | { clientX?: number; clientY?: number; x?: number; y?: number; preventDefault?: () => void; stopPropagation?: () => void };
+
 export function useContextMenu() {
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
 
-  const openContextMenu = useCallback((e: React.MouseEvent, items: ContextMenuItem[], title?: string) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const openContextMenu = useCallback((e: ContextMenuEvent, items: ContextMenuItem[], title?: string) => {
+    if (typeof e?.preventDefault === 'function') e.preventDefault();
+    if (typeof e?.stopPropagation === 'function') e.stopPropagation();
+
+    const x =
+      'clientX' in e && typeof e.clientX === 'number'
+        ? e.clientX
+        : 'x' in e && typeof e.x === 'number'
+        ? e.x
+        : 0;
+    const y =
+      'clientY' in e && typeof e.clientY === 'number'
+        ? e.clientY
+        : 'y' in e && typeof e.y === 'number'
+        ? e.y
+        : 0;
+
     setMenu({
-      x: e.clientX,
-      y: e.clientY,
+      x,
+      y,
       items,
       title,
     });

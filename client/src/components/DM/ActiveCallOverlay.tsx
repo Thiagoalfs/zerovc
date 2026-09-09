@@ -39,6 +39,8 @@ export const ActiveCallOverlay: React.FC = () => {
   if (callState !== 'calling' && callState !== 'connected') return null;
 
   const handleScreenShareClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (isScreensharing) {
       const rect = e.currentTarget.getBoundingClientRect();
       const items: ContextMenuItem[] = [
@@ -60,7 +62,7 @@ export const ActiveCallOverlay: React.FC = () => {
         },
       ];
       openContextMenu(
-        { clientX: rect.left + rect.width / 2, clientY: rect.bottom + 10 } as any,
+        { clientX: rect.left + rect.width / 2, clientY: rect.bottom + 10 },
         items,
         'Transmissão de Tela'
       );
