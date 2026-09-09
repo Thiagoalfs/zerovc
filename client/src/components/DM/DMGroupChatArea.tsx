@@ -354,7 +354,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden relative select-none"
+      className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden relative select-none min-h-0"
     >
       {/* Drag & Drop Files Overlay */}
       {isDraggingFile && (

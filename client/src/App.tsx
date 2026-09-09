@@ -106,6 +106,45 @@ export const App: React.FC = () => {
   // Mobile swipe gestures
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
+  // Dynamic visual viewport height for mobile browsers (keeps header stuck at top when keyboard opens)
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [viewportTop, setViewportTop] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleViewportChange = () => {
+      if (window.visualViewport) {
+        setViewportHeight(window.visualViewport.height);
+        setViewportTop(window.visualViewport.offsetTop);
+      } else {
+        setViewportHeight(window.innerHeight);
+        setViewportTop(0);
+      }
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    handleViewportChange();
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      window.visualViewport.addEventListener('scroll', handleViewportChange);
+    }
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+        window.visualViewport.removeEventListener('scroll', handleViewportChange);
+      }
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange);
+    };
+  }, []);
+
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       const target = e.target as HTMLElement;
@@ -930,10 +969,16 @@ export const App: React.FC = () => {
     : null;
 
   return (
-    <div className="w-screen h-[100dvh] flex flex-col bg-background-dark overflow-hidden select-none relative">
+    <div
+      style={{
+        height: viewportHeight ? `${viewportHeight}px` : '100dvh',
+        top: `${viewportTop}px`,
+      }}
+      className="fixed inset-x-0 bottom-auto w-full flex flex-col bg-background-dark overflow-hidden select-none"
+    >
       <TitleBar />
       <div
-        className="flex-1 flex w-full h-full overflow-hidden relative"
+        className="flex-1 flex w-full h-full overflow-hidden relative min-h-0"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -1061,7 +1106,7 @@ export const App: React.FC = () => {
       </div>
 
       {/* 3. Main Stage */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
+      <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative min-h-0">
         {isHomeActive ? (
           homeView === 'friends' ? (
             <FriendsView

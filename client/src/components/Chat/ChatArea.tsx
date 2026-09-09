@@ -249,7 +249,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="flex-1 bg-background-dark flex flex-row h-full overflow-hidden relative"
+      className="flex-1 bg-background-dark flex flex-row h-full overflow-hidden relative min-h-0"
     >
       {/* Drag & Drop Files Overlay */}
       {isDraggingFile && (
@@ -265,7 +265,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       )}
 
       {/* Center Chat View */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
         {/* Channel Header */}
         <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
           <div className="flex items-center gap-2 truncate">
