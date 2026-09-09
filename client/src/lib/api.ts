@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
 
@@ -656,6 +656,17 @@ export const api = {
         throw new Error(msg);
       }
       return res.json() as Promise<{ url: string; filename: string; size: number }>;
+    },
+  },
+  linkPreview: {
+    getMetadata: async (targetUrl: string): Promise<LinkMetadata | null> => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/link-preview?url=${encodeURIComponent(targetUrl)}`);
+        if (!res.ok) return null;
+        return res.json() as Promise<LinkMetadata>;
+      } catch {
+        return null;
+      }
     },
   },
 };

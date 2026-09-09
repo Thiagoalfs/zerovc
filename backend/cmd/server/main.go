@@ -150,6 +150,7 @@ func main() {
 	roleHandler := handlers.NewRoleHandler(db, hub)
 	dmHandler := handlers.NewDMHandler(db, hub, livekitService)
 	dmGroupHandler := handlers.NewDMGroupHandler(db, hub, livekitService)
+	linkPreviewHandler := handlers.NewLinkPreviewHandler()
 
 	uploadDir := getEnv("UPLOAD_DIR", "./assets")
 	uploadHandler := handlers.NewUploadHandler(uploadDir)
@@ -232,6 +233,9 @@ func main() {
 
 	// Public Invite Preview
 	r.Get("/api/invites/{code}", inviteHandler.GetInvite)
+
+	// Public Link OpenGraph Metadata Preview
+	r.Get("/api/link-preview", linkPreviewHandler.GetMetadata)
 
 	// Protected API Routes
 	r.Group(func(r chi.Router) {
