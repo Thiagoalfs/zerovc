@@ -132,10 +132,10 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
               className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors"
               title="Menu de Canais"
             >
-              <Menu className="w-5.5 h-5.5" />
+              <Menu className="w-6 h-6" />
             </button>
           )}
-          <Volume2 className="w-5.5 h-5.5 md:w-6 md:h-6 text-online flex-shrink-0" />
+          <Volume2 className="w-6 h-6 text-online flex-shrink-0" />
           <span className="font-bold text-gray-100 truncate text-[17px] md:text-base">{channel.name}</span>
           <span className="text-xs text-gray-400">({participants.length})</span>
         </div>

@@ -723,7 +723,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                           ? { boxShadow: '0 0 0 2px #23a55a' }
                           : undefined
                       }
-                      className="w-5.5 h-5.5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all flex-shrink-0"
+                      className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all flex-shrink-0 overflow-hidden"
                     >
                       {targetUser.avatar_url ? (
                         <img
