@@ -233,7 +233,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
           {/* Screen Share */}
           <button
             onClick={handleScreenShareClick}
-            className={`p-2.5 md:p-3 rounded-full transition-all ${
+            className={`hidden md:flex p-2.5 md:p-3 rounded-full transition-all ${
               isScreensharing
                 ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
                 : 'bg-background-light text-gray-200 hover:bg-white/20'

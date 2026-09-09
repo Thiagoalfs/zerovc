@@ -119,7 +119,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                     onOpenScreenShare();
                   }
                 }}
-                className={`p-1.5 rounded hover:bg-background-light transition-colors ${
+                className={`hidden md:inline-flex p-1.5 rounded hover:bg-background-light transition-colors ${
                   isScreensharing ? 'text-online bg-online/10' : 'text-gray-300'
                 }`}
                 title={isScreensharing ? 'Parar Transmissão' : 'Transmitir Tela'}
@@ -140,9 +140,20 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       )}
 
       {/* User Info and Controls */}
-      <div className="h-[56px] px-2.5 flex items-center justify-between bg-background-darkest/95 border-t border-black/30">
+      <div
+        onClick={() => {
+          if (window.innerWidth < 768) {
+            onOpenSettings();
+          }
+        }}
+        className="h-[56px] px-2.5 flex items-center justify-between bg-background-darkest/95 border-t border-black/30 cursor-pointer md:cursor-default"
+      >
         <div
-          onClick={() => setShowStatusMenu(!showStatusMenu)}
+          onClick={(e) => {
+            if (window.innerWidth >= 768) {
+              setShowStatusMenu(!showStatusMenu);
+            }
+          }}
           className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 mr-1.5 transition-colors"
         >
           {/* Avatar */}
@@ -171,7 +182,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-0.5 text-gray-400">
+        <div className="hidden md:flex items-center gap-0.5 text-gray-400">
           <button
             onClick={toggleMute}
             className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
