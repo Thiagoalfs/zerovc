@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Sparkles, Compass, ChevronRight, ArrowLeft, Camera, UploadCloud } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { api } from '../../lib/api';
@@ -25,8 +25,6 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
 
   const { createGuild, fetchGuilds, selectGuild } = useGuildStore();
 
-  if (!isOpen) return null;
-
   const handleClose = () => {
     setMode('choose');
     setName('');
@@ -36,6 +34,23 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
     setIsLoading(false);
     onClose();
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isCropOpen) {
+          setIsCropOpen(false);
+          return;
+        }
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isCropOpen, onClose]);
+
+  if (!isOpen) return null;
 
   const handleIconSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
