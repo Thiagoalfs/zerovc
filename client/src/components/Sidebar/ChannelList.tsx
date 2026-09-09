@@ -626,7 +626,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             setDragOverTarget(null);
           }}
           onContextMenu={(e) => handleChannelContextMenu(e, channel)}
-          className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
+          className={`group flex items-center justify-between px-2.5 py-2 md:py-1.5 rounded-xl text-[15px] md:text-[14.5px] min-h-[38px] md:min-h-[34px] transition-all relative ${
             isOwner ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
             isDragOver ? 'border-t-2 border-brand-500 bg-brand-500/10' : ''
@@ -642,7 +642,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         >
           {/* Left white indicator dot for unread */}
           {isUnread && (
-            <div className="absolute -left-1 w-1.5 h-2 rounded-r-full bg-white shadow-sm" />
+            <div className="absolute -left-1 w-1.5 h-2.5 rounded-r-full bg-white shadow-sm" />
           )}
 
           {/* Drag Handle icon for owner */}
@@ -652,19 +652,19 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
           <button
             onClick={() => (isText ? handleChannelClick(channel) : handleVoiceChannelClick(channel))}
-            className="flex items-center gap-2 truncate flex-1 text-left min-w-0"
+            className="flex items-center gap-2.5 truncate flex-1 text-left min-w-0 py-0.5"
           >
             {isText ? (
-              <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
+              <Hash className={`w-4.5 h-4.5 md:w-4 md:h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
             ) : (
               <Volume2
-                className={`w-4 h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400'}`}
+                className={`w-4.5 h-4.5 md:w-4 md:h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400'}`}
               />
             )}
             <span className="truncate font-medium">{channel.name}</span>
             {channel.is_private && (
               <span title="Canal Privado">
-                <Lock className="w-3 h-3 text-gray-400 flex-shrink-0 ml-0.5" />
+                <Lock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 ml-0.5" />
               </span>
             )}
           </button>
