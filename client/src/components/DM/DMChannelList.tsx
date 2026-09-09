@@ -211,7 +211,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
 
   return (
     <>
-      <div className="w-60 bg-background-darker flex flex-col h-full select-none border-r border-black/20">
+      <div className="w-60 bg-background-darker flex flex-col h-full select-none border-r border-black/20 flex-shrink-0 relative">
         {/* Header */}
         <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm">
           <span className="font-bold text-gray-100 text-sm">Mensagens Diretas</span>
