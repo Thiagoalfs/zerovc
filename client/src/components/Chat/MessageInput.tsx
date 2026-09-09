@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud } from 'lucide-react';
+import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -39,6 +39,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
   
+  // Channel (#) Autocomplete State
+  const [channelQuery, setChannelQuery] = useState<string | null>(null);
+  const [channelCursorPos, setChannelCursorPos] = useState<number>(0);
+  const [selectedChannelIndex, setSelectedChannelIndex] = useState<number>(0);
+
   // Mentions (@) Autocomplete State
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionCursorPos, setMentionCursorPos] = useState<number>(0);
@@ -76,6 +81,17 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
     return list;
   }, [activeGuild?.emojis, guilds]);
+
+  // Compute filtered channel suggestions
+  const channelSuggestions = useMemo(() => {
+    if (channelQuery === null) return [];
+    const q = channelQuery.toLowerCase();
+    const channels = activeGuild?.channels || [];
+    const list = channels.filter(
+      (c) => c.type !== 'category' && c.name.toLowerCase().includes(q)
+    );
+    return list.slice(0, 8);
+  }, [channelQuery, activeGuild?.channels]);
 
   // Compute filtered mention suggestions
   const mentionSuggestions = useMemo(() => {
@@ -161,6 +177,27 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   }, [replyingTo]);
 
+  const insertChannel = (item: Channel) => {
+    if (!textareaRef.current) return;
+    const text = content;
+    const textBefore = text.slice(0, channelCursorPos);
+    const textAfter = text.slice(channelCursorPos);
+
+    // Replace the trailing #query with #channel-name
+    const newTextBefore = textBefore.replace(/#([a-zA-Z0-9_\u00C0-\u00FF-]*)$/, `#${item.name} `);
+    const newContent = newTextBefore + textAfter;
+    setContent(newContent);
+    setChannelQuery(null);
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPos = newTextBefore.length;
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
+  };
+
   const insertMention = (item: { username: string }) => {
     if (!textareaRef.current) return;
     const text = content;
@@ -230,6 +267,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setSelectedFile(null);
     setSelectedImagePreview(null);
     setShowEmojiPicker(false);
+    setChannelQuery(null);
     setMentionQuery(null);
     setEmojiQuery(null);
     onCancelReply?.();
@@ -257,6 +295,30 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 0. Channel Suggestions Navigation
+    if (channelSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedChannelIndex((prev) => (prev + 1) % channelSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedChannelIndex((prev) => (prev - 1 + channelSuggestions.length) % channelSuggestions.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertChannel(channelSuggestions[selectedChannelIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setChannelQuery(null);
+        return;
+      }
+    }
+
     // 1. Emoji Suggestions Navigation
     if (emojiSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -331,24 +393,36 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const cursor = e.target.selectionStart || val.length;
     const textBefore = val.slice(0, cursor);
 
-    // Detect @ mention query at cursor (e.g. "@" or "@usr" at start or after whitespace)
-    const mentionMatch = textBefore.match(/(?:^|\s)@([a-zA-Z0-9_.-]*)$/);
-    if (mentionMatch) {
-      setMentionQuery(mentionMatch[1]);
-      setMentionCursorPos(cursor);
-      setSelectedMentionIndex(0);
+    // Detect # channel query at cursor (e.g. "#" or "#geral" at start or after whitespace)
+    const channelMatch = textBefore.match(/(?:^|\s)#([a-zA-Z0-9_\u00C0-\u00FF-]*)$/);
+    if (channelMatch) {
+      setChannelQuery(channelMatch[1]);
+      setChannelCursorPos(cursor);
+      setSelectedChannelIndex(0);
+      setMentionQuery(null);
       setEmojiQuery(null);
     } else {
-      setMentionQuery(null);
+      setChannelQuery(null);
 
-      // Detect : emoji query at cursor (e.g. ":th" or ":fire")
-      const emojiMatch = textBefore.match(/(?:^|\s):([a-zA-Z0-9_+-]*)$/);
-      if (emojiMatch) {
-        setEmojiQuery(emojiMatch[1]);
-        setEmojiCursorPos(cursor);
-        setSelectedEmojiIndex(0);
-      } else {
+      // Detect @ mention query at cursor (e.g. "@" or "@usr" at start or after whitespace)
+      const mentionMatch = textBefore.match(/(?:^|\s)@([a-zA-Z0-9_.-]*)$/);
+      if (mentionMatch) {
+        setMentionQuery(mentionMatch[1]);
+        setMentionCursorPos(cursor);
+        setSelectedMentionIndex(0);
         setEmojiQuery(null);
+      } else {
+        setMentionQuery(null);
+
+        // Detect : emoji query at cursor (e.g. ":th" or ":fire")
+        const emojiMatch = textBefore.match(/(?:^|\s):([a-zA-Z0-9_+-]*)$/);
+        if (emojiMatch) {
+          setEmojiQuery(emojiMatch[1]);
+          setEmojiCursorPos(cursor);
+          setSelectedEmojiIndex(0);
+        } else {
+          setEmojiQuery(null);
+        }
       }
     }
 
@@ -422,6 +496,51 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   return (
     <div className="px-3 md:px-4 pb-3 md:pb-4 pt-0 bg-background-dark relative">
+      {/* Channel (#) Autocomplete Suggestions Popup */}
+      {channelSuggestions.length > 0 && (
+        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
+          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Hash className="w-3.5 h-3.5 text-brand-400" />
+              <span>Canais de Texto e Voz ({channelSuggestions.length})</span>
+            </span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
+          </div>
+          <div className="space-y-0.5">
+            {channelSuggestions.map((ch, idx) => {
+              const category = activeGuild?.channels?.find((c) => c.id === ch.category_id);
+              const isVoice = ch.type === 'voice';
+              return (
+                <button
+                  key={ch.id}
+                  type="button"
+                  onClick={() => insertChannel(ch)}
+                  onMouseEnter={() => setSelectedChannelIndex(idx)}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer ${
+                    selectedChannelIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                  }`}
+                >
+                  <div className="w-6 h-6 rounded-lg bg-background-darker flex items-center justify-center text-gray-400 flex-shrink-0 border border-white/5">
+                    {isVoice ? <Volume2 className="w-3.5 h-3.5" /> : <Hash className="w-3.5 h-3.5" />}
+                  </div>
+                  <div className="flex items-center justify-between min-w-0 flex-1">
+                    <span className="font-semibold text-xs text-gray-200 truncate flex items-center gap-1">
+                      <span>{ch.name}</span>
+                      {ch.is_private && <Lock className="w-3 h-3 text-gray-400" />}
+                    </span>
+                    {category && (
+                      <span className="text-[10px] text-gray-500 truncate uppercase font-mono">
+                        {category.name}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Emoji Autocomplete Suggestions Popup */}
       {emojiSuggestions.length > 0 && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
