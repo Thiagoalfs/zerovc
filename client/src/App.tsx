@@ -730,6 +730,18 @@ export const App: React.FC = () => {
         }
       };
 
+      const handleDMMessageUpdate = (event: any) => {
+        if (event.data) {
+          useDMStore.getState().handleDMMessageUpdateEvent(event.data);
+        }
+      };
+
+      const handleDMMessageDelete = (event: any) => {
+        if (event.data) {
+          useDMStore.getState().handleDMMessageDeleteEvent(event.data);
+        }
+      };
+
       const handleVoiceStateUpdate = (event: any) => {
         updateVoiceState(event.data.action, event.data.session, event.data.channel_id, event.data.user_id);
 
@@ -815,6 +827,18 @@ export const App: React.FC = () => {
             body: msg.content?.slice(0, 100) || 'Enviou um anexo',
             tag: `group-msg-${msg.id}`,
           });
+        }
+      };
+
+      const handleGroupMessageUpdate = (event: any) => {
+        if (event.data) {
+          useDMGroupStore.getState().handleGroupMessageUpdate(event.data);
+        }
+      };
+
+      const handleGroupMessageDelete = (event: any) => {
+        if (event.data) {
+          useDMGroupStore.getState().handleGroupMessageDelete(event.data);
         }
       };
 
@@ -914,9 +938,13 @@ export const App: React.FC = () => {
       socket.on('MESSAGE_PIN', handleMessagePin);
       socket.on('MESSAGE_UNPIN', handleMessagePin);
       socket.on('DM_MESSAGE_CREATE', handleDMMessageCreate);
+      socket.on('DM_MESSAGE_UPDATE', handleDMMessageUpdate);
+      socket.on('DM_MESSAGE_DELETE', handleDMMessageDelete);
       socket.on('DM_REACTION_ADD', handleDMReactionAdd);
       socket.on('DM_REACTION_REMOVE', handleDMReactionRemove);
       socket.on('GROUP_MESSAGE_CREATE', handleGroupMessageCreate);
+      socket.on('GROUP_MESSAGE_UPDATE', handleGroupMessageUpdate);
+      socket.on('GROUP_MESSAGE_DELETE', handleGroupMessageDelete);
       socket.on('CALL_INCOMING', handleCallIncoming);
       socket.on('CALL_ACCEPT', handleCallAccept);
       socket.on('CALL_REJECT', handleCallEnd);
@@ -950,9 +978,13 @@ export const App: React.FC = () => {
         socket.off('MESSAGE_PIN', handleMessagePin);
         socket.off('MESSAGE_UNPIN', handleMessagePin);
         socket.off('DM_MESSAGE_CREATE', handleDMMessageCreate);
+        socket.off('DM_MESSAGE_UPDATE', handleDMMessageUpdate);
+        socket.off('DM_MESSAGE_DELETE', handleDMMessageDelete);
         socket.off('DM_REACTION_ADD', handleDMReactionAdd);
         socket.off('DM_REACTION_REMOVE', handleDMReactionRemove);
         socket.off('GROUP_MESSAGE_CREATE', handleGroupMessageCreate);
+        socket.off('GROUP_MESSAGE_UPDATE', handleGroupMessageUpdate);
+        socket.off('GROUP_MESSAGE_DELETE', handleGroupMessageDelete);
         socket.off('CALL_INCOMING', handleCallIncoming);
         socket.off('CALL_ACCEPT', handleCallAccept);
         socket.off('CALL_REJECT', handleCallEnd);
