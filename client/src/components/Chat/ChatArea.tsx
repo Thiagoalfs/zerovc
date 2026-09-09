@@ -255,7 +255,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="flex-1 bg-background-dark flex flex-row h-full overflow-hidden relative min-h-0"
+      className="flex-1 w-full min-w-0 bg-background-dark flex flex-row h-full overflow-hidden relative min-h-0"
     >
       {/* Drag & Drop Files Overlay */}
       {isDraggingFile && (

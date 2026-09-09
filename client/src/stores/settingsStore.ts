@@ -173,8 +173,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   chatDensity: getStoredString<ChatDensity>('zerovc_chat_density', 'cozy'),
   uiZoom: getStoredNumber('zerovc_ui_zoom', 100),
   autoplayGifs: getStoredBoolean('zerovc_autoplay_gifs', true),
-  channelListWidth: Math.max(200, Math.min(480, getStoredNumber('zerovc_channellist_width', 240))),
-  memberListWidth: Math.max(200, Math.min(480, getStoredNumber('zerovc_memberlist_width', 240))),
+  channelListWidth: Math.max(120, Math.min(480, getStoredNumber('zerovc_channellist_width', 240))),
+  memberListWidth: Math.max(160, Math.min(480, getStoredNumber('zerovc_memberlist_width', 240))),
 
   minimizeToTray: getStoredBoolean('zerovc_minimize_to_tray', true),
   autoStart: getStoredBoolean('zerovc_auto_start', false),
@@ -228,13 +228,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setChannelListWidth: (width) => {
-    const clamped = Math.max(200, Math.min(480, Math.round(width)));
+    const clamped = Math.max(120, Math.min(480, Math.round(width)));
     localStorage.setItem('zerovc_channellist_width', String(clamped));
     set({ channelListWidth: clamped });
   },
 
   setMemberListWidth: (width) => {
-    const clamped = Math.max(200, Math.min(480, Math.round(width)));
+    const clamped = Math.max(160, Math.min(480, Math.round(width)));
     localStorage.setItem('zerovc_memberlist_width', String(clamped));
     set({ memberListWidth: clamped });
   },

@@ -420,7 +420,6 @@ export const MemberList: React.FC<MemberListProps> = ({
       >
         {/* Resizer Handle */}
         <SidebarResizer side="left" target="memberList" />
-
         {/* Mobile Header */}
         <div className="h-14 -mx-3 -mt-3 px-4 mb-3 border-b border-black/20 flex items-center justify-between bg-background-dark/95 backdrop-blur-sm shadow-sm md:hidden flex-shrink-0">
           <h2 className="text-[17px] font-bold text-white">Membros do Servidor</h2>

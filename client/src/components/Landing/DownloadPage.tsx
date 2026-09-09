@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Zap,
   Download,
   CheckCircle2,
   Monitor,
@@ -215,7 +214,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               {/* Download APK Button */}
               <button
                 onClick={() => handleDownload('android')}
-                className={`w-full sm:w-auto min-h-[52px] flex items-center justify-center gap-3 px-8 sm:px-10 py-3.5 sm:py-4.5 rounded-2xl font-black text-sm sm:text-lg shadow-2xl transition-all cursor-pointer group flex-shrink-0 ${
+                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-black text-sm sm:text-lg shadow-2xl transition-all cursor-pointer group flex-shrink-0 ${
                   downloadStarted
                     ? 'bg-emerald-600 text-white shadow-emerald-600/40'
                     : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/40 hover:shadow-emerald-500/50 hover:-translate-y-1'
@@ -283,14 +282,14 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             PLATFORM CARD: WINDOWS
         ------------------------------------------------------------- */}
         {selectedPlatform === 'windows' && (
-          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-7 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
             <div className="flex flex-col items-center">
-              <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-xl shadow-brand-500/30 mb-6">
-                <Laptop className="w-10 h-10" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-xl shadow-brand-500/30 mb-4 sm:mb-6 flex-shrink-0">
+                <Laptop className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
 
-              <h2 className="text-2xl font-bold text-white mb-1">ZeroVC para Windows</h2>
-              <div className="flex items-center gap-2 text-xs text-gray-400 mb-8 font-mono">
+              <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">ZeroVC para Windows</h2>
+              <div className="flex items-center gap-2 text-xs text-gray-400 mb-6 sm:mb-8 font-mono">
                 <span>Windows 10 / 11 (64-bit)</span>
                 <span>•</span>
                 <span>Instalador Setup Wizard (.exe)</span>
@@ -299,7 +298,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               {/* Main Download Button */}
               <button
                 onClick={() => handleDownload('windows')}
-                className={`w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4.5 rounded-2xl font-black text-base sm:text-lg shadow-2xl transition-all cursor-pointer group ${
+                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-black text-sm sm:text-lg shadow-2xl transition-all cursor-pointer group flex-shrink-0 ${
                   downloadStarted
                     ? 'bg-emerald-600 text-white shadow-emerald-600/40'
                     : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/40 hover:shadow-brand-500/50 hover:-translate-y-1'
@@ -307,12 +306,12 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               >
                 {downloadStarted ? (
                   <>
-                    <Check className="w-6 h-6 animate-bounce" />
+                    <Check className="w-5 h-5 sm:w-6 sm:h-6 animate-bounce flex-shrink-0" />
                     <span>Download Iniciado!</span>
                   </>
                 ) : (
                   <>
-                    <Download className="w-6 h-6 group-hover:translate-y-0.5 transition-transform" />
+                    <Download className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-y-0.5 transition-transform flex-shrink-0" />
                     <span>Baixar ZeroVC Setup (.exe)</span>
                   </>
                 )}
@@ -367,14 +366,14 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             PLATFORM CARD: iOS
         ------------------------------------------------------------- */}
         {selectedPlatform === 'ios' && (
-          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-7 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
             <div className="flex flex-col items-center">
-              <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-gray-700 to-gray-900 flex items-center justify-center text-white shadow-xl shadow-black/50 mb-6">
-                <Apple className="w-10 h-10" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-gray-700 to-gray-900 flex items-center justify-center text-white shadow-xl shadow-black/50 mb-4 sm:mb-6 flex-shrink-0">
+                <Apple className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
 
-              <h2 className="text-2xl font-bold text-white mb-1">ZeroVC no iOS (iPhone / iPad)</h2>
-              <div className="flex items-center gap-2 text-xs text-gray-400 mb-8 font-mono">
+              <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">ZeroVC no iOS (iPhone / iPad)</h2>
+              <div className="flex items-center gap-2 text-xs text-gray-400 mb-6 sm:mb-8 font-mono">
                 <span>iOS 16+ / iPadOS</span>
                 <span>•</span>
                 <span>Instalação PWA via Safari</span>
@@ -383,9 +382,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               {/* iOS Direct Action */}
               <button
                 onClick={() => onNavigate(user ? '/@me' : '/signin')}
-                className="w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4.5 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-black text-base sm:text-lg shadow-2xl shadow-brand-600/40 hover:shadow-brand-500/50 hover:-translate-y-1 transition-all cursor-pointer"
+                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-black text-sm sm:text-lg shadow-2xl shadow-brand-600/40 hover:shadow-brand-500/50 hover:-translate-y-1 transition-all cursor-pointer flex-shrink-0"
               >
-                <Globe className="w-6 h-6" />
+                <Globe className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
                 <span>Abrir App no Safari</span>
               </button>
 
@@ -540,9 +539,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
       <footer className="border-t border-white/5 py-8 px-6 bg-[#090d12] text-xs text-gray-500 text-center">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-brand-600 flex items-center justify-center text-white">
-              <Zap className="w-3.5 h-3.5 fill-white" />
-            </div>
+            <ZeroVCLogo className="w-6 h-6 shadow-md shadow-brand-500/25 flex-shrink-0" />
             <span className="font-bold text-white">ZeroVC</span>
             <span>•</span>
             <span>Disponível para Windows, Android e Web</span>

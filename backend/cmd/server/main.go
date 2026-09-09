@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"os"
@@ -150,6 +151,7 @@ func main() {
 	roleHandler := handlers.NewRoleHandler(db, hub)
 	dmHandler := handlers.NewDMHandler(db, hub, livekitService)
 	dmGroupHandler := handlers.NewDMGroupHandler(db, hub, livekitService)
+	linkPreviewHandler := handlers.NewLinkPreviewHandler()
 
 	uploadDir := getEnv("UPLOAD_DIR", "./assets")
 	uploadHandler := handlers.NewUploadHandler(uploadDir)
@@ -232,6 +234,9 @@ func main() {
 
 	// Public Invite Preview
 	r.Get("/api/invites/{code}", inviteHandler.GetInvite)
+
+	// Public Link OpenGraph Metadata Preview
+	r.Get("/api/link-preview", linkPreviewHandler.GetMetadata)
 
 	// Protected API Routes
 	r.Group(func(r chi.Router) {
@@ -430,9 +435,11 @@ func main() {
 		http.StripPrefix("/downloads/", http.FileServer(http.Dir(downloadsDir))).ServeHTTP(w, r)
 	})
 
-	// 8. Serve Web Application (Single Page Application)
+	// 8. Serve Web Application (Single Page Application com SSR de Meta Tags para Discord / WhatsApp / Twitter)
 	if _, err := os.Stat(webDir); err == nil {
 		fileServer := http.FileServer(http.Dir(webDir))
+		indexHTMLPath := filepath.Join(webDir, "index.html")
+
 		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 			path := r.URL.Path
 			if strings.HasPrefix(path, "/api") || path == "/ws" || path == "/health" {
@@ -446,7 +453,57 @@ func main() {
 				return
 			}
 
-			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+			// Read index.html
+			rawIndex, err := os.ReadFile(indexHTMLPath)
+			if err != nil {
+				http.ServeFile(w, r, indexHTMLPath)
+				return
+			}
+
+			htmlStr := string(rawIndex)
+
+			// 1. Dynamic Server Invite Meta Tags: /invite/:code or /invites/:code
+			trimmedPath := strings.Trim(path, "/")
+			segments := strings.Split(trimmedPath, "/")
+			if len(segments) >= 2 && (segments[0] == "invite" || segments[0] == "invites") && len(segments[1]) == 10 {
+				code := segments[1]
+				var guildName string
+				var guildIcon *string
+				var memberCount int
+				q := `
+					SELECT g.name, g.icon_url, (SELECT COUNT(*) FROM guild_members gm WHERE gm.guild_id = g.id)
+					FROM guild_invites gi
+					INNER JOIN guilds g ON g.id = gi.guild_id
+					WHERE gi.code = $1
+				`
+				if err := db.Pool.QueryRow(r.Context(), q, code).Scan(&guildName, &guildIcon, &memberCount); err == nil {
+					inviteTitle := fmt.Sprintf("Você foi convidado para participar do servidor %s no ZeroVC!", guildName)
+					inviteDesc := fmt.Sprintf("Junte-se a %d membros no servidor %s. Converse por voz, vídeo e texto com latência zero.", memberCount, guildName)
+					inviteImg := "https://zerovc.safiroko.xyz/icon.png"
+					if guildIcon != nil && *guildIcon != "" {
+						if strings.HasPrefix(*guildIcon, "http") {
+							inviteImg = *guildIcon
+						} else {
+							inviteImg = fmt.Sprintf("https://zerovc.safiroko.xyz%s", *guildIcon)
+						}
+					}
+
+					// Replace OpenGraph & Twitter tags
+					htmlStr = strings.ReplaceAll(htmlStr, "<title>ZeroVC — Voz, Vídeo e Mensagens em Tempo Real</title>", fmt.Sprintf("<title>%s — Convite ZeroVC</title>", html.EscapeString(guildName)))
+					htmlStr = strings.ReplaceAll(htmlStr, `content="ZeroVC — Voz, Vídeo e Mensagens em Tempo Real"`, fmt.Sprintf(`content="%s"`, html.EscapeString(inviteTitle)))
+					htmlStr = strings.ReplaceAll(htmlStr, `content="Comunicação por voz, vídeo e texto ultrarrápida, moderna e sem limites para suas comunidades e amigos."`, fmt.Sprintf(`content="%s"`, html.EscapeString(inviteDesc)))
+					htmlStr = strings.ReplaceAll(htmlStr, `content="https://zerovc.safiroko.xyz/icon.png"`, fmt.Sprintf(`content="%s"`, html.EscapeString(inviteImg)))
+				}
+			} else if trimmedPath == "download" {
+				downloadTitle := "Baixar o ZeroVC para Windows — Cliente Desktop Oficial"
+				downloadDesc := "Baixe o aplicativo desktop oficial do ZeroVC com suporte a Push-to-Talk global, overlay de tela e máxima performance."
+				htmlStr = strings.ReplaceAll(htmlStr, "<title>ZeroVC — Voz, Vídeo e Mensagens em Tempo Real</title>", "<title>Baixar ZeroVC para Windows — Cliente Desktop</title>")
+				htmlStr = strings.ReplaceAll(htmlStr, `content="ZeroVC — Voz, Vídeo e Mensagens em Tempo Real"`, fmt.Sprintf(`content="%s"`, downloadTitle))
+				htmlStr = strings.ReplaceAll(htmlStr, `content="Comunicação por voz, vídeo e texto ultrarrápida, moderna e sem limites para suas comunidades e amigos."`, fmt.Sprintf(`content="%s"`, downloadDesc))
+			}
+
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Write([]byte(htmlStr))
 		})
 		log.Printf("[ZeroVC] Web App enabled: serving from %s", webDir)
 	} else {

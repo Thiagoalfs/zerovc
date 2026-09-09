@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff } from 'lucide-react';
+import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff, MonitorOff } from 'lucide-react';
 import { Channel, User } from '../../types';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { ParticipantCard } from './ParticipantCard';
+import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
 interface VoiceRoomProps {
   channel: Channel;
@@ -22,6 +23,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
   const {
     isConnected,
     isConnecting,
+    currentChannelId,
+    joinVoice,
     isMuted,
     isDeafened,
     isScreensharing,
@@ -31,16 +34,25 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     toggleDeafen,
     toggleCamera,
     leaveVoice,
-    startScreenShare,
     stopScreenShare,
   } = useVoiceStore();
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+  const isConnectedToThisChannel = isConnected && currentChannelId === channel.id;
+
+  const stageRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = stageRef.current;
     if (!el) return;
+
+    const updateDimensions = () => {
+      const rect = el.getBoundingClientRect();
+      setDimensions({ width: rect.width, height: rect.height });
+    };
+
+    updateDimensions();
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -53,9 +65,34 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     return () => observer.disconnect();
   }, []);
 
-  const handleScreenShareClick = () => {
+  const handleScreenShareClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (isScreensharing) {
-      stopScreenShare();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const items: ContextMenuItem[] = [
+        {
+          id: 'switch-screen',
+          label: 'Trocar tela',
+          icon: <Monitor className="w-4 h-4" />,
+          onClick: () => {
+            onOpenScreenShare();
+          },
+        },
+        {
+          id: 'stop-screen',
+          label: 'Parar compartilhamento',
+          variant: 'danger',
+          onClick: () => {
+            stopScreenShare();
+          },
+        },
+      ];
+      openContextMenu(
+        { clientX: rect.left + rect.width / 2, clientY: rect.top - 10 },
+        items,
+        'Transmissão de Tela'
+      );
     } else {
       onOpenScreenShare();
     }
@@ -68,14 +105,22 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
       return { cardWidth: 0, cardHeight: 0, rows: [] };
     }
 
+    const hasAnyVideo = participants.some(
+      (p) =>
+        p.isScreenShareEnabled ||
+        p.isCameraEnabled ||
+        !!p.getTrackPublication('screen_share' as any)?.track ||
+        !!p.getTrackPublication('camera' as any)?.track
+    );
+
     const W = dimensions.width;
     const H = dimensions.height;
-    const gap = W < 640 ? 8 : 16;
-    const paddingX = W < 640 ? 12 : 24;
-    const paddingY = H < 640 ? 12 : 24;
+    const gap = count > 1 ? (W < 640 ? 8 : 14) : 0;
+    const paddingX = W < 640 ? 8 : 16;
+    const paddingY = H < 640 ? 8 : 16;
 
-    const availableW = Math.max(80, W - paddingX * 2);
-    const availableH = Math.max(80, H - paddingY * 2);
+    const availableW = Math.max(60, W - paddingX * 2);
+    const availableH = Math.max(60, H - paddingY * 2);
     const targetAspect = 16 / 9;
 
     let bestCols = 1;
@@ -97,6 +142,20 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
       if (h > slotH) {
         h = slotH;
         w = h * targetAspect;
+      }
+
+      // If single participant without video, cap size so it doesn't blow up full screen
+      if (count === 1 && !hasAnyVideo) {
+        const maxW = Math.min(500, availableW);
+        const maxH = Math.min(300, availableH);
+        if (w > maxW) {
+          w = maxW;
+          h = w / targetAspect;
+        }
+        if (h > maxH) {
+          h = maxH;
+          w = h * targetAspect;
+        }
       }
 
       const area = w * h;
@@ -122,7 +181,9 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
   }, [participants, dimensions]);
 
   return (
-    <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden select-none">
+    <div
+      className="flex-1 w-full min-w-0 bg-background-dark flex flex-col h-full overflow-hidden select-none"
+    >
       {/* Voice Room Header */}
       <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10 flex-shrink-0">
         <div className="flex items-center gap-2.5 md:gap-2 truncate">
@@ -143,8 +204,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
       {/* Main Voice / Video Dynamic Stage (Strictly fits without scrollbars) */}
       <div
-        ref={containerRef}
-        className="flex-1 min-h-0 min-w-0 flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden relative"
+        ref={stageRef}
+        className="flex-1 min-h-0 min-w-0 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative"
       >
         {isConnecting ? (
           <div className="flex flex-col items-center gap-3 text-gray-400">
@@ -157,11 +218,11 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
             <span className="text-sm">Nenhum participante conectado</span>
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 sm:gap-3 md:gap-4 overflow-hidden">
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 sm:gap-3 overflow-hidden">
             {stageLayout.rows.map((row, rIdx) => (
               <div
                 key={rIdx}
-                className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4 flex-shrink-0"
+                className="flex items-center justify-center gap-2 sm:gap-3 flex-shrink-0"
                 style={{
                   height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
                 }}
@@ -173,6 +234,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                     style={{
                       width: stageLayout.cardWidth > 0 ? `${stageLayout.cardWidth}px` : 'auto',
                       height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
+                      maxWidth: '100%',
+                      maxHeight: '100%',
                     }}
                   >
                     <ParticipantCard
@@ -190,71 +253,96 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
       {/* Floating Bottom Voice Controls */}
       <div className="p-3 md:p-4 flex justify-center bg-background-darker/80 backdrop-blur-md border-t border-black/20">
-        <div className="bg-background-darkest/95 px-4 md:px-6 py-2 rounded-2xl shadow-2xl flex items-center gap-3 md:gap-4 border border-white/10">
-          {/* Mute Mic */}
-          <button
-            onClick={toggleMute}
-            className={`p-2.5 md:p-3 rounded-full transition-all ${
-              isMuted
-                ? 'bg-dnd text-white hover:bg-dnd/80'
-                : 'bg-background-light text-gray-200 hover:bg-white/20'
-            }`}
-            title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
-          >
-            {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
+        {isConnectedToThisChannel ? (
+          <div className="bg-background-darkest/95 px-4 md:px-6 py-2 rounded-2xl shadow-2xl flex items-center gap-3 md:gap-4 border border-white/10">
+            {/* Mute Mic */}
+            <button
+              onClick={toggleMute}
+              className={`p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
+                isMuted
+                  ? 'bg-dnd text-white hover:bg-dnd/80'
+                  : 'bg-background-light text-gray-200 hover:bg-white/20'
+              }`}
+              title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
+            >
+              {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
 
-          {/* Deafen */}
-          <button
-            onClick={toggleDeafen}
-            className={`p-2.5 md:p-3 rounded-full transition-all ${
-              isDeafened
-                ? 'bg-dnd text-white hover:bg-dnd/80'
-                : 'bg-background-light text-gray-200 hover:bg-white/20'
-            }`}
-            title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
-          >
-            <Headphones className="w-5 h-5" />
-          </button>
+            {/* Deafen */}
+            <button
+              onClick={toggleDeafen}
+              className={`p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
+                isDeafened
+                  ? 'bg-dnd text-white hover:bg-dnd/80'
+                  : 'bg-background-light text-gray-200 hover:bg-white/20'
+              }`}
+              title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
+            >
+              <Headphones className="w-5 h-5" />
+            </button>
 
-          {/* Camera WebCam */}
-          <button
-            onClick={toggleCamera}
-            className={`p-2.5 md:p-3 rounded-full transition-all ${
-              isCameraOn
-                ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
-                : 'bg-background-light text-gray-200 hover:bg-white/20'
-            }`}
-            title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
-          >
-            {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-          </button>
+            {/* Camera WebCam */}
+            <button
+              onClick={toggleCamera}
+              className={`p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
+                isCameraOn
+                  ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
+                  : 'bg-background-light text-gray-200 hover:bg-white/20'
+              }`}
+              title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
+            >
+              {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+            </button>
 
-          {/* Screen Share */}
-          <button
-            onClick={handleScreenShareClick}
-            className={`hidden md:flex p-2.5 md:p-3 rounded-full transition-all ${
-              isScreensharing
-                ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
-                : 'bg-background-light text-gray-200 hover:bg-white/20'
-            }`}
-            title={isScreensharing ? 'Parar Compartilhamento de Tela' : 'Compartilhar Tela'}
-          >
-            <Monitor className="w-5 h-5" />
-          </button>
+            {/* Screen Share */}
+            <button
+              onClick={handleScreenShareClick}
+              className={`hidden md:flex p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
+                isScreensharing
+                  ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
+                  : 'bg-background-light text-gray-200 hover:bg-white/20'
+              }`}
+              title={isScreensharing ? 'Opções de Compartilhamento de Tela' : 'Compartilhar Tela'}
+            >
+              <Monitor className="w-5 h-5" />
+            </button>
 
-          <div className="w-[1px] h-7 bg-white/10 mx-0.5" />
+            <div className="w-[1px] h-7 bg-white/10 mx-0.5" />
 
-          {/* Disconnect */}
-          <button
-            onClick={leaveVoice}
-            className="p-2.5 md:p-3 rounded-full bg-dnd/20 text-dnd hover:bg-dnd hover:text-white transition-all"
-            title="Desconectar da Sala"
-          >
-            <PhoneOff className="w-5 h-5" />
-          </button>
-        </div>
+            {/* Disconnect */}
+            <button
+              onClick={leaveVoice}
+              className="p-2.5 md:p-3 rounded-full bg-dnd/20 text-dnd hover:bg-dnd hover:text-white transition-all cursor-pointer"
+              title="Desconectar da Sala"
+            >
+              <PhoneOff className="w-5 h-5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => joinVoice(channel.id)}
+              disabled={isConnecting}
+              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold text-sm px-6 py-2.5 rounded-xl shadow-lg hover:shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              {isConnecting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Conectando...</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-4 h-4" />
+                  <span>Conectar à Voz</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Context Menu Component */}
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
     </div>
   );
 };
