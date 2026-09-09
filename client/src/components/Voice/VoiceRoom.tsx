@@ -40,12 +40,19 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const isConnectedToThisChannel = isConnected && currentChannelId === channel.id;
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = stageRef.current;
     if (!el) return;
+
+    const updateDimensions = () => {
+      const rect = el.getBoundingClientRect();
+      setDimensions({ width: rect.width, height: rect.height });
+    };
+
+    updateDimensions();
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -59,6 +66,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
   }, []);
 
   const handleScreenShareClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (isScreensharing) {
       const rect = e.currentTarget.getBoundingClientRect();
       const items: ContextMenuItem[] = [
@@ -80,7 +89,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
         },
       ];
       openContextMenu(
-        { clientX: rect.left + rect.width / 2, clientY: rect.top - 10 } as any,
+        { clientX: rect.left + rect.width / 2, clientY: rect.top - 10 },
         items,
         'Transmissão de Tela'
       );
@@ -96,14 +105,22 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
       return { cardWidth: 0, cardHeight: 0, rows: [] };
     }
 
+    const hasAnyVideo = participants.some(
+      (p) =>
+        p.isScreenShareEnabled ||
+        p.isCameraEnabled ||
+        !!p.getTrackPublication('screen_share' as any)?.track ||
+        !!p.getTrackPublication('camera' as any)?.track
+    );
+
     const W = dimensions.width;
     const H = dimensions.height;
-    const gap = W < 640 ? 8 : 16;
-    const paddingX = W < 640 ? 12 : 24;
-    const paddingY = H < 640 ? 12 : 24;
+    const gap = count > 1 ? (W < 640 ? 8 : 14) : 0;
+    const paddingX = W < 640 ? 8 : 16;
+    const paddingY = H < 640 ? 8 : 16;
 
-    const availableW = Math.max(80, W - paddingX * 2);
-    const availableH = Math.max(80, H - paddingY * 2);
+    const availableW = Math.max(60, W - paddingX * 2);
+    const availableH = Math.max(60, H - paddingY * 2);
     const targetAspect = 16 / 9;
 
     let bestCols = 1;
@@ -125,6 +142,20 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
       if (h > slotH) {
         h = slotH;
         w = h * targetAspect;
+      }
+
+      // If single participant without video, cap size so it doesn't blow up full screen
+      if (count === 1 && !hasAnyVideo) {
+        const maxW = Math.min(500, availableW);
+        const maxH = Math.min(300, availableH);
+        if (w > maxW) {
+          w = maxW;
+          h = w / targetAspect;
+        }
+        if (h > maxH) {
+          h = maxH;
+          w = h * targetAspect;
+        }
       }
 
       const area = w * h;
@@ -151,7 +182,6 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
   return (
     <div
-      ref={containerRef}
       className="flex-1 w-full min-w-0 bg-background-dark flex flex-col h-full overflow-hidden select-none"
     >
       {/* Voice Room Header */}
@@ -174,8 +204,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
       {/* Main Voice / Video Dynamic Stage (Strictly fits without scrollbars) */}
       <div
-        ref={containerRef}
-        className="flex-1 min-h-0 min-w-0 flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden relative"
+        ref={stageRef}
+        className="flex-1 min-h-0 min-w-0 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative"
       >
         {isConnecting ? (
           <div className="flex flex-col items-center gap-3 text-gray-400">
@@ -188,11 +218,11 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
             <span className="text-sm">Nenhum participante conectado</span>
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 sm:gap-3 md:gap-4 overflow-hidden">
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 sm:gap-3 overflow-hidden">
             {stageLayout.rows.map((row, rIdx) => (
               <div
                 key={rIdx}
-                className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4 flex-shrink-0"
+                className="flex items-center justify-center gap-2 sm:gap-3 flex-shrink-0"
                 style={{
                   height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
                 }}
@@ -204,6 +234,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                     style={{
                       width: stageLayout.cardWidth > 0 ? `${stageLayout.cardWidth}px` : 'auto',
                       height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
+                      maxWidth: '100%',
+                      maxHeight: '100%',
                     }}
                   >
                     <ParticipantCard

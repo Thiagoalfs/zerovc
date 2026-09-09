@@ -59,6 +59,8 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   };
 
   const handleScreenShareClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (isScreensharing) {
       const rect = e.currentTarget.getBoundingClientRect();
       const items: ContextMenuItem[] = [
@@ -80,7 +82,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         },
       ];
       openContextMenu(
-        { clientX: rect.left, clientY: rect.top - 10 } as any,
+        { clientX: rect.left, clientY: rect.top - 10 },
         items,
         'Transmissão de Tela'
       );
