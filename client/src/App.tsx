@@ -67,6 +67,7 @@ export const App: React.FC = () => {
     leaveVoice,
   } = useVoiceStore();
   const { addMessage: addDMMessage } = useDMStore();
+  const channelListWidth = useSettingsStore((s) => s.channelListWidth);
 
   const [isHomeActive, setIsHomeActive] = useState(true);
   const [homeView, setHomeView] = useState<'friends' | 'dm' | 'group'>('friends');
@@ -1139,8 +1140,10 @@ export const App: React.FC = () => {
         {/* 1 & 2. Sidebars */}
         <div
           style={{
+            width: typeof window !== 'undefined' && window.innerWidth < 768 ? undefined : `${72 + channelListWidth}px`,
+            maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? undefined : `${72 + channelListWidth}px`,
             transform:
-              dragState?.drawer === 'left' && dragState.offset !== undefined
+              dragState?.drawer === 'left'
                 ? `translateX(${dragState.offset}px)`
                 : undefined,
             transition:
@@ -1149,7 +1152,7 @@ export const App: React.FC = () => {
                 : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
             paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
           }}
-          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex-shrink-0 flex flex-col h-full w-full md:w-auto bg-background-darkest ${
+          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex-shrink-0 flex flex-col h-full w-full md:w-auto min-w-0 overflow-hidden bg-background-darkest ${
             dragState?.drawer === 'left'
               ? ''
               : isMobileDrawerOpen
