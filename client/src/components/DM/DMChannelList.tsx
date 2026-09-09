@@ -221,8 +221,8 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
         className="bg-background-darker flex flex-col h-full select-none border-r border-black/20 relative flex-1 md:flex-none"
       >
         {/* Header */}
-        <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm">
-          <span className="font-bold text-gray-100 text-sm">Mensagens Diretas</span>
+        <div className="h-14 md:h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm flex-shrink-0">
+          <span className="font-bold text-gray-100 text-[17px] md:text-sm">Mensagens Diretas</span>
         </div>
 
         {/* Friends Button */}
