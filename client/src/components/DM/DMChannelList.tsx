@@ -229,13 +229,13 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
         <div className="p-3 pb-1">
           <button
             onClick={handleSelectFriends}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[15px] font-semibold transition-colors cursor-pointer min-h-[42px] ${
+            className={`w-full flex items-center gap-3 px-3.5 py-3 md:py-2.5 rounded-xl text-[16px] md:text-[15px] font-semibold transition-colors cursor-pointer min-h-[46px] md:min-h-[42px] ${
               currentView === 'friends'
                 ? 'bg-brand-500 text-white shadow-md'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
             }`}
           >
-            <Users className="w-5 h-5 flex-shrink-0" />
+            <Users className="w-5.5 h-5.5 md:w-5 md:h-5 flex-shrink-0" />
             <span>Amigos</span>
           </button>
         </div>
@@ -267,17 +267,17 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                     <button
                       key={group.id}
                       onClick={() => handleSelectGroup(group)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer min-h-[44px] ${
+                      className={`w-full flex items-center gap-3 px-3.5 py-3 md:py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer min-h-[48px] md:min-h-[44px] ${
                         isSelected
                           ? 'bg-white/10 text-white shadow-sm'
                           : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                       }`}
                     >
-                      <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                        <Users className="w-4 h-4" />
+                      <div className="w-9 h-9 md:w-8 md:h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                        <Users className="w-4.5 h-4.5 md:w-4 md:h-4" />
                       </div>
                       <div className="flex flex-col text-left truncate flex-1 min-w-0">
-                        <span className="text-gray-100 text-[15px] font-medium truncate">{groupDisplayName}</span>
+                        <span className="text-gray-100 text-[16px] md:text-[15px] font-semibold md:font-medium truncate">{groupDisplayName}</span>
                         <span className="text-xs text-gray-400 truncate">
                           {group.members?.length || 0} membros
                         </span>
@@ -311,7 +311,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                       key={room.id}
                       onClick={() => handleSelectRoom(room)}
                       onContextMenu={(e) => handleUserContextMenu(e, recipient, room.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer min-h-[44px] ${
+                      className={`w-full flex items-center gap-3 px-3.5 py-3 md:py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer min-h-[48px] md:min-h-[44px] ${
                         isSelected
                           ? 'bg-white/10 text-white shadow-sm'
                           : unreadCount > 0
@@ -319,7 +319,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                           : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                       }`}
                     >
-                      <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                      <div className="relative w-9 h-9 md:w-8 md:h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
                         {recipient?.avatar_url ? (
                           <img src={formatAssetUrl(recipient.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                         ) : (
@@ -329,13 +329,13 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                       </div>
 
                       <div className="flex items-center text-left truncate flex-1 min-w-0">
-                        <span className={`truncate text-[15px] font-medium ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
+                        <span className={`truncate text-[16px] md:text-[15px] font-semibold md:font-medium ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
                           {recipient?.display_name || recipient?.username}
                         </span>
                       </div>
 
                       {unreadCount > 0 && !isSelected && (
-                        <div className="ml-1 px-1.5 py-0.5 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
+                        <div className="ml-1 px-1.5 py-0.5 min-w-[20px] h-[20px] md:min-w-[18px] md:h-[18px] bg-dnd text-white text-[11px] md:text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
                           {unreadCount > 99 ? '99+' : unreadCount}
                         </div>
                       )}
