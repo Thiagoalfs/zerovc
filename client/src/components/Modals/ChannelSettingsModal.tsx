@@ -304,9 +304,9 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 overflow-hidden animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-0 md:p-4 overflow-hidden animate-in fade-in duration-150"
     >
-      <div className="bg-background-darkest w-full max-w-2xl max-h-[92dvh] my-auto flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95">
+      <div className="bg-background-darkest w-full h-full md:max-w-2xl md:h-auto md:max-h-[92dvh] md:my-auto flex flex-col rounded-none md:rounded-3xl overflow-hidden shadow-2xl border-0 md:border md:border-white/10 animate-in fade-in zoom-in-95">
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 bg-background-darker/60 flex-shrink-0">
           <div className="flex items-center gap-2.5">

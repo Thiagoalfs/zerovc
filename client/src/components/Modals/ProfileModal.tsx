@@ -39,6 +39,7 @@ import {
   Moon,
   VolumeX,
   ChevronDown,
+  ChevronRight,
   Brain,
   Globe,
   Activity,
@@ -82,6 +83,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [activeTab, setActiveTab] = useState<
     'account' | 'profile' | 'privacy' | 'appearance' | 'audio' | 'notifications' | 'preferences' | 'keybinds'
   >('account');
+
+  // Mobile full-screen drilldown navigation state ('menu' -> 'content')
+  const [mobileView, setMobileView] = useState<'menu' | 'content'>('menu');
+
+  useEffect(() => {
+    if (isOpen) {
+      setMobileView('menu');
+    }
+  }, [isOpen]);
 
   // Crop Modal State
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -670,14 +680,244 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-2 sm:p-4 overflow-hidden animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-0 md:p-4 overflow-hidden animate-in fade-in"
     >
-      {/* Unified Fixed Container */}
-      <div className="bg-background-dark w-full max-w-5xl h-[92dvh] md:h-[680px] max-h-[92dvh] my-auto rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row relative animate-in zoom-in-95">
-        {/* Left Sidebar */}
-        <div className="w-full md:w-60 bg-background-darker p-3 md:p-4 flex flex-row md:flex-col justify-between border-b md:border-b-0 md:border-r border-white/5 flex-shrink-0 overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar touch-pan-x">
-          <div className="flex flex-row md:flex-col items-center md:items-stretch gap-1.5 md:gap-1 flex-shrink-0">
-            <span className="hidden md:block text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-2">
+      {/* Unified Fixed Container (Full-screen on mobile, centered card on desktop) */}
+      <div className="bg-background-dark w-full h-full md:max-w-5xl md:h-[680px] md:max-h-[92dvh] md:my-auto md:rounded-3xl rounded-none overflow-hidden shadow-2xl border-0 md:border md:border-white/10 flex flex-col md:flex-row relative animate-in zoom-in-95">
+        
+        {/* ======================================================== */}
+        {/* MOBILE MENU VIEW (Visible only on mobile when mobileView === 'menu') */}
+        {/* ======================================================== */}
+        {mobileView === 'menu' && (
+          <div className="flex md:hidden flex-col w-full h-full bg-background-dark overflow-hidden">
+            {/* Mobile Header */}
+            <div className="px-4 py-3.5 border-b border-white/5 bg-background-darker/70 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors"
+                  title="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <h2 className="text-base font-bold text-white">Configurações</h2>
+              </div>
+            </div>
+
+            {/* Mobile Navigation List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y no-scrollbar">
+              {/* User Mini Profile Card */}
+              <div
+                onClick={() => {
+                  setActiveTab('account');
+                  setMobileView('content');
+                }}
+                className="p-3.5 bg-background-darker rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer active:bg-white/5 transition-colors shadow-sm"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-full bg-brand-500 overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow">
+                    {user.avatar_url ? (
+                      <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-white truncate">{user.display_name || user.username}</h3>
+                    <p className="text-xs text-gray-400 font-mono truncate">@{user.username}</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-500 shrink-0" />
+              </div>
+
+              {/* Group 1: Configurações de Usuário */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
+                  Configurações de Usuário
+                </span>
+                <div className="bg-background-darker rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('account');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Minha Conta</div>
+                        <div className="text-xs text-gray-400">Perfil, avatar, display name, dados</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('privacy');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Shield className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Privacidade e Segurança</div>
+                        <div className="text-xs text-gray-400">E-mail, senha, 2FA, sessões</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Group 2: Configurações do App */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
+                  Configurações do App
+                </span>
+                <div className="bg-background-darker rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('appearance');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Palette className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Aparência</div>
+                        <div className="text-xs text-gray-400">Temas visuais, cores de destaque, densidade</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('audio');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Volume2 className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Voz & Vídeo</div>
+                        <div className="text-xs text-gray-400">Microfone, autofalante, câmera, VAD</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('notifications');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Bell className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Notificações & Sons</div>
+                        <div className="text-xs text-gray-400">Sons do sistema, alertas na área de trabalho</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('preferences');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Sliders className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Preferências</div>
+                        <div className="text-xs text-gray-400">Configurações de sistema e comportamento</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('keybinds');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Keyboard className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Atalhos do Teclado</div>
+                        <div className="text-xs text-gray-400">Push-to-Talk e atalhos rápidos</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Group 3: Sair da Conta */}
+              <div className="pt-2">
+                <div className="bg-background-darker rounded-2xl border border-white/5 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-red-500/10 active:bg-red-500/20 text-red-400 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-red-500/10 text-red-400">
+                        <LogOut className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold">Sair da Conta</div>
+                        <div className="text-xs text-red-400/70">Desconectar desta sessão</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-red-400/50 shrink-0" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* DESKTOP SIDEBAR (Visible on md: and above) */}
+        {/* ======================================================== */}
+        <div className="hidden md:flex w-60 bg-background-darker p-4 flex-col justify-between border-r border-white/5 flex-shrink-0">
+          <div className="flex flex-col items-stretch gap-1 flex-shrink-0">
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-2">
               Configurações de Usuário
             </span>
 
@@ -685,7 +925,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('account')}
-              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'account'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -699,7 +939,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('privacy')}
-              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'privacy'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -709,7 +949,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <span>Privacidade e Segurança</span>
             </button>
 
-            <span className="hidden md:block text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 pt-2">
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 pt-2">
               Configurações do App
             </span>
 
@@ -717,7 +957,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('appearance')}
-              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'appearance'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -731,7 +971,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('audio')}
-              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'audio'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -745,7 +985,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('notifications')}
-              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'notifications'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -759,7 +999,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('preferences')}
-              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'preferences'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -773,7 +1013,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => setActiveTab('keybinds')}
-              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer flex-shrink-0 whitespace-nowrap ${
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'keybinds'
                   ? 'bg-brand-500 text-white shadow-md'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
@@ -785,7 +1025,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           </div>
 
           {/* Bottom Logout */}
-          <div className="pt-0 md:pt-3 border-t-0 md:border-t border-white/5 flex-shrink-0">
+          <div className="pt-3 border-t border-white/5 flex-shrink-0">
             <button
               type="button"
               onClick={logout}
@@ -797,10 +1037,45 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           </div>
         </div>
 
-        {/* Right Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-background-dark/95">
-          {/* Top Bar with Title and Close Button */}
-          <div className="min-h-14 sm:h-16 px-4 sm:px-6 py-2 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+        {/* ======================================================== */}
+        {/* MAIN CONTENT AREA (Visible on desktop OR on mobile when mobileView === 'content') */}
+        {/* ======================================================== */}
+        <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 overflow-hidden bg-background-dark/95`}>
+          
+          {/* Mobile Drilldown Top Bar (Back Arrow + Title + Close) */}
+          <div className="flex md:hidden items-center justify-between px-4 py-3.5 border-b border-white/5 bg-background-darker/70 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMobileView('menu')}
+                className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span>Voltar</span>
+              </button>
+            </div>
+            <h2 className="text-sm font-bold text-white truncate max-w-[180px]">
+              {activeTab === 'account' && 'Minha Conta'}
+              {activeTab === 'profile' && 'Perfil de Usuário'}
+              {activeTab === 'privacy' && 'Privacidade'}
+              {activeTab === 'appearance' && 'Aparência'}
+              {activeTab === 'audio' && 'Voz & Vídeo'}
+              {activeTab === 'notifications' && 'Notificações'}
+              {activeTab === 'preferences' && 'Preferências'}
+              {activeTab === 'keybinds' && 'Atalhos'}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors"
+              title="Fechar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Desktop Top Bar with Title and Close Button */}
+          <div className="hidden md:flex min-h-14 sm:h-16 px-4 sm:px-6 py-2 border-b border-white/5 items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
               {activeTab === 'profile' && (
                 <button
