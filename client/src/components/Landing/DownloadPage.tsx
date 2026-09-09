@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Zap,
   Download,
   CheckCircle2,
   Monitor,
@@ -540,9 +539,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
       <footer className="border-t border-white/5 py-8 px-6 bg-[#090d12] text-xs text-gray-500 text-center">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-brand-600 flex items-center justify-center text-white">
-              <Zap className="w-3.5 h-3.5 fill-white" />
-            </div>
+            <ZeroVCLogo className="w-6 h-6 shadow-md shadow-brand-500/25 flex-shrink-0" />
             <span className="font-bold text-white">ZeroVC</span>
             <span>•</span>
             <span>Disponível para Windows, Android e Web</span>
