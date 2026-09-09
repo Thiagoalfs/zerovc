@@ -1,0 +1,12 @@
+{
+	"appId": "xyz.safiroko.zerovc",
+	"appName": "ZeroVC",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https",
+		"cleartext": true
+	},
+	"android": {
+		"allowMixedContent": true
+	}
+}
