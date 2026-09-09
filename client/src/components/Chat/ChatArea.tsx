@@ -273,20 +273,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       {/* Center Chat View */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
         {/* Channel Header */}
-        <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
-          <div className="flex items-center gap-2 truncate">
+        <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
+          <div className="flex items-center gap-2.5 md:gap-2 truncate">
             {/* Mobile Hamburger Drawer Toggle */}
             {onOpenMobileDrawer && (
               <button
                 onClick={onOpenMobileDrawer}
-                className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 rounded hover:bg-white/10 transition-colors"
+                className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors"
                 title="Menu de Canais"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="w-5.5 h-5.5" />
               </button>
             )}
-            <Hash className="w-5 h-5 md:w-6 md:h-6 text-gray-400 flex-shrink-0" />
-            <span className="font-bold text-gray-100 truncate text-sm md:text-base">{activeChannel.name}</span>
+            <Hash className="w-5.5 h-5.5 md:w-6 md:h-6 text-gray-400 flex-shrink-0" />
+            <span className="font-bold text-gray-100 truncate text-[17px] md:text-base">{activeChannel.name}</span>
           </div>
 
           {/* Right Header Actions */}
@@ -316,7 +316,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             ) : (
               <button
                 onClick={() => setIsSearchOpen(true)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+                className="p-2 md:p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
                 title="Buscar no canal"
               >
                 <Search className="w-5 h-5" />

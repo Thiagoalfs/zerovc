@@ -626,52 +626,52 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             setDragOverTarget(null);
           }}
           onContextMenu={(e) => handleChannelContextMenu(e, channel)}
-          className={`group flex items-center justify-between px-3 md:px-2.5 py-2.5 md:py-1.5 rounded-xl text-[16px] md:text-[14.5px] min-h-[42px] md:min-h-[34px] transition-all relative ${
+          className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
             isOwner ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
             isDragOver ? 'border-t-2 border-brand-500 bg-brand-500/10' : ''
           } ${
             isActive
-              ? 'bg-background-light text-white font-semibold md:font-medium shadow-sm'
+              ? 'bg-background-light text-white font-medium shadow-sm'
               : isInThisVoice
-              ? 'bg-online/15 text-online font-semibold md:font-medium'
+              ? 'bg-online/15 text-online font-medium'
               : isUnread
-              ? 'text-white font-bold md:font-semibold'
+              ? 'text-white font-semibold'
               : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
           }`}
         >
           {/* Left white indicator dot for unread */}
           {isUnread && (
-            <div className="absolute -left-1 w-1.5 h-3 md:h-2.5 rounded-r-full bg-white shadow-sm" />
+            <div className="absolute -left-1 w-1.5 h-2 rounded-r-full bg-white shadow-sm" />
           )}
 
           {/* Drag Handle icon for owner */}
           {isOwner && (
-            <GripVertical className="w-4 h-4 md:w-3.5 md:h-3.5 text-gray-500 opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 -ml-0.5 mr-0.5 transition-opacity" />
+            <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 -ml-0.5 mr-0.5 transition-opacity" />
           )}
 
           <button
             onClick={() => (isText ? handleChannelClick(channel) : handleVoiceChannelClick(channel))}
-            className="flex items-center gap-2.5 truncate flex-1 text-left min-w-0 py-0.5"
+            className="flex items-center gap-2 truncate flex-1 text-left min-w-0"
           >
             {isText ? (
-              <Hash className={`w-5 h-5 md:w-4 md:h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
+              <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
             ) : (
               <Volume2
-                className={`w-5 h-5 md:w-4 md:h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400'}`}
+                className={`w-4 h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400'}`}
               />
             )}
-            <span className="truncate font-semibold md:font-medium text-[16px] md:text-[14.5px]">{channel.name}</span>
+            <span className="truncate font-medium">{channel.name}</span>
             {channel.is_private && (
               <span title="Canal Privado">
-                <Lock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 ml-0.5" />
+                <Lock className="w-3 h-3 text-gray-400 flex-shrink-0 ml-0.5" />
               </span>
             )}
           </button>
 
           {/* Mention Badge */}
           {mentionCount > 0 && !isActive && (
-            <div className="ml-1 px-1.5 py-0.5 min-w-[20px] h-[20px] md:min-w-[18px] md:h-[18px] bg-dnd text-white text-[11px] md:text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
+            <div className="ml-1 px-1.5 py-0.5 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
               {mentionCount > 99 ? '99+' : mentionCount}
             </div>
           )}

@@ -124,19 +124,19 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
   return (
     <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden select-none">
       {/* Voice Room Header */}
-      <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10 flex-shrink-0">
-        <div className="flex items-center gap-2 truncate">
+      <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10 flex-shrink-0">
+        <div className="flex items-center gap-2.5 md:gap-2 truncate">
           {onOpenMobileDrawer && (
             <button
               onClick={onOpenMobileDrawer}
-              className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 rounded hover:bg-white/10 transition-colors"
+              className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors"
               title="Menu de Canais"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-5.5 h-5.5" />
             </button>
           )}
-          <Volume2 className="w-5 h-5 md:w-6 md:h-6 text-online flex-shrink-0" />
-          <span className="font-bold text-gray-100 truncate text-sm md:text-base">{channel.name}</span>
+          <Volume2 className="w-5.5 h-5.5 md:w-6 md:h-6 text-online flex-shrink-0" />
+          <span className="font-bold text-gray-100 truncate text-[17px] md:text-base">{channel.name}</span>
           <span className="text-xs text-gray-400">({participants.length})</span>
         </div>
       </div>

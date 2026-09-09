@@ -400,21 +400,21 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
       <ActiveCallOverlay />
 
-      <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
+      <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
         <div className="flex items-center gap-2.5 truncate">
           {onOpenMobileDrawer && (
             <button
               onClick={onOpenMobileDrawer}
-              className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
+              className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
               title="Menu Lateral"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-5.5 h-5.5" />
             </button>
           )}
 
           <div
             onClick={() => recipient && onOpenUserProfile?.(recipient)}
-            className="relative w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 cursor-pointer hover:opacity-85 transition-opacity"
+            className="relative w-8 h-8 md:w-7 md:h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 cursor-pointer hover:opacity-85 transition-opacity"
             title="Ver perfil"
           >
             {recipient?.avatar_url ? (
@@ -422,7 +422,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             ) : (
               <span>{recipient?.display_name?.[0]?.toUpperCase() || recipient?.username[0]?.toUpperCase() || 'U'}</span>
             )}
-            <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-background-dark ${getStatusColor(recipient?.status)}`} />
+            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 md:w-2.5 md:h-2.5 rounded-full border border-background-dark ${getStatusColor(recipient?.status)}`} />
           </div>
 
           <div
@@ -430,7 +430,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             className="flex items-baseline gap-1.5 truncate cursor-pointer group"
             title="Ver perfil"
           >
-            <span className="font-bold text-gray-100 text-sm md:text-base truncate group-hover:text-brand-400 transition-colors">
+            <span className="font-bold text-gray-100 text-[17px] md:text-base truncate group-hover:text-brand-400 transition-colors">
               {recipient?.display_name || recipient?.username}
             </span>
             <span className="text-xs text-gray-400 truncate">@{recipient?.username}</span>
@@ -441,7 +441,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           <button
             onClick={handleStartCall}
             disabled={callState !== 'idle'}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-online hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
+            className="p-2 md:p-1.5 rounded-lg text-gray-400 hover:text-online hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
             title="Iniciar Chamada de Voz/Vídeo"
           >
             <Phone className="w-5 h-5" />

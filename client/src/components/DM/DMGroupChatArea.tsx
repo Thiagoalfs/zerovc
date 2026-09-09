@@ -370,24 +370,24 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       )}
 
       {/* Group Header */}
-      <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
+      <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
         <div className="flex items-center gap-2.5 truncate">
           {onOpenMobileDrawer && (
             <button
               onClick={onOpenMobileDrawer}
-              className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
+              className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
               title="Menu Lateral"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-5.5 h-5.5" />
             </button>
           )}
 
-          <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-            <Users className="w-4 h-4" />
+          <div className="w-8 h-8 md:w-7 md:h-7 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+            <Users className="w-4.5 h-4.5 md:w-4 md:h-4" />
           </div>
 
           <div className="flex items-baseline gap-2 truncate">
-            <span className="font-bold text-gray-100 text-sm md:text-base truncate">{groupName}</span>
+            <span className="font-bold text-gray-100 text-[17px] md:text-base truncate">{groupName}</span>
             <span className="text-xs text-gray-400 truncate hidden sm:inline">
               {activeGroup.members?.length || 0} membros
             </span>
