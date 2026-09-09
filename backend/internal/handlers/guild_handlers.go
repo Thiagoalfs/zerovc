@@ -414,6 +414,14 @@ func (h *GuildHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 0. Check if user is banned from this guild
+	var isBanned bool
+	banCheckQuery := `SELECT EXISTS(SELECT 1 FROM guild_bans WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), banCheckQuery, guildID, userID).Scan(&isBanned); err == nil && isBanned {
+		http.Error(w, `{"error":"Você está banido deste servidor"}`, http.StatusForbidden)
+		return
+	}
+
 	query := `
 		INSERT INTO guild_members (guild_id, user_id, role)
 		VALUES ($1, $2, 'member')
@@ -1039,10 +1047,35 @@ func (h *GuildHandler) LogAudit(ctx context.Context, guildID, actorID uuid.UUID,
 		}
 	}
 
-	h.hub.BroadcastToGuild(guildID, models.WSEvent{
-		Type: models.EventAuditLogCreate,
-		Data: entry,
-	})
+	// Broadcast only to users with PermAdministrator or PermManageGuild (or guild owner)
+	rows, err := h.db.Pool.Query(ctx, `
+		SELECT DISTINCT gm.user_id
+		FROM guild_members gm
+		LEFT JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+		LEFT JOIN guild_roles gr ON gr.id = gmr.role_id
+		INNER JOIN guilds g ON g.id = gm.guild_id
+		WHERE gm.guild_id = $1
+		  AND (gm.user_id = g.owner_id OR (gr.permissions & ($2 | $3)) != 0)
+	`, guildID, models.PermAdministrator, models.PermManageGuild)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var allowedIDs []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err == nil {
+			allowedIDs = append(allowedIDs, id)
+		}
+	}
+
+	if len(allowedIDs) > 0 {
+		h.hub.BroadcastToUsers(allowedIDs, models.WSEvent{
+			Type: models.EventAuditLogCreate,
+			Data: entry,
+		})
+	}
 }
 
 func (h *GuildHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {

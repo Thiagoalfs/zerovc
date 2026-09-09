@@ -395,18 +395,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-4">
-      <div className="bg-background-dark w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex h-[620px] animate-in fade-in zoom-in-95 duration-150">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4 overflow-hidden animate-in fade-in duration-150"
+    >
+      <div className="bg-background-dark w-full max-w-3xl h-[92dvh] md:h-[620px] max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-150">
         {/* Left Sidebar Tabs */}
-        <div className="w-56 bg-background-darker p-4 flex flex-col justify-between border-r border-black/20">
-          <div className="space-y-1">
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider px-3 mb-2">
+        <div className="w-full md:w-56 bg-background-darker p-3 md:p-4 flex flex-row md:flex-col justify-between border-b md:border-b-0 md:border-r border-black/20 overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar touch-pan-x flex-shrink-0">
+          <div className="flex flex-row md:flex-col items-center md:items-stretch gap-1.5 md:gap-1 flex-1 flex-shrink-0">
+            <div className="hidden md:block text-xs font-bold text-gray-400 uppercase tracking-wider px-3 mb-2">
               Configurações
             </div>
 
             <button
+              type="button"
               onClick={() => setActiveTab('voice')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'voice' ? 'bg-background-light text-white' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
               }`}
             >
@@ -415,8 +421,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab('account')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'account' ? 'bg-background-light text-white' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
               }`}
             >
@@ -425,8 +432,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab('blocked')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'blocked' ? 'bg-background-light text-white' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
               }`}
             >
@@ -435,8 +443,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab('connection')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-2.5 px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer flex-shrink-0 whitespace-nowrap ${
                 activeTab === 'connection' ? 'bg-background-light text-white' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
               }`}
             >
@@ -447,34 +456,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
           {/* Logout button */}
           <button
+            type="button"
             onClick={() => {
               logout();
               onClose();
             }}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-dnd hover:bg-dnd/10 transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium text-dnd hover:bg-dnd/10 transition-colors cursor-pointer flex-shrink-0 whitespace-nowrap"
           >
             <LogOut className="w-4 h-4" />
-            <span>Sair da Conta</span>
+            <span>Sair</span>
           </button>
         </div>
 
         {/* Right Content Area */}
-        <div className="flex-1 flex flex-col bg-background-dark">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-background-dark">
           {/* Header */}
-          <div className="p-6 pb-2 flex items-center justify-between border-b border-white/5">
-            <h2 className="text-xl font-bold text-white">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 flex-shrink-0">
+            <h2 className="text-base sm:text-xl font-bold text-white truncate">
               {activeTab === 'voice' && 'Configurações de Voz & Áudio'}
               {activeTab === 'account' && 'Conta & Segurança'}
               {activeTab === 'blocked' && 'Usuários Bloqueados'}
               {activeTab === 'connection' && 'Conexão e Servidor'}
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-200 cursor-pointer">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-200 cursor-pointer p-1 rounded-lg hover:bg-white/5 transition-colors"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Body */}
-          <div className="p-6 flex-1 overflow-y-auto no-scrollbar space-y-6">
+          <div className="p-4 sm:p-6 flex-1 overflow-y-auto no-scrollbar space-y-4 sm:space-y-6 min-h-0 overscroll-contain touch-pan-y">
             {activeTab === 'voice' && (
               <div className="space-y-6">
                 {/* Audio Devices */}

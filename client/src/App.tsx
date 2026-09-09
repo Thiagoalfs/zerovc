@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuthStore } from './stores/authStore';
 import { useGuildStore } from './stores/guildStore';
 import { useFriendStore } from './stores/friendStore';
@@ -11,6 +11,7 @@ import { api } from './lib/api';
 import { sendNativeNotification, requestNotificationPermission } from './lib/notifications';
 import { ServerList } from './components/Sidebar/ServerList';
 import { ChannelList } from './components/Sidebar/ChannelList';
+import { UserBar } from './components/Sidebar/UserBar';
 import { DMChannelList } from './components/DM/DMChannelList';
 import { ChatArea } from './components/Chat/ChatArea';
 import { VoiceRoom } from './components/Voice/VoiceRoom';
@@ -24,6 +25,7 @@ import { AuthScreen } from './components/Auth/AuthScreen';
 import { LandingPage } from './components/Landing/LandingPage';
 import { DownloadPage } from './components/Landing/DownloadPage';
 import { CreateServerModal } from './components/Modals/CreateServerModal';
+import { CreateDMGroupModal } from './components/Modals/CreateDMGroupModal';
 import { CreateChannelModal } from './components/Modals/CreateChannelModal';
 import { CreateCategoryModal } from './components/Modals/CreateCategoryModal';
 import { ScreenShareModal } from './components/Modals/ScreenShareModal';
@@ -72,6 +74,7 @@ export const App: React.FC = () => {
 
   // Modals
   const [isCreateServerOpen, setIsCreateServerOpen] = useState(false);
+  const [isCreateDMGroupOpen, setIsCreateDMGroupOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
   const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false);
@@ -100,6 +103,229 @@ export const App: React.FC = () => {
       localStorage.setItem('zerovc_server_members_open', String(open));
     } catch {}
   };
+
+  // Dynamic visual viewport height for mobile browsers (keeps header stuck at top when keyboard opens)
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [viewportTop, setViewportTop] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleViewportChange = () => {
+      if (window.visualViewport) {
+        setViewportHeight(window.visualViewport.height);
+        setViewportTop(window.visualViewport.offsetTop);
+      } else {
+        setViewportHeight(window.innerHeight);
+        setViewportTop(0);
+      }
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    handleViewportChange();
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      window.visualViewport.addEventListener('scroll', handleViewportChange);
+    }
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+        window.visualViewport.removeEventListener('scroll', handleViewportChange);
+      }
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange);
+    };
+  }, []);
+
+  // Mobile swipe & drag gesture state
+  const touchStateRef = useRef<{
+    startX: number;
+    startY: number;
+    startTime: number;
+    initialLeftOpen: boolean;
+    initialRightOpen: boolean;
+    gestureIntent: 'horizontal' | 'vertical' | null;
+    activeDrawer: 'left' | 'right' | null;
+    leftDrawerWidth: number;
+    rightDrawerWidth: number;
+  } | null>(null);
+
+  const [dragState, setDragState] = useState<{
+    drawer: 'left' | 'right';
+    offset: number;
+    progress: number;
+  } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const target = e.target as HTMLElement;
+
+    // Ignore touches starting inside modals, inputs, textareas, sliders, or resizers
+    if (
+      isProfileModalOpen ||
+      isServerSettingsOpen ||
+      isCreateServerOpen ||
+      isCreateDMGroupOpen ||
+      isCreateChannelOpen ||
+      isCreateCategoryOpen ||
+      isInviteModalOpen ||
+      isScreenShareOpen ||
+      selectedUserForProfile ||
+      previewImageUrl ||
+      channelToEdit ||
+      target.closest('.fixed.z-50') ||
+      target.closest('input') ||
+      target.closest('textarea') ||
+      target.closest('input[type=range]') ||
+      target.closest('.cursor-col-resize')
+    ) {
+      return;
+    }
+
+    const startX = e.touches[0].clientX;
+    const startY = e.touches[0].clientY;
+    const winWidth = typeof window !== 'undefined' ? window.innerWidth : 360;
+    const leftWidth = winWidth; // Full width on mobile
+    const rightWidth = winWidth; // Full width on mobile
+
+    touchStateRef.current = {
+      startX,
+      startY,
+      startTime: Date.now(),
+      initialLeftOpen: isMobileDrawerOpen,
+      initialRightOpen: Boolean(isMemberListOpen && !isHomeActive && activeGuild),
+      gestureIntent: null,
+      activeDrawer: null,
+      leftDrawerWidth: leftWidth,
+      rightDrawerWidth: rightWidth,
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStateRef.current || e.touches.length !== 1) return;
+
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - touchStateRef.current.startX;
+    const deltaY = currentY - touchStateRef.current.startY;
+
+    // Detect gesture intent if not locked yet
+    if (!touchStateRef.current.gestureIntent) {
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      if (absY > 7 && absY >= absX) {
+        touchStateRef.current.gestureIntent = 'vertical';
+        return;
+      }
+
+      if (absX > 7 && absX > absY) {
+        touchStateRef.current.gestureIntent = 'horizontal';
+
+        const { initialLeftOpen, initialRightOpen } = touchStateRef.current;
+        if (initialLeftOpen) {
+          touchStateRef.current.activeDrawer = 'left';
+        } else if (initialRightOpen) {
+          touchStateRef.current.activeDrawer = 'right';
+        } else {
+          if (deltaX > 0) {
+            touchStateRef.current.activeDrawer = 'left';
+          } else if (!isHomeActive && activeGuild) {
+            touchStateRef.current.activeDrawer = 'right';
+          }
+        }
+      }
+    }
+
+    if (touchStateRef.current.gestureIntent === 'horizontal' && touchStateRef.current.activeDrawer) {
+      const { activeDrawer, initialLeftOpen, initialRightOpen, leftDrawerWidth, rightDrawerWidth } =
+        touchStateRef.current;
+
+      if (activeDrawer === 'left') {
+        const L = leftDrawerWidth;
+        let offset: number;
+        let progress: number;
+
+        if (initialLeftOpen) {
+          offset = Math.min(0, Math.max(-L, deltaX));
+          progress = Math.max(0, Math.min(1, 1 + offset / L));
+        } else {
+          offset = Math.min(0, Math.max(-L, -L + deltaX));
+          progress = Math.max(0, Math.min(1, deltaX / L));
+        }
+
+        setDragState({ drawer: 'left', offset, progress });
+      } else if (activeDrawer === 'right') {
+        const R = rightDrawerWidth;
+        let offset: number;
+        let progress: number;
+
+        if (initialRightOpen) {
+          offset = Math.max(0, Math.min(R, deltaX));
+          progress = Math.max(0, Math.min(1, 1 - offset / R));
+        } else {
+          offset = Math.max(0, Math.min(R, R + deltaX));
+          progress = Math.max(0, Math.min(1, -deltaX / R));
+        }
+
+        setDragState({ drawer: 'right', offset, progress });
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStateRef.current) return;
+
+    const { gestureIntent, activeDrawer, startX, startTime, initialLeftOpen, initialRightOpen } =
+      touchStateRef.current;
+
+    if (gestureIntent === 'horizontal' && activeDrawer) {
+      const endX = e.changedTouches[0]?.clientX ?? startX;
+      const deltaX = endX - startX;
+      const deltaTime = Math.max(1, Date.now() - startTime);
+      const velocityX = deltaX / deltaTime;
+
+      if (activeDrawer === 'left') {
+        if (initialLeftOpen) {
+          if (deltaX < -50 || velocityX < -0.3) {
+            setIsMobileDrawerOpen(false);
+          } else {
+            setIsMobileDrawerOpen(true);
+          }
+        } else {
+          if (deltaX > 50 || velocityX > 0.3) {
+            setIsMobileDrawerOpen(true);
+          } else {
+            setIsMobileDrawerOpen(false);
+          }
+        }
+      } else if (activeDrawer === 'right') {
+        if (initialRightOpen) {
+          if (deltaX > 50 || velocityX > 0.3) {
+            handleToggleMemberList(false);
+          } else {
+            handleToggleMemberList(true);
+          }
+        } else {
+          if (deltaX < -50 || velocityX < -0.3) {
+            handleToggleMemberList(true);
+          } else {
+            handleToggleMemberList(false);
+          }
+        }
+      }
+    }
+
+    touchStateRef.current = null;
+    setDragState(null);
+  };
+
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
@@ -767,13 +993,26 @@ export const App: React.FC = () => {
 
   const cleanRoute = currentRoute.replace(/^\/+|\/+$/g, '').split('?')[0];
 
+  const isCapacitor =
+    typeof window !== 'undefined' &&
+    (typeof (window as any).Capacitor !== 'undefined' &&
+      ((window as any).Capacitor?.isNativePlatform?.() ||
+        (window as any).Capacitor?.getPlatform?.() === 'android' ||
+        (window as any).Capacitor?.getPlatform?.() === 'ios') ||
+      window.matchMedia?.('(display-mode: standalone)')?.matches);
+
   if (!user) {
-    // Electron app: Always opens directly on AuthScreen (never the landing page)
-    if (isElectron) {
+    // Native Electron or Capacitor app: Always opens directly on AuthScreen (never the landing page)
+    if (isElectron || isCapacitor) {
       const isRegister = cleanRoute === 'signup' || cleanRoute === 'register';
       return (
-        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
-          <TitleBar />
+        <div
+          style={{
+            paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
+          }}
+          className="w-screen h-[100dvh] flex flex-col bg-background-darkest"
+        >
+          {isElectron && <TitleBar />}
           <div className="flex-1 overflow-hidden">
             <AuthScreen initialMode={isRegister ? 'register' : 'login'} onNavigate={navigateTo} />
           </div>
@@ -784,7 +1023,7 @@ export const App: React.FC = () => {
     // Web Browser routes:
     if (cleanRoute === 'download') {
       return (
-        <div className="w-full min-h-screen flex flex-col bg-background-darkest">
+        <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
           <DownloadPage onNavigate={navigateTo} user={user} />
         </div>
       );
@@ -837,16 +1076,16 @@ export const App: React.FC = () => {
 
     // Default Web Root (/): Landing Page
     return (
-      <div className="w-full min-h-screen flex flex-col bg-background-darkest">
+      <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
         <LandingPage onNavigate={navigateTo} user={user} />
       </div>
     );
   }
 
   // Authenticated user on Web accessing root or download:
-  if (!isElectron && cleanRoute === '') {
+  if (!isElectron && !isCapacitor && cleanRoute === '') {
     return (
-      <div className="w-full min-h-screen flex flex-col bg-background-darkest">
+      <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
         <LandingPage onNavigate={navigateTo} user={user} />
       </div>
     );
@@ -854,7 +1093,7 @@ export const App: React.FC = () => {
 
   if (cleanRoute === 'download') {
     return (
-      <div className="w-full min-h-screen flex flex-col bg-background-darkest">
+      <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
         <DownloadPage onNavigate={navigateTo} user={user} />
       </div>
     );
@@ -865,130 +1104,180 @@ export const App: React.FC = () => {
     : null;
 
   return (
-    <div className="w-screen h-[100dvh] flex flex-col bg-background-dark overflow-hidden select-none relative">
+    <div
+      style={{
+        height: viewportHeight ? `${viewportHeight}px` : '100dvh',
+        top: `${viewportTop}px`,
+        paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
+      }}
+      className="fixed inset-x-0 bottom-auto w-full flex flex-col bg-background-dark overflow-hidden select-none"
+    >
       <TitleBar />
-      <div className="flex-1 flex w-full h-full overflow-hidden relative">
+      <div
+        className="flex-1 flex w-full h-full overflow-hidden relative min-h-0"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Mobile Left Drawer Backdrop */}
-        {isMobileDrawerOpen && (
+        {(isMobileDrawerOpen || dragState?.drawer === 'left') && (
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-30 md:hidden animate-in fade-in duration-200"
+            style={{
+              opacity:
+                dragState?.drawer === 'left' && dragState.progress !== undefined
+                  ? dragState.progress * 0.7
+                  : isMobileDrawerOpen
+                  ? 0.7
+                  : 0,
+              transition: dragState?.drawer === 'left' ? 'none' : 'opacity 0.25s ease',
+            }}
+            className="fixed inset-0 bg-black backdrop-blur-sm z-30 md:hidden"
             onClick={() => setIsMobileDrawerOpen(false)}
           />
         )}
 
         {/* 1 & 2. Sidebars */}
         <div
-          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex-shrink-0 flex h-full transition-transform duration-200 ease-in-out ${
-            isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          style={{
+            transform:
+              dragState?.drawer === 'left' && dragState.offset !== undefined
+                ? `translateX(${dragState.offset}px)`
+                : undefined,
+            transition:
+              dragState?.drawer === 'left'
+                ? 'none'
+                : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
+          }}
+          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex-shrink-0 flex flex-col h-full w-full md:w-auto bg-background-darkest ${
+            dragState?.drawer === 'left'
+              ? ''
+              : isMobileDrawerOpen
+              ? 'translate-x-0'
+              : '-translate-x-full md:translate-x-0'
           }`}
         >
-        {/* 1. Server List */}
-        <ServerList
-          isHomeActive={isHomeActive}
-          onSelectHome={() => {
-            setIsHomeActive(true);
-            setHomeView('friends');
-            navigateTo('/@me');
-            setIsMobileDrawerOpen(false);
-          }}
-          onSelectGuild={async (guildId) => {
-            setIsHomeActive(false);
-            await selectGuild(guildId);
-            const active = useGuildStore.getState().activeGuild;
-            const ch = useGuildStore.getState().activeChannel;
-            if (active && ch) {
-              navigateTo(`/${active.id}/${ch.id}`);
-            }
-            setIsMobileDrawerOpen(false);
-          }}
-          onOpenCreateServer={() => {
-            setIsCreateServerOpen(true);
-            setIsMobileDrawerOpen(false);
-          }}
-        />
+          {/* Top Section: ServerList + Channels/DMs */}
+          <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
+            {/* 1. Server List */}
+            <ServerList
+              isHomeActive={isHomeActive}
+              onSelectHome={() => {
+                setIsHomeActive(true);
+                setHomeView('friends');
+                navigateTo('/@me');
+                setIsMobileDrawerOpen(false);
+              }}
+              onSelectGuild={async (guildId) => {
+                setIsHomeActive(false);
+                await selectGuild(guildId);
+                const active = useGuildStore.getState().activeGuild;
+                const ch = useGuildStore.getState().activeChannel;
+                if (active && ch) {
+                  navigateTo(`/${active.id}/${ch.id}`);
+                }
+                setIsMobileDrawerOpen(false);
+              }}
+              onOpenCreateServer={() => {
+                setIsCreateServerOpen(true);
+                setIsMobileDrawerOpen(false);
+              }}
+            />
 
-        {/* 2. Channels Sidebar OR DMs Sidebar */}
-        {isHomeActive ? (
-          <DMChannelList
-            currentView={homeView}
-            onSelectFriends={() => {
-              setHomeView('friends');
-              navigateTo('/@me');
-            }}
-            onSelectRoom={(room: DMRoom) => {
-              setHomeView('dm');
-              navigateTo(`/@me/${room.id}`);
-            }}
-            onSelectGroup={(group) => {
-              setHomeView('group');
-              navigateTo(`/@me/group/${group.id}`);
-            }}
-            onOpenUserProfile={(targetUser, pos) =>
-              setSelectedUserForProfile({ user: targetUser, position: pos })
-            }
+            {/* 2. Channels Sidebar OR DMs Sidebar */}
+            {isHomeActive ? (
+              <DMChannelList
+                currentView={homeView}
+                onSelectFriends={() => {
+                  setHomeView('friends');
+                  navigateTo('/@me');
+                }}
+                onSelectRoom={(room: DMRoom) => {
+                  setHomeView('dm');
+                  navigateTo(`/@me/${room.id}`);
+                }}
+                onSelectGroup={(group) => {
+                  setHomeView('group');
+                  navigateTo(`/@me/group/${group.id}`);
+                }}
+                onOpenUserProfile={(targetUser, pos) =>
+                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                }
+                onOpenSettings={() => setIsProfileModalOpen(true)}
+                onOpenScreenShare={() => setIsScreenShareOpen(true)}
+                onOpenCreateGroup={() => {
+                  setIsCreateDMGroupOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
+              />
+            ) : (
+              <ChannelList
+                isHomeActive={false}
+                onSelectChannel={(channel) => {
+                  if (activeGuild) {
+                    navigateTo(`/${activeGuild.id}/${channel.id}`);
+                  }
+                }}
+                onOpenCreateChannel={(type, categoryId) => {
+                  setCreateChannelType(type || 'text');
+                  setCreateChannelCategoryId(categoryId);
+                  setIsCreateChannelOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenCreateCategory={() => {
+                  setIsCreateCategoryOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenInviteModal={() => {
+                  setIsInviteModalOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenSettings={() => {
+                  setIsProfileModalOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenServerSettings={() => {
+                  setIsServerSettingsOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenChannelSettings={(channel) => {
+                  setChannelToEdit(channel);
+                }}
+                onOpenMemberList={() => {
+                  handleToggleMemberList(true);
+                }}
+                onSelectUser={(targetUser, pos) => {
+                  setSelectedUserForProfile({ user: targetUser, position: pos });
+                }}
+                onOpenDM={async (userId) => {
+                  setIsHomeActive(true);
+                  setHomeView('dm');
+                  setIsMobileDrawerOpen(false);
+                  const room = await useDMStore.getState().openDMWithUser(userId);
+                  if (room) {
+                    navigateTo(`/@me/${room.id}`);
+                  }
+                }}
+                onOpenScreenShare={() => {
+                  setIsScreenShareOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
+              />
+            )}
+          </div>
+
+          {/* Unified UserBar Footer extending across ServerList and ChannelList */}
+          <UserBar
             onOpenSettings={() => setIsProfileModalOpen(true)}
             onOpenScreenShare={() => setIsScreenShareOpen(true)}
-            onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
           />
-        ) : (
-          <ChannelList
-            isHomeActive={false}
-            onSelectChannel={(channel) => {
-              if (activeGuild) {
-                navigateTo(`/${activeGuild.id}/${channel.id}`);
-              }
-            }}
-            onOpenCreateChannel={(type, categoryId) => {
-              setCreateChannelType(type || 'text');
-              setCreateChannelCategoryId(categoryId);
-              setIsCreateChannelOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenCreateCategory={() => {
-              setIsCreateCategoryOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenInviteModal={() => {
-              setIsInviteModalOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenSettings={() => {
-              setIsProfileModalOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenServerSettings={() => {
-              setIsServerSettingsOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenChannelSettings={(channel) => {
-              setChannelToEdit(channel);
-            }}
-            onOpenMemberList={() => {
-              handleToggleMemberList(true);
-            }}
-            onSelectUser={(targetUser, pos) => {
-              setSelectedUserForProfile({ user: targetUser, position: pos });
-            }}
-            onOpenDM={async (userId) => {
-              setIsHomeActive(true);
-              setHomeView('dm');
-              setIsMobileDrawerOpen(false);
-              const room = await useDMStore.getState().openDMWithUser(userId);
-              if (room) {
-                navigateTo(`/@me/${room.id}`);
-              }
-            }}
-            onOpenScreenShare={() => {
-              setIsScreenShareOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
-          />
-        )}
-      </div>
+        </div>
 
       {/* 3. Main Stage */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden w-full min-w-0 relative">
+      {/* 3. Main Stage */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden w-full min-w-0 min-h-0 relative">
         {isHomeActive ? (
           homeView === 'friends' ? (
             <FriendsView
@@ -1061,6 +1350,9 @@ export const App: React.FC = () => {
             onPreviewImage={(url) => setPreviewImageUrl(url)}
             isMemberListOpen={isMemberListOpen}
             onToggleMemberList={handleToggleMemberList}
+            isDraggingMemberList={dragState?.drawer === 'right'}
+            memberListDragOffset={dragState?.drawer === 'right' ? dragState.offset : null}
+            memberListDragProgress={dragState?.drawer === 'right' ? dragState.progress : null}
           />
         )}
 
@@ -1085,6 +1377,17 @@ export const App: React.FC = () => {
       <CreateServerModal
         isOpen={isCreateServerOpen}
         onClose={() => setIsCreateServerOpen(false)}
+      />
+
+      <CreateDMGroupModal
+        isOpen={isCreateDMGroupOpen}
+        onClose={() => setIsCreateDMGroupOpen(false)}
+        onGroupCreated={(groupId) => {
+          setIsHomeActive(true);
+          setHomeView('group');
+          navigateTo(`/@me/group/${groupId}`);
+          useDMGroupStore.getState().selectGroupById(groupId);
+        }}
       />
 
       <InviteModal

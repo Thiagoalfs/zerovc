@@ -37,10 +37,11 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	Hub    *Hub
-	Conn   *websocket.Conn
-	UserID uuid.UUID
-	send   chan []byte
+	Hub        *Hub
+	Conn       *websocket.Conn
+	UserID     uuid.UUID
+	send       chan []byte
+	lastTyping time.Time
 }
 
 func (c *Client) ReadPump() {
@@ -77,11 +78,17 @@ func (c *Client) ReadPump() {
 
 		switch incomingEvent.Type {
 		case "TYPING_START":
+			now := time.Now()
+			if now.Sub(c.lastTyping) < 2*time.Second {
+				continue
+			}
+			c.lastTyping = now
+
 			var typingData struct {
 				ChannelID uuid.UUID  `json:"channel_id"`
 				GuildID   *uuid.UUID `json:"guild_id,omitempty"`
 			}
-			if err := json.Unmarshal(incomingEvent.Data, &typingData); err == nil {
+			if err := json.Unmarshal(incomingEvent.Data, &typingData); err == nil && typingData.ChannelID != uuid.Nil {
 				event := models.WSEvent{
 					Type: models.EventTypingStart,
 					Data: map[string]any{
