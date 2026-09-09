@@ -345,9 +345,6 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
           </div>
         </div>
 
-        {/* User Footer */}
-        <UserBar onOpenSettings={onOpenSettings} onOpenScreenShare={onOpenScreenShare} />
-
         {/* Resizer Handle */}
         <SidebarResizer />
       </div>

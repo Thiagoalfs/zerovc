@@ -11,6 +11,7 @@ import { api } from './lib/api';
 import { sendNativeNotification, requestNotificationPermission } from './lib/notifications';
 import { ServerList } from './components/Sidebar/ServerList';
 import { ChannelList } from './components/Sidebar/ChannelList';
+import { UserBar } from './components/Sidebar/UserBar';
 import { DMChannelList } from './components/DM/DMChannelList';
 import { ChatArea } from './components/Chat/ChatArea';
 import { VoiceRoom } from './components/Voice/VoiceRoom';
@@ -1134,7 +1135,7 @@ export const App: React.FC = () => {
                 ? 'none'
                 : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
-          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex h-full ${
+          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex flex-col h-full bg-background-darkest ${
             dragState?.drawer === 'left'
               ? ''
               : isMobileDrawerOpen
@@ -1142,114 +1143,123 @@ export const App: React.FC = () => {
               : '-translate-x-full md:translate-x-0'
           }`}
         >
-        {/* 1. Server List */}
-        <ServerList
-          isHomeActive={isHomeActive}
-          onSelectHome={() => {
-            setIsHomeActive(true);
-            setHomeView('friends');
-            navigateTo('/@me');
-            setIsMobileDrawerOpen(false);
-          }}
-          onSelectGuild={async (guildId) => {
-            setIsHomeActive(false);
-            await selectGuild(guildId);
-            const active = useGuildStore.getState().activeGuild;
-            const ch = useGuildStore.getState().activeChannel;
-            if (active && ch) {
-              navigateTo(`/${active.id}/${ch.id}`);
-            }
-            setIsMobileDrawerOpen(false);
-          }}
-          onOpenCreateServer={() => {
-            setIsCreateServerOpen(true);
-            setIsMobileDrawerOpen(false);
-          }}
-        />
+          {/* Top Section: ServerList + Channels/DMs */}
+          <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
+            {/* 1. Server List */}
+            <ServerList
+              isHomeActive={isHomeActive}
+              onSelectHome={() => {
+                setIsHomeActive(true);
+                setHomeView('friends');
+                navigateTo('/@me');
+                setIsMobileDrawerOpen(false);
+              }}
+              onSelectGuild={async (guildId) => {
+                setIsHomeActive(false);
+                await selectGuild(guildId);
+                const active = useGuildStore.getState().activeGuild;
+                const ch = useGuildStore.getState().activeChannel;
+                if (active && ch) {
+                  navigateTo(`/${active.id}/${ch.id}`);
+                }
+                setIsMobileDrawerOpen(false);
+              }}
+              onOpenCreateServer={() => {
+                setIsCreateServerOpen(true);
+                setIsMobileDrawerOpen(false);
+              }}
+            />
 
-        {/* 2. Channels Sidebar OR DMs Sidebar */}
-        {isHomeActive ? (
-          <DMChannelList
-            currentView={homeView}
-            onSelectFriends={() => {
-              setHomeView('friends');
-              navigateTo('/@me');
-            }}
-            onSelectRoom={(room: DMRoom) => {
-              setHomeView('dm');
-              navigateTo(`/@me/${room.id}`);
-            }}
-            onSelectGroup={(group) => {
-              setHomeView('group');
-              navigateTo(`/@me/group/${group.id}`);
-            }}
-            onOpenUserProfile={(targetUser, pos) =>
-              setSelectedUserForProfile({ user: targetUser, position: pos })
-            }
+            {/* 2. Channels Sidebar OR DMs Sidebar */}
+            {isHomeActive ? (
+              <DMChannelList
+                currentView={homeView}
+                onSelectFriends={() => {
+                  setHomeView('friends');
+                  navigateTo('/@me');
+                }}
+                onSelectRoom={(room: DMRoom) => {
+                  setHomeView('dm');
+                  navigateTo(`/@me/${room.id}`);
+                }}
+                onSelectGroup={(group) => {
+                  setHomeView('group');
+                  navigateTo(`/@me/group/${group.id}`);
+                }}
+                onOpenUserProfile={(targetUser, pos) =>
+                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                }
+                onOpenSettings={() => setIsProfileModalOpen(true)}
+                onOpenScreenShare={() => setIsScreenShareOpen(true)}
+                onOpenCreateGroup={() => {
+                  setIsCreateDMGroupOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
+              />
+            ) : (
+              <ChannelList
+                isHomeActive={false}
+                onSelectChannel={(channel) => {
+                  if (activeGuild) {
+                    navigateTo(`/${activeGuild.id}/${channel.id}`);
+                  }
+                }}
+                onOpenCreateChannel={(type, categoryId) => {
+                  setCreateChannelType(type || 'text');
+                  setCreateChannelCategoryId(categoryId);
+                  setIsCreateChannelOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenCreateCategory={() => {
+                  setIsCreateCategoryOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenInviteModal={() => {
+                  setIsInviteModalOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenSettings={() => {
+                  setIsProfileModalOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenServerSettings={() => {
+                  setIsServerSettingsOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onOpenChannelSettings={(channel) => {
+                  setChannelToEdit(channel);
+                }}
+                onOpenMemberList={() => {
+                  handleToggleMemberList(true);
+                }}
+                onSelectUser={(targetUser, pos) => {
+                  setSelectedUserForProfile({ user: targetUser, position: pos });
+                }}
+                onOpenDM={async (userId) => {
+                  setIsHomeActive(true);
+                  setHomeView('dm');
+                  setIsMobileDrawerOpen(false);
+                  const room = await useDMStore.getState().openDMWithUser(userId);
+                  if (room) {
+                    navigateTo(`/@me/${room.id}`);
+                  }
+                }}
+                onOpenScreenShare={() => {
+                  setIsScreenShareOpen(true);
+                  setIsMobileDrawerOpen(false);
+                }}
+                onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
+              />
+            )}
+          </div>
+
+          {/* Unified UserBar Footer extending across ServerList and ChannelList */}
+          <UserBar
             onOpenSettings={() => setIsProfileModalOpen(true)}
             onOpenScreenShare={() => setIsScreenShareOpen(true)}
-            onOpenCreateGroup={() => {
-              setIsCreateDMGroupOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
           />
-        ) : (
-          <ChannelList
-            isHomeActive={false}
-            onSelectChannel={(channel) => {
-              if (activeGuild) {
-                navigateTo(`/${activeGuild.id}/${channel.id}`);
-              }
-            }}
-            onOpenCreateChannel={(type, categoryId) => {
-              setCreateChannelType(type || 'text');
-              setCreateChannelCategoryId(categoryId);
-              setIsCreateChannelOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenCreateCategory={() => {
-              setIsCreateCategoryOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenInviteModal={() => {
-              setIsInviteModalOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenSettings={() => {
-              setIsProfileModalOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenServerSettings={() => {
-              setIsServerSettingsOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onOpenChannelSettings={(channel) => {
-              setChannelToEdit(channel);
-            }}
-            onOpenMemberList={() => {
-              handleToggleMemberList(true);
-            }}
-            onSelectUser={(targetUser, pos) => {
-              setSelectedUserForProfile({ user: targetUser, position: pos });
-            }}
-            onOpenDM={async (userId) => {
-              setIsHomeActive(true);
-              setHomeView('dm');
-              setIsMobileDrawerOpen(false);
-              const room = await useDMStore.getState().openDMWithUser(userId);
-              if (room) {
-                navigateTo(`/@me/${room.id}`);
-              }
-            }}
-            onOpenScreenShare={() => {
-              setIsScreenShareOpen(true);
-              setIsMobileDrawerOpen(false);
-            }}
-            onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
-          />
-        )}
-      </div>
+        </div>
 
       {/* 3. Main Stage */}
       <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative min-h-0">

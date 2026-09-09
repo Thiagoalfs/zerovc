@@ -1003,9 +1003,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           )}
         </div>
 
-        {/* User Status Bar */}
-        <UserBar onOpenSettings={onOpenSettings} onOpenScreenShare={onOpenScreenShare} />
-
         {/* Resizer Handle */}
         <SidebarResizer />
       </div>

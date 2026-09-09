@@ -140,13 +140,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       )}
 
       {/* User Info and Controls */}
-      <div className="h-[52px] px-2 flex items-center justify-between bg-background-darkest/60">
+      <div className="h-[56px] px-2.5 flex items-center justify-between bg-background-darkest/95 border-t border-black/30">
         <div
           onClick={() => setShowStatusMenu(!showStatusMenu)}
-          className="flex items-center gap-2 p-1 rounded-xl hover:bg-background-light/50 cursor-pointer flex-1 min-w-0 mr-1 transition-colors"
+          className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 mr-1.5 transition-colors"
         >
           {/* Avatar */}
-          <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+          <div className="relative w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm">
             {user?.avatar_url ? (
               <img src={formatAssetUrl(user.avatar_url)} alt={user.username} className="w-full h-full rounded-full object-cover" />
             ) : (
@@ -154,50 +154,50 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             )}
             {/* Status dot */}
             <div
-              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background-darkest ${getStatusColor(
+              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background-darkest ${getStatusColor(
                 user?.status
               )}`}
             />
           </div>
 
           <div className="flex flex-col truncate min-w-0">
-            <span className="text-[13.5px] font-semibold text-gray-100 truncate leading-tight">
+            <span className="text-[14px] font-bold text-white truncate leading-tight">
               {user?.display_name || user?.username || 'Usuário'}
             </span>
-            <span className="text-[11px] text-gray-400 truncate leading-tight">
+            <span className="text-[12px] text-gray-400 truncate leading-tight">
               {user?.custom_status || getStatusLabel(user?.status)}
             </span>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center text-gray-400">
+        <div className="flex items-center gap-0.5 text-gray-400">
           <button
             onClick={toggleMute}
-            className={`p-1.5 rounded hover:bg-background-light hover:text-gray-200 transition-colors ${
-              isMuted ? 'text-dnd hover:text-dnd' : ''
+            className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
+              isMuted ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
             }`}
             title={isMuted ? 'Desmutar' : 'Mutar'}
           >
-            {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {isMuted ? <MicOff className="w-[18px] h-[18px]" /> : <Mic className="w-[18px] h-[18px]" />}
           </button>
 
           <button
             onClick={toggleDeafen}
-            className={`p-1.5 rounded hover:bg-background-light hover:text-gray-200 transition-colors ${
-              isDeafened ? 'text-dnd hover:text-dnd' : ''
+            className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
+              isDeafened ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
             }`}
             title={isDeafened ? 'Ensurdecer' : 'Desensurdecer'}
           >
-            <Headphones className="w-4 h-4" />
+            <Headphones className="w-[18px] h-[18px]" />
           </button>
 
           <button
             onClick={onOpenSettings}
-            className="p-1.5 rounded hover:bg-background-light hover:text-gray-200 transition-colors"
-            title="Editar Meu Perfil"
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer"
+            title="Configurações de Usuário"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>
