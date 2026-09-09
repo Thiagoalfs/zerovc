@@ -3,6 +3,7 @@ import { Star } from 'lucide-react';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { formatAssetUrl } from '../../lib/api';
 import { GifEmbed } from './GifEmbed';
+import { LinkEmbed } from './LinkEmbed';
 
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -131,6 +132,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
   const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|data:image\/[^\s]+)/g;
   const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
+  const linkEmbedUrls: string[] = [];
   const foundUrls = new Set<string>();
 
   let matchUrl: RegExpExecArray | null;
@@ -141,6 +143,9 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
       const mediaInfo = isMediaUrl(rawUrl);
       if (mediaInfo.isMedia) {
         mediaEmbeds.push({ url: rawUrl, ...mediaInfo });
+      } else if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+        // HTTP/HTTPS links eligible for OpenGraph embed preview (YouTube, Twitter, GitHub, news, blogs, etc.)
+        linkEmbedUrls.push(rawUrl);
       }
     }
   }
@@ -210,8 +215,9 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
   const hasText = parts.length > 0;
   const hasEmbeds = mediaEmbeds.length > 0;
+  const hasLinkEmbeds = linkEmbedUrls.length > 0;
 
-  if (!hasText && !hasEmbeds) return null;
+  if (!hasText && !hasEmbeds && !hasLinkEmbeds) return null;
 
   return (
     <div className={`leading-relaxed break-words ${className}`}>
@@ -272,6 +278,19 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
               />
             );
           })}
+        </div>
+      )}
+
+      {/* Rich Link Previews / OpenGraph Cards (YouTube, Twitter, GitHub, etc.) */}
+      {hasLinkEmbeds && (
+        <div className={`${hasText || hasEmbeds ? 'mt-2' : ''} space-y-2 flex flex-col items-start`}>
+          {linkEmbedUrls.slice(0, 3).map((linkUrl, idx) => (
+            <LinkEmbed
+              key={idx}
+              url={linkUrl}
+              onPreviewImage={onPreviewImage}
+            />
+          ))}
         </div>
       )}
     </div>
