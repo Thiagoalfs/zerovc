@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor } from 'lucide-react';
+import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
+import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -13,6 +14,7 @@ interface UserBarProps {
 export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenShare }) => {
   const { user, updateProfile } = useAuthStore();
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const {
     currentChannelId,
     isConnected,
@@ -23,7 +25,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     toggleMute,
     toggleDeafen,
     leaveVoice,
-    startScreenShare,
     stopScreenShare,
   } = useVoiceStore();
 
@@ -54,6 +55,38 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       setShowStatusMenu(false);
     } catch (err) {
       console.error('Failed to change status:', err);
+    }
+  };
+
+  const handleScreenShareClick = (e: React.MouseEvent) => {
+    if (isScreensharing) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const items: ContextMenuItem[] = [
+        {
+          id: 'switch-screen',
+          label: 'Trocar tela',
+          icon: <Monitor className="w-4 h-4 text-brand-400" />,
+          onClick: () => {
+            onOpenScreenShare();
+          },
+        },
+        {
+          id: 'stop-screen',
+          label: 'Parar compartilhamento',
+          icon: <MonitorOff className="w-4 h-4 text-dnd" />,
+          variant: 'danger',
+          onClick: () => {
+            stopScreenShare();
+          },
+        },
+      ];
+      openContextMenu(
+        { clientX: rect.left, clientY: rect.top - 10 } as any,
+        items,
+        'Transmissão de Tela'
+      );
+    } else {
+      onOpenScreenShare();
     }
   };
 
@@ -112,24 +145,18 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
             <div className="flex items-center gap-1">
               <button
-                onClick={() => {
-                  if (isScreensharing) {
-                    stopScreenShare();
-                  } else {
-                    onOpenScreenShare();
-                  }
-                }}
-                className={`p-1.5 rounded hover:bg-background-light transition-colors ${
+                onClick={handleScreenShareClick}
+                className={`p-1.5 rounded hover:bg-background-light transition-colors cursor-pointer ${
                   isScreensharing ? 'text-online bg-online/10' : 'text-gray-300'
                 }`}
-                title={isScreensharing ? 'Parar Transmissão' : 'Transmitir Tela'}
+                title={isScreensharing ? 'Opções de Compartilhamento' : 'Transmitir Tela'}
               >
                 <Monitor className="w-4 h-4" />
               </button>
 
               <button
                 onClick={leaveVoice}
-                className="p-1.5 rounded hover:bg-dnd/20 text-gray-300 hover:text-dnd transition-colors"
+                className="p-1.5 rounded hover:bg-dnd/20 text-gray-300 hover:text-dnd transition-colors cursor-pointer"
                 title="Desconectar"
               >
                 <PhoneOff className="w-4 h-4" />
@@ -223,6 +250,9 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           </button>
         </div>
       </div>
+
+      {/* Context Menu Component */}
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
     </div>
   );
 };
