@@ -195,7 +195,7 @@ export const ActiveCallOverlay: React.FC = () => {
             {/* Screen Share */}
             <button
               onClick={handleScreenShareClick}
-              className={`p-3 rounded-full transition-all cursor-pointer shadow-md ${
+              className={`hidden md:flex p-3 rounded-full transition-all cursor-pointer shadow-md ${
                 isScreensharing
                   ? 'bg-online text-white hover:bg-emerald-600'
                   : 'bg-background-light hover:bg-white/15 text-white'

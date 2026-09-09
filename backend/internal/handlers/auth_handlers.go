@@ -205,6 +205,20 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var attempts int
+	err := h.db.Pool.QueryRow(r.Context(), `
+		UPDATE email_verifications
+		SET attempts = attempts + 1
+		WHERE LOWER(email) = $1 AND expires_at > CURRENT_TIMESTAMP
+		RETURNING attempts
+	`, req.Email).Scan(&attempts)
+
+	if err == nil && attempts > 8 {
+		h.db.Pool.Exec(r.Context(), "DELETE FROM email_verifications WHERE LOWER(email) = $1", req.Email)
+		http.Error(w, `{"error":"Muitas tentativas. Solicite um novo código."}`, http.StatusTooManyRequests)
+		return
+	}
+
 	codeHash := fmt.Sprintf("%x", sha256.Sum256([]byte(req.Code)))
 
 	var userID uuid.UUID
@@ -217,7 +231,7 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		ORDER BY ev.created_at DESC
 		LIMIT 1
 	`
-	err := h.db.Pool.QueryRow(r.Context(), query, req.Email, codeHash).Scan(&userID, &username)
+	err = h.db.Pool.QueryRow(r.Context(), query, req.Email, codeHash).Scan(&userID, &username)
 	if err != nil {
 		http.Error(w, `{"error":"Código de verificação inválido ou expirado."}`, http.StatusBadRequest)
 		return
@@ -628,17 +642,38 @@ func (h *AuthHandler) ChangePhone(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Password    string `json:"password"`
 		PhoneNumber string `json:"phone_number"`
+		Code        string `json:"code,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
 		return
 	}
 
-	var passwordHash string
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&passwordHash)
+	var passwordHash, twoFactorSecret string
+	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&passwordHash, &twoFactorSecret)
 	if err != nil || !h.auth.CheckPassword(req.Password, passwordHash) {
 		http.Error(w, `{"error":"senha atual incorreta"}`, http.StatusUnauthorized)
 		return
+	}
+
+	if twoFactorSecret != "" {
+		cleanCode := strings.TrimSpace(req.Code)
+		if cleanCode == "" {
+			http.Error(w, `{"error":"código 2FA obrigatório para alterar o telefone"}`, http.StatusUnauthorized)
+			return
+		}
+		if !auth.VerifyTOTPCode(twoFactorSecret, cleanCode) {
+			backupHash := auth.HashBackupCode(cleanCode)
+			var backupID uuid.UUID
+			err := h.db.Pool.QueryRow(r.Context(), `
+				SELECT id FROM user_2fa_backup_codes
+				WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+			`, userID, backupHash).Scan(&backupID)
+			if err != nil {
+				http.Error(w, `{"error":"código 2FA ou backup incorreto"}`, http.StatusUnauthorized)
+				return
+			}
+		}
 	}
 
 	phone := strings.TrimSpace(req.PhoneNumber)
@@ -757,7 +792,10 @@ func (h *AuthHandler) Disable2FA(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 		Code     string `json:"code"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" || req.Code == "" {
+		http.Error(w, `{"error":"senha e código 2FA são obrigatórios para desativar a autenticação de dois fatores"}`, http.StatusBadRequest)
+		return
+	}
 
 	var passwordHash, secret string
 	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&passwordHash, &secret)
@@ -766,16 +804,27 @@ func (h *AuthHandler) Disable2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	valid := false
-	if req.Password != "" && h.auth.CheckPassword(req.Password, passwordHash) {
-		valid = true
-	} else if req.Code != "" && secret != "" && auth.VerifyTOTPCode(secret, req.Code) {
-		valid = true
+	if !h.auth.CheckPassword(req.Password, passwordHash) {
+		http.Error(w, `{"error":"senha incorreta"}`, http.StatusUnauthorized)
+		return
 	}
 
-	if !valid {
-		http.Error(w, `{"error":"senha ou código 2FA incorreto"}`, http.StatusUnauthorized)
-		return
+	cleanCode := strings.TrimSpace(req.Code)
+	totpValid := secret != "" && auth.VerifyTOTPCode(secret, cleanCode)
+	if !totpValid {
+		backupHash := auth.HashBackupCode(cleanCode)
+		var backupID uuid.UUID
+		err := h.db.Pool.QueryRow(r.Context(), `
+			SELECT id FROM user_2fa_backup_codes
+			WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+		`, userID, backupHash).Scan(&backupID)
+
+		if err == nil {
+			h.db.Pool.Exec(r.Context(), "UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1", backupID)
+		} else {
+			http.Error(w, `{"error":"código 2FA ou de backup incorreto"}`, http.StatusUnauthorized)
+			return
+		}
 	}
 
 	_, err = h.db.Pool.Exec(r.Context(), "UPDATE users SET two_factor_secret = '' WHERE id = $1", userID)
@@ -896,17 +945,38 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Password string `json:"password"`
+		Code     string `json:"code,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" {
 		http.Error(w, `{"error":"senha é obrigatória para confirmar a exclusão da conta"}`, http.StatusBadRequest)
 		return
 	}
 
-	var passwordHash string
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&passwordHash)
+	var passwordHash, twoFactorSecret string
+	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&passwordHash, &twoFactorSecret)
 	if err != nil || !h.auth.CheckPassword(req.Password, passwordHash) {
 		http.Error(w, `{"error":"senha incorreta"}`, http.StatusUnauthorized)
 		return
+	}
+
+	if twoFactorSecret != "" {
+		cleanCode := strings.TrimSpace(req.Code)
+		if cleanCode == "" {
+			http.Error(w, `{"error":"código 2FA obrigatório para confirmar exclusão"}`, http.StatusUnauthorized)
+			return
+		}
+		if !auth.VerifyTOTPCode(twoFactorSecret, cleanCode) {
+			backupHash := auth.HashBackupCode(cleanCode)
+			var backupID uuid.UUID
+			err := h.db.Pool.QueryRow(r.Context(), `
+				SELECT id FROM user_2fa_backup_codes
+				WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+			`, userID, backupHash).Scan(&backupID)
+			if err != nil {
+				http.Error(w, `{"error":"código 2FA ou backup incorreto"}`, http.StatusUnauthorized)
+				return
+			}
+		}
 	}
 
 	// Delete user (Cascades to guild_members, messages, voice_sessions, user_blocks, guilds owned)
@@ -934,6 +1004,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`
+		Code            string `json:"code,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
@@ -945,11 +1016,31 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var currentHash string
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&currentHash)
+	var currentHash, twoFactorSecret string
+	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&currentHash, &twoFactorSecret)
 	if err != nil || !h.auth.CheckPassword(req.CurrentPassword, currentHash) {
 		http.Error(w, `{"error":"senha atual incorreta"}`, http.StatusUnauthorized)
 		return
+	}
+
+	if twoFactorSecret != "" {
+		cleanCode := strings.TrimSpace(req.Code)
+		if cleanCode == "" {
+			http.Error(w, `{"error":"código 2FA obrigatório para alterar a senha"}`, http.StatusUnauthorized)
+			return
+		}
+		if !auth.VerifyTOTPCode(twoFactorSecret, cleanCode) {
+			backupHash := auth.HashBackupCode(cleanCode)
+			var backupID uuid.UUID
+			err := h.db.Pool.QueryRow(r.Context(), `
+				SELECT id FROM user_2fa_backup_codes
+				WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+			`, userID, backupHash).Scan(&backupID)
+			if err != nil {
+				http.Error(w, `{"error":"código 2FA ou backup incorreto"}`, http.StatusUnauthorized)
+				return
+			}
+		}
 	}
 
 	newHash, err := h.auth.HashPassword(req.NewPassword)
@@ -978,6 +1069,7 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Password string `json:"password"`
 		NewEmail string `json:"new_email"`
+		Code     string `json:"code,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
@@ -990,10 +1082,37 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var currentHash string
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&currentHash)
+	var currentHash, twoFactorSecret string
+	var oldEmail string
+	var username string
+	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, email, username, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&currentHash, &oldEmail, &username, &twoFactorSecret)
 	if err != nil || !h.auth.CheckPassword(req.Password, currentHash) {
 		http.Error(w, `{"error":"senha incorreta"}`, http.StatusUnauthorized)
+		return
+	}
+
+	if twoFactorSecret != "" {
+		cleanCode := strings.TrimSpace(req.Code)
+		if cleanCode == "" {
+			http.Error(w, `{"error":"código 2FA obrigatório para alterar o e-mail"}`, http.StatusUnauthorized)
+			return
+		}
+		if !auth.VerifyTOTPCode(twoFactorSecret, cleanCode) {
+			backupHash := auth.HashBackupCode(cleanCode)
+			var backupID uuid.UUID
+			err := h.db.Pool.QueryRow(r.Context(), `
+				SELECT id FROM user_2fa_backup_codes
+				WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+			`, userID, backupHash).Scan(&backupID)
+			if err != nil {
+				http.Error(w, `{"error":"código 2FA ou backup incorreto"}`, http.StatusUnauthorized)
+				return
+			}
+		}
+	}
+
+	if strings.EqualFold(oldEmail, newEmail) {
+		http.Error(w, `{"error":"o novo e-mail deve ser diferente do e-mail atual"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -1004,12 +1123,49 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.db.Pool.Exec(r.Context(), "UPDATE users SET email = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", newEmail, userID)
+	_, err = h.db.Pool.Exec(r.Context(), "UPDATE users SET email = $1, email_verified = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $2", newEmail, userID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to update email"}`, http.StatusInternalServerError)
 		return
 	}
 
+	// Generate 6-digit verification code for new email
+	codeInt, err := rand.Int(rand.Reader, big.NewInt(900000))
+	var code string
+	if err != nil {
+		code = fmt.Sprintf("%06d", time.Now().UnixNano()%900000+100000)
+	} else {
+		code = fmt.Sprintf("%06d", codeInt.Int64()+100000)
+	}
+	codeHash := fmt.Sprintf("%x", sha256.Sum256([]byte(code)))
+
+	// Clean older verifications and insert new one for the new email
+	h.db.Pool.Exec(r.Context(), "DELETE FROM email_verifications WHERE user_id = $1 OR LOWER(email) = $2", userID, newEmail)
+	_, _ = h.db.Pool.Exec(r.Context(), `
+		INSERT INTO email_verifications (user_id, email, code_hash, expires_at)
+		VALUES ($1, $2, $3, CURRENT_TIMESTAMP + INTERVAL '15 minutes')
+	`, userID, newEmail, codeHash)
+
+	// Send notification to old email and verification code to new email asynchronously
+	if h.email != nil {
+		go func(oldE, newE, uName, vCode string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if oldE != "" {
+				if err := h.email.SendEmailChangedNotice(ctx, oldE, uName, newE); err != nil {
+					log.Printf("[Auth] Failed to send email changed notice to %s: %v", oldE, err)
+				}
+			}
+			if err := h.email.SendVerificationEmail(ctx, newE, uName, vCode); err != nil {
+				log.Printf("[Auth] Failed to send verification email to new email %s: %v", newE, err)
+			}
+		}(oldEmail, newEmail, username, code)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"success": true, "email": newEmail})
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":               true,
+		"email":                 newEmail,
+		"requires_verification": true,
+	})
 }

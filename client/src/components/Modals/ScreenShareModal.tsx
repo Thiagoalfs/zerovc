@@ -70,25 +70,31 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md select-none p-4 animate-in fade-in duration-200">
-      <div className="bg-[#18191c] w-full max-w-xl rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col max-h-[90vh]">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
+    >
+      <div className="bg-[#18191c] w-full max-w-xl max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 flex items-center justify-between border-b border-white/5">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-gray-100 lowercase tracking-wide">
               Selecione janela ou tela
             </h2>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+            className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Source Selection Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6 space-y-4 sm:space-y-5">
           {isElectron && sources.length > 0 && (
             <div className="flex items-center gap-2 pb-1">
               <button

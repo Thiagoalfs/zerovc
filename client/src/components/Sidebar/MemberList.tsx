@@ -16,6 +16,8 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useDMStore } from '../../stores/dmStore';
 import { User, Permissions } from '../../types';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { formatAssetUrl } from '../../lib/api';
 import { UserVolumeSlider } from '../Voice/VolumeSliders';
@@ -25,6 +27,9 @@ interface MemberListProps {
   onClose?: () => void;
   onSelectUser?: (user: User, position?: { x: number; y: number }) => void;
   onOpenDM?: (userId: string) => void;
+  isDragging?: boolean;
+  dragOffset?: number | null;
+  dragProgress?: number | null;
 }
 
 export const MemberList: React.FC<MemberListProps> = ({
@@ -32,6 +37,9 @@ export const MemberList: React.FC<MemberListProps> = ({
   onClose,
   onSelectUser,
   onOpenDM,
+  isDragging = false,
+  dragOffset = null,
+  dragProgress = null,
 }) => {
   const {
     activeGuild,
@@ -44,8 +52,10 @@ export const MemberList: React.FC<MemberListProps> = ({
   const { user: currentUser } = useAuthStore();
   const { openDMWithUser } = useDMStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+  const memberListWidth = useSettingsStore((s) => s.memberListWidth);
 
-  if (!isOpen || !activeGuild) return null;
+  if (!activeGuild) return null;
+  if (!isOpen && !isDragging) return null;
 
   const isCurrentOwner = activeGuild.owner_id === currentUser?.id;
   const members = activeGuild.members || [];
@@ -368,21 +378,53 @@ export const MemberList: React.FC<MemberListProps> = ({
     );
   };
 
+  const isCapacitor =
+    typeof window !== 'undefined' &&
+    (typeof (window as any).Capacitor !== 'undefined' &&
+      ((window as any).Capacitor?.isNativePlatform?.() ||
+        (window as any).Capacitor?.getPlatform?.() === 'android' ||
+        (window as any).Capacitor?.getPlatform?.() === 'ios') ||
+      window.matchMedia?.('(display-mode: standalone)')?.matches);
+
   return (
     <>
       {/* Mobile Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-200"
-        onClick={onClose}
-      />
+      {(isOpen || isDragging) && (
+        <div
+          style={{
+            opacity: isDragging && dragProgress !== null && dragProgress !== undefined
+              ? dragProgress * 0.7
+              : isOpen
+              ? 0.7
+              : 0,
+            transition: isDragging ? 'none' : 'opacity 0.25s ease',
+          }}
+          className="fixed inset-0 bg-black backdrop-blur-sm z-40 md:hidden"
+          onClick={onClose}
+        />
+      )}
 
       {/* Member Sidebar / Drawer */}
-      <div className="fixed md:static inset-y-0 right-0 z-50 md:z-0 w-64 md:w-60 flex-shrink-0 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none animate-in slide-in-from-right duration-200 md:animate-none">
+      <div
+        style={{
+          width: typeof window !== 'undefined' && window.innerWidth < 768 ? '100vw' : `${memberListWidth}px`,
+          transform: isDragging && dragOffset !== null && dragOffset !== undefined
+            ? `translateX(${dragOffset}px)`
+            : undefined,
+          transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+          paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
+        }}
+        className={`fixed md:static inset-y-0 right-0 z-40 md:z-0 w-full md:w-64 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none md:relative flex-shrink-0 ${
+          isDragging ? '' : isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
+        }`}
+      >
+        {/* Resizer Handle */}
+        <SidebarResizer side="left" target="memberList" />
         {/* Mobile Header */}
-        <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 md:hidden">
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Membros do Servidor</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white p-1 cursor-pointer">
-            <X className="w-5 h-5" />
+        <div className="h-14 -mx-3 -mt-3 px-4 mb-3 border-b border-black/20 flex items-center justify-between bg-background-dark/95 backdrop-blur-sm shadow-sm md:hidden flex-shrink-0">
+          <h2 className="text-[17px] font-bold text-white">Membros do Servidor</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
+            <X className="w-6 h-6" />
           </button>
         </div>
 

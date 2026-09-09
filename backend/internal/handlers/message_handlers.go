@@ -297,8 +297,19 @@ func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if authorID != userID && ownerID != userID {
-		http.Error(w, `{"error":"forbidden: you do not have permission to delete this message"}`, http.StatusForbidden)
-		return
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageMessages) == 0 {
+			http.Error(w, `{"error":"forbidden: you do not have permission to delete this message"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM messages WHERE id = $1", messageID)
@@ -663,10 +674,30 @@ func (h *MessageHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var isMember bool
-	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
-	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+	var ownerID uuid.UUID
+	checkQuery := `
+		SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2),
+		       (SELECT owner_id FROM guilds WHERE id = $1)
+	`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember, &ownerID); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server to pin messages"}`, http.StatusForbidden)
 		return
+	}
+
+	if userID != ownerID {
+		var perms int64
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(BIT_OR(r.permissions), 0)
+			FROM guild_members gm
+			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
+			JOIN guild_roles r ON r.id = gmr.role_id
+			WHERE gm.guild_id = $1 AND gm.user_id = $2
+		`, guildID, userID).Scan(&perms)
+
+		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageMessages) == 0 {
+			http.Error(w, `{"error":"forbidden: você não tem permissão para fixar mensagens"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	var isPinned bool
@@ -715,7 +746,8 @@ func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var guildID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
+	var isPrivate bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
@@ -726,6 +758,23 @@ func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server to view messages"}`, http.StatusForbidden)
 		return
+	}
+
+	if isPrivate {
+		var hasAccess bool
+		privateCheckQuery := `
+			SELECT EXISTS(
+				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
+				UNION
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
+			)
+		`
+		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
+			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	query := `
@@ -902,12 +951,21 @@ func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
 		INNER JOIN channels c ON c.id = m.channel_id
 		INNER JOIN users u ON u.id = m.author_id
 		WHERE c.guild_id = $1
+		  AND (
+		    c.is_private = false
+		    OR EXISTS (SELECT 1 FROM guilds g WHERE g.id = c.guild_id AND g.owner_id = $3)
+		    OR EXISTS (
+		      SELECT 1 FROM channel_role_access cra
+		      INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+		      WHERE cra.channel_id = c.id AND gmr.guild_id = c.guild_id AND gmr.user_id = $3
+		    )
+		  )
 		  AND (m.search_vector @@ plainto_tsquery('portuguese', $2) OR m.content ILIKE '%' || $2 || '%')
 	`
-	args := []any{guildID, queryTerm}
+	args := []any{guildID, queryTerm, userID}
 
 	if channelID != nil {
-		query += ` AND m.channel_id = $3`
+		query += ` AND m.channel_id = $4`
 		args = append(args, *channelID)
 	}
 
@@ -962,7 +1020,8 @@ func (h *MessageHandler) AckChannel(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
 	var guildID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
+	var isPrivate bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
@@ -973,6 +1032,23 @@ func (h *MessageHandler) AckChannel(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server"}`, http.StatusForbidden)
 		return
+	}
+
+	if isPrivate {
+		var hasAccess bool
+		privateCheckQuery := `
+			SELECT EXISTS(
+				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
+				UNION
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
+			)
+		`
+		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
+			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	var lastMsgID *uuid.UUID = req.MessageID

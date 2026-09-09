@@ -7,8 +7,9 @@ import { useFriendStore } from '../../stores/friendStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
 import { DMRoom, DMGroup, User } from '../../types';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { UserBar } from '../Sidebar/UserBar';
-import { CreateDMGroupModal } from '../Modals/CreateDMGroupModal';
+import { SidebarResizer } from '../Sidebar/SidebarResizer';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -19,6 +20,7 @@ interface DMChannelListProps {
   onSelectRoom?: (room: DMRoom) => void;
   onSelectGroup?: (group: DMGroup) => void;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
+  onOpenCreateGroup?: () => void;
   onOpenSettings: () => void;
   onOpenScreenShare: () => void;
   onCloseMobileDrawer?: () => void;
@@ -30,6 +32,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   onSelectRoom,
   onSelectGroup,
   onOpenUserProfile,
+  onOpenCreateGroup,
   onOpenSettings,
   onOpenScreenShare,
   onCloseMobileDrawer,
@@ -41,8 +44,8 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   const { friends, fetchFriends, sendRequest, removeFriend } = useFriendStore();
   const { startCall } = useCallStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
-  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
+  const channelListWidth = useSettingsStore((s) => s.channelListWidth);
 
   useEffect(() => {
     fetchRooms();
@@ -211,10 +214,15 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
 
   return (
     <>
-      <div className="w-60 bg-background-darker flex flex-col h-full select-none border-r border-black/20 flex-shrink-0 relative">
+      <div
+        style={{
+          width: typeof window !== 'undefined' && window.innerWidth < 768 ? 'calc(100vw - 72px)' : `${channelListWidth}px`,
+        }}
+        className="bg-background-darker flex flex-col h-full select-none border-r border-black/20 relative flex-1 md:flex-none flex-shrink-0"
+      >
         {/* Header */}
-        <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm">
-          <span className="font-bold text-gray-100 text-sm">Mensagens Diretas</span>
+        <div className="h-14 md:h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm flex-shrink-0">
+          <span className="font-bold text-gray-100 text-[17px] md:text-sm">Mensagens Diretas</span>
         </div>
 
         {/* Friends Button */}
@@ -241,7 +249,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                 Grupos
               </span>
               <button
-                onClick={() => setIsCreateGroupOpen(true)}
+                onClick={onOpenCreateGroup}
                 className="text-gray-400 hover:text-white p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
                 title="Criar Grupo de DM"
               >
@@ -259,7 +267,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                     <button
                       key={group.id}
                       onClick={() => handleSelectGroup(group)}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
                         isSelected
                           ? 'bg-white/10 text-white'
                           : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -269,8 +277,8 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                         <Users className="w-3.5 h-3.5" />
                       </div>
                       <div className="flex flex-col text-left truncate flex-1 min-w-0">
-                        <span className="text-gray-200 truncate">{groupDisplayName}</span>
-                        <span className="text-[10px] text-gray-500 truncate">
+                        <span className="text-gray-100 text-[14.5px] font-medium truncate">{groupDisplayName}</span>
+                        <span className="text-[11px] text-gray-400 truncate">
                           {group.members?.length || 0} membros
                         </span>
                       </div>
@@ -283,7 +291,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
 
           {/* DM 1x1 Section */}
           <div>
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1 block">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 py-1 block">
               Mensagens Diretas
             </span>
 
@@ -303,7 +311,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                       key={room.id}
                       onClick={() => handleSelectRoom(room)}
                       onContextMenu={(e) => handleUserContextMenu(e, recipient, room.id)}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
                         isSelected
                           ? 'bg-white/10 text-white'
                           : unreadCount > 0
@@ -320,12 +328,9 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                         <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-background-darker ${getStatusColor(recipient?.status)}`} />
                       </div>
 
-                      <div className="flex flex-col text-left truncate flex-1 min-w-0">
-                        <span className={`truncate ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-200'}`}>
+                      <div className="flex items-center text-left truncate flex-1 min-w-0">
+                        <span className={`truncate text-[14.5px] font-medium ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
                           {recipient?.display_name || recipient?.username}
-                        </span>
-                        <span className="text-[10px] text-gray-500 truncate">
-                          @{recipient?.username}
                         </span>
                       </div>
 
@@ -342,18 +347,9 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
           </div>
         </div>
 
-        {/* User Footer */}
-        <UserBar onOpenSettings={onOpenSettings} onOpenScreenShare={onOpenScreenShare} />
+        {/* Resizer Handle */}
+        <SidebarResizer />
       </div>
-
-      {/* Create Group Modal */}
-      <CreateDMGroupModal
-        isOpen={isCreateGroupOpen}
-        onClose={() => setIsCreateGroupOpen(false)}
-        onGroupCreated={(groupId) => {
-          // Handled via store select
-        }}
-      />
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />
     </>

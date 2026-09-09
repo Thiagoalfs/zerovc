@@ -35,7 +35,9 @@ import { useVoiceStore } from '../../stores/voiceStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useDMStore } from '../../stores/dmStore';
 import { api, formatAssetUrl } from '../../lib/api';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { UserBar } from './UserBar';
+import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
 interface ChannelListProps {
@@ -96,6 +98,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     setUserVolume,
     setStreamVolume,
   } = useVoiceStore();
+  const channelListWidth = useSettingsStore((s) => s.channelListWidth);
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
@@ -623,7 +626,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             setDragOverTarget(null);
           }}
           onContextMenu={(e) => handleChannelContextMenu(e, channel)}
-          className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-sm transition-all relative ${
+          className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
             isOwner ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
             isDragOver ? 'border-t-2 border-brand-500 bg-brand-500/10' : ''
@@ -649,7 +652,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
           <button
             onClick={() => (isText ? handleChannelClick(channel) : handleVoiceChannelClick(channel))}
-            className="flex items-center gap-1.5 truncate flex-1 text-left min-w-0"
+            className="flex items-center gap-2 truncate flex-1 text-left min-w-0"
           >
             {isText ? (
               <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
@@ -658,7 +661,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 className={`w-4 h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400'}`}
               />
             )}
-            <span className="truncate">{channel.name}</span>
+            <span className="truncate font-medium">{channel.name}</span>
             {channel.is_private && (
               <span title="Canal Privado">
                 <Lock className="w-3 h-3 text-gray-400 flex-shrink-0 ml-0.5" />
@@ -710,7 +713,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     onSelectUser?.(targetUser, { x: e.clientX, y: e.clientY });
                   }}
                   onContextMenu={(e) => handleVoiceMemberContextMenu(e, channel, vs, targetUser)}
-                  className="flex items-center justify-between py-1 px-1.5 rounded-lg hover:bg-background-light/40 text-xs text-gray-300 cursor-pointer transition-colors group/voice-member"
+                  className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-background-light/40 text-[13.5px] text-gray-300 cursor-pointer transition-colors group/voice-member"
                   title="Clique com botão esquerdo para perfil ou direito para opções"
                 >
                   <div className="flex items-center gap-2 truncate">
@@ -720,7 +723,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                           ? { boxShadow: '0 0 0 2px #23a55a' }
                           : undefined
                       }
-                      className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all flex-shrink-0"
+                      className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all flex-shrink-0 overflow-hidden"
                     >
                       {targetUser.avatar_url ? (
                         <img
@@ -736,7 +739,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         </span>
                       )}
                     </div>
-                    <span className={`truncate ${isSpeaking ? 'text-white font-semibold' : ''}`}>
+                    <span className={`truncate font-medium ${isSpeaking ? 'text-white font-semibold' : 'text-gray-300'}`}>
                       {targetUser.display_name || targetUser.username || 'Usuário'}
                     </span>
                   </div>
@@ -767,21 +770,24 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     <>
       <div
         onContextMenu={handleSidebarContextMenu}
-        className="w-60 bg-background-darker flex flex-col h-full border-r border-black/20 select-none flex-shrink-0 relative"
+        style={{
+          width: typeof window !== 'undefined' && window.innerWidth < 768 ? 'calc(100vw - 72px)' : `${channelListWidth}px`,
+        }}
+        className="bg-background-darker flex flex-col h-full border-r border-black/20 select-none flex-1 md:flex-none relative"
       >
         {/* Server Header or Home Header */}
         {isHomeActive ? (
-          <div className="h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm">
+          <div className="h-14 md:h-12 px-4 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm flex-shrink-0">
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-brand-500" />
-              <span className="truncate">Painel de Amigos</span>
+              <Users className="w-5 h-5 md:w-4 md:h-4 text-brand-500" />
+              <span className="truncate text-[17px] md:text-base">Painel de Amigos</span>
             </div>
             {onCloseMobileDrawer && (
               <button
                 onClick={onCloseMobileDrawer}
-                className="md:hidden text-gray-400 hover:text-white p-1"
+                className="md:hidden text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             )}
           </div>
@@ -803,7 +809,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               className={`w-full px-4 border-b border-black/20 flex justify-between font-bold text-gray-100 shadow-sm transition-all group cursor-pointer text-left relative overflow-hidden ${
                 activeGuild?.banner_url
                   ? 'h-36 pt-3.5 items-start hover:brightness-105'
-                  : 'h-12 items-center hover:bg-white/5'
+                  : 'h-14 md:h-12 items-center hover:bg-white/5'
               }`}
             >
               {/* Gradient overlay for banner readability */}
@@ -811,11 +817,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/35 to-transparent pointer-events-none" />
               )}
 
-              <span className="truncate max-w-[170px] text-sm md:text-base font-bold text-white group-hover:text-gray-100 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+              <span className="truncate max-w-[200px] md:max-w-[170px] text-[17px] md:text-base font-bold text-white group-hover:text-gray-100 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                 {activeGuild?.name || 'Servidor'}
               </span>
               <ChevronDown
-                className={`w-4 h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
+                className={`w-5 h-5 md:w-4 md:h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
                   isDropdownOpen ? 'rotate-180 text-brand-400' : ''
                 }`}
               />
@@ -999,8 +1005,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           )}
         </div>
 
-        {/* User Status Bar */}
-        <UserBar onOpenSettings={onOpenSettings} onOpenScreenShare={onOpenScreenShare} />
+        {/* Resizer Handle */}
+        <SidebarResizer />
       </div>
 
       {/* Context Menu Component */}
