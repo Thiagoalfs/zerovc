@@ -7,11 +7,13 @@ import {
   Video,
   VideoOff,
   Monitor,
+  MonitorOff,
   Volume2,
 } from 'lucide-react';
 import { useCallStore } from '../../stores/callStore';
 import { useAuthStore } from '../../stores/authStore';
 import { formatAssetUrl } from '../../lib/api';
+import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
 export const ActiveCallOverlay: React.FC = () => {
   const {
@@ -32,8 +34,41 @@ export const ActiveCallOverlay: React.FC = () => {
   } = useCallStore();
 
   const { user: currentUser } = useAuthStore();
+  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
 
   if (callState !== 'calling' && callState !== 'connected') return null;
+
+  const handleScreenShareClick = (e: React.MouseEvent) => {
+    if (isScreensharing) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const items: ContextMenuItem[] = [
+        {
+          id: 'switch-screen',
+          label: 'Trocar tela',
+          icon: <Monitor className="w-4 h-4 text-brand-400" />,
+          onClick: () => {
+            startScreenShare();
+          },
+        },
+        {
+          id: 'stop-screen',
+          label: 'Parar compartilhamento',
+          icon: <MonitorOff className="w-4 h-4 text-dnd" />,
+          variant: 'danger',
+          onClick: () => {
+            stopScreenShare();
+          },
+        },
+      ];
+      openContextMenu(
+        { clientX: rect.left + rect.width / 2, clientY: rect.bottom + 10 } as any,
+        items,
+        'Transmissão de Tela'
+      );
+    } else {
+      startScreenShare();
+    }
+  };
 
   return (
     <div className="w-full bg-background-darkest/90 border-b border-white/10 p-4 flex flex-col items-center justify-between transition-all select-none animate-in fade-in">
@@ -160,13 +195,13 @@ export const ActiveCallOverlay: React.FC = () => {
 
             {/* Screen Share */}
             <button
-              onClick={isScreensharing ? stopScreenShare : startScreenShare}
+              onClick={handleScreenShareClick}
               className={`p-3 rounded-full transition-all cursor-pointer shadow-md ${
                 isScreensharing
                   ? 'bg-online text-white hover:bg-emerald-600'
                   : 'bg-background-light hover:bg-white/15 text-white'
               }`}
-              title={isScreensharing ? 'Parar Compartilhamento' : 'Compartilhar Tela'}
+              title={isScreensharing ? 'Opções de Compartilhamento' : 'Compartilhar Tela'}
             >
               <Monitor className="w-5 h-5" />
             </button>
@@ -182,6 +217,9 @@ export const ActiveCallOverlay: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Context Menu Component */}
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
     </div>
   );
 };
