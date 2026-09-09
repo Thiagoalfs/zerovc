@@ -218,7 +218,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
         style={{
           width: typeof window !== 'undefined' && window.innerWidth < 768 ? 'calc(100vw - 72px)' : `${channelListWidth}px`,
         }}
-        className="bg-background-darker flex flex-col h-full select-none border-r border-black/20 relative flex-1 md:flex-none"
+        className="bg-background-darker flex flex-col h-full select-none border-r border-black/20 relative flex-1 md:flex-none flex-shrink-0"
       >
         {/* Header */}
         <div className="h-14 md:h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm flex-shrink-0">

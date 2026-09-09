@@ -203,7 +203,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
   const totalPending = pending.length + incoming.length;
 
   return (
-    <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden select-none">
+    <div className="flex-1 w-full min-w-0 bg-background-dark flex flex-col h-full overflow-hidden select-none">
       {/* Top Header with Responsive Scrolling Tabs */}
       <div className="h-14 md:h-12 border-b border-black/20 px-2 sm:px-4 md:px-6 flex items-center gap-1.5 sm:gap-3 md:gap-6 shadow-sm z-10 overflow-x-auto no-scrollbar">
         {onOpenMobileDrawer && (

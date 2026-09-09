@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor } from 'lucide-react';
+import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
+import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -13,6 +14,7 @@ interface UserBarProps {
 export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenShare }) => {
   const { user, updateProfile } = useAuthStore();
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const {
     currentChannelId,
     isConnected,
@@ -23,7 +25,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     toggleMute,
     toggleDeafen,
     leaveVoice,
-    startScreenShare,
     stopScreenShare,
   } = useVoiceStore();
 
@@ -57,8 +58,41 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     }
   };
 
+  const handleScreenShareClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isScreensharing) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const items: ContextMenuItem[] = [
+        {
+          id: 'switch-screen',
+          label: 'Trocar tela',
+          icon: <Monitor className="w-4 h-4" />,
+          onClick: () => {
+            onOpenScreenShare();
+          },
+        },
+        {
+          id: 'stop-screen',
+          label: 'Parar compartilhamento',
+          variant: 'danger',
+          onClick: () => {
+            stopScreenShare();
+          },
+        },
+      ];
+      openContextMenu(
+        { clientX: rect.left, clientY: rect.top - 10 },
+        items,
+        'Transmissão de Tela'
+      );
+    } else {
+      onOpenScreenShare();
+    }
+  };
+
   return (
-    <div className="flex flex-col bg-background-darkest select-none relative">
+    <div className="w-full min-w-0 max-w-full overflow-hidden flex flex-col bg-background-darkest select-none relative">
       {/* Quick Status Menu Popover */}
       {showStatusMenu && (
         <>
@@ -90,46 +124,40 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
       {/* Active Voice Connection Bar */}
       {(isConnected || isConnecting) && (
-        <div className="bg-background-darkest/90 border-b border-white/5 p-2 px-3 flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
+        <div className="w-full min-w-0 max-w-full bg-background-darkest/90 border-b border-white/5 p-2 px-2.5 flex flex-col gap-1.5 overflow-hidden">
+          <div className="flex items-center justify-between min-w-0 gap-1.5">
             <div
               onClick={() => {
                 if (activeVoiceChannel) selectChannel(activeVoiceChannel);
               }}
-              className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity"
+              className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden"
               title="Abrir canal de voz"
             >
-              <div className="w-2.5 h-2.5 rounded-full bg-online animate-pulse" />
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-online leading-tight">
+              <div className="w-2.5 h-2.5 rounded-full bg-online animate-pulse flex-shrink-0" />
+              <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+                <span className="text-xs font-bold text-online leading-tight truncate">
                   {isConnecting ? 'Conectando...' : 'Voz Conectada'}
                 </span>
-                <span className="text-[11px] text-gray-400 truncate max-w-[130px]">
+                <span className="text-[11px] text-gray-400 truncate leading-tight block min-w-0">
                   {activeVoiceChannel?.name || 'Canal de Voz'}
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-shrink-0 ml-1">
               <button
-                onClick={() => {
-                  if (isScreensharing) {
-                    stopScreenShare();
-                  } else {
-                    onOpenScreenShare();
-                  }
-                }}
-                className={`hidden md:inline-flex p-1.5 rounded hover:bg-background-light transition-colors ${
+                onClick={handleScreenShareClick}
+                className={`hidden md:inline-flex p-1.5 rounded hover:bg-background-light transition-colors cursor-pointer flex-shrink-0 ${
                   isScreensharing ? 'text-online bg-online/10' : 'text-gray-300'
                 }`}
-                title={isScreensharing ? 'Parar Transmissão' : 'Transmitir Tela'}
+                title={isScreensharing ? 'Opções de Compartilhamento' : 'Transmitir Tela'}
               >
                 <Monitor className="w-4 h-4" />
               </button>
 
               <button
                 onClick={leaveVoice}
-                className="p-1.5 rounded hover:bg-dnd/20 text-gray-300 hover:text-dnd transition-colors"
+                className="p-1.5 rounded hover:bg-dnd/20 text-gray-300 hover:text-dnd transition-colors cursor-pointer flex-shrink-0"
                 title="Desconectar"
               >
                 <PhoneOff className="w-4 h-4" />
@@ -142,19 +170,20 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       {/* User Info and Controls */}
       <div
         onClick={() => {
-          if (window.innerWidth < 768) {
+          if (typeof window !== 'undefined' && window.innerWidth < 768) {
             onOpenSettings();
           }
         }}
-        className="h-[56px] px-2.5 flex items-center justify-between bg-background-darkest/95 border-t border-black/30 cursor-pointer md:cursor-default"
+        className="h-[60px] md:h-[56px] px-2 w-full min-w-0 max-w-full flex items-center justify-between bg-background-darkest/95 border-t border-white/5 cursor-pointer md:cursor-default overflow-hidden gap-1.5"
       >
         <div
           onClick={(e) => {
-            if (window.innerWidth >= 768) {
+            if (typeof window !== 'undefined' && window.innerWidth >= 768) {
               setShowStatusMenu(!showStatusMenu);
             }
           }}
-          className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 mr-1.5 transition-colors"
+          className="flex items-center gap-2 p-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 transition-colors group/usercard overflow-hidden"
+          title="Editar Meu Perfil e Configurações"
         >
           {/* Avatar */}
           <div className="relative w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm">
@@ -171,21 +200,27 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             />
           </div>
 
-          <div className="flex flex-col truncate min-w-0">
-            <span className="text-[14px] font-bold text-white truncate leading-tight">
-              {user?.display_name || user?.username || 'Usuário'}
-            </span>
-            <span className="text-[12px] text-gray-400 truncate leading-tight">
+          <div className="flex flex-col truncate min-w-0 flex-1 overflow-hidden">
+            <div className="flex items-center gap-1.5 min-w-0 w-full overflow-hidden">
+              <span className="text-[14px] font-bold text-white truncate leading-tight group-hover/usercard:text-brand-300 transition-colors block min-w-0 flex-1">
+                {user?.display_name || user?.username || 'Usuário'}
+              </span>
+              <Settings className="w-3.5 h-3.5 text-gray-400 group-hover/usercard:text-brand-400 md:hidden flex-shrink-0 transition-transform group-hover/usercard:rotate-45" />
+            </div>
+            <span className="text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">
               {user?.custom_status || getStatusLabel(user?.status)}
             </span>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="hidden md:flex items-center gap-0.5 text-gray-400">
+        <div className="hidden md:flex items-center gap-0.5 text-gray-400 flex-shrink-0 ml-1">
           <button
-            onClick={toggleMute}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleMute();
+            }}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
               isMuted ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
             }`}
             title={isMuted ? 'Desmutar' : 'Mutar'}
@@ -194,8 +229,11 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           </button>
 
           <button
-            onClick={toggleDeafen}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleDeafen();
+            }}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
               isDeafened ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
             }`}
             title={isDeafened ? 'Ensurdecer' : 'Desensurdecer'}
@@ -204,14 +242,20 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           </button>
 
           <button
-            onClick={onOpenSettings}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenSettings();
+            }}
+            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer"
             title="Configurações de Usuário"
           >
             <Settings className="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>
+
+      {/* Context Menu Component */}
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
     </div>
   );
 };

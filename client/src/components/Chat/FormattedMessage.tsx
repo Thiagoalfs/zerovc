@@ -1,13 +1,16 @@
 import React, { useState, useMemo } from 'react';
-import { Star } from 'lucide-react';
+import { Star, Hash, Volume2 } from 'lucide-react';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { formatAssetUrl } from '../../lib/api';
 import { GifEmbed } from './GifEmbed';
+import { LinkEmbed } from './LinkEmbed';
+import { LimitAlertModal } from '../Modals/LimitAlertModal';
 
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useVoiceStore } from '../../stores/voiceStore';
 import { useDMStore } from '../../stores/dmStore';
-import { User, Permissions, GuildEmoji } from '../../types';
+import { User, Permissions, GuildEmoji, Channel, Guild } from '../../types';
 import { isPureEmojiMessage, replaceEmojiShortcodes, SHORTCODE_TO_UNICODE } from '../../utils/emojis';
 
 interface FormattedMessageProps {
@@ -93,8 +96,12 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   if (!content) return null;
 
   const { isFavorited } = useFavoriteGifStore();
-  const { activeGuild, guilds } = useGuildStore();
+  const { activeGuild, guilds, selectGuild, selectChannel } = useGuildStore();
+  const { joinVoice } = useVoiceStore();
   const { user: currentUser } = useAuthStore();
+  const [permissionAlert, setPermissionAlert] = useState<string | null>(null);
+
+  const activeGuildChannels = activeGuild?.channels || [];
   const guildEmojis = useMemo(() => {
     const list: GuildEmoji[] = [];
     const seen = new Set<string>();
@@ -123,6 +130,101 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
   const isJumboji = isPureEmojiMessage(content, guildEmojis);
 
+  const navigateToTargetChannel = (channel: Channel, guild: Guild) => {
+    if (activeGuild?.id !== guild.id) {
+      selectGuild(guild.id, channel.id);
+      window.dispatchEvent(
+        new CustomEvent('navigate-channel', {
+          detail: { guildId: guild.id, channelId: channel.id },
+        })
+      );
+    } else {
+      selectChannel(channel);
+      if (channel.type === 'voice') {
+        joinVoice(channel.id, guild.id);
+      }
+      window.dispatchEvent(
+        new CustomEvent('navigate-channel', {
+          detail: { guildId: guild.id, channelId: channel.id },
+        })
+      );
+    }
+  };
+
+  const handleChannelClick = (channel: Channel, guild?: Guild) => {
+    const targetGuild = guild || activeGuild;
+    if (!targetGuild || !channel) {
+      setPermissionAlert('Você não possui permissão para entrar nesse canal.');
+      return;
+    }
+
+    // 1. Owner always has unrestricted permission
+    const isOwner = targetGuild.owner_id === currentUser?.id;
+    if (isOwner) {
+      navigateToTargetChannel(channel, targetGuild);
+      return;
+    }
+
+    // 2. Find member in guild
+    const member = targetGuild.members?.find((m) => m.id === currentUser?.id);
+    const userRoles = member?.roles || [];
+    let userPerms = 0;
+    userRoles.forEach((r) => {
+      userPerms |= Number(r.permissions || 0);
+    });
+
+    const isAdmin = (userPerms & Permissions.ADMINISTRATOR) !== 0;
+    if (isAdmin) {
+      navigateToTargetChannel(channel, targetGuild);
+      return;
+    }
+
+    // 3. Check private channel role access
+    if (channel.is_private) {
+      const hasAllowedRole = channel.role_ids && channel.role_ids.length > 0
+        ? userRoles.some((r) => channel.role_ids?.includes(r.id))
+        : false;
+
+      if (!hasAllowedRole) {
+        setPermissionAlert('Você não possui permissão para entrar nesse canal.');
+        return;
+      }
+    }
+
+    // 4. Check permission overwrites
+    if (channel.permission_overwrites && channel.permission_overwrites.length > 0) {
+      const viewChannelPerm = Permissions.VIEW_CHANNEL;
+      let isExplicitlyDenied = false;
+      let isExplicitlyAllowed = false;
+
+      // Check @everyone overwrite
+      const everyoneRole = targetGuild.roles?.find((r) => r.name === '@everyone');
+      if (everyoneRole) {
+        const ow = channel.permission_overwrites.find((o) => o.role_id === everyoneRole.id);
+        if (ow) {
+          if ((ow.deny & viewChannelPerm) !== 0) isExplicitlyDenied = true;
+          if ((ow.allow & viewChannelPerm) !== 0) isExplicitlyAllowed = true;
+        }
+      }
+
+      // Check user roles overwrites
+      for (const r of userRoles) {
+        const ow = channel.permission_overwrites.find((o) => o.role_id === r.id);
+        if (ow) {
+          if ((ow.deny & viewChannelPerm) !== 0) isExplicitlyDenied = true;
+          if ((ow.allow & viewChannelPerm) !== 0) isExplicitlyAllowed = true;
+        }
+      }
+
+      if (isExplicitlyDenied && !isExplicitlyAllowed) {
+        setPermissionAlert('Você não possui permissão para entrar nesse canal.');
+        return;
+      }
+    }
+
+    navigateToTargetChannel(channel, targetGuild);
+  };
+
   // Extract all media links for Discord-like embeds below the text (ignoring code blocks / inline code / emoji tags)
   const contentWithoutCode = content
     .replace(/```[\s\S]*?```/g, '')
@@ -131,6 +233,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
   const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|data:image\/[^\s]+)/g;
   const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
+  const linkEmbedUrls: string[] = [];
   const foundUrls = new Set<string>();
 
   let matchUrl: RegExpExecArray | null;
@@ -141,6 +244,9 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
       const mediaInfo = isMediaUrl(rawUrl);
       if (mediaInfo.isMedia) {
         mediaEmbeds.push({ url: rawUrl, ...mediaInfo });
+      } else if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+        // HTTP/HTTPS links eligible for OpenGraph embed preview (YouTube, Twitter, GitHub, news, blogs, etc.)
+        linkEmbedUrls.push(rawUrl);
       }
     }
   }
@@ -173,7 +279,10 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
             guildRoles,
             currentUser,
             onOpenUserProfile,
-            onOpenUserContextMenu
+            onOpenUserContextMenu,
+            activeGuildChannels,
+            guilds,
+            handleChannelClick
           )
         );
       }
@@ -202,7 +311,10 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
           guildRoles,
           currentUser,
           onOpenUserProfile,
-          onOpenUserContextMenu
+          onOpenUserContextMenu,
+          activeGuildChannels,
+          guilds,
+          handleChannelClick
         )
       );
     }
@@ -210,8 +322,9 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
   const hasText = parts.length > 0;
   const hasEmbeds = mediaEmbeds.length > 0;
+  const hasLinkEmbeds = linkEmbedUrls.length > 0;
 
-  if (!hasText && !hasEmbeds) return null;
+  if (!hasText && !hasEmbeds && !hasLinkEmbeds) return null;
 
   return (
     <div className={`leading-relaxed break-words ${className}`}>
@@ -274,11 +387,34 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
           })}
         </div>
       )}
+
+      {/* Rich Link Previews / OpenGraph Cards (YouTube, Twitter, GitHub, etc.) */}
+      {hasLinkEmbeds && (
+        <div className={`${hasText || hasEmbeds ? 'mt-2' : ''} space-y-2 flex flex-col items-start`}>
+          {linkEmbedUrls.slice(0, 3).map((linkUrl, idx) => (
+            <LinkEmbed
+              key={idx}
+              url={linkUrl}
+              onPreviewImage={onPreviewImage}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Permission Denied Modal for Channels */}
+      {permissionAlert && (
+        <LimitAlertModal
+          isOpen={true}
+          title="Acesso Negado"
+          message={permissionAlert}
+          onClose={() => setPermissionAlert(null)}
+        />
+      )}
     </div>
   );
 };
 
-// Helper for inline tokens: Spoiler, Bold, Italic, Strikethrough, Inline Code, Custom Emojis, Shortcodes, Links, Mentions
+// Helper for inline tokens: Spoiler, Bold, Italic, Strikethrough, Inline Code, Custom Emojis, Shortcodes, Links, Mentions, Channels
 function renderInlineFormatting(
   text: string,
   keyPrefix: string,
@@ -288,7 +424,10 @@ function renderInlineFormatting(
   guildRoles?: any[],
   currentUser?: User | null,
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void,
-  onOpenUserContextMenu?: (e: React.MouseEvent, user: User) => void
+  onOpenUserContextMenu?: (e: React.MouseEvent, user: User) => void,
+  activeGuildChannels?: Channel[],
+  allGuilds?: Guild[],
+  onChannelClick?: (channel: Channel, guild?: Guild) => void
 ): React.ReactNode {
   const customMap = new Map<string, GuildEmoji>();
   if (guildEmojis) {
@@ -298,7 +437,7 @@ function renderInlineFormatting(
   }
 
   const tokenRegex =
-    /(\|\|[\s\S]+?\|\||`[^`\n]+`|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|<:[a-zA-Z0-9_+-]+:[^>]+>|:([a-zA-Z0-9_+-]+):|https?:\/\/[^\s<]+[^<.,:;"')\]\s]|@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
+    /(\|\|[\s\S]+?\|\||`[^`\n]+`|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|<:[a-zA-Z0-9_+-]+:[^>]+>|:([a-zA-Z0-9_+-]+):|https?:\/\/[^\s<]+[^<.,:;"')\]\s]|@[a-zA-Z0-9_.-]+|@everyone|@here|#[a-zA-Z0-9_\u00C0-\u00FF-]+)/g;
 
   const elements: React.ReactNode[] = [];
   let lastIdx = 0;
@@ -370,7 +509,10 @@ function renderInlineFormatting(
             guildRoles,
             currentUser,
             onOpenUserProfile,
-            onOpenUserContextMenu
+            onOpenUserContextMenu,
+            activeGuildChannels,
+            allGuilds,
+            onChannelClick
           )}
         </SpoilerText>
       );
@@ -397,7 +539,10 @@ function renderInlineFormatting(
             guildRoles,
             currentUser,
             onOpenUserProfile,
-            onOpenUserContextMenu
+            onOpenUserContextMenu,
+            activeGuildChannels,
+            allGuilds,
+            onChannelClick
           )}
         </strong>
       );
@@ -414,7 +559,10 @@ function renderInlineFormatting(
             guildRoles,
             currentUser,
             onOpenUserProfile,
-            onOpenUserContextMenu
+            onOpenUserContextMenu,
+            activeGuildChannels,
+            allGuilds,
+            onChannelClick
           )}
         </del>
       );
@@ -434,7 +582,10 @@ function renderInlineFormatting(
             guildRoles,
             currentUser,
             onOpenUserProfile,
-            onOpenUserContextMenu
+            onOpenUserContextMenu,
+            activeGuildChannels,
+            allGuilds,
+            onChannelClick
           )}
         </em>
       );
@@ -451,6 +602,49 @@ function renderInlineFormatting(
           {token}
         </a>
       );
+    } else if (token.startsWith('#')) {
+      const targetName = token.slice(1).toLowerCase();
+      let matchedChannel = activeGuildChannels?.find(
+        (c) => c.type !== 'category' && c.name.toLowerCase() === targetName
+      );
+      let matchedGuild: Guild | undefined = undefined;
+
+      if (!matchedChannel && allGuilds) {
+        for (const g of allGuilds) {
+          const found = (g.channels || []).find(
+            (c) => c.type !== 'category' && c.name.toLowerCase() === targetName
+          );
+          if (found) {
+            matchedChannel = found;
+            matchedGuild = g;
+            break;
+          }
+        }
+      }
+
+      if (matchedChannel) {
+        const isVoice = matchedChannel.type === 'voice';
+        elements.push(
+          <span
+            key={k}
+            onClick={(e) => {
+              e.stopPropagation();
+              onChannelClick?.(matchedChannel!, matchedGuild);
+            }}
+            className="font-semibold px-1.5 py-0.5 rounded-md text-[13px] inline-flex items-center gap-1 mx-0.5 transition-all duration-150 select-none cursor-pointer active:scale-95 bg-brand-500/20 text-brand-300 hover:bg-brand-500/35 hover:text-white border border-brand-500/25 shadow-sm"
+            title={isVoice ? `Canal de voz #${matchedChannel.name}` : `Canal de texto #${matchedChannel.name}`}
+          >
+            {isVoice ? (
+              <Volume2 className="w-3.5 h-3.5 flex-shrink-0" />
+            ) : (
+              <Hash className="w-3.5 h-3.5 flex-shrink-0" />
+            )}
+            <span>{matchedChannel.name}</span>
+          </span>
+        );
+      } else {
+        elements.push(token);
+      }
     } else if (token.startsWith('@')) {
       const isGlobal = token === '@everyone' || token === '@here';
       const targetName = token.slice(1).toLowerCase();

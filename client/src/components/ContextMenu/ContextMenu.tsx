@@ -160,7 +160,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                     item.disabled
                       ? 'opacity-40 cursor-not-allowed text-gray-500'
                       : isDanger
-                      ? 'text-dnd hover:bg-dnd/15 hover:text-red-400 cursor-pointer'
+                      ? 'text-red-500 hover:bg-red-500/15 hover:text-red-400 cursor-pointer font-medium'
                       : isSubmenuOpen
                       ? 'bg-brand-500/20 text-brand-300'
                       : 'text-gray-200 hover:bg-brand-500 hover:text-white cursor-pointer'
@@ -170,7 +170,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                     {item.icon && (
                       <span
                         className={`w-4 h-4 flex items-center justify-center flex-shrink-0 ${
-                          isDanger ? 'text-dnd group-hover:text-red-400' : 'text-gray-400 group-hover:text-white'
+                          isDanger ? 'text-red-500 group-hover:text-red-400' : 'text-gray-400 group-hover:text-white'
                         }`}
                       >
                         {item.icon}

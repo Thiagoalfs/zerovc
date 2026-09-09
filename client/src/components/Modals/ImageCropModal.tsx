@@ -99,6 +99,18 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
     [computeMaxPan, zoom, rotation]
   );
 
+  // Escape key to cancel
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onCancel]);
+
   // Load and reset image when file changes or modal opens
   useEffect(() => {
     if (isOpen && file) {

@@ -64,6 +64,17 @@ export const IncomingCallModal: React.FC = () => {
     };
   }, [callState]);
 
+  useEffect(() => {
+    if (callState !== 'ringing') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        rejectCall();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [callState, rejectCall]);
+
   if (callState !== 'ringing' || !incomingCaller) return null;
 
   return (

@@ -55,6 +55,17 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
     fetchSources();
   }, [isOpen, isElectron]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleShare = async () => {

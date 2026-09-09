@@ -82,6 +82,17 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
     loadInvite();
   }, [isOpen, activeGuild]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !activeGuild) return null;
 
   const inviteCode = invite?.code || '';
