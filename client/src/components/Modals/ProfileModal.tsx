@@ -167,6 +167,66 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
+  // Escape key handler
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isCropOpen) {
+          setIsCropOpen(false);
+          return;
+        }
+        if (isEditDisplayNameOpen) {
+          setIsEditDisplayNameOpen(false);
+          return;
+        }
+        if (isEditUsernameOpen) {
+          setIsEditUsernameOpen(false);
+          return;
+        }
+        if (isEditEmailOpen) {
+          setIsEditEmailOpen(false);
+          return;
+        }
+        if (isEditPhoneOpen) {
+          setIsEditPhoneOpen(false);
+          return;
+        }
+        if (isChangePasswordOpen) {
+          setIsChangePasswordOpen(false);
+          return;
+        }
+        if (is2FAModalOpen) {
+          setIs2FAModalOpen(false);
+          return;
+        }
+        if (showBackupCodesModal) {
+          setShowBackupCodesModal(false);
+          return;
+        }
+        if (isDeleteAccountOpen) {
+          setIsDeleteAccountOpen(false);
+          return;
+        }
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    isOpen,
+    onClose,
+    isCropOpen,
+    isEditDisplayNameOpen,
+    isEditUsernameOpen,
+    isEditEmailOpen,
+    isEditPhoneOpen,
+    isChangePasswordOpen,
+    is2FAModalOpen,
+    showBackupCodesModal,
+    isDeleteAccountOpen,
+  ]);
+
   // Audio / Device Fields
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);

@@ -245,6 +245,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [isRecordingPTT]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isRecordingPTT) {
+          setIsRecordingPTT(false);
+          return;
+        }
+        if (showDisableModal) {
+          setShowDisableModal(false);
+          return;
+        }
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isRecordingPTT, showDisableModal, onClose]);
+
   const loadBlockedUsers = async () => {
     setIsLoadingBlocks(true);
     try {
