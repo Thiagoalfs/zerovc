@@ -378,12 +378,12 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
               title="Menu Lateral"
             >
-              <Menu className="w-5.5 h-5.5" />
+              <Menu className="w-6 h-6" />
             </button>
           )}
 
           <div className="w-8 h-8 md:w-7 md:h-7 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-            <Users className="w-4.5 h-4.5 md:w-4 md:h-4" />
+            <Users className="w-4 h-4" />
           </div>
 
           <div className="flex items-baseline gap-2 truncate">
