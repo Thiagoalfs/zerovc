@@ -993,14 +993,25 @@ export const App: React.FC = () => {
 
   const cleanRoute = currentRoute.replace(/^\/+|\/+$/g, '').split('?')[0];
 
-  const isCapacitor = typeof (window as any).Capacitor !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor?.getPlatform?.() === 'android');
+  const isCapacitor =
+    typeof window !== 'undefined' &&
+    (typeof (window as any).Capacitor !== 'undefined' &&
+      ((window as any).Capacitor?.isNativePlatform?.() ||
+        (window as any).Capacitor?.getPlatform?.() === 'android' ||
+        (window as any).Capacitor?.getPlatform?.() === 'ios') ||
+      window.matchMedia?.('(display-mode: standalone)')?.matches);
 
   if (!user) {
     // Native Electron or Capacitor app: Always opens directly on AuthScreen (never the landing page)
     if (isElectron || isCapacitor) {
       const isRegister = cleanRoute === 'signup' || cleanRoute === 'register';
       return (
-        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+        <div
+          style={{
+            paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
+          }}
+          className="w-screen h-[100dvh] flex flex-col bg-background-darkest"
+        >
           {isElectron && <TitleBar />}
           <div className="flex-1 overflow-hidden">
             <AuthScreen initialMode={isRegister ? 'register' : 'login'} onNavigate={navigateTo} />
@@ -1097,6 +1108,7 @@ export const App: React.FC = () => {
       style={{
         height: viewportHeight ? `${viewportHeight}px` : '100dvh',
         top: `${viewportTop}px`,
+        paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
       }}
       className="fixed inset-x-0 bottom-auto w-full flex flex-col bg-background-dark overflow-hidden select-none"
     >
@@ -1135,6 +1147,7 @@ export const App: React.FC = () => {
               dragState?.drawer === 'left'
                 ? 'none'
                 : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
           }}
           className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex flex-col h-full w-full md:w-auto bg-background-darkest ${
             dragState?.drawer === 'left'

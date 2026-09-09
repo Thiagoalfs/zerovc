@@ -378,6 +378,14 @@ export const MemberList: React.FC<MemberListProps> = ({
     );
   };
 
+  const isCapacitor =
+    typeof window !== 'undefined' &&
+    (typeof (window as any).Capacitor !== 'undefined' &&
+      ((window as any).Capacitor?.isNativePlatform?.() ||
+        (window as any).Capacitor?.getPlatform?.() === 'android' ||
+        (window as any).Capacitor?.getPlatform?.() === 'ios') ||
+      window.matchMedia?.('(display-mode: standalone)')?.matches);
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -404,6 +412,7 @@ export const MemberList: React.FC<MemberListProps> = ({
             ? `translateX(${dragOffset}px)`
             : undefined,
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+          paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
         }}
         className={`fixed md:static inset-y-0 right-0 z-40 md:z-0 w-full md:w-64 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none md:relative flex-shrink-0 ${
           isDragging ? '' : isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
