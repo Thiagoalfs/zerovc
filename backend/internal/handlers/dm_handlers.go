@@ -924,3 +924,183 @@ func (h *DMHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "is_pinned": isPinned})
 }
 
+func (h *DMHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	messageIDStr := chi.URLParam(r, "messageID")
+	messageID, err := uuid.Parse(messageIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var user1ID, user2ID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
+	if err != nil || (user1ID != userID && user2ID != userID) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	var authorID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id FROM dm_messages WHERE id = $1 AND dm_room_id = $2", messageID, roomID).Scan(&authorID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if authorID != userID {
+		http.Error(w, `{"error":"forbidden: only author can delete message"}`, http.StatusForbidden)
+		return
+	}
+
+	_, _ = h.db.Pool.Exec(r.Context(), "DELETE FROM message_reactions WHERE dm_message_id = $1", messageID)
+	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM dm_messages WHERE id = $1 AND dm_room_id = $2", messageID, roomID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to delete message"}`, http.StatusInternalServerError)
+		return
+	}
+
+	otherUserID := user1ID
+	if otherUserID == userID {
+		otherUserID = user2ID
+	}
+
+	deletePayload := map[string]any{
+		"id":         messageID,
+		"message_id": messageID,
+		"room_id":    roomID,
+		"dm_room_id": roomID,
+	}
+
+	h.hub.SendToUser(userID, models.WSEvent{
+		Type: models.EventDMMessageDelete,
+		Data: deletePayload,
+	})
+	h.hub.SendToUser(otherUserID, models.WSEvent{
+		Type: models.EventDMMessageDelete,
+		Data: deletePayload,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true})
+}
+
+func (h *DMHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	messageIDStr := chi.URLParam(r, "messageID")
+	messageID, err := uuid.Parse(messageIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Content == "" {
+		http.Error(w, `{"error":"content cannot be empty"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Content) > 2000 {
+		http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
+		return
+	}
+
+	var user1ID, user2ID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
+	if err != nil || (user1ID != userID && user2ID != userID) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	var authorID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id FROM dm_messages WHERE id = $1 AND dm_room_id = $2", messageID, roomID).Scan(&authorID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if authorID != userID {
+		http.Error(w, `{"error":"forbidden: only author can edit message"}`, http.StatusForbidden)
+		return
+	}
+
+	now := time.Now().UTC()
+	_, err = h.db.Pool.Exec(r.Context(), `
+		UPDATE dm_messages
+		SET content = $1, is_edited = true, edited_at = $2
+		WHERE id = $3 AND dm_room_id = $4
+	`, req.Content, now, messageID, roomID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update message"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var msg models.DMMessage
+	var attachBytes []byte
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT id, dm_room_id, author_id, content, attachments, reply_to_id, is_pinned, is_edited, edited_at, created_at
+		FROM dm_messages
+		WHERE id = $1
+	`, messageID).Scan(
+		&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &attachBytes, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"failed to retrieve updated message"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if len(attachBytes) > 0 {
+		json.Unmarshal(attachBytes, &msg.Attachments)
+	}
+	if msg.Attachments == nil {
+		msg.Attachments = make([]models.Attachment, 0)
+	}
+
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1", userID).Scan(
+		&msg.Author.ID, &msg.Author.Username, &msg.Author.DisplayName, &msg.Author.AvatarURL, &msg.Author.BannerURL, &msg.Author.Bio, &msg.Author.Status, &msg.Author.CustomStatus,
+	)
+
+	otherUserID := user1ID
+	if otherUserID == userID {
+		otherUserID = user2ID
+	}
+
+	h.hub.SendToUser(userID, models.WSEvent{
+		Type: models.EventDMMessageUpdate,
+		Data: msg,
+	})
+	h.hub.SendToUser(otherUserID, models.WSEvent{
+		Type: models.EventDMMessageUpdate,
+		Data: msg,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(msg)
+}
+
+

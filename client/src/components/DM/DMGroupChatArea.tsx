@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -17,15 +17,28 @@ import {
   AlertCircle,
   RotateCcw,
   Copy,
+  Pencil,
+  Trash2,
+  Reply,
+  Pin,
+  CornerDownRight,
+  User as UserIcon,
+  MessageSquare,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
+import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useGuildStore } from '../../stores/guildStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
+import { DeleteMessageModal } from '../Modals/DeleteMessageModal';
 import { EmojiAndGifPicker } from '../Chat/EmojiAndGifPicker';
 import { FormattedMessage } from '../Chat/FormattedMessage';
+import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { UserVolumeSlider } from '../Voice/VolumeSliders';
+import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
 import { User, DMGroupMessage } from '../../types';
 
 interface DMGroupChatAreaProps {
@@ -47,12 +60,17 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     activeGroup,
     messages,
     sendMessage,
+    editMessage,
+    deleteMessage,
     removeMember,
     isLoadingMessages,
     isLoadingMoreMessages,
     hasMoreByGroup,
     loadMoreMessages,
   } = useDMGroupStore();
+  const { guilds, activeGuild } = useGuildStore();
+  const { openDMWithUser } = useDMStore();
+  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const chatDensity = useSettingsStore((s) => s.chatDensity);
   const isDensityCompact = chatDensity === 'compact';
 
@@ -62,6 +80,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<DMGroupMessage | null>(null);
   const [showMemberList, setShowMemberList] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('zerovc_server_members_open');
@@ -73,6 +92,26 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   });
   const [isInGroupVoice, setIsInGroupVoice] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
+
+  // Inline editing state
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState<string>('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Delete message modal state
+  const [messageToDelete, setMessageToDelete] = useState<DMGroupMessage | null>(null);
+  const [isDeletingMessage, setIsDeletingMessage] = useState(false);
+
+  // Mentions (@) Autocomplete State
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionCursorPos, setMentionCursorPos] = useState<number>(0);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState<number>(0);
+
+  // Emoji (:) Autocomplete State
+  const [emojiQuery, setEmojiQuery] = useState<string | null>(null);
+  const [emojiCursorPos, setEmojiCursorPos] = useState<number>(0);
+  const [selectedEmojiIndex, setSelectedEmojiIndex] = useState<number>(0);
 
   const dragCounterRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -236,6 +275,120 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   };
 
+  const allAvailableEmojis = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+    if (activeGuild?.emojis) {
+      for (const e of activeGuild.emojis) {
+        if (!seen.has(e.name.toLowerCase())) {
+          seen.add(e.name.toLowerCase());
+          list.push(e);
+        }
+      }
+    }
+    for (const g of guilds) {
+      if (g.emojis) {
+        for (const e of g.emojis) {
+          if (!seen.has(e.name.toLowerCase())) {
+            seen.add(e.name.toLowerCase());
+            list.push(e);
+          }
+        }
+      }
+    }
+    return list;
+  }, [activeGuild?.emojis, guilds]);
+
+  // Compute filtered mention suggestions
+  const mentionSuggestions = useMemo(() => {
+    if (mentionQuery === null || !activeGroup) return [];
+    const q = mentionQuery.toLowerCase();
+    const list: Array<{
+      id: string;
+      name: string;
+      username: string;
+      avatar_url?: string;
+    }> = [];
+
+    // Special mentions: @everyone / @here
+    if ('everyone'.includes(q) || 'todos'.includes(q)) {
+      list.push({
+        id: 'everyone',
+        name: 'everyone',
+        username: 'everyone',
+      });
+    }
+    if ('here'.includes(q) || 'aqui'.includes(q)) {
+      list.push({
+        id: 'here',
+        name: 'here',
+        username: 'here',
+      });
+    }
+
+    for (const m of activeGroup.members || []) {
+      const uName = (m.username || '').toLowerCase();
+      const dName = (m.display_name || '').toLowerCase();
+      if (uName.includes(q) || dName.includes(q)) {
+        list.push({
+          id: m.id,
+          name: m.display_name || m.username,
+          username: m.username,
+          avatar_url: m.avatar_url,
+        });
+      }
+    }
+
+    return list.slice(0, 8);
+  }, [mentionQuery, activeGroup]);
+
+  // Compute filtered emoji suggestions
+  const emojiSuggestions = useMemo(() => {
+    if (emojiQuery === null) return [];
+    return searchEmojiSuggestions(emojiQuery, allAvailableEmojis, 'Grupo', 8);
+  }, [emojiQuery, allAvailableEmojis]);
+
+  const insertMention = (item: { username: string }) => {
+    if (!textareaRef.current) return;
+    const text = content;
+    const textBefore = text.slice(0, mentionCursorPos);
+    const textAfter = text.slice(mentionCursorPos);
+
+    const newTextBefore = textBefore.replace(/@([a-zA-Z0-9_.-]*)$/, `@${item.username} `);
+    const newContent = newTextBefore + textAfter;
+    setContent(newContent);
+    setMentionQuery(null);
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPos = newTextBefore.length;
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
+  };
+
+  const insertEmoji = (item: EmojiSuggestion) => {
+    if (!textareaRef.current) return;
+    const text = content;
+    const textBefore = text.slice(0, emojiCursorPos);
+    const textAfter = text.slice(emojiCursorPos);
+
+    const replacement = item.isCustom ? `:${item.name}: ` : `${item.unicode} `;
+    const newTextBefore = textBefore.replace(/:([a-zA-Z0-9_+-]*)$/, replacement);
+    const newContent = newTextBefore + textAfter;
+    setContent(newContent);
+    setEmojiQuery(null);
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPos = newTextBefore.length;
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
+  };
+
   const handleSelectEmoji = (emoji: string) => {
     setContent((prev) => prev + emoji);
     setShowEmojiPicker(false);
@@ -245,27 +398,125 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const handleSelectGif = async (gifUrl: string) => {
     setShowEmojiPicker(false);
     try {
-      await sendMessage(gifUrl);
+      await sendMessage(gifUrl, undefined, replyingTo?.id);
+      setReplyingTo(null);
     } catch (err: any) {
       console.error('Failed to send GIF:', err);
     }
   };
 
+  const handleSaveEdit = async (msgId: string) => {
+    if (!editContent.trim()) return;
+    const msg = messages.find((m) => m.id === msgId);
+    if (msg && editContent.trim() === msg.content) {
+      setEditingMessageId(null);
+      return;
+    }
+
+    try {
+      setIsSavingEdit(true);
+      await editMessage(msgId, editContent.trim());
+      setEditingMessageId(null);
+    } catch (err: any) {
+      console.error('Failed to save message edit:', err);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!messageToDelete) return;
+    try {
+      setIsDeletingMessage(true);
+      await deleteMessage(messageToDelete.id);
+      setMessageToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete message:', err);
+    } finally {
+      setIsDeletingMessage(false);
+    }
+  };
+
+  const handleMessageContextMenu = (e: React.MouseEvent, msg: DMGroupMessage) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isAuthor = user?.id === msg.author_id;
+    const isOwner = activeGroup?.owner_id === user?.id;
+    const items: ContextMenuItem[] = [];
+
+    if (msg.author) {
+      items.push({
+        label: 'Ver Perfil',
+        icon: <UserIcon className="w-4 h-4" />,
+        onClick: () => onOpenUserProfile?.(msg.author, { x: e.clientX, y: e.clientY }),
+      });
+      items.push({ label: '', separator: true });
+    }
+
+    items.push({
+      label: 'Responder',
+      icon: <Reply className="w-4 h-4" />,
+      onClick: () => setReplyingTo(msg),
+    });
+
+    items.push({
+      label: 'Copiar Texto',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(msg.content),
+    });
+
+    if (isAuthor) {
+      items.push({
+        label: 'Editar Mensagem',
+        icon: <Pencil className="w-4 h-4" />,
+        onClick: () => {
+          setEditingMessageId(msg.id);
+          setEditContent(msg.content);
+        },
+      });
+    }
+
+    if (isAuthor || isOwner) {
+      items.push({
+        label: 'Excluir Mensagem',
+        icon: <Trash2 className="w-4 h-4" />,
+        variant: 'danger',
+        onClick: () => setMessageToDelete(msg),
+      });
+    }
+
+    items.push({ label: '', separator: true });
+    items.push({
+      label: 'Copiar ID da Mensagem',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(msg.id),
+    });
+
+    openContextMenu(e, items, 'Mensagem');
+  };
+
   const handleSend = async () => {
     if (!content.trim() && !selectedFile) return;
 
-    if (content.length > MAX_CHARS) {
+    let textToSend = replaceEmojiShortcodes(content.trim(), allAvailableEmojis);
+
+    if (textToSend.length > MAX_CHARS) {
       setLimitAlert({
         title: 'Mensagem muito longa',
         message: `O limite de caracteres por mensagem é de ${MAX_CHARS.toLocaleString('pt-BR')}.`,
-        detail: `Sua mensagem atual possui ${content.length.toLocaleString('pt-BR')} caracteres.`,
+        detail: `Sua mensagem atual possui ${textToSend.length.toLocaleString('pt-BR')} caracteres (${(textToSend.length - MAX_CHARS).toLocaleString('pt-BR')} acima do limite).`,
       });
       return;
     }
 
-    const textToSend = content.trim();
+    const replyIdToSend = replyingTo?.id;
 
     setContent('');
+    setReplyingTo(null);
+    setMentionQuery(null);
+    setEmojiQuery(null);
+
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -286,27 +537,115 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           },
         ];
 
-        await sendMessage(textToSend, attachmentPayload);
+        await sendMessage(textToSend, attachmentPayload, replyIdToSend);
       } catch (err: any) {
         setIsUploading(false);
         alert(err.message || 'Falha ao enviar arquivo');
       }
     } else {
-      await sendMessage(textToSend);
+      await sendMessage(textToSend, undefined, replyIdToSend);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 1. Emoji Suggestions Navigation
+    if (emojiSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedEmojiIndex((prev) => (prev + 1) % emojiSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedEmojiIndex((prev) => (prev - 1 + emojiSuggestions.length) % emojiSuggestions.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertEmoji(emojiSuggestions[selectedEmojiIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setEmojiQuery(null);
+        return;
+      }
+    }
+
+    // 2. Mention Suggestions Navigation
+    if (mentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedMentionIndex((prev) => (prev + 1) % mentionSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedMentionIndex((prev) => (prev - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(mentionSuggestions[selectedMentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
+
+    // 3. ArrowUp Shortcut to edit user's last message
+    if (e.key === 'ArrowUp' && !content.trim() && !selectedFile && !replyingTo) {
+      e.preventDefault();
+      const myLastMsg = [...messages].reverse().find((m) => m.author_id === user?.id && m.status !== 'sending' && m.status !== 'failed');
+      if (myLastMsg) {
+        setEditingMessageId(myLastMsg.id);
+        setEditContent(myLastMsg.content);
+      }
+      return;
+    }
+
+    // 4. Enter to send
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    } else if (e.key === 'Escape' && replyingTo) {
+      e.preventDefault();
+      setReplyingTo(null);
     }
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
+    const val = e.target.value;
+    setContent(val);
     e.target.style.height = 'auto';
     e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
+
+    const cursor = e.target.selectionStart || val.length;
+    const textBefore = val.slice(0, cursor);
+
+    // Detect @ mention
+    const mentionMatch = textBefore.match(/(?:^|\s)@([a-zA-Z0-9_.-]*)$/);
+    if (mentionMatch) {
+      setMentionQuery(mentionMatch[1]);
+      setMentionCursorPos(cursor);
+      setSelectedMentionIndex(0);
+      setEmojiQuery(null);
+    } else {
+      setMentionQuery(null);
+
+      // Detect : emoji
+      const emojiMatch = textBefore.match(/(?:^|\s):([a-zA-Z0-9_+-]*)$/);
+      if (emojiMatch) {
+        setEmojiQuery(emojiMatch[1]);
+        setEmojiCursorPos(cursor);
+        setSelectedEmojiIndex(0);
+      } else {
+        setEmojiQuery(null);
+      }
+    }
   };
 
   const handleJoinVoice = async () => {
@@ -471,6 +810,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 const isCompact = (() => {
                   if (!prevMsg) return false;
                   if (prevMsg.author_id !== msg.author_id) return false;
+                  if (msg.reply_to) return false;
                   const prevTime = new Date(prevMsg.created_at).getTime();
                   const currTime = new Date(msg.created_at).getTime();
                   if (isNaN(prevTime) || isNaN(currTime)) return false;
@@ -496,11 +836,15 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
                 const isSending = msg.status === 'sending';
                 const isFailed = msg.status === 'failed';
+                const isAuthor = user?.id === msg.author_id;
+                const isOwner = activeGroup?.owner_id === user?.id;
+                const isEditing = editingMessageId === msg.id;
 
                 return (
                   <div
                     key={msg.id}
                     id={`msg-${msg.id}`}
+                    onContextMenu={(e) => handleMessageContextMenu(e, msg)}
                     className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 ${
                       isFailed
                         ? 'bg-red-500/10 hover:bg-red-500/15 border-l-2 border-red-500 text-red-200'
@@ -509,9 +853,43 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                         : 'hover:bg-background-dark/40'
                     } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
                   >
+                    {msg.reply_to && (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const targetEl = document.getElementById(`msg-${msg.reply_to?.id}`);
+                          if (targetEl) {
+                            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            targetEl.classList.add('bg-brand-500/25', 'ring-2', 'ring-brand-500/50');
+                            setTimeout(() => {
+                              targetEl.classList.remove('bg-brand-500/25', 'ring-2', 'ring-brand-500/50');
+                            }, 1500);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-1 ml-9 md:ml-10 select-none opacity-80 hover:opacity-100 hover:text-gray-200 transition-all cursor-pointer group/reply"
+                        title="Clique para ir até a mensagem respondida"
+                      >
+                        <CornerDownRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 group-hover/reply:text-brand-400 transition-colors" />
+                        <span className="font-semibold text-brand-400 group-hover/reply:underline">
+                          @{msg.reply_to.author.display_name || msg.reply_to.author.username}
+                        </span>
+                        <span className="truncate text-gray-400 max-w-sm italic">
+                          "{msg.reply_to.content}"
+                        </span>
+                      </div>
+                    )}
+
                     <div className="flex gap-3 md:gap-4 relative">
-                      {!isSending && !isFailed && (
+                      {!isSending && !isFailed && !isEditing && (
                         <div className="absolute -top-3 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
+                          <button
+                            onClick={() => setReplyingTo(msg)}
+                            className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                            title="Responder"
+                          >
+                            <Reply className="w-3.5 h-3.5" />
+                          </button>
+
                           <button
                             onClick={() => navigator.clipboard.writeText(msg.content)}
                             className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
@@ -519,6 +897,29 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                           >
                             <Copy className="w-3.5 h-3.5" />
                           </button>
+
+                          {isAuthor && (
+                            <button
+                              onClick={() => {
+                                setEditingMessageId(msg.id);
+                                setEditContent(msg.content);
+                              }}
+                              className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                              title="Editar Mensagem"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {(isAuthor || isOwner) && (
+                            <button
+                              onClick={() => setMessageToDelete(msg)}
+                              className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer"
+                              title="Excluir Mensagem"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       )}
 
@@ -568,16 +969,67 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                           </div>
                         )}
 
-                        <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
-                          isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
-                        }`}>
-                          <FormattedMessage
-                            content={msg.content}
-                            onPreviewImage={onPreviewImage}
-                            onImageLoad={handleMediaLoad}
-                            onOpenUserProfile={onOpenUserProfile}
-                          />
-                        </div>
+                        {isEditing ? (
+                          <div className="mt-1 w-full animate-in fade-in">
+                            <div className="bg-background-darkest/90 rounded-xl p-2 border border-brand-500/50 focus-within:ring-1 focus-within:ring-brand-500 shadow-lg">
+                              <textarea
+                                ref={editInputRef}
+                                value={editContent}
+                                onChange={(e) => setEditContent(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSaveEdit(msg.id);
+                                  } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    setEditingMessageId(null);
+                                  }
+                                }}
+                                autoFocus
+                                rows={2}
+                                className="w-full bg-transparent text-sm text-gray-100 placeholder-gray-500 focus:outline-none resize-none no-scrollbar"
+                              />
+                              <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-white/5">
+                                <span>
+                                  escape para <button type="button" onClick={() => setEditingMessageId(null)} className="text-brand-400 hover:underline cursor-pointer">cancelar</button> • enter para <button type="button" onClick={() => handleSaveEdit(msg.id)} className="text-brand-400 hover:underline cursor-pointer font-semibold">salvar</button>
+                                </span>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingMessageId(null)}
+                                    className="px-2 py-0.5 rounded text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEdit(msg.id)}
+                                    disabled={isSavingEdit || !editContent.trim()}
+                                    className="px-2.5 py-0.5 rounded bg-brand-500 hover:bg-brand-600 text-white font-medium transition-colors cursor-pointer disabled:opacity-50"
+                                  >
+                                    {isSavingEdit ? 'Salvando...' : 'Salvar'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
+                            isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
+                          }`}>
+                            <FormattedMessage
+                              content={msg.content}
+                              onPreviewImage={onPreviewImage}
+                              onImageLoad={handleMediaLoad}
+                              onOpenUserProfile={onOpenUserProfile}
+                            />
+                            {msg.is_edited && (
+                              <span className="text-[10px] text-gray-400 select-none ml-1.5 opacity-80" title="Mensagem editada">
+                                (editado)
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {isFailed && (
                           <div className="mt-1.5 flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20">
@@ -610,6 +1062,119 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {replyingTo && (
+            <div className="px-4 py-1.5 bg-background-darkest border-t border-white/5 flex items-center justify-between text-xs text-gray-300 animate-in fade-in slide-in-from-bottom-1 select-none">
+              <div className="flex items-center gap-2 truncate">
+                <Reply className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
+                <span className="text-gray-400">Respondendo a</span>
+                <span className="font-bold text-brand-400">
+                  @{replyingTo.author?.display_name || replyingTo.author?.username}
+                </span>
+                <span className="text-gray-500 truncate max-w-xs italic hidden md:inline">
+                  "{replyingTo.content}"
+                </span>
+              </div>
+              <button
+                onClick={() => setReplyingTo(null)}
+                className="p-1 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors cursor-pointer"
+                title="Cancelar resposta"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Emoji Autocomplete Suggestions Popup */}
+          {emojiSuggestions.length > 0 && (
+            <div className="mx-3 md:mx-4 mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2 select-none z-30">
+              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Smile className="w-3.5 h-3.5 text-brand-400" />
+                  <span>Emojis correspondentes ({emojiSuggestions.length})</span>
+                </span>
+                <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
+              </div>
+              <div className="space-y-0.5">
+                {emojiSuggestions.map((item, idx) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => insertEmoji(item)}
+                    onMouseEnter={() => setSelectedEmojiIndex(idx)}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer ${
+                      selectedEmojiIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                    }`}
+                  >
+                    {item.isCustom ? (
+                      <div className="w-7 h-7 rounded-lg bg-background-darker flex items-center justify-center p-0.5 flex-shrink-0 border border-white/10">
+                        <img
+                          src={formatAssetUrl(item.imageUrl || '')}
+                          alt={item.name}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-7 h-7 flex items-center justify-center text-xl flex-shrink-0 select-none">
+                        {item.unicode}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between min-w-0 flex-1">
+                      <span className="font-semibold text-xs text-gray-200 truncate">
+                        {item.shortcode}
+                      </span>
+                      {item.isCustom ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-brand-500/20 text-brand-300 border border-brand-500/30 flex-shrink-0">
+                          {item.guildName}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-500 truncate">
+                          {item.name}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Mention Autocomplete Suggestions Popup */}
+          {mentionSuggestions.length > 0 && (
+            <div className="mx-3 md:mx-4 mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2 select-none z-30">
+              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+                <span>Membros sugeridos ({mentionSuggestions.length})</span>
+                <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
+              </div>
+              <div className="space-y-0.5">
+                {mentionSuggestions.map((item, idx) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => insertMention(item)}
+                    onMouseEnter={() => setSelectedMentionIndex(idx)}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer ${
+                      selectedMentionIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden flex-shrink-0">
+                      {item.avatar_url ? (
+                        <img src={formatAssetUrl(item.avatar_url)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        item.name[0]?.toUpperCase()
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="font-semibold text-xs truncate text-gray-200">
+                        {item.name}
+                      </span>
+                      <span className="text-[10px] text-gray-500 truncate">@{item.username}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Selected Image / File Preview */}
           {selectedFile && (
@@ -680,7 +1245,11 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 onChange={handleInput}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder={`Conversar em ${groupName}...`}
+                placeholder={
+                  replyingTo
+                    ? `Respondendo a @${replyingTo.author?.display_name || replyingTo.author?.username}...`
+                    : `Conversar em ${groupName}...`
+                }
                 rows={1}
                 disabled={isUploading}
                 className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-0.5 max-h-36 leading-relaxed font-normal no-scrollbar"
@@ -760,6 +1329,16 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           </div>
         )}
       </div>
+
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
+
+      <DeleteMessageModal
+        isOpen={!!messageToDelete}
+        onClose={() => setMessageToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        message={messageToDelete}
+        isDeleting={isDeletingMessage}
+      />
 
       {limitAlert && (
         <LimitAlertModal

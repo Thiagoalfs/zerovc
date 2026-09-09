@@ -457,6 +457,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    updateMessage: (roomId: string, messageId: string, data: { content: string }) =>
+      request<DMMessage>(`/dms/${roomId}/messages/${messageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    deleteMessage: (roomId: string, messageId: string) =>
+      request<{ success: boolean }>(`/dms/${roomId}/messages/${messageId}`, {
+        method: 'DELETE',
+      }),
     togglePin: (roomId: string, messageId: string) =>
       request<{ success: boolean; is_pinned: boolean }>(`/dms/${roomId}/messages/${messageId}/pin`, {
         method: 'POST',
@@ -519,6 +528,15 @@ export const api = {
       request<DMGroupMessage>(`/dm/groups/${id}/messages`, {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    updateMessage: (id: string, messageId: string, data: { content: string }) =>
+      request<DMGroupMessage>(`/dm/groups/${id}/messages/${messageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    deleteMessage: (id: string, messageId: string) =>
+      request<{ success: boolean }>(`/dm/groups/${id}/messages/${messageId}`, {
+        method: 'DELETE',
       }),
     getVoiceToken: (id: string) =>
       request<{ token: string; livekit_url: string; room_name: string }>(`/dm/groups/${id}/voice-token`, {
