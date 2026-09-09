@@ -993,13 +993,15 @@ export const App: React.FC = () => {
 
   const cleanRoute = currentRoute.replace(/^\/+|\/+$/g, '').split('?')[0];
 
+  const isCapacitor = typeof (window as any).Capacitor !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor?.getPlatform?.() === 'android');
+
   if (!user) {
-    // Electron app: Always opens directly on AuthScreen (never the landing page)
-    if (isElectron) {
+    // Native Electron or Capacitor app: Always opens directly on AuthScreen (never the landing page)
+    if (isElectron || isCapacitor) {
       const isRegister = cleanRoute === 'signup' || cleanRoute === 'register';
       return (
         <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
-          <TitleBar />
+          {isElectron && <TitleBar />}
           <div className="flex-1 overflow-hidden">
             <AuthScreen initialMode={isRegister ? 'register' : 'login'} onNavigate={navigateTo} />
           </div>
@@ -1010,7 +1012,7 @@ export const App: React.FC = () => {
     // Web Browser routes:
     if (cleanRoute === 'download') {
       return (
-        <div className="w-full min-h-screen flex flex-col bg-background-darkest">
+        <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
           <DownloadPage onNavigate={navigateTo} user={user} />
         </div>
       );
@@ -1063,16 +1065,16 @@ export const App: React.FC = () => {
 
     // Default Web Root (/): Landing Page
     return (
-      <div className="w-full min-h-screen flex flex-col bg-background-darkest">
+      <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
         <LandingPage onNavigate={navigateTo} user={user} />
       </div>
     );
   }
 
   // Authenticated user on Web accessing root or download:
-  if (!isElectron && cleanRoute === '') {
+  if (!isElectron && !isCapacitor && cleanRoute === '') {
     return (
-      <div className="w-full min-h-screen flex flex-col bg-background-darkest">
+      <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
         <LandingPage onNavigate={navigateTo} user={user} />
       </div>
     );
@@ -1080,7 +1082,7 @@ export const App: React.FC = () => {
 
   if (cleanRoute === 'download') {
     return (
-      <div className="w-full min-h-screen flex flex-col bg-background-darkest">
+      <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
         <DownloadPage onNavigate={navigateTo} user={user} />
       </div>
     );

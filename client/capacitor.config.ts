@@ -5,8 +5,9 @@ const config: CapacitorConfig = {
   appName: 'ZeroVC',
   webDir: 'dist',
   server: {
-    androidScheme: 'https',
+    url: 'https://zerovc.safiroko.xyz',
     cleartext: true,
+    androidScheme: 'https',
   },
   android: {
     allowMixedContent: true,
