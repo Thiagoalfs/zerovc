@@ -526,6 +526,15 @@ export const App: React.FC = () => {
     window.addEventListener('popstate', onRouteEvent);
     window.addEventListener('hashchange', onRouteEvent);
 
+    const onNavigateChannel = (e: any) => {
+      const { guildId, channelId } = e.detail || {};
+      if (guildId) {
+        setIsHomeActive(false);
+        selectGuild(guildId, channelId);
+      }
+    };
+    window.addEventListener('navigate-channel', onNavigateChannel as any);
+
     // Capture initial route/invite before login
     const initialRoute = getCurrentRoute();
     const cleanPath = initialRoute.replace(/^\/+|\/+$/g, '');
@@ -548,8 +557,9 @@ export const App: React.FC = () => {
     return () => {
       window.removeEventListener('popstate', onRouteEvent);
       window.removeEventListener('hashchange', onRouteEvent);
+      window.removeEventListener('navigate-channel', onNavigateChannel as any);
     };
-  }, [handleRoute]);
+  }, [handleRoute, selectGuild]);
 
   // Initialize desktop preferences (e.g. Minimize to Tray & Auto-Start)
   useEffect(() => {
