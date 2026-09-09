@@ -104,7 +104,7 @@ export const ServerList: React.FC<ServerListProps> = ({
 
   return (
     <>
-      <div className="w-[72px] bg-background-darkest flex flex-col items-center py-3 gap-2 select-none z-20 border-r border-black/20">
+      <div className="w-[72px] flex-shrink-0 bg-background-darkest flex flex-col items-center py-3 gap-2 select-none z-20 border-r border-black/20">
         {/* Home / Friends / Direct Messages */}
         <button
           onClick={onSelectHome}

@@ -122,7 +122,10 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
   }, [participants, dimensions]);
 
   return (
-    <div className="flex-1 bg-background-dark flex flex-col h-full overflow-hidden select-none">
+    <div
+      ref={containerRef}
+      className="flex-1 w-full min-w-0 bg-background-dark flex flex-col h-full overflow-hidden select-none"
+    >
       {/* Voice Room Header */}
       <div className="h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10 flex-shrink-0">
         <div className="flex items-center gap-2 truncate">
