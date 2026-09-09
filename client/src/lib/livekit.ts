@@ -426,6 +426,18 @@ class LiveKitManager {
           this.onScreenShareEnded?.();
         };
 
+        // Cleanly stop and unpublish previous screen/audio tracks before publishing new ones (seamless switch)
+        const oldScreenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+        if (oldScreenPub?.track) {
+          try { oldScreenPub.track.stop(); } catch {}
+          await this.room.localParticipant.unpublishTrack(oldScreenPub.track);
+        }
+        const oldAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+        if (oldAudioPub?.track) {
+          try { oldAudioPub.track.stop(); } catch {}
+          await this.room.localParticipant.unpublishTrack(oldAudioPub.track);
+        }
+
         // Publish track with simulcast: false to save ~65% GPU/CPU overhead
         const pub = await this.room.localParticipant.publishTrack(videoTrack, {
           name: 'screen_share',
