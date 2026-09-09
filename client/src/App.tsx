@@ -166,7 +166,7 @@ export const App: React.FC = () => {
     if (e.touches.length !== 1) return;
     const target = e.target as HTMLElement;
 
-    // Ignore touches starting inside modals, inputs, sliders, resizers, or interactive buttons
+    // Ignore touches starting inside modals, inputs, textareas, sliders, or resizers
     if (
       isProfileModalOpen ||
       isServerSettingsOpen ||
@@ -182,8 +182,7 @@ export const App: React.FC = () => {
       target.closest('.fixed.z-50') ||
       target.closest('input') ||
       target.closest('textarea') ||
-      target.closest('button') ||
-      target.closest('a') ||
+      target.closest('input[type=range]') ||
       target.closest('.cursor-col-resize')
     ) {
       return;
@@ -193,7 +192,7 @@ export const App: React.FC = () => {
     const startY = e.touches[0].clientY;
     const winWidth = typeof window !== 'undefined' ? window.innerWidth : 360;
     const leftWidth = Math.min(312, winWidth - 48);
-    const rightWidth = Math.min(260, winWidth - 48);
+    const rightWidth = winWidth; // Full width on mobile
 
     touchStateRef.current = {
       startX,

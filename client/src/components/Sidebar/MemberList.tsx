@@ -399,13 +399,13 @@ export const MemberList: React.FC<MemberListProps> = ({
       {/* Member Sidebar / Drawer */}
       <div
         style={{
-          width: `${memberListWidth}px`,
+          width: typeof window !== 'undefined' && window.innerWidth < 768 ? '100vw' : `${memberListWidth}px`,
           transform: isDragging && dragOffset !== null && dragOffset !== undefined
             ? `translateX(${dragOffset}px)`
             : undefined,
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
-        className={`fixed md:static inset-y-0 right-0 z-50 md:z-0 w-64 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none md:relative flex-shrink-0 max-w-[calc(100vw-72px)] ${
+        className={`fixed md:static inset-y-0 right-0 z-40 md:z-0 w-full md:w-64 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none md:relative flex-shrink-0 ${
           isDragging ? '' : isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
         }`}
       >
