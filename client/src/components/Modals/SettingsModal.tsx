@@ -399,11 +399,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4 overflow-hidden animate-in fade-in duration-150"
     >
       <div className="bg-background-dark w-full max-w-3xl h-[92dvh] md:h-[620px] max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-150">
         {/* Left Sidebar Tabs */}
-        <div className="w-full md:w-56 bg-background-darker p-3 md:p-4 flex flex-row md:flex-col justify-between border-b md:border-b-0 md:border-r border-black/20 overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar flex-shrink-0">
+        <div className="w-full md:w-56 bg-background-darker p-3 md:p-4 flex flex-row md:flex-col justify-between border-b md:border-b-0 md:border-r border-black/20 overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar touch-pan-x flex-shrink-0">
           <div className="flex flex-row md:flex-col items-center md:items-stretch gap-1.5 md:gap-1 flex-1 flex-shrink-0">
             <div className="hidden md:block text-xs font-bold text-gray-400 uppercase tracking-wider px-3 mb-2">
               Configurações
@@ -469,7 +469,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         </div>
 
         {/* Right Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-background-dark">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-background-dark">
           {/* Header */}
           <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 flex-shrink-0">
             <h2 className="text-base sm:text-xl font-bold text-white truncate">
@@ -488,7 +488,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </div>
 
           {/* Body */}
-          <div className="p-4 sm:p-6 flex-1 overflow-y-auto no-scrollbar space-y-4 sm:space-y-6">
+          <div className="p-4 sm:p-6 flex-1 overflow-y-auto no-scrollbar space-y-4 sm:space-y-6 min-h-0 overscroll-contain touch-pan-y">
             {activeTab === 'voice' && (
               <div className="space-y-6">
                 {/* Audio Devices */}

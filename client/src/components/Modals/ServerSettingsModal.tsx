@@ -772,12 +772,12 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto animate-fade-in"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-hidden animate-fade-in"
       >
         <div className="flex flex-col md:flex-row w-full max-w-5xl h-[92dvh] md:h-[88vh] max-h-[92dvh] my-auto bg-[#18191c] rounded-2xl shadow-2xl border border-white/10 overflow-hidden text-gray-200">
           
           {/* SIDEBAR TABS */}
-          <div className="w-full md:w-64 bg-[#111214] border-b md:border-b-0 md:border-r border-white/10 flex flex-row md:flex-col p-3 md:p-4 shrink-0 select-none overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar">
+          <div className="w-full md:w-64 bg-[#111214] border-b md:border-b-0 md:border-r border-white/10 flex flex-row md:flex-col p-3 md:p-4 shrink-0 overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar touch-pan-x">
             <div className="hidden md:block px-3 py-2 mb-4">
               <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono truncate">
                 {activeGuild.name}
@@ -897,7 +897,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           </div>
 
           {/* MAIN CONTENT AREA */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-[#18191c] relative">
+          <div className="flex-1 flex flex-col overflow-hidden bg-[#18191c] relative min-w-0 min-h-0">
             {/* TOP HEADER */}
             <div className="flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-[#1e1f22]/40">
               <div>
@@ -928,7 +928,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             </div>
 
             {/* TAB CONTENTS */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 no-scrollbar md:custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 no-scrollbar md:custom-scrollbar overscroll-contain touch-pan-y min-h-0">
 
               {/* TAB 1: VISÃO GERAL */}
               {activeTab === 'overview' && (
@@ -1159,9 +1159,9 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
               {/* TAB 2: CARGOS (ROLES) */}
               {activeTab === 'roles' && (
-                <div className="flex gap-6 h-[68vh] animate-fade-in">
+                <div className="flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 h-auto md:h-[68vh] animate-fade-in">
                   {/* Roles Sidebar / Hierarchy List */}
-                  <div className="w-72 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-3 shrink-0">
+                  <div className="w-full md:w-72 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-3 shrink-0 max-h-56 md:max-h-none">
                     <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 px-2">
                       <span className="text-xs font-bold uppercase text-gray-400 font-mono">
                         Cargos ({roles.length})
@@ -1180,7 +1180,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       )}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar min-h-0 touch-pan-y">
                       {roles
                         .slice()
                         .sort((a, b) => a.position - b.position)
@@ -1270,7 +1270,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
                   {/* Role Details Editor */}
                   {selectedRole ? (
-                    <div className="flex-1 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-6 overflow-hidden">
+                    <div className="flex-1 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-4 sm:p-6 overflow-hidden min-h-0">
                       <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
                         <div className="flex items-center gap-3">
                           <span
@@ -1306,7 +1306,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                         )}
                       </div>
 
-                      <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-2 custom-scrollbar">
+                      <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-2 custom-scrollbar touch-pan-y min-h-0">
                         {/* Role Name */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">

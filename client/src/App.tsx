@@ -110,6 +110,18 @@ export const App: React.FC = () => {
     if (e.touches.length === 1) {
       const target = e.target as HTMLElement;
       if (
+        isProfileModalOpen ||
+        isServerSettingsOpen ||
+        isCreateServerOpen ||
+        isCreateDMGroupOpen ||
+        isCreateChannelOpen ||
+        isCreateCategoryOpen ||
+        isInviteModalOpen ||
+        isScreenShareOpen ||
+        selectedUserForProfile ||
+        previewImageUrl ||
+        channelToEdit ||
+        target.closest('.fixed') ||
         target.closest('input[type=range]') ||
         target.closest('textarea') ||
         target.closest('input[type=text]') ||

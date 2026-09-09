@@ -670,12 +670,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-2 sm:p-4 overflow-y-auto animate-in fade-in select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-2 sm:p-4 overflow-hidden animate-in fade-in"
     >
       {/* Unified Fixed Container */}
       <div className="bg-background-dark w-full max-w-5xl h-[92dvh] md:h-[680px] max-h-[92dvh] my-auto rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col md:flex-row relative animate-in zoom-in-95">
         {/* Left Sidebar */}
-        <div className="w-full md:w-60 bg-background-darker p-3 md:p-4 flex flex-row md:flex-col justify-between border-b md:border-b-0 md:border-r border-white/5 flex-shrink-0 overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar">
+        <div className="w-full md:w-60 bg-background-darker p-3 md:p-4 flex flex-row md:flex-col justify-between border-b md:border-b-0 md:border-r border-white/5 flex-shrink-0 overflow-x-auto md:overflow-visible gap-1.5 md:gap-0 no-scrollbar touch-pan-x">
           <div className="flex flex-row md:flex-col items-center md:items-stretch gap-1.5 md:gap-1 flex-shrink-0">
             <span className="hidden md:block text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-2">
               Configurações de Usuário
@@ -798,7 +798,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         </div>
 
         {/* Right Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-background-dark/95">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-background-dark/95">
           {/* Top Bar with Title and Close Button */}
           <div className="min-h-14 sm:h-16 px-4 sm:px-6 py-2 border-b border-white/5 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -864,7 +864,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           />
 
           {/* Scrollable Tab Content Container */}
-          <div className="flex-1 p-5 overflow-y-auto no-scrollbar space-y-5">
+          <div className="flex-1 p-4 sm:p-6 overflow-y-auto no-scrollbar space-y-5 min-h-0 overscroll-contain touch-pan-y">
             {/* TAB 1: MINHA CONTA (UNIFIED WITH PROFILE CUSTOMIZATION) */}
             {activeTab === 'account' && (
               <div className="space-y-5 animate-in fade-in">
