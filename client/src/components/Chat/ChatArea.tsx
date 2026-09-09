@@ -14,6 +14,9 @@ interface ChatAreaProps {
   onPreviewImage?: (url: string) => void;
   isMemberListOpen?: boolean;
   onToggleMemberList?: (open: boolean) => void;
+  isDraggingMemberList?: boolean;
+  memberListDragOffset?: number | null;
+  memberListDragProgress?: number | null;
 }
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
@@ -23,6 +26,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   onPreviewImage,
   isMemberListOpen,
   onToggleMemberList,
+  isDraggingMemberList,
+  memberListDragOffset,
+  memberListDragProgress,
 }) => {
   const { user } = useAuthStore();
   const {
@@ -481,6 +487,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         }}
         onSelectUser={onOpenUserProfile}
         onOpenDM={onOpenDM}
+        isDragging={isDraggingMemberList}
+        dragOffset={memberListDragOffset}
+        dragProgress={memberListDragProgress}
       />
     </div>
   );

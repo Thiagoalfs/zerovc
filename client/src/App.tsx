@@ -103,9 +103,6 @@ export const App: React.FC = () => {
     } catch {}
   };
 
-  // Mobile swipe gestures
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
-
   // Dynamic visual viewport height for mobile browsers (keeps header stuck at top when keyboard opens)
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [viewportTop, setViewportTop] = useState<number>(0);
@@ -145,63 +142,188 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  // Mobile swipe & drag gesture state
+  const touchStateRef = useRef<{
+    startX: number;
+    startY: number;
+    startTime: number;
+    initialLeftOpen: boolean;
+    initialRightOpen: boolean;
+    gestureIntent: 'horizontal' | 'vertical' | null;
+    activeDrawer: 'left' | 'right' | null;
+    leftDrawerWidth: number;
+    rightDrawerWidth: number;
+  } | null>(null);
+
+  const [dragState, setDragState] = useState<{
+    drawer: 'left' | 'right';
+    offset: number;
+    progress: number;
+  } | null>(null);
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 1) {
-      const target = e.target as HTMLElement;
-      if (
-        isProfileModalOpen ||
-        isServerSettingsOpen ||
-        isCreateServerOpen ||
-        isCreateDMGroupOpen ||
-        isCreateChannelOpen ||
-        isCreateCategoryOpen ||
-        isInviteModalOpen ||
-        isScreenShareOpen ||
-        selectedUserForProfile ||
-        previewImageUrl ||
-        channelToEdit ||
-        target.closest('.fixed') ||
-        target.closest('input[type=range]') ||
-        target.closest('textarea') ||
-        target.closest('input[type=text]') ||
-        target.closest('.cursor-col-resize')
-      ) {
+    if (e.touches.length !== 1) return;
+    const target = e.target as HTMLElement;
+
+    // Ignore touches starting inside modals, inputs, sliders, resizers, or interactive buttons
+    if (
+      isProfileModalOpen ||
+      isServerSettingsOpen ||
+      isCreateServerOpen ||
+      isCreateDMGroupOpen ||
+      isCreateChannelOpen ||
+      isCreateCategoryOpen ||
+      isInviteModalOpen ||
+      isScreenShareOpen ||
+      selectedUserForProfile ||
+      previewImageUrl ||
+      channelToEdit ||
+      target.closest('.fixed.z-50') ||
+      target.closest('input') ||
+      target.closest('textarea') ||
+      target.closest('button') ||
+      target.closest('a') ||
+      target.closest('.cursor-col-resize')
+    ) {
+      return;
+    }
+
+    const startX = e.touches[0].clientX;
+    const startY = e.touches[0].clientY;
+    const winWidth = typeof window !== 'undefined' ? window.innerWidth : 360;
+    const leftWidth = Math.min(312, winWidth - 48);
+    const rightWidth = Math.min(260, winWidth - 48);
+
+    touchStateRef.current = {
+      startX,
+      startY,
+      startTime: Date.now(),
+      initialLeftOpen: isMobileDrawerOpen,
+      initialRightOpen: Boolean(isMemberListOpen && !isHomeActive && activeGuild),
+      gestureIntent: null,
+      activeDrawer: null,
+      leftDrawerWidth: leftWidth,
+      rightDrawerWidth: rightWidth,
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStateRef.current || e.touches.length !== 1) return;
+
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - touchStateRef.current.startX;
+    const deltaY = currentY - touchStateRef.current.startY;
+
+    // Detect gesture intent if not locked yet
+    if (!touchStateRef.current.gestureIntent) {
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      if (absY > 7 && absY >= absX) {
+        touchStateRef.current.gestureIntent = 'vertical';
         return;
       }
-      touchStartRef.current = {
-        x: e.touches[0].clientX,
-        y: e.touches[0].clientY,
-        time: Date.now(),
-      };
+
+      if (absX > 7 && absX > absY) {
+        touchStateRef.current.gestureIntent = 'horizontal';
+
+        const { initialLeftOpen, initialRightOpen } = touchStateRef.current;
+        if (initialLeftOpen) {
+          touchStateRef.current.activeDrawer = 'left';
+        } else if (initialRightOpen) {
+          touchStateRef.current.activeDrawer = 'right';
+        } else {
+          if (deltaX > 0) {
+            touchStateRef.current.activeDrawer = 'left';
+          } else if (!isHomeActive && activeGuild) {
+            touchStateRef.current.activeDrawer = 'right';
+          }
+        }
+      }
+    }
+
+    if (touchStateRef.current.gestureIntent === 'horizontal' && touchStateRef.current.activeDrawer) {
+      const { activeDrawer, initialLeftOpen, initialRightOpen, leftDrawerWidth, rightDrawerWidth } =
+        touchStateRef.current;
+
+      if (activeDrawer === 'left') {
+        const L = leftDrawerWidth;
+        let offset: number;
+        let progress: number;
+
+        if (initialLeftOpen) {
+          offset = Math.min(0, Math.max(-L, deltaX));
+          progress = Math.max(0, Math.min(1, 1 + offset / L));
+        } else {
+          offset = Math.min(0, Math.max(-L, -L + deltaX));
+          progress = Math.max(0, Math.min(1, deltaX / L));
+        }
+
+        setDragState({ drawer: 'left', offset, progress });
+      } else if (activeDrawer === 'right') {
+        const R = rightDrawerWidth;
+        let offset: number;
+        let progress: number;
+
+        if (initialRightOpen) {
+          offset = Math.max(0, Math.min(R, deltaX));
+          progress = Math.max(0, Math.min(1, 1 - offset / R));
+        } else {
+          offset = Math.max(0, Math.min(R, R + deltaX));
+          progress = Math.max(0, Math.min(1, -deltaX / R));
+        }
+
+        setDragState({ drawer: 'right', offset, progress });
+      }
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartRef.current || e.changedTouches.length === 0) return;
-    const endX = e.changedTouches[0].clientX;
-    const endY = e.changedTouches[0].clientY;
-    const deltaX = endX - touchStartRef.current.x;
-    const deltaY = endY - touchStartRef.current.y;
-    const deltaTime = Date.now() - touchStartRef.current.time;
-    touchStartRef.current = null;
+    if (!touchStateRef.current) return;
 
-    if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3 && deltaTime < 800) {
-      if (deltaX > 0) {
-        // Swipe Left -> Right: open channellist or close memberlist
-        if (isMemberListOpen && !isHomeActive) {
-          handleToggleMemberList(false);
-        } else if (!isMobileDrawerOpen) {
-          setIsMobileDrawerOpen(true);
+    const { gestureIntent, activeDrawer, startX, startTime, initialLeftOpen, initialRightOpen } =
+      touchStateRef.current;
+
+    if (gestureIntent === 'horizontal' && activeDrawer) {
+      const endX = e.changedTouches[0]?.clientX ?? startX;
+      const deltaX = endX - startX;
+      const deltaTime = Math.max(1, Date.now() - startTime);
+      const velocityX = deltaX / deltaTime;
+
+      if (activeDrawer === 'left') {
+        if (initialLeftOpen) {
+          if (deltaX < -50 || velocityX < -0.3) {
+            setIsMobileDrawerOpen(false);
+          } else {
+            setIsMobileDrawerOpen(true);
+          }
+        } else {
+          if (deltaX > 50 || velocityX > 0.3) {
+            setIsMobileDrawerOpen(true);
+          } else {
+            setIsMobileDrawerOpen(false);
+          }
         }
-      } else {
-        // Swipe Right -> Left: close channellist or open memberlist
-        if (isMobileDrawerOpen) {
-          setIsMobileDrawerOpen(false);
-        } else if (!isHomeActive && activeGuild && !isMemberListOpen) {
-          handleToggleMemberList(true);
+      } else if (activeDrawer === 'right') {
+        if (initialRightOpen) {
+          if (deltaX > 50 || velocityX > 0.3) {
+            handleToggleMemberList(false);
+          } else {
+            handleToggleMemberList(true);
+          }
+        } else {
+          if (deltaX < -50 || velocityX < -0.3) {
+            handleToggleMemberList(true);
+          } else {
+            handleToggleMemberList(false);
+          }
         }
       }
     }
+
+    touchStateRef.current = null;
+    setDragState(null);
   };
 
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
@@ -980,20 +1102,44 @@ export const App: React.FC = () => {
       <div
         className="flex-1 flex w-full h-full overflow-hidden relative min-h-0"
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         {/* Mobile Left Drawer Backdrop */}
-        {isMobileDrawerOpen && (
+        {(isMobileDrawerOpen || dragState?.drawer === 'left') && (
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-30 md:hidden animate-in fade-in duration-200"
+            style={{
+              opacity:
+                dragState?.drawer === 'left' && dragState.progress !== undefined
+                  ? dragState.progress * 0.7
+                  : isMobileDrawerOpen
+                  ? 0.7
+                  : 0,
+              transition: dragState?.drawer === 'left' ? 'none' : 'opacity 0.25s ease',
+            }}
+            className="fixed inset-0 bg-black backdrop-blur-sm z-30 md:hidden"
             onClick={() => setIsMobileDrawerOpen(false)}
           />
         )}
 
         {/* 1 & 2. Sidebars */}
         <div
-          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex h-full transition-transform duration-200 ease-in-out ${
-            isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          style={{
+            transform:
+              dragState?.drawer === 'left' && dragState.offset !== undefined
+                ? `translateX(${dragState.offset}px)`
+                : undefined,
+            transition:
+              dragState?.drawer === 'left'
+                ? 'none'
+                : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+          className={`fixed md:static inset-y-0 left-0 z-40 md:z-0 flex h-full ${
+            dragState?.drawer === 'left'
+              ? ''
+              : isMobileDrawerOpen
+              ? 'translate-x-0'
+              : '-translate-x-full md:translate-x-0'
           }`}
         >
         {/* 1. Server List */}
@@ -1179,6 +1325,9 @@ export const App: React.FC = () => {
             onPreviewImage={(url) => setPreviewImageUrl(url)}
             isMemberListOpen={isMemberListOpen}
             onToggleMemberList={handleToggleMemberList}
+            isDraggingMemberList={dragState?.drawer === 'right'}
+            memberListDragOffset={dragState?.drawer === 'right' ? dragState.offset : null}
+            memberListDragProgress={dragState?.drawer === 'right' ? dragState.progress : null}
           />
         )}
 
