@@ -408,7 +408,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
               title="Menu Lateral"
             >
-              <Menu className="w-5.5 h-5.5" />
+              <Menu className="w-6 h-6" />
             </button>
           )}
 
