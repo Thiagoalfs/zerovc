@@ -45,7 +45,7 @@ export const ActiveCallOverlay: React.FC = () => {
         {
           id: 'switch-screen',
           label: 'Trocar tela',
-          icon: <Monitor className="w-4 h-4 text-brand-400" />,
+          icon: <Monitor className="w-4 h-4" />,
           onClick: () => {
             startScreenShare();
           },
@@ -53,7 +53,6 @@ export const ActiveCallOverlay: React.FC = () => {
         {
           id: 'stop-screen',
           label: 'Parar compartilhamento',
-          icon: <MonitorOff className="w-4 h-4 text-dnd" />,
           variant: 'danger',
           onClick: () => {
             stopScreenShare();
