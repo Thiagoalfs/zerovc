@@ -140,13 +140,22 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       )}
 
       {/* User Info and Controls */}
-      <div className="h-[52px] px-2 flex items-center justify-between bg-background-darkest/60">
+      <div className="h-[60px] md:h-[52px] px-2.5 md:px-2 flex items-center justify-between bg-background-darkest/60 gap-1.5 border-t border-white/5">
+        {/* User Card - Clicking this whole container opens settings */}
         <div
-          onClick={() => setShowStatusMenu(!showStatusMenu)}
-          className="flex items-center gap-2 p-1 rounded-xl hover:bg-background-light/50 cursor-pointer max-w-[130px] transition-colors"
+          onClick={onOpenSettings}
+          className="flex-1 flex items-center gap-2 p-1.5 md:p-1 rounded-xl hover:bg-background-light/50 cursor-pointer min-w-0 transition-colors group/usercard"
+          title="Editar Meu Perfil e Configurações"
         >
-          {/* Avatar */}
-          <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+          {/* Avatar with Status Popover trigger */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowStatusMenu(!showStatusMenu);
+            }}
+            className="relative w-9 h-9 md:w-8 md:h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+            title="Alterar Status"
+          >
             {user?.avatar_url ? (
               <img src={formatAssetUrl(user.avatar_url)} alt={user.username} className="w-full h-full rounded-full object-cover" />
             ) : (
@@ -160,21 +169,28 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             />
           </div>
 
-          <div className="flex flex-col truncate">
-            <span className="text-xs font-semibold text-gray-100 truncate leading-tight">
-              {user?.display_name || user?.username || 'Usuário'}
-            </span>
-            <span className="text-[10px] text-gray-400 truncate leading-tight">
+          <div className="flex flex-col min-w-0 flex-1 justify-center">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-gray-100 truncate leading-tight group-hover/usercard:text-brand-300 transition-colors">
+                {user?.display_name || user?.username || 'Usuário'}
+              </span>
+              {/* Decorative settings gear on mobile for visual affordance */}
+              <Settings className="w-3.5 h-3.5 text-gray-400 group-hover/usercard:text-brand-400 md:hidden flex-shrink-0 transition-transform group-hover/usercard:rotate-45" />
+            </div>
+            <span className="text-[10px] text-gray-400 truncate leading-tight mt-0.5">
               {user?.custom_status || getStatusLabel(user?.status)}
             </span>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center text-gray-400">
+        {/* Action Buttons (Voice/Mute controls + Desktop settings button) */}
+        <div className="flex items-center text-gray-400 flex-shrink-0">
           <button
-            onClick={toggleMute}
-            className={`p-1.5 rounded hover:bg-background-light hover:text-gray-200 transition-colors ${
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleMute();
+            }}
+            className={`p-2 md:p-1.5 rounded-lg md:rounded hover:bg-background-light hover:text-gray-200 transition-colors ${
               isMuted ? 'text-dnd hover:text-dnd' : ''
             }`}
             title={isMuted ? 'Desmutar' : 'Mutar'}
@@ -183,8 +199,11 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           </button>
 
           <button
-            onClick={toggleDeafen}
-            className={`p-1.5 rounded hover:bg-background-light hover:text-gray-200 transition-colors ${
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleDeafen();
+            }}
+            className={`p-2 md:p-1.5 rounded-lg md:rounded hover:bg-background-light hover:text-gray-200 transition-colors ${
               isDeafened ? 'text-dnd hover:text-dnd' : ''
             }`}
             title={isDeafened ? 'Ensurdecer' : 'Desensurdecer'}
@@ -193,8 +212,11 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           </button>
 
           <button
-            onClick={onOpenSettings}
-            className="p-1.5 rounded hover:bg-background-light hover:text-gray-200 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenSettings();
+            }}
+            className="hidden md:flex p-1.5 rounded hover:bg-background-light hover:text-gray-200 transition-colors"
             title="Editar Meu Perfil"
           >
             <Settings className="w-4 h-4" />
