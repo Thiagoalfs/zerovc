@@ -171,10 +171,15 @@ func (h *InviteHandler) ListGuildInvites(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var isMember bool
-	_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, userID).Scan(&isMember)
-	if !isMember {
-		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+	ac, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	canList := ac.IsOwner || ac.HasAdmin || (ac.Perms&models.PermManageGuild) != 0 || (ac.Perms&models.PermCreateInstantInvite) != 0
+	if !canList {
+		http.Error(w, `{"error":"forbidden: você não tem permissão para listar convites deste servidor"}`, http.StatusForbidden)
 		return
 	}
 
@@ -237,6 +242,12 @@ func (h *InviteHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ac, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
 	// Verify owner or admin or creator
 	var creatorID, ownerID uuid.UUID
 	err = h.db.Pool.QueryRow(r.Context(), `
@@ -250,20 +261,10 @@ func (h *InviteHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userID != ownerID && userID != creatorID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para revogar convite"}`, http.StatusForbidden)
-			return
-		}
+	canDelete := ac.IsOwner || ac.HasAdmin || (ac.Perms&models.PermManageGuild) != 0 || userID == creatorID
+	if !canDelete {
+		http.Error(w, `{"error":"forbidden: sem permissão para revogar convite"}`, http.StatusForbidden)
+		return
 	}
 
 	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM guild_invites WHERE code = $1 AND guild_id = $2", code, guildID)
