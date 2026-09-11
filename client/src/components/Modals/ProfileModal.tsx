@@ -2774,31 +2774,46 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Item: Aceleração por Hardware */}
-                    <div className="flex items-center justify-between pt-4">
-                      <div className="space-y-1 pr-4">
-                        <span className="text-sm font-bold text-white block">
-                          Aceleração Gráfica por Hardware (GPU)
-                        </span>
-                        <p className="text-xs text-gray-400 leading-relaxed max-w-xl">
-                          Utiliza a placa de vídeo do computador para renderização ultra-fluida e menor consumo de processador (CPU).
-                        </p>
+                    <div className="pt-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1 pr-4">
+                          <span className="text-sm font-bold text-white block">
+                            Aceleração Gráfica por Hardware (GPU)
+                          </span>
+                          <p className="text-xs text-gray-400 leading-relaxed max-w-xl">
+                            Utiliza a placa de vídeo para renderização com alto desempenho e codificação nativa (NVENC/AMF/QSV) nas transmissões.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={hardwareAcceleration}
+                          onClick={() => setHardwareAcceleration(!hardwareAcceleration)}
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                            hardwareAcceleration ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              hardwareAcceleration ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
                       </div>
 
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={hardwareAcceleration}
-                        onClick={() => setHardwareAcceleration(!hardwareAcceleration)}
-                        className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                          hardwareAcceleration ? 'bg-brand-500' : 'bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                            hardwareAcceleration ? 'translate-x-6' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
+                      {typeof window !== 'undefined' && window.electronAPI?.relaunchApp && (
+                        <div className="p-3 bg-brand-500/10 border border-brand-500/20 rounded-xl flex items-center justify-between gap-3 text-xs text-brand-300">
+                          <span>A alteração da aceleração de hardware no Electron requer reiniciar o app.</span>
+                          <button
+                            type="button"
+                            onClick={() => window.electronAPI?.relaunchApp?.()}
+                            className="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex-shrink-0 shadow"
+                          >
+                            Reiniciar Agora
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
