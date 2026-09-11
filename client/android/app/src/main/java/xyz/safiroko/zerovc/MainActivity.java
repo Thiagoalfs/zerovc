@@ -134,8 +134,7 @@ public class MainActivity extends BridgeActivity {
                     } else if (type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
                                type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
                                type == AudioDeviceInfo.TYPE_USB_HEADSET ||
-                               type == AudioDeviceInfo.TYPE_USB_DEVICE ||
-                               type == AudioDeviceInfo.TYPE_USB_HEADPHONE) {
+                               type == AudioDeviceInfo.TYPE_USB_DEVICE) {
                         wiredDevice = device;
                     } else if (type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
                         speakerDevice = device;
