@@ -45,6 +45,7 @@ import {
   Activity,
   Zap,
   Gauge,
+  Headphones,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import {
@@ -85,6 +86,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   // Mobile full-screen drilldown navigation state ('menu' -> 'content')
   const [mobileView, setMobileView] = useState<'menu' | 'content'>('menu');
+  const isMobileDevice = typeof window !== 'undefined' && (
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    Boolean((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined) ||
+    window.innerWidth < 768
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -1949,71 +1955,85 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             {activeTab === 'audio' && (
               <div className="space-y-6 animate-in fade-in">
                 {/* Audio Devices */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                      <Mic className="w-3.5 h-3.5 text-brand-400" />
-                      Dispositivo de Entrada (Microfone)
-                    </label>
-                    <select
-                      value={selectedInput}
-                      onChange={(e) => handleDeviceChange('input', e.target.value)}
-                      className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
-                    >
-                      {audioInputs.map((d) => (
-                        <option key={d.deviceId} value={d.deviceId}>
-                          {d.label || `Microfone (${d.deviceId.slice(0, 6)})`}
-                        </option>
-                      ))}
-                      {audioInputs.length === 0 && <option value="">Microfone Padrão do Sistema</option>}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                      <Volume2 className="w-3.5 h-3.5 text-brand-400" />
-                      Dispositivo de Saída (Fone / Alto-falante)
-                    </label>
-                    <select
-                      value={selectedOutput}
-                      onChange={(e) => handleDeviceChange('output', e.target.value)}
-                      className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
-                    >
-                      {audioOutputs.map((d) => (
-                        <option key={d.deviceId} value={d.deviceId}>
-                          {d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`}
-                        </option>
-                      ))}
-                      {audioOutputs.length === 0 && <option value="">Saída Padrão do Sistema</option>}
-                    </select>
-                  </div>
-
-                  {/* Mic Test Section */}
-                  <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-bold text-gray-200 block">Teste de Microfone</span>
-                        <span className="text-[11px] text-gray-400">
-                          Fale para verificar se o microfone está captando seu áudio.
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={isTestingMic ? stopMicTest : startMicTest}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                          isTestingMic ? 'bg-dnd text-white' : 'bg-brand-500 text-white'
-                        }`}
+                {!isMobileDevice ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Mic className="w-3.5 h-3.5 text-brand-400" />
+                        Dispositivo de Entrada (Microfone)
+                      </label>
+                      <select
+                        value={selectedInput}
+                        onChange={(e) => handleDeviceChange('input', e.target.value)}
+                        className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
                       >
-                        {isTestingMic ? 'Parar Teste' : 'Testar Mic'}
-                      </button>
+                        {audioInputs.map((d) => (
+                          <option key={d.deviceId} value={d.deviceId}>
+                            {d.label || `Microfone (${d.deviceId.slice(0, 6)})`}
+                          </option>
+                        ))}
+                        {audioInputs.length === 0 && <option value="">Microfone Padrão do Sistema</option>}
+                      </select>
                     </div>
 
-                    <div className="w-full h-3 bg-background-darkest rounded-full overflow-hidden border border-white/10">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
-                        style={{ width: `${isTestingMic ? micLevel : 0}%` }}
-                      />
+                    <div>
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Volume2 className="w-3.5 h-3.5 text-brand-400" />
+                        Dispositivo de Saída (Fone / Alto-falante)
+                      </label>
+                      <select
+                        value={selectedOutput}
+                        onChange={(e) => handleDeviceChange('output', e.target.value)}
+                        className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
+                      >
+                        {audioOutputs.map((d) => (
+                          <option key={d.deviceId} value={d.deviceId}>
+                            {d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`}
+                          </option>
+                        ))}
+                        {audioOutputs.length === 0 && <option value="">Saída Padrão do Sistema</option>}
+                      </select>
                     </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-400 flex-shrink-0 mt-0.5">
+                      <Headphones className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold text-gray-200 block">Roteamento Automático de Áudio</span>
+                      <span className="text-[11px] text-gray-400 block leading-relaxed">
+                        No celular, o áudio e microfone são gerenciados automaticamente pelo sistema ao conectar ou desconectar fones Bluetooth e com fio.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mic Test Section */}
+                <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-gray-200 block">Teste de Microfone</span>
+                      <span className="text-[11px] text-gray-400">
+                        Fale para verificar se o microfone está captando seu áudio.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={isTestingMic ? stopMicTest : startMicTest}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        isTestingMic ? 'bg-dnd text-white' : 'bg-brand-500 text-white'
+                      }`}
+                    >
+                      {isTestingMic ? 'Parar Teste' : 'Testar Mic'}
+                    </button>
+                  </div>
+
+                  <div className="w-full h-3 bg-background-darkest rounded-full overflow-hidden border border-white/10">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
+                      style={{ width: `${isTestingMic ? micLevel : 0}%` }}
+                    />
                   </div>
                 </div>
 
