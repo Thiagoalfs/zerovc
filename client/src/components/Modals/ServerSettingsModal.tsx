@@ -805,7 +805,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           {mobileView === 'menu' && (
             <div className="flex md:hidden flex-col w-full h-full bg-[#18191c] overflow-hidden">
               {/* Mobile Header */}
-              <div className="px-4 py-3.5 border-b border-white/10 bg-[#111214] flex items-center justify-between flex-shrink-0">
+              <div
+                style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
+                className="px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex items-center justify-between flex-shrink-0"
+              >
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -1159,7 +1162,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden bg-[#18191c] relative min-w-0 min-h-0`}>
             
             {/* Mobile Drilldown Top Bar (Back Arrow + Title + Close) */}
-            <div className="flex md:hidden items-center justify-between px-4 py-3.5 border-b border-white/10 bg-[#111214] flex-shrink-0">
+            <div 
+              style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
+              className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex-shrink-0"
+            >
               <div className="flex items-center gap-2">
                 <button
                   type="button"
