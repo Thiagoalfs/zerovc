@@ -706,13 +706,29 @@ export const App: React.FC = () => {
         addMessage(msg);
 
         // Native notification if backgrounded and not author
-        const currentUserId = useAuthStore.getState().user?.id;
-        if (msg && msg.author_id !== currentUserId && typeof document !== 'undefined' && document.hidden) {
-          const authorName = msg.author?.display_name || msg.author?.username || 'Nova mensagem';
+        const currentUser = useAuthStore.getState().user;
+        if (msg && msg.author_id !== currentUser?.id && typeof document !== 'undefined' && document.hidden) {
+          if (currentUser?.status === 'dnd') return;
+
+          const guilds = useGuildStore.getState().guilds;
+          let guildName = 'Servidor';
+          let channelName = 'chat';
+
+          for (const g of guilds) {
+            const ch = g.channels?.find((c: any) => c.id === msg.channel_id);
+            if (ch) {
+              guildName = g.name;
+              channelName = ch.name;
+              break;
+            }
+          }
+
+          const authorName = msg.author?.display_name || msg.author?.username || 'Usuário';
           sendNativeNotification({
-            title: authorName,
-            body: msg.content?.slice(0, 100) || 'Enviou um anexo',
+            title: `ZeroVC - ${guildName} - #${channelName}`,
+            body: `${authorName}: ${msg.content || 'Enviou um anexo'}`,
             tag: `msg-${msg.id}`,
+            icon: `${window.location.origin}/icon.png`,
           });
         }
       };
@@ -730,13 +746,16 @@ export const App: React.FC = () => {
         addDMMessage(msg);
 
         // Native notification for direct messages
-        const currentUserId = useAuthStore.getState().user?.id;
-        if (msg && msg.author_id !== currentUserId && typeof document !== 'undefined' && document.hidden) {
-          const authorName = msg.author?.display_name || msg.author?.username || 'Mensagem Direta';
+        const currentUser = useAuthStore.getState().user;
+        if (msg && msg.author_id !== currentUser?.id && typeof document !== 'undefined' && document.hidden) {
+          if (currentUser?.status === 'dnd') return;
+
+          const authorName = msg.author?.display_name || msg.author?.username || 'Usuário';
           sendNativeNotification({
-            title: authorName,
-            body: msg.content?.slice(0, 100) || 'Enviou um anexo',
+            title: `ZeroVC - ${authorName}`,
+            body: msg.content || 'Enviou um anexo',
             tag: `dm-${msg.id}`,
+            icon: `${window.location.origin}/icon.png`,
           });
         }
       };
@@ -830,13 +849,20 @@ export const App: React.FC = () => {
         useDMGroupStore.getState().handleGroupMessageCreate(msg);
 
         // Native notification for group messages
-        const currentUserId = useAuthStore.getState().user?.id;
-        if (msg && msg.author_id !== currentUserId && typeof document !== 'undefined' && document.hidden) {
-          const authorName = msg.author?.display_name || msg.author?.username || 'Mensagem em Grupo';
+        const currentUser = useAuthStore.getState().user;
+        if (msg && msg.author_id !== currentUser?.id && typeof document !== 'undefined' && document.hidden) {
+          if (currentUser?.status === 'dnd') return;
+
+          const groups = useDMGroupStore.getState().groups;
+          const group = groups.find((g: any) => g.id === msg.group_id);
+          const groupName = group?.name || 'Grupo';
+          const authorName = msg.author?.display_name || msg.author?.username || 'Usuário';
+
           sendNativeNotification({
-            title: authorName,
-            body: msg.content?.slice(0, 100) || 'Enviou um anexo',
+            title: `ZeroVC - ${groupName} - ${authorName}`,
+            body: msg.content || 'Enviou um anexo',
             tag: `group-msg-${msg.id}`,
+            icon: `${window.location.origin}/icon.png`,
           });
         }
       };
