@@ -66,7 +66,19 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--pid" && i + 1 < argc) {
-            targetPID = (DWORD)std::stoul(argv[++i]);
+            try {
+                targetPID = (DWORD)std::stoul(argv[++i]);
+            } catch (...) {}
+        } else if (arg == "--hwnd" && i + 1 < argc) {
+            try {
+                std::string hwndStr = argv[++i];
+                HWND hwnd = (HWND)(uintptr_t)std::stoull(hwndStr);
+                DWORD pid = 0;
+                GetWindowThreadProcessId(hwnd, &pid);
+                if (pid != 0) {
+                    targetPID = pid;
+                }
+            } catch (...) {}
         } else if (arg == "--mode" && i + 1 < argc) {
             std::string modeStr = argv[++i];
             if (modeStr == "include") {
