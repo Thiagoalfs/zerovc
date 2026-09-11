@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 
@@ -29,6 +30,17 @@ public class MainActivity extends BridgeActivity {
     private BroadcastReceiver audioBroadcastReceiver;
     private Handler mainHandler;
     private boolean isReceiverRegistered = false;
+    private boolean isCallActive = false;
+
+    public class AndroidAudioBridge {
+        @JavascriptInterface
+        public void setCallAudioMode(boolean active) {
+            Log.d(TAG, "Bridge setCallAudioMode received: " + active);
+            mainHandler.post(() -> {
+                setCallModeInternal(active);
+            });
+        }
+    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -37,6 +49,7 @@ public class MainActivity extends BridgeActivity {
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         setupWebViewMediaSettings();
+        setupAudioBridge();
         setupAudioRouting();
     }
 
@@ -52,13 +65,32 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private void setupAudioBridge() {
+        try {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                WebView webView = getBridge().getWebView();
+                webView.addJavascriptInterface(new AndroidAudioBridge(), "AndroidAudioBridge");
+                Log.i(TAG, "AndroidAudioBridge interface registered successfully");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error setting up AudioBridge", e);
+        }
+    }
+
     private void setupAudioRouting() {
         if (audioManager == null) return;
 
+        // Ensure we start in NORMAL audio mode on startup
         try {
-            audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            audioManager.setMode(AudioManager.MODE_NORMAL);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.clearCommunicationDevice();
+            } else {
+                audioManager.stopBluetoothSco();
+                audioManager.setBluetoothScoOn(false);
+            }
         } catch (Exception e) {
-            Log.e(TAG, "Error setting audio mode", e);
+            Log.e(TAG, "Error resetting initial audio mode", e);
         }
 
         // 1. AudioDeviceCallback (API 23+)
@@ -67,13 +99,17 @@ public class MainActivity extends BridgeActivity {
                 @Override
                 public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
                     Log.d(TAG, "Audio devices added event detected");
-                    mainHandler.postDelayed(() -> updateAudioRoute(), 250);
+                    if (isCallActive) {
+                        mainHandler.postDelayed(() -> updateAudioRoute(), 250);
+                    }
                 }
 
                 @Override
                 public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
                     Log.d(TAG, "Audio devices removed event detected");
-                    mainHandler.postDelayed(() -> updateAudioRoute(), 250);
+                    if (isCallActive) {
+                        mainHandler.postDelayed(() -> updateAudioRoute(), 250);
+                    }
                 }
             };
             audioManager.registerAudioDeviceCallback(audioDeviceCallback, mainHandler);
@@ -85,7 +121,9 @@ public class MainActivity extends BridgeActivity {
             public void onReceive(Context context, Intent intent) {
                 String action = intent != null ? intent.getAction() : null;
                 Log.d(TAG, "Audio broadcast received: " + action);
-                mainHandler.postDelayed(() -> updateAudioRoute(), 300);
+                if (isCallActive) {
+                    mainHandler.postDelayed(() -> updateAudioRoute(), 300);
+                }
             }
         };
 
@@ -107,13 +145,34 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) {
             Log.e(TAG, "Error registering audio broadcast receiver", e);
         }
+    }
 
-        // Initial audio route resolution
-        mainHandler.postDelayed(() -> updateAudioRoute(), 500);
+    private synchronized void setCallModeInternal(boolean active) {
+        if (audioManager == null) return;
+        this.isCallActive = active;
+
+        if (active) {
+            Log.i(TAG, "Enabling Call Audio Mode (MODE_IN_COMMUNICATION)");
+            updateAudioRoute();
+        } else {
+            Log.i(TAG, "Disabling Call Audio Mode (Returning to MODE_NORMAL)");
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioManager.clearCommunicationDevice();
+                } else {
+                    audioManager.stopBluetoothSco();
+                    audioManager.setBluetoothScoOn(false);
+                    audioManager.setSpeakerphoneOn(false);
+                }
+                audioManager.setMode(AudioManager.MODE_NORMAL);
+            } catch (Exception e) {
+                Log.e(TAG, "Error reverting to normal audio mode", e);
+            }
+        }
     }
 
     private synchronized void updateAudioRoute() {
-        if (audioManager == null) return;
+        if (audioManager == null || !isCallActive) return;
 
         try {
             audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
@@ -142,15 +201,15 @@ public class MainActivity extends BridgeActivity {
                 }
 
                 if (bluetoothDevice != null) {
-                    Log.i(TAG, "Auto-routing audio to Bluetooth headset: " + bluetoothDevice.getProductName());
+                    Log.i(TAG, "Auto-routing call audio to Bluetooth headset: " + bluetoothDevice.getProductName());
                     boolean ok = audioManager.setCommunicationDevice(bluetoothDevice);
                     Log.i(TAG, "setCommunicationDevice(bluetooth) -> " + ok);
                 } else if (wiredDevice != null) {
-                    Log.i(TAG, "Auto-routing audio to Wired headset: " + wiredDevice.getProductName());
+                    Log.i(TAG, "Auto-routing call audio to Wired headset: " + wiredDevice.getProductName());
                     boolean ok = audioManager.setCommunicationDevice(wiredDevice);
                     Log.i(TAG, "setCommunicationDevice(wired) -> " + ok);
                 } else if (speakerDevice != null) {
-                    Log.i(TAG, "Auto-routing audio to Built-in Speaker: " + speakerDevice.getProductName());
+                    Log.i(TAG, "Auto-routing call audio to Built-in Speaker: " + speakerDevice.getProductName());
                     boolean ok = audioManager.setCommunicationDevice(speakerDevice);
                     Log.i(TAG, "setCommunicationDevice(speaker) -> " + ok);
                 } else {
@@ -199,7 +258,13 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
-        updateAudioRoute();
+        if (isCallActive) {
+            updateAudioRoute();
+        } else if (audioManager != null) {
+            try {
+                audioManager.setMode(AudioManager.MODE_NORMAL);
+            } catch (Exception ignored) {}
+        }
     }
 
     @Override

@@ -42,6 +42,7 @@ import { livekit } from './lib/livekit';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 import { initMobileBackHandler, pushBackHandler } from './lib/mobileBackHandler';
+import { initAudioRouting } from './lib/audioRouting';
 
 export const App: React.FC = () => {
   const { user, token, isCheckingAuth, checkAuth, setUser } = useAuthStore();
@@ -149,6 +150,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     initMobileBackHandler();
+    initAudioRouting();
   }, []);
 
   // Back button stack for modals and mobile drawers in App.tsx
@@ -325,7 +327,10 @@ export const App: React.FC = () => {
       if (absX > 7 && absX > absY) {
         touchStateRef.current.gestureIntent = 'horizontal';
 
-        const { initialLeftOpen, initialRightOpen } = touchStateRef.current;
+        const { initialLeftOpen, initialRightOpen, startX, leftDrawerWidth } = touchStateRef.current;
+        const winWidth = typeof window !== 'undefined' ? window.innerWidth : leftDrawerWidth;
+        const EDGE_THRESHOLD = 38; // Only trigger drawer from screen edge when closed to prevent conflict with message swipe-to-reply
+
         if (initialLeftOpen) {
           touchStateRef.current.activeDrawer = 'left';
         } else if (initialRightOpen) {
@@ -333,8 +338,6 @@ export const App: React.FC = () => {
         } else {
           if (deltaX > 0) {
             touchStateRef.current.activeDrawer = 'left';
-          } else if (!isHomeActive && activeGuild) {
-            touchStateRef.current.activeDrawer = 'right';
           }
         }
       }
@@ -408,12 +411,6 @@ export const App: React.FC = () => {
             handleToggleMemberList(false);
           } else {
             handleToggleMemberList(true);
-          }
-        } else {
-          if (deltaX < -50 || velocityX < -0.3) {
-            handleToggleMemberList(true);
-          } else {
-            handleToggleMemberList(false);
           }
         }
       }

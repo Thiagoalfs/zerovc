@@ -971,7 +971,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
                     <div className="flex gap-3 md:gap-4 relative">
                       {!isSending && !isFailed && !isEditing && (
-                        <div className="absolute -top-3 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
+                        <div className="absolute -top-3 right-4 hidden md:group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
                           <button
                             onClick={() => setReplyingTo(msg)}
                             className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"

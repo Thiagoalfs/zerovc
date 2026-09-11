@@ -60,6 +60,7 @@ import {
 } from '../../stores/settingsStore';
 import { audioProcessor } from '../../lib/audioProcessor';
 import { pushBackHandler } from '../../lib/mobileBackHandler';
+import { setMobileMicTesting } from '../../lib/audioRouting';
 import { hapticMedium } from '../../lib/haptics';
 import {
   playMessageSound,
@@ -816,6 +817,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const startMicTest = async () => {
     try {
       setIsTestingMic(true);
+      setMobileMicTesting(true);
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
       });
@@ -841,6 +843,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     } catch (err) {
       console.error('Failed to start mic test:', err);
       setIsTestingMic(false);
+      setMobileMicTesting(false);
     }
   };
 
@@ -853,6 +856,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     audioProcessor.setVadCallback(null);
     audioProcessor.cleanup();
     setIsTestingMic(false);
+    setMobileMicTesting(false);
     setMicLevel(0);
     setVadLiveState({ isSpeaking: false, volume: 0, speechProbability: 0, gateOpen: false });
   };
