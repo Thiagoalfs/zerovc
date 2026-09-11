@@ -1,4 +1,4 @@
-﻿import { formatAssetUrl } from './api';
+import { formatAssetUrl } from './api';
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -29,6 +29,13 @@ export const sendNativeNotification = ({ title, body, icon, tag, onClick }: Noti
   if (typeof window === 'undefined' || !('Notification' in window)) {
     return;
   }
+
+  try {
+    const isDesktopNotifEnabled = localStorage.getItem('zerovc_notifications_desktop') !== 'false';
+    if (!isDesktopNotifEnabled) {
+      return;
+    }
+  } catch {}
 
   if (Notification.permission !== 'granted') {
     return;
