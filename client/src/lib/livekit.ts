@@ -313,10 +313,14 @@ class LiveKitManager {
 
     // Auto-enable microphone in background without blocking fast connection
     if (callbacks.autoEnableMicrophone !== false) {
+      const isMobilePlatform = typeof navigator !== 'undefined' && (
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
+      );
       const autoGain = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_auto_gain_control') !== 'false' : true;
       const echoCanc = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_echo_cancellation') !== 'false' : true;
       const noiseSupp = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_noise_suppression') !== 'false' : true;
-      const devId = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_audio_input_device') || undefined : undefined;
+      const devId = !isMobilePlatform && typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_audio_input_device') || undefined : undefined;
 
       room.localParticipant.setMicrophoneEnabled(true, {
         deviceId: devId,
@@ -334,10 +338,14 @@ class LiveKitManager {
 
   async setMicrophoneEnabled(enabled: boolean) {
     if (this.room) {
+      const isMobilePlatform = typeof navigator !== 'undefined' && (
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
+      );
       const autoGain = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_auto_gain_control') !== 'false' : true;
       const echoCanc = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_echo_cancellation') !== 'false' : true;
       const noiseSupp = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_noise_suppression') !== 'false' : true;
-      const devId = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_audio_input_device') || undefined : undefined;
+      const devId = !isMobilePlatform && typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_audio_input_device') || undefined : undefined;
 
       await this.room.localParticipant.setMicrophoneEnabled(enabled, {
         deviceId: devId,
@@ -625,12 +633,20 @@ class LiveKitManager {
   }
 
   async setAudioInputDevice(deviceId: string) {
-    if (!this.room) return;
+    const isMobile = typeof navigator !== 'undefined' && (
+      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
+    );
+    if (!this.room || isMobile) return;
     await this.room.switchActiveDevice('audioinput', deviceId);
   }
 
   async setAudioOutputDevice(deviceId: string) {
-    if (!this.room) return;
+    const isMobile = typeof navigator !== 'undefined' && (
+      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
+    );
+    if (!this.room || isMobile) return;
     await this.room.switchActiveDevice('audiooutput', deviceId);
   }
 
