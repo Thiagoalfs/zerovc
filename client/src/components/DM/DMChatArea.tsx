@@ -1070,7 +1070,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
                 <div className="flex gap-3 md:gap-4 relative">
                   {!isSending && !isFailed && !isEditing && (
-                    <div className="absolute -top-3 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
+                    <div className="absolute -top-3 right-4 hidden md:group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
                       <div className="relative">
                         <button
                           onClick={() => setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id)}

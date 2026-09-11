@@ -254,12 +254,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       });
     }
 
-    items.push({
-      label: 'Copiar ID do Usuário',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => navigator.clipboard.writeText(targetUser.id),
-    });
-
     // Server Member Moderation Actions
     if (activeGuild && targetMember && (isCurrentOwner || isMe || (!isTargetOwner && isHierarchyAllowed))) {
       // Change Roles Submenu
@@ -370,6 +364,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       });
     }
 
+    items.push({ label: '', separator: true });
+    items.push({
+      label: 'Copiar ID do Usuário',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(targetUser.id),
+    });
+
     openContextMenu(e, items, `@${targetUser.username}`);
   };
 
@@ -440,12 +441,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         customRender: <UserVolumeSlider userId={author.id} />,
       });
     }
-
-    items.push({
-      label: 'Copiar ID do Usuário',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => navigator.clipboard.writeText(author.id),
-    });
 
     // Message Specific Actions
     items.push({ label: '', separator: true });
@@ -595,6 +590,19 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       });
     }
 
+    // IDs at the very bottom
+    items.push({ label: '', separator: true });
+    items.push({
+      label: 'Copiar ID da Mensagem',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(message.id),
+    });
+    items.push({
+      label: 'Copiar ID do Usuário',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(author.id),
+    });
+
     openContextMenu(e, items, `@${author.username}`);
   };
 
@@ -638,10 +646,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       }
     }
 
-    // Only allow swipe right if mostly horizontal
-    if (deltaX > 8 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
+    // Only allow swipe left (right-to-left) if mostly horizontal
+    if (deltaX < -8 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
       setIsSwiping(true);
-      const clampedOffset = Math.min(56, deltaX * 0.45);
+      const clampedOffset = Math.min(56, Math.abs(deltaX) * 0.45);
       setSwipeOffset(clampedOffset);
 
       if (clampedOffset >= 36 && !hasTriggeredSwipeHapticRef.current) {
@@ -804,7 +812,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
         style={{
-          transform: swipeOffset > 0 ? `translateX(${swipeOffset}px)` : undefined,
+          transform: swipeOffset > 0 ? `translateX(-${swipeOffset}px)` : undefined,
           transition: isSwiping ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 select-text ${
@@ -824,7 +832,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               opacity: Math.min(1, swipeOffset / 36),
               transform: `scale(${Math.min(1, Math.max(0.5, swipeOffset / 36))})`,
             }}
-            className="absolute -left-7 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white pointer-events-none shadow-md transition-opacity"
+            className="absolute -right-7 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white pointer-events-none shadow-md transition-opacity"
           >
             <Reply className="w-3.5 h-3.5" />
           </div>
@@ -860,7 +868,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         <div className="flex gap-3 md:gap-4 relative">
           {/* Quick Action Floating Bar on Hover */}
           {!isEditing && !isSending && !isFailed && (
-            <div className="absolute -top-3 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
+            <div className="absolute -top-3 right-4 hidden md:group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
               {/* Reaction Popover Toggle */}
               <div className="relative">
                 <button

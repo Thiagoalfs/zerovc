@@ -418,7 +418,7 @@ class LiveKitManager {
                 },
                 optional: [
                   { restrictOwnAudio: true },
-                  { suppressLocalAudioPlayback: false },
+                  { suppressLocalAudioPlayback: true },
                   { echoCancellation: true },
                   { googEchoCancellation: true },
                   { googEchoCancellation2: true },
@@ -550,7 +550,7 @@ class LiveKitManager {
               noiseSuppression: false,
               autoGainControl: false,
               restrictOwnAudio: true,
-              suppressLocalAudioPlayback: false,
+              suppressLocalAudioPlayback: true,
               channelCount: 2,
               sampleRate: 48000,
             } as any,
