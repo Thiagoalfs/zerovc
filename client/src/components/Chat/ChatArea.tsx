@@ -273,15 +273,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       {/* Center Chat View */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
         {/* Channel Header */}
-        <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
-          <div
-            onClick={() => {
-              if (typeof window !== 'undefined' && window.innerWidth < 768) {
-                toggleMembers();
-              }
-            }}
-            className="flex items-center gap-2.5 md:gap-2 truncate cursor-pointer md:cursor-default"
-          >
+        <div
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.innerWidth < 768) {
+              toggleMembers();
+            }
+          }}
+          className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0 cursor-pointer md:cursor-default"
+        >
+          <div className="flex items-center gap-2.5 md:gap-2 truncate flex-1 min-w-0">
             {/* Mobile Hamburger Drawer Toggle */}
             {onOpenMobileDrawer && (
               <button
@@ -289,7 +289,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   e.stopPropagation();
                   onOpenMobileDrawer();
                 }}
-                className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0"
                 title="Menu de Canais"
               >
                 <Menu className="w-6 h-6" />
@@ -299,8 +299,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             <span className="font-bold text-gray-100 truncate text-[17px] md:text-base">{activeChannel.name}</span>
           </div>
 
-          {/* Right Header Actions */}
-          <div className="flex items-center gap-1 md:gap-2">
+          {/* Right Header Actions (Desktop Only / Search Bar when active) */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`${isSearchOpen ? 'flex' : 'hidden md:flex'} items-center gap-1 md:gap-2 flex-shrink-0`}
+          >
             {/* Search Input / Toggle */}
             {isSearchOpen ? (
               <div className="flex items-center gap-1 bg-background-darkest px-2 py-1 rounded-xl border border-white/10 text-xs">
