@@ -68,7 +68,11 @@ export function useContextMenu() {
       }
     };
 
-    const handleScroll = () => {
+    const handleScroll = (e: Event) => {
+      // On mobile devices, do not auto-close on scroll (allows scrolling through long context menus/bottom sheets)
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        return;
+      }
       closeContextMenu();
     };
 
