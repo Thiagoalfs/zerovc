@@ -368,9 +368,10 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(payload),
       }),
-    joinVoice: (channelId: string) =>
+    joinVoice: (channelId: string, data?: { is_muted?: boolean; is_deafened?: boolean }) =>
       request<{ token: string; livekit_url: string; room_name: string }>(`/channels/${channelId}/join-voice`, {
         method: 'POST',
+        body: data ? JSON.stringify(data) : undefined,
       }),
     leaveVoice: (channelId: string) =>
       request<{ success: boolean }>(`/channels/${channelId}/leave-voice`, {

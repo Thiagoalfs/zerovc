@@ -110,6 +110,8 @@ class LiveKitManager {
   private userVolumes: Map<string, number> = new Map();
   private streamVolumes: Map<string, number> = new Map();
   private watchedParticipantIdentities: Set<string> = new Set();
+  private isDeafened: boolean = false;
+  private activeMediaStreamTracks: Set<MediaStreamTrack> = new Set();
 
   getRoom(): Room | null {
     return this.room;
@@ -183,7 +185,13 @@ class LiveKitManager {
     });
 
     room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-      const ids = speakers.map((s) => s.identity);
+      // Filter out participants whose microphone tracks are muted or disabled
+      const ids = speakers
+        .filter((s) => {
+          const micPub = s.getTrackPublication(Track.Source.Microphone);
+          return micPub && !micPub.isMuted && micPub.isEnabled !== false;
+        })
+        .map((s) => s.identity);
       this.onSpeakingChanged?.(ids);
     });
 
@@ -203,18 +211,18 @@ class LiveKitManager {
 
         if (isScreenAudio) {
           const isCurrentlyWatched = this.watchedParticipantIdentities.has(participant.identity);
-          audioEl.muted = !isCurrentlyWatched;
+          audioEl.muted = !isCurrentlyWatched || this.isDeafened;
           this.attachedStreamAudioElements.set(sid, audioEl);
           const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
           audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
           if (typeof (track as any).setVolume === 'function') {
             (track as any).setVolume(streamVol);
           }
-          if (isCurrentlyWatched) {
+          if (isCurrentlyWatched && !this.isDeafened) {
             audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
           }
         } else {
-          audioEl.muted = false;
+          audioEl.muted = this.isDeafened;
           this.attachedUserAudioElements.set(sid, audioEl);
           const userVol = this.userVolumes.get(participant.identity) ?? 1;
           audioEl.volume = Math.min(Math.max(userVol, 0), 1);
@@ -334,6 +342,7 @@ class LiveKitManager {
   }
 
   async setDeafened(deafened: boolean) {
+    this.isDeafened = deafened;
     if (this.room) {
       this.attachedAudioElements.forEach((el) => {
         el.muted = deafened;
@@ -374,8 +383,6 @@ class LiveKitManager {
       const selectedCodec = gpu.preferredCodec;
 
       if (sourceId && (window as any).electronAPI) {
-        const isWindowCapture = sourceId.startsWith('window:');
-
         // Electron Screen Capture API with Hardware Accelerated WGC & Flexible Framerate constraints
         const stream = await navigator.mediaDevices.getUserMedia({
           // Audio loopback (system loopback with echo cancellation and high-fidelity music settings)
@@ -419,6 +426,9 @@ class LiveKitManager {
           },
         });
 
+        // Register tracks for cleanup
+        stream.getTracks().forEach((t) => this.activeMediaStreamTracks.add(t));
+
         const videoTrack = stream.getVideoTracks()[0];
         videoTrack.contentHint = frameRate >= 60 ? 'motion' : 'detail';
         videoTrack.onended = () => {
@@ -438,19 +448,36 @@ class LiveKitManager {
           await this.room.localParticipant.unpublishTrack(oldAudioPub.track);
         }
 
-        // Publish track with simulcast: false to save ~65% GPU/CPU overhead
-        const pub = await this.room.localParticipant.publishTrack(videoTrack, {
-          name: 'screen_share',
-          source: Track.Source.ScreenShare,
-          simulcast: false,
-          videoCodec: selectedCodec,
-          backupCodec: false,
-          videoEncoding: {
-            maxBitrate: maxBitrate,
-            maxFramerate: frameRate,
-            priority: 'high',
-          },
-        });
+        // Publish track with backupCodec enabled for intelligent fallback (H.264 -> VP8 if GPU drops frames/crashes)
+        let pub;
+        try {
+          pub = await this.room.localParticipant.publishTrack(videoTrack, {
+            name: 'screen_share',
+            source: Track.Source.ScreenShare,
+            simulcast: false,
+            videoCodec: selectedCodec,
+            backupCodec: true,
+            videoEncoding: {
+              maxBitrate: maxBitrate,
+              maxFramerate: frameRate,
+              priority: 'high',
+            },
+          });
+        } catch (pubErr) {
+          console.warn('[LiveKit] Failed to publish screen share with preferred codec, falling back to VP8:', pubErr);
+          pub = await this.room.localParticipant.publishTrack(videoTrack, {
+            name: 'screen_share',
+            source: Track.Source.ScreenShare,
+            simulcast: false,
+            videoCodec: 'vp8',
+            backupCodec: false,
+            videoEncoding: {
+              maxBitrate: maxBitrate,
+              maxFramerate: frameRate,
+              priority: 'high',
+            },
+          });
+        }
 
         // Publish captured system audio as dedicated high-fidelity stereo track
         const audioTrack = stream.getAudioTracks()[0];
@@ -470,13 +497,13 @@ class LiveKitManager {
           });
         }
 
-        // Set WebRTC degradationPreference to maintain framerate for games or resolution for text
+        // Set WebRTC degradationPreference to maintain-resolution with smooth adaptive framerate
         try {
           const sender = (pub?.track as any)?.sender as RTCRtpSender | undefined;
           if (sender && typeof sender.getParameters === 'function') {
             const params = sender.getParameters();
             if (params) {
-              params.degradationPreference = frameRate >= 60 ? 'maintain-framerate' : 'maintain-resolution';
+              params.degradationPreference = 'maintain-resolution';
               if (params.encodings && params.encodings.length > 0) {
                 params.encodings[0].maxBitrate = maxBitrate;
                 params.encodings[0].maxFramerate = frameRate;
@@ -489,7 +516,7 @@ class LiveKitManager {
           console.warn('[LiveKit] Could not set degradationPreference on sender:', e);
         }
       } else {
-        // Native W3C getDisplayMedia for Web Browsers
+        // Native W3C getDisplayMedia for Web Browsers (excluding own surface to avoid infinite audio loop)
         const pub = await this.room.localParticipant.setScreenShareEnabled(
           true,
           {
@@ -502,7 +529,7 @@ class LiveKitManager {
               channelCount: 2,
               sampleRate: 48000,
             } as any,
-            selfBrowserSurface: 'include',
+            selfBrowserSurface: 'exclude',
             surfaceSwitching: 'include',
             systemAudio: 'include',
             resolution: {
@@ -515,7 +542,7 @@ class LiveKitManager {
           {
             simulcast: false,
             videoCodec: selectedCodec,
-            backupCodec: false,
+            backupCodec: true,
             audioPreset: AudioPresets.musicHighQualityStereo,
             dtx: false,
             videoEncoding: {
@@ -532,7 +559,7 @@ class LiveKitManager {
             if (sender && typeof sender.getParameters === 'function') {
               const params = sender.getParameters();
               if (params) {
-                params.degradationPreference = frameRate >= 60 ? 'maintain-framerate' : 'maintain-resolution';
+                params.degradationPreference = 'maintain-resolution';
                 if (params.encodings && params.encodings.length > 0) {
                   params.encodings[0].maxBitrate = maxBitrate;
                   params.encodings[0].maxFramerate = frameRate;
@@ -547,6 +574,7 @@ class LiveKitManager {
 
           const mediaStreamTrack = pub.track.mediaStreamTrack;
           if (mediaStreamTrack) {
+            this.activeMediaStreamTracks.add(mediaStreamTrack);
             mediaStreamTrack.onended = () => {
               this.setScreenShareEnabled(false);
               this.onScreenShareEnded?.();
@@ -558,12 +586,14 @@ class LiveKitManager {
       await this.room.localParticipant.setScreenShareEnabled(false);
       const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
       if (screenPub && screenPub.track) {
+        try { screenPub.track.stop(); } catch {}
         this.room.localParticipant.unpublishTrack(screenPub.track);
       }
 
       // Limpa também a track de áudio do sistema, se estiver publicada.
       const screenAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
       if (screenAudioPub && screenAudioPub.track) {
+        try { screenAudioPub.track.stop(); } catch {}
         this.room.localParticipant.unpublishTrack(screenAudioPub.track);
       }
     }
@@ -645,8 +675,8 @@ class LiveKitManager {
     // 1. Mute or unmute all stream audio elements for this participant
     this.attachedStreamAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
-        el.muted = !subscribed;
-        if (subscribed) {
+        el.muted = !subscribed || this.isDeafened;
+        if (subscribed && !this.isDeafened) {
           const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
           el.volume = Math.min(Math.max(streamVol, 0), 1);
           el.play().catch((err) => console.log('[LiveKit] Stream audio play error:', err));
@@ -683,6 +713,28 @@ class LiveKitManager {
     this.attachedAudioElements.clear();
     this.attachedUserAudioElements.clear();
     this.attachedStreamAudioElements.clear();
+
+    // Stop and unpublish all local tracks
+    if (this.room?.localParticipant) {
+      for (const pub of this.room.localParticipant.trackPublications.values()) {
+        try {
+          pub.track?.stop();
+        } catch {}
+        if (pub.track) {
+          try {
+            await this.room.localParticipant.unpublishTrack(pub.track);
+          } catch {}
+        }
+      }
+    }
+
+    // Clean up any remaining native MediaStreamTracks
+    this.activeMediaStreamTracks.forEach((track) => {
+      try {
+        track.stop();
+      } catch {}
+    });
+    this.activeMediaStreamTracks.clear();
 
     if (this.room) {
       await this.room.disconnect();

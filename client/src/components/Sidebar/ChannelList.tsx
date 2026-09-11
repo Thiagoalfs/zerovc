@@ -694,7 +694,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         {!isText && channel.voice_sessions && channel.voice_sessions.length > 0 && (
           <div className="pl-6 pr-2 py-1 space-y-0.5">
             {channel.voice_sessions.map((vs) => {
-              const isSpeaking = speakingUserIds.includes(vs.user_id);
+              const isSpeaking = speakingUserIds.includes(vs.user_id) && !vs.is_muted && !vs.is_deafened;
               const guildMember = activeGuild?.members?.find((m) => m.id === vs.user_id);
               const targetUser: User = {
                 id: vs.user_id,
@@ -745,7 +745,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   </div>
 
                   {/* Voice state indicators */}
-                  <div className="flex items-center gap-1 flex-shrink-0 opacity-70 group-hover/voice-member:opacity-100">
+                  <div className="flex items-center gap-1.5 flex-shrink-0 opacity-70 group-hover/voice-member:opacity-100">
+                    {vs.is_screensharing && (
+                      <span
+                        className="bg-[#f23f43] text-white text-[9px] font-black px-1.5 py-0.5 rounded flex items-center leading-none tracking-wider uppercase shadow-sm"
+                        title="Transmitindo ao vivo"
+                      >
+                        LIVE
+                      </span>
+                    )}
                     {vs.is_muted && (
                       <span title="Microfone Mutado">
                         <MicOff className="w-3 h-3 text-dnd" />
