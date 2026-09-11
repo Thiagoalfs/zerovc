@@ -868,7 +868,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         <div className="flex gap-3 md:gap-4 relative">
           {/* Quick Action Floating Bar on Hover */}
           {!isEditing && !isSending && !isFailed && (
-            <div className="absolute -top-3 right-4 hidden group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
+            <div className="absolute -top-3 right-4 hidden md:group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
               {/* Reaction Popover Toggle */}
               <div className="relative">
                 <button
