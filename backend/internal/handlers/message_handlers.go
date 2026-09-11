@@ -1101,6 +1101,13 @@ func (h *MessageHandler) GetGuildReadStates(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	var isMember bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, userID).Scan(&isMember)
+	if err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you are not a member of this server"}`, http.StatusForbidden)
+		return
+	}
+
 	query := `
 		SELECT crs.channel_id, crs.last_read_message_id, crs.unread_count, crs.updated_at
 		FROM channel_read_states crs

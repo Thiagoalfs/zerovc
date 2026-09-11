@@ -393,6 +393,17 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, req.Email).Scan(&user.ID, &user.Username, &user.Email)
 	if err == nil {
+		// Rate limit: check if a reset was requested less than 60s ago
+		var recentResetCount int
+		_ = h.db.Pool.QueryRow(r.Context(), `
+			SELECT COUNT(*) FROM password_resets
+			WHERE user_id = $1 AND created_at > (CURRENT_TIMESTAMP - INTERVAL '60 seconds')
+		`, user.ID).Scan(&recentResetCount)
+		if recentResetCount > 0 {
+			http.Error(w, `{"error":"Aguarde 60 segundos antes de solicitar uma nova redefinição de senha."}`, http.StatusTooManyRequests)
+			return
+		}
+
 		// Generate random secure token of 32 bytes
 		tokenBytes := make([]byte, 32)
 		_, _ = rand.Read(tokenBytes)
