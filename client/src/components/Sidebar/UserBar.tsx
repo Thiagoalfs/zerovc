@@ -92,7 +92,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   };
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-hidden flex flex-col bg-background-darkest select-none relative">
+    <div className="w-full min-w-0 max-w-full flex-shrink-0 overflow-hidden flex flex-col bg-background-darkest select-none relative">
       {/* Quick Status Menu Popover */}
       {showStatusMenu && (
         <>

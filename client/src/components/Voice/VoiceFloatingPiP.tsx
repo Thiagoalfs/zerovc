@@ -69,6 +69,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     isDeafened,
     isScreensharing,
     participants,
+    speakingUserIds,
     watchedParticipantId,
     setWatchedParticipant,
     toggleMute,
@@ -118,17 +119,38 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   });
   const hasMovedSignificantlyRef = useRef(false);
 
-  // Find target participant to display (ONLY if someone is sharing screen)
-  const activeScreenParticipant =
-    (watchedParticipantId ? participants.find((p) => p.identity === watchedParticipantId) : null) ||
-    participants.find((p) => {
-      const pub = p.getTrackPublication(Track.Source.ScreenShare);
-      return pub && pub.track && !pub.isMuted;
-    }) ||
-    (isScreensharing ? participants.find((p) => p.isLocal) : null);
+  // Check if any participant is actively sharing screen
+  const activeScreenSharer = participants.find((p) => {
+    const pub = p.getTrackPublication(Track.Source.ScreenShare);
+    return pub && pub.track && !pub.isMuted;
+  }) || (isScreensharing ? participants.find((p) => p.isLocal) : null);
 
-  const targetParticipant = activeScreenParticipant;
-  const screenPub = targetParticipant?.getTrackPublication(Track.Source.ScreenShare);
+  // Determine if user explicitly requested to watch a stream (or is local streamer)
+  const streamParticipant =
+    (watchedParticipantId
+      ? participants.find((p) => {
+          if (p.identity !== watchedParticipantId) return false;
+          const pub = p.getTrackPublication(Track.Source.ScreenShare);
+          return pub && pub.track && !pub.isMuted;
+        })
+      : null) || (isScreensharing ? participants.find((p) => p.isLocal) : null);
+
+  const isWatchingStream = !!streamParticipant;
+
+  // Active Speaker resolution (when not watching a video stream)
+  const speakingParticipant = participants.find((p) => {
+    const isSpeaking = speakingUserIds.includes(p.identity);
+    const isMicOn = p.isMicrophoneEnabled;
+    return isSpeaking && isMicOn;
+  });
+
+  const activeSpeaker =
+    speakingParticipant ||
+    participants.find((p) => !p.isLocal) ||
+    participants.find((p) => p.isLocal);
+
+  const targetParticipant = isWatchingStream ? streamParticipant : activeSpeaker;
+  const screenPub = streamParticipant?.getTrackPublication(Track.Source.ScreenShare);
   const activeVideoPub = (screenPub?.track && !screenPub.isMuted) ? screenPub : null;
   const hasScreenVideoTrack = !!activeVideoPub?.track && !activeVideoPub.isMuted;
   const isLocal = targetParticipant?.isLocal;
@@ -136,7 +158,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   const currentUVol = targetParticipant ? (userVolumes[targetParticipant.identity] ?? 1) : 1;
   const currentSVol = targetParticipant ? (streamVolumes[targetParticipant.identity] ?? 1) : 1;
 
-  // Resolve target participant User info for profile modal
+  // Resolve target participant User info for profile modal and context menu
   const targetUser: User =
     activeGuild?.members?.find((m) => m.id === targetParticipant?.identity) || {
       id: targetParticipant?.identity || '',
@@ -154,8 +176,15 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   const parentGuild =
     (voiceChannel && guilds.find((g) => g.id === voiceChannel.guild_id)) || activeGuild;
 
-  // Attach and subscribe video stream & stream audio
+  // Attach and subscribe video stream & stream audio ONLY when watching
   useEffect(() => {
+    if (!isWatchingStream || !streamParticipant) {
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      return;
+    }
+
     const el = videoRef.current;
     if (hasScreenVideoTrack && activeVideoPub?.track && el) {
       activeVideoPub.track.attach(el);
@@ -166,19 +195,19 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       activeVideoPub.setSubscribed(true);
     }
 
-    if (!isLocal && targetParticipant) {
-      livekit.setStreamAudioSubscribed(targetParticipant.identity, true);
+    if (!streamParticipant.isLocal) {
+      livekit.setStreamAudioSubscribed(streamParticipant.identity, true);
     }
 
     return () => {
       if (el && activeVideoPub?.track) {
         activeVideoPub.track.detach(el);
       }
-      if (!isLocal && targetParticipant) {
-        livekit.setStreamAudioSubscribed(targetParticipant.identity, false);
+      if (!streamParticipant.isLocal) {
+        livekit.setStreamAudioSubscribed(streamParticipant.identity, false);
       }
     };
-  }, [activeVideoPub?.track, hasScreenVideoTrack, isLocal, targetParticipant]);
+  }, [isWatchingStream, activeVideoPub?.track, hasScreenVideoTrack, streamParticipant]);
 
   // Drag Handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -264,7 +293,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     dragStartRef.current = { startX: 0, startY: 0, initX: 0, initY: 0 };
   }, [isDragging, dragPos]);
 
-  if (!isConnected || !currentChannelId || !targetParticipant || !hasScreenVideoTrack) {
+  if (!isConnected || !currentChannelId || !targetParticipant) {
     return null;
   }
 
@@ -574,77 +603,139 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
         <GripHorizontal className="w-5 h-3 text-white/60" />
       </div>
 
-      {/* Video Stream Stage */}
-      <div
-        onClick={handleOpenVoiceRoom}
-        className="relative aspect-video bg-black cursor-pointer overflow-hidden flex items-center justify-center"
-      >
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          className="w-full h-full object-contain bg-black pointer-events-none"
-        />
+      {/* PiP Stage: Video Stream OR Discord-Style Active Speaker */}
+      {isWatchingStream && hasScreenVideoTrack ? (
+        <div
+          onClick={handleOpenVoiceRoom}
+          className="relative aspect-video bg-black cursor-pointer overflow-hidden flex items-center justify-center"
+        >
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            className="w-full h-full object-contain bg-black pointer-events-none"
+          />
 
-        {/* Top Floating Bar */}
-        <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-20">
-          {/* User Profile Badge (Click to open profile modal) */}
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={handleOpenUserProfile}
-            className="flex items-center gap-1.5 bg-black/75 hover:bg-black/95 active:scale-95 border border-white/10 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow transition-all cursor-pointer z-30"
-            title="Ver perfil do participante"
-          >
-            <div className="w-3.5 h-3.5 rounded-full bg-brand-500 flex items-center justify-center text-[8px] font-bold overflow-hidden">
-              {targetUser.avatar_url ? (
-                <img src={formatAssetUrl(targetUser.avatar_url)} alt="" className="w-full h-full object-cover" />
-              ) : (
-                displayName?.[0]?.toUpperCase() || 'U'
-              )}
-            </div>
-            <span className="truncate max-w-[90px]">{displayName}</span>
-            <span className="bg-brand-500 text-white text-[8px] px-1 py-0.2 rounded uppercase font-bold">
-              Ao Vivo
-            </span>
-          </button>
-
-          <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
+          {/* Top Floating Bar */}
+          <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-20">
+            {/* User Profile Badge (Click to open profile modal) */}
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={toggleFullscreen}
-              className="p-1 rounded-lg bg-black/60 hover:bg-white/20 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
-              title="Tela cheia do vídeo"
+              onClick={handleOpenUserProfile}
+              className="flex items-center gap-1.5 bg-black/75 hover:bg-black/95 active:scale-95 border border-white/10 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow transition-all cursor-pointer z-30"
+              title="Ver perfil do participante"
             >
-              <Maximize2 className="w-3.5 h-3.5" />
+              <div className="w-3.5 h-3.5 rounded-full bg-brand-500 flex items-center justify-center text-[8px] font-bold overflow-hidden">
+                {targetUser.avatar_url ? (
+                  <img src={formatAssetUrl(targetUser.avatar_url)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  displayName?.[0]?.toUpperCase() || 'U'
+                )}
+              </div>
+              <span className="truncate max-w-[90px]">{displayName}</span>
+              <span className="bg-brand-500 text-white text-[8px] px-1 py-0.2 rounded uppercase font-bold">
+                Ao Vivo
+              </span>
             </button>
 
-            {!isLocal && (
+            <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setWatchedParticipant(null);
-                }}
-                className="p-1 rounded-lg bg-black/60 hover:bg-dnd/80 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
-                title="Fechar transmissão"
+                onClick={toggleFullscreen}
+                className="p-1 rounded-lg bg-black/60 hover:bg-white/20 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
+                title="Tela cheia do vídeo"
               >
-                <EyeOff className="w-3.5 h-3.5" />
+                <Maximize2 className="w-3.5 h-3.5" />
               </button>
-            )}
-          </div>
-        </div>
 
-        {/* Center Hover Click Overlay */}
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-          <div className="bg-background-darkest/95 border border-white/10 px-3.5 py-2 rounded-xl text-xs font-semibold text-white flex items-center gap-2 shadow-2xl backdrop-blur-md">
-            <Monitor className="w-4 h-4 text-brand-400" />
-            <span>Clique aqui para voltar para a call</span>
+              {!isLocal && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setWatchedParticipant(null);
+                  }}
+                  className="p-1 rounded-lg bg-black/60 hover:bg-dnd/80 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
+                  title="Fechar transmissão"
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Center Hover Click Overlay */}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+            <div className="bg-background-darkest/95 border border-white/10 px-3.5 py-2 rounded-xl text-xs font-semibold text-white flex items-center gap-2 shadow-2xl backdrop-blur-md">
+              <Monitor className="w-4 h-4 text-brand-400" />
+              <span>Clique aqui para voltar para a call</span>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-3 pt-4 flex flex-col gap-2.5">
+          {/* Active Speaker Card */}
+          <div
+            onClick={handleOpenUserProfile}
+            className="flex items-center gap-3 p-2 rounded-xl bg-background-dark/80 border border-white/5 cursor-pointer hover:bg-background-dark hover:border-white/10 transition-all group/speaker"
+            title="Ver perfil do usuário"
+          >
+            <div className="relative flex-shrink-0">
+              <div
+                className={`w-11 h-11 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm shadow-sm overflow-hidden transition-all ${
+                  speakingUserIds.includes(targetParticipant.identity) && targetParticipant.isMicrophoneEnabled
+                    ? 'ring-2 ring-online ring-offset-2 ring-offset-background-darkest animate-pulse'
+                    : ''
+                }`}
+              >
+                {targetUser.avatar_url ? (
+                  <img src={formatAssetUrl(targetUser.avatar_url)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="text-xs font-bold text-gray-200 truncate group-hover/speaker:text-white">
+                {displayName}
+              </span>
+              <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                {speakingUserIds.includes(targetParticipant.identity) && targetParticipant.isMicrophoneEnabled ? (
+                  <span className="text-online font-semibold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-online animate-ping" />
+                    Falando...
+                  </span>
+                ) : !targetParticipant.isMicrophoneEnabled ? (
+                  <span className="text-gray-500 flex items-center gap-1">
+                    <MicOff className="w-3 h-3 text-dnd" />
+                    Mutado
+                  </span>
+                ) : (
+                  <span className="text-gray-400">Na call</span>
+                )}
+              </span>
+            </div>
+          </div>
+
+          {/* Watch Stream Button (If another member is streaming) */}
+          {activeScreenSharer && !activeScreenSharer.isLocal && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setWatchedParticipant(activeScreenSharer.identity)}
+              className="w-full py-2 px-3 bg-brand-500 hover:bg-brand-600 active:scale-98 text-white text-xs font-semibold rounded-xl shadow-lg shadow-brand-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              title="Assistir Transmissão"
+            >
+              <Monitor className="w-3.5 h-3.5" />
+              <span className="truncate">Assistir Transmissão ({activeScreenSharer.name || 'Usuário'})</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Bottom Voice Control Bar */}
       <div className="p-2.5 px-3 bg-background-darker/90 border-t border-white/5 flex items-center justify-between">
@@ -652,12 +743,12 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={handleOpenVoiceRoom}
-          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0 text-left"
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0 text-left flex-1 mr-2"
           title="Clique aqui para voltar para a call"
         >
           <div className="w-2 h-2 rounded-full bg-online animate-pulse flex-shrink-0" />
           <span className="text-xs font-semibold text-gray-200 truncate hover:underline hover:text-white">
-            {displayName} • #{voiceChannel?.name || 'Voz'}
+            #{voiceChannel?.name || 'Voz'}
           </span>
         </button>
 
