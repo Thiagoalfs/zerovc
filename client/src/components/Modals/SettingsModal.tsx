@@ -17,6 +17,7 @@ import {
   Keyboard,
   Radio,
   RefreshCw,
+  Headphones,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { getApiBaseUrl, setApiBaseUrl, api, formatAssetUrl } from '../../lib/api';
@@ -50,6 +51,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
+
+  const isMobileDevice = typeof window !== 'undefined' && (
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    Boolean((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined) ||
+    window.innerWidth < 768
+  );
 
   // 2FA state
   const [twoFactorData, setTwoFactorData] = useState<{ secret: string; otpauth_uri: string } | null>(null);
@@ -511,89 +518,103 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             {activeTab === 'voice' && (
               <div className="space-y-6">
                 {/* Audio Devices */}
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-xs font-bold text-gray-300 uppercase">
-                        Dispositivo de Entrada (Microfone)
-                      </label>
-                      <button
-                        type="button"
-                        onClick={loadAudioDevices}
-                        disabled={isLoadingDevices}
-                        className="text-[11px] text-brand-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-3 h-3 ${isLoadingDevices ? 'animate-spin' : ''}`} />
-                        <span>Recarregar</span>
-                      </button>
-                    </div>
-
-                    <select
-                      value={selectedInput}
-                      onChange={(e) => handleInputChange(e.target.value)}
-                      className="w-full bg-background-darkest text-white px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-brand-500 text-sm cursor-pointer"
-                    >
-                      {audioInputs.length === 0 ? (
-                        <option value="">Microfone Padrão do Sistema</option>
-                      ) : (
-                        audioInputs.map((d, i) => (
-                          <option key={d.deviceId || i} value={d.deviceId}>
-                            {d.label || `Microfone ${i + 1}`}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
-                      Dispositivo de Saída (Alto-falante / Fone)
-                    </label>
-                    <select
-                      value={selectedOutput}
-                      onChange={(e) => handleOutputChange(e.target.value)}
-                      className="w-full bg-background-darkest text-white px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-brand-500 text-sm cursor-pointer"
-                    >
-                      {audioOutputs.length === 0 ? (
-                        <option value="">Alto-falante Padrão do Sistema</option>
-                      ) : (
-                        audioOutputs.map((d, i) => (
-                          <option key={d.deviceId || i} value={d.deviceId}>
-                            {d.label || `Alto-falante / Fone ${i + 1}`}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
-
-                  {/* Mic Test Section */}
-                  <div className="p-4 bg-background-darkest rounded-xl border border-white/5 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-semibold text-white block">Teste de Microfone</span>
-                        <span className="text-[11px] text-gray-400">
-                          Fale para verificar se seu microfone está captando áudio corretamente.
-                        </span>
+                {!isMobileDevice ? (
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-bold text-gray-300 uppercase">
+                          Dispositivo de Entrada (Microfone)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={loadAudioDevices}
+                          disabled={isLoadingDevices}
+                          className="text-[11px] text-brand-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${isLoadingDevices ? 'animate-spin' : ''}`} />
+                          <span>Recarregar</span>
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={isTestingMic ? stopMicTest : () => startMicTest()}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                          isTestingMic
-                            ? 'bg-dnd hover:bg-rose-700 text-white'
-                            : 'bg-brand-500 hover:bg-brand-600 text-white'
-                        }`}
+
+                      <select
+                        value={selectedInput}
+                        onChange={(e) => handleInputChange(e.target.value)}
+                        className="w-full bg-background-darkest text-white px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-brand-500 text-sm cursor-pointer"
                       >
-                        {isTestingMic ? 'Parar Teste' : 'Testar'}
-                      </button>
+                        {audioInputs.length === 0 ? (
+                          <option value="">Microfone Padrão do Sistema</option>
+                        ) : (
+                          audioInputs.map((d, i) => (
+                            <option key={d.deviceId || i} value={d.deviceId}>
+                              {d.label || `Microfone ${i + 1}`}
+                            </option>
+                          ))
+                        )}
+                      </select>
                     </div>
 
-                    <div className="h-2.5 bg-background-dark rounded-full overflow-hidden border border-white/10">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
-                        style={{ width: `${isTestingMic ? micLevel : 0}%` }}
-                      />
+                    <div>
+                      <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
+                        Dispositivo de Saída (Alto-falante / Fone)
+                      </label>
+                      <select
+                        value={selectedOutput}
+                        onChange={(e) => handleOutputChange(e.target.value)}
+                        className="w-full bg-background-darkest text-white px-3 py-2.5 rounded-lg border border-white/10 focus:outline-none focus:border-brand-500 text-sm cursor-pointer"
+                      >
+                        {audioOutputs.length === 0 ? (
+                          <option value="">Alto-falante Padrão do Sistema</option>
+                        ) : (
+                          audioOutputs.map((d, i) => (
+                            <option key={d.deviceId || i} value={d.deviceId}>
+                              {d.label || `Alto-falante / Fone ${i + 1}`}
+                            </option>
+                          ))
+                        )}
+                      </select>
                     </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-background-darkest rounded-xl border border-white/5 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400 flex-shrink-0 mt-0.5">
+                      <Headphones className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold text-gray-200 block">Roteamento Automático de Áudio</span>
+                      <span className="text-[11px] text-gray-400 block leading-relaxed">
+                        No celular, o áudio e microfone são gerenciados automaticamente pelo sistema ao conectar ou desconectar fones Bluetooth e com fio.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mic Test Section */}
+                <div className="p-4 bg-background-darkest rounded-xl border border-white/5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-white block">Teste de Microfone</span>
+                      <span className="text-[11px] text-gray-400">
+                        Fale para verificar se seu microfone está captando áudio corretamente.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={isTestingMic ? stopMicTest : () => startMicTest()}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                        isTestingMic
+                          ? 'bg-dnd hover:bg-rose-700 text-white'
+                          : 'bg-brand-500 hover:bg-brand-600 text-white'
+                      }`}
+                    >
+                      {isTestingMic ? 'Parar Teste' : 'Testar'}
+                    </button>
+                  </div>
+
+                  <div className="h-2.5 bg-background-dark rounded-full overflow-hidden border border-white/10">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
+                      style={{ width: `${isTestingMic ? micLevel : 0}%` }}
+                    />
                   </div>
                 </div>
 
