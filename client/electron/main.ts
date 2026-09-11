@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
+import fs from 'fs';
 
 let autoUpdater: any = null;
 try {
@@ -8,17 +9,38 @@ try {
   console.warn('[AutoUpdater] electron-updater could not be loaded:', err);
 }
 
-// Enable Hardware Acceleration & High-Performance Native Screen Capture
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-accelerated-video-decode');
-app.commandLine.appendSwitch('enable-accelerated-video-encode');
-app.commandLine.appendSwitch('disable-renderer-backgrounding');
-app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-app.commandLine.appendSwitch(
-  'enable-features',
-  'WindowsGraphicsCapture,WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,MediaFoundationVideoEncodeAcceleration,MediaFoundationD3D11VideoCapture,VaapiVideoEncoder'
-);
+// Persistent settings helper
+let hardwareAccelerationEnabled = true;
+try {
+  const userDataPath = app.getPath('userData');
+  const settingsFile = path.join(userDataPath, 'settings.json');
+  if (fs.existsSync(settingsFile)) {
+    const raw = fs.readFileSync(settingsFile, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.hardwareAcceleration === 'boolean') {
+      hardwareAccelerationEnabled = parsed.hardwareAcceleration;
+    }
+  }
+} catch (e) {
+  console.warn('[Settings] Failed to load hardware acceleration setting:', e);
+}
+
+if (!hardwareAccelerationEnabled) {
+  console.log('[Electron] Hardware acceleration is DISABLED by user preference.');
+  app.disableHardwareAcceleration();
+} else {
+  // Enable Hardware Acceleration & High-Performance Native Screen Capture
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-accelerated-video-decode');
+  app.commandLine.appendSwitch('enable-accelerated-video-encode');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+  app.commandLine.appendSwitch(
+    'enable-features',
+    'WindowsGraphicsCapture,WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,MediaFoundationVideoEncodeAcceleration,MediaFoundationD3D11VideoCapture,VaapiVideoEncoder'
+  );
+}
 
 // Base production server URL and Allowed Origins
 const REMOTE_SERVER_URL = 'https://zerovc.safiroko.xyz';
@@ -437,6 +459,34 @@ ipcMain.handle('get-gpu-info', async () => {
     console.warn('[Electron] Could not retrieve GPU info:', err);
     return null;
   }
+});
+
+ipcMain.handle('get-hardware-acceleration', () => {
+  return hardwareAccelerationEnabled;
+});
+
+ipcMain.on('set-hardware-acceleration', (_event, enabled: boolean) => {
+  hardwareAccelerationEnabled = enabled;
+  try {
+    const userDataPath = app.getPath('userData');
+    const settingsFile = path.join(userDataPath, 'settings.json');
+    let settings: any = {};
+    if (fs.existsSync(settingsFile)) {
+      try {
+        settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      } catch {}
+    }
+    settings.hardwareAcceleration = enabled;
+    fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
+    console.log('[Electron] Hardware acceleration preference saved to:', enabled);
+  } catch (err) {
+    console.error('[Settings] Failed to save hardware acceleration setting:', err);
+  }
+});
+
+ipcMain.on('relaunch-app', () => {
+  app.relaunch();
+  app.exit(0);
 });
 
 ipcMain.on('check-for-updates', () => {
