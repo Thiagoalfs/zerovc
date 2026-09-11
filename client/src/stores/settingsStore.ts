@@ -3,7 +3,6 @@ import { create } from 'zustand';
 export type ThemeMode = 'dark' | 'oled' | 'light';
 export type AccentColor = 'indigo' | 'purple' | 'emerald' | 'rose' | 'cyan' | 'amber';
 export type ChatDensity = 'cozy' | 'compact';
-export type ScreenshareQuality = '720p30' | '1080p30' | '1080p60' | 'source';
 export type DmPrivacy = 'everyone' | 'friends_only';
 
 export type AudioProcessingMode = 'webrtc' | 'rnnoise' | 'rnnoise_silero';
@@ -40,7 +39,6 @@ interface SettingsState {
   echoCancellation: boolean;
   noiseSuppression: boolean;
   autoGainControl: boolean;
-  screenshareQuality: ScreenshareQuality;
 
   // Privacy
   dmPrivacy: DmPrivacy;
@@ -69,7 +67,6 @@ interface SettingsState {
   setEchoCancellation: (enabled: boolean) => void;
   setNoiseSuppression: (enabled: boolean) => void;
   setAutoGainControl: (enabled: boolean) => void;
-  setScreenshareQuality: (quality: ScreenshareQuality) => void;
   setDmPrivacy: (privacy: DmPrivacy) => void;
   applyThemeToDOM: () => void;
 }
@@ -195,7 +192,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   echoCancellation: getStoredBoolean('zerovc_echo_cancellation', true),
   noiseSuppression: getStoredBoolean('zerovc_noise_suppression', true),
   autoGainControl: getStoredBoolean('zerovc_auto_gain_control', true),
-  screenshareQuality: getStoredString<ScreenshareQuality>('zerovc_screenshare_quality', '1080p30'),
 
   dmPrivacy: getStoredString<DmPrivacy>('zerovc_dm_privacy', 'everyone'),
 
@@ -285,6 +281,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setNotificationsDesktop: (notificationsDesktop) => {
     localStorage.setItem('zerovc_notifications_desktop', String(notificationsDesktop));
     set({ notificationsDesktop });
+    if (notificationsDesktop && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
   },
 
   setAudioProcessingMode: (audioProcessingMode) => {
@@ -320,11 +319,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setAutoGainControl: (autoGainControl) => {
     localStorage.setItem('zerovc_auto_gain_control', String(autoGainControl));
     set({ autoGainControl });
-  },
-
-  setScreenshareQuality: (screenshareQuality) => {
-    localStorage.setItem('zerovc_screenshare_quality', screenshareQuality);
-    set({ screenshareQuality });
   },
 
   setDmPrivacy: (dmPrivacy) => {

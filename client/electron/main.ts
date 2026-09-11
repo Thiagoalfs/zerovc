@@ -11,6 +11,7 @@ try {
 
 // Persistent settings helper
 let hardwareAccelerationEnabled = true;
+let minimizeToTray = true;
 try {
   const userDataPath = app.getPath('userData');
   const settingsFile = path.join(userDataPath, 'settings.json');
@@ -20,9 +21,12 @@ try {
     if (typeof parsed.hardwareAcceleration === 'boolean') {
       hardwareAccelerationEnabled = parsed.hardwareAcceleration;
     }
+    if (typeof parsed.minimizeToTray === 'boolean') {
+      minimizeToTray = parsed.minimizeToTray;
+    }
   }
 } catch (e) {
-  console.warn('[Settings] Failed to load hardware acceleration setting:', e);
+  console.warn('[Settings] Failed to load settings:', e);
 }
 
 if (!hardwareAccelerationEnabled) {
@@ -410,6 +414,20 @@ ipcMain.on('window-close', () => {
 
 ipcMain.on('set-minimize-to-tray', (_event, enabled: boolean) => {
   minimizeToTray = !!enabled;
+  try {
+    const userDataPath = app.getPath('userData');
+    const settingsFile = path.join(userDataPath, 'settings.json');
+    let settings: any = {};
+    if (fs.existsSync(settingsFile)) {
+      try {
+        settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      } catch {}
+    }
+    settings.minimizeToTray = minimizeToTray;
+    fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[Settings] Failed to save minimizeToTray setting:', err);
+  }
 });
 
 ipcMain.handle('get-minimize-to-tray', () => {

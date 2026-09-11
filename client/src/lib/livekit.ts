@@ -619,7 +619,8 @@ class LiveKitManager {
 
   async setCameraEnabled(enabled: boolean) {
     if (!this.room) return;
-    await this.room.localParticipant.setCameraEnabled(enabled);
+    const devId = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_video_device') || undefined : undefined;
+    await this.room.localParticipant.setCameraEnabled(enabled, devId ? { deviceId: { exact: devId } } : undefined);
     this.onTrackUpdated?.();
   }
 
@@ -631,6 +632,11 @@ class LiveKitManager {
   async setAudioOutputDevice(deviceId: string) {
     if (!this.room) return;
     await this.room.switchActiveDevice('audiooutput', deviceId);
+  }
+
+  async setVideoInputDevice(deviceId: string) {
+    if (!this.room) return;
+    await this.room.switchActiveDevice('videoinput', deviceId);
   }
 
   setUserVolume(participantIdentity: string, volume: number) {
