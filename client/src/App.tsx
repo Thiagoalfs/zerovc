@@ -42,6 +42,7 @@ import { livekit } from './lib/livekit';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 import { initMobileBackHandler, pushBackHandler } from './lib/mobileBackHandler';
+import { initAudioRouting } from './lib/audioRouting';
 
 export const App: React.FC = () => {
   const { user, token, isCheckingAuth, checkAuth, setUser } = useAuthStore();
@@ -149,6 +150,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     initMobileBackHandler();
+    initAudioRouting();
   }, []);
 
   // Back button stack for modals and mobile drawers in App.tsx

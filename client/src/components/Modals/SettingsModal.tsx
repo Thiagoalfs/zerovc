@@ -22,6 +22,7 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { getApiBaseUrl, setApiBaseUrl, api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
+import { setMobileMicTesting } from '../../lib/audioRouting';
 import { User } from '../../types';
 
 interface SettingsModalProps {
@@ -185,6 +186,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     const targetDevice = overrideDeviceId || selectedInput;
     try {
       setIsTestingMic(true);
+      setMobileMicTesting(true);
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: targetDevice ? { deviceId: { exact: targetDevice } } : true,
       });
@@ -219,11 +221,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     } catch (err) {
       console.error('Failed to test microphone:', err);
       setIsTestingMic(false);
+      setMobileMicTesting(false);
     }
   };
 
   const stopMicTest = () => {
     setIsTestingMic(false);
+    setMobileMicTesting(false);
     setMicLevel(0);
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (micStreamRef.current) {
