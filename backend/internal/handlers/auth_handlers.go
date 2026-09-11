@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,18 +24,43 @@ import (
 
 var validUsernameRegex = regexp.MustCompile(`^[a-z0-9_]+$`)
 
+type failed2FAAttempt struct {
+	count    int
+	lockedAt time.Time
+}
+
 type AuthHandler struct {
-	db    *database.DB
-	auth  *auth.Service
-	email *email.Service
+	db            *database.DB
+	auth          *auth.Service
+	email         *email.Service
+	twoFAMutex    sync.Mutex
+	twoFAAttempts map[uuid.UUID]*failed2FAAttempt
 }
 
 func NewAuthHandler(db *database.DB, authService *auth.Service, emailService *email.Service) *AuthHandler {
-	return &AuthHandler{
-		db:    db,
-		auth:  authService,
-		email: emailService,
+	handler := &AuthHandler{
+		db:            db,
+		auth:          authService,
+		email:         emailService,
+		twoFAAttempts: make(map[uuid.UUID]*failed2FAAttempt),
 	}
+
+	// Periodic cleanup of stale 2FA lockout entries every 15 minutes
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		for range ticker.C {
+			handler.twoFAMutex.Lock()
+			now := time.Now()
+			for id, att := range handler.twoFAAttempts {
+				if now.Sub(att.lockedAt) > 30*time.Minute {
+					delete(handler.twoFAAttempts, id)
+				}
+			}
+			handler.twoFAMutex.Unlock()
+		}
+	}()
+
+	return handler
 }
 
 type RegisterRequest struct {
@@ -560,6 +586,23 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Check if user is currently locked out from 2FA
+		h.twoFAMutex.Lock()
+		attempt, exists := h.twoFAAttempts[user.ID]
+		if exists && attempt.count >= 5 {
+			lockoutDuration := 15 * time.Minute
+			elapsed := time.Since(attempt.lockedAt)
+			if elapsed < lockoutDuration {
+				remainingMins := int((lockoutDuration - elapsed).Minutes()) + 1
+				h.twoFAMutex.Unlock()
+				http.Error(w, fmt.Sprintf(`{"error":"Muitas tentativas incorretas de 2FA. Conta temporariamente bloqueada. Tente novamente em %d minutos."}`, remainingMins), http.StatusTooManyRequests)
+				return
+			}
+			// Lockout expired, reset attempts
+			delete(h.twoFAAttempts, user.ID)
+		}
+		h.twoFAMutex.Unlock()
+
 		cleanCode := strings.TrimSpace(req.Code)
 		totpValid := auth.VerifyTOTPCode(user.TwoFactorSecret, cleanCode)
 		if !totpValid {
@@ -575,10 +618,32 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 				// Mark backup code as used
 				h.db.Pool.Exec(r.Context(), `UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1`, backupID)
 			} else {
-				http.Error(w, `{"error":"código 2FA ou código de backup inválido"}`, http.StatusUnauthorized)
+				// Increment failed attempt counter
+				h.twoFAMutex.Lock()
+				att, ok := h.twoFAAttempts[user.ID]
+				if !ok {
+					att = &failed2FAAttempt{count: 0, lockedAt: time.Now()}
+					h.twoFAAttempts[user.ID] = att
+				}
+				att.count++
+				att.lockedAt = time.Now()
+				if att.count >= 5 {
+					h.twoFAMutex.Unlock()
+					http.Error(w, `{"error":"Muitas tentativas incorretas de 2FA. Sua conta foi temporariamente bloqueada por 15 minutos."}`, http.StatusTooManyRequests)
+					return
+				}
+				remaining := 5 - att.count
+				h.twoFAMutex.Unlock()
+
+				http.Error(w, fmt.Sprintf(`{"error":"Código 2FA ou código de backup inválido. Restam %d tentativa(s)."}`, remaining), http.StatusUnauthorized)
 				return
 			}
 		}
+
+		// Successful 2FA verification: reset attempt counter
+		h.twoFAMutex.Lock()
+		delete(h.twoFAAttempts, user.ID)
+		h.twoFAMutex.Unlock()
 	}
 
 	user.TwoFactorEnabled = user.TwoFactorSecret != ""
