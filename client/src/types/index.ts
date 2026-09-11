@@ -18,6 +18,7 @@ export const Permissions = {
 
   VIEW_CHANNEL: 1 << 14, // 16384: Ver Canal
   STREAM_VOICE: 1 << 15, // 32768: Transmitir Tela / Vídeo
+  CREATE_INSTANT_INVITE: 1 << 16, // 65536: Criar Convite Instantâneo
 } as const;
 
 export interface User {

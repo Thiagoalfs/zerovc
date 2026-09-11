@@ -174,7 +174,7 @@ func main() {
 
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc: func(r *http.Request, origin string) bool {
-			if origin == "" || origin == "null" {
+			if origin == "" {
 				return true
 			}
 			return allowedOrigins[origin]
@@ -235,22 +235,32 @@ func main() {
 	// Public Invite Preview
 	r.Get("/api/invites/{code}", inviteHandler.GetInvite)
 
-	// Public Link OpenGraph Metadata Preview
-	r.Get("/api/link-preview", linkPreviewHandler.GetMetadata)
+	// Public Link OpenGraph Metadata Preview (Rate limit: 20 req/min por IP + SSRF Protection)
+	r.With(httprate.LimitByIP(20, time.Minute)).Get("/api/link-preview", linkPreviewHandler.GetMetadata)
 
 	// Protected API Routes
 	r.Group(func(r chi.Router) {
 		r.Use(authService.Middleware)
 
+		// Rate Limiters por Usuário Autenticado
+		messageLimiter := ratelimit.NewUserRateLimiter(10, 5, "Você está enviando mensagens muito rápido. Aguarde um instante.")
+		guildCreateLimiter := ratelimit.NewUserRateLimiter(5, 5.0/3600.0, "Limite de criação de servidores atingido. Tente novamente mais tarde.")
+		friendRequestLimiter := ratelimit.NewUserRateLimiter(5, 5.0/60.0, "Você está enviando solicitações de amizade muito rápido. Aguarde um instante.")
+		dmGroupLimiter := ratelimit.NewUserRateLimiter(3, 3.0/60.0, "Limite de criação de grupos atingido. Aguarde um momento.")
+		uploadLimiter := ratelimit.NewUserRateLimiter(15, 15.0/60.0, "Você está enviando arquivos muito rápido. Aguarde um instante.")
+		sensitiveActionLimiter := ratelimit.NewUserRateLimiter(5, 5.0/300.0, "Você realizou muitas ações sensíveis recentemente. Aguarde alguns minutos antes de tentar novamente.")
+		searchLimiter := ratelimit.NewUserRateLimiter(10, 10.0/60.0, "Você está realizando buscas muito rápido. Aguarde um instante.")
+		exportDataLimiter := ratelimit.NewUserRateLimiter(1, 1.0/600.0, "Você só pode solicitar a exportação de dados uma vez a cada 10 minutos. Tente novamente mais tarde.")
+
 		// Current User & Profile Customization
 		r.Get("/api/auth/me", authHandler.Me)
-		r.Get("/api/auth/export-data", authHandler.ExportData)
+		r.With(exportDataLimiter.Middleware).Get("/api/auth/export-data", authHandler.ExportData)
 		r.Post("/api/auth/delete-account", authHandler.DeleteAccount)
 		r.Post("/api/auth/2fa/generate", authHandler.Generate2FA)
 		r.Post("/api/auth/2fa/enable", authHandler.Enable2FA)
-		r.Post("/api/auth/2fa/disable", authHandler.Disable2FA)
-		r.Post("/api/auth/change-password", authHandler.ChangePassword)
-		r.Post("/api/auth/change-email", authHandler.ChangeEmail)
+		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/2fa/disable", authHandler.Disable2FA)
+		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/change-password", authHandler.ChangePassword)
+		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/change-email", authHandler.ChangeEmail)
 		r.Post("/api/auth/change-phone", authHandler.ChangePhone)
 		r.Patch("/api/users/@me", userHandler.UpdateProfile)
 		r.Get("/api/users/me/blocks", userHandler.ListBlockedUsers)
@@ -259,13 +269,6 @@ func main() {
 		r.Get("/api/users/me/favorite-gifs", userHandler.GetFavoriteGIFs)
 		r.Post("/api/users/me/favorite-gifs", userHandler.AddFavoriteGIF)
 		r.Delete("/api/users/me/favorite-gifs", userHandler.RemoveFavoriteGIF)
-
-		// Rate Limiters por Usuário Autenticado
-		messageLimiter := ratelimit.NewUserRateLimiter(10, 5, "Você está enviando mensagens muito rápido. Aguarde um instante.")
-		guildCreateLimiter := ratelimit.NewUserRateLimiter(5, 5.0/3600.0, "Limite de criação de servidores atingido. Tente novamente mais tarde.")
-		friendRequestLimiter := ratelimit.NewUserRateLimiter(5, 5.0/60.0, "Você está enviando solicitações de amizade muito rápido. Aguarde um instante.")
-		dmGroupLimiter := ratelimit.NewUserRateLimiter(3, 3.0/60.0, "Limite de criação de grupos atingido. Aguarde um momento.")
-		uploadLimiter := ratelimit.NewUserRateLimiter(15, 15.0/60.0, "Você está enviando arquivos muito rápido. Aguarde um instante.")
 
 		// Guilds (Protected)
 		r.Get("/api/guilds", guildHandler.List)
@@ -285,7 +288,7 @@ func main() {
 		r.Delete("/api/guilds/{id}/emojis/{emojiID}", guildHandler.DeleteEmoji)
 		r.Get("/api/guilds/{id}/audit-logs", guildHandler.ListAuditLogs)
 		r.Get("/api/guilds/{guildID}/read-states", messageHandler.GetGuildReadStates)
-		r.Get("/api/guilds/{guildID}/messages/search", messageHandler.Search)
+		r.With(searchLimiter.Middleware).Get("/api/guilds/{guildID}/messages/search", messageHandler.Search)
 
 		// Guild Moderation (Protected)
 		r.Post("/api/guilds/{id}/members/{userID}/kick", guildHandler.KickMember)
@@ -300,7 +303,7 @@ func main() {
 		r.Put("/api/channels/{id}/permissions/{roleID}", channelHandler.UpdatePermissionOverwrite)
 		r.Delete("/api/channels/{id}/permissions/{roleID}", channelHandler.DeletePermissionOverwrite)
 		r.Put("/api/guilds/{guildID}/channels/positions", channelHandler.Reorder)
-		r.Get("/api/channels/{channelID}/messages/search", messageHandler.Search)
+		r.With(searchLimiter.Middleware).Get("/api/channels/{channelID}/messages/search", messageHandler.Search)
 		r.Post("/api/channels/{channelID}/ack", messageHandler.AckChannel)
 
 		// Server Roles (Protected)
@@ -326,7 +329,7 @@ func main() {
 		r.Post("/api/dms", dmHandler.CreateOrGetRoom)
 		r.Get("/api/dms/{roomID}/messages", dmHandler.ListMessages)
 		r.Get("/api/dms/{roomID}/pins", dmHandler.ListPinned)
-		r.Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)
+		r.With(messageLimiter.Middleware).Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)
 		r.Patch("/api/dms/{roomID}/messages/{messageID}", dmHandler.UpdateMessage)
 		r.Delete("/api/dms/{roomID}/messages/{messageID}", dmHandler.DeleteMessage)
 		r.Post("/api/dms/{roomID}/messages/{messageID}/reactions", dmHandler.AddReaction)
@@ -349,7 +352,7 @@ func main() {
 		r.Post("/api/dm/groups/{id}/members", dmGroupHandler.AddMembers)
 		r.Delete("/api/dm/groups/{id}/members/{userID}", dmGroupHandler.RemoveMember)
 		r.Get("/api/dm/groups/{id}/messages", dmGroupHandler.ListMessages)
-		r.Post("/api/dm/groups/{id}/messages", dmGroupHandler.SendMessage)
+		r.With(messageLimiter.Middleware).Post("/api/dm/groups/{id}/messages", dmGroupHandler.SendMessage)
 		r.Patch("/api/dm/groups/{id}/messages/{messageID}", dmGroupHandler.UpdateMessage)
 		r.Delete("/api/dm/groups/{id}/messages/{messageID}", dmGroupHandler.DeleteMessage)
 		r.Post("/api/dm/groups/{id}/voice-token", dmGroupHandler.JoinVoice)

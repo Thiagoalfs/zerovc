@@ -58,11 +58,16 @@ func (h *InviteHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Verify user is a member of the guild
-	var isMember bool
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, userID).Scan(&isMember)
-	if err != nil || !isMember {
-		http.Error(w, `{"error":"forbidden: not a member of this server"}`, http.StatusForbidden)
+	// 1. Verify user is a member of the guild and has invite permissions
+	ac, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"servidor não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	canCreate := ac.IsOwner || ac.HasAdmin || (ac.Perms&models.PermCreateInstantInvite) != 0 || (ac.Perms&models.PermManageGuild) != 0
+	if !canCreate {
+		http.Error(w, `{"error":"você não tem permissão para criar convites neste servidor"}`, http.StatusForbidden)
 		return
 	}
 
