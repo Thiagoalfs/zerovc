@@ -254,6 +254,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setHardwareAcceleration: (hardwareAcceleration) => {
     localStorage.setItem('zerovc_hardware_acceleration', String(hardwareAcceleration));
     set({ hardwareAcceleration });
+    window.electronAPI?.setHardwareAcceleration?.(hardwareAcceleration);
   },
 
   setSoundsEnabled: (soundsEnabled) => {

@@ -18,6 +18,22 @@ export interface GpuDetectionResult {
 }
 
 export async function detectGpuVendor(): Promise<GpuDetectionResult> {
+  // Check user hardware acceleration preference
+  const userHwSetting = typeof localStorage !== 'undefined'
+    ? localStorage.getItem('zerovc_hardware_acceleration')
+    : null;
+  const isHwEnabledByUser = userHwSetting === null || userHwSetting === 'true';
+
+  if (!isHwEnabledByUser) {
+    console.log('[LiveKit GPU] Hardware acceleration is explicitly DISABLED by user in settings. Forcing VP8 software codec.');
+    return {
+      vendor: 'unknown',
+      name: 'Software Fallback (GPU Acceleration Disabled)',
+      hardwareAcceleration: false,
+      preferredCodec: 'vp8',
+    };
+  }
+
   let detectedVendor: GpuVendor = 'unknown';
   let deviceName = 'Generic Graphics Device';
   let hwAcceleration = true;

@@ -296,10 +296,12 @@ declare global {
       setAutoStart?: (enabled: boolean) => void;
       getAutoStart?: () => Promise<boolean>;
       setZoomFactor?: (factor: number) => void;
-      getZoomFactor?: () => number;
       getGpuInfo?: () => Promise<any>;
       setFullScreen?: (flag: boolean) => void;
       isFullScreen?: () => Promise<boolean>;
+      setHardwareAcceleration?: (enabled: boolean) => void;
+      getHardwareAcceleration?: () => Promise<boolean>;
+      relaunchApp?: () => void;
     };
   }
 }

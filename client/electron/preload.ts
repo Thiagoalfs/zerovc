@@ -48,6 +48,9 @@ export interface ElectronAPI {
   getGpuInfo: () => Promise<any>;
   setFullScreen: (flag: boolean) => void;
   isFullScreen: () => Promise<boolean>;
+  setHardwareAcceleration: (enabled: boolean) => void;
+  getHardwareAcceleration: () => Promise<boolean>;
+  relaunchApp: () => void;
 }
 
 const electronAPI: ElectronAPI = {
@@ -56,6 +59,9 @@ const electronAPI: ElectronAPI = {
   getGpuInfo: () => ipcRenderer.invoke('get-gpu-info'),
   setFullScreen: (flag: boolean) => ipcRenderer.send('window-set-fullscreen', flag),
   isFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
+  setHardwareAcceleration: (enabled: boolean) => ipcRenderer.send('set-hardware-acceleration', enabled),
+  getHardwareAcceleration: () => ipcRenderer.invoke('get-hardware-acceleration'),
+  relaunchApp: () => ipcRenderer.send('relaunch-app'),
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
