@@ -327,15 +327,18 @@ export const App: React.FC = () => {
       if (absX > 7 && absX > absY) {
         touchStateRef.current.gestureIntent = 'horizontal';
 
-        const { initialLeftOpen, initialRightOpen } = touchStateRef.current;
+        const { initialLeftOpen, initialRightOpen, startX, leftDrawerWidth } = touchStateRef.current;
+        const winWidth = typeof window !== 'undefined' ? window.innerWidth : leftDrawerWidth;
+        const EDGE_THRESHOLD = 38; // Only trigger drawer from screen edge when closed to prevent conflict with message swipe-to-reply
+
         if (initialLeftOpen) {
           touchStateRef.current.activeDrawer = 'left';
         } else if (initialRightOpen) {
           touchStateRef.current.activeDrawer = 'right';
         } else {
-          if (deltaX > 0) {
+          if (deltaX > 0 && startX <= EDGE_THRESHOLD) {
             touchStateRef.current.activeDrawer = 'left';
-          } else if (!isHomeActive && activeGuild) {
+          } else if (deltaX < 0 && startX >= winWidth - EDGE_THRESHOLD && !isHomeActive && activeGuild) {
             touchStateRef.current.activeDrawer = 'right';
           }
         }
@@ -392,13 +395,13 @@ export const App: React.FC = () => {
 
       if (activeDrawer === 'left') {
         if (initialLeftOpen) {
-          if (deltaX < -50 || velocityX < -0.3) {
+          if (deltaX < -35 || velocityX < -0.2) {
             setIsMobileDrawerOpen(false);
           } else {
             setIsMobileDrawerOpen(true);
           }
         } else {
-          if (deltaX > 50 || velocityX > 0.3) {
+          if (deltaX > 35 || velocityX > 0.2) {
             setIsMobileDrawerOpen(true);
           } else {
             setIsMobileDrawerOpen(false);
@@ -406,13 +409,13 @@ export const App: React.FC = () => {
         }
       } else if (activeDrawer === 'right') {
         if (initialRightOpen) {
-          if (deltaX > 50 || velocityX > 0.3) {
+          if (deltaX > 35 || velocityX > 0.2) {
             handleToggleMemberList(false);
           } else {
             handleToggleMemberList(true);
           }
         } else {
-          if (deltaX < -50 || velocityX < -0.3) {
+          if (deltaX < -35 || velocityX < -0.2) {
             handleToggleMemberList(true);
           } else {
             handleToggleMemberList(false);
