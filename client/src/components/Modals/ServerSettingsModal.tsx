@@ -44,6 +44,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { convertToWebP } from '../../utils/image';
 import { ImageCropModal } from './ImageCropModal';
 import { ServerAuditLogView } from './ServerAuditLogView';
+import { pushBackHandler } from '../../lib/mobileBackHandler';
 
 interface ServerSettingsModalProps {
   isOpen: boolean;
@@ -280,6 +281,58 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferError, setTransferError] = useState('');
   const [transferSearchQuery, setTransferSearchQuery] = useState('');
+
+  // Hardware Back Button integration for mobile
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const unregister = pushBackHandler('server_settings_modal', () => {
+      if (isCropOpen) {
+        setIsCropOpen(false);
+        return true;
+      }
+      if (isDeleteModalOpen) {
+        setIsDeleteModalOpen(false);
+        return true;
+      }
+      if (isTransferModalOpen) {
+        setIsTransferModalOpen(false);
+        return true;
+      }
+      if (muteModalUser) {
+        setMuteModalUser(null);
+        return true;
+      }
+      if (banModalUser) {
+        setBanModalUser(null);
+        return true;
+      }
+      if (selectedRoleId) {
+        setSelectedRoleId(null);
+        return true;
+      }
+      if (mobileView === 'content') {
+        setMobileView('menu');
+        return true;
+      }
+      onClose();
+      return true;
+    });
+
+    return () => {
+      unregister();
+    };
+  }, [
+    isOpen,
+    mobileView,
+    isCropOpen,
+    isDeleteModalOpen,
+    isTransferModalOpen,
+    muteModalUser,
+    banModalUser,
+    selectedRoleId,
+    onClose,
+  ]);
 
   useEffect(() => {
     if (activeGuild) {
