@@ -12,6 +12,10 @@ import {
   Clock,
   Volume2,
   Copy,
+  Hash,
+  ArrowLeft,
+  Search,
+  Pin,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -28,6 +32,8 @@ interface MemberListProps {
   onClose?: () => void;
   onSelectUser?: (user: User, position?: { x: number; y: number }) => void;
   onOpenDM?: (userId: string) => void;
+  onOpenSearch?: () => void;
+  onOpenPins?: () => void;
   isDragging?: boolean;
   dragOffset?: number | null;
   dragProgress?: number | null;
@@ -38,12 +44,15 @@ export const MemberList: React.FC<MemberListProps> = ({
   onClose,
   onSelectUser,
   onOpenDM,
+  onOpenSearch,
+  onOpenPins,
   isDragging = false,
   dragOffset = null,
   dragProgress = null,
 }) => {
   const {
     activeGuild,
+    activeChannel,
     kickMember,
     banMember,
     muteMember,
@@ -431,11 +440,53 @@ export const MemberList: React.FC<MemberListProps> = ({
         {/* Resizer Handle */}
         <SidebarResizer side="left" target="memberList" />
         {/* Mobile Header */}
-        <div className="h-14 -mx-3 -mt-3 px-4 mb-3 border-b border-black/20 flex items-center justify-between bg-background-dark/95 backdrop-blur-sm shadow-sm md:hidden flex-shrink-0">
-          <h2 className="text-[17px] font-bold text-white">Membros do Servidor</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
-            <X className="w-6 h-6" />
-          </button>
+        <div className="md:hidden flex-shrink-0 -mx-3 -mt-3 mb-3 bg-background-dark/95 backdrop-blur-sm border-b border-black/20 px-4 py-3 shadow-sm">
+          {/* Top Row: Back button on left, Search & Pins on right */}
+          <div className="flex items-center justify-between mb-2.5">
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white p-1.5 -ml-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-1"
+              title="Voltar para o chat"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center gap-1">
+              {onOpenSearch && (
+                <button
+                  onClick={onOpenSearch}
+                  className="p-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Buscar no canal"
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+              )}
+              {onOpenPins && (
+                <button
+                  onClick={onOpenPins}
+                  className="p-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Mensagens Fixadas"
+                >
+                  <Pin className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Channel Name Header */}
+          <div className="flex items-center gap-2">
+            <Hash className="w-6 h-6 text-gray-400 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[17px] font-bold text-white truncate leading-tight">
+                {activeChannel?.name || 'Membros do Servidor'}
+              </h2>
+              {activeChannel?.topic ? (
+                <p className="text-xs text-gray-400 truncate mt-0.5">{activeChannel.topic}</p>
+              ) : (
+                <p className="text-xs text-gray-400 truncate mt-0.5">Lista de Membros</p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Hoisted Role Sections */}

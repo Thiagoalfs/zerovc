@@ -646,10 +646,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       }
     }
 
-    // Only allow swipe right if mostly horizontal
-    if (deltaX > 8 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
+    // Only allow swipe left (right-to-left) if mostly horizontal
+    if (deltaX < -8 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
       setIsSwiping(true);
-      const clampedOffset = Math.min(56, deltaX * 0.45);
+      const clampedOffset = Math.min(56, Math.abs(deltaX) * 0.45);
       setSwipeOffset(clampedOffset);
 
       if (clampedOffset >= 36 && !hasTriggeredSwipeHapticRef.current) {
@@ -812,7 +812,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
         style={{
-          transform: swipeOffset > 0 ? `translateX(${swipeOffset}px)` : undefined,
+          transform: swipeOffset > 0 ? `translateX(-${swipeOffset}px)` : undefined,
           transition: isSwiping ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 select-text ${
@@ -832,7 +832,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               opacity: Math.min(1, swipeOffset / 36),
               transform: `scale(${Math.min(1, Math.max(0.5, swipeOffset / 36))})`,
             }}
-            className="absolute -left-7 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white pointer-events-none shadow-md transition-opacity"
+            className="absolute -right-7 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white pointer-events-none shadow-md transition-opacity"
           >
             <Reply className="w-3.5 h-3.5" />
           </div>

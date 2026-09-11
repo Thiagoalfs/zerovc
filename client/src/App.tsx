@@ -336,10 +336,8 @@ export const App: React.FC = () => {
         } else if (initialRightOpen) {
           touchStateRef.current.activeDrawer = 'right';
         } else {
-          if (deltaX > 0 && startX <= EDGE_THRESHOLD) {
+          if (deltaX > 0) {
             touchStateRef.current.activeDrawer = 'left';
-          } else if (deltaX < 0 && startX >= winWidth - EDGE_THRESHOLD && !isHomeActive && activeGuild) {
-            touchStateRef.current.activeDrawer = 'right';
           }
         }
       }
@@ -395,13 +393,13 @@ export const App: React.FC = () => {
 
       if (activeDrawer === 'left') {
         if (initialLeftOpen) {
-          if (deltaX < -35 || velocityX < -0.2) {
+          if (deltaX < -50 || velocityX < -0.3) {
             setIsMobileDrawerOpen(false);
           } else {
             setIsMobileDrawerOpen(true);
           }
         } else {
-          if (deltaX > 35 || velocityX > 0.2) {
+          if (deltaX > 50 || velocityX > 0.3) {
             setIsMobileDrawerOpen(true);
           } else {
             setIsMobileDrawerOpen(false);
@@ -409,16 +407,10 @@ export const App: React.FC = () => {
         }
       } else if (activeDrawer === 'right') {
         if (initialRightOpen) {
-          if (deltaX > 35 || velocityX > 0.2) {
+          if (deltaX > 50 || velocityX > 0.3) {
             handleToggleMemberList(false);
           } else {
             handleToggleMemberList(true);
-          }
-        } else {
-          if (deltaX < -35 || velocityX < -0.2) {
-            handleToggleMemberList(true);
-          } else {
-            handleToggleMemberList(false);
           }
         }
       }

@@ -274,12 +274,22 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
         {/* Channel Header */}
         <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
-          <div className="flex items-center gap-2.5 md:gap-2 truncate">
+          <div
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                toggleMembers();
+              }
+            }}
+            className="flex items-center gap-2.5 md:gap-2 truncate cursor-pointer md:cursor-default"
+          >
             {/* Mobile Hamburger Drawer Toggle */}
             {onOpenMobileDrawer && (
               <button
-                onClick={onOpenMobileDrawer}
-                className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenMobileDrawer();
+                }}
+                className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 title="Menu de Canais"
               >
                 <Menu className="w-6 h-6" />
@@ -487,6 +497,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         }}
         onSelectUser={onOpenUserProfile}
         onOpenDM={onOpenDM}
+        onOpenSearch={() => {
+          setIsSearchOpen(true);
+          if (onToggleMemberList) onToggleMemberList(false);
+          else setLocalShowMemberList(false);
+        }}
+        onOpenPins={() => {
+          setShowPinnedOnly(true);
+          if (onToggleMemberList) onToggleMemberList(false);
+          else setLocalShowMemberList(false);
+        }}
         isDragging={isDraggingMemberList}
         dragOffset={memberListDragOffset}
         dragProgress={memberListDragProgress}
