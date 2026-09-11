@@ -13,6 +13,12 @@ interface ContextMenuProps {
 const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void }> = ({ menu, onClose }) => {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const menuRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Mobile drag-to-dismiss state
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ startY: number; startTime: number } | null>(null);
 
   // Hardware Back button support on mobile
   useEffect(() => {
@@ -22,6 +28,42 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
       return true;
     });
   }, [isMobile, onClose]);
+
+  // Touch drag handlers for mobile bottom sheet
+  const handleDragStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    dragStartRef.current = { startY: e.touches[0].clientY, startTime: Date.now() };
+    setIsDragging(true);
+  };
+
+  const handleDragMove = (e: React.TouchEvent) => {
+    if (!dragStartRef.current || e.touches.length !== 1) return;
+    const currentY = e.touches[0].clientY;
+    const deltaY = currentY - dragStartRef.current.startY;
+
+    if (deltaY > 0) {
+      setDragY(deltaY);
+    } else {
+      // Small resistance when pulling upwards
+      setDragY(deltaY * 0.15);
+    }
+  };
+
+  const handleDragEnd = (e: React.TouchEvent) => {
+    if (!dragStartRef.current) return;
+    const endY = e.changedTouches[0]?.clientY ?? dragStartRef.current.startY;
+    const deltaY = endY - dragStartRef.current.startY;
+    const deltaTime = Math.max(1, Date.now() - dragStartRef.current.startTime);
+    const velocityY = deltaY / deltaTime;
+
+    if (deltaY > 60 || velocityY > 0.35) {
+      onClose();
+    } else {
+      setDragY(0);
+    }
+    setIsDragging(false);
+    dragStartRef.current = null;
+  };
 
   // 1. Calculate initial clamped position synchronously for desktop
   const initialPosition = useMemo(() => {
@@ -82,11 +124,17 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
 
   // ==================== MOBILE BOTTOM SHEET ====================
   if (isMobile) {
+    const backdropOpacity = Math.max(0, Math.min(0.6, 0.6 - (dragY / 400)));
+
     return (
       <div className="fixed inset-0 z-[99999] pointer-events-auto flex flex-col justify-end">
         {/* Dark translucent backdrop */}
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+          style={{
+            backgroundColor: `rgba(0, 0, 0, ${backdropOpacity})`,
+            transition: isDragging ? 'none' : 'background-color 0.2s ease',
+          }}
+          className="fixed inset-0 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -98,33 +146,43 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
           }}
         />
 
-        {/* Bottom Sheet Modal */}
+        {/* Bottom Sheet Modal Container */}
         <div
           ref={menuRef}
           style={{
-            paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)',
+            transform: dragY > 0 ? `translateY(${dragY}px)` : dragY < 0 ? `translateY(${dragY}px)` : undefined,
+            transition: isDragging ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+            paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)',
           }}
-          className="relative z-[100000] w-full max-h-[85vh] bg-[#111214] border-t border-white/10 rounded-t-3xl p-4 shadow-2xl overflow-y-auto no-scrollbar flex flex-col text-gray-200 select-none animate-in slide-in-from-bottom duration-200 font-sans"
+          className="relative z-[100000] w-full max-h-[50vh] bg-[#111214] border-t border-white/10 rounded-t-3xl shadow-2xl flex flex-col text-gray-200 select-none animate-in slide-in-from-bottom duration-200 font-sans overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Top drag pill handle */}
-          <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-3 flex-shrink-0" />
+          {/* Interactive Drag Pill Handle Area */}
+          <div
+            onTouchStart={handleDragStart}
+            onTouchMove={handleDragMove}
+            onTouchEnd={handleDragEnd}
+            className="w-full pt-3 pb-2 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none flex-shrink-0 select-none"
+          >
+            <div className="w-12 h-1.5 bg-white/30 rounded-full hover:bg-white/40 transition-colors" />
+            {menu.title && (
+              <div className="mt-2.5 px-4 w-full text-center text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
+                {menu.title}
+              </div>
+            )}
+          </div>
 
-          {/* Title Header */}
-          {menu.title && (
-            <div className="px-3 py-2 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider bg-white/5 rounded-xl border border-white/5 truncate">
-              {menu.title}
-            </div>
-          )}
-
-          {/* Menu Items */}
-          <div className="space-y-1">
+          {/* Scrollable Menu Items List */}
+          <div
+            ref={scrollContainerRef}
+            className="flex-1 overflow-y-auto overscroll-contain px-4 pb-2 space-y-1"
+          >
             {menu.items.map((item, index) => {
               if (item.separator) {
                 return (
                   <div
                     key={`sep-${index}`}
-                    className="h-px bg-white/10 my-2 mx-1"
+                    className="h-px bg-white/10 my-1.5 mx-1"
                   />
                 );
               }

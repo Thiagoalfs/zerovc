@@ -11,6 +11,7 @@ import {
   Check,
   Clock,
   Volume2,
+  Copy,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -280,6 +281,15 @@ export const MemberList: React.FC<MemberListProps> = ({
         });
       }
     }
+
+    items.push({ label: '', separator: true });
+    items.push({
+      label: 'Copiar ID do Usuário',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => {
+        navigator.clipboard.writeText(targetMember.id);
+      },
+    });
 
     openContextMenu(e, items, targetMember.display_name || targetMember.username);
   };

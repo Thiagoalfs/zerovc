@@ -254,12 +254,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       });
     }
 
-    items.push({
-      label: 'Copiar ID do Usuário',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => navigator.clipboard.writeText(targetUser.id),
-    });
-
     // Server Member Moderation Actions
     if (activeGuild && targetMember && (isCurrentOwner || isMe || (!isTargetOwner && isHierarchyAllowed))) {
       // Change Roles Submenu
@@ -370,6 +364,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       });
     }
 
+    items.push({ label: '', separator: true });
+    items.push({
+      label: 'Copiar ID do Usuário',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(targetUser.id),
+    });
+
     openContextMenu(e, items, `@${targetUser.username}`);
   };
 
@@ -440,12 +441,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         customRender: <UserVolumeSlider userId={author.id} />,
       });
     }
-
-    items.push({
-      label: 'Copiar ID do Usuário',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => navigator.clipboard.writeText(author.id),
-    });
 
     // Message Specific Actions
     items.push({ label: '', separator: true });
@@ -594,6 +589,19 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         },
       });
     }
+
+    // IDs at the very bottom
+    items.push({ label: '', separator: true });
+    items.push({
+      label: 'Copiar ID da Mensagem',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(message.id),
+    });
+    items.push({
+      label: 'Copiar ID do Usuário',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(author.id),
+    });
 
     openContextMenu(e, items, `@${author.username}`);
   };
