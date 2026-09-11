@@ -7,6 +7,7 @@ import {
   Participant,
   DisconnectReason,
 } from 'livekit-client';
+import { processAudioBridge } from './processAudioBridge';
 
 export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
 
@@ -541,31 +542,14 @@ class LiveKitManager {
       const selectedCodec = gpu.preferredCodec;
 
       if (sourceId && (window as any).electronAPI) {
+        // Stop any previous process audio bridge capture
+        await processAudioBridge.stopCapture();
+
         // Electron Screen Capture API with Hardware Accelerated WGC & Flexible Framerate constraints
+        // We capture video stream from desktopCapturer sourceId without legacy system audio
+        // Native WASAPI loopback (processAudioBridge) handles the audio with process exclusion/inclusion to prevent call echo.
         const stream = await navigator.mediaDevices.getUserMedia({
-          // Audio loopback (system loopback with echo cancellation and high-fidelity music settings)
-          audio: config?.includeAudio
-            ? ({
-                mandatory: {
-                  chromeMediaSource: 'desktop',
-                },
-                optional: [
-                  { restrictOwnAudio: true },
-                  { suppressLocalAudioPlayback: true },
-                  { echoCancellation: true },
-                  { googEchoCancellation: true },
-                  { googEchoCancellation2: true },
-                  { googDAEchoCancellation: true },
-                  { noiseSuppression: false },
-                  { autoGainControl: false },
-                  { googAutoGainControl: false },
-                  { googNoiseSuppression: false },
-                  { googHighpassFilter: false },
-                  { googTypingNoiseDetection: false },
-                  { googAudioMirroring: false },
-                ],
-              } as any)
-            : false,
+          audio: false,
           video: {
             // @ts-ignore
             mandatory: {
@@ -637,23 +621,29 @@ class LiveKitManager {
           });
         }
 
-        // Publish captured system audio as dedicated high-fidelity stereo track
-        const audioTrack = stream.getAudioTracks()[0];
-        if (audioTrack) {
-          audioTrack.onended = () => {
-            const audioPub = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
-            if (audioPub?.track) {
-              this.room?.localParticipant.unpublishTrack(audioPub.track);
+        // Publish captured process/system audio via WASAPI Loopback (zero voice echo)
+        if (config?.includeAudio) {
+          try {
+            const processAudioTrack = await processAudioBridge.startCapture(sourceId);
+            if (processAudioTrack) {
+              this.activeMediaStreamTracks.add(processAudioTrack);
+              processAudioTrack.onended = () => {
+                const audioPub = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+                if (audioPub?.track) {
+                  this.room?.localParticipant.unpublishTrack(audioPub.track);
+                }
+              };
+              await this.room.localParticipant.publishTrack(processAudioTrack, {
+                name: 'screen_share_audio',
+                source: Track.Source.ScreenShareAudio,
+                audioPreset: AudioPresets.musicHighQualityStereo,
+                dtx: false,
+                red: false,
+              });
             }
-          };
-          await this.room.localParticipant.publishTrack(audioTrack, {
-            name: 'screen_share_audio',
-            source: Track.Source.ScreenShareAudio,
-            audioPreset: AudioPresets.musicHighQualityStereo,
-            dtx: false,
-            red: false,
-          });
-          void this.setCallAudioRoutingForCapture(true);
+          } catch (audioErr) {
+            console.error('[LiveKit] Error starting native process audio capture:', audioErr);
+          }
         }
 
         // Set WebRTC degradationPreference to maintain-resolution with smooth adaptive framerate
@@ -751,6 +741,7 @@ class LiveKitManager {
       }
     } else {
       await this.room.localParticipant.setScreenShareEnabled(false);
+      await processAudioBridge.stopCapture();
       const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
       if (screenPub && screenPub.track) {
         try { screenPub.track.stop(); } catch {}
@@ -897,6 +888,7 @@ class LiveKitManager {
   }
 
   async disconnect() {
+    await processAudioBridge.stopCapture();
     this.watchedParticipantIdentities.clear();
     this.attachedAudioElements.forEach((el) => el.remove());
     this.attachedAudioElements.clear();

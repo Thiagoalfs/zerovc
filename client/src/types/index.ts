@@ -301,6 +301,9 @@ declare global {
       isFullScreen?: () => Promise<boolean>;
       setHardwareAcceleration?: (enabled: boolean) => void;
       getHardwareAcceleration?: () => Promise<boolean>;
+      startProcessAudioCapture?: (options?: { sourceId?: string; mode?: 'include' | 'exclude'; pid?: number; hwnd?: string }) => Promise<{ success: boolean; error?: string }>;
+      stopProcessAudioCapture?: () => Promise<{ success: boolean }>;
+      onProcessAudioChunk?: (callback: (chunk: Uint8Array) => void) => () => void;
       relaunchApp?: () => void;
     };
   }

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:electron": "tsc -p tsconfig.electron.json && node -e \"const fs=require('fs'); ['icon.ico','icon.png','tray-icon.png'].forEach(f=>{ if(fs.existsSync('electron/'+f)) fs.copyFileSync('electron/'+f, 'dist-electron/'+f); })\"",
+    "build:electron": "tsc -p tsconfig.electron.json && node -e \"const fs=require('fs'); ['icon.ico','icon.png','tray-icon.png'].forEach(f=>{ if(fs.existsSync('electron/'+f)) fs.copyFileSync('electron/'+f, 'dist-electron/'+f); }); if(fs.existsSync('electron/bin')) { fs.mkdirSync('dist-electron/bin', {recursive:true}); fs.cpSync('electron/bin', 'dist-electron/bin', {recursive:true}); }\"",
     "electron": "concurrently \"vite\" \"npm run build:electron && electron .\"",
     "package": "npm run build && npm run build:electron && electron-builder --win nsis",
     "package:dir": "npm run build && npm run build:electron && electron-builder --win --dir"
@@ -45,6 +45,9 @@
     "productName": "ZeroVC",
     "compression": "maximum",
     "asar": true,
+    "asarUnpack": [
+      "**/bin/*"
+    ],
     "directories": {
       "output": "release"
     },

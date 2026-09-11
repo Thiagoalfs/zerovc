@@ -50,6 +50,9 @@ export interface ElectronAPI {
   isFullScreen: () => Promise<boolean>;
   setHardwareAcceleration: (enabled: boolean) => void;
   getHardwareAcceleration: () => Promise<boolean>;
+  startProcessAudioCapture?: (options?: { sourceId?: string; mode?: 'include' | 'exclude'; pid?: number; hwnd?: string }) => Promise<{ success: boolean; error?: string }>;
+  stopProcessAudioCapture?: () => Promise<{ success: boolean }>;
+  onProcessAudioChunk?: (callback: (chunk: Uint8Array) => void) => () => void;
   relaunchApp: () => void;
 }
 
@@ -63,6 +66,13 @@ const electronAPI: ElectronAPI = {
   getHardwareAcceleration: () => ipcRenderer.invoke('get-hardware-acceleration'),
   relaunchApp: () => ipcRenderer.send('relaunch-app'),
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
+  startProcessAudioCapture: (options) => ipcRenderer.invoke('start-process-audio-capture', options),
+  stopProcessAudioCapture: () => ipcRenderer.invoke('stop-process-audio-capture'),
+  onProcessAudioChunk: (callback) => {
+    const handler = (_: any, chunk: Uint8Array) => callback(chunk);
+    ipcRenderer.on('process-audio-chunk', handler);
+    return () => ipcRenderer.removeListener('process-audio-chunk', handler);
+  },
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),

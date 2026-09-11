@@ -5,6 +5,8 @@ dist-electron/
 release/
 build/
 *.exe
+!client/electron/bin/*.exe
+*.obj
 
 # Node dependencies
 node_modules/
