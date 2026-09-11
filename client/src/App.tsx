@@ -1163,6 +1163,60 @@ export const App: React.FC = () => {
         (window as any).Capacitor?.getPlatform?.() === 'ios') ||
       window.matchMedia?.('(display-mode: standalone)')?.matches);
 
+  const isResetPassword =
+    cleanRoute === 'reset-password' ||
+    Boolean(typeof window !== 'undefined' && (window.location.pathname.includes('reset-password') || window.location.hash.includes('reset-password')));
+
+  // 1. Priority Auth Routes (Reset Password, Forgot Password, Verify Email)
+  // These MUST be accessible even if the user is already logged in!
+  if (isResetPassword) {
+    return (
+      <div
+        style={{
+          paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
+        }}
+        className="w-screen h-[100dvh] flex flex-col bg-background-darkest"
+      >
+        {isElectron && <TitleBar />}
+        <div className="flex-1 overflow-hidden">
+          <AuthScreen initialMode="reset_password" onNavigate={navigateTo} />
+        </div>
+      </div>
+    );
+  }
+
+  if (cleanRoute === 'forgot-password') {
+    return (
+      <div
+        style={{
+          paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
+        }}
+        className="w-screen h-[100dvh] flex flex-col bg-background-darkest"
+      >
+        {isElectron && <TitleBar />}
+        <div className="flex-1 overflow-hidden">
+          <AuthScreen initialMode="forgot_password" onNavigate={navigateTo} />
+        </div>
+      </div>
+    );
+  }
+
+  if (cleanRoute === 'verify-email') {
+    return (
+      <div
+        style={{
+          paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
+        }}
+        className="w-screen h-[100dvh] flex flex-col bg-background-darkest"
+      >
+        {isElectron && <TitleBar />}
+        <div className="flex-1 overflow-hidden">
+          <AuthScreen initialMode="verify_email" onNavigate={navigateTo} />
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     // Native Electron or Capacitor app: Always opens directly on AuthScreen (never the landing page)
     if (isElectron || isCapacitor) {
@@ -1195,30 +1249,6 @@ export const App: React.FC = () => {
       return (
         <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
           <AuthScreen initialMode="register" onNavigate={navigateTo} />
-        </div>
-      );
-    }
-
-    if (cleanRoute === 'forgot-password') {
-      return (
-        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
-          <AuthScreen initialMode="forgot_password" onNavigate={navigateTo} />
-        </div>
-      );
-    }
-
-    if (cleanRoute === 'reset-password') {
-      return (
-        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
-          <AuthScreen initialMode="reset_password" onNavigate={navigateTo} />
-        </div>
-      );
-    }
-
-    if (cleanRoute === 'verify-email') {
-      return (
-        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
-          <AuthScreen initialMode="verify_email" onNavigate={navigateTo} />
         </div>
       );
     }
