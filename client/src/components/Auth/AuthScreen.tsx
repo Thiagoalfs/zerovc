@@ -256,18 +256,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
 
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-background-darkest select-none p-4 relative overflow-hidden">
-      {/* Home Navigation Button at top left (if in browser) */}
-      {onNavigate && (
-        <button
-          onClick={() => onNavigate('/')}
-          className="absolute top-4 left-4 z-20 flex items-center gap-1.5 bg-background-dark/80 hover:bg-background-dark text-gray-400 hover:text-gray-200 text-xs px-3.5 py-2 rounded-full border border-white/10 transition-colors shadow-md backdrop-blur-sm cursor-pointer"
-          title="Voltar para a Página Inicial"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Início</span>
-        </button>
-      )}
-
       {/* Background ambient glow */}
       <div className="absolute w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-3xl pointer-events-none -top-20 -left-20" />
       <div className="absolute w-[500px] h-[500px] bg-online/10 rounded-full blur-3xl pointer-events-none -bottom-20 -right-20" />
