@@ -1,4 +1,5 @@
 import { formatAssetUrl } from './api';
+import { useAuthStore } from '../stores/authStore';
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -30,6 +31,15 @@ export const sendNativeNotification = ({ title, body, icon, tag, onClick }: Noti
     return;
   }
 
+  // 1. Não Perturbe (DND) - Não recebe notificações
+  try {
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser?.status === 'dnd') {
+      return;
+    }
+  } catch {}
+
+  // 2. Configuração de notificações de desktop
   try {
     const isDesktopNotifEnabled = localStorage.getItem('zerovc_notifications_desktop') !== 'false';
     if (!isDesktopNotifEnabled) {
@@ -42,10 +52,17 @@ export const sendNativeNotification = ({ title, body, icon, tag, onClick }: Noti
   }
 
   try {
-    const resolvedIcon = icon ? formatAssetUrl(icon) : undefined;
+    const appLogo = typeof window !== 'undefined' ? `${window.location.origin}/icon.png` : undefined;
+    const resolvedIcon = icon
+      ? icon.startsWith('http') || icon.startsWith('/')
+        ? icon
+        : formatAssetUrl(icon)
+      : appLogo;
+
     const notification = new Notification(title, {
       body,
-      icon: resolvedIcon,
+      icon: resolvedIcon || appLogo,
+      badge: appLogo,
       tag: tag || 'zerovc-notification',
       silent: false,
     });
