@@ -227,14 +227,14 @@ class LiveKitManager {
 
         if (isScreenAudio) {
           const isCurrentlyWatched = this.watchedParticipantIdentities.has(participant.identity);
-          audioEl.muted = !isCurrentlyWatched || this.isDeafened;
+          audioEl.muted = !isCurrentlyWatched;
           this.attachedStreamAudioElements.set(sid, audioEl);
           const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
           audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
           if (typeof (track as any).setVolume === 'function') {
             (track as any).setVolume(streamVol);
           }
-          if (isCurrentlyWatched && !this.isDeafened) {
+          if (isCurrentlyWatched) {
             audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
           }
         } else {
@@ -368,7 +368,8 @@ class LiveKitManager {
   async setDeafened(deafened: boolean) {
     this.isDeafened = deafened;
     if (this.room) {
-      this.attachedAudioElements.forEach((el) => {
+      // Deafen only mutes voice audio from participants; screen share audio stays audible
+      this.attachedUserAudioElements.forEach((el) => {
         el.muted = deafened;
       });
       if (deafened) {
@@ -713,8 +714,8 @@ class LiveKitManager {
     // 1. Mute or unmute all stream audio elements for this participant
     this.attachedStreamAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
-        el.muted = !subscribed || this.isDeafened;
-        if (subscribed && !this.isDeafened) {
+        el.muted = !subscribed;
+        if (subscribed) {
           const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
           el.volume = Math.min(Math.max(streamVol, 0), 1);
           el.play().catch((err) => console.log('[LiveKit] Stream audio play error:', err));
