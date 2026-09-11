@@ -52,7 +52,6 @@ import {
   ThemeMode,
   AccentColor,
   ChatDensity,
-  ScreenshareQuality,
   DmPrivacy,
   AudioProcessingMode,
   RNNoiseLevel,
@@ -230,11 +229,29 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   // Audio / Device Fields
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
-  const [selectedInput, setSelectedInput] = useState<string>('');
-  const [selectedOutput, setSelectedOutput] = useState<string>('');
+  const [selectedInput, setSelectedInput] = useState<string>(() => {
+    try {
+      return localStorage.getItem('zerovc_audio_input_device') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [selectedOutput, setSelectedOutput] = useState<string>(() => {
+    try {
+      return localStorage.getItem('zerovc_audio_output_device') || '';
+    } catch {
+      return '';
+    }
+  });
   const [isTestingMic, setIsTestingMic] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
-  const [inputMode, setInputMode] = useState<'activity' | 'ptt'>('activity');
+  const [inputMode, setInputMode] = useState<'activity' | 'ptt'>(() => {
+    try {
+      return (localStorage.getItem('zerovc_input_mode') as 'activity' | 'ptt') || 'activity';
+    } catch {
+      return 'activity';
+    }
+  });
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -262,7 +279,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     echoCancellation,
     noiseSuppression,
     autoGainControl,
-    screenshareQuality,
     dmPrivacy,
     setTheme,
     setAccentColor,
@@ -285,7 +301,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setEchoCancellation,
     setNoiseSuppression,
     setAutoGainControl,
-    setScreenshareQuality,
     setDmPrivacy,
   } = useSettingsStore();
 
@@ -300,7 +315,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   // Video devices & camera testing
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedVideoDevice, setSelectedVideoDevice] = useState<string>('');
+  const [selectedVideoDevice, setSelectedVideoDevice] = useState<string>(() => {
+    try {
+      return localStorage.getItem('zerovc_video_device') || '';
+    } catch {
+      return '';
+    }
+  });
   const [isTestingCamera, setIsTestingCamera] = useState(false);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
@@ -332,6 +353,56 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     }
   };
 
+  const loadMediaDevices = async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      const hasLabels = devices.some((d) => (d.kind === 'audioinput' || d.kind === 'videoinput') && d.label !== '');
+
+      // Probe permission briefly if labels are hidden
+      if (!hasLabels && navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(async () => null);
+          if (stream) {
+            stream.getTracks().forEach((t) => t.stop());
+            devices = await navigator.mediaDevices.enumerateDevices();
+          }
+        } catch {}
+      }
+
+      const inputs = devices.filter((d) => d.kind === 'audioinput');
+      const outputs = devices.filter((d) => d.kind === 'audiooutput');
+      const videos = devices.filter((d) => d.kind === 'videoinput');
+
+      setAudioInputs(inputs);
+      setAudioOutputs(outputs);
+      setVideoDevices(videos);
+
+      const savedInput = localStorage.getItem('zerovc_audio_input_device');
+      if (savedInput && inputs.some((d) => d.deviceId === savedInput)) {
+        setSelectedInput(savedInput);
+      } else if (inputs.length > 0 && !selectedInput) {
+        setSelectedInput(inputs[0].deviceId);
+      }
+
+      const savedOutput = localStorage.getItem('zerovc_audio_output_device');
+      if (savedOutput && outputs.some((d) => d.deviceId === savedOutput)) {
+        setSelectedOutput(savedOutput);
+      } else if (outputs.length > 0 && !selectedOutput) {
+        setSelectedOutput(outputs[0].deviceId);
+      }
+
+      const savedVideo = localStorage.getItem('zerovc_video_device');
+      if (savedVideo && videos.some((d) => d.deviceId === savedVideo)) {
+        setSelectedVideoDevice(savedVideo);
+      } else if (videos.length > 0 && !selectedVideoDevice) {
+        setSelectedVideoDevice(videos[0].deviceId);
+      }
+    } catch (err) {
+      console.warn('[ProfileModal] Error enumerating media devices:', err);
+    }
+  };
+
   // Load media devices & sync user state
   useEffect(() => {
     if (isOpen && user) {
@@ -346,21 +417,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       setNewEmail(user.email || '');
       setNewPhone(user.phone_number || '');
 
-      navigator.mediaDevices?.enumerateDevices().then((devices) => {
-        const inputs = devices.filter((d) => d.kind === 'audioinput');
-        const outputs = devices.filter((d) => d.kind === 'audiooutput');
-        const videos = devices.filter((d) => d.kind === 'videoinput');
-        setAudioInputs(inputs);
-        setAudioOutputs(outputs);
-        setVideoDevices(videos);
-        if (inputs[0]) setSelectedInput(inputs[0].deviceId);
-        if (outputs[0]) setSelectedOutput(outputs[0].deviceId);
-        if (videos[0]) setSelectedVideoDevice(videos[0].deviceId);
-      }).catch(() => {});
+      loadMediaDevices();
+      navigator.mediaDevices?.addEventListener?.('devicechange', loadMediaDevices);
     } else {
       stopMicTest();
       stopCameraTest();
     }
+
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', loadMediaDevices);
+    };
   }, [isOpen, user]);
 
   // Masking helpers
@@ -713,7 +779,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setVadLiveState({ isSpeaking: false, volume: 0, speechProbability: 0, gateOpen: false });
   };
 
-  const handleDeviceChange = async (type: 'input' | 'output', deviceId: string) => {
+  const handleDeviceChange = async (type: 'input' | 'output' | 'video', deviceId: string) => {
     if (type === 'input') {
       setSelectedInput(deviceId);
       try {
@@ -724,13 +790,30 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         stopMicTest();
         setTimeout(startMicTest, 100);
       }
-    } else {
+    } else if (type === 'output') {
       setSelectedOutput(deviceId);
       try {
         localStorage.setItem('zerovc_audio_output_device', deviceId);
       } catch {}
       await livekit.setAudioOutputDevice(deviceId);
+    } else if (type === 'video') {
+      setSelectedVideoDevice(deviceId);
+      try {
+        localStorage.setItem('zerovc_video_device', deviceId);
+      } catch {}
+      await livekit.setVideoInputDevice(deviceId);
+      if (isTestingCamera) {
+        stopCameraTest();
+        setTimeout(startCameraTest, 100);
+      }
     }
+  };
+
+  const handleInputModeChange = (mode: 'activity' | 'ptt') => {
+    setInputMode(mode);
+    try {
+      localStorage.setItem('zerovc_input_mode', mode);
+    } catch {}
   };
 
   if (!isOpen || !user) return null;
@@ -1942,7 +2025,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setInputMode('activity')}
+                      onClick={() => handleInputModeChange('activity')}
                       className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                         inputMode === 'activity'
                           ? 'bg-brand-500/15 border-brand-500 text-white'
@@ -1958,7 +2041,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                     <button
                       type="button"
-                      onClick={() => setInputMode('ptt')}
+                      onClick={() => handleInputModeChange('ptt')}
                       className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                         inputMode === 'ptt'
                           ? 'bg-brand-500/15 border-brand-500 text-white'
@@ -2475,7 +2558,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       </label>
                       <select
                         value={selectedVideoDevice}
-                        onChange={(e) => setSelectedVideoDevice(e.target.value)}
+                        onChange={(e) => handleDeviceChange('video', e.target.value)}
                         className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
                       >
                         {videoDevices.map((d) => (
