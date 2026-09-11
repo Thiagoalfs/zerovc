@@ -41,6 +41,7 @@ import { ErrorBoundary } from './components/Common/ErrorBoundary';
 import { livekit } from './lib/livekit';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
+import { initMobileBackHandler, pushBackHandler } from './lib/mobileBackHandler';
 
 export const App: React.FC = () => {
   const { user, token, isCheckingAuth, checkAuth, setUser } = useAuthStore();
@@ -88,6 +89,8 @@ export const App: React.FC = () => {
     position?: { x: number; y: number };
   } | null>(null);
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
+  const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [isMemberListOpen, setIsMemberListOpen] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('zerovc_server_members_open');
@@ -143,6 +146,99 @@ export const App: React.FC = () => {
       window.removeEventListener('scroll', handleViewportChange);
     };
   }, []);
+
+  useEffect(() => {
+    initMobileBackHandler();
+  }, []);
+
+  // Back button stack for modals and mobile drawers in App.tsx
+  useEffect(() => {
+    if (!previewImageUrl) return;
+    return pushBackHandler('preview_image', () => {
+      setPreviewImageUrl(null);
+      return true;
+    });
+  }, [previewImageUrl]);
+
+  useEffect(() => {
+    if (!selectedUserForProfile) return;
+    return pushBackHandler('user_profile_modal', () => {
+      setSelectedUserForProfile(null);
+      return true;
+    });
+  }, [selectedUserForProfile]);
+
+  useEffect(() => {
+    if (!channelToEdit) return;
+    return pushBackHandler('channel_settings_modal', () => {
+      setChannelToEdit(null);
+      return true;
+    });
+  }, [channelToEdit]);
+
+  useEffect(() => {
+    if (!isCreateServerOpen) return;
+    return pushBackHandler('create_server_modal', () => {
+      setIsCreateServerOpen(false);
+      return true;
+    });
+  }, [isCreateServerOpen]);
+
+  useEffect(() => {
+    if (!isCreateDMGroupOpen) return;
+    return pushBackHandler('create_dm_group_modal', () => {
+      setIsCreateDMGroupOpen(false);
+      return true;
+    });
+  }, [isCreateDMGroupOpen]);
+
+  useEffect(() => {
+    if (!isInviteModalOpen) return;
+    return pushBackHandler('invite_modal', () => {
+      setIsInviteModalOpen(false);
+      return true;
+    });
+  }, [isInviteModalOpen]);
+
+  useEffect(() => {
+    if (!isCreateChannelOpen) return;
+    return pushBackHandler('create_channel_modal', () => {
+      setIsCreateChannelOpen(false);
+      return true;
+    });
+  }, [isCreateChannelOpen]);
+
+  useEffect(() => {
+    if (!isCreateCategoryOpen) return;
+    return pushBackHandler('create_category_modal', () => {
+      setIsCreateCategoryOpen(false);
+      return true;
+    });
+  }, [isCreateCategoryOpen]);
+
+  useEffect(() => {
+    if (!isScreenShareOpen) return;
+    return pushBackHandler('screen_share_modal', () => {
+      setIsScreenShareOpen(false);
+      return true;
+    });
+  }, [isScreenShareOpen]);
+
+  useEffect(() => {
+    if (!isMemberListOpen || (typeof window !== 'undefined' && window.innerWidth >= 768)) return;
+    return pushBackHandler('mobile_member_list', () => {
+      setIsMemberListOpen(false);
+      return true;
+    });
+  }, [isMemberListOpen]);
+
+  useEffect(() => {
+    if (!isMobileDrawerOpen) return;
+    return pushBackHandler('mobile_drawer', () => {
+      setIsMobileDrawerOpen(false);
+      return true;
+    });
+  }, [isMobileDrawerOpen]);
 
   // Mobile swipe & drag gesture state
   const touchStateRef = useRef<{
@@ -326,9 +422,6 @@ export const App: React.FC = () => {
     touchStateRef.current = null;
     setDragState(null);
   };
-
-  const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const isElectron =
     typeof window !== 'undefined' &&

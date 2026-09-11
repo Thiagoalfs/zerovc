@@ -39,6 +39,7 @@ import { FormattedMessage } from '../Chat/FormattedMessage';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
 import { User, DMMessage } from '../../types';
+import { hapticLight, hapticMedium, hapticSuccess } from '../../lib/haptics';
 
 interface DMChatAreaProps {
   onOpenMobileDrawer?: () => void;
@@ -514,6 +515,74 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     openContextMenu(e, items, 'Mensagem');
   };
 
+  // Mobile Swipe-to-Reply & Long-Press state
+  const [swipingMsgId, setSwipingMsgId] = useState<string | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const dmTouchStartRef = useRef<{ x: number; y: number; msg: DMMessage } | null>(null);
+  const dmLongPressTimerRef = useRef<any>(null);
+  const dmHasTriggeredSwipeHapticRef = useRef(false);
+
+  const handleMsgTouchStart = (e: React.TouchEvent, msg: DMMessage) => {
+    if (e.touches.length !== 1 || editingMessageId === msg.id || msg.status === 'sending' || msg.status === 'failed') return;
+    const touch = e.touches[0];
+    dmTouchStartRef.current = { x: touch.clientX, y: touch.clientY, msg };
+    dmHasTriggeredSwipeHapticRef.current = false;
+
+    dmLongPressTimerRef.current = setTimeout(() => {
+      hapticMedium();
+      handleMessageContextMenu({
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      } as any, msg);
+      dmTouchStartRef.current = null;
+    }, 420);
+  };
+
+  const handleMsgTouchMove = (e: React.TouchEvent) => {
+    if (!dmTouchStartRef.current || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dmTouchStartRef.current.x;
+    const deltaY = touch.clientY - dmTouchStartRef.current.y;
+
+    if (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8) {
+      if (dmLongPressTimerRef.current) {
+        clearTimeout(dmLongPressTimerRef.current);
+        dmLongPressTimerRef.current = null;
+      }
+    }
+
+    if (deltaX > 8 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
+      setSwipingMsgId(dmTouchStartRef.current.msg.id);
+      const clampedOffset = Math.min(56, deltaX * 0.45);
+      setSwipeOffset(clampedOffset);
+
+      if (clampedOffset >= 36 && !dmHasTriggeredSwipeHapticRef.current) {
+        dmHasTriggeredSwipeHapticRef.current = true;
+        hapticLight();
+      } else if (clampedOffset < 36 && dmHasTriggeredSwipeHapticRef.current) {
+        dmHasTriggeredSwipeHapticRef.current = false;
+      }
+    }
+  };
+
+  const handleMsgTouchEnd = () => {
+    if (dmLongPressTimerRef.current) {
+      clearTimeout(dmLongPressTimerRef.current);
+      dmLongPressTimerRef.current = null;
+    }
+
+    if (dmTouchStartRef.current && swipeOffset >= 36) {
+      hapticSuccess();
+      setReplyingTo(dmTouchStartRef.current.msg);
+    }
+
+    setSwipingMsgId(null);
+    setSwipeOffset(0);
+    dmTouchStartRef.current = null;
+  };
+
   const handleSend = async () => {
     if (!content.trim() && !selectedFile) return;
 
@@ -938,12 +1007,22 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             const isAuthor = user?.id === msg.author_id;
             const isEditing = editingMessageId === msg.id;
 
+            const isThisMsgSwiping = swipingMsgId === msg.id;
+
             return (
               <div
                 key={msg.id}
                 id={`msg-${msg.id}`}
                 onContextMenu={(e) => handleMessageContextMenu(e, msg)}
-                className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 ${
+                onTouchStart={(e) => handleMsgTouchStart(e, msg)}
+                onTouchMove={handleMsgTouchMove}
+                onTouchEnd={handleMsgTouchEnd}
+                onTouchCancel={handleMsgTouchEnd}
+                style={{
+                  transform: isThisMsgSwiping && swipeOffset > 0 ? `translateX(${swipeOffset}px)` : undefined,
+                  transition: isThisMsgSwiping ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                }}
+                className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 select-text ${
                   isFailed
                     ? 'bg-red-500/10 hover:bg-red-500/15 border-l-2 border-red-500 text-red-200'
                     : isSending
@@ -951,6 +1030,18 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                     : 'hover:bg-background-dark/40'
                 } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
               >
+                {/* Swipe to Reply Indicator Icon (Mobile) */}
+                {isThisMsgSwiping && swipeOffset > 0 && (
+                  <div
+                    style={{
+                      opacity: Math.min(1, swipeOffset / 36),
+                      transform: `scale(${Math.min(1, Math.max(0.5, swipeOffset / 36))})`,
+                    }}
+                    className="absolute -left-7 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white pointer-events-none shadow-md transition-opacity"
+                  >
+                    <Reply className="w-3.5 h-3.5" />
+                  </div>
+                )}
                 {msg.reply_to && (
                   <div
                     onClick={(e) => {
@@ -1392,7 +1483,10 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         className="hidden"
       />
 
-      <div className="p-3 md:p-4 pt-0 select-none">
+      <div 
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
+        className="p-3 md:p-4 pt-0 select-none"
+      >
         <div className="bg-background-light/40 hover:bg-background-light/60 focus-within:bg-background-light/60 focus-within:ring-1 focus-within:ring-brand-500/50 rounded-xl px-3 py-2.5 flex items-center gap-2 transition-all border border-white/5">
           <button
             type="button"
