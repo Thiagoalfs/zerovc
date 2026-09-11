@@ -190,6 +190,9 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       }
     }
 
+    try {
+      await get().stopScreenShare();
+    } catch {}
     await livekit.disconnect();
     playLeaveVoiceSound();
     set({
@@ -205,6 +208,9 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   },
 
   handleCallEnded: async () => {
+    try {
+      await get().stopScreenShare();
+    } catch {}
     await livekit.disconnect();
     playLeaveVoiceSound();
     set({

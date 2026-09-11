@@ -119,10 +119,9 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullscreen]);
 
-  const isSpeaking = speakingUserIds.includes(participant.identity);
   const isLocal = participant.isLocal;
 
-  // Resolve participant profile avatar
+  // Resolve participant profile avatar (store first for realtime updates, meta token as last fallback)
   const meta = (() => {
     try {
       return participant.metadata ? JSON.parse(participant.metadata) : null;
@@ -131,15 +130,20 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     }
   })();
 
+  const dmRecipient = useDMStore.getState().activeRoom?.recipient;
+  const dmUser = dmRecipient?.id === participant.identity ? dmRecipient : null;
+  const guildMember = activeGuild?.members?.find((m) => m.id === participant.identity);
+
   const avatarUrl =
-    (isLocal ? user?.avatar_url : null) ||
-    meta?.avatar_url ||
-    activeGuild?.members?.find((m) => m.id === participant.identity)?.avatar_url ||
-    (participant.identity === user?.id ? user?.avatar_url : null);
+    (isLocal || participant.identity === user?.id ? user?.avatar_url : null) ||
+    guildMember?.avatar_url ||
+    dmUser?.avatar_url ||
+    meta?.avatar_url;
 
   // Check audio mute status
   const audioPub = participant.getTrackPublication(Track.Source.Microphone);
   const isMuted = !participant.isMicrophoneEnabled && (!audioPub || audioPub.isMuted);
+  const isSpeaking = speakingUserIds.includes(participant.identity) && !isMuted;
 
   // Check video & screen share track
   const screenPub = participant.getTrackPublication(Track.Source.ScreenShare);

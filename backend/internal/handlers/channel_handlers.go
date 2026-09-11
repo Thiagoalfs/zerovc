@@ -504,15 +504,37 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var joinReq struct {
+		IsMuted    *bool `json:"is_muted,omitempty"`
+		IsDeafened *bool `json:"is_deafened,omitempty"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&joinReq)
+
+	isMuted := false
+	if joinReq.IsMuted != nil {
+		isMuted = *joinReq.IsMuted
+	}
+	isDeafened := false
+	if joinReq.IsDeafened != nil {
+		isDeafened = *joinReq.IsDeafened
+	}
+	if isDeafened {
+		isMuted = true
+	}
+
 	voiceSessionQuery := `
-		INSERT INTO voice_sessions (channel_id, user_id)
-		VALUES ($1, $2)
+		INSERT INTO voice_sessions (channel_id, user_id, is_muted, is_deafened, is_screensharing)
+		VALUES ($1, $2, $3, $4, false)
 		ON CONFLICT (user_id) DO UPDATE
-		SET channel_id = EXCLUDED.channel_id, joined_at = CURRENT_TIMESTAMP
+		SET channel_id = EXCLUDED.channel_id,
+		    is_muted = EXCLUDED.is_muted,
+		    is_deafened = EXCLUDED.is_deafened,
+		    is_screensharing = false,
+		    joined_at = CURRENT_TIMESTAMP
 		RETURNING id, channel_id, user_id, is_muted, is_deafened, is_screensharing, joined_at
 	`
 	var session models.VoiceSession
-	err = h.db.Pool.QueryRow(r.Context(), voiceSessionQuery, channelID, userID).Scan(
+	err = h.db.Pool.QueryRow(r.Context(), voiceSessionQuery, channelID, userID, isMuted, isDeafened).Scan(
 		&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.IsScreensharing, &session.JoinedAt,
 	)
 	if err != nil {

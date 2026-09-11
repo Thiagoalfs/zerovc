@@ -129,15 +129,18 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
 
     set({ isConnecting: true, currentChannelId: channelId, currentGuildId: guildId || null });
 
+    const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
+    const shouldDeafen = get().isDeafened;
+    const shouldMute = shouldDeafen || isPTT || get().isMuted;
+
     try {
-      const res = await api.channels.joinVoice(channelId);
+      const res = await api.channels.joinVoice(channelId, {
+        is_muted: shouldMute,
+        is_deafened: shouldDeafen,
+      });
 
       // Check if user changed mind or joined another channel while requesting
       if (get().currentChannelId !== channelId) return;
-
-      const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
-      const shouldDeafen = get().isDeafened;
-      const shouldMute = shouldDeafen || isPTT || get().isMuted;
 
       await livekit.connect(res.livekit_url, res.token, {
         autoEnableMicrophone: !shouldMute,
@@ -247,6 +250,9 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     }
 
     playLeaveVoiceSound();
+    try {
+      await get().stopScreenShare();
+    } catch {}
     await livekit.disconnect();
     set({
       currentChannelId: null,
