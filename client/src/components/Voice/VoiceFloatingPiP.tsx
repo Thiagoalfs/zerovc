@@ -574,6 +574,17 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     }
   };
 
+  // Disable floating PiP completely on mobile devices
+  const isMobile =
+    typeof window !== 'undefined' &&
+    (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+      Boolean((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined) ||
+      window.innerWidth < 768);
+
+  if (isMobile) {
+    return null;
+  }
+
   return (
     <>
       <div
