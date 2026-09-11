@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"context"
@@ -38,11 +38,40 @@ type cachedMetadata struct {
 }
 
 func NewLinkPreviewHandler() *LinkPreviewHandler {
+	resolver := &net.Resolver{}
+	dialer := &net.Dialer{
+		Timeout:   5 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
 	transport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout:   5 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid address %q: %w", addr, err)
+			}
+
+			// Pre-resolve host to IPs
+			ips, err := resolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve host %q: %w", host, err)
+			}
+
+			if len(ips) == 0 {
+				return nil, fmt.Errorf("no IP addresses resolved for host %q", host)
+			}
+
+			// Validate all resolved IPs
+			for _, ipAddr := range ips {
+				if isDisallowedIP(ipAddr.IP) {
+					return nil, fmt.Errorf("SSRF protection: connection to restricted IP %s blocked", ipAddr.IP.String())
+				}
+			}
+
+			// Connect directly to the validated IP to prevent DNS rebinding
+			targetAddr := net.JoinHostPort(ips[0].IP.String(), port)
+			return dialer.DialContext(ctx, network, targetAddr)
+		},
 		TLSHandshakeTimeout:   5 * time.Second,
 		ResponseHeaderTimeout: 5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
@@ -56,6 +85,23 @@ func NewLinkPreviewHandler() *LinkPreviewHandler {
 				if len(via) >= 5 {
 					return fmt.Errorf("too many redirects")
 				}
+
+				// Re-validate host on redirect
+				host := req.URL.Hostname()
+				if isPrivateOrLocalHost(host) {
+					return fmt.Errorf("SSRF protection: redirect to private/local host %q blocked", host)
+				}
+
+				// Resolve target IP on redirect and validate
+				ips, err := net.LookupIP(host)
+				if err == nil {
+					for _, ip := range ips {
+						if isDisallowedIP(ip) {
+							return fmt.Errorf("SSRF protection: redirect to restricted IP %s blocked", ip.String())
+						}
+					}
+				}
+
 				return nil
 			},
 		},
@@ -235,9 +281,51 @@ func isPrivateOrLocalHost(host string) bool {
 	}
 	ip := net.ParseIP(host)
 	if ip != nil {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return isDisallowedIP(ip)
+	}
+	return false
+}
+
+// isDisallowedIP verifies if an IP address belongs to loopback, private RFC 1918,
+// cloud metadata (169.254.169.254), link-local, unspecified, or multicast ranges.
+func isDisallowedIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return true
+	}
+
+	// Cloud metadata IP (AWS/GCP/Azure/OpenStack metadata service)
+	metadataIP := net.ParseIP("169.254.169.254")
+	if ip.Equal(metadataIP) {
+		return true
+	}
+
+	// Explicit CIDR blocks check for defense in depth
+	disallowedCIDRs := []string{
+		"127.0.0.0/8",    // Loopback
+		"10.0.0.0/8",     // RFC 1918 Private
+		"172.16.0.0/12",  // RFC 1918 Private
+		"192.168.0.0/16", // RFC 1918 Private
+		"169.254.0.0/16", // Link-local / Cloud metadata
+		"0.0.0.0/8",      // Current network
+		"100.64.0.0/10",  // Carrier-grade NAT
+		"198.18.0.0/15",  // Benchmark testing
+		"224.0.0.0/4",    // Multicast
+		"240.0.0.0/4",    // Reserved
+		"::1/128",        // IPv6 loopback
+		"fc00::/7",       // IPv6 Unique Local Address
+		"fe80::/10",      // IPv6 Link-Local
+	}
+
+	for _, cidr := range disallowedCIDRs {
+		_, block, err := net.ParseCIDR(cidr)
+		if err == nil && block.Contains(ip) {
 			return true
 		}
 	}
+
 	return false
 }
