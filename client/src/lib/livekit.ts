@@ -128,6 +128,19 @@ class LiveKitManager {
   private watchedParticipantIdentities: Set<string> = new Set();
   private isDeafened: boolean = false;
   private activeMediaStreamTracks: Set<MediaStreamTrack> = new Set();
+  // Dispositivo de saída "principal" atualmente selecionado (o que setAudioOutputDevice
+  // define). É o dispositivo que a captura de áudio do sistema (screen share) vai ler.
+  private currentOutputDeviceId: string | null = null;
+  // Enquanto true, o áudio de microfone dos DEMAIS participantes é roteado (via setSinkId)
+  // para um dispositivo de saída SECUNDÁRIO, diferente do currentOutputDeviceId. Isso evita
+  // que a captura de áudio do sistema (usada ao compartilhar tela com "áudio do sistema")
+  // re-capture as vozes da própria call e as retransmita como eco para quem está assistindo
+  // — sem silenciar nem abaixar nada para quem está compartilhando, que continua ouvindo
+  // todo mundo normalmente, só que por outra saída (ex: fone em vez de alto-falante).
+  // Exige que existam 2+ dispositivos de saída de áudio no sistema; se não existir um
+  // segundo dispositivo, não há como separar fisicamente "o que a pessoa ouve" de "o que é
+  // capturado" — nesse caso o roteamento não é aplicado (ver pickSecondaryOutputDeviceId).
+  private isRoutingCallAudioForCapture: boolean = false;
 
   getRoom(): Room | null {
     return this.room;
@@ -244,6 +257,12 @@ class LiveKitManager {
           audioEl.volume = Math.min(Math.max(userVol, 0), 1);
           if (typeof (track as any).setVolume === 'function') {
             (track as any).setVolume(userVol);
+          }
+          // Se o roteamento de áudio de call já estiver ativo (esse participante entrou
+          // ou reconectou durante um compartilhamento de tela com áudio em andamento),
+          // aplica o mesmo dispositivo secundário imediatamente a esse novo elemento.
+          if (this.isRoutingCallAudioForCapture) {
+            void this.applyCallAudioRouting();
           }
         }
       }
@@ -375,6 +394,120 @@ class LiveKitManager {
       if (deafened) {
         await this.room.localParticipant.setMicrophoneEnabled(false);
       }
+    }
+  }
+
+  // Escolhe um dispositivo de saída de áudio DIFERENTE do currentOutputDeviceId (o
+  // dispositivo "principal", que é o que a captura de áudio do sistema vai ler ao
+  // compartilhar tela). Retorna null se só existir um dispositivo de saída no sistema —
+  // nesse caso não há como separar fisicamente "o que a pessoa ouve" do que é capturado.
+  private async pickSecondaryOutputDeviceId(): Promise<string | null> {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return null;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const outputs = devices.filter((d) => d.kind === 'audiooutput' && d.deviceId);
+      if (outputs.length < 2) return null;
+
+      const mainId = this.currentOutputDeviceId || 'default';
+
+      // 1) Prioriza um dispositivo salvo explicitamente pelo usuário para esse fim (ver
+      // setCallAudioOutputDevice / configurações).
+      const savedSecondary = typeof localStorage !== 'undefined'
+        ? localStorage.getItem('zerovc_call_audio_output_device')
+        : null;
+      if (savedSecondary && outputs.some((d) => d.deviceId === savedSecondary) && savedSecondary !== mainId) {
+        return savedSecondary;
+      }
+
+      // 2) Prioriza o papel "eCommunications" do Windows (exposto pelo Chrome como o
+      // deviceId especial 'communications'), quando ele já estiver configurado no sistema
+      // operacional para apontar para um hardware físico diferente do "Dispositivo Padrão"
+      // ('default'). É o mesmo mecanismo que Discord/Teams usam para separar "áudio de
+      // chamada" de "áudio geral", e acompanha automaticamente se a pessoa trocar o
+      // dispositivo de comunicação nas configurações do Windows. groupId identifica o
+      // hardware físico por trás do deviceId "mágico" — comparamos por ele, não pelo
+      // deviceId em si, já que 'default'/'communications' são só ponteiros para o hardware
+      // real e não têm significado físico próprio.
+      const defaultEntry = outputs.find((d) => d.deviceId === 'default');
+      const commsEntry = outputs.find((d) => d.deviceId === 'communications');
+      if (commsEntry && defaultEntry && commsEntry.groupId && commsEntry.groupId !== defaultEntry.groupId) {
+        return commsEntry.deviceId;
+      }
+
+      // 3) Sem preferência do SO disponível: pega o primeiro dispositivo físico que não
+      // seja o principal (evitando também os apelidos 'default'/'communications', que não
+      // são hardware por si só).
+      const candidate = outputs.find((d) => d.deviceId !== mainId && d.deviceId !== 'default');
+      return candidate?.deviceId ?? null;
+    } catch (err) {
+      console.warn('[LiveKit] Failed to enumerate output devices for call audio routing:', err);
+      return null;
+    }
+  }
+
+  // Aplica (ou reverte, se nenhum dispositivo secundário existir) o roteamento do áudio de
+  // microfone dos demais participantes para um dispositivo de saída separado do que a
+  // captura de tela está lendo. Chamado ao iniciar/parar compartilhamento de tela com áudio
+  // do sistema, e sempre que o dispositivo de saída principal muda enquanto isso está ativo.
+  private async applyCallAudioRouting(): Promise<void> {
+    if (!this.isRoutingCallAudioForCapture) return;
+
+    const secondaryId = await this.pickSecondaryOutputDeviceId();
+    const targetSinkId = secondaryId ?? this.currentOutputDeviceId ?? '';
+
+    if (!secondaryId) {
+      console.warn(
+        '[LiveKit] Only one audio output device detected — cannot route call audio away from ' +
+        'what system-audio screen capture reads. This is a hardware limitation, not fixable ' +
+        'in software: connect a second output device (e.g. headphones) to avoid hearing an ' +
+        'echo of the call through this screen share.'
+      );
+    }
+
+    for (const el of this.attachedUserAudioElements.values()) {
+      if (typeof (el as any).setSinkId === 'function') {
+        try {
+          await (el as any).setSinkId(targetSinkId);
+        } catch (err) {
+          console.warn('[LiveKit] setSinkId failed for call audio element:', err);
+        }
+      }
+    }
+  }
+
+  // Ativa/desativa o roteamento acima. `active` reflete se este usuário está publicando
+  // uma track de áudio de tela (screen share com áudio do sistema) no momento.
+  private async setCallAudioRoutingForCapture(active: boolean): Promise<void> {
+    if (this.isRoutingCallAudioForCapture === active) return;
+    this.isRoutingCallAudioForCapture = active;
+
+    if (active) {
+      await this.applyCallAudioRouting();
+      return;
+    }
+
+    // Restaura todo mundo para o dispositivo de saída principal normal.
+    const restoreId = this.currentOutputDeviceId ?? '';
+    for (const el of this.attachedUserAudioElements.values()) {
+      if (typeof (el as any).setSinkId === 'function') {
+        try {
+          await (el as any).setSinkId(restoreId);
+        } catch (err) {
+          console.warn('[LiveKit] setSinkId restore failed for call audio element:', err);
+        }
+      }
+    }
+  }
+
+  // Permite o usuário escolher manualmente, nas configurações, qual dispositivo deve
+  // receber as vozes da call durante compartilhamento de tela com áudio (em vez do
+  // primeiro dispositivo secundário detectado automaticamente).
+  setCallAudioOutputDevice(deviceId: string) {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('zerovc_call_audio_output_device', deviceId);
+    }
+    if (this.isRoutingCallAudioForCapture) {
+      void this.applyCallAudioRouting();
     }
   }
 
@@ -520,6 +653,7 @@ class LiveKitManager {
             dtx: false,
             red: false,
           });
+          void this.setCallAudioRoutingForCapture(true);
         }
 
         // Set WebRTC degradationPreference to maintain-resolution with smooth adaptive framerate
@@ -606,6 +740,14 @@ class LiveKitManager {
             };
           }
         }
+
+        // O picker nativo do navegador decide se o áudio do sistema foi realmente incluído
+        // (checkbox "compartilhar áudio"), então só sabemos depois de tentar publicar —
+        // se existir uma publicação de ScreenShareAudio, o ducking precisa ser ativado.
+        const nativeAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+        if (nativeAudioPub) {
+          void this.setCallAudioRoutingForCapture(true);
+        }
       }
     } else {
       await this.room.localParticipant.setScreenShareEnabled(false);
@@ -621,6 +763,8 @@ class LiveKitManager {
         try { screenAudioPub.track.stop(); } catch {}
         this.room.localParticipant.unpublishTrack(screenAudioPub.track);
       }
+
+      void this.setCallAudioRoutingForCapture(false);
     }
 
     this.onTrackUpdated?.();
@@ -647,8 +791,14 @@ class LiveKitManager {
       /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
     );
+    this.currentOutputDeviceId = deviceId;
     if (!this.room || isMobile) return;
     await this.room.switchActiveDevice('audiooutput', deviceId);
+    // Se o roteamento de áudio de call estiver ativo, reavaliar: o dispositivo secundário
+    // escolhido precisa continuar sendo diferente do novo dispositivo principal.
+    if (this.isRoutingCallAudioForCapture) {
+      await this.applyCallAudioRouting();
+    }
   }
 
   async setVideoInputDevice(deviceId: string) {
