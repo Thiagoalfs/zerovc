@@ -32,6 +32,7 @@ import { FormattedMessage } from './FormattedMessage';
 import { GifEmbed } from './GifEmbed';
 import { DeleteMessageModal } from '../Modals/DeleteMessageModal';
 import { AlertCircle, RotateCcw } from 'lucide-react';
+import { hapticLight, hapticMedium, hapticSuccess } from '../../lib/haptics';
 
 interface MessageItemProps {
   message: Message;
@@ -597,6 +598,77 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     openContextMenu(e, items, `@${author.username}`);
   };
 
+  // Mobile Swipe to Reply & Long-Press state
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const longPressTimerRef = useRef<any>(null);
+  const hasTriggeredSwipeHapticRef = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1 || isEditing || message.status === 'sending' || message.status === 'failed') return;
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    hasTriggeredSwipeHapticRef.current = false;
+
+    // Start long press timer (420ms)
+    longPressTimerRef.current = setTimeout(() => {
+      hapticMedium();
+      handleContextMenu({
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      } as any);
+      touchStartRef.current = null;
+    }, 420);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+
+    // If moved vertically or backward, cancel long-press
+    if (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8) {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+
+    // Only allow swipe right if mostly horizontal
+    if (deltaX > 8 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
+      setIsSwiping(true);
+      const clampedOffset = Math.min(56, deltaX * 0.45);
+      setSwipeOffset(clampedOffset);
+
+      if (clampedOffset >= 36 && !hasTriggeredSwipeHapticRef.current) {
+        hasTriggeredSwipeHapticRef.current = true;
+        hapticLight();
+      } else if (clampedOffset < 36 && hasTriggeredSwipeHapticRef.current) {
+        hasTriggeredSwipeHapticRef.current = false;
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    if (swipeOffset >= 36) {
+      hapticSuccess();
+      onReply?.(message);
+    }
+
+    setIsSwiping(false);
+    setSwipeOffset(0);
+    touchStartRef.current = null;
+  };
+
   const renderFormattedContent = (content: string) => {
     const lines = content.split('\n');
     return lines.map((line, lineIdx) => {
@@ -727,7 +799,15 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       <div
         id={`msg-${message.id}`}
         onContextMenu={isSending || isFailed ? undefined : handleContextMenu}
-        className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 ${
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        style={{
+          transform: swipeOffset > 0 ? `translateX(${swipeOffset}px)` : undefined,
+          transition: isSwiping ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
+        className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 select-text ${
           isFailed
             ? 'bg-red-500/10 hover:bg-red-500/15 border-l-2 border-red-500 text-red-200'
             : isMentioned
@@ -737,6 +817,18 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             : 'hover:bg-background-dark/40'
         } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
       >
+        {/* Swipe to Reply Indicator Icon (Mobile) */}
+        {swipeOffset > 0 && (
+          <div
+            style={{
+              opacity: Math.min(1, swipeOffset / 36),
+              transform: `scale(${Math.min(1, Math.max(0.5, swipeOffset / 36))})`,
+            }}
+            className="absolute -left-7 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white pointer-events-none shadow-md transition-opacity"
+          >
+            <Reply className="w-3.5 h-3.5" />
+          </div>
+        )}
         {/* Reply Reference Header (Clickable with smooth scroll) */}
         {message.reply_to && (
           <div

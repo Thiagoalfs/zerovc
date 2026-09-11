@@ -46,6 +46,7 @@ import {
   Zap,
   Gauge,
   Headphones,
+  Smartphone,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import {
@@ -58,6 +59,8 @@ import {
   RNNoiseLevel,
 } from '../../stores/settingsStore';
 import { audioProcessor } from '../../lib/audioProcessor';
+import { pushBackHandler } from '../../lib/mobileBackHandler';
+import { hapticMedium } from '../../lib/haptics';
 import {
   playMessageSound,
   playJoinVoiceSound,
@@ -172,6 +175,73 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
+  // Hardware Back Button integration for mobile
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const unregister = pushBackHandler('profile_modal', () => {
+      if (isCropOpen) {
+        setIsCropOpen(false);
+        return true;
+      }
+      if (isEditDisplayNameOpen) {
+        setIsEditDisplayNameOpen(false);
+        return true;
+      }
+      if (isEditUsernameOpen) {
+        setIsEditUsernameOpen(false);
+        return true;
+      }
+      if (isEditEmailOpen) {
+        setIsEditEmailOpen(false);
+        return true;
+      }
+      if (isEditPhoneOpen) {
+        setIsEditPhoneOpen(false);
+        return true;
+      }
+      if (isChangePasswordOpen) {
+        setIsChangePasswordOpen(false);
+        return true;
+      }
+      if (is2FAModalOpen) {
+        setIs2FAModalOpen(false);
+        return true;
+      }
+      if (showBackupCodesModal) {
+        setShowBackupCodesModal(false);
+        return true;
+      }
+      if (isDeleteAccountOpen) {
+        setIsDeleteAccountOpen(false);
+        return true;
+      }
+      if (mobileView === 'content') {
+        setMobileView('menu');
+        return true;
+      }
+      onClose();
+      return true;
+    });
+
+    return () => {
+      unregister();
+    };
+  }, [
+    isOpen,
+    mobileView,
+    isCropOpen,
+    isEditDisplayNameOpen,
+    isEditUsernameOpen,
+    isEditEmailOpen,
+    isEditPhoneOpen,
+    isChangePasswordOpen,
+    is2FAModalOpen,
+    showBackupCodesModal,
+    isDeleteAccountOpen,
+    onClose,
+  ]);
+
   // Escape key handler
   useEffect(() => {
     if (!isOpen) return;
@@ -278,6 +348,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     soundMuteEvents,
     soundMessageEvents,
     notificationsDesktop,
+    hapticFeedback,
     audioProcessingMode,
     rnnoiseLevel,
     vadSensitivity,
@@ -300,6 +371,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setSoundMuteEvents,
     setSoundMessageEvents,
     setNotificationsDesktop,
+    setHapticFeedback,
     setAudioProcessingMode,
     setRnnoiseLevel,
     setVadSensitivity,
@@ -2801,6 +2873,43 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           <div
                             className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
                               soundMessageEvents ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Haptic Feedback (Mobile Vibration) */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div className="space-y-0.5 pr-4">
+                        <div className="flex items-center gap-1.5">
+                          <Smartphone className="w-3.5 h-3.5 text-brand-400" />
+                          <span className="text-xs font-bold text-white block">Resposta Tátil (Vibração no Celular)</span>
+                        </div>
+                        <p className="text-[11px] text-gray-400">Vibrações sutis ao segurar mensagens, reagir com emojis, mutar microfone e navegar.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => hapticMedium()}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/5"
+                          title="Testar vibração"
+                        >
+                          <Smartphone className="w-3 h-3 text-brand-400" />
+                          <span>Testar</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={hapticFeedback}
+                          onClick={() => setHapticFeedback(!hapticFeedback)}
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                            hapticFeedback ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              hapticFeedback ? 'translate-x-6' : 'translate-x-0'
                             }`}
                           />
                         </button>

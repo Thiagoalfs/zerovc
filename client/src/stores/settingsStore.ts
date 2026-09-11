@@ -30,6 +30,7 @@ interface SettingsState {
   soundMuteEvents: boolean;
   soundMessageEvents: boolean;
   notificationsDesktop: boolean;
+  hapticFeedback: boolean;
 
   // Audio Processing Modes & Filters
   audioProcessingMode: AudioProcessingMode;
@@ -60,6 +61,7 @@ interface SettingsState {
   setSoundMuteEvents: (enabled: boolean) => void;
   setSoundMessageEvents: (enabled: boolean) => void;
   setNotificationsDesktop: (enabled: boolean) => void;
+  setHapticFeedback: (enabled: boolean) => void;
   setAudioProcessingMode: (mode: AudioProcessingMode) => void;
   setRnnoiseLevel: (level: RNNoiseLevel) => void;
   setVadSensitivity: (sensitivity: number) => void;
@@ -183,6 +185,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   soundMuteEvents: getStoredBoolean('zerovc_sound_mute_events', true),
   soundMessageEvents: getStoredBoolean('zerovc_sound_message_events', true),
   notificationsDesktop: getStoredBoolean('zerovc_notifications_desktop', true),
+  hapticFeedback: getStoredBoolean('zerovc_haptic_feedback', true),
 
   // Audio Processing Modes & Filters
   audioProcessingMode: getStoredString<AudioProcessingMode>('zerovc_audio_proc_mode', 'rnnoise_silero'),
@@ -284,6 +287,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (notificationsDesktop && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
+  },
+
+  setHapticFeedback: (hapticFeedback) => {
+    localStorage.setItem('zerovc_haptic_feedback', String(hapticFeedback));
+    set({ hapticFeedback });
   },
 
   setAudioProcessingMode: (audioProcessingMode) => {

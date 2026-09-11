@@ -14,6 +14,8 @@ import { useCallStore } from '../../stores/callStore';
 import { useAuthStore } from '../../stores/authStore';
 import { formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { useKeepAwake } from '../../hooks/useKeepAwake';
+import { hapticMedium, hapticWarning } from '../../lib/haptics';
 
 export const ActiveCallOverlay: React.FC = () => {
   const {
@@ -32,6 +34,9 @@ export const ActiveCallOverlay: React.FC = () => {
     stopScreenShare,
     endCall,
   } = useCallStore();
+
+  const isCallActive = callState === 'calling' || callState === 'connected';
+  useKeepAwake(isCallActive);
 
   const { user: currentUser } = useAuthStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
@@ -154,10 +159,13 @@ export const ActiveCallOverlay: React.FC = () => {
           </div>
 
           {/* Call Controls Bar */}
-          <div className="flex items-center justify-center gap-3 pt-1">
+          <div className="flex items-center justify-center gap-3 pt-1 select-none">
             {/* Mute */}
             <button
-              onClick={toggleMute}
+              onClick={() => {
+                hapticMedium();
+                toggleMute();
+              }}
               className={`p-3 rounded-full transition-all cursor-pointer shadow-md ${
                 isMuted
                   ? 'bg-dnd text-white hover:bg-rose-700'
@@ -170,7 +178,10 @@ export const ActiveCallOverlay: React.FC = () => {
 
             {/* Deafen */}
             <button
-              onClick={toggleDeafen}
+              onClick={() => {
+                hapticMedium();
+                toggleDeafen();
+              }}
               className={`p-3 rounded-full transition-all cursor-pointer shadow-md ${
                 isDeafened
                   ? 'bg-dnd text-white hover:bg-rose-700'
@@ -183,7 +194,10 @@ export const ActiveCallOverlay: React.FC = () => {
 
             {/* Camera */}
             <button
-              onClick={toggleCamera}
+              onClick={() => {
+                hapticMedium();
+                toggleCamera();
+              }}
               className={`p-3 rounded-full transition-all cursor-pointer shadow-md ${
                 isCameraOn
                   ? 'bg-online text-white hover:bg-emerald-600'
@@ -209,8 +223,11 @@ export const ActiveCallOverlay: React.FC = () => {
 
             {/* End Call Button */}
             <button
-              onClick={endCall}
-              className="bg-dnd hover:bg-rose-700 text-white p-3 rounded-full transition-all shadow-lg cursor-pointer ml-2"
+              onClick={() => {
+                hapticWarning();
+                endCall();
+              }}
+              className="bg-dnd hover:bg-rose-700 text-white p-3 rounded-full transition-all shadow-lg cursor-pointer ml-2 active:scale-95"
               title="Desligar Chamada"
             >
               <PhoneOff className="w-5 h-5" />
