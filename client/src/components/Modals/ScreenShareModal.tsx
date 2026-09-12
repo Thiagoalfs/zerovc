@@ -70,7 +70,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
 
   const handleShare = async () => {
     if (!selectedSourceId) return;
-    await startScreenShare(selectedSourceId, { resolution, fps, includeAudio: isElectron && includeAudio });
+    await startScreenShare(selectedSourceId, { resolution, fps, includeAudio });
     onClose();
   };
 

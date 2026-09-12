@@ -119,23 +119,52 @@ export class ProcessAudioBridge {
       this.destinationNode = this.audioContext.createMediaStreamDestination();
       this.workletNode.connect(this.destinationNode);
 
+      // Keep Chromium Web Audio hardware clock actively running even when unfocused/background
+      try {
+        const silenceGain = this.audioContext.createGain();
+        silenceGain.gain.value = 0;
+        this.workletNode.connect(silenceGain);
+        silenceGain.connect(this.audioContext.destination);
+      } catch {}
+
       // Subscribe to binary Float32 PCM chunks from Electron Main
       if (window.electronAPI.onProcessAudioChunk) {
-        this.unsubscribeChunk = window.electronAPI.onProcessAudioChunk((chunk: Uint8Array) => {
-          if (!this.workletNode || !chunk || chunk.byteLength < 4) return;
+        let remainderBytes: Uint8Array | null = null;
+
+        this.unsubscribeChunk = window.electronAPI.onProcessAudioChunk((rawChunk: Uint8Array) => {
+          if (!this.workletNode || !rawChunk || rawChunk.byteLength === 0) return;
           try {
-            let floatData: Float32Array;
-            if (chunk.byteOffset % 4 === 0) {
-              floatData = new Float32Array(
-                chunk.buffer,
-                chunk.byteOffset,
-                Math.floor(chunk.byteLength / 4)
-              );
-            } else {
-              const alignedBuf = chunk.slice().buffer;
-              floatData = new Float32Array(alignedBuf, 0, Math.floor(chunk.byteLength / 4));
+            let chunk = rawChunk;
+            if (remainderBytes && remainderBytes.byteLength > 0) {
+              const merged = new Uint8Array(remainderBytes.byteLength + rawChunk.byteLength);
+              merged.set(remainderBytes, 0);
+              merged.set(rawChunk, remainderBytes.byteLength);
+              chunk = merged;
+              remainderBytes = null;
             }
-            this.workletNode.port.postMessage(floatData);
+
+            // Must be multiple of 8 bytes (2 channels * 4 bytes per Float32 sample)
+            const usableBytes = Math.floor(chunk.byteLength / 8) * 8;
+            if (usableBytes < chunk.byteLength) {
+              remainderBytes = chunk.slice(usableBytes);
+              chunk = chunk.subarray(0, usableBytes);
+            }
+
+            if (chunk.byteLength >= 8) {
+              let floatData: Float32Array;
+              if (chunk.byteOffset % 4 === 0) {
+                floatData = new Float32Array(
+                  chunk.buffer,
+                  chunk.byteOffset,
+                  chunk.byteLength / 4
+                );
+              } else {
+                const copy = new Uint8Array(chunk.byteLength);
+                copy.set(chunk);
+                floatData = new Float32Array(copy.buffer, 0, copy.byteLength / 4);
+              }
+              this.workletNode.port.postMessage(floatData);
+            }
           } catch (err) {
             console.error('[ProcessAudioBridge] Error feeding audio chunk:', err);
           }

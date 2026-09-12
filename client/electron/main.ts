@@ -680,9 +680,24 @@ ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceI
 
     activeAudioProcess = child;
 
+    let remainderBuffer = Buffer.alloc(0);
+
     child.stdout.on('data', (chunk: Buffer) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('process-audio-chunk', chunk);
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+
+      const combined = remainderBuffer.length > 0 ? Buffer.concat([remainderBuffer, chunk]) : chunk;
+      // 8 bytes per stereo Float32 sample (2 channels * 4 bytes)
+      const alignedBytes = Math.floor(combined.length / 8) * 8;
+
+      if (alignedBytes > 0) {
+        const toSend = combined.subarray(0, alignedBytes);
+        mainWindow.webContents.send('process-audio-chunk', toSend);
+      }
+
+      if (alignedBytes < combined.length) {
+        remainderBuffer = Buffer.from(combined.subarray(alignedBytes));
+      } else {
+        remainderBuffer = Buffer.alloc(0);
       }
     });
 

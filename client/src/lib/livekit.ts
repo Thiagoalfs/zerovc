@@ -648,18 +648,21 @@ class LiveKitManager {
         }
       } else {
         // Native W3C getDisplayMedia for Web Browsers (excluding own surface to avoid infinite audio loop)
+        const shouldIncludeAudio = config?.includeAudio !== false;
         const pub = await this.room.localParticipant.setScreenShareEnabled(
           true,
           {
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: false,
-              autoGainControl: false,
-              restrictOwnAudio: true,
-              suppressLocalAudioPlayback: true,
-              channelCount: 2,
-              sampleRate: 48000,
-            } as any,
+            audio: shouldIncludeAudio
+              ? ({
+                  echoCancellation: false,
+                  noiseSuppression: false,
+                  autoGainControl: false,
+                  restrictOwnAudio: true,
+                  suppressLocalAudioPlayback: true,
+                  channelCount: 2,
+                  sampleRate: 48000,
+                } as any)
+              : false,
             selfBrowserSurface: 'exclude',
             surfaceSwitching: 'include',
             systemAudio: 'include',
