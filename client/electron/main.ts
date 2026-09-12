@@ -649,6 +649,9 @@ ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceI
   const sourceId = options?.sourceId || '';
   let mode = options?.mode;
 
+  // Always supply the ZeroVC main process PID so WASAPI exclusion can filter out call audio
+  args.push('--zerovc-pid', String(process.pid));
+
   if (sourceId.startsWith('window:')) {
     const parts = sourceId.split(':');
     const hwnd = parts[1];
