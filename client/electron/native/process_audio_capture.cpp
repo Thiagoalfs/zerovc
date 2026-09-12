@@ -21,75 +21,14 @@
 
 using namespace Microsoft::WRL;
 
-// --- Signal Handling & Session Mute Management ---
 std::atomic<bool> g_bRunning(true);
-std::mutex g_muteMutex;
-
-struct MutedSessionInfo {
-    DWORD pid;
-    ComPtr<ISimpleAudioVolume> pVolume;
-};
-std::vector<MutedSessionInfo> g_mutedSessions;
-
-void RestoreMutedSessions() {
-    std::lock_guard<std::mutex> lock(g_muteMutex);
-    for (auto& info : g_mutedSessions) {
-        if (info.pVolume) {
-            info.pVolume->SetMute(FALSE, NULL);
-        }
-    }
-    g_mutedSessions.clear();
-}
 
 BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType) {
     if (ctrlType == CTRL_C_EVENT || ctrlType == CTRL_BREAK_EVENT || ctrlType == CTRL_CLOSE_EVENT) {
         g_bRunning = false;
-        RestoreMutedSessions();
         return TRUE;
     }
     return FALSE;
-}
-
-// Recursively find all processes in the tree rooted at rootPID
-std::set<DWORD> GetProcessTreePIDs(DWORD rootPID) {
-    std::set<DWORD> treePIDs;
-    if (rootPID == 0) return treePIDs;
-
-    treePIDs.insert(rootPID);
-
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot == INVALID_HANDLE_VALUE) {
-        return treePIDs;
-    }
-
-    PROCESSENTRY32W pe;
-    pe.dwSize = sizeof(PROCESSENTRY32W);
-
-    std::map<DWORD, std::vector<DWORD>> parentToChildren;
-    if (Process32FirstW(hSnapshot, &pe)) {
-        do {
-            parentToChildren[pe.th32ParentProcessID].push_back(pe.th32ProcessID);
-        } while (Process32NextW(hSnapshot, &pe));
-    }
-    CloseHandle(hSnapshot);
-
-    std::vector<DWORD> queue;
-    queue.push_back(rootPID);
-    size_t head = 0;
-    while (head < queue.size()) {
-        DWORD current = queue[head++];
-        auto it = parentToChildren.find(current);
-        if (it != parentToChildren.end()) {
-            for (DWORD childPID : it->second) {
-                if (treePIDs.find(childPID) == treePIDs.end()) {
-                    treePIDs.insert(childPID);
-                    queue.push_back(childPID);
-                }
-            }
-        }
-    }
-
-    return treePIDs;
 }
 
 // Resolves actual audio-producing process ID from HWND (including UWP / ApplicationFrameHost apps)
@@ -173,37 +112,26 @@ public:
 };
 
 int RunCaptureLoop(IAudioClient* pAudioClient, HANDLE hAudioSamplesEvent) {
-    WAVEFORMATEX* pMixFormat = NULL;
-    HRESULT hr = pAudioClient->GetMixFormat(&pMixFormat);
-    if (FAILED(hr) || !pMixFormat) {
-        std::cerr << "[WASAPI Capture] GetMixFormat failed: 0x" << std::hex << hr << std::endl;
-        return 1;
-    }
-
     ComPtr<IAudioCaptureClient> pCaptureClient;
-    hr = pAudioClient->GetService(__uuidof(IAudioCaptureClient), &pCaptureClient);
+    HRESULT hr = pAudioClient->GetService(__uuidof(IAudioCaptureClient), &pCaptureClient);
     if (FAILED(hr)) {
         std::cerr << "[WASAPI Capture] GetService IAudioCaptureClient failed: 0x" << std::hex << hr << std::endl;
-        CoTaskMemFree(pMixFormat);
         return 1;
     }
 
     hr = pAudioClient->Start();
     if (FAILED(hr)) {
         std::cerr << "[WASAPI Capture] AudioClient Start failed: 0x" << std::hex << hr << std::endl;
-        CoTaskMemFree(pMixFormat);
         return 1;
     }
 
-    std::cerr << "[WASAPI Capture] Capture Started. Rate: " << pMixFormat->nSamplesPerSec
-              << " Channels: " << pMixFormat->nChannels
-              << " Bits: " << pMixFormat->wBitsPerSample << std::endl;
+    std::cerr << "[WASAPI Capture] Capture Started. Rate: 48000 Channels: 2 Bits: 32 (Float32)" << std::endl;
 
-    const int bytesPerFrame = pMixFormat->nBlockAlign;
+    const int bytesPerFrame = 8; // 2 channels * 4 bytes (Float32)
     BYTE* pData = NULL;
     UINT32 numFramesAvailable = 0;
     DWORD flags = 0;
-    std::vector<float> floatConvertBuffer;
+    std::vector<float> silentBuffer;
 
     while (g_bRunning) {
         WaitForSingleObject(hAudioSamplesEvent, 20);
@@ -213,22 +141,10 @@ int RunCaptureLoop(IAudioClient* pAudioClient, HANDLE hAudioSamplesEvent) {
             hr = pCaptureClient->GetBuffer(&pData, &numFramesAvailable, &flags, NULL, NULL);
             if (SUCCEEDED(hr)) {
                 if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
-                    floatConvertBuffer.assign(numFramesAvailable * pMixFormat->nChannels, 0.0f);
-                    fwrite(floatConvertBuffer.data(), sizeof(float), floatConvertBuffer.size(), stdout);
+                    silentBuffer.assign(numFramesAvailable * 2, 0.0f);
+                    fwrite(silentBuffer.data(), sizeof(float), silentBuffer.size(), stdout);
                 } else if (pData) {
-                    if (pMixFormat->wBitsPerSample == 32) {
-                        fwrite(pData, 1, numFramesAvailable * bytesPerFrame, stdout);
-                    } else if (pMixFormat->wBitsPerSample == 16) {
-                        int16_t* pSamples16 = (int16_t*)pData;
-                        size_t sampleCount = numFramesAvailable * pMixFormat->nChannels;
-                        floatConvertBuffer.resize(sampleCount);
-                        for (size_t s = 0; s < sampleCount; s++) {
-                            floatConvertBuffer[s] = (float)pSamples16[s] / 32768.0f;
-                        }
-                        fwrite(floatConvertBuffer.data(), sizeof(float), sampleCount, stdout);
-                    } else {
-                        fwrite(pData, 1, numFramesAvailable * bytesPerFrame, stdout);
-                    }
+                    fwrite(pData, 1, numFramesAvailable * bytesPerFrame, stdout);
                 }
                 fflush(stdout);
                 pCaptureClient->ReleaseBuffer(numFramesAvailable);
@@ -238,7 +154,6 @@ int RunCaptureLoop(IAudioClient* pAudioClient, HANDLE hAudioSamplesEvent) {
     }
 
     pAudioClient->Stop();
-    if (pMixFormat) CoTaskMemFree(pMixFormat);
     return 0;
 }
 
@@ -278,42 +193,45 @@ int StartProcessLoopback(DWORD targetPID, PROCESS_LOOPBACK_MODE loopbackMode) {
 
     ComPtr<IAudioClient> pAudioClient = pActivator->m_pAudioClient;
 
-    WAVEFORMATEX* pMixFormat = NULL;
-    hr = pAudioClient->GetMixFormat(&pMixFormat);
-    if (FAILED(hr) || !pMixFormat) {
-        std::cerr << "[WASAPI Capture] GetMixFormat failed: 0x" << std::hex << hr << std::endl;
-        return -1;
-    }
+    WAVEFORMATEXTENSIBLE wfx = {};
+    wfx.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    wfx.Format.nChannels = 2;
+    wfx.Format.nSamplesPerSec = 48000;
+    wfx.Format.wBitsPerSample = 32;
+    wfx.Format.nBlockAlign = 8;
+    wfx.Format.nAvgBytesPerSec = 48000 * 8;
+    wfx.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+    wfx.Samples.wValidBitsPerSample = 32;
+    wfx.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
+    wfx.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
 
     REFERENCE_TIME hnsBufferDuration = 200000; // 20ms
     hr = pAudioClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
-        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
         hnsBufferDuration,
         0,
-        pMixFormat,
+        (WAVEFORMATEX*)&wfx,
         NULL
     );
     if (FAILED(hr)) {
         hr = pAudioClient->Initialize(
             AUDCLNT_SHAREMODE_SHARED,
-            AUDCLNT_STREAMFLAGS_LOOPBACK,
+            AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
             hnsBufferDuration,
             0,
-            pMixFormat,
+            (WAVEFORMATEX*)&wfx,
             NULL
         );
     }
 
     if (FAILED(hr)) {
         std::cerr << "[WASAPI Capture] IAudioClient Initialize failed: 0x" << std::hex << hr << std::endl;
-        CoTaskMemFree(pMixFormat);
         return -1;
     }
 
     HANDLE hAudioSamplesEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     pAudioClient->SetEventHandle(hAudioSamplesEvent);
-    CoTaskMemFree(pMixFormat);
 
     int exitCode = RunCaptureLoop(pAudioClient.Get(), hAudioSamplesEvent);
     CloseHandle(hAudioSamplesEvent);
@@ -351,42 +269,45 @@ int StartClassicDefaultEndpointLoopback(DWORD zeroVCRootPID) {
         return 1;
     }
 
-    WAVEFORMATEX* pMixFormat = NULL;
-    hr = pAudioClient->GetMixFormat(&pMixFormat);
-    if (FAILED(hr) || !pMixFormat) {
-        std::cerr << "[WASAPI Capture] GetMixFormat failed: 0x" << std::hex << hr << std::endl;
-        return 1;
-    }
+    WAVEFORMATEXTENSIBLE wfx = {};
+    wfx.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    wfx.Format.nChannels = 2;
+    wfx.Format.nSamplesPerSec = 48000;
+    wfx.Format.wBitsPerSample = 32;
+    wfx.Format.nBlockAlign = 8;
+    wfx.Format.nAvgBytesPerSec = 48000 * 8;
+    wfx.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+    wfx.Samples.wValidBitsPerSample = 32;
+    wfx.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
+    wfx.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
 
     REFERENCE_TIME hnsBufferDuration = 200000; // 20ms
     hr = pAudioClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
-        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
         hnsBufferDuration,
         0,
-        pMixFormat,
+        (WAVEFORMATEX*)&wfx,
         NULL
     );
     if (FAILED(hr)) {
         hr = pAudioClient->Initialize(
             AUDCLNT_SHAREMODE_SHARED,
-            AUDCLNT_STREAMFLAGS_LOOPBACK,
+            AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
             hnsBufferDuration,
             0,
-            pMixFormat,
+            (WAVEFORMATEX*)&wfx,
             NULL
         );
     }
 
     if (FAILED(hr)) {
         std::cerr << "[WASAPI Capture] Initialize classic loopback failed: 0x" << std::hex << hr << std::endl;
-        CoTaskMemFree(pMixFormat);
         return 1;
     }
 
     HANDLE hAudioSamplesEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     pAudioClient->SetEventHandle(hAudioSamplesEvent);
-    CoTaskMemFree(pMixFormat);
 
     int exitCode = RunCaptureLoop(pAudioClient.Get(), hAudioSamplesEvent);
     CloseHandle(hAudioSamplesEvent);
@@ -416,10 +337,14 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--hwnd" && i + 1 < argc) {
             try {
                 std::string hwndStr = argv[++i];
-                HWND hwnd = (HWND)(uintptr_t)std::stoull(hwndStr);
+                HWND hwnd = (HWND)(uintptr_t)std::stoull(hwndStr, nullptr, 0);
                 DWORD pid = GetRealProcessIdFromWindow(hwnd);
+                if (pid == 0) {
+                    GetWindowThreadProcessId(hwnd, &pid);
+                }
                 if (pid != 0) {
                     targetPID = pid;
+                    std::cerr << "[WASAPI Capture] Resolved HWND " << hwndStr << " to PID: " << targetPID << std::endl;
                 }
             } catch (...) {}
         } else if (arg == "--mode" && i + 1 < argc) {
@@ -459,7 +384,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    RestoreMutedSessions();
     CoUninitialize();
     return exitCode;
 }
