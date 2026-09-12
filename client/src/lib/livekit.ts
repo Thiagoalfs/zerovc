@@ -240,17 +240,14 @@ class LiveKitManager {
         this.attachedAudioElements.set(sid, audioEl);
 
         if (isScreenAudio) {
-          const isCurrentlyWatched = this.watchedParticipantIdentities.has(participant.identity);
-          audioEl.muted = !isCurrentlyWatched;
+          audioEl.muted = this.isDeafened;
           this.attachedStreamAudioElements.set(sid, audioEl);
           const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
           audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
           if (typeof (track as any).setVolume === 'function') {
             (track as any).setVolume(streamVol);
           }
-          if (isCurrentlyWatched) {
-            audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
-          }
+          audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
         } else {
           audioEl.muted = this.isDeafened;
           this.attachedUserAudioElements.set(sid, audioEl);
@@ -259,9 +256,6 @@ class LiveKitManager {
           if (typeof (track as any).setVolume === 'function') {
             (track as any).setVolume(userVol);
           }
-          // Se o roteamento de áudio de call já estiver ativo (esse participante entrou
-          // ou reconectou durante um compartilhamento de tela com áudio em andamento),
-          // aplica o mesmo dispositivo secundário imediatamente a esse novo elemento.
           if (this.isRoutingCallAudioForCapture) {
             void this.applyCallAudioRouting();
           }
@@ -590,23 +584,9 @@ class LiveKitManager {
           await this.room.localParticipant.unpublishTrack(oldAudioPub.track);
         }
 
-        // Publish track with backupCodec enabled for intelligent fallback (H.264 -> VP8 if GPU drops frames/crashes)
+        // Publish track using standard VP8 (universal compatibility across Android, iOS, Web and Desktop)
         let pub;
         try {
-          pub = await this.room.localParticipant.publishTrack(videoTrack, {
-            name: 'screen_share',
-            source: Track.Source.ScreenShare,
-            simulcast: false,
-            videoCodec: selectedCodec,
-            backupCodec: true,
-            videoEncoding: {
-              maxBitrate: maxBitrate,
-              maxFramerate: frameRate,
-              priority: 'high',
-            },
-          });
-        } catch (pubErr) {
-          console.warn('[LiveKit] Failed to publish screen share with preferred codec, falling back to VP8:', pubErr);
           pub = await this.room.localParticipant.publishTrack(videoTrack, {
             name: 'screen_share',
             source: Track.Source.ScreenShare,
@@ -619,6 +599,8 @@ class LiveKitManager {
               priority: 'high',
             },
           });
+        } catch (pubErr) {
+          console.error('[LiveKit] Failed to publish screen share track:', pubErr);
         }
 
         // Publish captured process/system audio via WASAPI Loopback (zero voice echo)

@@ -158,51 +158,83 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   const currentSVol = streamVolumes[participant.identity] ?? 1;
   const isWatching = (isLocal && isScreenSharing) || watchedParticipantId === participant.identity;
 
-  // Handle Screen Share video track & Screen Share audio track attachment
+  const fullscreenVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Handle Screen Share video track attachment
   useEffect(() => {
     const el = videoRef.current;
     if (isWatching && hasScreenVideoTrack && screenPub?.track && el) {
-      screenPub.track.attach(el);
-      el.play().catch(() => {});
+      try {
+        screenPub.track.attach(el);
+        el.play().catch(() => {});
+      } catch (err) {
+        console.warn('[ParticipantCard] Error attaching screen video track:', err);
+      }
     }
 
     if (screenPub instanceof RemoteTrackPublication) {
-      screenPub.setSubscribed(isWatching);
-    }
-
-    // Toggle screen share audio track subscription & playback only when watching!
-    if (!isLocal) {
-      livekit.setStreamAudioSubscribed(participant.identity, isWatching);
+      try {
+        screenPub.setSubscribed(isWatching);
+      } catch {}
     }
 
     return () => {
       if (el && screenPub?.track) {
-        screenPub.track.detach(el);
-      }
-      if (!isLocal) {
-        livekit.setStreamAudioSubscribed(participant.identity, false);
+        try {
+          screenPub.track.detach(el);
+        } catch {}
       }
     };
-  }, [screenPub?.track, hasScreenVideoTrack, isWatching, isLocal, participant.identity]);
+  }, [screenPub?.track, hasScreenVideoTrack, isWatching]);
 
   // Handle Camera track attachment
   useEffect(() => {
     const el = cameraRef.current;
     if (hasCameraVideoTrack && cameraPub?.track && el) {
-      cameraPub.track.attach(el);
-      el.play().catch(() => {});
+      try {
+        cameraPub.track.attach(el);
+        el.play().catch(() => {});
+      } catch (err) {
+        console.warn('[ParticipantCard] Error attaching camera track:', err);
+      }
     }
 
     if (cameraPub instanceof RemoteTrackPublication) {
-      cameraPub.setSubscribed(true);
+      try {
+        cameraPub.setSubscribed(true);
+      } catch {}
     }
 
     return () => {
       if (el && cameraPub?.track) {
-        cameraPub.track.detach(el);
+        try {
+          cameraPub.track.detach(el);
+        } catch {}
       }
     };
   }, [cameraPub?.track, hasCameraVideoTrack]);
+
+  // Handle Fullscreen video attachment
+  useEffect(() => {
+    const el = fullscreenVideoRef.current;
+    if (!isFullscreen || !el) return;
+
+    const track = (isScreenSharing && isWatching && screenPub?.track) || (hasCameraVideoTrack && cameraPub?.track);
+    if (track) {
+      try {
+        track.attach(el);
+        el.play().catch(() => {});
+      } catch {}
+    }
+
+    return () => {
+      if (track && el) {
+        try {
+          track.detach(el);
+        } catch {}
+      }
+    };
+  }, [isFullscreen, isScreenSharing, isWatching, screenPub?.track, hasCameraVideoTrack, cameraPub?.track]);
 
   const handleToggleWatch = (watch: boolean) => {
     setWatchedParticipant(watch ? participant.identity : null);
@@ -484,30 +516,20 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         {/* 1. If screen sharing and watching: render live screen video */}
         {isScreenSharing && isWatching && hasScreenVideoTrack ? (
           <video
-            ref={(el) => {
-              videoRef.current = el;
-              if (el && screenPub?.track) {
-                screenPub.track.attach(el);
-                el.play().catch(() => {});
-              }
-            }}
+            ref={videoRef}
             autoPlay
             playsInline
+            muted
             className="w-full h-full object-contain bg-black"
           />
         ) : hasCameraVideoTrack ? (
           /* 2. WebCam Video Stream */
           <>
             <video
-              ref={(el) => {
-                cameraRef.current = el;
-                if (el && cameraPub?.track) {
-                  cameraPub.track.attach(el);
-                  el.play().catch(() => {});
-                }
-              }}
+              ref={cameraRef}
               autoPlay
               playsInline
+              muted
               className="w-full h-full object-cover bg-black"
             />
             <div className="absolute top-3 right-3 p-1 rounded-lg bg-black/60 backdrop-blur-sm text-brand-400 z-10">
@@ -684,18 +706,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             className={`fixed ${isElectron ? 'top-8' : 'top-0'} inset-x-0 bottom-0 z-[45] bg-black flex items-center justify-center select-none`}
           >
             <video
-              ref={(el) => {
-                if (el) {
-                  const track = (isScreenSharing && isWatching && screenPub?.track) || (hasCameraVideoTrack && cameraPub?.track);
-                  if (track) {
-                    track.attach(el);
-                    el.play().catch(() => {});
-                  }
-                }
-              }}
+              ref={fullscreenVideoRef}
               onContextMenu={handleContextMenu}
               autoPlay
               playsInline
+              muted
               className="w-full h-full object-contain bg-black cursor-default"
             />
 

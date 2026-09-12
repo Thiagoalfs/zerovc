@@ -31,7 +31,6 @@ pgdata/
 
 # Uploaded assets
 /assets/
-
-
-
-
+*.apk
+*.zip
+*.tar.gz

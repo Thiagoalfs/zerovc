@@ -122,13 +122,19 @@ export class ProcessAudioBridge {
       // Subscribe to binary Float32 PCM chunks from Electron Main
       if (window.electronAPI.onProcessAudioChunk) {
         this.unsubscribeChunk = window.electronAPI.onProcessAudioChunk((chunk: Uint8Array) => {
-          if (!this.workletNode) return;
+          if (!this.workletNode || !chunk || chunk.byteLength < 4) return;
           try {
-            const floatData = new Float32Array(
-              chunk.buffer,
-              chunk.byteOffset,
-              Math.floor(chunk.byteLength / 4)
-            );
+            let floatData: Float32Array;
+            if (chunk.byteOffset % 4 === 0) {
+              floatData = new Float32Array(
+                chunk.buffer,
+                chunk.byteOffset,
+                Math.floor(chunk.byteLength / 4)
+              );
+            } else {
+              const alignedBuf = chunk.slice().buffer;
+              floatData = new Float32Array(alignedBuf, 0, Math.floor(chunk.byteLength / 4));
+            }
             this.workletNode.port.postMessage(floatData);
           } catch (err) {
             console.error('[ProcessAudioBridge] Error feeding audio chunk:', err);
