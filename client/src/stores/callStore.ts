@@ -30,7 +30,10 @@ interface CallStoreState {
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
   toggleCamera: () => Promise<void>;
-  startScreenShare: () => Promise<void>;
+  startScreenShare: (
+    sourceId?: string,
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }
+  ) => Promise<void>;
   stopScreenShare: () => Promise<void>;
 }
 

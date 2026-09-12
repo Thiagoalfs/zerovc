@@ -604,8 +604,9 @@ class LiveKitManager {
         }
 
         // Publish captured process/system audio via WASAPI Loopback (zero voice echo)
-        if (config?.includeAudio) {
+        if (config?.includeAudio !== false) {
           try {
+            console.log('[LiveKit] Requesting WASAPI native audio capture for sourceId:', sourceId);
             const processAudioTrack = await processAudioBridge.startCapture(sourceId);
             if (processAudioTrack) {
               this.activeMediaStreamTracks.add(processAudioTrack);
@@ -622,6 +623,7 @@ class LiveKitManager {
                 dtx: false,
                 red: false,
               });
+              console.log('[LiveKit] Successfully published screen_share_audio track');
             }
           } catch (audioErr) {
             console.error('[LiveKit] Error starting native process audio capture:', audioErr);

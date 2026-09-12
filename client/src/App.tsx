@@ -1498,6 +1498,7 @@ export const App: React.FC = () => {
             />
           ) : (
             <DMChatArea
+              onOpenScreenShare={() => setIsScreenShareOpen(true)}
               onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
               onOpenUserProfile={(targetUser, pos) =>
                 setSelectedUserForProfile({ user: targetUser, position: pos })

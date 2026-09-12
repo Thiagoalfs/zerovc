@@ -45,6 +45,7 @@ interface DMChatAreaProps {
   onOpenMobileDrawer?: () => void;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   onPreviewImage?: (url: string) => void;
+  onOpenScreenShare?: () => void;
 }
 
 const QUICK_EMOJIS = ['👍', '❤️', '🔥', '😂', '🎉', '👀', '✨', '💀'];
@@ -55,6 +56,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   onOpenMobileDrawer,
   onOpenUserProfile,
   onPreviewImage,
+  onOpenScreenShare,
 }) => {
   const { user } = useAuthStore();
   const {
@@ -800,7 +802,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       )}
 
-      <ActiveCallOverlay />
+      <ActiveCallOverlay onOpenScreenShare={onOpenScreenShare} />
 
       <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0">
         <div className="flex items-center gap-2.5 truncate">
