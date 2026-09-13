@@ -18,6 +18,8 @@
 #include <chrono>
 #include <thread>
 #include <cstdint>
+#include <cmath>
+#include <algorithm>
 
 using namespace Microsoft::WRL;
 
@@ -82,6 +84,33 @@ DWORD GetRealProcessIdFromWindow(HWND hwnd) {
     return pid;
 }
 
+// Helper to get default render endpoint mix format
+WAVEFORMATEX* GetDefaultDeviceMixFormat() {
+    ComPtr<IMMDeviceEnumerator> pEnumerator;
+    HRESULT hr = CoCreateInstance(
+        __uuidof(MMDeviceEnumerator),
+        NULL,
+        CLSCTX_ALL,
+        __uuidof(IMMDeviceEnumerator),
+        (void**)&pEnumerator
+    );
+    if (FAILED(hr) || !pEnumerator) return nullptr;
+
+    ComPtr<IMMDevice> pDevice;
+    hr = pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
+    if (FAILED(hr) || !pDevice) return nullptr;
+
+    ComPtr<IAudioClient> pAudioClient;
+    hr = pDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, NULL, (void**)&pAudioClient);
+    if (FAILED(hr) || !pAudioClient) return nullptr;
+
+    WAVEFORMATEX* pMixFormat = nullptr;
+    hr = pAudioClient->GetMixFormat(&pMixFormat);
+    if (FAILED(hr)) return nullptr;
+
+    return pMixFormat;
+}
+
 // Activator for Window/Process Loopback
 class AudioLoopbackActivator : public RuntimeClass<RuntimeClassFlags<ClassicCom>, FtmBase, IActivateAudioInterfaceCompletionHandler> {
 public:
@@ -111,7 +140,194 @@ public:
     }
 };
 
-int RunCaptureLoop(IAudioClient* pAudioClient, HANDLE hAudioSamplesEvent) {
+// Universal Audio Converter: Converts arbitrary WASAPI input format -> 48000Hz Stereo 32-bit Float
+class AudioFormatConverter {
+public:
+    int inChannels = 2;
+    int inSampleRate = 48000;
+    int inBitsPerSample = 32;
+    int inBytesPerFrame = 8;
+    bool isFloat = true;
+
+    // Resampler state (linear interpolation)
+    double phase = 0.0;
+    float prevSampleL = 0.0f;
+    float prevSampleR = 0.0f;
+    bool hasPrevSample = false;
+
+    std::vector<float> inputStereoBuffer;
+    std::vector<float> outputBuffer;
+
+    void Configure(const WAVEFORMATEX* pwfx) {
+        if (!pwfx) return;
+        inChannels = pwfx->nChannels;
+        inSampleRate = pwfx->nSamplesPerSec;
+        inBitsPerSample = pwfx->wBitsPerSample;
+        inBytesPerFrame = pwfx->nBlockAlign;
+
+        if (pwfx->wFormatTag == WAVE_FORMAT_EXTENSIBLE && pwfx->cbSize >= 22) {
+            const WAVEFORMATEXTENSIBLE* pExt = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(pwfx);
+            if (IsEqualGUID(pExt->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)) {
+                isFloat = true;
+            } else if (IsEqualGUID(pExt->SubFormat, KSDATAFORMAT_SUBTYPE_PCM)) {
+                isFloat = false;
+            } else {
+                isFloat = (inBitsPerSample == 32);
+            }
+        } else if (pwfx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) {
+            isFloat = true;
+        } else {
+            isFloat = false;
+        }
+
+        std::cerr << "[WASAPI Capture] Audio format configured: " 
+                  << inSampleRate << "Hz, " 
+                  << inChannels << " channels, " 
+                  << inBitsPerSample << " bits (" 
+                  << (isFloat ? "Float" : "PCM") << ")" << std::endl;
+    }
+
+    void ProcessFrames(const BYTE* pData, UINT32 numFrames, DWORD flags) {
+        if (numFrames == 0) return;
+
+        if (flags & AUDCLNT_BUFFERFLAGS_SILENT || !pData) {
+            // Generate silence
+            UINT32 outFrames = (inSampleRate == 48000) ? numFrames : (UINT32)std::round(numFrames * (48000.0 / inSampleRate));
+            if (outFrames == 0) outFrames = 1;
+            outputBuffer.assign(outFrames * 2, 0.0f);
+            fwrite(outputBuffer.data(), sizeof(float), outputBuffer.size(), stdout);
+            fflush(stdout);
+            prevSampleL = 0.0f;
+            prevSampleR = 0.0f;
+            return;
+        }
+
+        // Step 1: Decode input frames into normalized Stereo Float buffer (inputStereoBuffer)
+        inputStereoBuffer.resize(numFrames * 2);
+
+        for (UINT32 i = 0; i < numFrames; i++) {
+            const BYTE* framePtr = pData + (i * inBytesPerFrame);
+            float sL = 0.0f;
+            float sR = 0.0f;
+
+            if (isFloat) {
+                if (inBitsPerSample == 32) {
+                    const float* fData = reinterpret_cast<const float*>(framePtr);
+                    if (inChannels == 1) {
+                        sL = sR = fData[0];
+                    } else if (inChannels == 2) {
+                        sL = fData[0];
+                        sR = fData[1];
+                    } else { // Multi-channel (5.1 / 7.1)
+                        sL = fData[0] + 0.7071f * fData[2]; // L + Center
+                        sR = fData[1] + 0.7071f * fData[2]; // R + Center
+                    }
+                } else if (inBitsPerSample == 64) {
+                    const double* dData = reinterpret_cast<const double*>(framePtr);
+                    if (inChannels == 1) {
+                        sL = sR = (float)dData[0];
+                    } else if (inChannels == 2) {
+                        sL = (float)dData[0];
+                        sR = (float)dData[1];
+                    } else {
+                        sL = (float)(dData[0] + 0.7071 * dData[2]);
+                        sR = (float)(dData[1] + 0.7071 * dData[2]);
+                    }
+                }
+            } else {
+                // PCM Integer
+                if (inBitsPerSample == 16) {
+                    const int16_t* iData = reinterpret_cast<const int16_t*>(framePtr);
+                    if (inChannels == 1) {
+                        sL = sR = iData[0] / 32768.0f;
+                    } else if (inChannels == 2) {
+                        sL = iData[0] / 32768.0f;
+                        sR = iData[1] / 32768.0f;
+                    } else {
+                        sL = (iData[0] + 0.7071f * iData[2]) / 32768.0f;
+                        sR = (iData[1] + 0.7071f * iData[2]) / 32768.0f;
+                    }
+                } else if (inBitsPerSample == 24) {
+                    auto read24 = [](const BYTE* b) -> float {
+                        int32_t val = (int32_t)((b[0]) | (b[1] << 8) | (b[2] << 16));
+                        if (val & 0x800000) val |= 0xFF000000;
+                        return val / 8388608.0f;
+                    };
+                    if (inChannels == 1) {
+                        sL = sR = read24(framePtr);
+                    } else if (inChannels == 2) {
+                        sL = read24(framePtr);
+                        sR = read24(framePtr + 3);
+                    } else {
+                        sL = read24(framePtr) + 0.7071f * read24(framePtr + 6);
+                        sR = read24(framePtr + 3) + 0.7071f * read24(framePtr + 6);
+                    }
+                } else if (inBitsPerSample == 32) {
+                    const int32_t* iData = reinterpret_cast<const int32_t*>(framePtr);
+                    if (inChannels == 1) {
+                        sL = sR = iData[0] / 2147483648.0f;
+                    } else if (inChannels == 2) {
+                        sL = iData[0] / 2147483648.0f;
+                        sR = iData[1] / 2147483648.0f;
+                    } else {
+                        sL = (iData[0] + 0.7071f * iData[2]) / 2147483648.0f;
+                        sR = (iData[1] + 0.7071f * iData[2]) / 2147483648.0f;
+                    }
+                }
+            }
+
+            inputStereoBuffer[i * 2] = sL;
+            inputStereoBuffer[i * 2 + 1] = sR;
+        }
+
+        // Step 2: Resample to 48000Hz if needed
+        if (inSampleRate == 48000) {
+            fwrite(inputStereoBuffer.data(), sizeof(float), inputStereoBuffer.size(), stdout);
+            fflush(stdout);
+            return;
+        }
+
+        // Resampling with linear interpolation
+        outputBuffer.clear();
+        double step = (double)inSampleRate / 48000.0;
+
+        if (!hasPrevSample) {
+            prevSampleL = inputStereoBuffer[0];
+            prevSampleR = inputStereoBuffer[1];
+            hasPrevSample = true;
+        }
+
+        while (phase < numFrames) {
+            size_t idx = (size_t)phase;
+            double frac = phase - idx;
+
+            float curL = inputStereoBuffer[idx * 2];
+            float curR = inputStereoBuffer[idx * 2 + 1];
+
+            float nextL = (idx + 1 < numFrames) ? inputStereoBuffer[(idx + 1) * 2] : curL;
+            float nextR = (idx + 1 < numFrames) ? inputStereoBuffer[(idx + 1) * 2 + 1] : curR;
+
+            float outL = (float)((1.0 - frac) * curL + frac * nextL);
+            float outR = (float)((1.0 - frac) * curR + frac * nextR);
+
+            outputBuffer.push_back(outL);
+            outputBuffer.push_back(outR);
+
+            phase += step;
+        }
+
+        phase -= numFrames;
+        prevSampleL = inputStereoBuffer[(numFrames - 1) * 2];
+        prevSampleR = inputStereoBuffer[(numFrames - 1) * 2 + 1];
+
+        if (!outputBuffer.empty()) {
+            fwrite(outputBuffer.data(), sizeof(float), outputBuffer.size(), stdout);
+            fflush(stdout);
+        }
+    }
+};
+
+int RunCaptureLoop(IAudioClient* pAudioClient, HANDLE hAudioSamplesEvent, const WAVEFORMATEX* pwfx) {
     ComPtr<IAudioCaptureClient> pCaptureClient;
     HRESULT hr = pAudioClient->GetService(__uuidof(IAudioCaptureClient), &pCaptureClient);
     if (FAILED(hr)) {
@@ -119,19 +335,20 @@ int RunCaptureLoop(IAudioClient* pAudioClient, HANDLE hAudioSamplesEvent) {
         return 1;
     }
 
+    AudioFormatConverter converter;
+    converter.Configure(pwfx);
+
     hr = pAudioClient->Start();
     if (FAILED(hr)) {
         std::cerr << "[WASAPI Capture] AudioClient Start failed: 0x" << std::hex << hr << std::endl;
         return 1;
     }
 
-    std::cerr << "[WASAPI Capture] Capture Started. Rate: 48000 Channels: 2 Bits: 32 (Float32)" << std::endl;
+    std::cerr << "[WASAPI Capture] Capture Started. Output format -> 48000Hz Stereo Float32" << std::endl;
 
-    const int bytesPerFrame = 8; // 2 channels * 4 bytes (Float32)
     BYTE* pData = NULL;
     UINT32 numFramesAvailable = 0;
     DWORD flags = 0;
-    std::vector<float> silentBuffer;
 
     while (g_bRunning) {
         WaitForSingleObject(hAudioSamplesEvent, 20);
@@ -140,13 +357,7 @@ int RunCaptureLoop(IAudioClient* pAudioClient, HANDLE hAudioSamplesEvent) {
         while (SUCCEEDED(hr) && numFramesAvailable > 0) {
             hr = pCaptureClient->GetBuffer(&pData, &numFramesAvailable, &flags, NULL, NULL);
             if (SUCCEEDED(hr)) {
-                if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
-                    silentBuffer.assign(numFramesAvailable * 2, 0.0f);
-                    fwrite(silentBuffer.data(), sizeof(float), silentBuffer.size(), stdout);
-                } else if (pData) {
-                    fwrite(pData, 1, numFramesAvailable * bytesPerFrame, stdout);
-                }
-                fflush(stdout);
+                converter.ProcessFrames(pData, numFramesAvailable, flags);
                 pCaptureClient->ReleaseBuffer(numFramesAvailable);
             }
             hr = pCaptureClient->GetNextPacketSize(&numFramesAvailable);
@@ -193,48 +404,51 @@ int StartProcessLoopback(DWORD targetPID, PROCESS_LOOPBACK_MODE loopbackMode) {
 
     ComPtr<IAudioClient> pAudioClient = pActivator->m_pAudioClient;
 
-    WAVEFORMATEXTENSIBLE wfx = {};
-    wfx.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-    wfx.Format.nChannels = 2;
-    wfx.Format.nSamplesPerSec = 48000;
-    wfx.Format.wBitsPerSample = 32;
-    wfx.Format.nBlockAlign = 8;
-    wfx.Format.nAvgBytesPerSec = 48000 * 8;
-    wfx.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-    wfx.Samples.wValidBitsPerSample = 32;
-    wfx.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-    wfx.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+    WAVEFORMATEX* pMixFormat = nullptr;
+    hr = pAudioClient->GetMixFormat(&pMixFormat);
+    if (FAILED(hr) || !pMixFormat) {
+        pMixFormat = GetDefaultDeviceMixFormat();
+    }
+
+    if (!pMixFormat) {
+        std::cerr << "[WASAPI Capture] Failed to retrieve native mix format." << std::endl;
+        return -1;
+    }
 
     REFERENCE_TIME hnsBufferDuration = 200000; // 20ms
     hr = pAudioClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
-        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
         hnsBufferDuration,
         0,
-        (WAVEFORMATEX*)&wfx,
+        pMixFormat,
         NULL
     );
+
     if (FAILED(hr)) {
         hr = pAudioClient->Initialize(
             AUDCLNT_SHAREMODE_SHARED,
-            AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+            AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
             hnsBufferDuration,
             0,
-            (WAVEFORMATEX*)&wfx,
+            pMixFormat,
             NULL
         );
     }
 
     if (FAILED(hr)) {
         std::cerr << "[WASAPI Capture] IAudioClient Initialize failed: 0x" << std::hex << hr << std::endl;
+        CoTaskMemFree(pMixFormat);
         return -1;
     }
 
     HANDLE hAudioSamplesEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     pAudioClient->SetEventHandle(hAudioSamplesEvent);
 
-    int exitCode = RunCaptureLoop(pAudioClient.Get(), hAudioSamplesEvent);
+    int exitCode = RunCaptureLoop(pAudioClient.Get(), hAudioSamplesEvent, pMixFormat);
+
     CloseHandle(hAudioSamplesEvent);
+    CoTaskMemFree(pMixFormat);
     return exitCode;
 }
 
@@ -269,48 +483,51 @@ int StartClassicDefaultEndpointLoopback(DWORD zeroVCRootPID) {
         return 1;
     }
 
-    WAVEFORMATEXTENSIBLE wfx = {};
-    wfx.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-    wfx.Format.nChannels = 2;
-    wfx.Format.nSamplesPerSec = 48000;
-    wfx.Format.wBitsPerSample = 32;
-    wfx.Format.nBlockAlign = 8;
-    wfx.Format.nAvgBytesPerSec = 48000 * 8;
-    wfx.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-    wfx.Samples.wValidBitsPerSample = 32;
-    wfx.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-    wfx.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+    WAVEFORMATEX* pMixFormat = nullptr;
+    hr = pAudioClient->GetMixFormat(&pMixFormat);
+    if (FAILED(hr) || !pMixFormat) {
+        pMixFormat = GetDefaultDeviceMixFormat();
+    }
+
+    if (!pMixFormat) {
+        std::cerr << "[WASAPI Capture] Failed to retrieve native mix format." << std::endl;
+        return 1;
+    }
 
     REFERENCE_TIME hnsBufferDuration = 200000; // 20ms
     hr = pAudioClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
-        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
         hnsBufferDuration,
         0,
-        (WAVEFORMATEX*)&wfx,
+        pMixFormat,
         NULL
     );
+
     if (FAILED(hr)) {
         hr = pAudioClient->Initialize(
             AUDCLNT_SHAREMODE_SHARED,
-            AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+            AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
             hnsBufferDuration,
             0,
-            (WAVEFORMATEX*)&wfx,
+            pMixFormat,
             NULL
         );
     }
 
     if (FAILED(hr)) {
         std::cerr << "[WASAPI Capture] Initialize classic loopback failed: 0x" << std::hex << hr << std::endl;
+        CoTaskMemFree(pMixFormat);
         return 1;
     }
 
     HANDLE hAudioSamplesEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     pAudioClient->SetEventHandle(hAudioSamplesEvent);
 
-    int exitCode = RunCaptureLoop(pAudioClient.Get(), hAudioSamplesEvent);
+    int exitCode = RunCaptureLoop(pAudioClient.Get(), hAudioSamplesEvent, pMixFormat);
+
     CloseHandle(hAudioSamplesEvent);
+    CoTaskMemFree(pMixFormat);
     return exitCode;
 }
 
