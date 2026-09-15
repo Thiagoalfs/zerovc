@@ -35,6 +35,7 @@ import {
   Pencil,
   ArrowLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -2673,38 +2674,77 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       {/* MODAL 6: DELETE GUILD */}
       {isDeleteModalOpen && (
         <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsDeleteModalOpen(false);
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+          style={{ zIndex: 999999 }}
+          onClick={() => {
+            setIsDeleteModalOpen(false);
+            setDeleteConfirmText('');
+            setIsDeleteAcknowledged(false);
+            setDeleteError('');
           }}
-          style={{ zIndex: 99999 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-fade-in"
         >
-          <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-red-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2.5 rounded-xl bg-red-500/15 text-red-500">
-                <Trash2 className="w-6 h-6" />
+          <div
+            className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col text-gray-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-5 pb-3 flex-shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                  <span>Excluir servidor</span>
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeleteModalOpen(false);
+                    setDeleteConfirmText('');
+                    setIsDeleteAcknowledged(false);
+                    setDeleteError('');
+                  }}
+                  className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Excluir Servidor</h3>
-                <p className="text-xs text-gray-400">Esta ação é permanente e irreversível</p>
-              </div>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Tem certeza de que deseja excluir o servidor <span className="font-semibold text-white">"{activeGuild.name}"</span>? Esta ação não pode ser desfeita.
+              </p>
             </div>
 
-            <p className="text-xs text-gray-300 my-3 leading-relaxed">
-              Você tem certeza de que deseja excluir <strong>{activeGuild.name}</strong>? Todos os canais, mensagens, cargos e convites serão apagados permanentemente.
-            </p>
-
-            {deleteError && (
-              <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-2 animate-in fade-in">
-                <span>{deleteError}</span>
+            {/* Server Preview Box */}
+            <div className="px-4 sm:px-5 py-2 overflow-y-auto no-scrollbar flex-1">
+              <div className="bg-background-darkest/90 rounded-2xl p-3 border border-white/5 shadow-inner flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-brand-500 flex items-center justify-center font-bold text-white text-sm flex-shrink-0 overflow-hidden shadow-md">
+                  {activeGuild.icon_url ? (
+                    <img
+                      src={formatAssetUrl(activeGuild.icon_url)}
+                      alt={activeGuild.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{initials}</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-xs text-white truncate">
+                    {activeGuild.name}
+                  </div>
+                  <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                    {members.length} membro(s) • {(activeGuild.channels || []).length} canal(is)
+                  </div>
+                </div>
               </div>
-            )}
 
-            <form onSubmit={handleConfirmDeleteGuild} className="space-y-4">
-              <div className="space-y-1.5">
+              {deleteError && (
+                <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs">
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="mt-4 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                    Digite o nome do servidor:
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 font-mono">
+                    DIGITE O NOME DO SERVIDOR
                   </label>
                   <button
                     type="button"
@@ -2712,9 +2752,9 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       setDeleteConfirmText(activeGuild.name);
                       setDeleteError('');
                     }}
-                    className="text-[11px] text-brand-400 hover:text-brand-300 underline cursor-pointer"
+                    className="text-[11px] text-brand-400 hover:text-brand-300 hover:underline cursor-pointer"
                   >
-                    Preencher nome
+                    Preencher
                   </button>
                 </div>
                 <input
@@ -2726,52 +2766,65 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   }}
                   placeholder={activeGuild.name}
                   autoFocus
-                  className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-red-500 transition-colors"
+                  className="w-full px-3 py-2 bg-background-darkest/90 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-red-500 transition-colors"
                 />
               </div>
 
-              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+              <div className="mt-3 flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/5">
                 <input
                   type="checkbox"
-                  id="delete-confirm-check"
+                  id="delete-server-ack"
                   checked={isDeleteAcknowledged}
                   onChange={(e) => {
                     setIsDeleteAcknowledged(e.target.checked);
                     if (deleteError) setDeleteError('');
                   }}
-                  className="w-4 h-4 rounded border-gray-700 bg-background-darkest text-red-600 focus:ring-red-500 cursor-pointer shrink-0"
+                  className="w-4 h-4 rounded border-gray-600 bg-background-darkest text-red-600 focus:ring-red-500 cursor-pointer shrink-0"
                 />
                 <label
-                  htmlFor="delete-confirm-check"
+                  htmlFor="delete-server-ack"
                   className="text-xs text-gray-300 cursor-pointer select-none leading-tight"
                 >
-                  Estou ciente de que esta ação é permanente e irreversível.
+                  Estou ciente de que todos os canais e mensagens serão excluídos permanentemente.
                 </label>
               </div>
+            </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDeleteModalOpen(false);
-                    setDeleteConfirmText('');
-                    setIsDeleteAcknowledged(false);
-                    setDeleteError('');
-                  }}
-                  className="px-4 py-2.5 text-gray-400 hover:text-white text-xs font-medium cursor-pointer rounded-xl hover:bg-white/5 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isDeleting}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-600/30 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>{isDeleting ? 'Excluindo Servidor...' : 'Excluir Servidor'}</span>
-                </button>
-              </div>
-            </form>
+            {/* Footer */}
+            <div className="p-5 pt-3 bg-background-darkest/60 border-t border-white/5 flex items-center justify-end gap-3 mt-2 flex-shrink-0">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setDeleteConfirmText('');
+                  setIsDeleteAcknowledged(false);
+                  setDeleteError('');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-gray-300 hover:text-white hover:underline transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDeleteGuild}
+                className="bg-dnd hover:bg-red-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-red-500/20 flex items-center gap-2 cursor-pointer"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Excluir Servidor</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
