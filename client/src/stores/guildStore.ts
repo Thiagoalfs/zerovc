@@ -30,7 +30,7 @@ interface GuildState {
   createGuild: (name: string, iconUrl?: string) => Promise<Guild>;
   updateGuild: (guildId: string, data: { name?: string; icon_url?: string; banner_url?: string; system_channel_id?: string; clear_system_channel?: boolean }) => Promise<void>;
   transferOwnership: (guildId: string, newOwnerId: string) => Promise<void>;
-  deleteGuild: (guildId: string) => Promise<void>;
+  deleteGuild: (guildId: string, code?: string) => Promise<void>;
   leaveGuild: (guildId: string) => Promise<void>;
   toggleMuteGuild: (guildId: string) => Promise<void>;
   markGuildAsRead: (guildId: string) => void;
@@ -304,8 +304,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     });
   },
 
-  deleteGuild: async (guildId: string) => {
-    await api.guilds.delete(guildId);
+  deleteGuild: async (guildId: string, code?: string) => {
+    await api.guilds.delete(guildId, code);
     set((state) => {
       const guilds = state.guilds.filter((g) => g.id !== guildId);
       const activeGuild = state.activeGuild?.id === guildId ? null : state.activeGuild;

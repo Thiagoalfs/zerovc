@@ -272,6 +272,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleteAcknowledged, setIsDeleteAcknowledged] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
@@ -295,6 +296,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       }
       if (isDeleteModalOpen) {
         setIsDeleteModalOpen(false);
+        setTwoFactorCode('');
         return true;
       }
       if (isTransferModalOpen) {
@@ -841,13 +843,19 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       return;
     }
 
+    if (user?.two_factor_enabled && !twoFactorCode.trim()) {
+      setDeleteError('Por favor, digite seu código de autenticação 2FA (TOTP ou código de backup).');
+      return;
+    }
+
     setIsDeleting(true);
     setDeleteError('');
     try {
-      await deleteGuild(activeGuild.id);
+      await deleteGuild(activeGuild.id, twoFactorCode.trim() || undefined);
       setIsDeleteModalOpen(false);
       setDeleteConfirmText('');
       setIsDeleteAcknowledged(false);
+      setTwoFactorCode('');
       onClose();
       useGuildStore.getState().handleGuildDeleteEvent(activeGuild.id);
     } catch (err: any) {
@@ -2680,6 +2688,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             setIsDeleteModalOpen(false);
             setDeleteConfirmText('');
             setIsDeleteAcknowledged(false);
+            setTwoFactorCode('');
             setDeleteError('');
           }}
         >
@@ -2699,6 +2708,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     setIsDeleteModalOpen(false);
                     setDeleteConfirmText('');
                     setIsDeleteAcknowledged(false);
+                    setTwoFactorCode('');
                     setDeleteError('');
                   }}
                   className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
@@ -2750,7 +2760,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     type="button"
                     onClick={() => {
                       setDeleteConfirmText(activeGuild.name);
-                      setDeleteError('');
+                      if (deleteError) setDeleteError('');
                     }}
                     className="text-[11px] text-brand-400 hover:text-brand-300 hover:underline cursor-pointer"
                   >
@@ -2769,6 +2779,33 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   className="w-full px-3 py-2 bg-background-darkest/90 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-red-500 transition-colors"
                 />
               </div>
+
+              {Boolean(user?.two_factor_enabled) && (
+                <div className="mt-4 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 font-mono flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-brand-400" />
+                      <span>CÓDIGO DE AUTENTICAÇÃO (2FA)</span>
+                    </label>
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={10}
+                    value={twoFactorCode}
+                    onChange={(e) => {
+                      setTwoFactorCode(e.target.value);
+                      if (deleteError) setDeleteError('');
+                    }}
+                    placeholder="Código de 6 dígitos ou backup"
+                    className="w-full px-3 py-2 bg-background-darkest/90 border border-white/10 rounded-xl text-white text-xs font-mono tracking-wider focus:outline-none focus:border-brand-500 transition-colors placeholder:font-sans placeholder:tracking-normal"
+                  />
+                  <p className="text-[10px] text-gray-400">
+                    Insira o código do seu aplicativo autenticador (Google Authenticator, Authy, etc.) ou um código de backup.
+                  </p>
+                </div>
+              )}
 
               <div className="mt-3 flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/5">
                 <input
@@ -2799,6 +2836,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   setIsDeleteModalOpen(false);
                   setDeleteConfirmText('');
                   setIsDeleteAcknowledged(false);
+                  setTwoFactorCode('');
                   setDeleteError('');
                 }}
                 className="px-4 py-2 text-xs font-semibold text-gray-300 hover:text-white hover:underline transition-all cursor-pointer disabled:opacity-50"
@@ -2808,7 +2846,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
               <button
                 type="button"
-                disabled={isDeleting}
+                disabled={isDeleting || (Boolean(user?.two_factor_enabled) && !twoFactorCode.trim())}
                 onClick={handleConfirmDeleteGuild}
                 className="bg-dnd hover:bg-red-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-red-500/20 flex items-center gap-2 cursor-pointer"
               >

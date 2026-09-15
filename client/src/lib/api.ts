@@ -223,10 +223,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ new_owner_id: newOwnerId }),
       }),
-    delete: (id: string) =>
-      request<{ success: boolean; guild_id: string }>(`/guilds/${id}`, {
-        method: 'DELETE',
-      }),
+    delete: (id: string, code?: string) =>
+      request<{ success: boolean; guild_id: string }>(
+        `/guilds/${id}${code ? `?code=${encodeURIComponent(code)}` : ''}`,
+        {
+          method: 'DELETE',
+          headers: code ? { 'X-2FA-Code': code } : undefined,
+        }
+      ),
     join: (id: string) =>
       request<{ success: boolean }>(`/guilds/${id}/join`, {
         method: 'POST',

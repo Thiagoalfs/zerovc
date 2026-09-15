@@ -934,6 +934,52 @@ func (h *GuildHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if owner has 2FA enabled
+	var twoFactorSecret string
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&twoFactorSecret)
+	if err == nil && twoFactorSecret != "" {
+		code := strings.TrimSpace(r.Header.Get("X-2FA-Code"))
+		if code == "" {
+			code = strings.TrimSpace(r.URL.Query().Get("code"))
+		}
+		if code == "" && r.Body != nil {
+			var bodyReq struct {
+				Code string `json:"code"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&bodyReq)
+			code = strings.TrimSpace(bodyReq.Code)
+		}
+
+		if code == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPreconditionRequired)
+			json.NewEncoder(w).Encode(map[string]any{
+				"error":        "2fa_required",
+				"requires_2fa": true,
+				"message":      "Autenticação de dois fatores (2FA) necessária para excluir o servidor.",
+			})
+			return
+		}
+
+		cleanCode := strings.TrimSpace(code)
+		totpValid := auth.VerifyTOTPCode(twoFactorSecret, cleanCode)
+		if !totpValid {
+			backupHash := auth.HashBackupCode(cleanCode)
+			var backupID uuid.UUID
+			err := h.db.Pool.QueryRow(r.Context(), `
+				SELECT id FROM user_2fa_backup_codes
+				WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+			`, userID, backupHash).Scan(&backupID)
+
+			if err == nil {
+				h.db.Pool.Exec(r.Context(), `UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1`, backupID)
+			} else {
+				http.Error(w, `{"error":"código de 2fa inválido ou expirado"}`, http.StatusUnauthorized)
+				return
+			}
+		}
+	}
+
 	// Broadcast GUILD_DELETE to all connected members before deleting
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: "GUILD_DELETE",
