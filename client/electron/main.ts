@@ -648,7 +648,7 @@ if (!gotTheLock) {
   });
 }
 
-ipcMain.handle('start-process-audio-capture', async () => {
+ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => {
   if (process.platform !== 'win32') {
     return { success: false, error: 'WASAPI capture is only supported on Windows' };
   }
@@ -668,8 +668,19 @@ ipcMain.handle('start-process-audio-capture', async () => {
   }
 
   try {
-    const args = ['--zerovc-pid', process.pid.toString()];
-    console.log('[AudioCapture] Spawning native WASAPI audio capture with ZeroVC exclusion:', binPath, args);
+    const args: string[] = ['--zerovc-pid', process.pid.toString()];
+
+    if (options?.sourceId && options.sourceId.startsWith('window:')) {
+      const parts = options.sourceId.split(':');
+      const hwndStr = parts[1];
+      if (hwndStr) {
+        args.push('--hwnd', hwndStr, '--mode', 'include');
+      }
+    } else {
+      args.push('--mode', 'exclude');
+    }
+
+    console.log('[AudioCapture] Spawning native WASAPI audio capture:', binPath, args);
 
     const child = spawn(binPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],

@@ -34,7 +34,7 @@ export interface ElectronAPI {
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
   onRepoUpdateAvailable?: (callback: (info: any) => void) => () => void;
-  startProcessAudioCapture?: () => Promise<{ success: boolean; error?: string }>;
+  startProcessAudioCapture?: (options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => Promise<{ success: boolean; error?: string }>;
   stopProcessAudioCapture?: () => Promise<{ success: boolean; error?: string }>;
   onProcessAudioChunk?: (callback: (chunk: Uint8Array) => void) => () => void;
   setMinimizeToTray?: (enabled: boolean) => void;

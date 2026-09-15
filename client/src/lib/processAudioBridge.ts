@@ -72,7 +72,7 @@ export class ProcessAudioBridge {
   private unsubscribeChunk: (() => void) | null = null;
   private isCapturing = false;
 
-  async startCapture(): Promise<MediaStreamTrack | null> {
+  async startCapture(sourceId?: string): Promise<MediaStreamTrack | null> {
     if (typeof window === 'undefined' || !(window as any).electronAPI?.startProcessAudioCapture) {
       console.warn('[ProcessAudioBridge] Electron process capture not available in this environment');
       return null;
@@ -82,7 +82,11 @@ export class ProcessAudioBridge {
     await this.stopCapture();
 
     try {
-      const result = await (window as any).electronAPI.startProcessAudioCapture();
+      const mode: 'include' | 'exclude' = sourceId?.startsWith('window:') ? 'include' : 'exclude';
+      const result = await (window as any).electronAPI.startProcessAudioCapture({
+        sourceId,
+        mode,
+      });
 
       if (!result.success) {
         console.error('[ProcessAudioBridge] Failed to start native capture:', result.error);

@@ -3,6 +3,8 @@
 #include <windows.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <audiopolicy.h>
+#include <tlhelp32.h>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -292,6 +294,75 @@ public:
     }
 };
 
+DWORD GetRealProcessIdFromWindow(HWND hwnd) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == 0) return 0;
+
+    // If UWP ApplicationFrameHost, inspect child CoreWindow
+    HWND child = FindWindowExW(hwnd, NULL, L"Windows.UI.Core.CoreWindow", NULL);
+    if (child) {
+        DWORD childPid = 0;
+        GetWindowThreadProcessId(child, &childPid);
+        if (childPid != 0) return childPid;
+    }
+    return pid;
+}
+
+DWORD FindZeroVCAudioSessionPID(DWORD rootPID) {
+    CComPtr<IMMDeviceEnumerator> pEnumerator;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&pEnumerator);
+    if (FAILED(hr) || !pEnumerator) return rootPID;
+
+    CComPtr<IMMDevice> pDevice;
+    hr = pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
+    if (FAILED(hr) || !pDevice) return rootPID;
+
+    CComPtr<IAudioSessionManager2> pSessionManager;
+    hr = pDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**)&pSessionManager);
+    if (FAILED(hr) || !pSessionManager) return rootPID;
+
+    CComPtr<IAudioSessionEnumerator> pSessionList;
+    hr = pSessionManager->GetSessionEnumerator(&pSessionList);
+    if (FAILED(hr) || !pSessionList) return rootPID;
+
+    int sessionCount = 0;
+    pSessionList->GetCount(&sessionCount);
+
+    std::vector<DWORD> zeroVCPIDs;
+    zeroVCPIDs.push_back(rootPID);
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnap != INVALID_HANDLE_VALUE) {
+        PROCESSENTRY32W pe32 = { sizeof(PROCESSENTRY32W) };
+        if (Process32FirstW(hSnap, &pe32)) {
+            do {
+                if (pe32.th32ParentProcessID == rootPID) {
+                    zeroVCPIDs.push_back(pe32.th32ProcessID);
+                }
+            } while (Process32NextW(hSnap, &pe32));
+        }
+        CloseHandle(hSnap);
+    }
+
+    for (int i = 0; i < sessionCount; i++) {
+        CComPtr<IAudioSessionControl> pControl;
+        if (SUCCEEDED(pSessionList->GetSession(i, &pControl)) && pControl) {
+            CComPtr<IAudioSessionControl2> pControl2;
+            if (SUCCEEDED(pControl->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&pControl2)) && pControl2) {
+                DWORD sessionPid = 0;
+                pControl2->GetProcessId(&sessionPid);
+                for (DWORD p : zeroVCPIDs) {
+                    if (sessionPid == p) {
+                        std::cerr << "[WASAPI Capture] Found active ZeroVC audio session PID: " << sessionPid << std::endl;
+                        return sessionPid;
+                    }
+                }
+            }
+        }
+    }
+    return rootPID;
+}
+
 WAVEFORMATEX* GetDefaultDeviceMixFormat() {
     CComPtr<IMMDeviceEnumerator> pEnumerator;
     HRESULT hr = CoCreateInstance(
@@ -369,7 +440,7 @@ int RunCaptureLoop(IAudioClient* pAudioClient, HANDLE hAudioSamplesEvent, const 
     return 0;
 }
 
-int StartProcessLoopback(DWORD zeroVCPID) {
+int StartProcessLoopback(DWORD targetPID, PROCESS_LOOPBACK_MODE loopbackMode) {
     HMODULE hMmdevapi = LoadLibraryW(L"mmdevapi.dll");
     if (!hMmdevapi) {
         std::cerr << "[WASAPI Capture] mmdevapi.dll not available." << std::endl;
@@ -385,8 +456,8 @@ int StartProcessLoopback(DWORD zeroVCPID) {
 
     AUDIOCLIENT_ACTIVATION_PARAMS params = {};
     params.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
-    params.ProcessLoopbackParams.TargetProcessId = zeroVCPID;
-    params.ProcessLoopbackParams.ProcessLoopbackMode = PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE;
+    params.ProcessLoopbackParams.TargetProcessId = targetPID;
+    params.ProcessLoopbackParams.ProcessLoopbackMode = loopbackMode;
 
     PROPVARIANT activateParams = {};
     activateParams.vt = VT_BLOB;
@@ -562,13 +633,36 @@ int main(int argc, char* argv[]) {
     SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 
     DWORD zeroVCPID = 0;
+    DWORD targetPID = 0;
+    bool isIncludeMode = false;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
-        if ((arg == "--zerovc-pid" || arg == "--pid") && i + 1 < argc) {
+        if (arg == "--zerovc-pid" && i + 1 < argc) {
             try {
                 zeroVCPID = (DWORD)std::stoul(argv[++i]);
             } catch (...) {}
+        } else if (arg == "--pid" && i + 1 < argc) {
+            try {
+                targetPID = (DWORD)std::stoul(argv[++i]);
+            } catch (...) {}
+        } else if (arg == "--hwnd" && i + 1 < argc) {
+            try {
+                std::string hwndStr = argv[++i];
+                HWND hwnd = (HWND)(uintptr_t)std::stoull(hwndStr, nullptr, 0);
+                DWORD pid = GetRealProcessIdFromWindow(hwnd);
+                if (pid != 0) {
+                    targetPID = pid;
+                    std::cerr << "[WASAPI Capture] Resolved HWND " << hwndStr << " to PID: " << targetPID << std::endl;
+                }
+            } catch (...) {}
+        } else if (arg == "--mode" && i + 1 < argc) {
+            std::string modeStr = argv[++i];
+            if (modeStr == "include") {
+                isIncludeMode = true;
+            } else {
+                isIncludeMode = false;
+            }
         }
     }
 
@@ -582,11 +676,29 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::cerr << "[WASAPI Capture] Initializing EXCLUDE mode for ZeroVC PID: " << zeroVCPID << std::endl;
-    int exitCode = StartProcessLoopback(zeroVCPID);
-    if (exitCode == -1) {
-        std::cerr << "[WASAPI Capture] Process loopback EXCLUDE failed, falling back to classic loopback." << std::endl;
-        exitCode = StartClassicDefaultEndpointLoopback();
+    int exitCode = 0;
+
+    if (isIncludeMode && targetPID != 0) {
+        // --- 1. WINDOW SPECIFIC CAPTURE (AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK + INCLUDE) ---
+        std::cerr << "[WASAPI Capture] Mode: INCLUDE Target Process PID: " << targetPID << std::endl;
+        exitCode = StartProcessLoopback(targetPID, PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE);
+        if (exitCode == -1) {
+            std::cerr << "[WASAPI Capture] Window process loopback failed, falling back to full screen exclude mode." << std::endl;
+            DWORD excludePID = FindZeroVCAudioSessionPID(zeroVCPID);
+            exitCode = StartProcessLoopback(excludePID, PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE);
+            if (exitCode == -1) {
+                exitCode = StartClassicDefaultEndpointLoopback();
+            }
+        }
+    } else {
+        // --- 2. FULL SCREEN CAPTURE (PROCESS LOOPBACK EXCLUDE ZEROVC AUDIO TREE) ---
+        DWORD excludePID = FindZeroVCAudioSessionPID(zeroVCPID);
+        std::cerr << "[WASAPI Capture] Mode: EXCLUDE ZeroVC PID: " << excludePID << " (Root: " << zeroVCPID << ")" << std::endl;
+        exitCode = StartProcessLoopback(excludePID, PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE);
+        if (exitCode == -1) {
+            std::cerr << "[WASAPI Capture] Process loopback EXCLUDE failed, falling back to classic loopback." << std::endl;
+            exitCode = StartClassicDefaultEndpointLoopback();
+        }
     }
 
     CoUninitialize();

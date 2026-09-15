@@ -602,8 +602,8 @@ class LiveKitManager {
         if (shouldIncludeAudio) {
           let audioTrack: MediaStreamTrack | null = null;
           try {
-            // Attempt native WASAPI process loopback capture with ZeroVC process tree exclusion
-            audioTrack = await processAudioBridge.startCapture();
+            // Attempt native WASAPI process loopback capture (Window include mode or Desktop with ZeroVC exclusion)
+            audioTrack = await processAudioBridge.startCapture(sourceId);
           } catch (bridgeErr) {
             console.warn('[LiveKit] WASAPI process audio bridge failed, falling back to Chromium loopback:', bridgeErr);
           }
