@@ -7,6 +7,7 @@ import {
   Participant,
   DisconnectReason,
 } from 'livekit-client';
+import { processAudioBridge } from './processAudioBridge';
 
 export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
 
@@ -541,47 +542,22 @@ class LiveKitManager {
 
       if (sourceId && (window as any).electronAPI) {
         // Electron Screen Capture API with Hardware Accelerated capture & Flexible Framerate constraints
-        // We capture video stream from desktopCapturer sourceId with native Chromium desktop audio
-        let stream: MediaStream;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: shouldIncludeAudio
-              ? ({
-                  // @ts-ignore
-                  mandatory: {
-                    chromeMediaSource: 'desktop',
-                  },
-                } as any)
-              : false,
-            video: {
-              // @ts-ignore
-              mandatory: {
-                chromeMediaSource: 'desktop',
-                chromeMediaSourceId: sourceId,
-                maxWidth: dims.width,
-                maxHeight: dims.height,
-                maxFrameRate: frameRate,
-              },
+        // 1. Capture clean video stream from desktopCapturer sourceId
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            // @ts-ignore
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: sourceId,
+              maxWidth: dims.width,
+              maxHeight: dims.height,
+              maxFrameRate: frameRate,
             },
-          });
-        } catch (captureErr) {
-          console.warn('[LiveKit] Desktop capture with audio constraint failed, retrying video-only:', captureErr);
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              // @ts-ignore
-              mandatory: {
-                chromeMediaSource: 'desktop',
-                chromeMediaSourceId: sourceId,
-                maxWidth: dims.width,
-                maxHeight: dims.height,
-                maxFrameRate: frameRate,
-              },
-            },
-          });
-        }
+          },
+        });
 
-        // Register tracks for cleanup
+        // Register video tracks for cleanup
         stream.getTracks().forEach((t) => this.activeMediaStreamTracks.add(t));
 
         const videoTrack = stream.getVideoTracks()[0];
@@ -622,27 +598,66 @@ class LiveKitManager {
           console.error('[LiveKit] Failed to publish screen share track:', pubErr);
         }
 
-        // Publish captured system audio natively via Chromium desktop audio
-        const audioTracks = stream.getAudioTracks();
-        if (audioTracks.length > 0) {
-          const audioTrack = audioTracks[0];
+        // 2. Audio Capture with ZeroVC Voice Exclusion (Option 1) + Transparent Fallback
+        if (shouldIncludeAudio) {
+          let audioTrack: MediaStreamTrack | null = null;
           try {
+            // Attempt native WASAPI process loopback capture with ZeroVC process tree exclusion
+            audioTrack = await processAudioBridge.startCapture();
+          } catch (bridgeErr) {
+            console.warn('[LiveKit] WASAPI process audio bridge failed, falling back to Chromium loopback:', bridgeErr);
+          }
+
+          // Fallback to Chromium desktop loopback audio if native WASAPI bridge was unavailable
+          if (!audioTrack) {
+            try {
+              const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                audio: ({
+                  // @ts-ignore
+                  mandatory: {
+                    chromeMediaSource: 'desktop',
+                  },
+                } as any),
+                video: ({
+                  // @ts-ignore
+                  mandatory: {
+                    chromeMediaSource: 'desktop',
+                    chromeMediaSourceId: sourceId,
+                    maxWidth: 128,
+                    maxHeight: 128,
+                    maxFrameRate: 5,
+                  },
+                } as any),
+              });
+              const fTracks = fallbackStream.getAudioTracks();
+              if (fTracks.length > 0) {
+                audioTrack = fTracks[0];
+                fallbackStream.getVideoTracks().forEach((t) => t.stop());
+              }
+            } catch (fallbackErr) {
+              console.warn('[LiveKit] Fallback audio capture also failed:', fallbackErr);
+            }
+          }
+
+          if (audioTrack) {
+            this.activeMediaStreamTracks.add(audioTrack);
             audioTrack.onended = () => {
               const audioPub = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
               if (audioPub?.track) {
                 this.room?.localParticipant.unpublishTrack(audioPub.track);
               }
             };
-            await this.room.localParticipant.publishTrack(audioTrack, {
-              name: 'screen_share_audio',
-              source: Track.Source.ScreenShareAudio,
-              audioPreset: AudioPresets.musicHighQualityStereo,
-              dtx: false,
-              red: false,
-            });
-            void this.setCallAudioRoutingForCapture(true);
-          } catch (audioErr) {
-            console.error('[LiveKit] Error publishing native screen share audio track:', audioErr);
+            try {
+              await this.room.localParticipant.publishTrack(audioTrack, {
+                name: 'screen_share_audio',
+                source: Track.Source.ScreenShareAudio,
+                audioPreset: AudioPresets.musicHighQualityStereo,
+                dtx: false,
+                red: false,
+              });
+            } catch (audioErr) {
+              console.error('[LiveKit] Error publishing screen share audio track:', audioErr);
+            }
           }
         }
 
@@ -757,6 +772,7 @@ class LiveKitManager {
         this.room.localParticipant.unpublishTrack(screenAudioPub.track);
       }
 
+      void processAudioBridge.stopCapture();
       void this.setCallAudioRoutingForCapture(false);
     }
 
@@ -899,6 +915,7 @@ class LiveKitManager {
     this.attachedAudioElements.clear();
     this.attachedUserAudioElements.clear();
     this.attachedStreamAudioElements.clear();
+    void processAudioBridge.stopCapture();
     void this.setCallAudioRoutingForCapture(false);
 
     // Stop and unpublish all local tracks

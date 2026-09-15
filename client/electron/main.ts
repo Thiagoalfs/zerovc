@@ -1,6 +1,11 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { spawn, ChildProcess } from 'child_process';
+
+app.name = 'ZeroVC';
+process.title = 'ZeroVC';
+app.setAppUserModelId('com.zerovc.app');
 
 let autoUpdater: any = null;
 try {
@@ -643,12 +648,113 @@ if (!gotTheLock) {
   });
 }
 
+ipcMain.handle('start-process-audio-capture', async () => {
+  if (process.platform !== 'win32') {
+    return { success: false, error: 'WASAPI capture is only supported on Windows' };
+  }
+
+  if (activeAudioProcess) {
+    try {
+      activeAudioProcess.kill();
+    } catch {}
+    activeAudioProcess = null;
+  }
+  activeAudioBuffer = Buffer.alloc(0);
+
+  const binPath = getAudioCaptureBinaryPath();
+  if (!fs.existsSync(binPath)) {
+    console.error('[AudioCapture] Binary not found at:', binPath);
+    return { success: false, error: `Capture binary not found at ${binPath}` };
+  }
+
+  try {
+    const args = ['--zerovc-pid', process.pid.toString()];
+    console.log('[AudioCapture] Spawning native WASAPI audio capture with ZeroVC exclusion:', binPath, args);
+
+    const child = spawn(binPath, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+
+    activeAudioProcess = child;
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      activeAudioBuffer = Buffer.concat([activeAudioBuffer, chunk]);
+      while (activeAudioBuffer.length >= AUDIO_CHUNK_BYTES) {
+        const packet = activeAudioBuffer.subarray(0, AUDIO_CHUNK_BYTES);
+        activeAudioBuffer = activeAudioBuffer.subarray(AUDIO_CHUNK_BYTES);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('process-audio-chunk', packet);
+        }
+      }
+    });
+
+    child.stderr.on('data', (data) => {
+      console.log(`[AudioCapture Native] ${data.toString().trim()}`);
+    });
+
+    child.on('close', (code) => {
+      console.log(`[AudioCapture] Process exited with code ${code}`);
+      if (activeAudioProcess === child) {
+        activeAudioProcess = null;
+      }
+    });
+
+    child.on('error', (err) => {
+      console.error('[AudioCapture] Process spawn error:', err);
+      if (activeAudioProcess === child) {
+        activeAudioProcess = null;
+      }
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('[AudioCapture] Failed to start native capture:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('stop-process-audio-capture', async () => {
+  if (activeAudioProcess) {
+    try {
+      activeAudioProcess.kill();
+    } catch {}
+    activeAudioProcess = null;
+  }
+  activeAudioBuffer = Buffer.alloc(0);
+  return { success: true };
+});
+
+let activeAudioProcess: ChildProcess | null = null;
+let activeAudioBuffer = Buffer.alloc(0);
+const AUDIO_CHUNK_BYTES = 3840; // 480 frames * 2 channels * 4 bytes (Float32) = 10ms at 48kHz
+
+function getAudioCaptureBinaryPath(): string {
+  const binaryName = 'zerovc-audio-capture.exe';
+  const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'dist-electron', 'bin', binaryName);
+  if (fs.existsSync(unpackedPath)) return unpackedPath;
+
+  const distBinPath = path.join(__dirname, 'bin', binaryName);
+  if (fs.existsSync(distBinPath)) return distBinPath;
+
+  const electronBinPath = path.join(__dirname, '..', 'electron', 'bin', binaryName);
+  if (fs.existsSync(electronBinPath)) return electronBinPath;
+
+  return distBinPath;
+}
+
 app.on('before-quit', () => {
   isQuitting = true;
 });
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  if (activeAudioProcess) {
+    try {
+      activeAudioProcess.kill();
+    } catch {}
+    activeAudioProcess = null;
+  }
   if (tray) {
     tray.destroy();
     tray = null;

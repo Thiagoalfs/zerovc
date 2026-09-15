@@ -39,6 +39,9 @@ export interface ElectronAPI {
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
   onRepoUpdateAvailable: (callback: (info: any) => void) => () => void;
+  startProcessAudioCapture: () => Promise<{ success: boolean; error?: string }>;
+  stopProcessAudioCapture: () => Promise<{ success: boolean; error?: string }>;
+  onProcessAudioChunk: (callback: (chunk: Uint8Array) => void) => () => void;
   setMinimizeToTray: (enabled: boolean) => void;
   getMinimizeToTray: () => Promise<boolean>;
   setAutoStart: (enabled: boolean) => void;
@@ -56,6 +59,13 @@ export interface ElectronAPI {
 const electronAPI: ElectronAPI = {
   isElectron: true,
   platform: process.platform,
+  startProcessAudioCapture: () => ipcRenderer.invoke('start-process-audio-capture'),
+  stopProcessAudioCapture: () => ipcRenderer.invoke('stop-process-audio-capture'),
+  onProcessAudioChunk: (callback) => {
+    const handler = (_: any, chunk: Uint8Array) => callback(chunk);
+    ipcRenderer.on('process-audio-chunk', handler);
+    return () => ipcRenderer.removeListener('process-audio-chunk', handler);
+  },
   getGpuInfo: () => ipcRenderer.invoke('get-gpu-info'),
   setFullScreen: (flag: boolean) => ipcRenderer.send('window-set-fullscreen', flag),
   isFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
