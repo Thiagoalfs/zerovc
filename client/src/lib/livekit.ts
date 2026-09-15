@@ -377,8 +377,16 @@ class LiveKitManager {
   }
 
   async setMuted(muted: boolean) {
-    if (this.room) {
-      await this.setMicrophoneEnabled(!muted);
+    if (!this.room) return;
+    const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (micPub) {
+      if (muted) {
+        await micPub.mute();
+      } else {
+        await micPub.unmute();
+      }
+    } else if (!muted) {
+      await this.setMicrophoneEnabled(true);
     }
   }
 
@@ -390,7 +398,7 @@ class LiveKitManager {
         el.muted = deafened;
       });
       if (deafened) {
-        await this.room.localParticipant.setMicrophoneEnabled(false);
+        await this.setMuted(true);
       }
     }
   }
