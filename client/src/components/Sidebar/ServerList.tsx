@@ -158,41 +158,77 @@ export const ServerList: React.FC<ServerListProps> = ({
     setDragOverTarget({ id: targetId, type, position });
   };
 
-  const handleDrop = (e: React.DragEvent, targetId: string, type: 'guild' | 'folder') => {
+  const handleDrop = (
+    e: React.DragEvent,
+    targetId: string,
+    type: 'guild' | 'folder' | 'root',
+    targetFolderId?: string
+  ) => {
     e.preventDefault();
+    e.stopPropagation();
     const srcGuildId = draggedGuildId;
     setDraggedGuildId(null);
     setDragOverTarget(null);
 
-    if (!srcGuildId || srcGuildId === targetId) return;
+    if (!srcGuildId) return;
 
-    // 1. Dropped into / onto existing Folder
+    // Case 0: Dropped onto root area (outside any folder) -> pull out of folder if it was inside one
+    if (type === 'root' || !targetId) {
+      const cleanFolders = folders
+        .map((f) => ({
+          ...f,
+          guild_ids: f.guild_ids.filter((id) => id !== srcGuildId),
+        }))
+        .filter((f) => f.guild_ids.length > 1);
+
+      const currentList = orderedGuildIds.length > 0 ? [...orderedGuildIds] : guilds.map((g) => g.id);
+      const filtered = currentList.filter((id) => id !== srcGuildId);
+      filtered.push(srcGuildId);
+
+      syncFoldersAndPositions(cleanFolders, filtered);
+      return;
+    }
+
+    if (srcGuildId === targetId) return;
+
+    const srcFolder = guildToFolderMap.get(srcGuildId);
+
+    // 1. Dropped into / onto existing Folder Header
     if (type === 'folder' || (dragOverTarget?.position === 'center' && guildToFolderMap.has(targetId))) {
-      const targetFolder = type === 'folder' 
-        ? folders.find((f) => f.id === targetId) 
+      const targetFolder = type === 'folder'
+        ? folders.find((f) => f.id === targetId)
         : guildToFolderMap.get(targetId);
 
       if (targetFolder) {
-        // Remove srcGuild from any old folder
-        const cleanFolders = folders.map((f) => ({
-          ...f,
-          guild_ids: f.guild_ids.filter((id) => id !== srcGuildId),
-        }));
+        // Remove srcGuild from old folder if different
+        const cleanFolders = folders
+          .map((f) => ({
+            ...f,
+            guild_ids: f.guild_ids.filter((id) => id !== srcGuildId),
+          }))
+          .filter((f) => f.guild_ids.length > 1);
 
         // Add to target folder
         const updated = cleanFolders.map((f) =>
           f.id === targetFolder.id && !f.guild_ids.includes(srcGuildId)
             ? { ...f, guild_ids: [...f.guild_ids, srcGuildId], is_collapsed: false }
             : f
-        ).filter((f) => f.guild_ids.length > 0);
+        );
 
         syncFoldersAndPositions(updated, orderedGuildIds);
         return;
       }
     }
 
-    // 2. Dropped in center of another guild -> Create New Folder
+    // 2. Dropped in center of another standalone guild -> Create New Folder
     if (dragOverTarget?.position === 'center' && type === 'guild') {
+      const cleanFolders = folders
+        .map((f) => ({
+          ...f,
+          guild_ids: f.guild_ids.filter((id) => id !== srcGuildId && id !== targetId),
+        }))
+        .filter((f) => f.guild_ids.length > 1);
+
       const newFolder: ServerFolder = {
         id: `folder-${Date.now()}`,
         name: 'Pasta de Servidores',
@@ -200,23 +236,46 @@ export const ServerList: React.FC<ServerListProps> = ({
         is_collapsed: false,
       };
 
-      const cleanFolders = folders.map((f) => ({
-        ...f,
-        guild_ids: f.guild_ids.filter((id) => id !== srcGuildId && id !== targetId),
-      })).filter((f) => f.guild_ids.length > 0);
-
       syncFoldersAndPositions([...cleanFolders, newFolder], orderedGuildIds);
       return;
     }
 
-    // 3. Reorder list position
-    const currentList = guilds.map((g) => g.id);
+    // 3. Dropped top/bottom inside the SAME folder -> Reorder inside that folder
+    if (
+      srcFolder &&
+      targetFolderId &&
+      srcFolder.id === targetFolderId &&
+      (dragOverTarget?.position === 'top' || dragOverTarget?.position === 'bottom')
+    ) {
+      const folderGuilds = [...srcFolder.guild_ids.filter((id) => id !== srcGuildId)];
+      const targetIdx = folderGuilds.indexOf(targetId);
+      const insertIdx = dragOverTarget.position === 'bottom' ? targetIdx + 1 : Math.max(0, targetIdx);
+      folderGuilds.splice(insertIdx, 0, srcGuildId);
+
+      const updated = folders.map((f) =>
+        f.id === srcFolder.id ? { ...f, guild_ids: folderGuilds } : f
+      );
+      syncFoldersAndPositions(updated, orderedGuildIds);
+      return;
+    }
+
+    // 4. Dropped top/bottom of a standalone server OR outside folder -> Pull out of folder!
+    const cleanFolders = folders
+      .map((f) => ({
+        ...f,
+        guild_ids: f.guild_ids.filter((id) => id !== srcGuildId),
+      }))
+      .filter((f) => f.guild_ids.length > 1);
+
+    const currentList = orderedGuildIds.length > 0 ? [...orderedGuildIds] : guilds.map((g) => g.id);
     const filtered = currentList.filter((id) => id !== srcGuildId);
     const targetIdx = filtered.indexOf(targetId);
-    const insertIdx = dragOverTarget?.position === 'bottom' ? targetIdx + 1 : Math.max(0, targetIdx);
-    filtered.splice(insertIdx, 0, srcGuildId);
+    const insertIdx = targetIdx >= 0
+      ? (dragOverTarget?.position === 'bottom' ? targetIdx + 1 : Math.max(0, targetIdx))
+      : filtered.length;
 
-    syncFoldersAndPositions(folders, filtered);
+    filtered.splice(insertIdx, 0, srcGuildId);
+    syncFoldersAndPositions(cleanFolders, filtered);
   };
 
   const handleServerContextMenu = (e: React.MouseEvent, guild: (typeof guilds)[0]) => {
@@ -254,7 +313,7 @@ export const ServerList: React.FC<ServerListProps> = ({
                       ? { ...f, guild_ids: f.guild_ids.filter((id) => id !== guild.id) }
                       : f
                   )
-                  .filter((f) => f.guild_ids.length > 0);
+                  .filter((f) => f.guild_ids.length > 1);
                 syncFoldersAndPositions(updated, orderedGuildIds);
               },
             },
@@ -303,7 +362,7 @@ export const ServerList: React.FC<ServerListProps> = ({
     openContextMenu(e, items, guild.name);
   };
 
-  const renderGuildIcon = (guild: (typeof guilds)[0], inFolder = false) => {
+  const renderGuildIcon = (guild: (typeof guilds)[0], inFolder = false, parentFolderId?: string) => {
     const isActive = !isHomeActive && activeGuild?.id === guild.id;
     const mentionCount = guildMentions[guild.id] || 0;
     const hasUnread = guild.channels?.some((c) => unreadChannels.has(c.id));
@@ -315,6 +374,7 @@ export const ServerList: React.FC<ServerListProps> = ({
       .toUpperCase();
 
     const isOver = dragOverTarget?.id === guild.id;
+    const isCenterOver = isOver && dragOverTarget.position === 'center';
 
     return (
       <div
@@ -322,15 +382,15 @@ export const ServerList: React.FC<ServerListProps> = ({
         draggable
         onDragStart={(e) => handleDragStart(e, guild.id)}
         onDragOver={(e) => handleDragOver(e, guild.id, 'guild')}
-        onDrop={(e) => handleDrop(e, guild.id, 'guild')}
+        onDrop={(e) => handleDrop(e, guild.id, 'guild', parentFolderId)}
         className="relative group flex items-center justify-center"
       >
         {/* Drop Insertion Line (Top / Bottom) */}
         {isOver && dragOverTarget.position === 'top' && (
-          <div className="absolute -top-1.5 inset-x-2 h-1 bg-brand-400 rounded-full z-30 animate-pulse" />
+          <div className="absolute -top-1.5 inset-x-2 h-1 bg-brand-400 rounded-full z-30 animate-pulse shadow-md shadow-brand-500/50" />
         )}
         {isOver && dragOverTarget.position === 'bottom' && (
-          <div className="absolute -bottom-1.5 inset-x-2 h-1 bg-brand-400 rounded-full z-30 animate-pulse" />
+          <div className="absolute -bottom-1.5 inset-x-2 h-1 bg-brand-400 rounded-full z-30 animate-pulse shadow-md shadow-brand-500/50" />
         )}
 
         <button
@@ -342,14 +402,14 @@ export const ServerList: React.FC<ServerListProps> = ({
             }
           }}
           onContextMenu={(e) => handleServerContextMenu(e, guild)}
-          className={`relative group w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 font-semibold text-sm ${
-            isActive
+          className={`relative group w-12 h-12 flex items-center justify-center font-semibold text-sm transition-all duration-150 origin-center ${
+            isCenterOver
+              ? 'scale-[0.80] rounded-[18px] ring-2 ring-brand-400 bg-brand-500/40 shadow-inner'
+              : isActive
               ? 'rounded-[16px] bg-brand-500 text-white shadow-lg shadow-brand-500/30'
-              : isOver && dragOverTarget.position === 'center'
-              ? 'rounded-[16px] bg-brand-500/50 ring-2 ring-brand-400 scale-105'
               : inFolder
-              ? 'bg-background-darkest/90 hover:bg-brand-500 text-gray-200 hover:text-white'
-              : 'bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white'
+              ? 'rounded-[24px] hover:rounded-[16px] bg-background-darkest/90 hover:bg-brand-500 text-gray-200 hover:text-white'
+              : 'rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white'
           }`}
           title={guild.name}
         >
@@ -364,7 +424,7 @@ export const ServerList: React.FC<ServerListProps> = ({
             <img
               src={formatAssetUrl(guild.icon_url)}
               alt={guild.name}
-              className="w-full h-full object-cover rounded-[inherit]"
+              className="w-full h-full object-cover rounded-[inherit] transition-all duration-150"
             />
           ) : (
             <span>{initials}</span>
@@ -414,7 +474,17 @@ export const ServerList: React.FC<ServerListProps> = ({
         <div className="w-8 h-[2px] bg-white/10 rounded-full my-1" />
 
         {/* Guilds & Folders List */}
-        <div className="flex-1 w-full flex flex-col items-center gap-2 overflow-y-auto overflow-x-hidden no-scrollbar">
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+          }}
+          onDrop={(e) => {
+            if (draggedGuildId) {
+              handleDrop(e, '', 'root');
+            }
+          }}
+          className="flex-1 w-full flex flex-col items-center gap-2 overflow-y-auto overflow-x-hidden no-scrollbar pb-6"
+        >
           {displayItems.map((item) => {
             if (item.type === 'folder') {
               const folder = item.folder;
@@ -470,7 +540,7 @@ export const ServerList: React.FC<ServerListProps> = ({
                   {/* Expanded Server Items in Folder */}
                   {!isCollapsed && (
                     <div className="flex flex-col items-center gap-2 w-full animate-in fade-in slide-in-from-top-1">
-                      {folderGuilds.map((fg) => renderGuildIcon(fg, true))}
+                      {folderGuilds.map((fg) => renderGuildIcon(fg, true, folder.id))}
                     </div>
                   )}
                 </div>
