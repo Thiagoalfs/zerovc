@@ -827,15 +827,22 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
   const handleConfirmDeleteGuild = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (deleteConfirmText.trim() !== activeGuild.name.trim()) return;
+    if (!activeGuild) return;
+    if (deleteConfirmText.trim().toLowerCase() !== activeGuild.name.trim().toLowerCase()) {
+      setDeleteError('Por favor, digite o nome do servidor para confirmar.');
+      return;
+    }
 
     setIsDeleting(true);
     setDeleteError('');
     try {
       await deleteGuild(activeGuild.id);
       setIsDeleteModalOpen(false);
+      setDeleteConfirmText('');
       onClose();
+      useGuildStore.getState().handleGuildDeleteEvent(activeGuild.id);
     } catch (err: any) {
+      console.error('Failed to delete guild:', err);
       setDeleteError(err.message || 'Erro ao excluir servidor');
       setIsDeleting(false);
     }
@@ -2683,14 +2690,24 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
             <form onSubmit={handleConfirmDeleteGuild} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                  Digite o nome do servidor: <span className="text-white select-all">{activeGuild.name}</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+                    Digite o nome do servidor:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirmText(activeGuild.name)}
+                    className="text-[11px] text-brand-400 hover:text-brand-300 underline cursor-pointer"
+                  >
+                    Preencher automaticamente
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={deleteConfirmText}
                   onChange={(e) => setDeleteConfirmText(e.target.value)}
                   placeholder={activeGuild.name}
+                  autoFocus
                   className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-red-500"
                 />
               </div>
@@ -2698,14 +2715,18 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button
                   type="button"
-                  onClick={() => setIsDeleteModalOpen(false)}
+                  onClick={() => {
+                    setIsDeleteModalOpen(false);
+                    setDeleteConfirmText('');
+                    setDeleteError('');
+                  }}
                   className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={isDeleting || deleteConfirmText.trim() !== activeGuild.name.trim()}
+                  disabled={isDeleting || deleteConfirmText.trim().toLowerCase() !== activeGuild.name.trim().toLowerCase()}
                   className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isDeleting ? 'Excluindo...' : 'Excluir Servidor'}

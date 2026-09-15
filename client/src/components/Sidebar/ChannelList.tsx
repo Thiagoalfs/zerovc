@@ -80,6 +80,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     channelMentions,
     reorderChannels,
     deleteChannel,
+    deleteGuild,
     kickMember,
     banMember,
     muteMember,
@@ -891,6 +892,32 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     >
                       <span>Configurações do Servidor</span>
                       <Settings className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {isOwner && (
+                    <button
+                      onClick={async () => {
+                        setIsDropdownOpen(false);
+                        if (!activeGuild) return;
+                        const conf = window.prompt(
+                          `ATENÇÃO: A exclusão é permanente e irreversível!\nPara EXCLUIR o servidor "${activeGuild.name}", digite o nome dele abaixo:`
+                        );
+                        if (conf === null) return;
+                        if (conf.trim().toLowerCase() === activeGuild.name.trim().toLowerCase()) {
+                          try {
+                            await deleteGuild(activeGuild.id);
+                          } catch (err: any) {
+                            alert(err?.message || 'Erro ao excluir servidor');
+                          }
+                        } else {
+                          alert('Nome do servidor incorreto. A exclusão foi cancelada.');
+                        }
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer border-t border-white/5 pt-2"
+                    >
+                      <span>Excluir Servidor</span>
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
 
