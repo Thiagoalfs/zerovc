@@ -334,53 +334,30 @@ export const ServerList: React.FC<ServerListProps> = ({
         separator: true,
         label: '',
       },
-      ...(isOwner
-        ? [
-            {
-              id: 'delete-server',
-              label: 'Excluir Servidor',
-              icon: <Trash2 className="w-4 h-4 text-red-400" />,
-              variant: 'danger' as const,
-              onClick: async () => {
-                const conf = window.prompt(
-                  `ATENÇÃO: A exclusão é permanente e irreversível!\nPara EXCLUIR o servidor "${guild.name}", digite o nome dele abaixo:`
-                );
-                if (conf === null) return;
-                if (conf.trim().toLowerCase() === guild.name.trim().toLowerCase()) {
-                  try {
-                    await deleteGuild(guild.id);
-                    if (activeGuild?.id === guild.id) {
-                      onSelectHome();
-                    }
-                  } catch (err: any) {
-                    alert(err?.message || 'Erro ao excluir servidor');
-                  }
-                } else {
-                  alert('Nome do servidor incorreto. A exclusão foi cancelada.');
-                }
-              },
-            },
-          ]
-        : [
-            {
-              id: 'leave-server',
-              label: 'Sair do Servidor',
-              icon: <LogOut className="w-4 h-4" />,
-              variant: 'danger' as const,
-              onClick: async () => {
-                if (window.confirm(`Tem certeza que deseja sair do servidor "${guild.name}"?`)) {
-                  try {
-                    await leaveGuild(guild.id);
-                    if (activeGuild?.id === guild.id) {
-                      onSelectHome();
-                    }
-                  } catch (err: any) {
-                    alert(err?.message || 'Erro ao sair do servidor');
-                  }
-                }
-              },
-            },
-          ]),
+      {
+        id: 'leave-server',
+        label: isOwner ? 'Sair do Servidor (Dono)' : 'Sair do Servidor',
+        icon: <LogOut className="w-4 h-4" />,
+        variant: 'danger',
+        disabled: isOwner,
+        tooltip: isOwner ? 'Donos de servidor não podem sair sem antes transferir ou excluir o servidor nas configurações' : undefined,
+        onClick: async () => {
+          if (isOwner) {
+            alert('Você é o dono deste servidor. Transfira a posse ou exclua o servidor nas configurações.');
+            return;
+          }
+          if (window.confirm(`Tem certeza que deseja sair do servidor "${guild.name}"?`)) {
+            try {
+              await leaveGuild(guild.id);
+              if (activeGuild?.id === guild.id) {
+                onSelectHome();
+              }
+            } catch (err: any) {
+              alert(err?.message || 'Erro ao sair do servidor');
+            }
+          }
+        },
+      },
     ];
 
     openContextMenu(e, items, guild.name);

@@ -270,6 +270,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   // Delete Server Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleteAcknowledged, setIsDeleteAcknowledged] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
@@ -387,7 +388,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
   if (!isOpen || !activeGuild) return null;
 
-  const isOwner = activeGuild.owner_id === user?.id;
+  const isOwner = Boolean(
+    user?.id &&
+    activeGuild?.owner_id &&
+    String(user.id).toLowerCase() === String(activeGuild.owner_id).toLowerCase()
+  );
   const currentMember = (activeGuild.members || []).find((m) => m.id === user?.id);
   const currentUserRoles = currentMember?.roles || [];
   let currentUserPerms = 0;
@@ -825,11 +830,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     }
   };
 
-  const handleConfirmDeleteGuild = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleConfirmDeleteGuild = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!activeGuild) return;
-    if (deleteConfirmText.trim().toLowerCase() !== activeGuild.name.trim().toLowerCase()) {
-      setDeleteError('Por favor, digite o nome do servidor para confirmar.');
+
+    const isMatch = deleteConfirmText.trim().toLowerCase() === activeGuild.name.trim().toLowerCase();
+    if (!isMatch && !isDeleteAcknowledged) {
+      setDeleteError('Por favor, digite o nome do servidor ou marque a confirmação abaixo.');
       return;
     }
 
@@ -839,6 +846,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       await deleteGuild(activeGuild.id);
       setIsDeleteModalOpen(false);
       setDeleteConfirmText('');
+      setIsDeleteAcknowledged(false);
       onClose();
       useGuildStore.getState().handleGuildDeleteEvent(activeGuild.id);
     } catch (err: any) {
@@ -2678,13 +2686,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               </div>
             </div>
 
-            <p className="text-xs text-gray-300 my-4 leading-relaxed">
+            <p className="text-xs text-gray-300 my-3 leading-relaxed">
               Você tem certeza de que deseja excluir <strong>{activeGuild.name}</strong>? Todos os canais, mensagens, cargos e convites serão apagados permanentemente.
             </p>
 
             {deleteError && (
-              <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs">
-                {deleteError}
+              <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-2 animate-in fade-in">
+                <span>{deleteError}</span>
               </div>
             )}
 
@@ -2696,40 +2704,67 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   </label>
                   <button
                     type="button"
-                    onClick={() => setDeleteConfirmText(activeGuild.name)}
+                    onClick={() => {
+                      setDeleteConfirmText(activeGuild.name);
+                      setDeleteError('');
+                    }}
                     className="text-[11px] text-brand-400 hover:text-brand-300 underline cursor-pointer"
                   >
-                    Preencher automaticamente
+                    Preencher nome
                   </button>
                 </div>
                 <input
                   type="text"
                   value={deleteConfirmText}
-                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  onChange={(e) => {
+                    setDeleteConfirmText(e.target.value);
+                    if (deleteError) setDeleteError('');
+                  }}
                   placeholder={activeGuild.name}
                   autoFocus
-                  className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-red-500"
+                  className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-red-500 transition-colors"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3">
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                <input
+                  type="checkbox"
+                  id="delete-confirm-check"
+                  checked={isDeleteAcknowledged}
+                  onChange={(e) => {
+                    setIsDeleteAcknowledged(e.target.checked);
+                    if (deleteError) setDeleteError('');
+                  }}
+                  className="w-4 h-4 rounded border-gray-700 bg-background-darkest text-red-600 focus:ring-red-500 cursor-pointer shrink-0"
+                />
+                <label
+                  htmlFor="delete-confirm-check"
+                  className="text-xs text-gray-300 cursor-pointer select-none leading-tight"
+                >
+                  Estou ciente de que esta ação é permanente e irreversível.
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     setIsDeleteModalOpen(false);
                     setDeleteConfirmText('');
+                    setIsDeleteAcknowledged(false);
                     setDeleteError('');
                   }}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
+                  className="px-4 py-2.5 text-gray-400 hover:text-white text-xs font-medium cursor-pointer rounded-xl hover:bg-white/5 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={isDeleting || deleteConfirmText.trim().toLowerCase() !== activeGuild.name.trim().toLowerCase()}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                  disabled={isDeleting}
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-600/30 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
                 >
-                  {isDeleting ? 'Excluindo...' : 'Excluir Servidor'}
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isDeleting ? 'Excluindo Servidor...' : 'Excluir Servidor'}</span>
                 </button>
               </div>
             </form>
