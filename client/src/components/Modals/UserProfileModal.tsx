@@ -1,7 +1,7 @@
 import React, { useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageSquare, Shield, Calendar, Edit3 } from 'lucide-react';
+import { MessageSquare, Shield, Calendar, Edit3, Gamepad2, Music, Tv, Radio, Trophy, Sparkles } from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { formatAssetUrl } from '../../lib/api';
@@ -175,6 +175,39 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             {user.custom_status && (
               <div className="p-2 bg-background-darkest rounded-xl text-xs text-gray-200 border border-white/5 flex items-center gap-1.5">
                 <span>{user.custom_status}</span>
+              </div>
+            )}
+
+            {/* Rich Presence / Custom Activity */}
+            {user.custom_activity && (
+              <div className="p-2.5 bg-background-darkest/90 rounded-xl border border-brand-500/20 flex flex-col gap-1 shadow-sm animate-in fade-in">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-400 uppercase tracking-wider">
+                  {user.custom_activity.type === 'playing' ? <Gamepad2 className="w-3.5 h-3.5" /> :
+                   user.custom_activity.type === 'listening' ? <Music className="w-3.5 h-3.5" /> :
+                   user.custom_activity.type === 'watching' ? <Tv className="w-3.5 h-3.5" /> :
+                   user.custom_activity.type === 'streaming' ? <Radio className="w-3.5 h-3.5" /> :
+                   user.custom_activity.type === 'competing' ? <Trophy className="w-3.5 h-3.5" /> :
+                   <Sparkles className="w-3.5 h-3.5" />}
+                  <span>
+                    {user.custom_activity.type === 'playing' ? 'Jogando' :
+                     user.custom_activity.type === 'listening' ? 'Ouvindo' :
+                     user.custom_activity.type === 'watching' ? 'Assistindo' :
+                     user.custom_activity.type === 'streaming' ? 'Transmitindo' :
+                     user.custom_activity.type === 'competing' ? 'Competindo' : 'Atividade'}
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-gray-100 flex items-center gap-1">
+                    {user.custom_activity.emoji && <span>{user.custom_activity.emoji}</span>}
+                    <span>{user.custom_activity.name}</span>
+                  </span>
+                  {user.custom_activity.details && (
+                    <span className="text-[11px] text-gray-300">{user.custom_activity.details}</span>
+                  )}
+                  {user.custom_activity.state && (
+                    <span className="text-[10px] text-gray-400">{user.custom_activity.state}</span>
+                  )}
+                </div>
               </div>
             )}
 

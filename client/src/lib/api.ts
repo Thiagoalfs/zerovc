@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
 
@@ -173,6 +173,11 @@ export const api = {
       bio?: string;
       status?: 'online' | 'idle' | 'dnd' | 'offline';
       custom_status?: string;
+      custom_activity?: CustomActivity | null;
+      show_activity_status?: boolean;
+      auto_detect_activity?: boolean;
+      server_folders?: ServerFolder[];
+      guild_positions?: string[];
     }) =>
       request<User>('/users/@me', {
         method: 'PATCH',

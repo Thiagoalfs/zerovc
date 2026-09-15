@@ -690,12 +690,20 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	query := `
-		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), created_at, updated_at
+		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status,
+		       COALESCE(two_factor_secret, ''), email_verified,
+		       COALESCE(custom_activity, 'null'::jsonb), COALESCE(show_activity_status, true), COALESCE(auto_detect_activity, true),
+		       COALESCE(server_folders, '[]'::jsonb), COALESCE(guild_positions, '[]'::jsonb),
+		       created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, userID).Scan(
-		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus,
+		&user.TwoFactorSecret, &user.EmailVerified,
+		&user.CustomActivity, &user.ShowActivityStatus, &user.AutoDetectActivity,
+		&user.ServerFolders, &user.GuildPositions,
+		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)

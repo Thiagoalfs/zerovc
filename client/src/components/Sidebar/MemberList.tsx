@@ -1,31 +1,25 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Crown,
-  X,
-  User as UserIcon,
-  MessageSquare,
-  Shield,
   VolumeX,
-  UserMinus,
-  Ban,
-  Check,
-  Clock,
-  Volume2,
-  Copy,
   Hash,
   ArrowLeft,
   Search,
   Pin,
+  Gamepad2,
+  Music,
+  Tv,
+  Radio,
+  Sparkles,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
-import { useDMStore } from '../../stores/dmStore';
-import { User, Permissions } from '../../types';
+import { User } from '../../types';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { SidebarResizer } from './SidebarResizer';
-import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
-import { formatAssetUrl } from '../../lib/api';
-import { UserVolumeSlider } from '../Voice/VolumeSliders';
+import { ContextMenu } from '../ContextMenu';
+import { UserAvatar } from '../Common/UserAvatar';
+import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 
 interface MemberListProps {
   isOpen: boolean;
@@ -50,55 +44,16 @@ export const MemberList: React.FC<MemberListProps> = ({
   dragOffset = null,
   dragProgress = null,
 }) => {
-  const {
-    activeGuild,
-    activeChannel,
-    kickMember,
-    banMember,
-    muteMember,
-    assignRole,
-    removeRole,
-  } = useGuildStore();
+  const { activeGuild, activeChannel } = useGuildStore();
   const { user: currentUser } = useAuthStore();
-  const { openDMWithUser } = useDMStore();
-  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+  const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
   const memberListWidth = useSettingsStore((s) => s.memberListWidth);
 
   if (!activeGuild) return null;
   if (!isOpen && !isDragging) return null;
 
-  const isCurrentOwner = activeGuild.owner_id === currentUser?.id;
   const members = activeGuild.members || [];
   const guildRoles = activeGuild.roles || [];
-
-  // Calculate current user's permissions
-  const currentUserRoles = activeGuild.members?.find((m) => m.id === currentUser?.id)?.roles || [];
-  let currentUserPerms = 0;
-  let currentUserHighestPos = 999999;
-  currentUserRoles.forEach((r) => {
-    currentUserPerms |= Number(r.permissions || 0);
-    if (r.position < currentUserHighestPos) {
-      currentUserHighestPos = r.position;
-    }
-  });
-
-  const hasAdmin = isCurrentOwner || (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
-  const canManageRoles = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_ROLES) !== 0;
-  const canKick = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.KICK_MEMBERS) !== 0;
-  const canBan = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.BAN_MEMBERS) !== 0;
-  const canMute = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_MEMBERS) !== 0;
-
-  const onlineMembers = members.filter((m) => {
-    const isMe = m.id === currentUser?.id;
-    const st = isMe && currentUser ? currentUser.status : m.status;
-    return st && st !== 'offline';
-  });
-
-  const offlineMembers = members.filter((m) => {
-    const isMe = m.id === currentUser?.id;
-    const st = isMe && currentUser ? currentUser.status : m.status;
-    return !st || st === 'offline';
-  });
 
   // Helper to get roles with live metadata from activeGuild.roles
   const getMemberLiveRoles = (member: User) => {
@@ -117,203 +72,57 @@ export const MemberList: React.FC<MemberListProps> = ({
     return hoisted.length > 0 ? hoisted[0] : null;
   };
 
-  // Sorted list of all hoisted roles
-  const sortedHoistedRoles = [...guildRoles]
-    .filter((r) => r.name !== '@everyone' && Boolean(r.hoist))
-    .sort((a, b) => a.position - b.position);
-
-  // Group online members by their highest hoisted role
-  const hoistedGroups: Array<{ role: typeof guildRoles[0]; members: User[] }> = sortedHoistedRoles
-    .map((role) => {
-      const roleMembers = onlineMembers.filter((m) => {
-        const highestHoisted = getMemberHighestHoistedRole(m);
-        return highestHoisted?.id === role.id;
-      });
-      return { role, members: roleMembers };
-    })
-    .filter((g) => g.members.length > 0);
-
-  // Members without a hoisted role (or whose roles are not hoisted)
-  const generalOnlineMembers = onlineMembers.filter((m) => {
-    const highestHoisted = getMemberHighestHoistedRole(m);
-    return !highestHoisted;
-  });
-
-  const handleMemberContextMenu = (e: React.MouseEvent, targetMember: User) => {
-    const isMe = targetMember.id === currentUser?.id;
-    const isTargetOwner = targetMember.id === activeGuild.owner_id;
-
-    // Calculate target's highest role position
-    let targetHighestPos = 999999;
-    const targetLiveRoles = getMemberLiveRoles(targetMember);
-    targetLiveRoles.forEach((r) => {
-      if (r.position < targetHighestPos) {
-        targetHighestPos = r.position;
-      }
+  const { onlineMembers, offlineMembers, hoistedGroups, generalOnlineMembers } = useMemo(() => {
+    const online = members.filter((m) => {
+      const isMe = m.id === currentUser?.id;
+      const st = isMe && currentUser ? currentUser.status : m.status;
+      return st && st !== 'offline';
     });
 
-    const isHierarchyAllowed = isCurrentOwner || isMe || (currentUserHighestPos < targetHighestPos);
-
-    const items: ContextMenuItem[] = [
-      {
-        label: 'Ver Perfil',
-        icon: <UserIcon className="w-4 h-4" />,
-        onClick: () => onSelectUser?.(targetMember, { x: e.clientX, y: e.clientY }),
-      },
-      ...(!isMe
-        ? [
-            {
-              label: 'Enviar Mensagem',
-              icon: <MessageSquare className="w-4 h-4" />,
-              onClick: async () => {
-                if (onOpenDM) {
-                  onOpenDM(targetMember.id);
-                } else {
-                  await openDMWithUser(targetMember.id);
-                }
-              },
-            },
-            { label: '', separator: true },
-            {
-              label: 'Volume de Usuário',
-              customRender: <UserVolumeSlider userId={targetMember.id} />,
-            },
-          ]
-        : []),
-    ];
-
-    // Change Roles Submenu (allowed if has permission and hierarchy allows or is self)
-    if (canManageRoles && guildRoles.length > 0 && (isCurrentOwner || isMe || isHierarchyAllowed)) {
-      const roleSubItems: ContextMenuItem[] = guildRoles
-        .filter((role) => role.name !== '@everyone')
-        .map((role) => {
-        const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
-        return {
-          label: role.name,
-          icon: hasRole ? (
-            <Check className="w-3.5 h-3.5 text-online" />
-          ) : (
-            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
-          ),
-          onClick: async () => {
-            if (hasRole) {
-              await removeRole(activeGuild.id, targetMember.id, role.id);
-            } else {
-              await assignRole(activeGuild.id, targetMember.id, role.id);
-            }
-          },
-        };
-      });
-
-      items.push({
-        label: 'Alterar Cargos',
-        icon: <Shield className="w-4 h-4 text-brand-400" />,
-        subItems: roleSubItems,
-      });
-    }
-
-    // Mute/Timeout Submenu (allowed if has permission and hierarchy allows or is self)
-    if (canMute && (isCurrentOwner || isMe || isHierarchyAllowed)) {
-      const isMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
-
-      const muteSubItems: ContextMenuItem[] = [
-        {
-          label: '15 minutos',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
-        },
-        {
-          label: '1 hora',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
-        },
-        {
-          label: '24 horas',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
-        },
-        {
-          label: '1 semana',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
-        },
-        {
-          label: 'Permanente',
-          icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
-        },
-        ...(isMuted
-          ? [
-              { label: '', separator: true },
-              {
-                label: 'Remover Silenciamento',
-                icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
-                onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
-              },
-            ]
-          : []),
-      ];
-
-      items.push({
-        label: isMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
-        icon: <VolumeX className={`w-4 h-4 ${isMuted ? 'text-dnd' : 'text-gray-400'}`} />,
-        subItems: muteSubItems,
-      });
-    }
-
-    // Kick and Ban (only for other members)
-    if (!isMe && !isTargetOwner && isHierarchyAllowed) {
-      if (canKick) {
-        items.push({
-          label: `Expulsar ${targetMember.display_name || targetMember.username}`,
-          icon: <UserMinus className="w-4 h-4" />,
-          variant: 'danger',
-          onClick: async () => {
-            if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username} do servidor?`)) {
-              await kickMember(activeGuild.id, targetMember.id);
-            }
-          },
-        });
-      }
-
-      if (canBan) {
-        items.push({
-          label: `Banir ${targetMember.display_name || targetMember.username}`,
-          icon: <Ban className="w-4 h-4" />,
-          variant: 'danger',
-          onClick: async () => {
-            const reason = prompt(`Motivo do banimento para ${targetMember.display_name || targetMember.username} (opcional):`);
-            if (reason !== null) {
-              await banMember(activeGuild.id, targetMember.id, reason);
-            }
-          },
-        });
-      }
-    }
-
-    items.push({ label: '', separator: true });
-    items.push({
-      label: 'Copiar ID do Usuário',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => {
-        navigator.clipboard.writeText(targetMember.id);
-      },
+    const offline = members.filter((m) => {
+      const isMe = m.id === currentUser?.id;
+      const st = isMe && currentUser ? currentUser.status : m.status;
+      return !st || st === 'offline';
     });
 
-    openContextMenu(e, items, targetMember.display_name || targetMember.username);
-  };
+    const sortedHoistedRoles = [...guildRoles]
+      .filter((r) => r.name !== '@everyone' && Boolean(r.hoist))
+      .sort((a, b) => a.position - b.position);
 
-  const renderMember = (m: User) => {
-    const isMe = m.id === currentUser?.id;
-    const user = isMe && currentUser ? { ...m, ...currentUser } : m;
-    const isOwner = user.id === activeGuild.owner_id;
-    const liveRoles = getMemberLiveRoles(user);
+    const groups: Array<{ role: typeof guildRoles[0]; members: User[] }> = sortedHoistedRoles
+      .map((role) => {
+        const roleMembers = online.filter((m) => {
+          const highestHoisted = getMemberHighestHoistedRole(m);
+          return highestHoisted?.id === role.id;
+        });
+        return { role, members: roleMembers };
+      })
+      .filter((g) => g.members.length > 0);
+
+    const generalOnline = online.filter((m) => {
+      const highestHoisted = getMemberHighestHoistedRole(m);
+      return !highestHoisted;
+    });
+
+    return {
+      onlineMembers: online,
+      offlineMembers: offline,
+      hoistedGroups: groups,
+      generalOnlineMembers: generalOnline,
+    };
+  }, [members, guildRoles, currentUser?.id, currentUser?.status]);
+
+  const renderMember = (member: User) => {
+    const isMe = member.id === currentUser?.id;
+    const status = isMe && currentUser ? currentUser.status : member.status;
+    const isOwner = member.id === activeGuild.owner_id;
+    const liveRoles = getMemberLiveRoles(member);
     const sortedRoles = liveRoles
       .filter((r) => r.name !== '@everyone')
       .sort((a, b) => a.position - b.position);
     const topRole = sortedRoles.length > 0 ? sortedRoles[0] : null;
-    const isOffline = !user.status || user.status === 'offline';
-    const isMuted = user.muted_until && new Date(user.muted_until) > new Date();
+    const isOffline = !status || status === 'offline';
+    const isMuted = member.muted_until && new Date(member.muted_until) > new Date();
 
     const roleColor = topRole && topRole.color && topRole.color !== '#99aab5' && topRole.color !== '#99AAB5'
       ? topRole.color
@@ -321,35 +130,29 @@ export const MemberList: React.FC<MemberListProps> = ({
 
     return (
       <div
-        key={user.id}
+        key={member.id}
         onClick={(e) => {
           e.stopPropagation();
-          onSelectUser?.(user, { x: e.clientX, y: e.clientY });
+          onSelectUser?.(member, { x: e.clientX, y: e.clientY });
         }}
-        onContextMenu={(e) => handleMemberContextMenu(e, user)}
+        onContextMenu={(e) =>
+          handleUserContextMenu(e, member, {
+            onOpenUserProfile: onSelectUser,
+            onOpenDM,
+            contextType: 'guild',
+          })
+        }
         className={`flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-all active:scale-[0.98] ${
           isOffline ? 'opacity-55 hover:opacity-100' : ''
         }`}
         title="Clique com botão esquerdo para ver o perfil ou direito para opções"
       >
-        <div className="relative w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-          {user.avatar_url ? (
-            <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
-          ) : (
-            <span>{user.display_name?.[0]?.toUpperCase() || user.username?.[0]?.toUpperCase() || 'U'}</span>
-          )}
-          <div
-            className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background-darker ${
-              user.status === 'online'
-                ? 'bg-online'
-                : user.status === 'idle'
-                ? 'bg-idle'
-                : user.status === 'dnd'
-                ? 'bg-dnd'
-                : 'bg-offline'
-            }`}
-          />
-        </div>
+        <UserAvatar
+          user={member}
+          size="sm"
+          showStatus={true}
+          status={status}
+        />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
@@ -367,7 +170,7 @@ export const MemberList: React.FC<MemberListProps> = ({
                   : { color: '#E0E0E0' }
               }
             >
-              {user.display_name || user.username}
+              {member.display_name || member.username}
             </span>
             {isOwner && (
               <span title="Dono do Servidor">
@@ -381,9 +184,23 @@ export const MemberList: React.FC<MemberListProps> = ({
             )}
           </div>
 
-          {/* Custom Status / Roles Badges */}
-          {user.custom_status ? (
-            <p className="text-[11px] text-gray-400 truncate">{user.custom_status}</p>
+          {/* Activity / Custom Status / Roles Badges */}
+          {member.custom_activity ? (
+            <p className="text-[11px] text-brand-300 font-medium truncate flex items-center gap-1">
+              {member.custom_activity.type === 'playing' ? <Gamepad2 className="w-3 h-3 flex-shrink-0" /> :
+               member.custom_activity.type === 'listening' ? <Music className="w-3 h-3 flex-shrink-0" /> :
+               member.custom_activity.type === 'watching' ? <Tv className="w-3 h-3 flex-shrink-0" /> :
+               member.custom_activity.type === 'streaming' ? <Radio className="w-3 h-3 flex-shrink-0" /> :
+               <Sparkles className="w-3 h-3 flex-shrink-0" />}
+              <span className="truncate">
+                {member.custom_activity.type === 'playing' ? 'Jogando ' :
+                 member.custom_activity.type === 'listening' ? 'Ouvindo ' :
+                 member.custom_activity.type === 'watching' ? 'Assistindo ' : ''}
+                {member.custom_activity.name}
+              </span>
+            </p>
+          ) : member.custom_status ? (
+            <p className="text-[11px] text-gray-400 truncate">{member.custom_status}</p>
           ) : topRole ? (
             <span
               className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white/5 truncate max-w-fit block"

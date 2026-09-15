@@ -24,20 +24,21 @@ import { useSettingsStore } from './stores/settingsStore';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { LandingPage } from './components/Landing/LandingPage';
 import { DownloadPage } from './components/Landing/DownloadPage';
-import { CreateServerModal } from './components/Modals/CreateServerModal';
-import { CreateDMGroupModal } from './components/Modals/CreateDMGroupModal';
-import { CreateChannelModal } from './components/Modals/CreateChannelModal';
-import { CreateCategoryModal } from './components/Modals/CreateCategoryModal';
-import { ScreenShareModal } from './components/Modals/ScreenShareModal';
-import { ProfileModal } from './components/Modals/ProfileModal';
-import { ServerSettingsModal } from './components/Modals/ServerSettingsModal';
-import { ChannelSettingsModal } from './components/Modals/ChannelSettingsModal';
-import { InviteModal } from './components/Modals/InviteModal';
-import { UserProfileModal } from './components/Modals/UserProfileModal';
-import { ImageModal } from './components/Modals/ImageModal';
+const CreateServerModal = React.lazy(() => import('./components/Modals/CreateServerModal').then(m => ({ default: m.CreateServerModal })));
+const CreateDMGroupModal = React.lazy(() => import('./components/Modals/CreateDMGroupModal').then(m => ({ default: m.CreateDMGroupModal })));
+const CreateChannelModal = React.lazy(() => import('./components/Modals/CreateChannelModal').then(m => ({ default: m.CreateChannelModal })));
+const CreateCategoryModal = React.lazy(() => import('./components/Modals/CreateCategoryModal').then(m => ({ default: m.CreateCategoryModal })));
+const ScreenShareModal = React.lazy(() => import('./components/Modals/ScreenShareModal').then(m => ({ default: m.ScreenShareModal })));
+const ProfileModal = React.lazy(() => import('./components/Modals/ProfileModal').then(m => ({ default: m.ProfileModal })));
+const ServerSettingsModal = React.lazy(() => import('./components/Modals/ServerSettingsModal').then(m => ({ default: m.ServerSettingsModal })));
+const ChannelSettingsModal = React.lazy(() => import('./components/Modals/ChannelSettingsModal').then(m => ({ default: m.ChannelSettingsModal })));
+const InviteModal = React.lazy(() => import('./components/Modals/InviteModal').then(m => ({ default: m.InviteModal })));
+const UserProfileModal = React.lazy(() => import('./components/Modals/UserProfileModal').then(m => ({ default: m.UserProfileModal })));
+const ImageModal = React.lazy(() => import('./components/Modals/ImageModal').then(m => ({ default: m.ImageModal })));
 import { IncomingCallModal } from './components/DM/IncomingCallModal';
 import { TitleBar } from './components/Desktop/TitleBar';
 import { ErrorBoundary } from './components/Common/ErrorBoundary';
+import { NetworkStatusBanner } from './components/Common/NetworkStatusBanner';
 import { livekit } from './lib/livekit';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
@@ -1096,7 +1097,49 @@ export const App: React.FC = () => {
       socket.on('GUILD_EMOJI_UPDATE', handleGuildEmojiUpdate);
       socket.on('GUILD_EMOJI_DELETE', handleGuildEmojiDelete);
 
+      const unsubscribeReconnect = socket.onReconnect(async () => {
+        try {
+          // 1. Resync active channel messages
+          const curActiveChannel = useGuildStore.getState().activeChannel;
+          if (curActiveChannel && curActiveChannel.type === 'text') {
+            const msgs = await api.channels.getMessages(curActiveChannel.id, 50);
+            useGuildStore.setState((state) => ({
+              messages: state.activeChannel?.id === curActiveChannel.id ? msgs : state.messages,
+              messagesByChannel: {
+                ...state.messagesByChannel,
+                [curActiveChannel.id]: msgs,
+              },
+            }));
+          }
+
+          // 2. Resync active guild read states
+          const curActiveGuild = useGuildStore.getState().activeGuild;
+          if (curActiveGuild) {
+            const readStates = await api.guilds.getReadStates(curActiveGuild.id);
+            if (readStates) {
+              useGuildStore.setState((state) => {
+                const unread = new Set(state.unreadChannels);
+                for (const rs of readStates) {
+                  if (rs.unread_count > 0) unread.add(rs.channel_id);
+                  else unread.delete(rs.channel_id);
+                }
+                return { unreadChannels: unread };
+              });
+            }
+          }
+
+          // 3. Resync friends list
+          useFriendStore.getState().fetchFriends().catch(() => {});
+
+          // 4. Resync DM rooms
+          useDMStore.getState().fetchRooms().catch(() => {});
+        } catch (err) {
+          console.error('[Socket Resync] Failed to resync on reconnection:', err);
+        }
+      });
+
       return () => {
+        unsubscribeReconnect();
         socket.off('MESSAGE_CREATE', handleMessageCreate);
         socket.off('MESSAGE_UPDATE', handleMessageUpdate);
         socket.off('MESSAGE_DELETE', handleMessageDelete);
@@ -1302,6 +1345,7 @@ export const App: React.FC = () => {
       className="fixed inset-x-0 bottom-auto w-full flex flex-col bg-background-dark overflow-hidden select-none"
     >
       <TitleBar />
+      <NetworkStatusBanner />
       <div
         className="flex-1 flex w-full h-full overflow-hidden relative min-h-0"
         onTouchStart={handleTouchStart}
@@ -1565,94 +1609,96 @@ export const App: React.FC = () => {
         )}
       </div>
 
-      {/* Modals */}
-      <CreateServerModal
-        isOpen={isCreateServerOpen}
-        onClose={() => setIsCreateServerOpen(false)}
-      />
-
-      <CreateDMGroupModal
-        isOpen={isCreateDMGroupOpen}
-        onClose={() => setIsCreateDMGroupOpen(false)}
-        onGroupCreated={(groupId) => {
-          setIsHomeActive(true);
-          setHomeView('group');
-          navigateTo(`/@me/group/${groupId}`);
-          useDMGroupStore.getState().selectGroupById(groupId);
-        }}
-      />
-
-      <InviteModal
-        isOpen={isInviteModalOpen}
-        onClose={() => setIsInviteModalOpen(false)}
-      />
-
-      <CreateChannelModal
-        isOpen={isCreateChannelOpen}
-        initialType={createChannelType}
-        initialCategoryId={createChannelCategoryId}
-        onClose={() => {
-          setIsCreateChannelOpen(false);
-          setCreateChannelCategoryId(undefined);
-        }}
-      />
-
-      <CreateCategoryModal
-        isOpen={isCreateCategoryOpen}
-        onClose={() => setIsCreateCategoryOpen(false)}
-      />
-
-      <ScreenShareModal
-        isOpen={isScreenShareOpen}
-        onClose={() => setIsScreenShareOpen(false)}
-      />
-
-      <ProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-      />
-
-      <UserProfileModal
-        user={selectedUserForProfile?.user || null}
-        position={selectedUserForProfile?.position || null}
-        isOpen={!!selectedUserForProfile}
-        onClose={() => setSelectedUserForProfile(null)}
-        onOpenDM={async (userId) => {
-          setSelectedUserForProfile(null);
-          setIsHomeActive(true);
-          setHomeView('dm');
-          setIsMobileDrawerOpen(false);
-          const room = await useDMStore.getState().openDMWithUser(userId);
-          if (room) {
-            navigateTo(`/@me/${room.id}`);
-          }
-        }}
-        onEditOwnProfile={() => {
-          setSelectedUserForProfile(null);
-          setIsProfileModalOpen(true);
-        }}
-      />
-
-      <ImageModal
-        imageUrl={previewImageUrl}
-        isOpen={!!previewImageUrl}
-        onClose={() => setPreviewImageUrl(null)}
-      />
-
-      <ErrorBoundary>
-        <ServerSettingsModal
-          isOpen={isServerSettingsOpen}
-          onClose={() => setIsServerSettingsOpen(false)}
+      {/* Modals with Suspense Lazy Loading */}
+      <React.Suspense fallback={null}>
+        <CreateServerModal
+          isOpen={isCreateServerOpen}
+          onClose={() => setIsCreateServerOpen(false)}
         />
-      </ErrorBoundary>
 
-      <ErrorBoundary>
-        <ChannelSettingsModal
-          channel={channelToEdit}
-          isOpen={!!channelToEdit}
-          onClose={() => setChannelToEdit(null)}
+        <CreateDMGroupModal
+          isOpen={isCreateDMGroupOpen}
+          onClose={() => setIsCreateDMGroupOpen(false)}
+          onGroupCreated={(groupId) => {
+            setIsHomeActive(true);
+            setHomeView('group');
+            navigateTo(`/@me/group/${groupId}`);
+            useDMGroupStore.getState().selectGroupById(groupId);
+          }}
         />
-      </ErrorBoundary>
+
+        <InviteModal
+          isOpen={isInviteModalOpen}
+          onClose={() => setIsInviteModalOpen(false)}
+        />
+
+        <CreateChannelModal
+          isOpen={isCreateChannelOpen}
+          initialType={createChannelType}
+          initialCategoryId={createChannelCategoryId}
+          onClose={() => {
+            setIsCreateChannelOpen(false);
+            setCreateChannelCategoryId(undefined);
+          }}
+        />
+
+        <CreateCategoryModal
+          isOpen={isCreateCategoryOpen}
+          onClose={() => setIsCreateCategoryOpen(false)}
+        />
+
+        <ScreenShareModal
+          isOpen={isScreenShareOpen}
+          onClose={() => setIsScreenShareOpen(false)}
+        />
+
+        <ProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
+
+        <UserProfileModal
+          user={selectedUserForProfile?.user || null}
+          position={selectedUserForProfile?.position || null}
+          isOpen={!!selectedUserForProfile}
+          onClose={() => setSelectedUserForProfile(null)}
+          onOpenDM={async (userId) => {
+            setSelectedUserForProfile(null);
+            setIsHomeActive(true);
+            setHomeView('dm');
+            setIsMobileDrawerOpen(false);
+            const room = await useDMStore.getState().openDMWithUser(userId);
+            if (room) {
+              navigateTo(`/@me/${room.id}`);
+            }
+          }}
+          onEditOwnProfile={() => {
+            setSelectedUserForProfile(null);
+            setIsProfileModalOpen(true);
+          }}
+        />
+
+        <ImageModal
+          imageUrl={previewImageUrl}
+          isOpen={!!previewImageUrl}
+          onClose={() => setPreviewImageUrl(null)}
+        />
+
+        <ErrorBoundary>
+          <ServerSettingsModal
+            isOpen={isServerSettingsOpen}
+            onClose={() => setIsServerSettingsOpen(false)}
+          />
+        </ErrorBoundary>
+
+        <ErrorBoundary>
+          <ChannelSettingsModal
+            channel={channelToEdit}
+            isOpen={!!channelToEdit}
+            onClose={() => setChannelToEdit(null)}
+          />
+        </ErrorBoundary>
+      </React.Suspense>
 
       {/* Global Incoming Call Popup */}
       <IncomingCallModal />

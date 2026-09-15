@@ -4,6 +4,7 @@ import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { formatAssetUrl } from '../../lib/api';
 import { GifEmbed } from './GifEmbed';
 import { LinkEmbed } from './LinkEmbed';
+import { VoiceNotePlayer } from './VoiceNotePlayer';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 
 import { useGuildStore } from '../../stores/guildStore';
@@ -364,12 +365,11 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
             if (media.isAudio) {
               return (
-                <div
+                <VoiceNotePlayer
                   key={idx}
-                  className="p-3 bg-background-darker rounded-2xl border border-white/10 max-w-md w-full shadow-md"
-                >
-                  <audio src={resolvedSrc} controls className="w-full h-8" />
-                </div>
+                  src={resolvedSrc}
+                  className="mt-2 mb-1"
+                />
               );
             }
 

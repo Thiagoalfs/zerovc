@@ -656,6 +656,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         updatedChannelMsgs.push({ ...message, status: 'sent' });
       }
 
+      // Cap memory at 200 messages per channel
+      if (updatedChannelMsgs.length > 200) {
+        updatedChannelMsgs = updatedChannelMsgs.slice(-200);
+      }
+
       const nextMessagesByChannel = {
         ...state.messagesByChannel,
         [message.channel_id]: updatedChannelMsgs,
@@ -688,6 +693,10 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           nextMessages[activeTempIdx] = { ...message, status: 'sent' };
         } else {
           nextMessages.push({ ...message, status: 'sent' });
+        }
+
+        if (nextMessages.length > 200) {
+          nextMessages = nextMessages.slice(-200);
         }
 
         if (message.author_id !== currentUser?.id && !isServerMuted && !isDND) {

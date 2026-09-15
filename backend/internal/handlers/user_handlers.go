@@ -29,14 +29,19 @@ func NewUserHandler(db *database.DB, hub *gateway.Hub) *UserHandler {
 }
 
 type UpdateProfileRequest struct {
-	Username     *string `json:"username,omitempty"`
-	PhoneNumber  *string `json:"phone_number,omitempty"`
-	DisplayName  *string `json:"display_name,omitempty"`
-	AvatarURL    *string `json:"avatar_url,omitempty"`
-	BannerURL    *string `json:"banner_url,omitempty"`
-	Bio          *string `json:"bio,omitempty"`
-	Status       *string `json:"status,omitempty"` // online, idle, dnd, offline
-	CustomStatus *string `json:"custom_status,omitempty"`
+	Username           *string          `json:"username,omitempty"`
+	PhoneNumber        *string          `json:"phone_number,omitempty"`
+	DisplayName        *string          `json:"display_name,omitempty"`
+	AvatarURL          *string          `json:"avatar_url,omitempty"`
+	BannerURL          *string          `json:"banner_url,omitempty"`
+	Bio                *string          `json:"bio,omitempty"`
+	Status             *string          `json:"status,omitempty"` // online, idle, dnd, offline
+	CustomStatus       *string          `json:"custom_status,omitempty"`
+	CustomActivity     *json.RawMessage `json:"custom_activity,omitempty"`
+	ShowActivityStatus *bool            `json:"show_activity_status,omitempty"`
+	AutoDetectActivity *bool            `json:"auto_detect_activity,omitempty"`
+	ServerFolders      *json.RawMessage `json:"server_folders,omitempty"`
+	GuildPositions     *json.RawMessage `json:"guild_positions,omitempty"`
 }
 
 func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -94,16 +99,48 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		    status = COALESCE($7, status),
 		    saved_status = COALESCE($7, saved_status),
 		    custom_status = COALESCE($8, custom_status),
+		    custom_activity = CASE WHEN $9::boolean THEN $10::jsonb ELSE custom_activity END,
+		    show_activity_status = COALESCE($11, show_activity_status),
+		    auto_detect_activity = COALESCE($12, auto_detect_activity),
+		    server_folders = CASE WHEN $13::boolean THEN $14::jsonb ELSE server_folders END,
+		    guild_positions = CASE WHEN $15::boolean THEN $16::jsonb ELSE guild_positions END,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $9
-		RETURNING id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, created_at, updated_at
+		WHERE id = $17
+		RETURNING id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status,
+		          COALESCE(custom_activity, 'null'::jsonb), COALESCE(show_activity_status, true), COALESCE(auto_detect_activity, true),
+		          COALESCE(server_folders, '[]'::jsonb), COALESCE(guild_positions, '[]'::jsonb),
+		          created_at, updated_at
 	`
+	hasCustomActivity := req.CustomActivity != nil
+	var customActivityBytes []byte
+	if hasCustomActivity && req.CustomActivity != nil {
+		customActivityBytes = *req.CustomActivity
+	}
+
+	hasServerFolders := req.ServerFolders != nil
+	var serverFoldersBytes []byte
+	if hasServerFolders && req.ServerFolders != nil {
+		serverFoldersBytes = *req.ServerFolders
+	}
+
+	hasGuildPositions := req.GuildPositions != nil
+	var guildPositionsBytes []byte
+	if hasGuildPositions && req.GuildPositions != nil {
+		guildPositionsBytes = *req.GuildPositions
+	}
+
 	var user models.User
 	err := h.db.Pool.QueryRow(r.Context(), query,
-		req.Username, req.PhoneNumber, req.DisplayName, req.AvatarURL, req.BannerURL, req.Bio, req.Status, req.CustomStatus, userID,
+		req.Username, req.PhoneNumber, req.DisplayName, req.AvatarURL, req.BannerURL, req.Bio, req.Status, req.CustomStatus,
+		hasCustomActivity, customActivityBytes, req.ShowActivityStatus, req.AutoDetectActivity,
+		hasServerFolders, serverFoldersBytes, hasGuildPositions, guildPositionsBytes,
+		userID,
 	).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL,
-		&user.Bio, &user.Status, &user.CustomStatus, &user.CreatedAt, &user.UpdatedAt,
+		&user.Bio, &user.Status, &user.CustomStatus,
+		&user.CustomActivity, &user.ShowActivityStatus, &user.AutoDetectActivity,
+		&user.ServerFolders, &user.GuildPositions,
+		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"falha ao atualizar perfil"}`, http.StatusInternalServerError)

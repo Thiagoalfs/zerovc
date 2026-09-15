@@ -279,7 +279,66 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 5. Get Channels
+	// 5. Batch-load Channel Metadata (Role Access, Permission Overwrites, and Voice Sessions)
+	roleAccessMap := make(map[uuid.UUID][]uuid.UUID)
+	accessQuery := `
+		SELECT cra.channel_id, cra.role_id 
+		FROM channel_role_access cra
+		INNER JOIN channels c ON c.id = cra.channel_id
+		WHERE c.guild_id = $1
+	`
+	if aRows, aErr := h.db.Pool.Query(r.Context(), accessQuery, guildID); aErr == nil {
+		for aRows.Next() {
+			var chID, rID uuid.UUID
+			if aRows.Scan(&chID, &rID) == nil {
+				roleAccessMap[chID] = append(roleAccessMap[chID], rID)
+			}
+		}
+		aRows.Close()
+	}
+
+	overwritesMap := make(map[uuid.UUID][]models.ChannelPermissionOverwrite)
+	owQuery := `
+		SELECT cpo.channel_id, cpo.role_id, cpo.allow, cpo.deny 
+		FROM channel_permission_overwrites cpo
+		INNER JOIN channels c ON c.id = cpo.channel_id
+		WHERE c.guild_id = $1
+	`
+	if owRows, owErr := h.db.Pool.Query(r.Context(), owQuery, guildID); owErr == nil {
+		for owRows.Next() {
+			var ow models.ChannelPermissionOverwrite
+			if owRows.Scan(&ow.ChannelID, &ow.RoleID, &ow.Allow, &ow.Deny) == nil {
+				overwritesMap[ow.ChannelID] = append(overwritesMap[ow.ChannelID], ow)
+			}
+		}
+		owRows.Close()
+	}
+
+	voiceSessionsMap := make(map[uuid.UUID][]models.VoiceSession)
+	vQuery := `
+		SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, vs.is_screensharing, vs.joined_at,
+		       u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, '')
+		FROM voice_sessions vs
+		INNER JOIN channels c ON c.id = vs.channel_id
+		INNER JOIN users u ON u.id = vs.user_id
+		WHERE c.guild_id = $1
+		ORDER BY vs.joined_at ASC
+	`
+	if vRows, vErr := h.db.Pool.Query(r.Context(), vQuery, guildID); vErr == nil {
+		for vRows.Next() {
+			var vs models.VoiceSession
+			if scanErr := vRows.Scan(
+				&vs.ID, &vs.ChannelID, &vs.UserID, &vs.IsMuted, &vs.IsDeafened, &vs.IsScreensharing, &vs.JoinedAt,
+				&vs.User.Username, &vs.User.DisplayName, &vs.User.AvatarURL, &vs.User.BannerURL, &vs.User.Bio, &vs.User.Status, &vs.User.CustomStatus,
+			); scanErr == nil {
+				vs.User.ID = vs.UserID
+				voiceSessionsMap[vs.ChannelID] = append(voiceSessionsMap[vs.ChannelID], vs)
+			}
+		}
+		vRows.Close()
+	}
+
+	// 5.1 Get Channels with in-memory metadata attachment
 	chanQuery := `SELECT id, guild_id, name, type, category_id, topic, position, is_private, created_at FROM channels WHERE guild_id = $1 ORDER BY position ASC, name ASC`
 	cRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildID)
 	if err == nil {
@@ -289,74 +348,63 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 			if err := cRows.Scan(&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic, &ch.Position, &ch.IsPrivate, &ch.CreatedAt); err == nil {
 				// If private, load allowed role IDs and check access
 				if ch.IsPrivate {
-					accessQuery := `SELECT role_id FROM channel_role_access WHERE channel_id = $1`
-					aRows, aErr := h.db.Pool.Query(r.Context(), accessQuery, ch.ID)
+					allowedRoles := roleAccessMap[ch.ID]
+					ch.RoleIDs = allowedRoles
 					hasChannelAccess := hasAdminPerm
-					if aErr == nil {
-						for aRows.Next() {
-							var allowedRoleID uuid.UUID
-							if aRows.Scan(&allowedRoleID) == nil {
-								ch.RoleIDs = append(ch.RoleIDs, allowedRoleID)
-								if userRoleMap[allowedRoleID] {
-									hasChannelAccess = true
-								}
+					if !hasAdminPerm {
+						for _, allowedRoleID := range allowedRoles {
+							if userRoleMap[allowedRoleID] {
+								hasChannelAccess = true
+								break
 							}
 						}
-						aRows.Close()
 					}
-
-					// If user does not have access to this private channel, skip it
 					if !hasChannelAccess {
 						continue
 					}
 				}
 
-				// Load permission overwrites for this channel
-				owQuery := `SELECT channel_id, role_id, allow, deny FROM channel_permission_overwrites WHERE channel_id = $1`
-				owRows, owErr := h.db.Pool.Query(r.Context(), owQuery, ch.ID)
-				if owErr == nil {
-					for owRows.Next() {
-						var ow models.ChannelPermissionOverwrite
-						if owRows.Scan(&ow.ChannelID, &ow.RoleID, &ow.Allow, &ow.Deny) == nil {
-							ch.PermissionOverwrites = append(ch.PermissionOverwrites, ow)
-						}
-					}
-					owRows.Close()
+				ch.PermissionOverwrites = overwritesMap[ch.ID]
+				if ch.PermissionOverwrites == nil {
+					ch.PermissionOverwrites = make([]models.ChannelPermissionOverwrite, 0)
 				}
 
 				if ch.Type == models.ChannelTypeVoice {
-					ch.VoiceSessions = make([]models.VoiceSession, 0)
-					vQuery := `
-						SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, vs.is_screensharing, vs.joined_at,
-						       u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, '')
-						FROM voice_sessions vs
-						INNER JOIN users u ON u.id = vs.user_id
-						WHERE vs.channel_id = $1
-						ORDER BY vs.joined_at ASC
-					`
-					vRows, vErr := h.db.Pool.Query(r.Context(), vQuery, ch.ID)
-					if vErr == nil {
-						for vRows.Next() {
-							var vs models.VoiceSession
-							if scanErr := vRows.Scan(
-								&vs.ID, &vs.ChannelID, &vs.UserID, &vs.IsMuted, &vs.IsDeafened, &vs.IsScreensharing, &vs.JoinedAt,
-								&vs.User.Username, &vs.User.DisplayName, &vs.User.AvatarURL, &vs.User.BannerURL, &vs.User.Bio, &vs.User.Status, &vs.User.CustomStatus,
-							); scanErr == nil {
-								vs.User.ID = vs.UserID
-								ch.VoiceSessions = append(ch.VoiceSessions, vs)
-							}
-						}
-						vRows.Close()
+					sessions := voiceSessionsMap[ch.ID]
+					if sessions == nil {
+						sessions = make([]models.VoiceSession, 0)
 					}
+					ch.VoiceSessions = sessions
 				}
 				guild.Channels = append(guild.Channels, ch)
 			}
 		}
 	}
 
-	// 5. Get Members with Roles
+	// 6. Batch-load Member Roles for the entire guild
+	memberRolesMap := make(map[uuid.UUID][]models.Role)
+	allMemberRolesQuery := `
+		SELECT gmr.user_id, gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, COALESCE(gr.hoist, false), COALESCE(gr.mentionable, false), gr.created_at
+		FROM guild_roles gr
+		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+		WHERE gmr.guild_id = $1
+		ORDER BY gr.position ASC, gr.created_at ASC
+	`
+	if mrRows, mrErr := h.db.Pool.Query(r.Context(), allMemberRolesQuery, guildID); mrErr == nil {
+		for mrRows.Next() {
+			var uID uuid.UUID
+			var mr models.Role
+			if mrScan := mrRows.Scan(&uID, &mr.ID, &mr.GuildID, &mr.Name, &mr.Color, &mr.Position, &mr.Permissions, &mr.Hoist, &mr.Mentionable, &mr.CreatedAt); mrScan == nil {
+				memberRolesMap[uID] = append(memberRolesMap[uID], mr)
+			}
+		}
+		mrRows.Close()
+	}
+
+	// 6.1 Get Members and map roles in-memory
 	memQuery := `
-		SELECT u.id, u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, '')
+		SELECT u.id, u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, ''),
+		       COALESCE(u.custom_activity, 'null'::jsonb), COALESCE(u.show_activity_status, true)
 		FROM users u
 		INNER JOIN guild_members gm ON gm.user_id = u.id
 		WHERE gm.guild_id = $1
@@ -367,30 +415,19 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		defer mRows.Close()
 		for mRows.Next() {
 			var u models.UserPublic
-			if err := mRows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus); err == nil {
-				// If user is not currently active on WebSocket, mark as offline
+			var showAct bool
+			if err := mRows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus, &u.CustomActivity, &showAct); err == nil {
+				if !showAct || string(u.CustomActivity) == "null" {
+					u.CustomActivity = nil
+				}
 				if !h.hub.IsUserOnline(u.ID) {
 					u.Status = "offline"
 				}
-
-				// Query roles for member
-				roleQuery := `
-					SELECT gr.id, gr.guild_id, gr.name, gr.color, gr.position, gr.permissions, COALESCE(gr.hoist, false), COALESCE(gr.mentionable, false), gr.created_at
-					FROM guild_roles gr
-					INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
-					WHERE gmr.guild_id = $1 AND gmr.user_id = $2
-					ORDER BY gr.position ASC
-				`
-				mrRows, mrErr := h.db.Pool.Query(r.Context(), roleQuery, guildID, u.ID)
-				if mrErr == nil {
-					for mrRows.Next() {
-						var mr models.Role
-						if mrScan := mrRows.Scan(&mr.ID, &mr.GuildID, &mr.Name, &mr.Color, &mr.Position, &mr.Permissions, &mr.Hoist, &mr.Mentionable, &mr.CreatedAt); mrScan == nil {
-							u.Roles = append(u.Roles, mr)
-						}
-					}
-					mrRows.Close()
+				roles := memberRolesMap[u.ID]
+				if roles == nil {
+					roles = make([]models.Role, 0)
 				}
+				u.Roles = roles
 				guild.Members = append(guild.Members, u)
 			}
 		}

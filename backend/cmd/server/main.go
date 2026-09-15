@@ -159,11 +159,12 @@ func main() {
 	// 5. Router & Middleware
 	r := chi.NewRouter()
 
-	// Global middlewares (sem rate limit aqui)
+	// Global middlewares
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Compress(5))
 	r.Use(middleware.Timeout(30 * time.Second))
 
 	// CORS Configuration
@@ -459,6 +460,11 @@ func main() {
 
 			fpath := filepath.Join(webDir, filepath.Clean(path))
 			if info, err := os.Stat(fpath); err == nil && !info.IsDir() {
+				if strings.HasPrefix(path, "/assets/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else {
+					w.Header().Set("Cache-Control", "public, max-age=86400")
+				}
 				fileServer.ServeHTTP(w, r)
 				return
 			}

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
+import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff, Activity } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { UserAvatar } from '../Common/UserAvatar';
+import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -14,6 +16,7 @@ interface UserBarProps {
 export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenShare }) => {
   const { user, updateProfile } = useAuthStore();
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const {
     currentChannelId,
@@ -146,6 +149,15 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
             <div className="flex items-center gap-1 flex-shrink-0 ml-1">
               <button
+                type="button"
+                onClick={() => setShowDiagnostic(true)}
+                className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-brand-400 transition-colors cursor-pointer flex-shrink-0"
+                title="Diagnóstico da Conexão WebRTC (Ping / Bitrate)"
+              >
+                <Activity className="w-4 h-4" />
+              </button>
+
+              <button
                 onClick={handleScreenShareClick}
                 className={`hidden md:inline-flex p-1.5 rounded hover:bg-background-light transition-colors cursor-pointer flex-shrink-0 ${
                   isScreensharing ? 'text-online bg-online/10' : 'text-gray-300'
@@ -167,6 +179,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         </div>
       )}
 
+      {/* WebRTC Diagnostics Modal */}
+      <VoiceDiagnosticModal
+        isOpen={showDiagnostic}
+        onClose={() => setShowDiagnostic(false)}
+      />
+
       {/* User Info and Controls */}
       <div
         onClick={() => {
@@ -186,19 +204,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           title="Editar Meu Perfil e Configurações"
         >
           {/* Avatar */}
-          <div className="relative w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm">
-            {user?.avatar_url ? (
-              <img src={formatAssetUrl(user.avatar_url)} alt={user.username} className="w-full h-full rounded-full object-cover" />
-            ) : (
-              <span>{user?.display_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'U'}</span>
-            )}
-            {/* Status dot */}
-            <div
-              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background-darkest ${getStatusColor(
-                user?.status
-              )}`}
-            />
-          </div>
+          <UserAvatar
+            user={user}
+            size="lg"
+            showStatus={true}
+            statusBorderColor="border-background-darkest"
+          />
 
           <div className="flex flex-col truncate min-w-0 flex-1 overflow-hidden">
             <div className="flex items-center gap-1.5 min-w-0 w-full overflow-hidden">

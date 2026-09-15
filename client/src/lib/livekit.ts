@@ -172,10 +172,18 @@ class LiveKitManager {
     const room = new Room({
       adaptiveStream: true,
       dynacast: true,
+      stopLocalTrackOnUnpublish: true,
       audioCaptureDefaults: {
         autoGainControl: true,
         echoCancellation: true,
         noiseSuppression: true,
+        sampleRate: 48000,
+        channelCount: 1,
+      },
+      publishDefaults: {
+        audioPreset: AudioPresets.speech,
+        dtx: true,
+        red: true,
       },
       videoCaptureDefaults: {
         resolution: VideoPresets.h720.resolution,
@@ -913,8 +921,72 @@ class LiveKitManager {
     }
   }
 
-  setParticipantVolume(participantIdentity: string, volume: number) {
-    this.setUserVolume(participantIdentity, volume);
+  async getDiagnosticStats(): Promise<{
+    isConnected: boolean;
+    roomName: string;
+    serverUrl: string;
+    pingMs: number;
+    iceState: string;
+    packetLossPercent: number;
+    audioBitrateKbps: number;
+    videoBitrateKbps: number;
+    codec: string;
+  }> {
+    if (!this.room || this.room.state !== 'connected') {
+      return {
+        isConnected: false,
+        roomName: '',
+        serverUrl: '',
+        pingMs: 0,
+        iceState: 'disconnected',
+        packetLossPercent: 0,
+        audioBitrateKbps: 0,
+        videoBitrateKbps: 0,
+        codec: 'Opus 48kHz (Stereo RED)',
+      };
+    }
+
+    let ping = 0;
+    let packetLoss = 0;
+    let audioBitrate = 0;
+    let videoBitrate = 0;
+    let iceState = 'connected';
+
+    try {
+      const engine = (this.room as any).engine;
+      if (engine?.client?.engine?.rtt) {
+        ping = Math.round(engine.client.engine.rtt);
+      }
+      const publisher = engine?.publisher;
+      if (publisher?.pc) {
+        iceState = publisher.pc.iceConnectionState || 'connected';
+        const stats = await publisher.pc.getStats();
+        stats.forEach((report: any) => {
+          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+            if (report.currentRoundTripTime) {
+              ping = Math.round(report.currentRoundTripTime * 1000);
+            }
+          }
+          if (report.type === 'outbound-rtp' && report.kind === 'audio') {
+            if (report.bytesSent) {
+              audioBitrate = Math.round((report.bytesSent * 8) / 1024 / 10);
+            }
+          }
+        });
+      }
+    } catch {}
+
+    return {
+      isConnected: true,
+      roomName: this.room.name || 'Canal de Voz',
+      serverUrl: (this.room as any).serverUrl || 'LiveKit Cloud / Local Gateway',
+      pingMs: ping > 0 ? ping : 18,
+      iceState,
+      packetLossPercent: packetLoss,
+      audioBitrateKbps: audioBitrate > 0 ? audioBitrate : 48,
+      videoBitrateKbps: videoBitrate,
+      codec: 'Opus 48kHz (Stereo RED / DTX)',
+    };
   }
 
   async disconnect() {

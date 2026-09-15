@@ -21,6 +21,23 @@ export const Permissions = {
   CREATE_INSTANT_INVITE: 1 << 16, // 65536: Criar Convite Instantâneo
 } as const;
 
+export interface CustomActivity {
+  type: 'playing' | 'listening' | 'watching' | 'streaming' | 'competing' | 'custom';
+  name: string;
+  details?: string;
+  state?: string;
+  emoji?: string;
+  start_time?: number;
+}
+
+export interface ServerFolder {
+  id: string;
+  name: string;
+  color?: string;
+  guild_ids: string[];
+  is_collapsed?: boolean;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -32,6 +49,11 @@ export interface User {
   bio?: string;
   status: 'online' | 'idle' | 'dnd' | 'offline';
   custom_status?: string;
+  custom_activity?: CustomActivity | null;
+  show_activity_status?: boolean;
+  auto_detect_activity?: boolean;
+  server_folders?: ServerFolder[];
+  guild_positions?: string[];
   roles?: Role[];
   two_factor_enabled?: boolean;
   email_verified?: boolean;

@@ -284,6 +284,11 @@ export const useDMStore = create<DMState>((set, get) => ({
         updatedRoomMsgs.push({ ...message, status: 'sent' });
       }
 
+      // Cap memory at 200 messages per DM room
+      if (updatedRoomMsgs.length > 200) {
+        updatedRoomMsgs = updatedRoomMsgs.slice(-200);
+      }
+
       const nextMessagesByRoom = {
         ...state.messagesByRoom,
         [message.dm_room_id]: updatedRoomMsgs,
@@ -302,6 +307,10 @@ export const useDMStore = create<DMState>((set, get) => ({
           nextMessages[activeTempIdx] = { ...message, status: 'sent' };
         } else {
           nextMessages.push({ ...message, status: 'sent' });
+        }
+
+        if (nextMessages.length > 200) {
+          nextMessages = nextMessages.slice(-200);
         }
 
         if (message.author_id !== currentUser?.id) {

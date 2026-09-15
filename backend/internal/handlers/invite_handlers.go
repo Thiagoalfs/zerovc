@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -16,15 +17,23 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/models"
 )
 
+type cachedInvite struct {
+	payload   []byte
+	expiresAt time.Time
+}
+
 type InviteHandler struct {
-	db  *database.DB
-	hub *gateway.Hub
+	db    *database.DB
+	hub   *gateway.Hub
+	cache map[string]cachedInvite
+	mu    sync.RWMutex
 }
 
 func NewInviteHandler(db *database.DB, hub *gateway.Hub) *InviteHandler {
 	return &InviteHandler{
-		db:  db,
-		hub: hub,
+		db:    db,
+		hub:   hub,
+		cache: make(map[string]cachedInvite),
 	}
 }
 
@@ -273,6 +282,10 @@ func (h *InviteHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.mu.Lock()
+	delete(h.cache, code)
+	h.mu.Unlock()
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "code": code})
 }
@@ -284,6 +297,16 @@ func (h *InviteHandler) GetInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid invite code format"}`, http.StatusBadRequest)
 		return
 	}
+
+	// 1. Check in-memory cache
+	h.mu.RLock()
+	if cached, ok := h.cache[code]; ok && time.Now().Before(cached.expiresAt) {
+		h.mu.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(cached.payload)
+		return
+	}
+	h.mu.RUnlock()
 
 	var invite models.GuildInvite
 	var guild models.Guild
@@ -317,11 +340,25 @@ func (h *InviteHandler) GetInvite(w http.ResponseWriter, r *http.Request) {
 
 	invite.Guild = &guild
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	payload, err := json.Marshal(map[string]any{
 		"invite":       invite,
 		"member_count": memberCount,
 	})
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Store in cache (60s TTL)
+	h.mu.Lock()
+	h.cache[code] = cachedInvite{
+		payload:   payload,
+		expiresAt: time.Now().Add(60 * time.Second),
+	}
+	h.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(payload)
 }
 
 // Join guild using 10-character invite hash
