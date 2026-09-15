@@ -33,7 +33,7 @@ if (!hardwareAccelerationEnabled) {
   console.log('[Electron] Hardware acceleration is DISABLED by user preference.');
   app.disableHardwareAcceleration();
 } else {
-  // Enable Hardware Acceleration & High-Performance Native Screen Capture
+  // Enable Hardware Acceleration & High-Performance Screen Capture
   app.commandLine.appendSwitch('enable-gpu-rasterization');
   app.commandLine.appendSwitch('ignore-gpu-blocklist');
   app.commandLine.appendSwitch('enable-accelerated-video-decode');
@@ -42,7 +42,7 @@ if (!hardwareAccelerationEnabled) {
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
   app.commandLine.appendSwitch(
     'enable-features',
-    'WindowsGraphicsCapture,WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,MediaFoundationVideoEncodeAcceleration,MediaFoundationD3D11VideoCapture,VaapiVideoEncoder'
+    'WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,MediaFoundationVideoEncodeAcceleration,VaapiVideoEncoder'
   );
 }
 

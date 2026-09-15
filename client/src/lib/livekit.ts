@@ -239,14 +239,17 @@ class LiveKitManager {
         this.attachedAudioElements.set(sid, audioEl);
 
         if (isScreenAudio) {
-          audioEl.muted = this.isDeafened;
+          const isWatched = this.watchedParticipantIdentities.has(participant.identity);
+          audioEl.muted = this.isDeafened || !isWatched;
           this.attachedStreamAudioElements.set(sid, audioEl);
           const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
           audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
           if (typeof (track as any).setVolume === 'function') {
             (track as any).setVolume(streamVol);
           }
-          audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
+          if (isWatched && !this.isDeafened) {
+            audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
+          }
         } else {
           audioEl.muted = this.isDeafened;
           this.attachedUserAudioElements.set(sid, audioEl);
@@ -537,34 +540,46 @@ class LiveKitManager {
       const shouldIncludeAudio = config?.includeAudio !== false;
 
       if (sourceId && (window as any).electronAPI) {
-        // Electron Screen Capture API with Hardware Accelerated WGC & Flexible Framerate constraints
+        // Electron Screen Capture API with Hardware Accelerated capture & Flexible Framerate constraints
         // We capture video stream from desktopCapturer sourceId with native Chromium desktop audio
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: shouldIncludeAudio
-            ? ({
-                // @ts-ignore
-                mandatory: {
-                  chromeMediaSource: 'desktop',
-                },
-              } as any)
-            : false,
-          video: {
-            // @ts-ignore
-            mandatory: {
-              chromeMediaSource: 'desktop',
-              chromeMediaSourceId: sourceId,
-              maxWidth: dims.width,
-              maxHeight: dims.height,
-              maxFrameRate: frameRate,
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: shouldIncludeAudio
+              ? ({
+                  // @ts-ignore
+                  mandatory: {
+                    chromeMediaSource: 'desktop',
+                  },
+                } as any)
+              : false,
+            video: {
+              // @ts-ignore
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: sourceId,
+                maxWidth: dims.width,
+                maxHeight: dims.height,
+                maxFrameRate: frameRate,
+              },
             },
-            // @ts-ignore
-            optional: [
-              { width: { ideal: dims.width } },
-              { height: { ideal: dims.height } },
-              { frameRate: { ideal: frameRate } },
-            ],
-          },
-        });
+          });
+        } catch (captureErr) {
+          console.warn('[LiveKit] Desktop capture with audio constraint failed, retrying video-only:', captureErr);
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              // @ts-ignore
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: sourceId,
+                maxWidth: dims.width,
+                maxHeight: dims.height,
+                maxFrameRate: frameRate,
+              },
+            },
+          });
+        }
 
         // Register tracks for cleanup
         stream.getTracks().forEach((t) => this.activeMediaStreamTracks.add(t));
@@ -842,11 +857,15 @@ class LiveKitManager {
     // 1. Mute or unmute all stream audio elements for this participant
     this.attachedStreamAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
-        el.muted = !subscribed;
-        if (subscribed) {
+        el.muted = !subscribed || this.isDeafened;
+        if (subscribed && !this.isDeafened) {
           const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
           el.volume = Math.min(Math.max(streamVol, 0), 1);
           el.play().catch((err) => console.log('[LiveKit] Stream audio play error:', err));
+        } else {
+          try {
+            el.pause();
+          } catch {}
         }
       }
     });
@@ -861,7 +880,7 @@ class LiveKitManager {
             if (pub.audioTrack) {
               const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
               if (typeof (pub.audioTrack as any).setVolume === 'function') {
-                (pub.audioTrack as any).setVolume(streamVol);
+                (pub.audioTrack as any).setVolume(subscribed ? streamVol : 0);
               }
             }
           }
