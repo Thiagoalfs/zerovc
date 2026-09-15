@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { spawn, ChildProcess } from 'child_process';
 
 let autoUpdater: any = null;
 try {
@@ -596,138 +595,6 @@ ipcMain.handle('unregister-all-shortcuts', () => {
   }
 });
 
-// -------------------------------------------------------------
-// Native Windows Process Loopback Audio Capture (WASAPI)
-// -------------------------------------------------------------
-let activeAudioProcess: ChildProcess | null = null;
-
-function getAudioCaptureExePath(): string {
-  const candidates = [
-    path.join(__dirname, 'bin', 'zerovc-audio-capture.exe'),
-    path.join(__dirname, '..', 'electron', 'bin', 'zerovc-audio-capture.exe'),
-    path.join(process.resourcesPath, 'bin', 'zerovc-audio-capture.exe'),
-    path.join(process.resourcesPath, 'app.asar.unpacked', 'dist-electron', 'bin', 'zerovc-audio-capture.exe'),
-    path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'bin', 'zerovc-audio-capture.exe'),
-    path.join(app.getAppPath(), 'dist-electron', 'bin', 'zerovc-audio-capture.exe'),
-    path.join(app.getAppPath(), 'electron', 'bin', 'zerovc-audio-capture.exe'),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) {
-      return c;
-    }
-  }
-  return candidates[0];
-}
-
-function stopAudioCaptureProcess() {
-  if (activeAudioProcess) {
-    try {
-      const pid = activeAudioProcess.pid;
-      activeAudioProcess.kill('SIGINT');
-      if (pid && process.platform === 'win32') {
-        try {
-          require('child_process').exec(`taskkill /PID ${pid} /T /F`, () => {});
-        } catch {}
-      }
-    } catch (e) {
-      console.warn('[WASAPI Capture] Error killing process:', e);
-    }
-    activeAudioProcess = null;
-  }
-}
-
-ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceId?: string; mode?: 'include' | 'exclude'; pid?: number; hwnd?: string }) => {
-  stopAudioCaptureProcess();
-
-  const exePath = getAudioCaptureExePath();
-  if (!fs.existsSync(exePath)) {
-    console.error('[WASAPI Capture] Binary not found at:', exePath);
-    return { success: false, error: `Binary not found at ${exePath}` };
-  }
-
-  const args: string[] = [];
-  const sourceId = options?.sourceId || '';
-  let mode = options?.mode;
-
-  // Always supply the ZeroVC main process PID so WASAPI exclusion can filter out call audio
-  args.push('--zerovc-pid', String(process.pid));
-
-  if (sourceId.startsWith('window:')) {
-    const parts = sourceId.split(':');
-    const hwnd = parts[1];
-    if (!mode) mode = 'include';
-    args.push('--mode', mode);
-    if (hwnd) {
-      args.push('--hwnd', hwnd);
-    }
-  } else if (sourceId.startsWith('screen:') || !sourceId) {
-    if (!mode) mode = 'exclude';
-    args.push('--mode', mode);
-    args.push('--pid', String(process.pid));
-  } else {
-    if (mode) args.push('--mode', mode);
-    if (options?.hwnd) args.push('--hwnd', options.hwnd);
-    else if (options?.pid) args.push('--pid', String(options.pid));
-  }
-
-  console.log('[WASAPI Capture] Spawning:', exePath, args.join(' '));
-
-  try {
-    const child = spawn(exePath, args, {
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    activeAudioProcess = child;
-
-    let remainderBuffer = Buffer.alloc(0);
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-
-      const combined = remainderBuffer.length > 0 ? Buffer.concat([remainderBuffer, chunk]) : chunk;
-      // 8 bytes per stereo Float32 sample (2 channels * 4 bytes)
-      const alignedBytes = Math.floor(combined.length / 8) * 8;
-
-      if (alignedBytes > 0) {
-        const toSend = combined.subarray(0, alignedBytes);
-        mainWindow.webContents.send('process-audio-chunk', toSend);
-      }
-
-      if (alignedBytes < combined.length) {
-        remainderBuffer = Buffer.from(combined.subarray(alignedBytes));
-      } else {
-        remainderBuffer = Buffer.alloc(0);
-      }
-    });
-
-    child.stderr.on('data', (data: Buffer) => {
-      console.log('[WASAPI Capture STDERR]', data.toString().trim());
-    });
-
-    child.on('error', (err) => {
-      console.error('[WASAPI Capture Error]', err);
-    });
-
-    child.on('exit', (code, signal) => {
-      console.log(`[WASAPI Capture Exit] code=${code} signal=${signal}`);
-      if (activeAudioProcess === child) {
-        activeAudioProcess = null;
-      }
-    });
-
-    return { success: true };
-  } catch (err: any) {
-    console.error('[WASAPI Capture] Failed to spawn:', err);
-    return { success: false, error: err?.message || String(err) };
-  }
-});
-
-ipcMain.handle('stop-process-audio-capture', async () => {
-  stopAudioCaptureProcess();
-  return { success: true };
-});
-
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
@@ -781,7 +648,6 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
-  stopAudioCaptureProcess();
   globalShortcut.unregisterAll();
   if (tray) {
     tray.destroy();

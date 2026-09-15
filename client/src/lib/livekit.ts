@@ -7,7 +7,6 @@ import {
   Participant,
   DisconnectReason,
 } from 'livekit-client';
-import { processAudioBridge } from './processAudioBridge';
 
 export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
 
@@ -535,15 +534,20 @@ class LiveKitManager {
       const gpu = await detectGpuVendor();
       const selectedCodec = gpu.preferredCodec;
 
-      if (sourceId && (window as any).electronAPI) {
-        // Stop any previous process audio bridge capture
-        await processAudioBridge.stopCapture();
+      const shouldIncludeAudio = config?.includeAudio !== false;
 
+      if (sourceId && (window as any).electronAPI) {
         // Electron Screen Capture API with Hardware Accelerated WGC & Flexible Framerate constraints
-        // We capture video stream from desktopCapturer sourceId without legacy system audio
-        // Native WASAPI loopback (processAudioBridge) handles the audio with process exclusion/inclusion to prevent call echo.
+        // We capture video stream from desktopCapturer sourceId with native Chromium desktop audio
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
+          audio: shouldIncludeAudio
+            ? ({
+                // @ts-ignore
+                mandatory: {
+                  chromeMediaSource: 'desktop',
+                },
+              } as any)
+            : false,
           video: {
             // @ts-ignore
             mandatory: {
@@ -603,30 +607,27 @@ class LiveKitManager {
           console.error('[LiveKit] Failed to publish screen share track:', pubErr);
         }
 
-        // Publish captured process/system audio via WASAPI Loopback (zero voice echo)
-        if (config?.includeAudio !== false) {
+        // Publish captured system audio natively via Chromium desktop audio
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          const audioTrack = audioTracks[0];
           try {
-            console.log('[LiveKit] Requesting WASAPI native audio capture for sourceId:', sourceId);
-            const processAudioTrack = await processAudioBridge.startCapture(sourceId);
-            if (processAudioTrack) {
-              this.activeMediaStreamTracks.add(processAudioTrack);
-              processAudioTrack.onended = () => {
-                const audioPub = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
-                if (audioPub?.track) {
-                  this.room?.localParticipant.unpublishTrack(audioPub.track);
-                }
-              };
-              await this.room.localParticipant.publishTrack(processAudioTrack, {
-                name: 'screen_share_audio',
-                source: Track.Source.ScreenShareAudio,
-                audioPreset: AudioPresets.musicHighQualityStereo,
-                dtx: false,
-                red: false,
-              });
-              console.log('[LiveKit] Successfully published screen_share_audio track');
-            }
+            audioTrack.onended = () => {
+              const audioPub = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+              if (audioPub?.track) {
+                this.room?.localParticipant.unpublishTrack(audioPub.track);
+              }
+            };
+            await this.room.localParticipant.publishTrack(audioTrack, {
+              name: 'screen_share_audio',
+              source: Track.Source.ScreenShareAudio,
+              audioPreset: AudioPresets.musicHighQualityStereo,
+              dtx: false,
+              red: false,
+            });
+            void this.setCallAudioRoutingForCapture(true);
           } catch (audioErr) {
-            console.error('[LiveKit] Error starting native process audio capture:', audioErr);
+            console.error('[LiveKit] Error publishing native screen share audio track:', audioErr);
           }
         }
 
@@ -728,7 +729,6 @@ class LiveKitManager {
       }
     } else {
       await this.room.localParticipant.setScreenShareEnabled(false);
-      await processAudioBridge.stopCapture();
       const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
       if (screenPub && screenPub.track) {
         try { screenPub.track.stop(); } catch {}
@@ -875,12 +875,12 @@ class LiveKitManager {
   }
 
   async disconnect() {
-    await processAudioBridge.stopCapture();
     this.watchedParticipantIdentities.clear();
     this.attachedAudioElements.forEach((el) => el.remove());
     this.attachedAudioElements.clear();
     this.attachedUserAudioElements.clear();
     this.attachedStreamAudioElements.clear();
+    void this.setCallAudioRoutingForCapture(false);
 
     // Stop and unpublish all local tracks
     if (this.room?.localParticipant) {
