@@ -68,8 +68,10 @@ registerProcessor('process-pcm-processor', PCMPlayerProcessor);
 export class ProcessAudioBridge {
   private audioContext: AudioContext | null = null;
   private workletNode: AudioWorkletNode | null = null;
+  nativeFallbackInfo: { reason: string; at: number } | null = null;
   private destinationNode: MediaStreamAudioDestinationNode | null = null;
   private unsubscribeChunk: (() => void) | null = null;
+  private unsubscribeFallback: (() => void) | null = null;
   private isCapturing = false;
 
   async startCapture(sourceId?: string): Promise<MediaStreamTrack | null> {
@@ -90,6 +92,11 @@ export class ProcessAudioBridge {
 
       if (!result.success) {
         console.error('[ProcessAudioBridge] Failed to start native capture:', result.error);
+        // Se o binário caiu no fallback de mix completo, avisa o LiveKitManager para
+        // decidir (não publicar áudio com eco; opcionalmente avisar o usuário).
+        if (result.error === 'native-fallback-full-mix') {
+          this.nativeFallbackInfo = { reason: result.error, at: Date.now() };
+        }
         return null;
       }
 
@@ -141,6 +148,29 @@ export class ProcessAudioBridge {
         });
       }
 
+      // Kill-switch: se o binário cair no fallback de mix completo no MEIO da sessão,
+      // o main process mata o exe e nos avisa. Unsubscribimos os chunks (para de alimentar
+      // o worklet) e marcamos o estado para o LiveKitManager despublicar a track.
+      if ((window as any).electronAPI.onProcessAudioFallback) {
+        this.unsubscribeFallback = (window as any).electronAPI.onProcessAudioFallback((info: { reason: string }) => {
+          console.error('[ProcessAudioBridge] Native capture fell back to full-mix loopback:', info?.reason);
+          this.nativeFallbackInfo = { reason: info?.reason || 'native-fallback-full-mix', at: Date.now() };
+          this.isCapturing = false;
+          if (this.unsubscribeChunk) {
+            this.unsubscribeChunk();
+            this.unsubscribeChunk = null;
+          }
+          if (this.workletNode) {
+            try { this.workletNode.disconnect(); } catch {}
+            this.workletNode = null;
+          }
+          const track = this.destinationNode?.stream.getAudioTracks()[0];
+          if (track) {
+            try { track.stop(); } catch {}
+          }
+        });
+      }
+
       this.isCapturing = true;
       const track = this.destinationNode.stream.getAudioTracks()[0] || null;
       if (track) {
@@ -158,10 +188,16 @@ export class ProcessAudioBridge {
 
   async stopCapture(): Promise<void> {
     this.isCapturing = false;
+    this.nativeFallbackInfo = null;
 
     if (this.unsubscribeChunk) {
       this.unsubscribeChunk();
       this.unsubscribeChunk = null;
+    }
+
+    if (this.unsubscribeFallback) {
+      this.unsubscribeFallback();
+      this.unsubscribeFallback = null;
     }
 
     if (this.workletNode) {

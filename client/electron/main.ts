@@ -283,12 +283,17 @@ function createWindow(initialUrl?: string) {
   });
 
   // Handle getDisplayMedia requests in Electron
+  // IMPORTANTE: NÃO entregar audio:'loopback' aqui. O loopback do Electron é o mix do PC
+  // inteiro SEM exclusão de árvore de processos — publicar isso retransmite as vozes da
+  // própria call como eco para os outros participantes. O áudio do compartilhamento é
+  // capturado pela ponte nativa WASAPI (zerovc-audio-capture.exe via processAudioBridge),
+  // que exclui a árvore do ZeroVC (tela inteira) ou inclui apenas o processo da janela.
   session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
     desktopCapturer
       .getSources({ types: ['screen', 'window'] })
       .then((sources) => {
         if (sources.length > 0) {
-          callback({ video: sources[0], audio: 'loopback' });
+          callback({ video: sources[0] });
         } else {
           callback({ video: undefined as any });
         }
@@ -700,10 +705,6 @@ ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceI
       }
     });
 
-    child.stderr.on('data', (data) => {
-      console.log(`[AudioCapture Native] ${data.toString().trim()}`);
-    });
-
     child.on('close', (code) => {
       console.log(`[AudioCapture] Process exited with code ${code}`);
       if (activeAudioProcess === child) {
@@ -717,6 +718,64 @@ ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceI
         activeAudioProcess = null;
       }
     });
+
+    // Confirmação de captura real: só reportamos sucesso quando o binário sinalizar
+    // "Capture Started" SEM ter caído no fallback de loopback clássico (mix do PC
+    // inteiro via StartClassicDefaultEndpointLoopback). Esse fallback é a causa do eco
+    // das vozes da call em servidores, grupos e DMs — nesse caso falhamos explicitamente
+    // para que NENHUM áudio seja publicado (o share segue só com vídeo).
+    const captureStatus = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      let settled = false;
+      let started = false;
+      const finish = (result: { ok: boolean; error?: string }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      };
+      const timer = setTimeout(() => finish({ ok: false, error: 'capture-start-timeout' }), 3000);
+
+      child.stderr.on('data', (data: Buffer) => {
+        const text = data.toString();
+        console.log(`[AudioCapture Native] ${text.trim()}`);
+        // Ordem importa: a linha de fallback vem ANTES do "Capture Started" do fallback.
+        if (text.includes('FULL SCREEN DEFAULT ENDPOINT LOOPBACK')) {
+          finish({ ok: false, error: 'native-fallback-full-mix' });
+          if (started) {
+            // Fallback no MEIO da sessão: mata o processo imediatamente para não vazar
+            // o mix completo (com as vozes da call) e avisa o renderer.
+            try { child.kill(); } catch {}
+            if (activeAudioProcess === child) {
+              activeAudioProcess = null;
+            }
+            activeAudioBuffer = Buffer.alloc(0);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('process-audio-fallback', { reason: 'native-fallback-full-mix' });
+            }
+          }
+        } else if (text.includes('Capture Started')) {
+          started = true;
+          finish({ ok: true });
+        }
+      });
+
+      child.on('close', (code) => {
+        finish({ ok: false, error: `capture-exited-before-start-${code}` });
+      });
+    });
+
+    if (!captureStatus.ok) {
+      console.error('[AudioCapture] Native capture did not start cleanly:', captureStatus.error);
+      try { child.kill(); } catch {}
+      if (activeAudioProcess === child) {
+        activeAudioProcess = null;
+      }
+      activeAudioBuffer = Buffer.alloc(0);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('process-audio-fallback', { reason: captureStatus.error });
+      }
+      return { success: false, error: captureStatus.error };
+    }
 
     return { success: true };
   } catch (err: any) {

@@ -42,6 +42,7 @@ export interface ElectronAPI {
   startProcessAudioCapture: (options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => Promise<{ success: boolean; error?: string }>;
   stopProcessAudioCapture: () => Promise<{ success: boolean; error?: string }>;
   onProcessAudioChunk: (callback: (chunk: Uint8Array) => void) => () => void;
+  onProcessAudioFallback: (callback: (info: { reason: string }) => void) => () => void;
   setMinimizeToTray: (enabled: boolean) => void;
   getMinimizeToTray: () => Promise<boolean>;
   setAutoStart: (enabled: boolean) => void;
@@ -65,6 +66,11 @@ const electronAPI: ElectronAPI = {
     const handler = (_: any, chunk: Uint8Array) => callback(chunk);
     ipcRenderer.on('process-audio-chunk', handler);
     return () => ipcRenderer.removeListener('process-audio-chunk', handler);
+  },
+  onProcessAudioFallback: (callback) => {
+    const handler = (_: any, info: { reason: string }) => callback(info);
+    ipcRenderer.on('process-audio-fallback', handler);
+    return () => ipcRenderer.removeListener('process-audio-fallback', handler);
   },
   getGpuInfo: () => ipcRenderer.invoke('get-gpu-info'),
   setFullScreen: (flag: boolean) => ipcRenderer.send('window-set-fullscreen', flag),
