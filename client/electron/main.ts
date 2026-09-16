@@ -753,7 +753,9 @@ ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceI
               mainWindow.webContents.send('process-audio-fallback', { reason: 'native-fallback-full-mix' });
             }
           }
-        } else if (text.includes('Capture Started')) {
+        } else if (text.includes('Capture Started') || text.includes('Started capture loop')) {
+          // O binário pode imprimir "Capture Started" (versões antigas) ou
+          // "Started capture loop -> 48000Hz Stereo Float32" (versões novas).
           started = true;
           finish({ ok: true });
         }

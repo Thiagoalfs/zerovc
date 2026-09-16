@@ -15,9 +15,15 @@
 #include <fcntl.h>
 #include <cmath>
 #include <algorithm>
+#include <wrl/implements.h>
+
+using namespace Microsoft::WRL;
 
 #ifndef VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK
-#define VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK L"VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK"
+// Caminho do dispositivo virtual REAL definido pelo Windows (audioclientactivationparams.h
+// do SDK). Passar qualquer outra string faz a ativação falhar com 0x80070002
+// (ERROR_FILE_NOT_FOUND) e o binário cair no fallback de mix completo (eco).
+#define VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK L"VAD\\Process_Loopback"
 #endif
 
 #ifndef AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
@@ -101,53 +107,36 @@ public:
     void Release() { if (p) { p->Release(); p = nullptr; } }
 };
 
-class AudioLoopbackActivator : public IActivateAudioInterfaceCompletionHandler {
-private:
-    std::atomic<ULONG> m_refCount;
+// IMPORTANTE: o completion handler DEVE ser agile (free-threaded marshaler / FtmBase).
+// O ActivateAudioInterfaceAsync entrega o callback de outra thread do serviço de áudio;
+// sem o marshaler a ativação falha imediatamente com 0x8000000E (E_PENDING) e o binário
+// cai no fallback de mix completo (causa do eco). Este é o mesmo padrão do sample oficial
+// da Microsoft (ApplicationLoopbackAudio) e do exe que funcionava antes.
+class AudioLoopbackActivator :
+    public RuntimeClass<RuntimeClassFlags<ClassicCom>, FtmBase, IActivateAudioInterfaceCompletionHandler>
+{
 public:
     HANDLE m_hCompletedEvent;
     HRESULT m_hrResult;
-    CComPtr<IAudioClient> m_pAudioClient;
+    ComPtr<IAudioClient> m_pAudioClient;
 
-    AudioLoopbackActivator() : m_refCount(1), m_hrResult(E_FAIL) {
+    AudioLoopbackActivator() : m_hrResult(E_FAIL) {
         m_hCompletedEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     }
 
-    virtual ~AudioLoopbackActivator() {
+    ~AudioLoopbackActivator() override {
         if (m_hCompletedEvent) {
             CloseHandle(m_hCompletedEvent);
         }
     }
 
-    STDMETHODIMP QueryInterface(REFIID riid, void** ppvObject) override {
-        if (!ppvObject) return E_POINTER;
-        if (riid == IID_IUnknown || riid == __uuidof(IActivateAudioInterfaceCompletionHandler)) {
-            *ppvObject = static_cast<IActivateAudioInterfaceCompletionHandler*>(this);
-            AddRef();
-            return S_OK;
-        }
-        *ppvObject = nullptr;
-        return E_NOINTERFACE;
-    }
-
-    STDMETHODIMP_(ULONG) AddRef() override {
-        return ++m_refCount;
-    }
-
-    STDMETHODIMP_(ULONG) Release() override {
-        ULONG count = --m_refCount;
-        if (count == 0) {
-            delete this;
-        }
-        return count;
-    }
-
     STDMETHODIMP ActivateCompleted(IActivateAudioInterfaceAsyncOperation *operation) override {
-        IUnknown *punk = nullptr;
-        m_hrResult = operation->GetActivateResult(&m_hrResult, &punk);
-        if (SUCCEEDED(m_hrResult) && punk) {
-            punk->QueryInterface(__uuidof(IAudioClient), (void**)&m_pAudioClient);
-            punk->Release();
+        ComPtr<IUnknown> punk;
+        HRESULT hrCall = operation->GetActivateResult(&m_hrResult, &punk);
+        if (SUCCEEDED(hrCall) && SUCCEEDED(m_hrResult) && punk) {
+            punk.As(&m_pAudioClient);
+        } else if (FAILED(hrCall)) {
+            m_hrResult = hrCall;
         }
         SetEvent(m_hCompletedEvent);
         return S_OK;
@@ -464,20 +453,19 @@ int StartProcessLoopback(DWORD targetPID, PROCESS_LOOPBACK_MODE loopbackMode) {
     activateParams.blob.cbSize = sizeof(params);
     activateParams.blob.pBlobData = (BYTE*)&params;
 
-    AudioLoopbackActivator* pActivator = new AudioLoopbackActivator();
-    CComPtr<IActivateAudioInterfaceAsyncOperation> pAsyncOp;
+    ComPtr<AudioLoopbackActivator> pActivator = Make<AudioLoopbackActivator>();
+    ComPtr<IActivateAudioInterfaceAsyncOperation> pAsyncOp;
 
     HRESULT hr = pfnActivate(
         VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
         __uuidof(IAudioClient),
         &activateParams,
-        pActivator,
+        pActivator.Get(),
         &pAsyncOp
     );
 
     if (FAILED(hr)) {
         std::cerr << "[WASAPI Capture] ActivateAudioInterfaceAsync failed: 0x" << std::hex << hr << std::endl;
-        pActivator->Release();
         FreeLibrary(hMmdevapi);
         return -1;
     }
@@ -486,12 +474,11 @@ int StartProcessLoopback(DWORD targetPID, PROCESS_LOOPBACK_MODE loopbackMode) {
 
     if (FAILED(pActivator->m_hrResult) || !pActivator->m_pAudioClient) {
         std::cerr << "[WASAPI Capture] Activation result failed: 0x" << std::hex << pActivator->m_hrResult << std::endl;
-        pActivator->Release();
         FreeLibrary(hMmdevapi);
         return -1;
     }
 
-    CComPtr<IAudioClient> pAudioClient = pActivator->m_pAudioClient;
+    ComPtr<IAudioClient> pAudioClient = pActivator->m_pAudioClient;
 
     WAVEFORMATEX* pMixFormat = nullptr;
     hr = pAudioClient->GetMixFormat(&pMixFormat);
