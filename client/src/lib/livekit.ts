@@ -302,6 +302,16 @@ class LiveKitManager {
       updateParticipants();
     });
 
+    room.on(RoomEvent.TrackPublished, () => {
+      this.onTrackUpdated?.();
+      updateParticipants();
+    });
+
+    room.on(RoomEvent.TrackUnpublished, () => {
+      this.onTrackUpdated?.();
+      updateParticipants();
+    });
+
     room.on(RoomEvent.LocalTrackPublished, () => {
       this.onTrackUpdated?.();
       updateParticipants();
@@ -867,6 +877,10 @@ class LiveKitManager {
   }
 
   setStreamAudioSubscribed(participantIdentity: string, subscribed: boolean) {
+    this.setStreamSubscribed(participantIdentity, subscribed);
+  }
+
+  setStreamSubscribed(participantIdentity: string, subscribed: boolean) {
     if (subscribed) {
       this.watchedParticipantIdentities.add(participantIdentity);
     } else {
@@ -889,13 +903,29 @@ class LiveKitManager {
       }
     });
 
-    // 2. Adjust subscription on remote participant track publication if applicable
+    // 2. Adjust subscription on remote participant track publications (video & audio)
     if (this.room) {
       const remote = this.room.remoteParticipants.get(participantIdentity);
       if (remote) {
+        // Video screen share publication
+        remote.videoTrackPublications.forEach((pub) => {
+          if (pub.source === Track.Source.ScreenShare) {
+            try {
+              pub.setSubscribed(subscribed);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting video screenshare subscription:', err);
+            }
+          }
+        });
+
+        // Audio screen share publication
         remote.audioTrackPublications.forEach((pub) => {
           if (pub.source === Track.Source.ScreenShareAudio) {
-            pub.setSubscribed(subscribed);
+            try {
+              pub.setSubscribed(subscribed);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting audio screenshare subscription:', err);
+            }
             if (pub.audioTrack) {
               const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
               if (typeof (pub.audioTrack as any).setVolume === 'function') {

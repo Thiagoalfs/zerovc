@@ -113,10 +113,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   setWatchedParticipant: (identity: string | null) => {
     const prev = get().watchedParticipantId;
     if (prev && prev !== identity) {
-      livekit.setStreamAudioSubscribed(prev, false);
+      livekit.setStreamSubscribed(prev, false);
     }
     if (identity) {
-      livekit.setStreamAudioSubscribed(identity, true);
+      livekit.setStreamSubscribed(identity, true);
     }
     set({ watchedParticipantId: identity });
   },

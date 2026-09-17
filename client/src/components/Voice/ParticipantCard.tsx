@@ -162,22 +162,30 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
   const fullscreenVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Handle Screen Share video track attachment
+  // Helper to safely attach track to HTMLVideoElement
+  const attachVideoTrack = (el: HTMLVideoElement | null, track: any) => {
+    if (!el || !track) return;
+    try {
+      track.attach(el);
+      el.play().catch(() => {});
+    } catch (err) {
+      console.warn('[ParticipantCard] Error attaching video track:', err);
+    }
+  };
+
+  // Handle Screen Share video track attachment and LiveKit subscription
   useEffect(() => {
     const el = videoRef.current;
     if (isWatching && hasScreenVideoTrack && screenPub?.track && el) {
-      try {
-        screenPub.track.attach(el);
-        el.play().catch(() => {});
-      } catch (err) {
-        console.warn('[ParticipantCard] Error attaching screen video track:', err);
-      }
+      attachVideoTrack(el, screenPub.track);
     }
 
     if (screenPub instanceof RemoteTrackPublication) {
       try {
         screenPub.setSubscribed(isWatching);
-      } catch {}
+      } catch (err) {
+        console.warn('[ParticipantCard] Error setting screenPub subscription:', err);
+      }
     }
 
     return () => {
@@ -187,18 +195,13 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         } catch {}
       }
     };
-  }, [screenPub?.track, hasScreenVideoTrack, isWatching]);
+  }, [screenPub?.track, hasScreenVideoTrack, isWatching, screenPub]);
 
   // Handle Camera track attachment
   useEffect(() => {
     const el = cameraRef.current;
     if (hasCameraVideoTrack && cameraPub?.track && el) {
-      try {
-        cameraPub.track.attach(el);
-        el.play().catch(() => {});
-      } catch (err) {
-        console.warn('[ParticipantCard] Error attaching camera track:', err);
-      }
+      attachVideoTrack(el, cameraPub.track);
     }
 
     if (cameraPub instanceof RemoteTrackPublication) {
@@ -214,7 +217,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         } catch {}
       }
     };
-  }, [cameraPub?.track, hasCameraVideoTrack]);
+  }, [cameraPub?.track, hasCameraVideoTrack, cameraPub]);
 
   // Handle Fullscreen video attachment
   useEffect(() => {
@@ -223,10 +226,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
     const track = (isScreenSharing && isWatching && screenPub?.track) || (hasCameraVideoTrack && cameraPub?.track);
     if (track) {
-      try {
-        track.attach(el);
-        el.play().catch(() => {});
-      } catch {}
+      attachVideoTrack(el, track);
     }
 
     return () => {
@@ -308,20 +308,40 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             : 'border-transparent hover:border-white/10'
         }`}
       >
-        {/* 1. If screen sharing and watching: render live screen video */}
-        {isScreenSharing && isWatching && hasScreenVideoTrack ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-contain bg-black"
-          />
+        {/* 1. If screen sharing and watching: render live screen video container */}
+        {isScreenSharing && isWatching ? (
+          <div className="relative w-full h-full flex items-center justify-center bg-black">
+            <video
+              ref={(el) => {
+                videoRef.current = el;
+                if (el && screenPub?.track && !screenPub.isMuted) {
+                  attachVideoTrack(el, screenPub.track);
+                }
+              }}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-contain bg-black transition-opacity duration-200 ${
+                hasScreenVideoTrack ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'
+              }`}
+            />
+            {!hasScreenVideoTrack && (
+              <div className="flex flex-col items-center justify-center gap-2.5 p-4 text-center">
+                <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs font-medium text-gray-300">Carregando transmissão...</span>
+              </div>
+            )}
+          </div>
         ) : hasCameraVideoTrack ? (
           /* 2. WebCam Video Stream */
           <>
             <video
-              ref={cameraRef}
+              ref={(el) => {
+                cameraRef.current = el;
+                if (el && cameraPub?.track && !cameraPub.isMuted) {
+                  attachVideoTrack(el, cameraPub.track);
+                }
+              }}
               autoPlay
               playsInline
               muted

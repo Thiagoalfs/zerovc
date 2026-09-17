@@ -124,7 +124,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   // Check if any participant is actively sharing screen
   const activeScreenSharer = participants.find((p) => {
     const pub = p.getTrackPublication(Track.Source.ScreenShare);
-    return pub && pub.track && !pub.isMuted;
+    return (p.isScreenShareEnabled || !!pub) && (!pub || !pub.isMuted);
   }) || (isScreensharing ? participants.find((p) => p.isLocal) : null);
 
   // Determine if user explicitly requested to watch a stream (or is local streamer)
@@ -133,7 +133,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       ? participants.find((p) => {
           if (p.identity !== watchedParticipantId) return false;
           const pub = p.getTrackPublication(Track.Source.ScreenShare);
-          return pub && pub.track && !pub.isMuted;
+          return (p.isScreenShareEnabled || !!pub) && (!pub || !pub.isMuted);
         })
       : null) || (isScreensharing ? participants.find((p) => p.isLocal) : null);
 
@@ -153,8 +153,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
   const targetParticipant = isWatchingStream ? streamParticipant : activeSpeaker;
   const screenPub = streamParticipant?.getTrackPublication(Track.Source.ScreenShare);
-  const activeVideoPub = (screenPub?.track && !screenPub.isMuted) ? screenPub : null;
-  const hasScreenVideoTrack = !!activeVideoPub?.track && !activeVideoPub.isMuted;
+  const hasScreenVideoTrack = !!screenPub?.track && !screenPub.isMuted;
   const isLocal = targetParticipant?.isLocal;
 
   const currentUVol = targetParticipant ? (userVolumes[targetParticipant.identity] ?? 1) : 1;
@@ -188,28 +187,35 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     }
 
     const el = videoRef.current;
-    if (hasScreenVideoTrack && activeVideoPub?.track && el) {
-      activeVideoPub.track.attach(el);
-      el.play().catch(() => {});
+    if (hasScreenVideoTrack && screenPub?.track && el) {
+      try {
+        screenPub.track.attach(el);
+        el.play().catch(() => {});
+      } catch (err) {
+        console.warn('[VoiceFloatingPiP] Error attaching video track:', err);
+      }
     }
 
-    if (activeVideoPub instanceof RemoteTrackPublication) {
-      activeVideoPub.setSubscribed(true);
+    if (screenPub instanceof RemoteTrackPublication) {
+      try {
+        screenPub.setSubscribed(true);
+      } catch (err) {
+        console.warn('[VoiceFloatingPiP] Error subscribing screenPub:', err);
+      }
     }
 
     if (!streamParticipant.isLocal) {
-      livekit.setStreamAudioSubscribed(streamParticipant.identity, true);
+      livekit.setStreamSubscribed(streamParticipant.identity, true);
     }
 
     return () => {
-      if (el && activeVideoPub?.track) {
-        activeVideoPub.track.detach(el);
-      }
-      if (!streamParticipant.isLocal) {
-        livekit.setStreamAudioSubscribed(streamParticipant.identity, false);
+      if (el && screenPub?.track) {
+        try {
+          screenPub.track.detach(el);
+        } catch {}
       }
     };
-  }, [isWatchingStream, activeVideoPub?.track, hasScreenVideoTrack, streamParticipant]);
+  }, [isWatchingStream, screenPub?.track, hasScreenVideoTrack, streamParticipant, screenPub]);
 
   // Drag Handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -418,17 +424,34 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       </div>
 
       {/* PiP Stage: Video Stream OR Discord-Style Active Speaker */}
-      {isWatchingStream && hasScreenVideoTrack ? (
+      {isWatchingStream ? (
         <div
           onClick={handleOpenVoiceRoom}
           className="relative aspect-video bg-black cursor-pointer overflow-hidden flex items-center justify-center"
         >
           <video
-            ref={videoRef}
+            ref={(el) => {
+              videoRef.current = el;
+              if (el && screenPub?.track && !screenPub.isMuted) {
+                try {
+                  screenPub.track.attach(el);
+                  el.play().catch(() => {});
+                } catch {}
+              }
+            }}
             autoPlay
             playsInline
-            className="w-full h-full object-contain bg-black pointer-events-none"
+            className={`w-full h-full object-contain bg-black pointer-events-none transition-opacity duration-200 ${
+              hasScreenVideoTrack ? 'opacity-100' : 'opacity-0 absolute inset-0'
+            }`}
           />
+
+          {!hasScreenVideoTrack && (
+            <div className="flex flex-col items-center justify-center gap-2 p-3 text-center pointer-events-none">
+              <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-[11px] font-medium text-gray-300">Carregando...</span>
+            </div>
+          )}
 
           {/* Top Floating Bar */}
           <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-20">
@@ -701,9 +724,11 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
         >
           <video
             ref={(el) => {
-              if (el && activeVideoPub?.track) {
-                activeVideoPub.track.attach(el);
-                el.play().catch(() => {});
+              if (el && screenPub?.track) {
+                try {
+                  screenPub.track.attach(el);
+                  el.play().catch(() => {});
+                } catch {}
               }
             }}
             onContextMenu={handleContextMenu}
