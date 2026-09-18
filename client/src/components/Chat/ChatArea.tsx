@@ -230,15 +230,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   // Filter messages based on search & pinned filter
   const baseMessages = showPinnedOnly
-    ? pinnedMessagesByChannel[activeChannel.id] || []
-    : messages;
+    ? pinnedMessagesByChannel?.[activeChannel.id] || []
+    : messages || [];
 
   const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
 
   const displayedMessages = useMemo(() => {
     let list = baseMessages;
     if (showPinnedOnly && activeChannel) {
-      list = pinnedMessagesByChannel[activeChannel.id] || [];
+      list = pinnedMessagesByChannel?.[activeChannel.id] || [];
     }
     return filterMessages(list, parsedSearch);
   }, [baseMessages, showPinnedOnly, activeChannel, pinnedMessagesByChannel, parsedSearch]);
