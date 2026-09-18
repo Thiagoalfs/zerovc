@@ -57,6 +57,7 @@ export interface User {
   roles?: Role[];
   two_factor_enabled?: boolean;
   email_verified?: boolean;
+  csrf_token?: string;
   muted_until?: string;
   created_at?: string;
 }

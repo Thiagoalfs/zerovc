@@ -81,6 +81,16 @@ func (s *CSRFService) ValidateToken(tokenString string, userID uuid.UUID) bool {
 		return false
 	}
 
+	// Signature must be exactly 64 hex chars (32 bytes HMAC-SHA256)
+	if len(providedSig) != 64 {
+		return false
+	}
+
+	// Verify signature hex decoding
+	if _, err := hex.DecodeString(providedSig); err != nil {
+		return false
+	}
+
 	// Parse and check timestamp
 	ts, err := strconv.ParseInt(tsStr, 10, 64)
 	if err != nil {
@@ -160,7 +170,7 @@ func (s *CSRFService) RequireCSRF(next http.Handler) http.Handler {
 			return
 		}
 
-		// 4. Double-Submit validation: if csrf_token cookie is present, it must match the header token in constant time
+		// 4. Double-Submit validation: if csrf_token cookie is present, it must match in constant time
 		if cookie, err := r.Cookie(CSRFCookieName); err == nil && cookie.Value != "" {
 			if subtle.ConstantTimeCompare([]byte(headerToken), []byte(cookie.Value)) != 1 {
 				rejectCSRF(w, "CSRF token missing or invalid")

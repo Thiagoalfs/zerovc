@@ -45,6 +45,7 @@ type UserPublic struct {
 	AutoDetectActivity bool            `json:"auto_detect_activity"`
 	TwoFactorEnabled   bool            `json:"two_factor_enabled"`
 	EmailVerified      bool            `json:"email_verified"`
+	CSRFToken          string          `json:"csrf_token,omitempty"`
 	Roles              []Role          `json:"roles,omitempty"`
 }
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { User } from '../types';
-import { api } from '../lib/api';
+import { api, setCsrfToken } from '../lib/api';
 import { socket } from '../lib/socket';
 import { livekit } from '../lib/livekit';
 import { isElectron } from '../lib/platform';
@@ -152,6 +152,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           localStorage.setItem('token', res.token);
           localStorage.setItem('zerovc_token', res.token);
         }
+        if (res.csrf_token) {
+          setCsrfToken(res.csrf_token);
+        } else if (res.user.csrf_token) {
+          setCsrfToken(res.user.csrf_token);
+        }
         set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
         socket.connect();
       }
@@ -174,6 +179,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           localStorage.setItem('token', res.token);
           localStorage.setItem('zerovc_token', res.token);
         }
+        if (res.csrf_token) {
+          setCsrfToken(res.csrf_token);
+        } else if (res.user.csrf_token) {
+          setCsrfToken(res.user.csrf_token);
+        }
         set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
         socket.connect();
       }
@@ -191,6 +201,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (isElectron()) {
           localStorage.setItem('token', res.token);
           localStorage.setItem('zerovc_token', res.token);
+        }
+        if (res.csrf_token) {
+          setCsrfToken(res.csrf_token);
+        } else if (res.user.csrf_token) {
+          setCsrfToken(res.user.csrf_token);
         }
         set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
         socket.connect();
@@ -216,6 +231,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   checkAuth: async () => {
     try {
       const user = await api.auth.me();
+      if (user?.csrf_token) {
+        setCsrfToken(user.csrf_token);
+      }
       const token = isElectron()
         ? localStorage.getItem('token') || localStorage.getItem('zerovc_token') || 'cookie_session'
         : 'cookie_session';

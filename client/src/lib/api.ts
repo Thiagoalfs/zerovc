@@ -74,7 +74,7 @@ export const getCsrfToken = (): string => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const baseUrl = getApiBaseUrl();
   const method = (options.method || 'GET').toUpperCase();
 
@@ -83,8 +83,22 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...(options.headers as Record<string, string>),
   };
 
+  const isPublicAuth =
+    endpoint.startsWith('/auth/login') ||
+    endpoint.startsWith('/auth/register') ||
+    endpoint.startsWith('/auth/verify') ||
+    endpoint.startsWith('/auth/resend') ||
+    endpoint.startsWith('/auth/forgot') ||
+    endpoint.startsWith('/auth/reset');
+
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    const csrf = getCsrfToken();
+    let csrf = getCsrfToken();
+    if (!csrf && !isPublicAuth && !isRetry) {
+      try {
+        await request<User>('/auth/me', {}, true);
+        csrf = getCsrfToken();
+      } catch {}
+    }
     if (csrf && !headers['X-CSRF-Token']) {
       headers['X-CSRF-Token'] = csrf;
     }
@@ -105,7 +119,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers,
   });
 
-  // Captura CSRF token retornado no cabeçalho ou cookie se disponível
+  // Captura CSRF token retornado no cabeçalho se disponível
   const resCsrf = response.headers.get('X-CSRF-Token');
   if (resCsrf) {
     setCsrfToken(resCsrf);
@@ -117,6 +131,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       const errJson = await response.json();
       if (errJson.error) errorMsg = errJson.error;
     } catch {}
+
+    // Auto-recuperação transparente se o token CSRF expirou ou dessincronizou
+    if (response.status === 403 && errorMsg.toLowerCase().includes('csrf') && !isRetry && !isPublicAuth) {
+      try {
+        await request<User>('/auth/me', {}, true);
+        return await request<T>(endpoint, options, true);
+      } catch {}
+    }
+
     throw new Error(errorMsg);
   }
 
@@ -125,8 +148,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 
   const data = await response.json();
-  if (data && typeof data === 'object' && 'csrf_token' in data && typeof (data as any).csrf_token === 'string') {
-    setCsrfToken((data as any).csrf_token);
+  if (data && typeof data === 'object') {
+    if ('csrf_token' in data && typeof (data as any).csrf_token === 'string') {
+      setCsrfToken((data as any).csrf_token);
+    }
   }
   return data as T;
 }
@@ -134,12 +159,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 export const api = {
   auth: {
     register: (data: { username: string; email: string; password: string }) =>
-      request<{ token?: string; requires_verification?: boolean; email?: string; user?: User }>('/auth/register', {
+      request<{ token?: string; csrf_token?: string; requires_verification?: boolean; email?: string; user?: User }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     verifyEmail: (data: { email: string; code: string }) =>
-      request<{ token: string; user: User }>('/auth/verify-email', {
+      request<{ token: string; csrf_token?: string; user: User }>('/auth/verify-email', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -164,7 +189,7 @@ export const api = {
         body: JSON.stringify(data),
       }),
     login: (data: { email: string; password: string; code?: string }) =>
-      request<{ token?: string; requires_2fa?: boolean; requires_verification?: boolean; email?: string; user?: User }>('/auth/login', {
+      request<{ token?: string; csrf_token?: string; requires_2fa?: boolean; requires_verification?: boolean; email?: string; user?: User }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(data),
       }),

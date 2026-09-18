@@ -760,6 +760,9 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if csrfToken != "" {
+		w.Header().Set("X-CSRF-Token", csrfToken)
+	}
 	response := struct {
 		models.User
 		CSRFToken string `json:"csrf_token,omitempty"`
