@@ -208,28 +208,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  if (!activeChannel) {
-    return (
-      <div className="flex-1 bg-background-dark flex flex-col items-center justify-center text-gray-500 font-medium p-4">
-        {onOpenMobileDrawer && (
-          <button
-            onClick={onOpenMobileDrawer}
-            className="md:hidden mb-4 bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2"
-          >
-            <Menu className="w-4 h-4" />
-            <span>Abrir Servidores e Canais</span>
-          </button>
-        )}
-        <span>Selecione um canal para começar a conversar</span>
-      </div>
-    );
-  }
-
-  const typingForThisChannel = typingUsers.get(activeChannel.id);
-  const isSomeoneTyping = typingForThisChannel && typingForThisChannel.size > 0;
-
   // Filter messages based on search & pinned filter
-  const baseMessages = showPinnedOnly
+  const baseMessages = showPinnedOnly && activeChannel
     ? pinnedMessagesByChannel?.[activeChannel.id] || []
     : messages || [];
 
@@ -253,6 +233,26 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       }
     }
   };
+
+  if (!activeChannel) {
+    return (
+      <div className="flex-1 bg-background-dark flex flex-col items-center justify-center text-gray-500 font-medium p-4">
+        {onOpenMobileDrawer && (
+          <button
+            onClick={onOpenMobileDrawer}
+            className="md:hidden mb-4 bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2"
+          >
+            <Menu className="w-4 h-4" />
+            <span>Abrir Servidores e Canais</span>
+          </button>
+        )}
+        <span>Selecione um canal para começar a conversar</span>
+      </div>
+    );
+  }
+
+  const typingForThisChannel = typingUsers.get(activeChannel.id);
+  const isSomeoneTyping = typingForThisChannel && typingForThisChannel.size > 0;
 
   return (
     <div
