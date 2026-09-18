@@ -103,10 +103,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       {showStatusMenu && (
         <>
           <div
-            className="fixed inset-0 z-40"
-            onClick={() => setShowStatusMenu(false)}
+            className="fixed inset-0 z-[99]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowStatusMenu(false);
+            }}
           />
-          <div className="absolute bottom-16 left-2 z-50 bg-background-darkest border border-white/10 rounded-2xl p-2 shadow-2xl w-48 animate-in fade-in zoom-in-95">
+          <div className="fixed bottom-16 left-3 sm:left-4 z-[100] bg-background-darkest border border-white/10 rounded-2xl p-2 shadow-2xl w-52 animate-in fade-in zoom-in-95">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1 block">
               Definir Status
             </span>
@@ -114,7 +117,10 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               {(['online', 'idle', 'dnd', 'offline'] as const).map((st) => (
                 <button
                   key={st}
-                  onClick={() => handleSetStatus(st)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSetStatus(st);
+                  }}
                   className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     user?.status === st ? 'bg-brand-500 text-white' : 'text-gray-300 hover:bg-white/5'
                   }`}
@@ -225,12 +231,11 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       >
         <div
           onClick={(e) => {
-            if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-              setShowStatusMenu(!showStatusMenu);
-            }
+            e.stopPropagation();
+            setShowStatusMenu((prev) => !prev);
           }}
           className="flex items-center gap-2 p-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 transition-colors group/usercard overflow-hidden"
-          title="Editar Meu Perfil e Configurações"
+          title="Definir Status"
         >
           {/* Avatar */}
           <UserAvatar
