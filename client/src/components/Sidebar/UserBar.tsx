@@ -7,6 +7,7 @@ import { formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
+import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -16,6 +17,7 @@ interface UserBarProps {
 export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenShare }) => {
   const { user, updateProfile } = useAuthStore();
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [showVoicePopout, setShowVoicePopout] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const {
@@ -127,21 +129,38 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
       {/* Active Voice Connection Bar */}
       {(isConnected || isConnecting) && (
-        <div className="w-full min-w-0 max-w-full bg-background-darkest/90 border-b border-white/5 p-2 px-2.5 flex flex-col gap-1.5 overflow-hidden">
+        <div className="w-full min-w-0 max-w-full bg-background-darkest/90 border-b border-white/5 p-2 px-2.5 flex flex-col gap-1.5 overflow-visible relative">
+          {/* Discord-style Floating Voice Connection Popout */}
+          <VoiceConnectionPopout
+            isOpen={showVoicePopout}
+            onClose={() => setShowVoicePopout(false)}
+            onOpenDiagnostic={() => setShowDiagnostic(true)}
+            channelName={activeVoiceChannel?.name}
+            serverName={activeGuild?.name}
+          />
+
           <div className="flex items-center justify-between min-w-0 gap-1.5">
             <div
-              onClick={() => {
-                if (activeVoiceChannel) selectChannel(activeVoiceChannel);
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowVoicePopout(!showVoicePopout);
               }}
-              className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden"
-              title="Abrir canal de voz"
+              className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden group"
+              title="Clique para ver o status da conexão (Ping / WebRTC)"
             >
               <div className="w-2.5 h-2.5 rounded-full bg-online animate-pulse flex-shrink-0" />
               <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                <span className="text-xs font-bold text-online leading-tight truncate">
+                <span className="text-xs font-bold text-online leading-tight truncate group-hover:underline">
                   {isConnecting ? 'Conectando...' : 'Voz Conectada'}
                 </span>
-                <span className="text-[11px] text-gray-400 truncate leading-tight block min-w-0">
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (activeVoiceChannel) selectChannel(activeVoiceChannel);
+                  }}
+                  className="text-[11px] text-gray-400 hover:text-gray-200 truncate leading-tight block min-w-0 cursor-pointer"
+                  title="Ir para o canal de voz"
+                >
                   {activeVoiceChannel?.name || 'Canal de Voz'}
                 </span>
               </div>
@@ -150,9 +169,14 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             <div className="flex items-center gap-1 flex-shrink-0 ml-1">
               <button
                 type="button"
-                onClick={() => setShowDiagnostic(true)}
-                className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-brand-400 transition-colors cursor-pointer flex-shrink-0"
-                title="Diagnóstico da Conexão WebRTC (Ping / Bitrate)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowVoicePopout(!showVoicePopout);
+                }}
+                className={`p-1.5 rounded hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0 ${
+                  showVoicePopout ? 'text-brand-400 bg-white/10' : 'text-gray-400 hover:text-brand-400'
+                }`}
+                title="Status da Conexão WebRTC (Ping / Servidor)"
               >
                 <Activity className="w-4 h-4" />
               </button>
@@ -179,7 +203,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         </div>
       )}
 
-      {/* WebRTC Diagnostics Modal */}
+      {/* Full WebRTC Technical Diagnostics Modal */}
       <VoiceDiagnosticModal
         isOpen={showDiagnostic}
         onClose={() => setShowDiagnostic(false)}
