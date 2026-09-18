@@ -673,32 +673,53 @@ export const App: React.FC = () => {
 
   // Rich Presence & Game Activity Detection in Electron
   useEffect(() => {
-    if (window.electronAPI?.onActivityDetected && user) {
-      const removeListener = window.electronAPI.onActivityDetected((detectedActivity: any) => {
-        const currentUser = useAuthStore.getState().user;
-        if (!currentUser || currentUser.auto_detect_activity === false) return;
-
-        const currentAct = currentUser.custom_activity;
-        if (
-          (!currentAct && !detectedActivity) ||
-          (currentAct && detectedActivity && currentAct.name === detectedActivity.name && currentAct.type === detectedActivity.type)
-        ) {
-          return;
-        }
-
-        api.users
-          .updateProfile({ custom_activity: detectedActivity || null })
-          .then((updated) => {
-            useAuthStore.getState().setUser(updated);
+    if (window.electronAPI && user) {
+      // Check current activity immediately on mount in Electron
+      if (window.electronAPI.getCurrentActivity) {
+        window.electronAPI
+          .getCurrentActivity()
+          .then((currentAct: any) => {
+            const currentUser = useAuthStore.getState().user;
+            if (!currentUser || currentUser.auto_detect_activity === false) return;
+            if (!currentAct && currentUser.custom_activity) {
+              api.users
+                .updateProfile({ custom_activity: null })
+                .then((updated) => {
+                  useAuthStore.getState().setUser(updated);
+                })
+                .catch(() => {});
+            }
           })
-          .catch((err) => {
-            console.warn('[Activity] Failed to auto-update activity:', err);
-          });
-      });
+          .catch(() => {});
+      }
 
-      return () => {
-        removeListener?.();
-      };
+      if (window.electronAPI.onActivityDetected) {
+        const removeListener = window.electronAPI.onActivityDetected((detectedActivity: any) => {
+          const currentUser = useAuthStore.getState().user;
+          if (!currentUser || currentUser.auto_detect_activity === false) return;
+
+          const currentAct = currentUser.custom_activity;
+          if (
+            (!currentAct && !detectedActivity) ||
+            (currentAct && detectedActivity && currentAct.name === detectedActivity.name && currentAct.type === detectedActivity.type)
+          ) {
+            return;
+          }
+
+          api.users
+            .updateProfile({ custom_activity: detectedActivity || null })
+            .then((updated) => {
+              useAuthStore.getState().setUser(updated);
+            })
+            .catch((err) => {
+              console.warn('[Activity] Failed to auto-update activity:', err);
+            });
+        });
+
+        return () => {
+          removeListener?.();
+        };
+      }
     }
   }, [user?.id, user?.auto_detect_activity]);
 

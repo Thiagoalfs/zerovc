@@ -675,60 +675,79 @@ interface DetectedActivity {
 }
 
 const KNOWN_GAMES_AND_APPS: Array<{
-  match: RegExp;
+  processes: string[];
   name: string;
-  type: 'playing' | 'listening' | 'watching' | 'streaming' | 'competing' | 'custom';
+  type: DetectedActivity['type'];
 }> = [
   // Popular Games
-  { match: /Minecraft|javaw\.exe|bedrock_server|Minecraft\.Windows/i, name: 'Minecraft', type: 'playing' },
-  { match: /LeagueClient|League of Legends/i, name: 'League of Legends', type: 'playing' },
-  { match: /VALORANT|VALORANT-Win64-Shipping/i, name: 'VALORANT', type: 'playing' },
-  { match: /cs2\.exe|csgo\.exe|Counter-Strike/i, name: 'Counter-Strike 2', type: 'playing' },
-  { match: /GTA5\.exe|Grand Theft Auto V|FiveM/i, name: 'Grand Theft Auto V', type: 'playing' },
-  { match: /RobloxPlayerBeta|Roblox/i, name: 'Roblox', type: 'playing' },
-  { match: /FortniteClient-Win64-Shipping|Fortnite/i, name: 'Fortnite', type: 'playing' },
-  { match: /Overwatch|Overwatch\.exe/i, name: 'Overwatch 2', type: 'playing' },
-  { match: /GenshinImpact\.exe|Genshin Impact/i, name: 'Genshin Impact', type: 'playing' },
-  { match: /StarRail\.exe|Honkai: Star Rail/i, name: 'Honkai: Star Rail', type: 'playing' },
-  { match: /ApexLegends|r5apex\.exe/i, name: 'Apex Legends', type: 'playing' },
-  { match: /RocketLeague\.exe|Rocket League/i, name: 'Rocket League', type: 'playing' },
-  { match: /Cyberpunk2077\.exe/i, name: 'Cyberpunk 2077', type: 'playing' },
-  { match: /eldenring\.exe/i, name: 'ELDEN RING', type: 'playing' },
-  { match: /Terraria\.exe/i, name: 'Terraria', type: 'playing' },
-  { match: /Stardew Valley|StardewValley\.exe/i, name: 'Stardew Valley', type: 'playing' },
-  { match: /dota2\.exe|Dota 2/i, name: 'Dota 2', type: 'playing' },
-  { match: /DeadByDaylight/i, name: 'Dead by Daylight', type: 'playing' },
-  { match: /RustClient\.exe|Rust/i, name: 'Rust', type: 'playing' },
-  { match: /Among Us|Among Us\.exe/i, name: 'Among Us', type: 'playing' },
-  { match: /osu!\.exe|osu!/i, name: 'osu!', type: 'playing' },
-  { match: /RainbowSix\.exe|Rainbow Six/i, name: 'Rainbow Six Siege', type: 'playing' },
-  { match: /WorldOfTanks\.exe|World of Tanks/i, name: 'World of Tanks', type: 'playing' },
-  { match: /Warframe\.x64\.exe|Warframe/i, name: 'Warframe', type: 'playing' },
-  { match: /Destiny2\.exe|Destiny 2/i, name: 'Destiny 2', type: 'playing' },
-  { match: /TslGame\.exe|PUBG/i, name: 'PUBG: BATTLEGROUNDS', type: 'playing' },
-  { match: /FallGuys_client\.exe|Fall Guys/i, name: 'Fall Guys', type: 'playing' },
-  { match: /Brawlhalla\.exe|Brawlhalla/i, name: 'Brawlhalla', type: 'playing' },
-  { match: /TheSims4|TS4_x64\.exe/i, name: 'The Sims 4', type: 'playing' },
+  { processes: ['minecraft.exe', 'javaw.exe', 'bedrock_server.exe', 'minecraft.windows.exe'], name: 'Minecraft', type: 'playing' },
+  { processes: ['leagueclient.exe', 'leagueclientux.exe'], name: 'League of Legends', type: 'playing' },
+  { processes: ['valorant.exe', 'valorant-win64-shipping.exe'], name: 'VALORANT', type: 'playing' },
+  { processes: ['cs2.exe', 'csgo.exe'], name: 'Counter-Strike 2', type: 'playing' },
+  { processes: ['gta5.exe', 'fivem.exe', 'fivem_b2699_gtaprocess.exe'], name: 'Grand Theft Auto V', type: 'playing' },
+  { processes: ['robloxplayerbeta.exe', 'robloxplayerlauncher.exe', 'roblox.exe'], name: 'Roblox', type: 'playing' },
+  { processes: ['fortniteclient-win64-shipping.exe', 'fortnitelauncher.exe'], name: 'Fortnite', type: 'playing' },
+  { processes: ['overwatch.exe'], name: 'Overwatch 2', type: 'playing' },
+  { processes: ['genshinimpact.exe', 'yuanshen.exe'], name: 'Genshin Impact', type: 'playing' },
+  { processes: ['starrail.exe'], name: 'Honkai: Star Rail', type: 'playing' },
+  { processes: ['r5apex.exe'], name: 'Apex Legends', type: 'playing' },
+  { processes: ['rocketleague.exe'], name: 'Rocket League', type: 'playing' },
+  { processes: ['cyberpunk2077.exe'], name: 'Cyberpunk 2077', type: 'playing' },
+  { processes: ['eldenring.exe'], name: 'ELDEN RING', type: 'playing' },
+  { processes: ['terraria.exe'], name: 'Terraria', type: 'playing' },
+  { processes: ['stardew valley.exe', 'stardewvalley.exe'], name: 'Stardew Valley', type: 'playing' },
+  { processes: ['dota2.exe'], name: 'Dota 2', type: 'playing' },
+  { processes: ['deadbydaylight-win64-shipping.exe', 'deadbydaylight.exe'], name: 'Dead by Daylight', type: 'playing' },
+  { processes: ['rustclient.exe', 'rust.exe'], name: 'Rust', type: 'playing' },
+  { processes: ['among us.exe'], name: 'Among Us', type: 'playing' },
+  { processes: ['osu!.exe', 'osu.exe'], name: 'osu!', type: 'playing' },
+  { processes: ['rainbowsix.exe', 'rainbowsix_vulkan.exe'], name: 'Rainbow Six Siege', type: 'playing' },
+  { processes: ['worldoftanks.exe'], name: 'World of Tanks', type: 'playing' },
+  { processes: ['warframe.x64.exe', 'warframe.exe'], name: 'Warframe', type: 'playing' },
+  { processes: ['destiny2.exe'], name: 'Destiny 2', type: 'playing' },
+  { processes: ['tslgame.exe'], name: 'PUBG: BATTLEGROUNDS', type: 'playing' },
+  { processes: ['fallguys_client.exe'], name: 'Fall Guys', type: 'playing' },
+  { processes: ['brawlhalla.exe'], name: 'Brawlhalla', type: 'playing' },
+  { processes: ['ts4_x64.exe', 'thesims4.exe'], name: 'The Sims 4', type: 'playing' },
   // Apps & Creative
-  { match: /Spotify\.exe|Spotify/i, name: 'Spotify', type: 'listening' },
-  { match: /Code\.exe|Visual Studio Code/i, name: 'Visual Studio Code', type: 'playing' },
-  { match: /blender\.exe|Blender/i, name: 'Blender', type: 'playing' },
-  { match: /Photoshop\.exe|Adobe Photoshop/i, name: 'Adobe Photoshop', type: 'playing' },
-  { match: /obs64\.exe|obs32\.exe|OBS Studio/i, name: 'OBS Studio', type: 'streaming' },
+  { processes: ['spotify.exe', 'spotify'], name: 'Spotify', type: 'listening' },
+  { processes: ['code.exe', 'code'], name: 'Visual Studio Code', type: 'playing' },
+  { processes: ['blender.exe'], name: 'Blender', type: 'playing' },
+  { processes: ['photoshop.exe'], name: 'Adobe Photoshop', type: 'playing' },
+  { processes: ['obs64.exe', 'obs32.exe'], name: 'OBS Studio', type: 'streaming' },
 ];
 
 let lastDetectedActivity: DetectedActivity | null = null;
-let activeActivityProcessMatch: RegExp | null = null;
+let activeActivityProcesses: string[] | null = null;
 let activeActivityCloseWatcherTimer: NodeJS.Timeout | null = null;
 let backgroundScanTimer: NodeJS.Timeout | null = null;
 let isScanning = false;
+let hasPerformedInitialScan = false;
+
+function parseRunningProcesses(stdout: string): Set<string> {
+  const set = new Set<string>();
+  const lines = stdout.split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    // Tasklist CSV format: "image_name.exe","pid","session","session_num","mem"
+    const match = trimmed.match(/^"([^"]+)"/);
+    if (match) {
+      set.add(match[1].toLowerCase());
+    } else {
+      const proc = trimmed.split(/\s+/)[0];
+      if (proc) set.add(proc.toLowerCase());
+    }
+  }
+  return set;
+}
 
 function startActiveActivityCloseWatcher() {
   if (activeActivityCloseWatcherTimer) return;
 
   // Poll only while an activity is actively running to catch termination quickly
   activeActivityCloseWatcherTimer = setInterval(() => {
-    if (!lastDetectedActivity || !activeActivityProcessMatch) {
+    if (!lastDetectedActivity || !activeActivityProcesses) {
       stopActiveActivityCloseWatcher();
       return;
     }
@@ -746,11 +765,14 @@ function startActiveActivityCloseWatcher() {
     exec(cmd, { maxBuffer: 1024 * 512, windowsHide: true }, (err: any, stdout: string) => {
       if (err || !stdout) return;
 
+      const procSet = parseRunningProcesses(stdout);
+      const isStillRunning = activeActivityProcesses && activeActivityProcesses.some((p) => procSet.has(p));
+
       // If the currently detected game/app is no longer in running processes
-      if (activeActivityProcessMatch && !activeActivityProcessMatch.test(stdout)) {
+      if (!isStillRunning) {
         console.log('[Activity] Detected application close for:', lastDetectedActivity?.name);
         lastDetectedActivity = null;
-        activeActivityProcessMatch = null;
+        activeActivityProcesses = null;
         stopActiveActivityCloseWatcher();
 
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -761,7 +783,7 @@ function startActiveActivityCloseWatcher() {
         setTimeout(scanProcessesForActivity, 500);
       }
     });
-  }, 3500);
+  }, 3000);
 }
 
 function stopActiveActivityCloseWatcher() {
@@ -790,17 +812,18 @@ function scanProcessesForActivity() {
     isScanning = false;
     if (err || !stdout) return;
 
-    let foundMatch: { name: string; type: DetectedActivity['type']; match: RegExp } | null = null;
+    const procSet = parseRunningProcesses(stdout);
+    let foundMatch: { name: string; type: DetectedActivity['type']; processes: string[] } | null = null;
 
     for (const item of KNOWN_GAMES_AND_APPS) {
-      if (item.match.test(stdout)) {
-        foundMatch = { name: item.name, type: item.type, match: item.match };
+      if (item.processes.some((p) => procSet.has(p))) {
+        foundMatch = { name: item.name, type: item.type, processes: item.processes };
         break;
       }
     }
 
     if (foundMatch) {
-      activeActivityProcessMatch = foundMatch.match;
+      activeActivityProcesses = foundMatch.processes;
       if (!lastDetectedActivity || lastDetectedActivity.name !== foundMatch.name) {
         lastDetectedActivity = {
           name: foundMatch.name,
@@ -813,15 +836,19 @@ function scanProcessesForActivity() {
         }
       }
       startActiveActivityCloseWatcher();
-    } else if (lastDetectedActivity) {
-      console.log('[Activity] Application closed:', lastDetectedActivity.name);
+    } else {
+      const shouldClear = lastDetectedActivity !== null || !hasPerformedInitialScan;
+      if (lastDetectedActivity) {
+        console.log('[Activity] Application closed:', lastDetectedActivity.name);
+      }
       lastDetectedActivity = null;
-      activeActivityProcessMatch = null;
+      activeActivityProcesses = null;
       stopActiveActivityCloseWatcher();
-      if (mainWindow && !mainWindow.isDestroyed()) {
+      if (shouldClear && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('activity-detected', null);
       }
     }
+    hasPerformedInitialScan = true;
   });
 }
 
