@@ -59,6 +59,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
   const [isSearchAutocompleteOpen, setIsSearchAutocompleteOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -132,7 +133,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const scrollToBottom = (smooth = false) => {
-    if (!showPinnedOnly && !searchQuery) {
+    if (!showPinnedOnly && !appliedSearchQuery) {
       if (scrollContainerRef.current) {
         if (smooth) {
           scrollContainerRef.current.scrollTo({
@@ -213,7 +214,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     ? pinnedMessagesByChannel?.[activeChannel.id] || []
     : messages || [];
 
-  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
+  const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
 
   const displayedMessages = useMemo(() => {
     let list = baseMessages;
@@ -355,14 +356,25 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 setSearchQuery(e.target.value);
                 if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setAppliedSearchQuery(searchQuery.trim());
+                  setIsSearchAutocompleteOpen(false);
+                }
+              }}
               onFocus={() => setIsSearchAutocompleteOpen(true)}
               placeholder="Buscar..."
               className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
             />
-            {searchQuery && (
+            {(searchQuery || appliedSearchQuery) && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('');
+                  setAppliedSearchQuery('');
+                  setIsSearchAutocompleteOpen(false);
+                }}
                 className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
                 title="Limpar busca"
               >
@@ -380,6 +392,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               setSearchQuery(newQ);
               searchInputRef.current?.focus();
             }}
+            onSearchSubmit={(q) => {
+              setAppliedSearchQuery(q.trim());
+            }}
             anchorRef={searchContainerRef}
             members={activeGuild?.members || []}
             channels={activeGuild?.channels || []}
@@ -389,12 +404,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       </div>
 
       {/* Pinned or Search Active Notice Banner */}
-      {(showPinnedOnly || searchQuery) && (
+      {(showPinnedOnly || appliedSearchQuery) && (
         <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300 flex-shrink-0">
           <span>
-            {showPinnedOnly && searchQuery ? (
+            {showPinnedOnly && appliedSearchQuery ? (
               <>
-                Filtrando por mensagens fixadas contendo <strong className="text-white font-mono font-semibold">"{searchQuery}"</strong> ({displayedMessages.length} encontradas)
+                Filtrando por mensagens fixadas contendo <strong className="text-white font-mono font-semibold">"{appliedSearchQuery}"</strong> ({displayedMessages.length} encontradas)
               </>
             ) : showPinnedOnly ? (
               <>
@@ -402,7 +417,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               </>
             ) : (
               <>
-                Resultados para <strong className="text-white font-mono font-semibold">"{searchQuery}"</strong> ({displayedMessages.length} encontradas)
+                Resultados para <strong className="text-white font-mono font-semibold">"{appliedSearchQuery}"</strong> ({displayedMessages.length} encontradas)
               </>
             )}
           </span>
@@ -411,6 +426,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             onClick={() => {
               setShowPinnedOnly(false);
               setSearchQuery('');
+              setAppliedSearchQuery('');
             }}
             className="text-brand-400 hover:underline font-semibold cursor-pointer ml-2 flex-shrink-0"
           >
@@ -468,7 +484,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                     <span className="text-sm font-semibold text-gray-300">Nenhuma mensagem fixada</span>
                     <span className="text-xs text-gray-500">Fixe mensagens importantes para que todos possam consultá-las facilmente.</span>
                   </>
-                ) : searchQuery ? (
+                ) : appliedSearchQuery ? (
                   <>
                     <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-400">
                       <Search className="w-6 h-6" />

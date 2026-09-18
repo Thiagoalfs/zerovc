@@ -57,6 +57,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const [replyingTo, setReplyingTo] = useState<DMMessage | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
   const [isSearchAutocompleteOpen, setIsSearchAutocompleteOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -125,7 +126,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   };
 
   const scrollToBottom = (smooth = false) => {
-    if (!searchQuery && scrollContainerRef.current) {
+    if (!appliedSearchQuery && scrollContainerRef.current) {
       if (smooth) {
         scrollContainerRef.current.scrollTo({
           top: scrollContainerRef.current.scrollHeight,
@@ -186,7 +187,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     }
   };
 
-  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
+  const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
 
   const displayedMessages = useMemo(() => {
     let list = messages;
@@ -365,14 +366,25 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                 setSearchQuery(e.target.value);
                 if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setAppliedSearchQuery(searchQuery.trim());
+                  setIsSearchAutocompleteOpen(false);
+                }
+              }}
               onFocus={() => setIsSearchAutocompleteOpen(true)}
               placeholder="Buscar..."
               className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
             />
-            {searchQuery && (
+            {(searchQuery || appliedSearchQuery) && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('');
+                  setAppliedSearchQuery('');
+                  setIsSearchAutocompleteOpen(false);
+                }}
                 className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
                 title="Limpar busca"
               >
@@ -390,6 +402,9 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               setSearchQuery(newQ);
               searchInputRef.current?.focus();
             }}
+            onSearchSubmit={(q) => {
+              setAppliedSearchQuery(q.trim());
+            }}
             anchorRef={searchContainerRef}
             members={recipient ? [recipient] : []}
             contextType="dm"
@@ -403,17 +418,18 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       )}
 
       {/* Pinned or Search Active Notice Banner */}
-      {(showPinnedOnly || searchQuery) && (
+      {(showPinnedOnly || appliedSearchQuery) && (
         <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
           <span>
             {showPinnedOnly
               ? `Exibindo apenas mensagens fixadas (${displayedMessages.length})`
-              : `Resultados da busca para "${searchQuery}" (${displayedMessages.length})`}
+              : `Resultados da busca para "${appliedSearchQuery}" (${displayedMessages.length})`}
           </span>
           <button
             onClick={() => {
               setShowPinnedOnly(false);
               setSearchQuery('');
+              setAppliedSearchQuery('');
             }}
             className="text-brand-400 hover:underline font-semibold cursor-pointer"
           >
@@ -437,7 +453,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         )}
 
         {/* Welcome Header at the absolute top of the DM */}
-        {!showPinnedOnly && !searchQuery && hasMoreByRoom[activeRoom.id] === false && (
+        {!showPinnedOnly && !appliedSearchQuery && hasMoreByRoom[activeRoom.id] === false && (
           <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
             <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-brand-500 flex items-center justify-center mb-3 text-white text-xl font-bold shadow-lg overflow-hidden">
               {recipient.avatar_url ? (
@@ -473,7 +489,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                 <span className="text-sm font-semibold text-gray-300">Nenhuma mensagem fixada</span>
                 <span className="text-xs text-gray-500">Fixe mensagens importantes para consultá-las com facilidade.</span>
               </>
-            ) : searchQuery ? (
+            ) : appliedSearchQuery ? (
               <>
                 <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-400">
                   <Search className="w-6 h-6" />

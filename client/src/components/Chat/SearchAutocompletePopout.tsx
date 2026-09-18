@@ -23,6 +23,7 @@ export interface SearchAutocompletePopoutProps {
   onClose: () => void;
   query: string;
   onSelectFilter: (newQuery: string) => void;
+  onSearchSubmit?: (query: string) => void;
   anchorRef?: React.RefObject<HTMLElement> | null;
   members?: User[];
   channels?: Channel[];
@@ -108,6 +109,7 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
   onClose,
   query,
   onSelectFilter,
+  onSearchSubmit,
   anchorRef,
   members = [],
   channels = [],
@@ -263,18 +265,30 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
-      } else if (e.key === 'Tab' || e.key === 'Enter') {
-        // Autocomplete selected item
+      } else if (e.key === 'Tab') {
+        // Tab autocompletes selected item
         if (currentItemCount > 0) {
           e.preventDefault();
           selectCurrentIndex();
+        }
+      } else if (e.key === 'Enter') {
+        if (activeMode.type !== 'root' && currentItemCount > 0) {
+          // When picking a specific user, channel, or modifier, Enter autocompletes the token
+          e.preventDefault();
+          selectCurrentIndex();
+        } else {
+          // In root mode or general typing, pressing Enter closes popout and triggers search execution
+          onClose();
+          if (onSearchSubmit) {
+            onSearchSubmit(query);
+          }
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentItemCount, selectedIndex, activeMode]);
+  }, [isOpen, currentItemCount, selectedIndex, activeMode, query, onSearchSubmit, onClose]);
 
   const selectCurrentIndex = () => {
     if (activeMode.type === 'author' || activeMode.type === 'mention') {

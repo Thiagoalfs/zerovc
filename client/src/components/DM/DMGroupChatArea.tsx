@@ -57,6 +57,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     return typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
   const [isSearchAutocompleteOpen, setIsSearchAutocompleteOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -169,7 +170,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   };
 
-  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
+  const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
 
   const displayedMessages = useMemo(() => {
     return filterMessages(messages, parsedSearch);
@@ -338,14 +339,25 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 setSearchQuery(e.target.value);
                 if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setAppliedSearchQuery(searchQuery.trim());
+                  setIsSearchAutocompleteOpen(false);
+                }
+              }}
               onFocus={() => setIsSearchAutocompleteOpen(true)}
               placeholder="Buscar..."
               className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
             />
-            {searchQuery && (
+            {(searchQuery || appliedSearchQuery) && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('');
+                  setAppliedSearchQuery('');
+                  setIsSearchAutocompleteOpen(false);
+                }}
                 className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
                 title="Limpar busca"
               >
@@ -363,12 +375,33 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               setSearchQuery(newQ);
               searchInputRef.current?.focus();
             }}
+            onSearchSubmit={(q) => {
+              setAppliedSearchQuery(q.trim());
+            }}
             anchorRef={searchContainerRef}
             members={activeGroup?.members || []}
             contextType="dm_group"
           />
         </div>
       </div>
+
+      {/* Search Active Notice Banner */}
+      {appliedSearchQuery && (
+        <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
+          <span>
+            Resultados da busca para "<strong className="text-white font-mono font-semibold">{appliedSearchQuery}</strong>" ({displayedMessages.length} encontradas)
+          </span>
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setAppliedSearchQuery('');
+            }}
+            className="text-brand-400 hover:underline font-semibold cursor-pointer"
+          >
+            Limpar busca
+          </button>
+        </div>
+      )}
 
       {/* Main Area (Messages + optional Member List) */}
       <div className="flex-1 flex overflow-hidden">
@@ -387,7 +420,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             )}
 
             {/* Welcome header for Group at top */}
-            {hasMoreByGroup[activeGroup.id] === false && (
+            {!appliedSearchQuery && hasMoreByGroup[activeGroup.id] === false && (
               <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
                 <div className="w-14 h-14 md:w-16 md:h-16 rounded-3xl bg-brand-500/20 border border-brand-500/30 text-brand-400 flex items-center justify-center mb-3 shadow-lg">
                   <Users className="w-8 h-8" />
@@ -408,7 +441,17 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               </div>
             ) : displayedMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 select-none">
-                <span>{searchQuery ? 'Nenhuma mensagem encontrada para essa busca.' : 'Nenhuma mensagem ainda no grupo. Diga olá!'}</span>
+                {appliedSearchQuery ? (
+                  <>
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-400">
+                      <Search className="w-6 h-6" />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-300">Nenhum resultado encontrado</span>
+                    <span className="text-xs text-gray-500">Tente buscar por outros termos.</span>
+                  </>
+                ) : (
+                  <span>Nenhuma mensagem ainda no grupo. Diga olá!</span>
+                )}
               </div>
             ) : (
               displayedMessages.map((message, index) => {
