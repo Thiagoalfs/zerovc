@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff, Activity } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -19,6 +19,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showVoicePopout, setShowVoicePopout] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const voiceBarRef = useRef<HTMLDivElement>(null);
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const {
     currentChannelId,
@@ -129,7 +130,10 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
       {/* Active Voice Connection Bar */}
       {(isConnected || isConnecting) && (
-        <div className="w-full min-w-0 max-w-full bg-background-darkest/90 border-b border-white/5 p-2 px-2.5 flex flex-col gap-1.5 overflow-visible relative">
+        <div
+          ref={voiceBarRef}
+          className="w-full min-w-0 max-w-full bg-background-darkest/90 border-b border-white/5 p-2 px-2.5 flex flex-col gap-1.5 overflow-visible relative"
+        >
           {/* Discord-style Floating Voice Connection Popout */}
           <VoiceConnectionPopout
             isOpen={showVoicePopout}
@@ -137,6 +141,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             onOpenDiagnostic={() => setShowDiagnostic(true)}
             channelName={activeVoiceChannel?.name}
             serverName={activeGuild?.name}
+            anchorRef={voiceBarRef}
           />
 
           <div className="flex items-center justify-between min-w-0 gap-1.5">
