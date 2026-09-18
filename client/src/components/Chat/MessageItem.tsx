@@ -771,10 +771,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           >
             <CornerDownRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 group-hover/reply:text-brand-400 transition-colors" />
             <span className="font-semibold text-brand-400 group-hover/reply:underline">
-              @{message.reply_to.author.display_name || message.reply_to.author.username}
+              @{message.reply_to?.author?.display_name || message.reply_to?.author?.username || 'Usuário'}
             </span>
             <span className="truncate text-gray-400 max-w-sm italic">
-              "{message.reply_to.content}"
+              "{message.reply_to?.content || ''}"
             </span>
           </div>
         )}

@@ -1550,86 +1550,87 @@ export const App: React.FC = () => {
         </div>
 
       {/* 3. Main Stage */}
-      {/* 3. Main Stage */}
       <div className="flex-1 flex flex-col h-full overflow-hidden w-full min-w-0 min-h-0 relative">
-        {isHomeActive ? (
-          homeView === 'friends' ? (
-            <FriendsView
-              onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
-              onOpenUserProfile={(targetUser, pos) =>
-                setSelectedUserForProfile({ user: targetUser, position: pos })
-              }
-              onOpenDM={(userId, room) => {
-                setIsHomeActive(true);
-                setHomeView('dm');
-                setIsMobileDrawerOpen(false);
-                const targetRoom = room || useDMStore.getState().activeRoom;
-                if (targetRoom) {
-                  navigateTo(`/@me/${targetRoom.id}`);
-                } else {
-                  navigateTo('/@me');
+        <ErrorBoundary>
+          {isHomeActive ? (
+            homeView === 'friends' ? (
+              <FriendsView
+                onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+                onOpenUserProfile={(targetUser, pos) =>
+                  setSelectedUserForProfile({ user: targetUser, position: pos })
                 }
-              }}
-            />
-          ) : homeView === 'group' ? (
-            <DMGroupChatArea
-              onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
-              onOpenUserProfile={(targetUser, pos) =>
-                setSelectedUserForProfile({ user: targetUser, position: pos })
-              }
-              onPreviewImage={(url) => setPreviewImageUrl(url)}
-            />
-          ) : (
-            <DMChatArea
+                onOpenDM={(userId, room) => {
+                  setIsHomeActive(true);
+                  setHomeView('dm');
+                  setIsMobileDrawerOpen(false);
+                  const targetRoom = room || useDMStore.getState().activeRoom;
+                  if (targetRoom) {
+                    navigateTo(`/@me/${targetRoom.id}`);
+                  } else {
+                    navigateTo('/@me');
+                  }
+                }}
+              />
+            ) : homeView === 'group' ? (
+              <DMGroupChatArea
+                onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+                onOpenUserProfile={(targetUser, pos) =>
+                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                }
+                onPreviewImage={(url) => setPreviewImageUrl(url)}
+              />
+            ) : (
+              <DMChatArea
+                onOpenScreenShare={() => setIsScreenShareOpen(true)}
+                onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+                onOpenUserProfile={(targetUser, pos) =>
+                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                }
+                onPreviewImage={(url) => setPreviewImageUrl(url)}
+              />
+            )
+          ) : activeChannel?.type === 'voice' ? (
+            <VoiceRoom
+              channel={activeChannel}
               onOpenScreenShare={() => setIsScreenShareOpen(true)}
               onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
               onOpenUserProfile={(targetUser, pos) =>
                 setSelectedUserForProfile({ user: targetUser, position: pos })
               }
-              onPreviewImage={(url) => setPreviewImageUrl(url)}
+              onOpenDM={async (userId) => {
+                setIsHomeActive(true);
+                setHomeView('dm');
+                setIsMobileDrawerOpen(false);
+                const room = await useDMStore.getState().openDMWithUser(userId);
+                if (room) {
+                  navigateTo(`/@me/${room.id}`);
+                }
+              }}
             />
-          )
-        ) : activeChannel?.type === 'voice' ? (
-          <VoiceRoom
-            channel={activeChannel}
-            onOpenScreenShare={() => setIsScreenShareOpen(true)}
-            onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
-            onOpenUserProfile={(targetUser, pos) =>
-              setSelectedUserForProfile({ user: targetUser, position: pos })
-            }
-            onOpenDM={async (userId) => {
-              setIsHomeActive(true);
-              setHomeView('dm');
-              setIsMobileDrawerOpen(false);
-              const room = await useDMStore.getState().openDMWithUser(userId);
-              if (room) {
-                navigateTo(`/@me/${room.id}`);
+          ) : (
+            <ChatArea
+              onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+              onOpenUserProfile={(targetUser, pos) =>
+                setSelectedUserForProfile({ user: targetUser, position: pos })
               }
-            }}
-          />
-        ) : (
-          <ChatArea
-            onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
-            onOpenUserProfile={(targetUser, pos) =>
-              setSelectedUserForProfile({ user: targetUser, position: pos })
-            }
-            onOpenDM={async (userId) => {
-              setIsHomeActive(true);
-              setHomeView('dm');
-              setIsMobileDrawerOpen(false);
-              const room = await useDMStore.getState().openDMWithUser(userId);
-              if (room) {
-                navigateTo(`/@me/${room.id}`);
-              }
-            }}
-            onPreviewImage={(url) => setPreviewImageUrl(url)}
-            isMemberListOpen={isMemberListOpen}
-            onToggleMemberList={handleToggleMemberList}
-            isDraggingMemberList={dragState?.drawer === 'right'}
-            memberListDragOffset={dragState?.drawer === 'right' ? dragState.offset : null}
-            memberListDragProgress={dragState?.drawer === 'right' ? dragState.progress : null}
-          />
-        )}
+              onOpenDM={async (userId) => {
+                setIsHomeActive(true);
+                setHomeView('dm');
+                setIsMobileDrawerOpen(false);
+                const room = await useDMStore.getState().openDMWithUser(userId);
+                if (room) {
+                  navigateTo(`/@me/${room.id}`);
+                }
+              }}
+              onPreviewImage={(url) => setPreviewImageUrl(url)}
+              isMemberListOpen={isMemberListOpen}
+              onToggleMemberList={handleToggleMemberList}
+              isDraggingMemberList={dragState?.drawer === 'right'}
+              memberListDragOffset={dragState?.drawer === 'right' ? dragState.offset : null}
+              memberListDragProgress={dragState?.drawer === 'right' ? dragState.progress : null}
+            />
+          )}
+        </ErrorBoundary>
 
         {/* Floating Live Screen PiP (Shown ONLY when someone in the call is actively sharing screen) */}
         {isConnected && (isHomeActive || activeChannel?.type !== 'voice' || activeChannel?.id !== currentChannelId) && (

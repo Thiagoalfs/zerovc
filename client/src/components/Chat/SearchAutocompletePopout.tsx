@@ -196,10 +196,12 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
   // Filter member suggestions
   const filteredMembers = useMemo(() => {
     if (activeMode.type !== 'author' && activeMode.type !== 'mention') return [];
+    const list = Array.isArray(members) ? members.filter(Boolean) : [];
     const val = activeMode.filterValue;
-    if (!val) return members.slice(0, 10);
-    return members
+    if (!val) return list.slice(0, 10);
+    return list
       .filter((m) => {
+        if (!m) return false;
         const u = (m.username || '').toLowerCase();
         const d = (m.display_name || '').toLowerCase();
         return u.includes(val) || d.includes(val);
@@ -210,10 +212,11 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
   // Filter channel suggestions
   const filteredChannels = useMemo(() => {
     if (activeMode.type !== 'channel') return [];
-    const textChannels = channels.filter((c) => c.type === 'text');
+    const list = Array.isArray(channels) ? channels.filter(Boolean) : [];
+    const textChannels = list.filter((c) => c && c.type === 'text');
     const val = activeMode.filterValue;
     if (!val) return textChannels.slice(0, 10);
-    return textChannels.filter((c) => c.name.toLowerCase().includes(val)).slice(0, 10);
+    return textChannels.filter((c) => c && c.name && c.name.toLowerCase().includes(val)).slice(0, 10);
   }, [activeMode, channels]);
 
   // Filter has suggestions
