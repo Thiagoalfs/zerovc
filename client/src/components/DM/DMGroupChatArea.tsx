@@ -6,6 +6,8 @@ import {
   PhoneOff,
   LogOut,
   UploadCloud,
+  Search,
+  X,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -52,6 +54,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     } catch {}
     return typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
   });
+  const [searchQuery, setSearchQuery] = useState('');
   const [isInGroupVoice, setIsInGroupVoice] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
@@ -161,10 +164,20 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   };
 
+  const displayedMessages = useMemo(() => {
+    if (!searchQuery.trim()) return messages;
+    const q = searchQuery.toLowerCase();
+    return messages.filter((m) => {
+      const matchContent = m.content.toLowerCase().includes(q);
+      const matchAuthor = (m.author?.display_name || m.author?.username || '').toLowerCase().includes(q);
+      return matchContent || matchAuthor;
+    });
+  }, [messages, searchQuery]);
+
   const handleEditLastMessage = () => {
-    if (!user || !messages || messages.length === 0) return;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
+    if (!user || !displayedMessages || displayedMessages.length === 0) return;
+    for (let i = displayedMessages.length - 1; i >= 0; i--) {
+      const msg = displayedMessages[i];
       if (msg.author_id === user.id) {
         setEditingMessageId(msg.id);
         break;
@@ -279,7 +292,29 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
         </div>
 
         {/* Right Header Actions */}
-        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+          {/* Discord-style Search Input Box */}
+          <div className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64">
+            <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar..."
+              className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
+                title="Limpar busca"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
           {/* Voice Channel in Group Toggle */}
           <button
             onClick={handleJoinVoice}
@@ -348,13 +383,13 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
                 <span>Carregando mensagens...</span>
               </div>
-            ) : messages.length === 0 ? (
+            ) : displayedMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 select-none">
-                <span>Nenhuma mensagem ainda no grupo. Diga olá!</span>
+                <span>{searchQuery ? 'Nenhuma mensagem encontrada para essa busca.' : 'Nenhuma mensagem ainda no grupo. Diga olá!'}</span>
               </div>
             ) : (
-              messages.map((message, index) => {
-                const prevMessage = index > 0 ? messages[index - 1] : null;
+              displayedMessages.map((message, index) => {
+                const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
                 const isCompact = (() => {
                   if (!prevMessage) return false;
                   if (prevMessage.author_id !== message.author_id) return false;

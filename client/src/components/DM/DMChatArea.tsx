@@ -324,7 +324,29 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
 
         {/* Right Header Actions */}
-        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+          {/* Discord-style Search Input Box */}
+          <div className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64">
+            <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar..."
+              className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
+                title="Limpar busca"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
           {/* Voice Call Button */}
           {!isCallActiveInThisRoom && (
             <button
@@ -333,38 +355,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               title="Iniciar Chamada de Voz"
             >
               <Phone className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Search Toggle */}
-          {isSearchOpen ? (
-            <div className="flex items-center gap-1 bg-background-darkest px-2 py-1 rounded-xl border border-white/10 text-xs">
-              <Search className="w-3.5 h-3.5 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar mensagens..."
-                autoFocus
-                className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-28 md:w-44"
-              />
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setIsSearchOpen(false);
-                }}
-                className="p-0.5 text-gray-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsSearchOpen(true)}
-              className="p-2 md:p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors cursor-pointer"
-              title="Buscar na conversa"
-            >
-              <Search className="w-4 h-4" />
             </button>
           )}
 
