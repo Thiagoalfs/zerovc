@@ -857,24 +857,7 @@ ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceI
       child.stderr.on('data', (data: Buffer) => {
         const text = data.toString();
         console.log(`[AudioCapture Native] ${text.trim()}`);
-        // Ordem importa: a linha de fallback vem ANTES do "Capture Started" do fallback.
-        if (text.includes('FULL SCREEN DEFAULT ENDPOINT LOOPBACK')) {
-          finish({ ok: false, error: 'native-fallback-full-mix' });
-          if (started) {
-            // Fallback no MEIO da sessão: mata o processo imediatamente para não vazar
-            // o mix completo (com as vozes da call) e avisa o renderer.
-            try { child.kill(); } catch {}
-            if (activeAudioProcess === child) {
-              activeAudioProcess = null;
-            }
-            activeAudioBuffer = Buffer.alloc(0);
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('process-audio-fallback', { reason: 'native-fallback-full-mix' });
-            }
-          }
-        } else if (text.includes('Capture Started') || text.includes('Started capture loop')) {
-          // O binário pode imprimir "Capture Started" (versões antigas) ou
-          // "Started capture loop -> 48000Hz Stereo Float32" (versões novas).
+        if (text.includes('Capture Started') || text.includes('Started capture loop')) {
           started = true;
           finish({ ok: true });
         }
