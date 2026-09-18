@@ -2,44 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Shield,
-  Plus,
   Trash2,
-  Check,
   Users,
-  Lock,
   Crown,
-  MessageSquare,
-  Volume2,
   Settings as SettingsIcon,
-  UserCheck,
-  AlertTriangle,
-  Palette,
-  Upload,
-  Image as ImageIcon,
-  ChevronDown,
   ScrollText,
   Smile,
   Link as LinkIcon,
-  Copy,
-  ArrowUp,
-  ArrowDown,
-  Search,
-  MoreVertical,
-  Clock,
-  UserX,
-  Ban,
-  Hash,
-  Sparkles,
-  CheckCircle2,
-  Calendar,
-  Pencil,
-  ArrowLeft,
   ChevronRight,
-  Loader2,
+  ArrowLeft,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
-import { Permissions, Role, GuildEmoji, GuildInvite, User } from '../../types';
+import { Permissions, GuildEmoji, GuildInvite, User } from '../../types';
 import { api, formatAssetUrl, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
 import { convertToWebP } from '../../utils/image';
@@ -47,140 +22,20 @@ import { ImageCropModal } from './ImageCropModal';
 import { ServerAuditLogView } from './ServerAuditLogView';
 import { pushBackHandler } from '../../lib/mobileBackHandler';
 
+import { OverviewTab } from './ServerSettings/OverviewTab';
+import { RolesTab } from './ServerSettings/RolesTab';
+import { EmojisTab } from './ServerSettings/EmojisTab';
+import { InvitesTab } from './ServerSettings/InvitesTab';
+import { MembersTab } from './ServerSettings/MembersTab';
+import { DeleteServerModal } from './ServerSettings/DeleteServerModal';
+import { TransferOwnershipModal } from './ServerSettings/TransferOwnershipModal';
+import { BanMemberModal } from './ServerSettings/BanMemberModal';
+import { MuteMemberModal } from './ServerSettings/MuteMemberModal';
+
 interface ServerSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-const PRESET_ROLE_COLORS = [
-  '#5865F2', // Blurple
-  '#57F287', // Green
-  '#FEE75C', // Yellow
-  '#EB459E', // Fuchsia
-  '#ED4245', // Red
-  '#9B59B6', // Purple
-  '#1ABC9C', // Teal
-  '#E67E22', // Orange
-  '#3498DB', // Blue
-  '#99AAB5', // Gray
-  '#E91E63', // Pink
-  '#607D8B', // Blue Grey
-];
-
-interface PermissionDefinition {
-  flag: number;
-  name: string;
-  description: string;
-  isMaster?: boolean;
-}
-
-const PERMISSION_GROUPS: { category: string; icon: React.ReactNode; permissions: PermissionDefinition[] }[] = [
-  {
-    category: 'Permissões Gerais',
-    icon: <SettingsIcon className="w-4 h-4 text-brand-400" />,
-    permissions: [
-      {
-        flag: Permissions.ADMINISTRATOR,
-        name: 'Administrador (Permissão Mestre)',
-        description: 'Membros com esta permissão têm acesso total irrestrito e ignoram todos os bloqueios de canais.',
-        isMaster: true,
-      },
-      {
-        flag: Permissions.VIEW_CHANNEL,
-        name: 'Ver Canais',
-        description: 'Permite que membros vejam canais por padrão no servidor.',
-      },
-      {
-        flag: Permissions.MANAGE_GUILD,
-        name: 'Gerenciar Servidor',
-        description: 'Permite alterar o nome do servidor, ícone, banner e configurações gerais.',
-      },
-      {
-        flag: Permissions.MANAGE_ROLES,
-        name: 'Gerenciar Cargos',
-        description: 'Permite criar novos cargos e editar permissões de cargos inferiores.',
-      },
-      {
-        flag: Permissions.MANAGE_CHANNELS,
-        name: 'Gerenciar Canais e Categorias',
-        description: 'Permite criar, editar, reordenar ou excluir canais e categorias.',
-      },
-    ],
-  },
-  {
-    category: 'Moderação de Membros',
-    icon: <UserCheck className="w-4 h-4 text-amber-400" />,
-    permissions: [
-      {
-        flag: Permissions.KICK_MEMBERS,
-        name: 'Expulsar Membros',
-        description: 'Permite expulsar membros com cargos inferiores do servidor.',
-      },
-      {
-        flag: Permissions.BAN_MEMBERS,
-        name: 'Banir Membros',
-        description: 'Permite banir membros com cargos inferiores permanentemente.',
-      },
-      {
-        flag: Permissions.MUTE_MEMBERS,
-        name: 'Silenciar Membros no Servidor',
-        description: 'Permite aplicar timeout/silenciamento temporário ou permanente a membros.',
-      },
-    ],
-  },
-  {
-    category: 'Permissões de Chat de Texto',
-    icon: <MessageSquare className="w-4 h-4 text-sky-400" />,
-    permissions: [
-      {
-        flag: Permissions.SEND_MESSAGES,
-        name: 'Enviar Mensagens',
-        description: 'Permite enviar mensagens de texto e iniciar conversas nos canais.',
-      },
-      {
-        flag: Permissions.MANAGE_MESSAGES,
-        name: 'Gerenciar Mensagens',
-        description: 'Permite deletar mensagens de outros usuários e fixar mensagens.',
-      },
-      {
-        flag: Permissions.ATTACH_FILES,
-        name: 'Anexar Arquivos e Imagens',
-        description: 'Permite enviar fotos, arquivos e mídias nos canais de texto.',
-      },
-    ],
-  },
-  {
-    category: 'Permissões de Voz',
-    icon: <Volume2 className="w-4 h-4 text-emerald-400" />,
-    permissions: [
-      {
-        flag: Permissions.CONNECT_VOICE,
-        name: 'Conectar em Canais de Voz',
-        description: 'Permite entrar e ouvir conversas nos canais de voz.',
-      },
-      {
-        flag: Permissions.SPEAK_VOICE,
-        name: 'Falar em Voz',
-        description: 'Permite ativar o microfone e transmitir áudio nos canais de voz.',
-      },
-      {
-        flag: Permissions.STREAM_VOICE,
-        name: 'Transmitir Tela e Vídeo',
-        description: 'Permite compartilhar a tela ou transmitir vídeo nos canais de voz.',
-      },
-      {
-        flag: Permissions.MUTE_VOICE,
-        name: 'Silenciar Membros em Voz',
-        description: 'Permite silenciar o microfone de outros usuários na sala de voz.',
-      },
-      {
-        flag: Permissions.DEAFEN_VOICE,
-        name: 'Ensurdecer Membros em Voz',
-        description: 'Permite desativar o áudio de outros usuários na sala de voz.',
-      },
-    ],
-  },
-];
 
 export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen, onClose }) => {
   const { user } = useAuthStore();
@@ -201,8 +56,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   } = useGuildStore();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'roles' | 'emojis' | 'invites' | 'members' | 'audit_log'>('overview');
-
-  // Mobile full-screen drilldown navigation state ('menu' -> 'content')
   const [mobileView, setMobileView] = useState<'menu' | 'content'>('menu');
 
   useEffect(() => {
@@ -233,7 +86,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   // Roles State
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [newRoleName, setNewRoleName] = useState('');
-  const [newRoleColor, setNewRoleColor] = useState('#5865F2');
+  const [newRoleColor] = useState('#5865F2');
   const [isCreatingRole, setIsCreatingRole] = useState(false);
   const [isReorderingRoles, setIsReorderingRoles] = useState(false);
 
@@ -410,13 +263,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const textChannels = (activeGuild.channels || []).filter((c) => c.type === 'text');
   const voiceChannels = (activeGuild.channels || []).filter((c) => c.type === 'voice');
   const onlineMembersCount = members.filter((m) => m.status && m.status !== 'offline').length;
-  const initials = (activeGuild.name || '')
-    .trim()
-    .split(/\s+/)
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 3)
-    .toUpperCase() || 'SRV';
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
   const isRoleAdmin = selectedRole ? (Number(selectedRole.permissions || 0) & Permissions.ADMINISTRATOR) !== 0 : false;
@@ -661,7 +507,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     setIsUploadingEmoji(true);
     setEmojiError('');
     try {
-      // 1. Convert static images to WebP maintaining transparent background & high quality
       let fileToUpload: File;
       try {
         fileToUpload = await convertToWebP(file, { quality: 0.95, maxWidth: 512, maxHeight: 512 });
@@ -670,14 +515,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         fileToUpload = file;
       }
 
-      // 2. Auto-generate name from original file name
       const baseName = file.name.replace(/\.[^/.]+$/, '').toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 32);
       const derivedName = baseName.length >= 2 ? baseName : `emoji_${Date.now().toString().slice(-4)}`;
 
-      // 3. Upload attachment
       const uploadRes = await api.upload.attachment(fileToUpload);
 
-      // 4. Create emoji in guild
       const newEmoji = await api.guilds.createEmoji(activeGuild.id, {
         name: derivedName,
         image_url: uploadRes.url,
@@ -697,7 +539,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const handleInlineRename = async (emojiId: string, rawName: string, originalName: string) => {
     const sanitized = rawName.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 32);
     if (!sanitized || sanitized === originalName) {
-      // Refresh state to keep input synced with current name
       setEmojisList((prev) => [...prev]);
       return;
     }
@@ -873,15 +714,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         }}
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-0 md:p-4 overflow-hidden animate-fade-in"
       >
-        {/* Unified Container (Full-screen on mobile, centered card on desktop) */}
         <div className="flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-[#18191c] rounded-none md:rounded-2xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200">
           
-          {/* ======================================================== */}
-          {/* MOBILE MENU VIEW (Visible only on mobile when mobileView === 'menu') */}
-          {/* ======================================================== */}
+          {/* MOBILE MENU VIEW */}
           {mobileView === 'menu' && (
             <div className="flex md:hidden flex-col w-full h-full bg-[#18191c] overflow-hidden">
-              {/* Mobile Header */}
               <div
                 style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
                 className="px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex items-center justify-between flex-shrink-0"
@@ -890,7 +727,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={onClose}
-                    className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors"
+                    className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer"
                     title="Fechar"
                   >
                     <X className="w-5 h-5" />
@@ -899,7 +736,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 </div>
               </div>
 
-              {/* Mobile Navigation List */}
               <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y no-scrollbar">
                 {/* Server Mini Card */}
                 <div
@@ -936,14 +772,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     Configurações do Servidor
                   </span>
                   <div className="bg-[#1e1f22] rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
-                    {/* Visão Geral */}
                     <button
                       type="button"
                       onClick={() => {
                         setActiveTab('overview');
                         setMobileView('content');
                       }}
-                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 rounded-xl bg-white/5 text-gray-300">
@@ -957,14 +792,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
 
-                    {/* Cargos */}
                     <button
                       type="button"
                       onClick={() => {
                         setActiveTab('roles');
                         setMobileView('content');
                       }}
-                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 rounded-xl bg-white/5 text-gray-300">
@@ -978,14 +812,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
 
-                    {/* Emojis */}
                     <button
                       type="button"
                       onClick={() => {
                         setActiveTab('emojis');
                         setMobileView('content');
                       }}
-                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 rounded-xl bg-white/5 text-gray-300">
@@ -999,14 +832,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
 
-                    {/* Convites */}
                     <button
                       type="button"
                       onClick={() => {
                         setActiveTab('invites');
                         setMobileView('content');
                       }}
-                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 rounded-xl bg-white/5 text-gray-300">
@@ -1020,14 +852,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
 
-                    {/* Membros */}
                     <button
                       type="button"
                       onClick={() => {
                         setActiveTab('members');
                         setMobileView('content');
                       }}
-                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 rounded-xl bg-white/5 text-gray-300">
@@ -1041,14 +872,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
 
-                    {/* Auditoria */}
                     <button
                       type="button"
                       onClick={() => {
                         setActiveTab('audit_log');
                         setMobileView('content');
                       }}
-                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                      className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 rounded-xl bg-white/5 text-gray-300">
@@ -1064,7 +894,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   </div>
                 </div>
 
-                {/* Group 2: Ações de Dono (Se for Owner) */}
+                {/* Group 2: Ações de Dono */}
                 {isOwner && (
                   <div className="space-y-1.5 pt-1">
                     <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
@@ -1074,7 +904,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <button
                         type="button"
                         onClick={() => setIsTransferModalOpen(true)}
-                        className="w-full flex items-center justify-between p-3.5 text-left hover:bg-amber-500/10 active:bg-amber-500/20 text-amber-400 transition-colors"
+                        className="w-full flex items-center justify-between p-3.5 text-left hover:bg-amber-500/10 active:bg-amber-500/20 text-amber-400 transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
@@ -1091,7 +921,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       <button
                         type="button"
                         onClick={() => setIsDeleteModalOpen(true)}
-                        className="w-full flex items-center justify-between p-3.5 text-left hover:bg-red-500/10 active:bg-red-500/20 text-red-400 transition-colors"
+                        className="w-full flex items-center justify-between p-3.5 text-left hover:bg-red-500/10 active:bg-red-500/20 text-red-400 transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="p-2 rounded-xl bg-red-500/10 text-red-400">
@@ -1111,9 +941,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             </div>
           )}
 
-          {/* ======================================================== */}
-          {/* DESKTOP SIDEBAR TABS (Visible on md: and above) */}
-          {/* ======================================================== */}
+          {/* DESKTOP SIDEBAR TABS */}
           <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar">
             <div className="px-3 py-2 mb-4">
               <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono truncate">
@@ -1233,12 +1061,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             )}
           </div>
 
-          {/* ======================================================== */}
-          {/* MAIN CONTENT AREA (Visible on desktop OR on mobile when mobileView === 'content') */}
-          {/* ======================================================== */}
+          {/* MAIN CONTENT AREA */}
           <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden bg-[#18191c] relative min-w-0 min-h-0`}>
             
-            {/* Mobile Drilldown Top Bar (Back Arrow + Title + Close) */}
+            {/* Mobile Drilldown Top Bar */}
             <div 
               style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
               className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex-shrink-0"
@@ -1247,7 +1073,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 <button
                   type="button"
                   onClick={() => setMobileView('menu')}
-                  className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+                  className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
                 >
                   <ArrowLeft className="w-5 h-5" />
                   <span>Voltar</span>
@@ -1264,7 +1090,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors"
+                className="p-1.5 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer"
                 title="Fechar"
               >
                 <X className="w-5 h-5" />
@@ -1293,7 +1119,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               </div>
               <button
                 onClick={onClose}
-                className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10/60 transition-colors"
+                className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                 title="Fechar Configurações (ESC)"
               >
                 <X className="w-5 h-5" />
@@ -1302,1079 +1128,116 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
             {/* TAB CONTENTS */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-8 no-scrollbar md:custom-scrollbar overscroll-contain touch-pan-y min-h-0">
-
-              {/* TAB 1: VISÃO GERAL */}
               {activeTab === 'overview' && (
-                <div className="max-w-3xl space-y-8 animate-fade-in">
-                  {/* Quick Stats Grid */}
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 font-mono">
-                      Métricas do Servidor
-                    </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
-                        <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
-                          <span>Total Membros</span>
-                          <Users className="w-4 h-4 text-brand-400" />
-                        </div>
-                        <span className="text-2xl font-bold text-white">{members.length}</span>
-                        <span className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          {onlineMembersCount} online
-                        </span>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
-                        <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
-                          <span>Canais Texto</span>
-                          <Hash className="w-4 h-4 text-sky-400" />
-                        </div>
-                        <span className="text-2xl font-bold text-white">{textChannels.length}</span>
-                        <span className="text-[11px] text-gray-500 mt-1">salas de bate-papo</span>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
-                        <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
-                          <span>Canais Voz</span>
-                          <Volume2 className="w-4 h-4 text-emerald-400" />
-                        </div>
-                        <span className="text-2xl font-bold text-white">{voiceChannels.length}</span>
-                        <span className="text-[11px] text-gray-500 mt-1">com áudio & vídeo</span>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
-                        <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
-                          <span>Criação</span>
-                          <Calendar className="w-4 h-4 text-purple-400" />
-                        </div>
-                        <span className="text-sm font-semibold text-white mt-1">
-                          {activeGuild.created_at ? new Date(activeGuild.created_at).toLocaleDateString('pt-BR') : 'Hoje'}
-                        </span>
-                        <span className="text-[11px] text-gray-500 mt-auto">data de fundação</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {overviewMsg && (
-                    <div
-                      className={`p-3.5 rounded-xl text-sm flex items-center gap-2.5 ${
-                        overviewMsg.type === 'success'
-                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                          : 'bg-red-500/15 text-red-300 border border-red-500/30'
-                      }`}
-                    >
-                      {overviewMsg.type === 'success' ? (
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 shrink-0" />
-                      )}
-                      <span>{overviewMsg.text}</span>
-                    </div>
-                  )}
-
-                  {/* Visual Identity (Icon & Banner) */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                      Identidade Visual
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#1e1f22] p-5 rounded-2xl border border-white/10">
-                      {/* Icon */}
-                      <div className="flex flex-col gap-3">
-                        <label className="text-xs font-medium text-gray-300">Ícone do Servidor</label>
-                        <div className="flex items-center gap-4">
-                          <div className="w-20 h-20 rounded-2xl bg-[#2b2d31] border-2 border-white/15 flex items-center justify-center overflow-hidden shrink-0 shadow-lg">
-                            {activeGuild.icon_url ? (
-                              <img
-                                src={formatAssetUrl(activeGuild.icon_url)}
-                                alt={activeGuild.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-xl font-bold text-white">{initials}</span>
-                            )}
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <input
-                              type="file"
-                              ref={iconInputRef}
-                              onChange={handleIconChange}
-                              accept="image/*"
-                              className="hidden"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => iconInputRef.current?.click()}
-                              disabled={!isOwner || isUploadingIcon}
-                              className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-                            >
-                              <Upload className="w-3.5 h-3.5" />
-                              <span>{isUploadingIcon ? 'Enviando...' : 'Trocar Ícone'}</span>
-                            </button>
-                            {activeGuild.icon_url && isOwner && (
-                              <button
-                                type="button"
-                                onClick={handleRemoveIcon}
-                                disabled={isUploadingIcon}
-                                className="text-xs text-red-400 hover:text-red-300 text-left transition-colors"
-                              >
-                                Remover Ícone
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Banner */}
-                      <div className="flex flex-col gap-3">
-                        <label className="text-xs font-medium text-gray-300">Banner do Servidor</label>
-                        <div className="flex flex-col gap-2">
-                          <div className="w-full h-20 rounded-xl bg-[#2b2d31] border border-white/15 overflow-hidden relative group">
-                            {activeGuild.banner_url ? (
-                              <img
-                                src={formatAssetUrl(activeGuild.banner_url)}
-                                alt="Banner"
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs gap-1.5">
-                                <ImageIcon className="w-4 h-4" />
-                                <span>Sem banner definido</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="file"
-                              ref={bannerInputRef}
-                              onChange={handleBannerChange}
-                              accept="image/*"
-                              className="hidden"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => bannerInputRef.current?.click()}
-                              disabled={!isOwner || isUploadingBanner}
-                              className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-                            >
-                              <Upload className="w-3.5 h-3.5" />
-                              <span>{isUploadingBanner ? 'Enviando...' : 'Trocar Banner'}</span>
-                            </button>
-                            {activeGuild.banner_url && isOwner && (
-                              <button
-                                type="button"
-                                onClick={handleRemoveBanner}
-                                disabled={isUploadingBanner}
-                                className="text-xs text-red-400 hover:text-red-300 transition-colors"
-                              >
-                                Remover Banner
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* General Form */}
-                  <form onSubmit={handleSaveOverview} className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                        Nome do Servidor
-                      </label>
-                      <input
-                        type="text"
-                        value={guildName}
-                        onChange={(e) => setGuildName(e.target.value)}
-                        disabled={!isOwner}
-                        placeholder="Nome do servidor"
-                        className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-60"
-                      />
-                    </div>
-
-                    {/* System Welcome Channel Selector */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                        Canal de Mensagens do Sistema (Boas-Vindas)
-                      </label>
-                      <p className="text-xs text-gray-400">
-                        O canal onde o servidor pode receber novos membros e avisos importantes.
-                      </p>
-                      <select
-                        value={systemChannelId}
-                        onChange={(e) => setSystemChannelId(e.target.value)}
-                        disabled={!isOwner}
-                        className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-60"
-                      >
-                        <option value="">Nenhum (Desativado)</option>
-                        {textChannels.map((ch) => (
-                          <option key={ch.id} value={ch.id}>
-                            # {ch.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {isOwner && (
-                      <div className="flex justify-end pt-2">
-                        <button
-                          type="submit"
-                          disabled={isSavingOverview || !guildName.trim()}
-                          className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-brand-500/20 transition-all disabled:opacity-50"
-                        >
-                          {isSavingOverview ? 'Salvando...' : 'Salvar Alterações'}
-                        </button>
-                      </div>
-                    )}
-                  </form>
-                </div>
+                <OverviewTab
+                  activeGuild={activeGuild}
+                  isOwner={isOwner}
+                  members={members}
+                  onlineMembersCount={onlineMembersCount}
+                  textChannels={textChannels}
+                  voiceChannels={voiceChannels}
+                  overviewMsg={overviewMsg}
+                  guildName={guildName}
+                  setGuildName={setGuildName}
+                  systemChannelId={systemChannelId}
+                  setSystemChannelId={setSystemChannelId}
+                  isSavingOverview={isSavingOverview}
+                  handleSaveOverview={handleSaveOverview}
+                  iconInputRef={iconInputRef}
+                  bannerInputRef={bannerInputRef}
+                  handleIconChange={handleIconChange}
+                  handleBannerChange={handleBannerChange}
+                  handleRemoveIcon={handleRemoveIcon}
+                  handleRemoveBanner={handleRemoveBanner}
+                  isUploadingIcon={isUploadingIcon}
+                  isUploadingBanner={isUploadingBanner}
+                />
               )}
 
-              {/* TAB 2: CARGOS (ROLES) */}
               {activeTab === 'roles' && (
-                <div className="flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 h-auto md:h-[68vh] animate-fade-in">
-                  {/* Roles Sidebar / Hierarchy List */}
-                  <div className="w-full md:w-72 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-3 shrink-0 max-h-56 md:max-h-none">
-                    <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 px-2">
-                      <span className="text-xs font-bold uppercase text-gray-400 font-mono">
-                        Cargos ({roles.length})
-                      </span>
-                      {isOwner && (
-                        <button
-                          onClick={() => {
-                            setSelectedRoleId(null);
-                            setNewRoleName('');
-                          }}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10/50 transition-colors"
-                          title="Novo Cargo"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar min-h-0 touch-pan-y">
-                      {roles
-                        .slice()
-                        .sort((a, b) => a.position - b.position)
-                        .map((role, idx) => {
-                          const isSelected = (selectedRoleId === role.id) || (!selectedRoleId && idx === 0);
-                          const isEveryone = role.name === '@everyone';
-                          const memberCount = isEveryone
-                            ? members.length
-                            : members.filter((m) => m.roles && m.roles.some((r) => r.id === role.id)).length;
-
-                          return (
-                            <div
-                              key={role.id}
-                              onClick={() => setSelectedRoleId(role.id)}
-                              className={`group flex items-center justify-between px-3 py-2 rounded-xl text-sm cursor-pointer transition-all ${
-                                isSelected
-                                  ? 'bg-brand-500/15 text-white border border-brand-500/30'
-                                  : 'text-gray-300 hover:bg-[#18191c]/80'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <span
-                                  className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm"
-                                  style={{ backgroundColor: role.color || '#99AAB5' }}
-                                />
-                                <span className="truncate font-medium">
-                                  {role.name}
-                                </span>
-                                {isEveryone && (
-                                  <span className="text-[10px] bg-white/10 text-gray-300 px-1.5 py-0.5 rounded font-mono">
-                                    Padrão
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
-                                <span className="text-[11px] text-gray-500 mr-1">{memberCount}</span>
-                                {canManageRoles && !isEveryone && (
-                                  <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                                    <button
-                                      type="button"
-                                      disabled={idx === 0 || isReorderingRoles}
-                                      onClick={() => handleMoveRoleHierarchy(role.id, 'up')}
-                                      className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-20"
-                                      title="Subir na Hierarquia"
-                                    >
-                                      <ArrowUp className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={idx === roles.length - 1 || isReorderingRoles || roles[idx + 1]?.name === '@everyone'}
-                                      onClick={() => handleMoveRoleHierarchy(role.id, 'down')}
-                                      className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-20"
-                                      title="Descer na Hierarquia"
-                                    >
-                                      <ArrowDown className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-
-                    {canManageRoles && (
-                      <form onSubmit={handleCreateRole} className="mt-3 pt-3 border-t border-white/10 space-y-2">
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={newRoleName}
-                            onChange={(e) => setNewRoleName(e.target.value)}
-                            placeholder="Nome do novo cargo..."
-                            className="flex-1 px-3 py-1.5 bg-[#111214] border border-white/10 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                          />
-                          <button
-                            type="submit"
-                            disabled={isCreatingRole || !newRoleName.trim()}
-                            className="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-medium disabled:opacity-50 transition-colors"
-                          >
-                            Criar
-                          </button>
-                        </div>
-                      </form>
-                    )}
-                  </div>
-
-                  {/* Role Details Editor */}
-                  {selectedRole ? (
-                    <div className="flex-1 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-4 sm:p-6 overflow-hidden min-h-0">
-                      <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className="w-5 h-5 rounded-full shadow"
-                            style={{ backgroundColor: selectedRole.color || '#99AAB5' }}
-                          />
-                          <h2 className="text-base font-bold text-white">{selectedRole.name}</h2>
-                          {selectedRole.name === '@everyone' && (
-                            <span className="text-[10px] bg-white/10 text-gray-200 px-2 py-0.5 rounded-full font-medium">
-                              Cargo Base de Todos
-                            </span>
-                          )}
-                          {selectedRole.hoist && (
-                            <span className="text-[10px] bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-full font-medium">
-                              Separado
-                            </span>
-                          )}
-                          {selectedRole.mentionable && (
-                            <span className="text-[10px] bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full font-medium">
-                              Mencionável
-                            </span>
-                          )}
-                        </div>
-
-                        {canManageRoles && selectedRole.name !== '@everyone' && (
-                          <button
-                            onClick={() => handleDeleteRole(selectedRole.id)}
-                            className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Excluir Cargo</span>
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-2 custom-scrollbar touch-pan-y min-h-0">
-                        {/* Role Name */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                            Nome do Cargo
-                          </label>
-                          <input
-                            type="text"
-                            defaultValue={selectedRole.name}
-                            key={selectedRole.id + selectedRole.name}
-                            onBlur={(e) => handleUpdateRoleName(e.target.value)}
-                            disabled={!canManageRoles || selectedRole.name === '@everyone'}
-                            className="w-full px-4 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
-                          />
-                          {selectedRole.name === '@everyone' && (
-                            <p className="text-xs text-gray-500">
-                              O cargo @everyone representa as permissões padrão atribuídas a todos os membros do servidor.
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Role Color */}
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                            Cor do Cargo
-                          </label>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {PRESET_ROLE_COLORS.map((c) => (
-                              <button
-                                key={c}
-                                type="button"
-                                onClick={() => handleUpdateRoleColor(c)}
-                                disabled={!canManageRoles}
-                                className={`w-7 h-7 rounded-full transition-transform flex items-center justify-center ${
-                                  selectedRole.color?.toLowerCase() === c.toLowerCase()
-                                    ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-[#111214]'
-                                    : 'hover:scale-105'
-                                } disabled:opacity-50`}
-                                style={{ backgroundColor: c }}
-                              >
-                                {selectedRole.color?.toLowerCase() === c.toLowerCase() && (
-                                  <Check className="w-3.5 h-3.5 text-black drop-shadow" />
-                                )}
-                              </button>
-                            ))}
-                            <div className="flex items-center gap-2 ml-2">
-                              <input
-                                type="color"
-                                value={selectedRole.color || '#5865F2'}
-                                onChange={(e) => handleUpdateRoleColor(e.target.value)}
-                                disabled={!canManageRoles}
-                                className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer disabled:opacity-50"
-                                title="Cor personalizada"
-                              />
-                              <span className="text-xs font-mono text-gray-400">{selectedRole.color || '#5865F2'}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Role Display Switches (Hoist & Mentionable) */}
-                        <div className="space-y-3 pt-3 border-t border-white/10">
-                          <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                            Exibição de Membros
-                          </label>
-                          <div className="space-y-3">
-                            <div
-                              onClick={() => {
-                                if (canManageRoles && selectedRole.name !== '@everyone') {
-                                  handleToggleRoleHoist();
-                                }
-                              }}
-                              className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                                selectedRole.hoist
-                                  ? 'bg-[#111214]/80 border-white/15'
-                                  : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
-                              } ${canManageRoles && selectedRole.name !== '@everyone' ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
-                            >
-                              <div className="pr-4 select-none">
-                                <div className="text-sm font-semibold text-white">
-                                  Exibir membros deste cargo separadamente
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1 leading-relaxed">
-                                  {selectedRole.name === '@everyone'
-                                    ? 'O cargo @everyone engloba todos os membros e não pode ser exibido separadamente.'
-                                    : 'Membros com este cargo aparecerão em uma categoria própria na lista lateral de membros.'}
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                disabled={!canManageRoles || selectedRole.name === '@everyone'}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleRoleHoist();
-                                }}
-                                className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
-                                  selectedRole.hoist ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
-                                } disabled:opacity-40 disabled:cursor-not-allowed`}
-                              >
-                                <div
-                                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                                    selectedRole.hoist ? 'translate-x-5' : 'translate-x-0'
-                                  }`}
-                                />
-                              </button>
-                            </div>
-
-                            <div
-                              onClick={() => {
-                                if (canManageRoles) {
-                                  handleToggleRoleMentionable();
-                                }
-                              }}
-                              className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                                selectedRole.mentionable
-                                  ? 'bg-[#111214]/80 border-white/15'
-                                  : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
-                              } ${canManageRoles ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
-                            >
-                              <div className="pr-4 select-none">
-                                <div className="text-sm font-semibold text-white">
-                                  Permitir que qualquer um @mencione este cargo
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1 leading-relaxed">
-                                  Permite que membros enviem mensagens com @cargo para notificar todos com este cargo.
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                disabled={!canManageRoles}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleRoleMentionable();
-                                }}
-                                className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
-                                  selectedRole.mentionable ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
-                                } disabled:opacity-40 disabled:cursor-not-allowed`}
-                              >
-                                <div
-                                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                                    selectedRole.mentionable ? 'translate-x-5' : 'translate-x-0'
-                                  }`}
-                                />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Permission Groups */}
-                        <div className="space-y-5 pt-3 border-t border-white/10">
-                          <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                            Permissões do Cargo
-                          </label>
-
-                          {PERMISSION_GROUPS.map((group) => (
-                            <div key={group.category} className="space-y-3">
-                              <div className="flex items-center gap-2 text-xs font-semibold text-gray-300">
-                                {group.icon}
-                                <span>{group.category}</span>
-                              </div>
-
-                              <div className="space-y-2">
-                                {group.permissions.map((perm) => {
-                                  const currentPerms = Number(selectedRole.permissions || 0);
-                                  const isChecked = isRoleAdmin || (currentPerms & perm.flag) !== 0;
-
-                                  return (
-                                    <div
-                                      key={perm.flag}
-                                      onClick={() => {
-                                        if (canManageRoles && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
-                                          handleTogglePermission(perm.flag);
-                                        }
-                                      }}
-                                      className={`flex items-start justify-between p-4 rounded-xl border transition-all ${
-                                        perm.isMaster
-                                          ? 'bg-amber-500/10 border-amber-500/30'
-                                          : isChecked
-                                          ? 'bg-[#111214]/80 border-white/15'
-                                          : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
-                                      } ${canManageRoles ? 'cursor-pointer' : 'opacity-70'}`}
-                                    >
-                                      <div className="pr-4 select-none">
-                                        <div className="text-sm font-semibold text-white flex items-center gap-2">
-                                          <span>{perm.name}</span>
-                                          {perm.isMaster && (
-                                            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-medium">
-                                              Mestre
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="text-xs text-gray-400 mt-1 leading-relaxed">{perm.description}</div>
-                                      </div>
-
-                                      <button
-                                        type="button"
-                                        disabled={!isOwner || (isRoleAdmin && perm.flag !== Permissions.ADMINISTRATOR)}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (isOwner && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
-                                            handleTogglePermission(perm.flag);
-                                          }
-                                        }}
-                                        className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
-                                          isChecked ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
-                                        } disabled:opacity-50`}
-                                      >
-                                        <div
-                                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                                            isChecked ? 'translate-x-5' : 'translate-x-0'
-                                          }`}
-                                        />
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex-1 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col items-center justify-center text-gray-400">
-                      <Shield className="w-12 h-12 stroke-1 mb-2 text-gray-500" />
-                      <p className="text-sm">Selecione ou crie um cargo na lista ao lado.</p>
-                    </div>
-                  )}
-                </div>
+                <RolesTab
+                  roles={roles}
+                  members={members}
+                  isOwner={isOwner}
+                  canManageRoles={canManageRoles}
+                  selectedRoleId={selectedRoleId}
+                  setSelectedRoleId={setSelectedRoleId}
+                  selectedRole={selectedRole}
+                  newRoleName={newRoleName}
+                  setNewRoleName={setNewRoleName}
+                  isCreatingRole={isCreatingRole}
+                  isReorderingRoles={isReorderingRoles}
+                  handleMoveRoleHierarchy={handleMoveRoleHierarchy}
+                  handleCreateRole={handleCreateRole}
+                  handleDeleteRole={handleDeleteRole}
+                  handleUpdateRoleName={handleUpdateRoleName}
+                  handleUpdateRoleColor={handleUpdateRoleColor}
+                  handleToggleRoleHoist={handleToggleRoleHoist}
+                  handleToggleRoleMentionable={handleToggleRoleMentionable}
+                  handleTogglePermission={handleTogglePermission}
+                  isRoleAdmin={isRoleAdmin}
+                />
               )}
 
-              {/* TAB 3: EMOJIS */}
               {activeTab === 'emojis' && (
-                <div className="max-w-4xl space-y-6 animate-fade-in">
-                  <div className="flex items-center justify-between p-5 rounded-2xl bg-[#1e1f22] border border-white/10">
-                    <div>
-                      <h3 className="text-sm font-bold text-white">Slots de Emojis do Servidor</h3>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {emojisList.length} de 50 slots utilizados • Clique no nome para renomear
-                      </p>
-                    </div>
-                    <div>
-                      <input
-                        type="file"
-                        ref={emojiInputRef}
-                        onChange={handleSelectEmojiFile}
-                        accept="image/png,image/jpeg,image/gif,image/webp"
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => emojiInputRef.current?.click()}
-                        disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
-                        className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer"
-                      >
-                        {isUploadingEmoji ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" />
-                            <span>Carregando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4" />
-                            <span>Carregar Emoji</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {emojiError && (
-                    <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center justify-between animate-fade-in">
-                      <span>{emojiError}</span>
-                      <button
-                        type="button"
-                        onClick={() => setEmojiError('')}
-                        className="p-1 hover:text-white rounded transition-colors cursor-pointer"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-
-                  {isLoadingEmojis ? (
-                    <div className="flex items-center justify-center py-16 text-gray-400">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500" />
-                    </div>
-                  ) : emojisList.length === 0 && !isUploadingEmoji ? (
-                    <div className="text-center py-16 px-4 rounded-2xl bg-[#1e1f22]/60 border border-white/10">
-                      <Smile className="w-12 h-12 stroke-1 text-gray-500 mx-auto mb-3" />
-                      <h4 className="text-base font-semibold text-white">Nenhum emoji personalizado ainda</h4>
-                      <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
-                        Carregue imagens quadradas (PNG, GIF, WebP) para que todos os membros possam usar no chat com :nome:!
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                      {isUploadingEmoji && (
-                        <div className="p-3.5 rounded-2xl bg-[#1e1f22]/60 border border-brand-500/40 animate-pulse flex flex-col items-center justify-center min-h-[165px]">
-                          <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-500/20 border-t-brand-500 mb-2" />
-                          <span className="text-xs text-brand-400 font-medium">Enviando emoji...</span>
-                        </div>
-                      )}
-
-                      {emojisList.map((em) => {
-                        const isSaving = savingEmojiId === em.id;
-                        const isCopied = copiedEmojiId === em.id;
-                        return (
-                          <div
-                            key={em.id}
-                            className="p-3.5 rounded-2xl bg-[#1e1f22] border border-white/10 hover:border-white/15 transition-all flex flex-col group relative"
-                          >
-                            <div className="w-full h-24 rounded-xl bg-[#111214] flex items-center justify-center p-2 mb-2.5 overflow-hidden">
-                              <img
-                                src={formatAssetUrl(em.image_url)}
-                                alt={em.name}
-                                className="max-h-full max-w-full object-contain select-none"
-                              />
-                            </div>
-
-                            {/* Inline Rename Box */}
-                            <div className="space-y-1.5 flex-1 flex flex-col justify-between">
-                              <div className="flex items-center bg-[#111214] border border-white/10 focus-within:border-brand-500 rounded-lg px-2 py-1 transition-all">
-                                <span className="text-gray-500 font-mono text-xs select-none">:</span>
-                                <input
-                                  type="text"
-                                  defaultValue={em.name}
-                                  key={`${em.id}-${em.name}`}
-                                  disabled={(!isOwner && !hasAdmin && !canManageGuild) || isSaving}
-                                  onBlur={(e) => handleInlineRename(em.id, e.target.value, em.name)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      (e.target as HTMLInputElement).blur();
-                                    }
-                                  }}
-                                  maxLength={32}
-                                  className="bg-transparent text-xs text-white font-mono w-full px-1 focus:outline-none disabled:opacity-75"
-                                  placeholder="nome_do_emoji"
-                                />
-                                <span className="text-gray-500 font-mono text-xs select-none">:</span>
-                                {isSaving && (
-                                  <div className="animate-spin rounded-full h-3 w-3 border border-brand-400 border-t-transparent ml-1 shrink-0" />
-                                )}
-                              </div>
-
-                              <div className="flex items-center justify-between pt-1">
-                                <span className="text-[10px] text-gray-500 truncate max-w-[80px]" title={em.creator ? `@${em.creator.username}` : ''}>
-                                  {em.creator ? `@${em.creator.username}` : ''}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(`:${em.name}:`);
-                                      setCopiedEmojiId(em.id);
-                                      setTimeout(() => setCopiedEmojiId(null), 2000);
-                                    }}
-                                    className="p-1 text-gray-400 hover:text-white rounded transition-colors cursor-pointer"
-                                    title="Copiar código :nome:"
-                                  >
-                                    {isCopied ? (
-                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                    ) : (
-                                      <Copy className="w-3.5 h-3.5" />
-                                    )}
-                                  </button>
-                                  {(isOwner || hasAdmin || canManageGuild) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteEmoji(em.id, em.name)}
-                                      className="p-1 text-red-400 hover:text-red-300 rounded transition-colors cursor-pointer"
-                                      title="Excluir Emoji"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <EmojisTab
+                  emojisList={emojisList}
+                  isLoadingEmojis={isLoadingEmojis}
+                  isUploadingEmoji={isUploadingEmoji}
+                  emojiError={emojiError}
+                  setEmojiError={setEmojiError}
+                  emojiInputRef={emojiInputRef}
+                  handleSelectEmojiFile={handleSelectEmojiFile}
+                  savingEmojiId={savingEmojiId}
+                  copiedEmojiId={copiedEmojiId}
+                  setCopiedEmojiId={setCopiedEmojiId}
+                  handleInlineRename={handleInlineRename}
+                  handleDeleteEmoji={handleDeleteEmoji}
+                  isOwner={isOwner}
+                  hasAdmin={hasAdmin}
+                  canManageGuild={canManageGuild}
+                />
               )}
 
-              {/* TAB 4: CONVITES (INVITES) */}
               {activeTab === 'invites' && (
-                <div className="max-w-4xl space-y-6 animate-fade-in">
-                  <div className="flex items-center justify-between p-5 rounded-2xl bg-[#1e1f22] border border-white/10">
-                    <div>
-                      <h3 className="text-sm font-bold text-white">Gerenciamento de Links de Convite</h3>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Veja todos os links de convite ativos gerados para este servidor.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleGenerateNewInvite}
-                      disabled={isCreatingInvite}
-                      className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>{isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}</span>
-                    </button>
-                  </div>
-
-                  {isLoadingInvites ? (
-                    <div className="flex items-center justify-center py-16 text-gray-400">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500" />
-                    </div>
-                  ) : invitesList.length === 0 ? (
-                    <div className="text-center py-16 px-4 rounded-2xl bg-[#1e1f22]/60 border border-white/10">
-                      <LinkIcon className="w-12 h-12 stroke-1 text-gray-500 mx-auto mb-3" />
-                      <h4 className="text-base font-semibold text-white">Nenhum link de convite ativo</h4>
-                      <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
-                        Crie um link de convite acima para convidar seus amigos para o servidor!
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {invitesList.map((inv) => {
-                        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://zerovc.safiroko.xyz';
-                        const fullLink = `${origin}/invite/${inv.code}`;
-                        const isCopied = copiedCode === inv.code;
-
-                        return (
-                          <div
-                            key={inv.code}
-                            className="p-4 rounded-2xl bg-[#1e1f22] border border-white/10 flex items-center justify-between gap-4"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-mono font-bold text-brand-400">{inv.code}</span>
-                                <span className="text-xs text-gray-500 truncate font-mono">({fullLink})</span>
-                              </div>
-                              <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
-                                <span>Criado por @{inv.creator?.username || 'membro'}</span>
-                                <span>•</span>
-                                <span className="text-white font-medium">{inv.uses} {inv.uses === 1 ? 'uso' : 'usos'}</span>
-                                <span>•</span>
-                                <span>{inv.created_at ? new Date(inv.created_at).toLocaleDateString('pt-BR') : 'Hoje'}</span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => handleCopyInviteLink(inv.code)}
-                                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                                  isCopied
-                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                                    : 'bg-white/10 hover:bg-white/15 text-white'
-                                }`}
-                              >
-                                {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                                <span>{isCopied ? 'Copiado!' : 'Copiar'}</span>
-                              </button>
-
-                              {isOwner && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRevokeInvite(inv.code)}
-                                  className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors"
-                                  title="Revogar / Excluir Convite"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <InvitesTab
+                  invitesList={invitesList}
+                  isLoadingInvites={isLoadingInvites}
+                  isCreatingInvite={isCreatingInvite}
+                  handleGenerateNewInvite={handleGenerateNewInvite}
+                  handleCopyInviteLink={handleCopyInviteLink}
+                  handleRevokeInvite={handleRevokeInvite}
+                  copiedCode={copiedCode}
+                  isOwner={isOwner}
+                />
               )}
 
-              {/* TAB 5: MEMBROS & MODERAÇÃO RÁPIDA */}
               {activeTab === 'members' && (
-                <div className="max-w-4xl space-y-6 animate-fade-in">
-                  {/* Search and Role Filter Bar */}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="flex-1 relative">
-                      <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={memberSearchQuery}
-                        onChange={(e) => setMemberSearchQuery(e.target.value)}
-                        placeholder="Buscar por nome de usuário ou apelido..."
-                        className="w-full pl-10 pr-4 py-2 bg-[#1e1f22] border border-white/10 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                      />
-                    </div>
-
-                    <select
-                      value={selectedRoleFilter}
-                      onChange={(e) => setSelectedRoleFilter(e.target.value)}
-                      className="px-4 py-2 bg-[#1e1f22] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-brand-500"
-                    >
-                      <option value="all">Todos os Cargos ({members.length})</option>
-                      {roles.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="text-xs text-gray-400">
-                    Mostrando {filteredMembers.length} de {members.length} membros
-                  </div>
-
-                  {/* Members List Table */}
-                  <div className="space-y-2.5">
-                    {filteredMembers.map((member) => {
-                      const isMemberOwner = member.id === activeGuild.owner_id;
-                      const memberRoles = member.roles || [];
-                      const isMuted = !!member.muted_until && new Date(member.muted_until) > new Date();
-                      const isMenuOpen = activeMemberMenuId === member.id;
-
-                      return (
-                        <div
-                          key={member.id}
-                          className="p-3.5 rounded-2xl bg-[#1e1f22] border border-white/10 flex items-center justify-between gap-4 hover:border-white/15 transition-colors"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="relative">
-                              <div className="w-10 h-10 rounded-full bg-white/10 overflow-hidden shrink-0">
-                                {member.avatar_url ? (
-                                  <img
-                                    src={formatAssetUrl(member.avatar_url)}
-                                    alt={member.username}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center font-bold text-white text-sm bg-brand-600">
-                                    {member.username[0]?.toUpperCase()}
-                                  </div>
-                                )}
-                              </div>
-                              <span
-                                className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#1e1f22] ${
-                                  member.status === 'online'
-                                    ? 'bg-emerald-500'
-                                    : member.status === 'idle'
-                                    ? 'bg-amber-500'
-                                    : member.status === 'dnd'
-                                    ? 'bg-red-500'
-                                    : 'bg-gray-500'
-                                }`}
-                              />
-                            </div>
-
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-white text-sm truncate">
-                                  {member.display_name || member.username}
-                                </span>
-                                {isMemberOwner && (
-                                  <span className="p-0.5 text-amber-400" title="Dono do Servidor">
-                                    <Crown className="w-3.5 h-3.5" />
-                                  </span>
-                                )}
-                                {isMuted && (
-                                  <span className="text-[10px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full font-medium">
-                                    Silenciado
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-xs text-gray-400">@{member.username}</span>
-                            </div>
-                          </div>
-
-                          {/* Member Roles & Quick Actions */}
-                          <div className="flex items-center gap-3">
-                            <div className="hidden sm:flex flex-wrap items-center gap-1.5 max-w-md justify-end">
-                              {memberRoles
-                                .filter((r) => r.name !== '@everyone')
-                                .map((r) => (
-                                <span
-                                  key={r.id}
-                                  className="text-[11px] px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1.5"
-                                  style={{
-                                    backgroundColor: `${r.color || '#5865F2'}20`,
-                                    color: r.color || '#5865F2',
-                                    border: `1px solid ${r.color || '#5865F2'}40`,
-                                  }}
-                                >
-                                  <span
-                                    className="w-1.5 h-1.5 rounded-full"
-                                    style={{ backgroundColor: r.color || '#5865F2' }}
-                                  />
-                                  <span>{r.name}</span>
-                                </span>
-                              ))}
-                            </div>
-
-                            {/* Moderation Popover Menu */}
-                            {isOwner && member.id !== user?.id && (
-                              <div className="relative">
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveMemberMenuId(isMenuOpen ? null : member.id)}
-                                  className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10/60 transition-colors"
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-
-                                {isMenuOpen && (
-                                  <div className="absolute right-0 top-10 z-30 w-56 p-2 bg-[#111214] border border-white/10 rounded-2xl shadow-2xl space-y-1 animate-fade-in">
-                                    <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-400 font-mono">
-                                      Cargos
-                                    </div>
-                                    <div className="max-h-36 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
-                                      {roles
-                                        .filter((r) => r.name !== '@everyone')
-                                        .map((r) => {
-                                        const hasThisRole = memberRoles.some((mr) => mr.id === r.id);
-                                        return (
-                                          <button
-                                            key={r.id}
-                                            type="button"
-                                            onClick={() => handleToggleMemberRole(member.id, r.id, hasThisRole)}
-                                            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-[#18191c] text-left transition-colors"
-                                          >
-                                            <div className="flex items-center gap-2 min-w-0">
-                                              <span
-                                                className="w-2 h-2 rounded-full"
-                                                style={{ backgroundColor: r.color || '#99AAB5' }}
-                                              />
-                                              <span className="truncate text-white">{r.name}</span>
-                                            </div>
-                                            {hasThisRole && <Check className="w-3.5 h-3.5 text-brand-400" />}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-
-                                    <div className="pt-2 mt-1 border-t border-white/10 space-y-0.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setActiveMemberMenuId(null);
-                                          setMuteModalUser(member);
-                                        }}
-                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-amber-300 hover:bg-amber-500/15 transition-colors"
-                                      >
-                                        <Clock className="w-3.5 h-3.5" />
-                                        <span>{isMuted ? 'Alterar Silenciamento' : 'Silenciar (Timeout)'}</span>
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setActiveMemberMenuId(null);
-                                          if (confirm(`Expulsar @${member.username} do servidor?`)) {
-                                            kickMember(activeGuild.id, member.id);
-                                          }
-                                        }}
-                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/15 transition-colors"
-                                      >
-                                        <UserX className="w-3.5 h-3.5" />
-                                        <span>Expulsar Membro</span>
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setActiveMemberMenuId(null);
-                                          setBanModalUser(member);
-                                        }}
-                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-500 hover:bg-red-500/20 font-semibold transition-colors"
-                                      >
-                                        <Ban className="w-3.5 h-3.5" />
-                                        <span>Banir Membro</span>
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                <MembersTab
+                  activeGuild={activeGuild}
+                  user={user}
+                  roles={roles}
+                  members={members}
+                  filteredMembers={filteredMembers}
+                  memberSearchQuery={memberSearchQuery}
+                  setMemberSearchQuery={setMemberSearchQuery}
+                  selectedRoleFilter={selectedRoleFilter}
+                  setSelectedRoleFilter={setSelectedRoleFilter}
+                  activeMemberMenuId={activeMemberMenuId}
+                  setActiveMemberMenuId={setActiveMemberMenuId}
+                  handleToggleMemberRole={handleToggleMemberRole}
+                  setMuteModalUser={setMuteModalUser}
+                  setBanModalUser={setBanModalUser}
+                  kickMember={kickMember}
+                  isOwner={isOwner}
+                />
               )}
 
-              {/* TAB 6: AUDIT LOG */}
               {activeTab === 'audit_log' && (
-                <div className="h-full animate-fade-in">
+                <div className="animate-fade-in">
                   <ServerAuditLogView guildId={activeGuild.id} />
                 </div>
               )}
-
             </div>
           </div>
         </div>
@@ -2394,478 +1257,76 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         />
       )}
 
+      {/* MODAL 2: MUTE / TIMEOUT */}
+      <MuteMemberModal
+        isOpen={Boolean(muteModalUser)}
+        onClose={() => setMuteModalUser(null)}
+        muteModalUser={muteModalUser}
+        onMuteDuration={handleMuteMemberWithDuration}
+      />
 
+      {/* MODAL 3: BAN MEMBER */}
+      <BanMemberModal
+        isOpen={Boolean(banModalUser)}
+        onClose={() => {
+          setBanModalUser(null);
+          setBanReason('');
+        }}
+        banModalUser={banModalUser}
+        banReason={banReason}
+        setBanReason={setBanReason}
+        onConfirmBan={handleConfirmBan}
+      />
 
-      {/* MODAL 3: MUTE / TIMEOUT DURATION */}
-      {muteModalUser && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setMuteModalUser(null);
-          }}
-          style={{ zIndex: 99999 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
-        >
-          <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-white/10 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
-            <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-amber-400" />
-              <span>Silenciar @{muteModalUser.username}</span>
-            </h3>
-            <p className="text-xs text-gray-400 mb-5">
-              Escolha por quanto tempo o membro ficará silenciado no servidor.
-            </p>
+      {/* MODAL 4: TRANSFER OWNERSHIP */}
+      <TransferOwnershipModal
+        isOpen={isTransferModalOpen}
+        onClose={() => {
+          setIsTransferModalOpen(false);
+          setTransferTargetUser(null);
+          setTransferConfirmText('');
+          setTransferAcknowledge(false);
+        }}
+        activeGuild={activeGuild}
+        user={user}
+        members={members}
+        transferTargetUser={transferTargetUser}
+        setTransferTargetUser={setTransferTargetUser}
+        transferConfirmText={transferConfirmText}
+        setTransferConfirmText={setTransferConfirmText}
+        transferAcknowledge={transferAcknowledge}
+        setTransferAcknowledge={setTransferAcknowledge}
+        transferSearchQuery={transferSearchQuery}
+        setTransferSearchQuery={setTransferSearchQuery}
+        transferError={transferError}
+        isTransferring={isTransferring}
+        onConfirmTransfer={handleConfirmTransferOwnership}
+      />
 
-            <div className="grid grid-cols-2 gap-2.5 mb-6">
-              <button
-                type="button"
-                onClick={() => handleMuteMemberWithDuration(15 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
-              >
-                15 Minutos
-              </button>
-              <button
-                type="button"
-                onClick={() => handleMuteMemberWithDuration(60 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
-              >
-                1 Hora
-              </button>
-              <button
-                type="button"
-                onClick={() => handleMuteMemberWithDuration(24 * 60 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
-              >
-                24 Horas (1 Dia)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleMuteMemberWithDuration(7 * 24 * 60 * 60)}
-                className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
-              >
-                7 Dias (1 Semana)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleMuteMemberWithDuration(-1)}
-                className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl text-xs font-semibold text-center border border-red-500/30 transition-colors cursor-pointer"
-              >
-                Permanente
-              </button>
-              <button
-                type="button"
-                onClick={() => handleMuteMemberWithDuration(0)}
-                className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-xl text-xs font-semibold text-center border border-emerald-500/30 transition-colors cursor-pointer"
-              >
-                Remover Silêncio
-              </button>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setMuteModalUser(null)}
-                className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 4: BAN MEMBER WITH REASON */}
-      {banModalUser && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setBanModalUser(null);
-              setBanReason('');
-            }
-          }}
-          style={{ zIndex: 99999 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
-        >
-          <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-red-500/30 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
-            <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
-              <Ban className="w-5 h-5 text-red-500" />
-              <span>Banir @{banModalUser.username}</span>
-            </h3>
-            <p className="text-xs text-gray-400 mb-4">
-              O membro será desconectado e impedido de reentrar no servidor até ser desbanido.
-            </p>
-
-            <form onSubmit={handleConfirmBan} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                  Motivo do Banimento (Opcional)
-                </label>
-                <textarea
-                  value={banReason}
-                  onChange={(e) => setBanReason(e.target.value)}
-                  placeholder="Ex: Violação das regras da comunidade..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-red-500 resize-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBanModalUser(null);
-                    setBanReason('');
-                  }}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-colors cursor-pointer"
-                >
-                  Confirmar Banimento
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 5: TRANSFER OWNERSHIP */}
-      {isTransferModalOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setIsTransferModalOpen(false);
-              setTransferTargetUser(null);
-              setTransferConfirmText('');
-              setTransferAcknowledge(false);
-            }
-          }}
-          style={{ zIndex: 99999 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
-        >
-          <div className="w-full max-w-lg max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-amber-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400">
-                <Crown className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Transferir Posse do Servidor</h3>
-                <p className="text-xs text-gray-400">Passe o controle total deste servidor para outro membro</p>
-              </div>
-            </div>
-
-            <div className="p-3.5 my-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs leading-relaxed">
-              ⚠️ <strong>Atenção:</strong> Você deixará de ser o dono do servidor e passará a ser um administrador. Esta ação não poderá ser desfeita por você após a confirmação.
-            </div>
-
-            {transferError && (
-              <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs">
-                {transferError}
-              </div>
-            )}
-
-            <form onSubmit={handleConfirmTransferOwnership} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                  1. Selecione o Novo Dono
-                </label>
-                <div className="relative">
-                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={transferSearchQuery}
-                    onChange={(e) => setTransferSearchQuery(e.target.value)}
-                    placeholder="Filtrar membro..."
-                    className="w-full pl-9 pr-4 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-xs mb-2 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div className="max-h-36 overflow-y-auto space-y-1 bg-[#111214]/60 p-2 rounded-xl border border-white/10 custom-scrollbar">
-                  {members
-                    .filter((m) => m.id !== user?.id)
-                    .filter((m) =>
-                      !transferSearchQuery.trim() ||
-                      m.username.toLowerCase().includes(transferSearchQuery.toLowerCase()) ||
-                      (m.display_name && m.display_name.toLowerCase().includes(transferSearchQuery.toLowerCase()))
-                    )
-                    .map((m) => {
-                      const isSelected = transferTargetUser?.id === m.id;
-                      return (
-                        <div
-                          key={m.id}
-                          onClick={() => setTransferTargetUser(m)}
-                          className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                            isSelected ? 'bg-amber-500/20 border border-amber-500/40 text-white' : 'hover:bg-[#18191c] text-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-6 h-6 rounded-full bg-white/10 overflow-hidden shrink-0">
-                              {m.avatar_url ? (
-                                <img src={formatAssetUrl(m.avatar_url)} alt={m.username} className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-white bg-brand-600">
-                                  {m.username[0]?.toUpperCase()}
-                                </div>
-                              )}
-                            </div>
-                            <span className="text-xs font-semibold">{m.display_name || m.username}</span>
-                            <span className="text-[11px] text-gray-500">@{m.username}</span>
-                          </div>
-                          {isSelected && <Check className="w-4 h-4 text-amber-400" />}
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-
-              {transferTargetUser && (
-                <div className="space-y-3 pt-2">
-                  <label className="flex items-start gap-2.5 cursor-pointer text-xs text-gray-300 select-none">
-                    <input
-                      type="checkbox"
-                      checked={transferAcknowledge}
-                      onChange={(e) => setTransferAcknowledge(e.target.checked)}
-                      className="mt-0.5 rounded bg-[#111214] border-white/10 text-amber-500 focus:ring-0"
-                    />
-                    <span>
-                      Reconheço que estou transferindo irreversivelmente a posse para <strong>@{transferTargetUser.username}</strong>.
-                    </span>
-                  </label>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
-                      2. Digite o nome do servidor para confirmar: <span className="text-white select-all">{activeGuild.name}</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={transferConfirmText}
-                      onChange={(e) => setTransferConfirmText(e.target.value)}
-                      placeholder={activeGuild.name}
-                      className="w-full px-4 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTransferModalOpen(false);
-                    setTransferTargetUser(null);
-                    setTransferConfirmText('');
-                    setTransferAcknowledge(false);
-                  }}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    isTransferring ||
-                    !transferTargetUser ||
-                    !transferAcknowledge ||
-                    transferConfirmText.trim() !== activeGuild.name.trim()
-                  }
-                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-amber-600/20 transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {isTransferring ? 'Transferindo...' : 'Confirmar Transferência'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 6: DELETE GUILD */}
-      {isDeleteModalOpen && (
-        <div
-          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
-          style={{ zIndex: 999999 }}
-          onClick={() => {
-            setIsDeleteModalOpen(false);
-            setDeleteConfirmText('');
-            setIsDeleteAcknowledged(false);
-            setTwoFactorCode('');
-            setDeleteError('');
-          }}
-        >
-          <div
-            className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col text-gray-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="p-4 sm:p-5 pb-3 flex-shrink-0">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                  <span>Excluir servidor</span>
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDeleteModalOpen(false);
-                    setDeleteConfirmText('');
-                    setIsDeleteAcknowledged(false);
-                    setTwoFactorCode('');
-                    setDeleteError('');
-                  }}
-                  className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <p className="text-xs text-gray-300 leading-relaxed">
-                Tem certeza de que deseja excluir o servidor <span className="font-semibold text-white">"{activeGuild.name}"</span>? Esta ação não pode ser desfeita.
-              </p>
-            </div>
-
-            {/* Server Preview Box */}
-            <div className="px-4 sm:px-5 py-2 overflow-y-auto no-scrollbar flex-1">
-              <div className="bg-background-darkest/90 rounded-2xl p-3 border border-white/5 shadow-inner flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-brand-500 flex items-center justify-center font-bold text-white text-sm flex-shrink-0 overflow-hidden shadow-md">
-                  {activeGuild.icon_url ? (
-                    <img
-                      src={formatAssetUrl(activeGuild.icon_url)}
-                      alt={activeGuild.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span>{initials}</span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-xs text-white truncate">
-                    {activeGuild.name}
-                  </div>
-                  <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-                    {members.length} membro(s) • {(activeGuild.channels || []).length} canal(is)
-                  </div>
-                </div>
-              </div>
-
-              {deleteError && (
-                <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs">
-                  {deleteError}
-                </div>
-              )}
-
-              <div className="mt-4 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 font-mono">
-                    DIGITE O NOME DO SERVIDOR
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDeleteConfirmText(activeGuild.name);
-                      if (deleteError) setDeleteError('');
-                    }}
-                    className="text-[11px] text-brand-400 hover:text-brand-300 hover:underline cursor-pointer"
-                  >
-                    Preencher
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={deleteConfirmText}
-                  onChange={(e) => {
-                    setDeleteConfirmText(e.target.value);
-                    if (deleteError) setDeleteError('');
-                  }}
-                  placeholder={activeGuild.name}
-                  autoFocus
-                  className="w-full px-3 py-2 bg-background-darkest/90 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-red-500 transition-colors"
-                />
-              </div>
-
-              {Boolean(user?.two_factor_enabled) && (
-                <div className="mt-4 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 font-mono flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-brand-400" />
-                      <span>CÓDIGO DE AUTENTICAÇÃO (2FA)</span>
-                    </label>
-                  </div>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={10}
-                    value={twoFactorCode}
-                    onChange={(e) => {
-                      setTwoFactorCode(e.target.value);
-                      if (deleteError) setDeleteError('');
-                    }}
-                    placeholder="Código de 6 dígitos ou backup"
-                    className="w-full px-3 py-2 bg-background-darkest/90 border border-white/10 rounded-xl text-white text-xs font-mono tracking-wider focus:outline-none focus:border-brand-500 transition-colors placeholder:font-sans placeholder:tracking-normal"
-                  />
-                  <p className="text-[10px] text-gray-400">
-                    Insira o código do seu aplicativo autenticador (Google Authenticator, Authy, etc.) ou um código de backup.
-                  </p>
-                </div>
-              )}
-
-              <div className="mt-3 flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <input
-                  type="checkbox"
-                  id="delete-server-ack"
-                  checked={isDeleteAcknowledged}
-                  onChange={(e) => {
-                    setIsDeleteAcknowledged(e.target.checked);
-                    if (deleteError) setDeleteError('');
-                  }}
-                  className="w-4 h-4 rounded border-gray-600 bg-background-darkest text-red-600 focus:ring-red-500 cursor-pointer shrink-0"
-                />
-                <label
-                  htmlFor="delete-server-ack"
-                  className="text-xs text-gray-300 cursor-pointer select-none leading-tight"
-                >
-                  Estou ciente de que todos os canais e mensagens serão excluídos permanentemente.
-                </label>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-5 pt-3 bg-background-darkest/60 border-t border-white/5 flex items-center justify-end gap-3 mt-2 flex-shrink-0">
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={() => {
-                  setIsDeleteModalOpen(false);
-                  setDeleteConfirmText('');
-                  setIsDeleteAcknowledged(false);
-                  setTwoFactorCode('');
-                  setDeleteError('');
-                }}
-                className="px-4 py-2 text-xs font-semibold text-gray-300 hover:text-white hover:underline transition-all cursor-pointer disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                disabled={isDeleting || (Boolean(user?.two_factor_enabled) && !twoFactorCode.trim())}
-                onClick={handleConfirmDeleteGuild}
-                className="bg-dnd hover:bg-red-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-red-500/20 flex items-center gap-2 cursor-pointer"
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Excluindo...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Excluir Servidor</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL 5: DELETE GUILD (WITH 2FA) */}
+      <DeleteServerModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeleteConfirmText('');
+          setIsDeleteAcknowledged(false);
+          setTwoFactorCode('');
+          setDeleteError('');
+        }}
+        activeGuild={activeGuild}
+        user={user}
+        deleteConfirmText={deleteConfirmText}
+        setDeleteConfirmText={setDeleteConfirmText}
+        isDeleteAcknowledged={isDeleteAcknowledged}
+        setIsDeleteAcknowledged={setIsDeleteAcknowledged}
+        twoFactorCode={twoFactorCode}
+        setTwoFactorCode={setTwoFactorCode}
+        deleteError={deleteError}
+        setDeleteError={setDeleteError}
+        isDeleting={isDeleting}
+        onConfirmDelete={handleConfirmDeleteGuild}
+        membersCount={members.length}
+      />
     </>
   );
 };
