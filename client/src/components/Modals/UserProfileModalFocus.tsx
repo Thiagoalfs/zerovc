@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -12,6 +12,7 @@ import {
   Radio,
   Trophy,
   Sparkles,
+  Volume2,
   X,
   UserX,
   ExternalLink,
@@ -20,7 +21,9 @@ import {
 } from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
+import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
+import { getUserActivity } from '../../utils/userActivity';
 
 export interface UserProfileModalFocusProps {
   user: User | null;
@@ -40,6 +43,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
   onPreviewImage,
 }) => {
   const { user: currentUser } = useAuthStore();
+  const guilds = useGuildStore((s) => s.guilds);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -52,6 +56,10 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const activity = useMemo(() => {
+    return getUserActivity(user, currentUser, guilds);
+  }, [user, currentUser, guilds]);
 
   if (!isOpen || !user) return null;
 
@@ -244,6 +252,20 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
               </button>
             </div>
 
+            {/* Quick Activity Subtitle beneath name */}
+            {activity && (
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-brand-300 font-medium truncate">
+                {activity.kind === 'game' ? <Gamepad2 className="w-4 h-4 text-green-400 flex-shrink-0" /> :
+                 activity.kind === 'music' ? <Music className="w-4 h-4 text-emerald-400 flex-shrink-0" /> :
+                 activity.kind === 'call' ? <Volume2 className="w-4 h-4 text-brand-400 animate-pulse flex-shrink-0" /> :
+                 <Sparkles className="w-4 h-4 text-brand-400 flex-shrink-0" />}
+                <span className="truncate">
+                  <span className="text-gray-400 font-normal">{activity.header} </span>
+                  <span className="text-gray-100 font-semibold">{activity.name}</span>
+                </span>
+              </div>
+            )}
+
             {/* Custom Status */}
             {user.custom_status && (
               <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-background-darker/90 rounded-xl text-xs sm:text-sm text-gray-200 border border-white/5 shadow-inner">
@@ -252,54 +274,54 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
             )}
           </div>
 
-            {/* Details Sections Container */}
-            <div className="bg-background-darker/90 rounded-2xl p-4 sm:p-5 border border-white/5 space-y-4">
-              {/* Rich Presence / Custom Activity */}
-              {user.custom_activity && user.show_activity_status !== false && (
+          {/* Details Sections Container */}
+          <div className="bg-background-darker/90 rounded-2xl p-4 sm:p-5 border border-white/5 space-y-4">
+            {/* Atividade Category - Only rendered if an activity is active */}
+            {activity && (
+              <div>
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
+                  Atividade
+                </span>
                 <div className="p-3.5 bg-background-darkest/90 rounded-xl border border-brand-500/25 flex flex-col gap-1.5 shadow-md animate-in fade-in">
                   <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-400 uppercase tracking-wider">
-                    {user.custom_activity.type === 'playing' ? <Gamepad2 className="w-4 h-4" /> :
-                     user.custom_activity.type === 'listening' ? <Music className="w-4 h-4" /> :
-                     user.custom_activity.type === 'watching' ? <Tv className="w-4 h-4" /> :
-                     user.custom_activity.type === 'streaming' ? <Radio className="w-4 h-4" /> :
-                     user.custom_activity.type === 'competing' ? <Trophy className="w-4 h-4" /> :
-                     <Sparkles className="w-4 h-4" />}
-                    <span>
-                      {user.custom_activity.type === 'playing' ? 'Jogando agora' :
-                       user.custom_activity.type === 'listening' ? 'Ouvindo' :
-                       user.custom_activity.type === 'watching' ? 'Assistindo' :
-                       user.custom_activity.type === 'streaming' ? 'Transmitindo' :
-                       user.custom_activity.type === 'competing' ? 'Competindo' : 'Atividade'}
-                    </span>
+                    {activity.kind === 'game' ? <Gamepad2 className="w-4 h-4 text-green-400" /> :
+                     activity.kind === 'music' ? <Music className="w-4 h-4 text-emerald-400" /> :
+                     activity.kind === 'call' ? <Volume2 className="w-4 h-4 text-brand-400 animate-pulse" /> :
+                     activity.type === 'watching' ? <Tv className="w-4 h-4 text-purple-400" /> :
+                     activity.type === 'streaming' ? <Radio className="w-4 h-4 text-red-400" /> :
+                     activity.type === 'competing' ? <Trophy className="w-4 h-4 text-amber-400" /> :
+                     <Sparkles className="w-4 h-4 text-brand-400" />}
+                    <span>{activity.header}</span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-bold text-gray-100 flex items-center gap-1.5">
-                      {user.custom_activity.emoji && <span>{user.custom_activity.emoji}</span>}
-                      <span>{user.custom_activity.name}</span>
+                      {activity.emoji && <span>{activity.emoji}</span>}
+                      <span>{activity.name}</span>
                     </span>
-                    {user.custom_activity.details && (
-                      <span className="text-xs text-gray-300 font-medium">{user.custom_activity.details}</span>
+                    {activity.details && (
+                      <span className="text-xs text-gray-300 font-medium">{activity.details}</span>
                     )}
-                    {user.custom_activity.state && (
-                      <span className="text-xs text-gray-400">{user.custom_activity.state}</span>
+                    {activity.state && (
+                      <span className="text-xs text-gray-400">{activity.state}</span>
                     )}
                   </div>
                 </div>
-              )}
-
-              {/* About Me / Bio */}
-              <div>
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                  Sobre mim
-                </span>
-                {user.bio ? (
-                  <p className="text-xs sm:text-sm text-gray-200 leading-relaxed whitespace-pre-wrap selection:bg-brand-500/30">
-                    {user.bio}
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-500 italic">Nenhuma biografia informada.</p>
-                )}
               </div>
+            )}
+
+            {/* About Me / Bio */}
+            <div>
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                Sobre mim
+              </span>
+              {user.bio ? (
+                <p className="text-xs sm:text-sm text-gray-200 leading-relaxed whitespace-pre-wrap selection:bg-brand-500/30">
+                  {user.bio}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 italic">Nenhuma biografia informada.</p>
+              )}
+            </div>
 
               {/* Server Roles */}
               {user.roles && user.roles.length > 0 && (

@@ -12,11 +12,14 @@ import {
   Radio,
   Trophy,
   Sparkles,
+  Volume2,
   Maximize2,
 } from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
+import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
+import { getUserActivity } from '../../utils/userActivity';
 
 export interface UserProfilePosition {
   x: number;
@@ -43,6 +46,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onOpenFullProfile,
 }) => {
   const { user: currentUser } = useAuthStore();
+  const guilds = useGuildStore((s) => s.guilds);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -54,6 +58,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const activity = useMemo(() => {
+    return getUserActivity(user, currentUser, guilds);
+  }, [user, currentUser, guilds]);
 
   const popoverStyle: React.CSSProperties = useMemo(() => {
     if (!position || typeof window === 'undefined' || window.innerWidth < 640) {
@@ -197,12 +205,25 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
           {/* User Details Card */}
           <div className="bg-background-darker/90 rounded-2xl p-3 border border-white/5 space-y-2.5">
-            {/* Names */}
+            {/* Names & Quick Activity Subtitle */}
             <div>
               <h2 className="text-base font-bold text-white leading-snug">
                 {user.display_name || user.username}
               </h2>
               <span className="text-xs text-gray-400 font-medium">@{user.username}</span>
+
+              {activity && (
+                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-brand-300 font-medium truncate">
+                  {activity.kind === 'game' ? <Gamepad2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" /> :
+                   activity.kind === 'music' ? <Music className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" /> :
+                   activity.kind === 'call' ? <Volume2 className="w-3.5 h-3.5 text-brand-400 animate-pulse flex-shrink-0" /> :
+                   <Sparkles className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />}
+                  <span className="truncate">
+                    <span className="text-gray-400 font-normal">{activity.header} </span>
+                    <span className="text-gray-200 font-semibold">{activity.name}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Custom Status */}
@@ -212,35 +233,35 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
             )}
 
-            {/* Rich Presence / Custom Activity */}
-            {user.custom_activity && user.show_activity_status !== false && (
-              <div className="p-2.5 bg-background-darkest/90 rounded-xl border border-brand-500/20 flex flex-col gap-1 shadow-sm animate-in fade-in">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-400 uppercase tracking-wider">
-                  {user.custom_activity.type === 'playing' ? <Gamepad2 className="w-3.5 h-3.5" /> :
-                   user.custom_activity.type === 'listening' ? <Music className="w-3.5 h-3.5" /> :
-                   user.custom_activity.type === 'watching' ? <Tv className="w-3.5 h-3.5" /> :
-                   user.custom_activity.type === 'streaming' ? <Radio className="w-3.5 h-3.5" /> :
-                   user.custom_activity.type === 'competing' ? <Trophy className="w-3.5 h-3.5" /> :
-                   <Sparkles className="w-3.5 h-3.5" />}
-                  <span>
-                    {user.custom_activity.type === 'playing' ? 'Jogando' :
-                     user.custom_activity.type === 'listening' ? 'Ouvindo' :
-                     user.custom_activity.type === 'watching' ? 'Assistindo' :
-                     user.custom_activity.type === 'streaming' ? 'Transmitindo' :
-                     user.custom_activity.type === 'competing' ? 'Competindo' : 'Atividade'}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-gray-100 flex items-center gap-1">
-                    {user.custom_activity.emoji && <span>{user.custom_activity.emoji}</span>}
-                    <span>{user.custom_activity.name}</span>
-                  </span>
-                  {user.custom_activity.details && (
-                    <span className="text-[11px] text-gray-300">{user.custom_activity.details}</span>
-                  )}
-                  {user.custom_activity.state && (
-                    <span className="text-[10px] text-gray-400">{user.custom_activity.state}</span>
-                  )}
+            {/* Atividade Category - Only rendered if an activity is active */}
+            {activity && (
+              <div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                  Atividade
+                </span>
+                <div className="p-2.5 bg-background-darkest/90 rounded-xl border border-brand-500/20 flex flex-col gap-1 shadow-sm animate-in fade-in">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-400 uppercase tracking-wider">
+                    {activity.kind === 'game' ? <Gamepad2 className="w-3.5 h-3.5 text-green-400" /> :
+                     activity.kind === 'music' ? <Music className="w-3.5 h-3.5 text-emerald-400" /> :
+                     activity.kind === 'call' ? <Volume2 className="w-3.5 h-3.5 text-brand-400 animate-pulse" /> :
+                     activity.type === 'watching' ? <Tv className="w-3.5 h-3.5 text-purple-400" /> :
+                     activity.type === 'streaming' ? <Radio className="w-3.5 h-3.5 text-red-400" /> :
+                     activity.type === 'competing' ? <Trophy className="w-3.5 h-3.5 text-amber-400" /> :
+                     <Sparkles className="w-3.5 h-3.5 text-brand-400" />}
+                    <span>{activity.header}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-100 flex items-center gap-1">
+                      {activity.emoji && <span>{activity.emoji}</span>}
+                      <span>{activity.name}</span>
+                    </span>
+                    {activity.details && (
+                      <span className="text-[11px] text-gray-300">{activity.details}</span>
+                    )}
+                    {activity.state && (
+                      <span className="text-[10px] text-gray-400">{activity.state}</span>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
