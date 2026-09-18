@@ -205,25 +205,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
           {/* User Details Card */}
           <div className="bg-background-darker/90 rounded-2xl p-3 border border-white/5 space-y-2.5">
-            {/* Names & Quick Activity Subtitle */}
+            {/* Names */}
             <div>
               <h2 className="text-base font-bold text-white leading-snug">
                 {user.display_name || user.username}
               </h2>
               <span className="text-xs text-gray-400 font-medium">@{user.username}</span>
-
-              {activity && (
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-brand-300 font-medium truncate">
-                  {activity.kind === 'game' ? <Gamepad2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" /> :
-                   activity.kind === 'music' ? <Music className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" /> :
-                   activity.kind === 'call' ? <Volume2 className="w-3.5 h-3.5 text-brand-400 animate-pulse flex-shrink-0" /> :
-                   <Sparkles className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />}
-                  <span className="truncate">
-                    <span className="text-gray-400 font-normal">{activity.header} </span>
-                    <span className="text-gray-200 font-semibold">{activity.name}</span>
-                  </span>
-                </div>
-              )}
             </div>
 
             {/* Custom Status */}

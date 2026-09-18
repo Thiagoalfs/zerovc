@@ -252,20 +252,6 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
               </button>
             </div>
 
-            {/* Quick Activity Subtitle beneath name */}
-            {activity && (
-              <div className="mt-1 flex items-center gap-1.5 text-xs text-brand-300 font-medium truncate">
-                {activity.kind === 'game' ? <Gamepad2 className="w-4 h-4 text-green-400 flex-shrink-0" /> :
-                 activity.kind === 'music' ? <Music className="w-4 h-4 text-emerald-400 flex-shrink-0" /> :
-                 activity.kind === 'call' ? <Volume2 className="w-4 h-4 text-brand-400 animate-pulse flex-shrink-0" /> :
-                 <Sparkles className="w-4 h-4 text-brand-400 flex-shrink-0" />}
-                <span className="truncate">
-                  <span className="text-gray-400 font-normal">{activity.header} </span>
-                  <span className="text-gray-100 font-semibold">{activity.name}</span>
-                </span>
-              </div>
-            )}
-
             {/* Custom Status */}
             {user.custom_status && (
               <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-background-darker/90 rounded-xl text-xs sm:text-sm text-gray-200 border border-white/5 shadow-inner">
