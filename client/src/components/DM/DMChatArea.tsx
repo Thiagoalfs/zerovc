@@ -16,6 +16,8 @@ import { formatAssetUrl } from '../../lib/api';
 import { ActiveCallOverlay } from './ActiveCallOverlay';
 import { MessageItem } from '../Chat/MessageItem';
 import { MessageInput } from '../Chat/MessageInput';
+import { SearchAutocompletePopout } from '../Chat/SearchAutocompletePopout';
+import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { User, DMMessage } from '../../types';
 
 interface DMChatAreaProps {
@@ -55,7 +57,9 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const [replyingTo, setReplyingTo] = useState<DMMessage | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSearchAutocompleteOpen, setIsSearchAutocompleteOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
@@ -182,17 +186,15 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     }
   };
 
+  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
+
   const displayedMessages = useMemo(() => {
     let list = messages;
     if (showPinnedOnly && activeRoom) {
       list = pinnedMessagesByRoom[activeRoom.id] || [];
     }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter((m) => m.content.toLowerCase().includes(q));
-    }
-    return list;
-  }, [messages, showPinnedOnly, activeRoom, pinnedMessagesByRoom, searchQuery]);
+    return filterMessages(list, parsedSearch);
+  }, [messages, showPinnedOnly, activeRoom, pinnedMessagesByRoom, parsedSearch]);
 
   const handleEditLastMessage = () => {
     if (!user || !displayedMessages || displayedMessages.length === 0) return;
@@ -350,12 +352,20 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           </button>
 
           {/* Discord-style Search Input Box (Last element on the right) */}
-          <div className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64">
+          <div
+            ref={searchContainerRef}
+            className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64 relative"
+          >
             <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             <input
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
+              }}
+              onFocus={() => setIsSearchAutocompleteOpen(true)}
               placeholder="Buscar..."
               className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
             />
@@ -370,6 +380,20 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               </button>
             )}
           </div>
+
+          {/* Floating Search Autocomplete Popout Modal */}
+          <SearchAutocompletePopout
+            isOpen={isSearchAutocompleteOpen}
+            onClose={() => setIsSearchAutocompleteOpen(false)}
+            query={searchQuery}
+            onSelectFilter={(newQ) => {
+              setSearchQuery(newQ);
+              searchInputRef.current?.focus();
+            }}
+            anchorRef={searchContainerRef}
+            members={recipient ? [recipient] : []}
+            contextType="dm"
+          />
         </div>
       </div>
 

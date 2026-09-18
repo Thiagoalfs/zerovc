@@ -15,6 +15,8 @@ import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { MessageItem } from '../Chat/MessageItem';
 import { MessageInput } from '../Chat/MessageInput';
+import { SearchAutocompletePopout } from '../Chat/SearchAutocompletePopout';
+import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { User, DMGroupMessage } from '../../types';
 
 interface DMGroupChatAreaProps {
@@ -55,6 +57,9 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     return typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchAutocompleteOpen, setIsSearchAutocompleteOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const [isInGroupVoice, setIsInGroupVoice] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
@@ -164,15 +169,11 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   };
 
+  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
+
   const displayedMessages = useMemo(() => {
-    if (!searchQuery.trim()) return messages;
-    const q = searchQuery.toLowerCase();
-    return messages.filter((m) => {
-      const matchContent = m.content.toLowerCase().includes(q);
-      const matchAuthor = (m.author?.display_name || m.author?.username || '').toLowerCase().includes(q);
-      return matchContent || matchAuthor;
-    });
-  }, [messages, searchQuery]);
+    return filterMessages(messages, parsedSearch);
+  }, [messages, parsedSearch]);
 
   const handleEditLastMessage = () => {
     if (!user || !displayedMessages || displayedMessages.length === 0) return;
@@ -324,12 +325,20 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           </button>
 
           {/* Discord-style Search Input Box (Last element on the right) */}
-          <div className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64">
+          <div
+            ref={searchContainerRef}
+            className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64 relative"
+          >
             <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             <input
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
+              }}
+              onFocus={() => setIsSearchAutocompleteOpen(true)}
               placeholder="Buscar..."
               className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
             />
@@ -344,6 +353,20 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               </button>
             )}
           </div>
+
+          {/* Floating Search Autocomplete Popout Modal */}
+          <SearchAutocompletePopout
+            isOpen={isSearchAutocompleteOpen}
+            onClose={() => setIsSearchAutocompleteOpen(false)}
+            query={searchQuery}
+            onSelectFilter={(newQ) => {
+              setSearchQuery(newQ);
+              searchInputRef.current?.focus();
+            }}
+            anchorRef={searchContainerRef}
+            members={activeGroup?.members || []}
+            contextType="dm_group"
+          />
         </div>
       </div>
 
