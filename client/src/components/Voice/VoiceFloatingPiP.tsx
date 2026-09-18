@@ -805,10 +805,18 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
                   {showVolume && (
                     <>
-                      <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowVolume(false); }} />
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setShowVolume(false);
+                        }}
+                      />
                       <div
                         className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-60 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 pointer-events-auto"
                         onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
                       >
                         <UserVolumeSlider userId={targetParticipant.identity} label="Volume de Voz" className="p-0" />
                         {hasScreenVideoTrack && (

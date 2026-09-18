@@ -405,7 +405,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         </div>
 
         {/* Top Right Unified Action Controls Bar (Hover) */}
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 shadow-lg">
+        <div className={`absolute top-3 right-3 flex items-center gap-1.5 z-30 transition-opacity bg-black/75 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 shadow-lg ${showVolumeSlider ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           {/* Watch / Stop Live Controls */}
           {isScreenSharing && isWatching && (
             <>
@@ -475,10 +475,18 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
               {showVolumeSlider && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowVolumeSlider(false); }} />
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowVolumeSlider(false);
+                    }}
+                  />
                   <div
                     className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-56 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 pointer-events-auto"
                     onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
                   >
                     {/* User Mic Volume */}
                     <UserVolumeSlider userId={participant.identity} label="Volume de Voz" className="p-0" />
@@ -617,10 +625,18 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
                     {showVolumeSlider && (
                       <>
-                        <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowVolumeSlider(false); }} />
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowVolumeSlider(false);
+                          }}
+                        />
                         <div
                           className="absolute right-0 top-full mt-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-60 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 pointer-events-auto"
                           onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
                         >
                           <UserVolumeSlider userId={participant.identity} label="Volume de Voz" className="p-0" />
                           {isScreenSharing && (

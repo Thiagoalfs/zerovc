@@ -15,17 +15,11 @@ export const UserVolumeSlider: React.FC<UserVolumeSliderProps> = ({
   showIcon = true,
   label = 'Volume de Usuário',
 }) => {
-  const storeVol = useVoiceStore((state) => state.userVolumes[userId] ?? 1);
+  const volume = useVoiceStore((state) => state.userVolumes[userId] ?? 1);
   const setUserVolume = useVoiceStore((state) => state.setUserVolume);
-  const [localVol, setLocalVol] = useState(storeVol);
-
-  useEffect(() => {
-    setLocalVol(storeVol);
-  }, [storeVol]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
-    setLocalVol(val);
     setUserVolume(userId, val);
   };
 
@@ -34,11 +28,13 @@ export const UserVolumeSlider: React.FC<UserVolumeSliderProps> = ({
       className={`px-2.5 py-1.5 flex flex-col gap-1.5 select-none ${className}`}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
         <div className="flex items-center gap-1.5">
           {showIcon && (
-            localVol === 0 ? (
+            volume === 0 ? (
               <VolumeX className="w-3.5 h-3.5 text-dnd flex-shrink-0" />
             ) : (
               <Volume2 className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
@@ -47,7 +43,7 @@ export const UserVolumeSlider: React.FC<UserVolumeSliderProps> = ({
           <span>{label}</span>
         </div>
         <span className="text-brand-400 font-mono text-[11px] font-bold">
-          {Math.round(localVol * 100)}%
+          {Math.round(volume * 100)}%
         </span>
       </div>
 
@@ -56,7 +52,7 @@ export const UserVolumeSlider: React.FC<UserVolumeSliderProps> = ({
         min={0}
         max={2}
         step={0.01}
-        value={localVol}
+        value={volume}
         onChange={handleChange}
         onInput={handleChange as any}
         className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
@@ -78,17 +74,11 @@ export const StreamVolumeSlider: React.FC<StreamVolumeSliderProps> = ({
   showIcon = true,
   label = 'Volume da Transmissão',
 }) => {
-  const storeVol = useVoiceStore((state) => state.streamVolumes[userId] ?? 1);
+  const volume = useVoiceStore((state) => state.streamVolumes[userId] ?? 1);
   const setStreamVolume = useVoiceStore((state) => state.setStreamVolume);
-  const [localVol, setLocalVol] = useState(storeVol);
-
-  useEffect(() => {
-    setLocalVol(storeVol);
-  }, [storeVol]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
-    setLocalVol(val);
     setStreamVolume(userId, val);
   };
 
@@ -97,6 +87,8 @@ export const StreamVolumeSlider: React.FC<StreamVolumeSliderProps> = ({
       className={`px-2.5 py-1.5 flex flex-col gap-1.5 select-none ${className}`}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
         <div className="flex items-center gap-1.5">
@@ -104,7 +96,7 @@ export const StreamVolumeSlider: React.FC<StreamVolumeSliderProps> = ({
           <span>{label}</span>
         </div>
         <span className="text-brand-400 font-mono text-[11px] font-bold">
-          {Math.round(localVol * 100)}%
+          {Math.round(volume * 100)}%
         </span>
       </div>
 
@@ -113,7 +105,7 @@ export const StreamVolumeSlider: React.FC<StreamVolumeSliderProps> = ({
         min={0}
         max={2}
         step={0.01}
-        value={localVol}
+        value={volume}
         onChange={handleChange}
         onInput={handleChange as any}
         className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"

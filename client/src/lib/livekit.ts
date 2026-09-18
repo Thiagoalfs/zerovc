@@ -124,11 +124,34 @@ class LiveKitManager {
   private attachedAudioElements: Map<string, HTMLMediaElement> = new Map();
   private attachedUserAudioElements: Map<string, HTMLMediaElement> = new Map();
   private attachedStreamAudioElements: Map<string, HTMLMediaElement> = new Map();
-  private userVolumes: Map<string, number> = new Map();
-  private streamVolumes: Map<string, number> = new Map();
+  private userVolumes: Map<string, number> = new Map(
+    Object.entries(
+      (() => {
+        try {
+          const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_user_volumes') : null;
+          return raw ? JSON.parse(raw) : {};
+        } catch {
+          return {};
+        }
+      })()
+    )
+  );
+  private streamVolumes: Map<string, number> = new Map(
+    Object.entries(
+      (() => {
+        try {
+          const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_stream_volumes') : null;
+          return raw ? JSON.parse(raw) : {};
+        } catch {
+          return {};
+        }
+      })()
+    )
+  );
   private watchedParticipantIdentities: Set<string> = new Set();
   private isDeafened: boolean = false;
   private activeMediaStreamTracks: Set<MediaStreamTrack> = new Set();
+  private audioContext?: AudioContext;
   // Dispositivo de saída "principal" atualmente selecionado (o que setAudioOutputDevice
   // define). É o dispositivo que a captura de áudio do sistema (screen share) vai ler.
   private currentOutputDeviceId: string | null = null;
@@ -190,6 +213,18 @@ class LiveKitManager {
       },
     });
 
+    try {
+      const AudioCtxClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtxClass) {
+        this.audioContext = new AudioCtxClass();
+        if (typeof (room as any).setAudioContext === 'function') {
+          (room as any).setAudioContext(this.audioContext);
+        }
+      }
+    } catch (e) {
+      console.warn('[LiveKit] Could not initialize WebAudio context for room:', e);
+    }
+
     this.room = room;
 
     const updateParticipants = () => {
@@ -201,6 +236,9 @@ class LiveKitManager {
     room.on(RoomEvent.Connected, async () => {
       console.log('[LiveKit] Connected to room:', room.name);
       try {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+          await this.audioContext.resume().catch(() => {});
+        }
         await room.startAudio();
       } catch (err) {
         console.warn('[LiveKit] startAudio error:', err);
@@ -252,9 +290,16 @@ class LiveKitManager {
           audioEl.muted = this.isDeafened || !isWatched;
           this.attachedStreamAudioElements.set(sid, audioEl);
           const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
-          audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
-          if (typeof (track as any).setVolume === 'function') {
-            (track as any).setVolume(streamVol);
+          try {
+            audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
+          } catch {}
+          const audioTrack = (track as any);
+          if (typeof audioTrack.setVolume === 'function') {
+            try {
+              audioTrack.setVolume(streamVol);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting stream volume on subscribed track:', err);
+            }
           }
           if (isWatched && !this.isDeafened) {
             audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
@@ -263,9 +308,16 @@ class LiveKitManager {
           audioEl.muted = this.isDeafened;
           this.attachedUserAudioElements.set(sid, audioEl);
           const userVol = this.userVolumes.get(participant.identity) ?? 1;
-          audioEl.volume = Math.min(Math.max(userVol, 0), 1);
-          if (typeof (track as any).setVolume === 'function') {
-            (track as any).setVolume(userVol);
+          try {
+            audioEl.volume = Math.min(Math.max(userVol, 0), 1);
+          } catch {}
+          const audioTrack = (track as any);
+          if (typeof audioTrack.setVolume === 'function') {
+            try {
+              audioTrack.setVolume(userVol);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting user volume on subscribed track:', err);
+            }
           }
           if (this.isRoutingCallAudioForCapture) {
             void this.applyCallAudioRouting();
@@ -846,22 +898,36 @@ class LiveKitManager {
 
   setUserVolume(participantIdentity: string, volume: number) {
     this.userVolumes.set(participantIdentity, volume);
-    if (!this.room) return;
+
+    // Save to localStorage
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_user_volumes') : null;
+      const existing = raw ? JSON.parse(raw) : {};
+      existing[participantIdentity] = volume;
+      localStorage.setItem('zerovc_user_volumes', JSON.stringify(existing));
+    } catch {}
 
     // Adjust user audio elements (microphone)
     this.attachedUserAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
-        el.volume = Math.min(Math.max(volume, 0), 1);
+        try {
+          el.volume = Math.min(Math.max(volume, 0), 1);
+        } catch {}
       }
     });
 
-    const remote = this.room.remoteParticipants.get(participantIdentity);
+    const remote = this.room?.remoteParticipants.get(participantIdentity);
     if (remote) {
       // Find microphone audio track
       remote.audioTrackPublications.forEach((pub) => {
-        if (pub.source === Track.Source.Microphone && pub.audioTrack) {
-          if (typeof (pub.audioTrack as any).setVolume === 'function') {
-            (pub.audioTrack as any).setVolume(volume);
+        const audioTrack = pub.track || (pub as any).audioTrack;
+        if (pub.source === Track.Source.Microphone && audioTrack) {
+          if (typeof audioTrack.setVolume === 'function') {
+            try {
+              audioTrack.setVolume(volume);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting user track volume:', err);
+            }
           }
         }
       });
@@ -870,22 +936,36 @@ class LiveKitManager {
 
   setStreamVolume(participantIdentity: string, volume: number) {
     this.streamVolumes.set(participantIdentity, volume);
-    if (!this.room) return;
+
+    // Save to localStorage
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_stream_volumes') : null;
+      const existing = raw ? JSON.parse(raw) : {};
+      existing[participantIdentity] = volume;
+      localStorage.setItem('zerovc_stream_volumes', JSON.stringify(existing));
+    } catch {}
 
     // Adjust screen share audio elements
     this.attachedStreamAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
-        el.volume = Math.min(Math.max(volume, 0), 1);
+        try {
+          el.volume = Math.min(Math.max(volume, 0), 1);
+        } catch {}
       }
     });
 
-    const remote = this.room.remoteParticipants.get(participantIdentity);
+    const remote = this.room?.remoteParticipants.get(participantIdentity);
     if (remote) {
       // Find screen share audio track
       remote.audioTrackPublications.forEach((pub) => {
-        if (pub.source === Track.Source.ScreenShareAudio && pub.audioTrack) {
-          if (typeof (pub.audioTrack as any).setVolume === 'function') {
-            (pub.audioTrack as any).setVolume(volume);
+        const audioTrack = pub.track || (pub as any).audioTrack;
+        if (pub.source === Track.Source.ScreenShareAudio && audioTrack) {
+          if (typeof audioTrack.setVolume === 'function') {
+            try {
+              audioTrack.setVolume(volume);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting stream track volume:', err);
+            }
           }
         }
       });
@@ -909,7 +989,9 @@ class LiveKitManager {
         el.muted = !subscribed || this.isDeafened;
         if (subscribed && !this.isDeafened) {
           const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
-          el.volume = Math.min(Math.max(streamVol, 0), 1);
+          try {
+            el.volume = Math.min(Math.max(streamVol, 0), 1);
+          } catch {}
           el.play().catch((err) => console.log('[LiveKit] Stream audio play error:', err));
         } else {
           try {
@@ -942,10 +1024,13 @@ class LiveKitManager {
             } catch (err) {
               console.warn('[LiveKit] Error setting audio screenshare subscription:', err);
             }
-            if (pub.audioTrack) {
+            const audioTrack = pub.track || (pub as any).audioTrack;
+            if (audioTrack && typeof audioTrack.setVolume === 'function') {
               const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
-              if (typeof (pub.audioTrack as any).setVolume === 'function') {
-                (pub.audioTrack as any).setVolume(subscribed ? streamVol : 0);
+              try {
+                audioTrack.setVolume(subscribed ? streamVol : 0);
+              } catch (err) {
+                console.warn('[LiveKit] Error setting stream volume on publication change:', err);
               }
             }
           }
