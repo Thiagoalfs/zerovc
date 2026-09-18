@@ -644,6 +644,7 @@ if (!gotTheLock) {
 
     createWindow(initialUrl);
     createTray();
+    startActivityScanner();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -652,6 +653,124 @@ if (!gotTheLock) {
     });
   });
 }
+
+// -------------------------------------------------------------
+// Activity / Game Detection Scanner
+// -------------------------------------------------------------
+interface DetectedActivity {
+  type: 'playing' | 'listening' | 'watching' | 'streaming' | 'competing' | 'custom';
+  name: string;
+  details?: string;
+  start_time: number;
+}
+
+const KNOWN_GAMES_AND_APPS: Array<{
+  match: RegExp;
+  name: string;
+  type: 'playing' | 'listening' | 'watching' | 'streaming' | 'competing' | 'custom';
+}> = [
+  // Popular Games
+  { match: /Minecraft|javaw\.exe|bedrock_server|Minecraft\.Windows/i, name: 'Minecraft', type: 'playing' },
+  { match: /LeagueClient|League of Legends/i, name: 'League of Legends', type: 'playing' },
+  { match: /VALORANT|VALORANT-Win64-Shipping/i, name: 'VALORANT', type: 'playing' },
+  { match: /cs2\.exe|csgo\.exe|Counter-Strike/i, name: 'Counter-Strike 2', type: 'playing' },
+  { match: /GTA5\.exe|Grand Theft Auto V|FiveM/i, name: 'Grand Theft Auto V', type: 'playing' },
+  { match: /RobloxPlayerBeta|Roblox/i, name: 'Roblox', type: 'playing' },
+  { match: /FortniteClient-Win64-Shipping|Fortnite/i, name: 'Fortnite', type: 'playing' },
+  { match: /Overwatch|Overwatch\.exe/i, name: 'Overwatch 2', type: 'playing' },
+  { match: /GenshinImpact\.exe|Genshin Impact/i, name: 'Genshin Impact', type: 'playing' },
+  { match: /StarRail\.exe|Honkai: Star Rail/i, name: 'Honkai: Star Rail', type: 'playing' },
+  { match: /ApexLegends|r5apex\.exe/i, name: 'Apex Legends', type: 'playing' },
+  { match: /RocketLeague\.exe|Rocket League/i, name: 'Rocket League', type: 'playing' },
+  { match: /Cyberpunk2077\.exe/i, name: 'Cyberpunk 2077', type: 'playing' },
+  { match: /eldenring\.exe/i, name: 'ELDEN RING', type: 'playing' },
+  { match: /Terraria\.exe/i, name: 'Terraria', type: 'playing' },
+  { match: /Stardew Valley|StardewValley\.exe/i, name: 'Stardew Valley', type: 'playing' },
+  { match: /dota2\.exe|Dota 2/i, name: 'Dota 2', type: 'playing' },
+  { match: /DeadByDaylight/i, name: 'Dead by Daylight', type: 'playing' },
+  { match: /RustClient\.exe|Rust/i, name: 'Rust', type: 'playing' },
+  { match: /Among Us|Among Us\.exe/i, name: 'Among Us', type: 'playing' },
+  { match: /osu!\.exe|osu!/i, name: 'osu!', type: 'playing' },
+  { match: /RainbowSix\.exe|Rainbow Six/i, name: 'Rainbow Six Siege', type: 'playing' },
+  { match: /WorldOfTanks\.exe|World of Tanks/i, name: 'World of Tanks', type: 'playing' },
+  { match: /Warframe\.x64\.exe|Warframe/i, name: 'Warframe', type: 'playing' },
+  { match: /Destiny2\.exe|Destiny 2/i, name: 'Destiny 2', type: 'playing' },
+  { match: /TslGame\.exe|PUBG/i, name: 'PUBG: BATTLEGROUNDS', type: 'playing' },
+  { match: /FallGuys_client\.exe|Fall Guys/i, name: 'Fall Guys', type: 'playing' },
+  { match: /Brawlhalla\.exe|Brawlhalla/i, name: 'Brawlhalla', type: 'playing' },
+  { match: /TheSims4|TS4_x64\.exe/i, name: 'The Sims 4', type: 'playing' },
+  // Apps & Creative
+  { match: /Spotify\.exe|Spotify/i, name: 'Spotify', type: 'listening' },
+  { match: /Code\.exe|Visual Studio Code/i, name: 'Visual Studio Code', type: 'playing' },
+  { match: /blender\.exe|Blender/i, name: 'Blender', type: 'playing' },
+  { match: /Photoshop\.exe|Adobe Photoshop/i, name: 'Adobe Photoshop', type: 'playing' },
+  { match: /obs64\.exe|obs32\.exe|OBS Studio/i, name: 'OBS Studio', type: 'streaming' },
+];
+
+let lastDetectedActivity: DetectedActivity | null = null;
+let activityScanTimer: NodeJS.Timeout | null = null;
+
+function scanProcessesForActivity() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const { exec } = require('child_process');
+  let cmd = '';
+  if (process.platform === 'win32') {
+    cmd = 'tasklist /FO CSV /NH';
+  } else if (process.platform === 'darwin' || process.platform === 'linux') {
+    cmd = 'ps -eo comm=';
+  } else {
+    return;
+  }
+
+  exec(cmd, { maxBuffer: 1024 * 512, windowsHide: true }, (err: any, stdout: string) => {
+    if (err || !stdout) return;
+
+    let foundMatch: { name: string; type: DetectedActivity['type'] } | null = null;
+
+    for (const item of KNOWN_GAMES_AND_APPS) {
+      if (item.match.test(stdout)) {
+        foundMatch = { name: item.name, type: item.type };
+        break;
+      }
+    }
+
+    if (foundMatch) {
+      if (!lastDetectedActivity || lastDetectedActivity.name !== foundMatch.name) {
+        lastDetectedActivity = {
+          name: foundMatch.name,
+          type: foundMatch.type,
+          start_time: Math.floor(Date.now() / 1000),
+        };
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('activity-detected', lastDetectedActivity);
+        }
+      }
+    } else if (lastDetectedActivity) {
+      lastDetectedActivity = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('activity-detected', null);
+      }
+    }
+  });
+}
+
+function startActivityScanner() {
+  if (activityScanTimer) return;
+  setTimeout(scanProcessesForActivity, 3000);
+  activityScanTimer = setInterval(scanProcessesForActivity, 20000);
+}
+
+function stopActivityScanner() {
+  if (activityScanTimer) {
+    clearInterval(activityScanTimer);
+    activityScanTimer = null;
+  }
+}
+
+ipcMain.handle('get-current-activity', () => {
+  return lastDetectedActivity;
+});
 
 ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => {
   if (process.platform !== 'win32') {
@@ -820,6 +939,7 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  stopActivityScanner();
   globalShortcut.unregisterAll();
   if (activeAudioProcess) {
     try {

@@ -179,7 +179,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             )}
 
             {/* Rich Presence / Custom Activity */}
-            {user.custom_activity && (
+            {user.custom_activity && user.show_activity_status !== false && (
               <div className="p-2.5 bg-background-darkest/90 rounded-xl border border-brand-500/20 flex flex-col gap-1 shadow-sm animate-in fade-in">
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-400 uppercase tracking-wider">
                   {user.custom_activity.type === 'playing' ? <Gamepad2 className="w-3.5 h-3.5" /> :

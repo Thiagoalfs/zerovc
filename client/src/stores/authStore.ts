@@ -32,6 +32,9 @@ interface AuthState {
     bio?: string;
     status?: 'online' | 'idle' | 'dnd' | 'offline';
     custom_status?: string;
+    custom_activity?: import('../types').CustomActivity | null;
+    show_activity_status?: boolean;
+    auto_detect_activity?: boolean;
   }) => Promise<User>;
   setUser: (user: Partial<User> & { id?: string }) => void;
 }

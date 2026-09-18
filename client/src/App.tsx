@@ -652,8 +652,10 @@ export const App: React.FC = () => {
     };
   }, [handleRoute, selectGuild]);
 
-  // Initialize desktop preferences (e.g. Minimize to Tray & Auto-Start)
+  // Initialize desktop preferences & apply DOM themes / accessibility
   useEffect(() => {
+    useSettingsStore.getState().applyThemeToDOM();
+
     if (window.electronAPI) {
       try {
         const { minimizeToTray, autoStart } = useSettingsStore.getState();
@@ -666,6 +668,37 @@ export const App: React.FC = () => {
       } catch {}
     }
   }, []);
+
+  // Rich Presence & Game Activity Detection in Electron
+  useEffect(() => {
+    if (window.electronAPI?.onActivityDetected && user) {
+      const removeListener = window.electronAPI.onActivityDetected((detectedActivity: any) => {
+        const currentUser = useAuthStore.getState().user;
+        if (!currentUser || currentUser.auto_detect_activity === false) return;
+
+        const currentAct = currentUser.custom_activity;
+        if (
+          (!currentAct && !detectedActivity) ||
+          (currentAct && detectedActivity && currentAct.name === detectedActivity.name && currentAct.type === detectedActivity.type)
+        ) {
+          return;
+        }
+
+        api.users
+          .updateProfile({ custom_activity: detectedActivity || null })
+          .then((updated) => {
+            useAuthStore.getState().setUser(updated);
+          })
+          .catch((err) => {
+            console.warn('[Activity] Failed to auto-update activity:', err);
+          });
+      });
+
+      return () => {
+        removeListener?.();
+      };
+    }
+  }, [user?.id, user?.auto_detect_activity]);
 
   // Push-to-Talk (PTT) Global Key Listener
   useEffect(() => {
@@ -1058,6 +1091,10 @@ export const App: React.FC = () => {
         }
       };
 
+      const handleSessionRevoked = () => {
+        useAuthStore.getState().logout();
+      };
+
       socket.on('MESSAGE_CREATE', handleMessageCreate);
       socket.on('MESSAGE_UPDATE', handleMessageUpdate);
       socket.on('MESSAGE_DELETE', handleMessageDelete);
@@ -1096,6 +1133,7 @@ export const App: React.FC = () => {
       socket.on('GUILD_EMOJI_CREATE', handleGuildEmojiCreate);
       socket.on('GUILD_EMOJI_UPDATE', handleGuildEmojiUpdate);
       socket.on('GUILD_EMOJI_DELETE', handleGuildEmojiDelete);
+      socket.on('SESSION_REVOKED', handleSessionRevoked);
 
       const unsubscribeReconnect = socket.onReconnect(async () => {
         try {
@@ -1178,6 +1216,7 @@ export const App: React.FC = () => {
         socket.off('GUILD_EMOJI_CREATE', handleGuildEmojiCreate);
         socket.off('GUILD_EMOJI_UPDATE', handleGuildEmojiUpdate);
         socket.off('GUILD_EMOJI_DELETE', handleGuildEmojiDelete);
+        socket.off('SESSION_REVOKED', handleSessionRevoked);
       };
     }
   }, [token, user]);

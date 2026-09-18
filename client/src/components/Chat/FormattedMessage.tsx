@@ -328,7 +328,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   if (!hasText && !hasEmbeds && !hasLinkEmbeds) return null;
 
   return (
-    <div className={`leading-relaxed break-words ${className}`}>
+    <div className={`leading-relaxed break-words chat-message-content ${className}`}>
       {hasText && (
         <div className={`${textClassName} ${isJumboji ? 'text-3xl sm:text-4xl leading-normal' : ''}`}>
           {parts}

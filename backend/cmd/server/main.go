@@ -143,7 +143,7 @@ func main() {
 	appURL := getEnv("APP_URL", "https://zerovc.safiroko.xyz")
 	emailService := email.NewService(resendAPIKey, resendFromEmail, appURL)
 
-	authHandler := handlers.NewAuthHandler(db, authService, emailService, csrfService)
+	authHandler := handlers.NewAuthHandler(db, authService, emailService, csrfService, hub)
 	userHandler := handlers.NewUserHandler(db, hub)
 	guildHandler := handlers.NewGuildHandler(db, hub)
 	channelHandler := handlers.NewChannelHandler(db, hub, livekitService)
@@ -274,6 +274,9 @@ func main() {
 
 		// Current User & Profile Customization
 		r.Get("/api/auth/me", authHandler.Me)
+		r.Get("/api/auth/sessions", authHandler.GetSessions)
+		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/sessions/{id}/revoke", authHandler.RevokeSession)
+		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/sessions/revoke-others", authHandler.RevokeOtherSessions)
 		r.With(exportDataLimiter.Middleware).Get("/api/auth/export-data", authHandler.ExportData)
 		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/delete-account", authHandler.DeleteAccount)
 		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/2fa/generate", authHandler.Generate2FA)

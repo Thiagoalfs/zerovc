@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
 
@@ -232,6 +232,15 @@ export const api = {
       request<{ success: boolean; phone_number: string }>('/auth/change-phone', {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    getSessions: () => request<UserSession[]>('/auth/sessions'),
+    revokeSession: (id: string) =>
+      request<{ message: string }>(`/auth/sessions/${id}/revoke`, {
+        method: 'POST',
+      }),
+    revokeOtherSessions: () =>
+      request<{ message: string }>('/auth/sessions/revoke-others', {
+        method: 'POST',
       }),
   },
 

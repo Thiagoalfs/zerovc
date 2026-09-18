@@ -48,6 +48,8 @@ export interface ElectronAPI {
   setHardwareAcceleration?: (enabled: boolean) => void;
   getHardwareAcceleration?: () => Promise<boolean>;
   relaunchApp?: () => void;
+  onActivityDetected?: (callback: (activity: any) => void) => () => void;
+  getCurrentActivity?: () => Promise<any>;
 }
 
 declare global {

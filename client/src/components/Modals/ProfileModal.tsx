@@ -75,6 +75,8 @@ import { livekit } from '../../lib/livekit';
 import { api, formatAssetUrl } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
 import { KeybindSettingsView } from './KeybindSettingsView';
+import { SessionsSettingsView } from './SessionsSettingsView';
+import { AccessibilitySettingsView } from './AccessibilitySettingsView';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -85,7 +87,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const { user, updateProfile, logout, setUser } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<
-    'account' | 'profile' | 'privacy' | 'appearance' | 'audio' | 'notifications' | 'preferences' | 'keybinds'
+    'account' | 'profile' | 'privacy' | 'sessions' | 'appearance' | 'accessibility' | 'audio' | 'notifications' | 'preferences' | 'keybinds'
   >('account');
 
   // Mobile full-screen drilldown navigation state ('menu' -> 'content')
@@ -999,7 +1001,27 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">Privacidade e Segurança</div>
-                        <div className="text-xs text-gray-400">E-mail, senha, 2FA, sessões</div>
+                        <div className="text-xs text-gray-400">E-mail, senha, 2FA, atividade</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('sessions');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Smartphone className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Dispositivos & Sessões</div>
+                        <div className="text-xs text-gray-400">Aparelhos conectados, encerrar sessões</div>
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
@@ -1028,6 +1050,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">Aparência</div>
                         <div className="text-xs text-gray-400">Temas visuais, cores de destaque, densidade</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('accessibility');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Eye className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Acessibilidade</div>
+                        <div className="text-xs text-gray-400">Escala da fonte, alto contraste, daltonismo, TTS</div>
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
@@ -1137,6 +1179,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <span>Privacidade e Segurança</span>
             </button>
 
+            {/* Tab: Dispositivos & Sessões */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('sessions')}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'sessions'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
+              }`}
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>Dispositivos & Sessões</span>
+            </button>
+
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 pt-2">
               Configurações do App
             </span>
@@ -1153,6 +1209,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             >
               <Palette className="w-4 h-4" />
               <span>Aparência</span>
+            </button>
+
+            {/* Tab: Acessibilidade */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('accessibility')}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'accessibility'
+                  ? 'bg-brand-500 text-white shadow-md'
+                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
+              }`}
+            >
+              <Eye className="w-4 h-4" />
+              <span>Acessibilidade</span>
             </button>
 
             {/* Tab: Voz & Vídeo */}
@@ -1249,7 +1319,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               {activeTab === 'account' && 'Minha Conta'}
               {activeTab === 'profile' && 'Perfil de Usuário'}
               {activeTab === 'privacy' && 'Privacidade'}
+              {activeTab === 'sessions' && 'Sessões & Dispositivos'}
               {activeTab === 'appearance' && 'Aparência'}
+              {activeTab === 'accessibility' && 'Acessibilidade'}
               {activeTab === 'audio' && 'Voz & Vídeo'}
               {activeTab === 'notifications' && 'Notificações'}
               {activeTab === 'preferences' && 'Preferências'}
@@ -1284,7 +1356,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {activeTab === 'account' && 'Minha Conta'}
                   {activeTab === 'profile' && 'Perfil de Usuário'}
                   {activeTab === 'privacy' && 'Privacidade e Segurança'}
+                  {activeTab === 'sessions' && 'Sessões Ativas e Dispositivos'}
                   {activeTab === 'appearance' && 'Aparência & Customização'}
+                  {activeTab === 'accessibility' && 'Central de Acessibilidade'}
                   {activeTab === 'audio' && 'Voz & Vídeo'}
                   {activeTab === 'notifications' && 'Notificações & Sons'}
                   {activeTab === 'preferences' && 'Preferências do Sistema'}
@@ -1293,8 +1367,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <p className="text-xs text-gray-400">
                   {activeTab === 'account' && 'Personalize seu perfil, avatar, banner, nome de exibição e recado.'}
                   {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
-                  {activeTab === 'privacy' && 'Gerencie credenciais de acesso, e-mail, senha, autenticação 2FA, sessões ativas e dados.'}
+                  {activeTab === 'privacy' && 'Gerencie credenciais de acesso, e-mail, senha, autenticação 2FA, atividade e dados.'}
+                  {activeTab === 'sessions' && 'Visualize aparelhos conectados e encerre sessões ativas remotamente.'}
                   {activeTab === 'appearance' && 'Personalize temas visuais, cores de destaque, densidade e zoom.'}
+                  {activeTab === 'accessibility' && 'Ajuste escala tipográfica do chat, alto contraste, redução de movimento, daltonismo e TTS.'}
                   {activeTab === 'audio' && 'Ajuste dispositivos, microfone, webcam e filtros avançados de áudio WebRTC.'}
                   {activeTab === 'notifications' && 'Configure sons do sistema, alertas sonoros e notificações na área de trabalho.'}
                   {activeTab === 'preferences' && 'Configure o comportamento da janela, inicialização e integração com o sistema.'}
@@ -1737,7 +1813,86 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* 4. Gestão de Dados e Conta (LGPD / GDPR) */}
+                {/* 4. Atividade de Jogo e Rich Presence */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Activity className="w-3.5 h-3.5 text-brand-400" />
+                    <span>Status de Atividade & Jogos</span>
+                  </h4>
+                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+                    {/* Show Activity Status */}
+                    <div className="flex items-center justify-between pt-1 first:pt-0">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">
+                          Exibir atividade atual como mensagem de status
+                        </span>
+                        <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+                          Permite que outros usuários vejam qual jogo ou aplicativo você está executando em seu perfil e na lista de membros.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={user.show_activity_status !== false}
+                        onClick={async () => {
+                          const currentVal = user.show_activity_status !== false;
+                          try {
+                            const updated = await updateProfile({ show_activity_status: !currentVal });
+                            setUser(updated);
+                          } catch (err) {
+                            console.error('Failed to toggle show_activity_status:', err);
+                          }
+                        }}
+                        className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                          user.show_activity_status !== false ? 'bg-brand-500' : 'bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                            user.show_activity_status !== false ? 'translate-x-6' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Auto-detect activity in Electron */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">
+                          Detectar automaticamente jogos em execução
+                        </span>
+                        <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+                          Escaneia processos em segundo plano no desktop e sincroniza seu status de jogo em tempo real.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={user.auto_detect_activity !== false}
+                        onClick={async () => {
+                          const currentVal = user.auto_detect_activity !== false;
+                          try {
+                            const updated = await updateProfile({ auto_detect_activity: !currentVal });
+                            setUser(updated);
+                          } catch (err) {
+                            console.error('Failed to toggle auto_detect_activity:', err);
+                          }
+                        }}
+                        className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                          user.auto_detect_activity !== false ? 'bg-brand-500' : 'bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                            user.auto_detect_activity !== false ? 'translate-x-6' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Gestão de Dados e Conta (LGPD / GDPR) */}
                 <div>
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <Shield className="w-3.5 h-3.5 text-brand-400" />
@@ -1797,6 +1952,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* TAB: SESSÕES ATIVAS & DISPOSITIVOS */}
+            {activeTab === 'sessions' && (
+              <div className="animate-in fade-in">
+                <SessionsSettingsView />
+              </div>
+            )}
+
+            {/* TAB: CENTRAL DE ACESSIBILIDADE */}
+            {activeTab === 'accessibility' && (
+              <div className="animate-in fade-in">
+                <AccessibilitySettingsView />
               </div>
             )}
 

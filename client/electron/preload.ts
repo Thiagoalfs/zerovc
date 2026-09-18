@@ -55,6 +55,8 @@ export interface ElectronAPI {
   setHardwareAcceleration: (enabled: boolean) => void;
   getHardwareAcceleration: () => Promise<boolean>;
   relaunchApp: () => void;
+  onActivityDetected: (callback: (activity: any) => void) => () => void;
+  getCurrentActivity: () => Promise<any>;
 }
 
 const electronAPI: ElectronAPI = {
@@ -121,6 +123,12 @@ const electronAPI: ElectronAPI = {
   getAutoStart: () => ipcRenderer.invoke('get-auto-start'),
   setZoomFactor: (factor: number) => webFrame.setZoomFactor(factor),
   getZoomFactor: () => webFrame.getZoomFactor(),
+  onActivityDetected: (callback: (activity: any) => void) => {
+    const handler = (_: any, activity: any) => callback(activity);
+    ipcRenderer.on('activity-detected', handler);
+    return () => ipcRenderer.removeListener('activity-detected', handler);
+  },
+  getCurrentActivity: () => ipcRenderer.invoke('get-current-activity'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

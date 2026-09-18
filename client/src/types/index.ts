@@ -62,6 +62,19 @@ export interface User {
   created_at?: string;
 }
 
+export interface UserSession {
+  id: string;
+  user_id: string;
+  ip_address: string;
+  user_agent: string;
+  device_type: 'desktop' | 'mobile' | 'web';
+  os: string;
+  browser: string;
+  is_current: boolean;
+  last_active_at: string;
+  created_at: string;
+}
+
 export interface FavoriteGIF {
   id: string;
   user_id: string;
@@ -315,6 +328,8 @@ declare global {
       setHardwareAcceleration?: (enabled: boolean) => void;
       getHardwareAcceleration?: () => Promise<boolean>;
       relaunchApp?: () => void;
+      onActivityDetected?: (callback: (activity: any) => void) => () => void;
+      getCurrentActivity?: () => Promise<any>;
     };
   }
 }

@@ -185,20 +185,25 @@ export const MemberList: React.FC<MemberListProps> = ({
           </div>
 
           {/* Activity / Custom Status / Roles Badges */}
-          {member.custom_activity ? (
-            <p className="text-[11px] text-brand-300 font-medium truncate flex items-center gap-1">
-              {member.custom_activity.type === 'playing' ? <Gamepad2 className="w-3 h-3 flex-shrink-0" /> :
-               member.custom_activity.type === 'listening' ? <Music className="w-3 h-3 flex-shrink-0" /> :
-               member.custom_activity.type === 'watching' ? <Tv className="w-3 h-3 flex-shrink-0" /> :
-               member.custom_activity.type === 'streaming' ? <Radio className="w-3 h-3 flex-shrink-0" /> :
-               <Sparkles className="w-3 h-3 flex-shrink-0" />}
-              <span className="truncate">
-                {member.custom_activity.type === 'playing' ? 'Jogando ' :
-                 member.custom_activity.type === 'listening' ? 'Ouvindo ' :
-                 member.custom_activity.type === 'watching' ? 'Assistindo ' : ''}
-                {member.custom_activity.name}
-              </span>
-            </p>
+          {((isMe && currentUser ? currentUser.show_activity_status !== false && (currentUser.custom_activity || member.custom_activity) : member.show_activity_status !== false && member.custom_activity)) ? (
+            (() => {
+              const act = (isMe && currentUser?.custom_activity) ? currentUser.custom_activity : member.custom_activity!;
+              return (
+                <p className="text-[11px] text-brand-300 font-medium truncate flex items-center gap-1">
+                  {act.type === 'playing' ? <Gamepad2 className="w-3 h-3 flex-shrink-0" /> :
+                   act.type === 'listening' ? <Music className="w-3 h-3 flex-shrink-0" /> :
+                   act.type === 'watching' ? <Tv className="w-3 h-3 flex-shrink-0" /> :
+                   act.type === 'streaming' ? <Radio className="w-3 h-3 flex-shrink-0" /> :
+                   <Sparkles className="w-3 h-3 flex-shrink-0" />}
+                  <span className="truncate">
+                    {act.type === 'playing' ? 'Jogando ' :
+                     act.type === 'listening' ? 'Ouvindo ' :
+                     act.type === 'watching' ? 'Assistindo ' : ''}
+                    {act.name}
+                  </span>
+                </p>
+              );
+            })()
           ) : member.custom_status ? (
             <p className="text-[11px] text-gray-400 truncate">{member.custom_status}</p>
           ) : topRole ? (

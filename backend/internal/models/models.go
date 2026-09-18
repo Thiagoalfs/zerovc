@@ -343,11 +343,26 @@ const (
 	EventCallReject             WSEventType = "CALL_REJECT"
 	EventAuditLogCreate         WSEventType = "AUDIT_LOG_CREATE"
 	EventChannelAck             WSEventType = "CHANNEL_ACK"
+	EventSessionRevoked         WSEventType = "SESSION_REVOKED"
 )
 
 type WSEvent struct {
 	Type WSEventType `json:"type"`
 	Data any         `json:"data"`
+}
+
+type UserSession struct {
+	ID           uuid.UUID `json:"id"`
+	UserID       uuid.UUID `json:"user_id"`
+	TokenHash    string    `json:"-"`
+	IPAddress    string    `json:"ip_address"`
+	UserAgent    string    `json:"user_agent"`
+	DeviceType   string    `json:"device_type"`
+	OS           string    `json:"os"`
+	Browser      string    `json:"browser"`
+	IsCurrent    bool      `json:"is_current"`
+	LastActiveAt time.Time `json:"last_active_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type AuditLog struct {

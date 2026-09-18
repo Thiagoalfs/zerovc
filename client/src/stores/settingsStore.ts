@@ -7,6 +7,7 @@ export type DmPrivacy = 'everyone' | 'friends_only';
 
 export type AudioProcessingMode = 'webrtc' | 'rnnoise' | 'rnnoise_silero';
 export type RNNoiseLevel = 'light' | 'balanced' | 'aggressive';
+export type ColorblindFilter = 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
 
 interface SettingsState {
   // Theme & Appearance
@@ -17,6 +18,13 @@ interface SettingsState {
   autoplayGifs: boolean;
   channelListWidth: number;
   memberListWidth: number;
+
+  // Accessibility Suite
+  reducedMotion: boolean;
+  chatFontSize: number;
+  highContrast: boolean;
+  colorblindFilter: ColorblindFilter;
+  textToSpeechEnabled: boolean;
 
   // System & Window
   minimizeToTray: boolean;
@@ -52,6 +60,11 @@ interface SettingsState {
   setAutoplayGifs: (enabled: boolean) => void;
   setChannelListWidth: (width: number) => void;
   setMemberListWidth: (width: number) => void;
+  setReducedMotion: (enabled: boolean) => void;
+  setChatFontSize: (size: number) => void;
+  setHighContrast: (enabled: boolean) => void;
+  setColorblindFilter: (filter: ColorblindFilter) => void;
+  setTextToSpeechEnabled: (enabled: boolean) => void;
   setMinimizeToTray: (enabled: boolean) => void;
   setAutoStart: (enabled: boolean) => void;
   setHardwareAcceleration: (enabled: boolean) => void;
@@ -175,6 +188,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   channelListWidth: Math.max(120, Math.min(480, getStoredNumber('zerovc_channellist_width', 240))),
   memberListWidth: Math.max(160, Math.min(480, getStoredNumber('zerovc_memberlist_width', 240))),
 
+  // Accessibility Suite
+  reducedMotion: getStoredBoolean('zerovc_reduced_motion', false),
+  chatFontSize: Math.max(12, Math.min(24, getStoredNumber('zerovc_chat_font_size', 14))),
+  highContrast: getStoredBoolean('zerovc_high_contrast', false),
+  colorblindFilter: getStoredString<ColorblindFilter>('zerovc_colorblind_filter', 'none'),
+  textToSpeechEnabled: getStoredBoolean('zerovc_tts_enabled', false),
+
   minimizeToTray: getStoredBoolean('zerovc_minimize_to_tray', true),
   autoStart: getStoredBoolean('zerovc_auto_start', false),
   hardwareAcceleration: getStoredBoolean('zerovc_hardware_acceleration', true),
@@ -224,6 +244,36 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setAutoplayGifs: (autoplayGifs) => {
     localStorage.setItem('zerovc_autoplay_gifs', String(autoplayGifs));
     set({ autoplayGifs });
+  },
+
+  setReducedMotion: (reducedMotion) => {
+    localStorage.setItem('zerovc_reduced_motion', String(reducedMotion));
+    set({ reducedMotion });
+    get().applyThemeToDOM();
+  },
+
+  setChatFontSize: (size) => {
+    const clamped = Math.max(12, Math.min(24, Math.round(size)));
+    localStorage.setItem('zerovc_chat_font_size', String(clamped));
+    set({ chatFontSize: clamped });
+    get().applyThemeToDOM();
+  },
+
+  setHighContrast: (highContrast) => {
+    localStorage.setItem('zerovc_high_contrast', String(highContrast));
+    set({ highContrast });
+    get().applyThemeToDOM();
+  },
+
+  setColorblindFilter: (colorblindFilter) => {
+    localStorage.setItem('zerovc_colorblind_filter', colorblindFilter);
+    set({ colorblindFilter });
+    get().applyThemeToDOM();
+  },
+
+  setTextToSpeechEnabled: (textToSpeechEnabled) => {
+    localStorage.setItem('zerovc_tts_enabled', String(textToSpeechEnabled));
+    set({ textToSpeechEnabled });
   },
 
   setChannelListWidth: (width) => {
@@ -370,6 +420,32 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       root.style.zoom = '';
     } else {
       root.style.zoom = zoomLevel === 100 ? '' : `${zoomLevel}%`;
+    }
+
+    // 5. Accessibility Suite Injections
+    const { reducedMotion, chatFontSize, highContrast, colorblindFilter } = get();
+
+    // Reduced Motion
+    if (reducedMotion) {
+      root.classList.add('reduced-motion');
+    } else {
+      root.classList.remove('reduced-motion');
+    }
+
+    // High Contrast
+    if (highContrast) {
+      root.classList.add('high-contrast');
+    } else {
+      root.classList.remove('high-contrast');
+    }
+
+    // Chat Font Size Variable
+    root.style.setProperty('--chat-font-size', `${chatFontSize || 14}px`);
+
+    // Colorblind Filters
+    root.classList.remove('colorblind-protanopia', 'colorblind-deuteranopia', 'colorblind-tritanopia');
+    if (colorblindFilter && colorblindFilter !== 'none') {
+      root.classList.add(`colorblind-${colorblindFilter}`);
     }
   },
 }));

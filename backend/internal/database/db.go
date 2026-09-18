@@ -87,6 +87,24 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS server_folders JSONB DEFAULT '[]'::jsonb")
 	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS guild_positions JSONB DEFAULT '[]'::jsonb")
 
+	// Ensure user_sessions table and indexes exist
+	db.Pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS user_sessions (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_hash VARCHAR(64) NOT NULL,
+			ip_address VARCHAR(45) DEFAULT '',
+			user_agent TEXT DEFAULT '',
+			device_type VARCHAR(32) DEFAULT 'web',
+			os VARCHAR(32) DEFAULT '',
+			browser VARCHAR(32) DEFAULT '',
+			last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions (user_id)")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions (token_hash)")
+
 	log.Println("Database schema migration executed successfully")
 	return nil
 }
