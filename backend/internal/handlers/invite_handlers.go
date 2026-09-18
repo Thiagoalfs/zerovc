@@ -375,44 +375,62 @@ func (h *InviteHandler) JoinByInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Begin Atomic Transaction
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// 1. Lock the invite row FOR UPDATE to prevent race conditions on max_uses
 	var guildID uuid.UUID
 	var uses, maxUses int
 	var expiresAt *time.Time
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, uses, max_uses, expires_at FROM guild_invites WHERE code = $1", code).Scan(&guildID, &uses, &maxUses, &expiresAt)
+	inviteQuery := `
+		SELECT guild_id, uses, max_uses, expires_at
+		FROM guild_invites
+		WHERE code = $1
+		FOR UPDATE
+	`
+	err = tx.QueryRow(r.Context(), inviteQuery, code).Scan(&guildID, &uses, &maxUses, &expiresAt)
 	if err != nil {
 		http.Error(w, `{"error":"invalid or expired invite code"}`, http.StatusNotFound)
 		return
 	}
 
+	// Expiration check
 	if expiresAt != nil && expiresAt.Before(time.Now()) {
 		http.Error(w, `{"error":"Este convite expirou"}`, http.StatusForbidden)
 		return
 	}
+
+	// Max uses check
 	if maxUses > 0 && uses >= maxUses {
 		http.Error(w, `{"error":"Este convite atingiu o limite máximo de utilizações"}`, http.StatusForbidden)
 		return
 	}
 
-	// 0. Check if user is banned from this guild
+	// 2. Check if user is banned from this guild
 	var isBanned bool
 	banCheckQuery := `SELECT EXISTS(SELECT 1 FROM guild_bans WHERE guild_id = $1 AND user_id = $2)`
-	if err := h.db.Pool.QueryRow(r.Context(), banCheckQuery, guildID, userID).Scan(&isBanned); err == nil && isBanned {
+	if err := tx.QueryRow(r.Context(), banCheckQuery, guildID, userID).Scan(&isBanned); err == nil && isBanned {
 		http.Error(w, `{"error":"Você está banido deste servidor"}`, http.StatusForbidden)
 		return
 	}
 
-	// 1. Add user to guild_members
+	// 3. Add user to guild_members
 	joinQuery := `
 		INSERT INTO guild_members (guild_id, user_id, role)
 		VALUES ($1, $2, 'member')
 		ON CONFLICT (guild_id, user_id) DO NOTHING
 	`
-	if _, err := h.db.Pool.Exec(r.Context(), joinQuery, guildID, userID); err != nil {
+	if _, err := tx.Exec(r.Context(), joinQuery, guildID, userID); err != nil {
 		http.Error(w, `{"error":"failed to join server"}`, http.StatusInternalServerError)
 		return
 	}
 
-	// 1.1 Assign @everyone role to new member
+	// 4. Assign @everyone base role
 	assignEveryoneQuery := `
 		INSERT INTO guild_member_roles (guild_id, user_id, role_id)
 		SELECT $1, $2, id
@@ -420,17 +438,28 @@ func (h *InviteHandler) JoinByInvite(w http.ResponseWriter, r *http.Request) {
 		WHERE guild_id = $1 AND name = '@everyone'
 		ON CONFLICT DO NOTHING
 	`
-	h.db.Pool.Exec(r.Context(), assignEveryoneQuery, guildID, userID)
+	if _, err := tx.Exec(r.Context(), assignEveryoneQuery, guildID, userID); err != nil {
+		http.Error(w, `{"error":"failed to assign default role"}`, http.StatusInternalServerError)
+		return
+	}
 
-	// 2. Increment invite uses count
-	h.db.Pool.Exec(r.Context(), "UPDATE guild_invites SET uses = uses + 1 WHERE code = $1", code)
+	// 5. Increment invite uses count
+	if _, err := tx.Exec(r.Context(), "UPDATE guild_invites SET uses = uses + 1 WHERE code = $1", code); err != nil {
+		http.Error(w, `{"error":"failed to update invite uses"}`, http.StatusInternalServerError)
+		return
+	}
 
-	// 3. Register user in hub for real-time events
+	// Commit Transaction
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit join transaction"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Post-Commit: Register user in hub and broadcast
 	h.hub.AddGuildMember(guildID, userID)
 
-	// Fetch new member data and broadcast to guild
 	var newMem models.UserPublic
-	h.db.Pool.QueryRow(r.Context(), `
+	_ = h.db.Pool.QueryRow(r.Context(), `
 		SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status
 		FROM users
 		WHERE id = $1

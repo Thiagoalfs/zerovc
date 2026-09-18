@@ -147,38 +147,8 @@ export interface MessageReplyInfo {
   content: string;
 }
 
-export interface Message {
+export interface BaseMessage {
   id: string;
-  channel_id: string;
-  author_id: string;
-  author: User;
-  content: string;
-  attachments?: Attachment[];
-  reply_to_id?: string;
-  reply_to?: MessageReplyInfo;
-  reactions?: MessageReaction[];
-  is_pinned: boolean;
-  is_edited?: boolean;
-  edited_at?: string;
-  created_at: string;
-  updated_at: string;
-  status?: 'sending' | 'sent' | 'failed';
-  tempId?: string;
-  error?: string;
-}
-
-export interface DMRoom {
-  id: string;
-  user1_id: string;
-  user2_id: string;
-  recipient: User;
-  last_message?: DMMessage;
-  created_at: string;
-}
-
-export interface DMMessage {
-  id: string;
-  dm_room_id: string;
   author_id: string;
   author: User;
   content: string;
@@ -194,6 +164,29 @@ export interface DMMessage {
   tempId?: string;
   error?: string;
 }
+
+export interface Message extends BaseMessage {
+  channel_id: string;
+  is_pinned: boolean;
+  updated_at: string;
+}
+
+export type ChannelMessage = Message;
+
+export interface DMRoom {
+  id: string;
+  user1_id: string;
+  user2_id: string;
+  recipient: User;
+  last_message?: DMMessage;
+  created_at: string;
+}
+
+export interface DMMessage extends BaseMessage {
+  dm_room_id: string;
+}
+
+export type DirectMessage = DMMessage;
 
 export interface DMGroup {
   id: string;
@@ -205,23 +198,20 @@ export interface DMGroup {
   created_at: string;
 }
 
-export interface DMGroupMessage {
-  id: string;
+export interface DMGroupMessage extends BaseMessage {
   group_id: string;
-  author_id: string;
-  author: User;
-  content: string;
-  attachments?: Attachment[];
-  reply_to_id?: string;
-  reply_to?: MessageReplyInfo;
-  reactions?: MessageReaction[];
-  is_pinned?: boolean;
-  is_edited?: boolean;
-  edited_at?: string;
-  created_at: string;
-  status?: 'sending' | 'sent' | 'failed';
-  tempId?: string;
-  error?: string;
+}
+
+export type GroupMessage = DMGroupMessage;
+
+export type UniversalMessage = Message | DMMessage | DMGroupMessage;
+
+export interface WSEvent<T = unknown> {
+  type: string;
+  data: T;
+  guild_id?: string;
+  channel_id?: string;
+  user_id?: string;
 }
 
 export interface VoiceSession {

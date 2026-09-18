@@ -322,6 +322,22 @@ class LiveKitManager {
       updateParticipants();
     });
 
+    room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      // Limpa elementos de áudio do participante que saiu
+      const ident = participant.identity;
+      this.attachedAudioElements.forEach((el, sid) => {
+        if (sid.includes(ident) || el.id.includes(ident)) {
+          el.remove();
+          this.attachedAudioElements.delete(sid);
+          this.attachedUserAudioElements.delete(sid);
+          this.attachedStreamAudioElements.delete(sid);
+        }
+      });
+      this.watchedParticipantIdentities.delete(ident);
+      this.onTrackUpdated?.();
+      updateParticipants();
+    });
+
     room.on(RoomEvent.Disconnected, (reason) => {
       console.log('[LiveKit] Disconnected from room. Reason:', reason);
       this.attachedAudioElements.forEach((el) => el.remove());

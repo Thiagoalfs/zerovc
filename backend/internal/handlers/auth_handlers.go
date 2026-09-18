@@ -19,6 +19,7 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/email"
+	"github.com/zerovc/zerovc/backend/internal/middleware"
 	"github.com/zerovc/zerovc/backend/internal/models"
 )
 
@@ -33,15 +34,17 @@ type AuthHandler struct {
 	db            *database.DB
 	auth          *auth.Service
 	email         *email.Service
+	csrf          *middleware.CSRFService
 	twoFAMutex    sync.Mutex
 	twoFAAttempts map[uuid.UUID]*failed2FAAttempt
 }
 
-func NewAuthHandler(db *database.DB, authService *auth.Service, emailService *email.Service) *AuthHandler {
+func NewAuthHandler(db *database.DB, authService *auth.Service, emailService *email.Service, csrfService *middleware.CSRFService) *AuthHandler {
 	handler := &AuthHandler{
 		db:            db,
 		auth:          authService,
 		email:         emailService,
+		csrf:          csrfService,
 		twoFAAttempts: make(map[uuid.UUID]*failed2FAAttempt),
 	}
 
@@ -61,6 +64,11 @@ func NewAuthHandler(db *database.DB, authService *auth.Service, emailService *em
 	}()
 
 	return handler
+}
+
+// ContextWithUserID injects a user ID into the context (helper function).
+func ContextWithUserID(ctx context.Context, userID uuid.UUID) context.Context {
+	return auth.ContextWithUserID(ctx, userID)
 }
 
 type RegisterRequest struct {
@@ -100,6 +108,7 @@ type ResetPasswordRequest struct {
 
 type AuthResponse struct {
 	Token                string            `json:"token,omitempty"`
+	CSRFToken            string            `json:"csrf_token,omitempty"`
 	Requires2FA          bool              `json:"requires_2fa,omitempty"`
 	RequiresVerification bool              `json:"requires_verification,omitempty"`
 	Email                string            `json:"email,omitempty"`
@@ -263,15 +272,30 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update user as verified
-	_, err = h.db.Pool.Exec(r.Context(), "UPDATE users SET email_verified = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1", userID)
+	// Update user as verified and clean verification records atomically
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	_, err = tx.Exec(r.Context(), "UPDATE users SET email_verified = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1", userID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to update verification status"}`, http.StatusInternalServerError)
 		return
 	}
 
 	// Clean used verification records
-	h.db.Pool.Exec(r.Context(), "DELETE FROM email_verifications WHERE user_id = $1 OR LOWER(email) = $2", userID, req.Email)
+	if _, err := tx.Exec(r.Context(), "DELETE FROM email_verifications WHERE user_id = $1 OR LOWER(email) = $2", userID, req.Email); err != nil {
+		http.Error(w, `{"error":"failed to clean verification records"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit verification transaction"}`, http.StatusInternalServerError)
+		return
+	}
 
 	// Fetch updated user
 	var user models.User
@@ -294,10 +318,17 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 	setAuthCookie(w, token)
 
+	var csrfToken string
+	if h.csrf != nil {
+		csrfToken, _ = h.csrf.GenerateToken(user.ID)
+		h.csrf.SetCookie(w, csrfToken, r.TLS != nil)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		Token: token,
-		User:  user.ToPublic(),
+		Token:     token,
+		CSRFToken: csrfToken,
+		User:      user.ToPublic(),
 	})
 }
 
@@ -668,15 +699,25 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Set HttpOnly session cookie
 	setAuthCookie(w, token)
 
+	var csrfToken string
+	if h.csrf != nil {
+		csrfToken, _ = h.csrf.GenerateToken(user.ID)
+		h.csrf.SetCookie(w, csrfToken, r.TLS != nil)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		Token: token,
-		User:  user.ToPublic(),
+		Token:     token,
+		CSRFToken: csrfToken,
+		User:      user.ToPublic(),
 	})
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	clearAuthCookie(w)
+	if h.csrf != nil {
+		h.csrf.ClearCookie(w)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message":"logged out successfully"}`))
 }
@@ -712,8 +753,21 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	user.TwoFactorEnabled = user.TwoFactorSecret != ""
 
+	var csrfToken string
+	if h.csrf != nil {
+		csrfToken, _ = h.csrf.GenerateToken(userID)
+		h.csrf.SetCookie(w, csrfToken, r.TLS != nil)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	response := struct {
+		models.User
+		CSRFToken string `json:"csrf_token,omitempty"`
+	}{
+		User:      user,
+		CSRFToken: csrfToken,
+	}
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *AuthHandler) ChangePhone(w http.ResponseWriter, r *http.Request) {

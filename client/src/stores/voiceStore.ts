@@ -167,6 +167,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
           });
         },
         onSpeakingChanged: (speakingUserIds) => {
+          const current = get().speakingUserIds;
+          if (
+            current.length === speakingUserIds.length &&
+            current.every((id, idx) => id === speakingUserIds[idx])
+          ) {
+            return;
+          }
           set({ speakingUserIds });
         },
         onTrackUpdated: () => {

@@ -606,11 +606,39 @@ func (h *GuildHandler) KickMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove from guild_members, member_roles, voice_sessions
-	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID)
-	h.db.Pool.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", targetUserID)
-	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID)
+	// Begin Atomic Transaction
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
 
+	// 1. Remove from guild_member_roles
+	if _, err := tx.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID); err != nil {
+		http.Error(w, `{"error":"failed to remove member roles"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Remove from voice_sessions
+	if _, err := tx.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", targetUserID); err != nil {
+		http.Error(w, `{"error":"failed to remove voice session"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Remove from guild_members
+	if _, err := tx.Exec(r.Context(), "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, targetUserID); err != nil {
+		http.Error(w, `{"error":"failed to remove member"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Commit Transaction
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit kick transaction"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Post-Commit Side Effects
 	h.hub.RemoveGuildMember(guildID, targetUserID)
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: "GUILD_MEMBER_REMOVE",
@@ -648,23 +676,50 @@ func (h *GuildHandler) BanMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Insert into guild_bans
+	// Begin Atomic Transaction
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// 1. Insert or update guild_bans
 	banQuery := `
 		INSERT INTO guild_bans (guild_id, user_id, reason, banned_by)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (guild_id, user_id) DO UPDATE SET reason = EXCLUDED.reason, banned_by = EXCLUDED.banned_by
 	`
-	_, err := h.db.Pool.Exec(r.Context(), banQuery, guildID, req.UserID, req.Reason, actorID)
-	if err != nil {
+	if _, err := tx.Exec(r.Context(), banQuery, guildID, req.UserID, req.Reason, actorID); err != nil {
 		http.Error(w, `{"error":"failed to ban user"}`, http.StatusInternalServerError)
 		return
 	}
 
-	// Remove member
-	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", guildID, req.UserID)
-	h.db.Pool.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", req.UserID)
-	h.db.Pool.Exec(r.Context(), "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, req.UserID)
+	// 2. Remove member roles for this guild
+	if _, err := tx.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", guildID, req.UserID); err != nil {
+		http.Error(w, `{"error":"failed to clean member roles"}`, http.StatusInternalServerError)
+		return
+	}
 
+	// 3. Terminate voice session if user is connected to a channel in this guild
+	if _, err := tx.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", req.UserID); err != nil {
+		http.Error(w, `{"error":"failed to terminate voice session"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 4. Remove member record from guild
+	if _, err := tx.Exec(r.Context(), "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, req.UserID); err != nil {
+		http.Error(w, `{"error":"failed to remove guild member"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Commit Transaction
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit ban transaction"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Post-Commit Side Effects
 	h.hub.RemoveGuildMember(guildID, req.UserID)
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
 		Type: "GUILD_BAN_ADD",

@@ -365,17 +365,35 @@ func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If category is being deleted, move child channels to root (category_id = NULL)
+	// Begin Atomic Transaction
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// 1. If category is being deleted, move child channels to root (category_id = NULL)
 	if channelType == models.ChannelTypeCategory {
-		h.db.Pool.Exec(r.Context(), "UPDATE channels SET category_id = NULL WHERE category_id = $1", channelID)
+		if _, err := tx.Exec(r.Context(), "UPDATE channels SET category_id = NULL WHERE category_id = $1", channelID); err != nil {
+			http.Error(w, `{"error":"failed to reparent category child channels"}`, http.StatusInternalServerError)
+			return
+		}
 	}
 
-	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM channels WHERE id = $1", channelID)
-	if err != nil {
+	// 2. Delete channel (Postgres cascades delete to messages, voice_sessions, overwrites, etc.)
+	if _, err := tx.Exec(r.Context(), "DELETE FROM channels WHERE id = $1", channelID); err != nil {
 		http.Error(w, `{"error":"failed to delete channel"}`, http.StatusInternalServerError)
 		return
 	}
 
+	// Commit Transaction
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit channel deletion"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Post-Commit Side Effects
 	h.broadcastChannelEvent(r.Context(), guildID, channelID, isPrivate, models.WSEvent{
 		Type: models.EventChannelDelete,
 		Data: map[string]any{"id": channelID, "guild_id": guildID},
@@ -415,22 +433,47 @@ func (h *ChannelHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Begin Atomic Transaction
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
 	// Granular reorder with category_id and position
 	if len(req.Channels) > 0 {
 		for _, item := range req.Channels {
 			if item.ClearCategory {
-				h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1, category_id = NULL WHERE id = $2 AND guild_id = $3", item.Position, item.ID, guildID)
+				if _, err := tx.Exec(r.Context(), "UPDATE channels SET position = $1, category_id = NULL WHERE id = $2 AND guild_id = $3", item.Position, item.ID, guildID); err != nil {
+					http.Error(w, `{"error":"failed to update channel position"}`, http.StatusInternalServerError)
+					return
+				}
 			} else if item.CategoryID != nil {
-				h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1, category_id = $2 WHERE id = $3 AND guild_id = $4", item.Position, item.CategoryID, item.ID, guildID)
+				if _, err := tx.Exec(r.Context(), "UPDATE channels SET position = $1, category_id = $2 WHERE id = $3 AND guild_id = $4", item.Position, item.CategoryID, item.ID, guildID); err != nil {
+					http.Error(w, `{"error":"failed to update channel position"}`, http.StatusInternalServerError)
+					return
+				}
 			} else {
-				h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1 WHERE id = $2 AND guild_id = $3", item.Position, item.ID, guildID)
+				if _, err := tx.Exec(r.Context(), "UPDATE channels SET position = $1 WHERE id = $2 AND guild_id = $3", item.Position, item.ID, guildID); err != nil {
+					http.Error(w, `{"error":"failed to update channel position"}`, http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 	} else if len(req.ChannelIDs) > 0 {
 		// Fallback simple reorder
 		for idx, id := range req.ChannelIDs {
-			h.db.Pool.Exec(r.Context(), "UPDATE channels SET position = $1 WHERE id = $2 AND guild_id = $3", idx, id, guildID)
+			if _, err := tx.Exec(r.Context(), "UPDATE channels SET position = $1 WHERE id = $2 AND guild_id = $3", idx, id, guildID); err != nil {
+				http.Error(w, `{"error":"failed to update channel position"}`, http.StatusInternalServerError)
+				return
+			}
 		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit channel reorder"}`, http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

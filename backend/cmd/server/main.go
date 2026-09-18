@@ -15,15 +15,16 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/httprate"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 	"github.com/google/uuid"
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/email"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
 	"github.com/zerovc/zerovc/backend/internal/handlers"
+	appMiddleware "github.com/zerovc/zerovc/backend/internal/middleware"
 	"github.com/zerovc/zerovc/backend/internal/models"
 	"github.com/zerovc/zerovc/backend/internal/ratelimit"
 	"github.com/zerovc/zerovc/backend/internal/voice"
@@ -71,6 +72,7 @@ func main() {
 
 	// 3. Initialize Services
 	authService := auth.NewService(jwtSecret)
+	csrfService := appMiddleware.NewCSRFService(jwtSecret)
 	livekitService := voice.NewLiveKitService(livekitKey, livekitSecret, livekitPublicURL)
 	hub := gateway.NewHub()
 
@@ -141,7 +143,7 @@ func main() {
 	appURL := getEnv("APP_URL", "https://zerovc.safiroko.xyz")
 	emailService := email.NewService(resendAPIKey, resendFromEmail, appURL)
 
-	authHandler := handlers.NewAuthHandler(db, authService, emailService)
+	authHandler := handlers.NewAuthHandler(db, authService, emailService, csrfService)
 	userHandler := handlers.NewUserHandler(db, hub)
 	guildHandler := handlers.NewGuildHandler(db, hub)
 	channelHandler := handlers.NewChannelHandler(db, hub, livekitService)
@@ -188,6 +190,11 @@ func main() {
 	}))
 
 	// Public Auth Endpoints — rate limit só aqui dentro
+	loginLimiter := ratelimit.NewLoginRateLimiter(
+		5, 5.0/60.0,   // 5 req/min per IP:username
+		10, 10.0/60.0, // 10 req/min per username globally
+		"Muitas tentativas de login. Aguarde um instante antes de tentar novamente.",
+	)
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Use(httprate.LimitByIP(10, time.Minute))
 		r.Post("/register", authHandler.Register)
@@ -196,7 +203,7 @@ func main() {
 		r.Post("/forgot-password", authHandler.ForgotPassword)
 		r.Post("/verify-reset-token", authHandler.VerifyResetToken)
 		r.Post("/reset-password", authHandler.ResetPassword)
-		r.Post("/login", authHandler.Login)
+		r.With(loginLimiter.Middleware).Post("/login", authHandler.Login)
 		r.Post("/logout", authHandler.Logout)
 	})
 
@@ -242,6 +249,7 @@ func main() {
 	// Protected API Routes
 	r.Group(func(r chi.Router) {
 		r.Use(authService.Middleware)
+		r.Use(csrfService.RequireCSRF)
 
 		// Rate Limiters por Usuário Autenticado
 		messageLimiter := ratelimit.NewUserRateLimiter(10, 5, "Você está enviando mensagens muito rápido. Aguarde um instante.")
@@ -259,6 +267,10 @@ func main() {
 		pinLimiter := ratelimit.NewUserRateLimiter(10, 10.0/60.0, "Você está fixando/desafixando mensagens muito rápido. Aguarde um momento.")
 		emojiLimiter := ratelimit.NewUserRateLimiter(10, 10.0/60.0, "Você está alterando emojis muito rápido. Aguarde um instante.")
 		profileUpdateLimiter := ratelimit.NewUserRateLimiter(10, 10.0/60.0, "Você está atualizando seu perfil muito rápido. Aguarde um instante.")
+		moderationLimiter := ratelimit.NewUserRateLimiter(10, 10.0/60.0, "Você está realizando ações de moderação muito rápido. Aguarde um instante.")
+		guildStructureLimiter := ratelimit.NewUserRateLimiter(10, 10.0/60.0, "Você está alterando a estrutura do servidor muito rápido. Aguarde um instante.")
+		messageMutationLimiter := ratelimit.NewUserRateLimiter(15, 15.0/60.0, "Você está editando ou excluindo mensagens muito rápido. Aguarde um instante.")
+		channelAckLimiter := ratelimit.NewUserRateLimiter(30, 30.0/60.0, "Você está confirmando leitura de canais muito rápido. Aguarde um instante.")
 
 		// Current User & Profile Customization
 		r.Get("/api/auth/me", authHandler.Me)
@@ -299,29 +311,29 @@ func main() {
 		r.With(searchLimiter.Middleware).Get("/api/guilds/{guildID}/messages/search", messageHandler.Search)
 
 		// Guild Moderation (Protected)
-		r.Post("/api/guilds/{id}/members/{userID}/kick", guildHandler.KickMember)
-		r.Post("/api/guilds/{id}/bans", guildHandler.BanMember)
-		r.Delete("/api/guilds/{id}/bans/{userID}", guildHandler.UnbanMember)
-		r.Post("/api/guilds/{id}/members/{userID}/mute", guildHandler.MuteMember)
+		r.With(moderationLimiter.Middleware).Post("/api/guilds/{id}/members/{userID}/kick", guildHandler.KickMember)
+		r.With(moderationLimiter.Middleware).Post("/api/guilds/{id}/bans", guildHandler.BanMember)
+		r.With(moderationLimiter.Middleware).Delete("/api/guilds/{id}/bans/{userID}", guildHandler.UnbanMember)
+		r.With(moderationLimiter.Middleware).Post("/api/guilds/{id}/members/{userID}/mute", guildHandler.MuteMember)
 
 		// Channels (Protected)
-		r.Post("/api/guilds/{guildID}/channels", channelHandler.Create)
-		r.Patch("/api/channels/{id}", channelHandler.Update)
-		r.Delete("/api/channels/{id}", channelHandler.Delete)
-		r.Put("/api/channels/{id}/permissions/{roleID}", channelHandler.UpdatePermissionOverwrite)
-		r.Delete("/api/channels/{id}/permissions/{roleID}", channelHandler.DeletePermissionOverwrite)
-		r.Put("/api/guilds/{guildID}/channels/positions", channelHandler.Reorder)
+		r.With(guildStructureLimiter.Middleware).Post("/api/guilds/{guildID}/channels", channelHandler.Create)
+		r.With(guildStructureLimiter.Middleware).Patch("/api/channels/{id}", channelHandler.Update)
+		r.With(guildStructureLimiter.Middleware).Delete("/api/channels/{id}", channelHandler.Delete)
+		r.With(guildStructureLimiter.Middleware).Put("/api/channels/{id}/permissions/{roleID}", channelHandler.UpdatePermissionOverwrite)
+		r.With(guildStructureLimiter.Middleware).Delete("/api/channels/{id}/permissions/{roleID}", channelHandler.DeletePermissionOverwrite)
+		r.With(guildStructureLimiter.Middleware).Put("/api/guilds/{guildID}/channels/positions", channelHandler.Reorder)
 		r.With(searchLimiter.Middleware).Get("/api/channels/{channelID}/messages/search", messageHandler.Search)
-		r.Post("/api/channels/{channelID}/ack", messageHandler.AckChannel)
+		r.With(channelAckLimiter.Middleware).Post("/api/channels/{channelID}/ack", messageHandler.AckChannel)
 
 		// Server Roles (Protected)
 		r.Get("/api/guilds/{guildID}/roles", roleHandler.List)
-		r.Post("/api/guilds/{guildID}/roles", roleHandler.Create)
-		r.Patch("/api/guilds/{guildID}/roles/{roleID}", roleHandler.Update)
-		r.Put("/api/guilds/{guildID}/roles/positions", roleHandler.Reorder)
-		r.Delete("/api/guilds/{guildID}/roles/{roleID}", roleHandler.Delete)
-		r.Post("/api/guilds/{guildID}/members/{userID}/roles/{roleID}", roleHandler.AssignRole)
-		r.Delete("/api/guilds/{guildID}/members/{userID}/roles/{roleID}", roleHandler.RemoveRole)
+		r.With(guildStructureLimiter.Middleware).Post("/api/guilds/{guildID}/roles", roleHandler.Create)
+		r.With(guildStructureLimiter.Middleware).Patch("/api/guilds/{guildID}/roles/{roleID}", roleHandler.Update)
+		r.With(guildStructureLimiter.Middleware).Put("/api/guilds/{guildID}/roles/positions", roleHandler.Reorder)
+		r.With(guildStructureLimiter.Middleware).Delete("/api/guilds/{guildID}/roles/{roleID}", roleHandler.Delete)
+		r.With(guildStructureLimiter.Middleware).Post("/api/guilds/{guildID}/members/{userID}/roles/{roleID}", roleHandler.AssignRole)
+		r.With(guildStructureLimiter.Middleware).Delete("/api/guilds/{guildID}/members/{userID}/roles/{roleID}", roleHandler.RemoveRole)
 
 		// Join server via 10-char invite hash
 		r.With(joinGuildLimiter.Middleware).Post("/api/invites/{code}/join", inviteHandler.JoinByInvite)
@@ -338,8 +350,8 @@ func main() {
 		r.Get("/api/dms/{roomID}/messages", dmHandler.ListMessages)
 		r.Get("/api/dms/{roomID}/pins", dmHandler.ListPinned)
 		r.With(messageLimiter.Middleware).Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)
-		r.Patch("/api/dms/{roomID}/messages/{messageID}", dmHandler.UpdateMessage)
-		r.Delete("/api/dms/{roomID}/messages/{messageID}", dmHandler.DeleteMessage)
+		r.With(messageMutationLimiter.Middleware).Patch("/api/dms/{roomID}/messages/{messageID}", dmHandler.UpdateMessage)
+		r.With(messageMutationLimiter.Middleware).Delete("/api/dms/{roomID}/messages/{messageID}", dmHandler.DeleteMessage)
 		r.With(reactionLimiter.Middleware).Post("/api/dms/{roomID}/messages/{messageID}/reactions", dmHandler.AddReaction)
 		r.With(reactionLimiter.Middleware).Delete("/api/dms/{roomID}/messages/{messageID}/reactions/{emoji}", dmHandler.RemoveReaction)
 		r.With(pinLimiter.Middleware).Post("/api/dms/{roomID}/messages/{messageID}/pin", dmHandler.TogglePin)
@@ -361,16 +373,16 @@ func main() {
 		r.Delete("/api/dm/groups/{id}/members/{userID}", dmGroupHandler.RemoveMember)
 		r.Get("/api/dm/groups/{id}/messages", dmGroupHandler.ListMessages)
 		r.With(messageLimiter.Middleware).Post("/api/dm/groups/{id}/messages", dmGroupHandler.SendMessage)
-		r.Patch("/api/dm/groups/{id}/messages/{messageID}", dmGroupHandler.UpdateMessage)
-		r.Delete("/api/dm/groups/{id}/messages/{messageID}", dmGroupHandler.DeleteMessage)
+		r.With(messageMutationLimiter.Middleware).Patch("/api/dm/groups/{id}/messages/{messageID}", dmGroupHandler.UpdateMessage)
+		r.With(messageMutationLimiter.Middleware).Delete("/api/dm/groups/{id}/messages/{messageID}", dmGroupHandler.DeleteMessage)
 		r.With(voiceJoinLimiter.Middleware).Post("/api/dm/groups/{id}/voice-token", dmGroupHandler.JoinVoice)
 
 		// Messages (Protected)
 		r.Get("/api/channels/{channelID}/messages", messageHandler.List)
 		r.Get("/api/channels/{channelID}/pins", messageHandler.ListPinned)
 		r.With(messageLimiter.Middleware).Post("/api/channels/{channelID}/messages", messageHandler.Send)
-		r.Patch("/api/channels/{channelID}/messages/{messageID}", messageHandler.Update)
-		r.Delete("/api/channels/{channelID}/messages/{messageID}", messageHandler.Delete)
+		r.With(messageMutationLimiter.Middleware).Patch("/api/channels/{channelID}/messages/{messageID}", messageHandler.Update)
+		r.With(messageMutationLimiter.Middleware).Delete("/api/channels/{channelID}/messages/{messageID}", messageHandler.Delete)
 		r.With(reactionLimiter.Middleware).Post("/api/channels/{channelID}/messages/{messageID}/reactions", messageHandler.AddReaction)
 		r.With(reactionLimiter.Middleware).Delete("/api/channels/{channelID}/messages/{messageID}/reactions/{emoji}", messageHandler.RemoveReaction)
 		r.With(pinLimiter.Middleware).Post("/api/channels/{channelID}/messages/{messageID}/pin", messageHandler.TogglePin)
@@ -379,7 +391,7 @@ func main() {
 		r.With(voiceJoinLimiter.Middleware).Post("/api/channels/{id}/join-voice", channelHandler.JoinVoice)
 		r.Post("/api/channels/{id}/leave-voice", channelHandler.LeaveVoice)
 		r.Post("/api/channels/{id}/voice-state", channelHandler.UpdateVoiceState)
-		r.Post("/api/channels/{channelID}/members/{userID}/voice-state", channelHandler.AdminUpdateVoiceState)
+		r.With(moderationLimiter.Middleware).Post("/api/channels/{channelID}/members/{userID}/voice-state", channelHandler.AdminUpdateVoiceState)
 
 		// Upload Endpoints (Protected)
 		r.With(uploadLimiter.Middleware).Post("/api/upload/avatar", uploadHandler.UploadAvatar)
