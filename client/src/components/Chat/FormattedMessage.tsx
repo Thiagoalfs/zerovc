@@ -26,40 +26,45 @@ interface FormattedMessageProps {
 
 const isMediaUrl = (url: string) => {
   const clean = url.split('?')[0].toLowerCase();
-  const isImg =
-    clean.endsWith('.png') ||
-    clean.endsWith('.jpg') ||
-    clean.endsWith('.jpeg') ||
-    clean.endsWith('.gif') ||
-    clean.endsWith('.webp') ||
-    clean.endsWith('.svg') ||
-    clean.endsWith('.bmp') ||
-    clean.endsWith('.avif') ||
-    url.includes('/assets/user/') ||
-    url.includes('/assets/guild/') ||
-    url.includes('tenor.com/view/') ||
-    url.includes('giphy.com/gifs/') ||
-    url.includes('media.tenor.com') ||
-    url.includes('c.tenor.com') ||
-    url.includes('media.giphy.com') ||
-    url.includes('i.giphy.com') ||
-    url.includes('klipy') ||
-    url.startsWith('data:image/');
+  const isVoiceMsg = clean.includes('voice-message') || clean.includes('voice_message') || clean.includes('/audio/');
 
-  const isVid =
-    clean.endsWith('.mp4') ||
-    clean.endsWith('.webm') ||
-    clean.endsWith('.ogg') ||
-    clean.endsWith('.mov') ||
-    clean.endsWith('.mkv');
+  const isImg =
+    !isVoiceMsg &&
+    (clean.endsWith('.png') ||
+      clean.endsWith('.jpg') ||
+      clean.endsWith('.jpeg') ||
+      clean.endsWith('.gif') ||
+      clean.endsWith('.webp') ||
+      clean.endsWith('.svg') ||
+      clean.endsWith('.bmp') ||
+      clean.endsWith('.avif') ||
+      url.includes('/assets/user/') ||
+      url.includes('/assets/guild/') ||
+      url.includes('tenor.com/view/') ||
+      url.includes('giphy.com/gifs/') ||
+      url.includes('media.tenor.com') ||
+      url.includes('c.tenor.com') ||
+      url.includes('media.giphy.com') ||
+      url.includes('i.giphy.com') ||
+      url.includes('klipy') ||
+      url.startsWith('data:image/'));
 
   const isAud =
+    isVoiceMsg ||
     clean.endsWith('.mp3') ||
     clean.endsWith('.wav') ||
-    clean.endsWith('.ogg') ||
     clean.endsWith('.m4a') ||
     clean.endsWith('.aac') ||
-    clean.endsWith('.flac');
+    clean.endsWith('.flac') ||
+    clean.endsWith('.ogg');
+
+  const isVid =
+    !isVoiceMsg &&
+    !isAud &&
+    (clean.endsWith('.mp4') ||
+      clean.endsWith('.webm') ||
+      clean.endsWith('.mov') ||
+      clean.endsWith('.mkv'));
 
   return { isMedia: isImg || isVid || isAud, isImage: isImg, isVideo: isVid, isAudio: isAud };
 };

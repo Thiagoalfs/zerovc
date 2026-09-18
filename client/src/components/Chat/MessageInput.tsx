@@ -798,7 +798,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         />
       ) : (
         <div
-          className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2 border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
+          className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 min-h-[48px] md:min-h-[52px] border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
             replyingTo ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl'
           }`}
         >
@@ -829,7 +829,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             }
             rows={1}
             disabled={isUploading}
-            className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1 max-h-40 leading-relaxed font-normal no-scrollbar"
+            className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1.5 min-h-[26px] max-h-40 leading-relaxed font-normal no-scrollbar"
           />
 
           {/* Emoji Button */}

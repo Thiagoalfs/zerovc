@@ -122,7 +122,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSendVoice, onCan
   };
 
   return (
-    <div className="flex items-center gap-3 w-full bg-background-darkest/95 border border-red-500/30 px-3 py-2 rounded-2xl shadow-xl animate-in fade-in slide-in-from-bottom-2 select-none">
+    <div className="flex items-center gap-3 w-full min-h-[48px] md:min-h-[52px] bg-background-darkest/95 border border-red-500/30 px-3 md:px-4 py-2.5 rounded-2xl shadow-xl animate-in fade-in slide-in-from-bottom-2 select-none">
       {/* Blinking Red Dot & Mic Icon */}
       <div className="flex items-center gap-2">
         <span className="relative flex h-3 w-3">
