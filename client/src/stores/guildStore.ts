@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { Channel, Guild, Message, Role, VoiceSession, User, ChannelPermissionOverwrite, GuildEmoji } from '../types';
 import { api } from '../lib/api';
-import { playMessageSound } from '../utils/audio';
+import { playMessageSound, speakText } from '../utils/audio';
 import { useAuthStore } from './authStore';
+import { useSettingsStore } from './settingsStore';
 
 interface GuildState {
   guilds: Guild[];
@@ -701,6 +702,9 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
         if (message.author_id !== currentUser?.id && !isServerMuted && !isDND) {
           playMessageSound(isMention);
+          if (useSettingsStore.getState().textToSpeechEnabled && message.content) {
+            speakText(message.content, message.author?.display_name || message.author?.username);
+          }
         }
         return {
           messages: nextMessages,

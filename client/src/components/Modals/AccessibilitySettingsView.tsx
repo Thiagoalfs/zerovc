@@ -1,30 +1,23 @@
 import React, { useState } from 'react';
 import {
-  Sparkles,
   Eye,
   Type,
   Volume2,
   Play,
-  RotateCcw,
-  Check,
   ZapOff,
   Contrast,
-  Sliders,
-  Palette,
 } from 'lucide-react';
-import { useSettingsStore, ColorblindFilter } from '../../stores/settingsStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 export const AccessibilitySettingsView: React.FC = () => {
   const {
     reducedMotion,
     chatFontSize,
     highContrast,
-    colorblindFilter,
     textToSpeechEnabled,
     setReducedMotion,
     setChatFontSize,
     setHighContrast,
-    setColorblindFilter,
     setTextToSpeechEnabled,
   } = useSettingsStore();
 
@@ -42,38 +35,6 @@ export const AccessibilitySettingsView: React.FC = () => {
     window.speechSynthesis.speak(utterance);
   };
 
-  const COLORBLIND_OPTIONS: Array<{
-    id: ColorblindFilter;
-    name: string;
-    description: string;
-    sampleColors: string[];
-  }> = [
-    {
-      id: 'none',
-      name: 'Padrão (Sem filtro)',
-      description: 'Cores originais e balanceadas do ZeroVC.',
-      sampleColors: ['#5865F2', '#23A55A', '#FEE75C', '#ED4245'],
-    },
-    {
-      id: 'protanopia',
-      name: 'Protanopia (Deficiência no Vermelho)',
-      description: 'Ajuste de matriz para sensibilidade reduzida ao vermelho.',
-      sampleColors: ['#5865F2', '#23A55A', '#FEE75C', '#998844'],
-    },
-    {
-      id: 'deuteranopia',
-      name: 'Deuteranopia (Deficiência no Verde)',
-      description: 'Ajuste de matriz para sensibilidade reduzida ao verde.',
-      sampleColors: ['#5865F2', '#77AA55', '#FEE75C', '#ED4245'],
-    },
-    {
-      id: 'tritanopia',
-      name: 'Tritanopia (Deficiência no Azul)',
-      description: 'Ajuste de matriz para sensibilidade reduzida ao azul/amarelo.',
-      sampleColors: ['#5599AA', '#23A55A', '#EE8888', '#ED4245'],
-    },
-  ];
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -83,7 +44,7 @@ export const AccessibilitySettingsView: React.FC = () => {
           <span>Central de Acessibilidade</span>
         </h3>
         <p className="text-xs text-gray-400 mt-1">
-          Personalize a legibilidade, animações e filtros para a melhor experiência visual e auditiva.
+          Personalize a legibilidade, escala de texto, animações e leitor por voz para a melhor experiência.
         </p>
       </div>
 
@@ -131,7 +92,7 @@ export const AccessibilitySettingsView: React.FC = () => {
               </div>
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white">ZeroVC Bot</span>
+                  <span className="text-xs font-bold text-white">ZeroVC</span>
                   <span className="text-[10px] text-gray-500">Hoje às 14:30</span>
                 </div>
                 <div
@@ -200,66 +161,19 @@ export const AccessibilitySettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Group 3: Filtros para Daltonismo */}
-      <div className="space-y-3">
-        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1 block flex items-center gap-1.5">
-          <Palette className="w-3.5 h-3.5 text-gray-400" />
-          <span>Filtro de Daltonismo</span>
-        </span>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {COLORBLIND_OPTIONS.map((opt) => {
-            const isSelected = colorblindFilter === opt.id;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setColorblindFilter(opt.id)}
-                className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
-                  isSelected
-                    ? 'bg-brand-500/10 border-brand-500/50 shadow-md shadow-brand-500/10'
-                    : 'bg-background-darker border-white/5 hover:border-white/20 hover:bg-white/[0.02]'
-                }`}
-              >
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white truncate">{opt.name}</span>
-                    {isSelected && <Check className="w-4 h-4 text-brand-400 shrink-0" />}
-                  </div>
-                  <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed">
-                    {opt.description}
-                  </p>
-                </div>
-
-                {/* Sample Swatches */}
-                <div className="flex items-center gap-1.5 pt-1">
-                  {opt.sampleColors.map((col, idx) => (
-                    <div
-                      key={idx}
-                      style={{ backgroundColor: col }}
-                      className="w-5 h-5 rounded-full border border-black/20 shadow-sm"
-                    />
-                  ))}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Group 4: Leitor de Mensagens (TTS) */}
+      {/* Group 3: Leitor de Mensagens (TTS) */}
       <div className="space-y-3">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1 block flex items-center gap-1.5">
           <Volume2 className="w-3.5 h-3.5 text-gray-400" />
-          <span>Leitor de Mensagens (Text-to-Speech)</span>
+          <span>Leitor de Mensagens por Voz (Text-to-Speech)</span>
         </span>
 
         <div className="bg-background-darker rounded-2xl border border-white/5 p-4 space-y-3">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 min-w-0">
-              <div className="text-xs font-semibold text-white">Leitura por Voz de Mensagens</div>
+              <div className="text-xs font-semibold text-white">Leitura Automática de Novas Mensagens</div>
               <p className="text-[11px] text-gray-400 leading-relaxed">
-                Permite sintetizar áudio para mensagens de texto e avisos importantes através da Web Speech API.
+                Quando ativado, novas mensagens recebidas no canal ativo são narradas automaticamente. Você também pode clicar com o botão direito em qualquer mensagem para ouvi-la individualmente.
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0">

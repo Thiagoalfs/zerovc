@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { DMRoom, DMMessage } from '../types';
 import { api } from '../lib/api';
-import { playMessageSound } from '../utils/audio';
+import { playMessageSound, speakText } from '../utils/audio';
 import { useAuthStore } from './authStore';
+import { useSettingsStore } from './settingsStore';
 
 interface DMState {
   rooms: DMRoom[];
@@ -315,6 +316,9 @@ export const useDMStore = create<DMState>((set, get) => ({
 
         if (message.author_id !== currentUser?.id) {
           playMessageSound(false);
+          if (useSettingsStore.getState().textToSpeechEnabled && message.content) {
+            speakText(message.content, message.author?.display_name || message.author?.username);
+          }
         }
         return {
           messages: nextMessages,

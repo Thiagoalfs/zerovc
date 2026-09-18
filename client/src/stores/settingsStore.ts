@@ -7,7 +7,6 @@ export type DmPrivacy = 'everyone' | 'friends_only';
 
 export type AudioProcessingMode = 'webrtc' | 'rnnoise' | 'rnnoise_silero';
 export type RNNoiseLevel = 'light' | 'balanced' | 'aggressive';
-export type ColorblindFilter = 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
 
 interface SettingsState {
   // Theme & Appearance
@@ -23,7 +22,6 @@ interface SettingsState {
   reducedMotion: boolean;
   chatFontSize: number;
   highContrast: boolean;
-  colorblindFilter: ColorblindFilter;
   textToSpeechEnabled: boolean;
 
   // System & Window
@@ -63,7 +61,6 @@ interface SettingsState {
   setReducedMotion: (enabled: boolean) => void;
   setChatFontSize: (size: number) => void;
   setHighContrast: (enabled: boolean) => void;
-  setColorblindFilter: (filter: ColorblindFilter) => void;
   setTextToSpeechEnabled: (enabled: boolean) => void;
   setMinimizeToTray: (enabled: boolean) => void;
   setAutoStart: (enabled: boolean) => void;
@@ -192,7 +189,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   reducedMotion: getStoredBoolean('zerovc_reduced_motion', false),
   chatFontSize: Math.max(12, Math.min(24, getStoredNumber('zerovc_chat_font_size', 14))),
   highContrast: getStoredBoolean('zerovc_high_contrast', false),
-  colorblindFilter: getStoredString<ColorblindFilter>('zerovc_colorblind_filter', 'none'),
   textToSpeechEnabled: getStoredBoolean('zerovc_tts_enabled', false),
 
   minimizeToTray: getStoredBoolean('zerovc_minimize_to_tray', true),
@@ -262,12 +258,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setHighContrast: (highContrast) => {
     localStorage.setItem('zerovc_high_contrast', String(highContrast));
     set({ highContrast });
-    get().applyThemeToDOM();
-  },
-
-  setColorblindFilter: (colorblindFilter) => {
-    localStorage.setItem('zerovc_colorblind_filter', colorblindFilter);
-    set({ colorblindFilter });
     get().applyThemeToDOM();
   },
 
@@ -423,7 +413,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
 
     // 5. Accessibility Suite Injections
-    const { reducedMotion, chatFontSize, highContrast, colorblindFilter } = get();
+    const { reducedMotion, chatFontSize, highContrast } = get();
 
     // Reduced Motion
     if (reducedMotion) {
@@ -441,11 +431,5 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
     // Chat Font Size Variable
     root.style.setProperty('--chat-font-size', `${chatFontSize || 14}px`);
-
-    // Colorblind Filters
-    root.classList.remove('colorblind-protanopia', 'colorblind-deuteranopia', 'colorblind-tritanopia');
-    if (colorblindFilter && colorblindFilter !== 'none') {
-      root.classList.add(`colorblind-${colorblindFilter}`);
-    }
   },
 }));

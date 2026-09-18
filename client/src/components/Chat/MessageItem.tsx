@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Copy,
   Shield,
+  Volume2,
   VolumeX,
   UserMinus,
   Ban,
@@ -36,6 +37,7 @@ import { hapticLight, hapticMedium, hapticSuccess } from '../../lib/haptics';
 import { UserAvatar } from '../Common/UserAvatar';
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
+import { speakText } from '../../utils/audio';
 
 export interface UniversalMessage {
   id: string;
@@ -368,6 +370,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       label: 'Copiar Texto',
       icon: <Copy className="w-4 h-4" />,
       onClick: () => navigator.clipboard.writeText(message.content),
+    });
+
+    items.push({
+      label: 'Ouvir Mensagem (TTS)',
+      icon: <Volume2 className="w-4 h-4 text-brand-400" />,
+      onClick: () => speakText(message.content, author.display_name || author.username),
     });
 
     if (isAuthor) {
