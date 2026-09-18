@@ -708,10 +708,11 @@ const KNOWN_GAMES_AND_APPS: Array<{
 ];
 
 let lastDetectedActivity: DetectedActivity | null = null;
-let activityScanTimer: NodeJS.Timeout | null = null;
+let isScanning = false;
 
 function scanProcessesForActivity() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!mainWindow || mainWindow.isDestroyed() || isScanning) return;
+  isScanning = true;
 
   const { exec } = require('child_process');
   let cmd = '';
@@ -720,10 +721,12 @@ function scanProcessesForActivity() {
   } else if (process.platform === 'darwin' || process.platform === 'linux') {
     cmd = 'ps -eo comm=';
   } else {
+    isScanning = false;
     return;
   }
 
   exec(cmd, { maxBuffer: 1024 * 512, windowsHide: true }, (err: any, stdout: string) => {
+    isScanning = false;
     if (err || !stdout) return;
 
     let foundMatch: { name: string; type: DetectedActivity['type'] } | null = null;
@@ -755,17 +758,38 @@ function scanProcessesForActivity() {
   });
 }
 
+/**
+ * Event-Driven Activity Monitor:
+ * Triggers on application switch, window blur (when user enters a game), window focus,
+ * restore and system events instead of wasteful continuous polling.
+ */
 function startActivityScanner() {
-  if (activityScanTimer) return;
-  setTimeout(scanProcessesForActivity, 3000);
-  activityScanTimer = setInterval(scanProcessesForActivity, 20000);
+  // Initial detection check after app startup
+  setTimeout(scanProcessesForActivity, 2500);
+
+  if (mainWindow) {
+    // When user minimizes or clicks outside into a game/app
+    mainWindow.on('blur', () => {
+      setTimeout(scanProcessesForActivity, 800);
+    });
+
+    // When user comes back to ZeroVC
+    mainWindow.on('focus', () => {
+      scanProcessesForActivity();
+    });
+
+    mainWindow.on('restore', () => {
+      scanProcessesForActivity();
+    });
+
+    mainWindow.on('show', () => {
+      scanProcessesForActivity();
+    });
+  }
 }
 
 function stopActivityScanner() {
-  if (activityScanTimer) {
-    clearInterval(activityScanTimer);
-    activityScanTimer = null;
-  }
+  // Event-driven cleanup
 }
 
 ipcMain.handle('get-current-activity', () => {
