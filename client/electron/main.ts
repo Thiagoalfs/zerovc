@@ -651,6 +651,16 @@ if (!gotTheLock) {
         createWindow();
       }
     });
+
+    app.on('before-quit', () => {
+      isQuitting = true;
+      stopActivityScanner();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try {
+          mainWindow.webContents.send('activity-detected', null);
+        } catch {}
+      }
+    });
   });
 }
 
@@ -708,7 +718,58 @@ const KNOWN_GAMES_AND_APPS: Array<{
 ];
 
 let lastDetectedActivity: DetectedActivity | null = null;
+let activeActivityProcessMatch: RegExp | null = null;
+let activeActivityCloseWatcherTimer: NodeJS.Timeout | null = null;
+let backgroundScanTimer: NodeJS.Timeout | null = null;
 let isScanning = false;
+
+function startActiveActivityCloseWatcher() {
+  if (activeActivityCloseWatcherTimer) return;
+
+  // Poll only while an activity is actively running to catch termination quickly
+  activeActivityCloseWatcherTimer = setInterval(() => {
+    if (!lastDetectedActivity || !activeActivityProcessMatch) {
+      stopActiveActivityCloseWatcher();
+      return;
+    }
+
+    const { exec } = require('child_process');
+    let cmd = '';
+    if (process.platform === 'win32') {
+      cmd = 'tasklist /FO CSV /NH';
+    } else if (process.platform === 'darwin' || process.platform === 'linux') {
+      cmd = 'ps -eo comm=';
+    } else {
+      return;
+    }
+
+    exec(cmd, { maxBuffer: 1024 * 512, windowsHide: true }, (err: any, stdout: string) => {
+      if (err || !stdout) return;
+
+      // If the currently detected game/app is no longer in running processes
+      if (activeActivityProcessMatch && !activeActivityProcessMatch.test(stdout)) {
+        console.log('[Activity] Detected application close for:', lastDetectedActivity?.name);
+        lastDetectedActivity = null;
+        activeActivityProcessMatch = null;
+        stopActiveActivityCloseWatcher();
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('activity-detected', null);
+        }
+
+        // Check immediately if another game/app is running
+        setTimeout(scanProcessesForActivity, 500);
+      }
+    });
+  }, 3500);
+}
+
+function stopActiveActivityCloseWatcher() {
+  if (activeActivityCloseWatcherTimer) {
+    clearInterval(activeActivityCloseWatcherTimer);
+    activeActivityCloseWatcherTimer = null;
+  }
+}
 
 function scanProcessesForActivity() {
   if (!mainWindow || mainWindow.isDestroyed() || isScanning) return;
@@ -729,28 +790,34 @@ function scanProcessesForActivity() {
     isScanning = false;
     if (err || !stdout) return;
 
-    let foundMatch: { name: string; type: DetectedActivity['type'] } | null = null;
+    let foundMatch: { name: string; type: DetectedActivity['type']; match: RegExp } | null = null;
 
     for (const item of KNOWN_GAMES_AND_APPS) {
       if (item.match.test(stdout)) {
-        foundMatch = { name: item.name, type: item.type };
+        foundMatch = { name: item.name, type: item.type, match: item.match };
         break;
       }
     }
 
     if (foundMatch) {
+      activeActivityProcessMatch = foundMatch.match;
       if (!lastDetectedActivity || lastDetectedActivity.name !== foundMatch.name) {
         lastDetectedActivity = {
           name: foundMatch.name,
           type: foundMatch.type,
           start_time: Math.floor(Date.now() / 1000),
         };
+        console.log('[Activity] Detected application open:', lastDetectedActivity.name);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('activity-detected', lastDetectedActivity);
         }
       }
+      startActiveActivityCloseWatcher();
     } else if (lastDetectedActivity) {
+      console.log('[Activity] Application closed:', lastDetectedActivity.name);
       lastDetectedActivity = null;
+      activeActivityProcessMatch = null;
+      stopActiveActivityCloseWatcher();
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('activity-detected', null);
       }
@@ -760,17 +827,17 @@ function scanProcessesForActivity() {
 
 /**
  * Event-Driven Activity Monitor:
- * Triggers on application switch, window blur (when user enters a game), window focus,
- * restore and system events instead of wasteful continuous polling.
+ * Triggers on application launch, window blur (when user switches into a game), window focus,
+ * restore, minimize, close and active termination watcher.
  */
 function startActivityScanner() {
   // Initial detection check after app startup
-  setTimeout(scanProcessesForActivity, 2500);
+  setTimeout(scanProcessesForActivity, 2000);
 
   if (mainWindow) {
     // When user minimizes or clicks outside into a game/app
     mainWindow.on('blur', () => {
-      setTimeout(scanProcessesForActivity, 800);
+      setTimeout(scanProcessesForActivity, 600);
     });
 
     // When user comes back to ZeroVC
@@ -785,11 +852,28 @@ function startActivityScanner() {
     mainWindow.on('show', () => {
       scanProcessesForActivity();
     });
+
+    mainWindow.on('hide', () => {
+      scanProcessesForActivity();
+    });
+
+    mainWindow.on('minimize', () => {
+      scanProcessesForActivity();
+    });
+  }
+
+  // Relaxed background fallback scanner every 30s
+  if (!backgroundScanTimer) {
+    backgroundScanTimer = setInterval(scanProcessesForActivity, 30000);
   }
 }
 
 function stopActivityScanner() {
-  // Event-driven cleanup
+  stopActiveActivityCloseWatcher();
+  if (backgroundScanTimer) {
+    clearInterval(backgroundScanTimer);
+    backgroundScanTimer = null;
+  }
 }
 
 ipcMain.handle('get-current-activity', () => {
