@@ -293,28 +293,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
         {/* Right Header Actions */}
         <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
-          {/* Discord-style Search Input Box */}
-          <div className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64">
-            <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar..."
-              className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
-                title="Limpar busca"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
           {/* Voice Channel in Group Toggle */}
           <button
             onClick={handleJoinVoice}
@@ -344,6 +322,28 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           >
             <Users className="w-4 h-4" />
           </button>
+
+          {/* Discord-style Search Input Box (Last element on the right) */}
+          <div className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64">
+            <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar..."
+              className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
+                title="Limpar busca"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
