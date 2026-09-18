@@ -6,6 +6,7 @@ import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
 import { MemberList } from '../Sidebar/MemberList';
 import { SearchAutocompletePopout } from './SearchAutocompletePopout';
+import { SearchResultsPanel } from './SearchResultsPanel';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { User, Message } from '../../types';
 
@@ -133,7 +134,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const scrollToBottom = (smooth = false) => {
-    if (!showPinnedOnly && !appliedSearchQuery) {
+    if (!showPinnedOnly) {
       if (scrollContainerRef.current) {
         if (smooth) {
           scrollContainerRef.current.scrollTo({
@@ -209,20 +210,37 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  // Filter messages based on search & pinned filter
+  // Filter messages based on pinned filter
   const baseMessages = showPinnedOnly && activeChannel
     ? pinnedMessagesByChannel?.[activeChannel.id] || []
     : messages || [];
 
   const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
 
+  // Main chat messages stay normal (or show pinned if toggled)
   const displayedMessages = useMemo(() => {
-    let list = baseMessages;
     if (showPinnedOnly && activeChannel) {
-      list = pinnedMessagesByChannel?.[activeChannel.id] || [];
+      return pinnedMessagesByChannel?.[activeChannel.id] || [];
     }
-    return filterMessages(list, parsedSearch);
-  }, [baseMessages, showPinnedOnly, activeChannel, pinnedMessagesByChannel, parsedSearch]);
+    return baseMessages;
+  }, [baseMessages, showPinnedOnly, activeChannel, pinnedMessagesByChannel]);
+
+  // Search Results for the right-side SearchResultsPanel
+  const searchResults = useMemo(() => {
+    if (!appliedSearchQuery) return [];
+    return filterMessages(messages || [], parsedSearch);
+  }, [messages, appliedSearchQuery, parsedSearch]);
+
+  const handleJumpToMessage = (messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-brand-500/20', 'transition-colors', 'duration-500');
+      setTimeout(() => {
+        el.classList.remove('bg-brand-500/20');
+      }, 2500);
+    }
+  };
 
   const handleEditLastMessage = () => {
     if (!user || !displayedMessages || displayedMessages.length === 0) return;
@@ -403,31 +421,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
       </div>
 
-      {/* Pinned or Search Active Notice Banner */}
-      {(showPinnedOnly || appliedSearchQuery) && (
+      {/* Pinned Messages Active Notice Banner */}
+      {showPinnedOnly && (
         <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300 flex-shrink-0">
           <span>
-            {showPinnedOnly && appliedSearchQuery ? (
-              <>
-                Filtrando por mensagens fixadas contendo <strong className="text-white font-mono font-semibold">"{appliedSearchQuery}"</strong> ({displayedMessages.length} encontradas)
-              </>
-            ) : showPinnedOnly ? (
-              <>
-                Exibindo <strong className="text-white font-semibold">{displayedMessages.length}</strong> mensagens fixadas neste canal
-              </>
-            ) : (
-              <>
-                Resultados para <strong className="text-white font-mono font-semibold">"{appliedSearchQuery}"</strong> ({displayedMessages.length} encontradas)
-              </>
-            )}
+            Exibindo <strong className="text-white font-semibold">{displayedMessages.length}</strong> mensagens fixadas neste canal
           </span>
           <button
             type="button"
-            onClick={() => {
-              setShowPinnedOnly(false);
-              setSearchQuery('');
-              setAppliedSearchQuery('');
-            }}
+            onClick={() => setShowPinnedOnly(false)}
             className="text-brand-400 hover:underline font-semibold cursor-pointer ml-2 flex-shrink-0"
           >
             Limpar Filtros
@@ -544,25 +546,42 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           />
         </div>
 
-        {/* Right-side Member List Sidebar */}
-        <MemberList
-          isOpen={showMembers}
-          onClose={() => {
-            if (onToggleMemberList) onToggleMemberList(false);
-            else setLocalShowMemberList(false);
-          }}
-          onSelectUser={onOpenUserProfile}
-          onOpenDM={onOpenDM}
-          onOpenSearch={() => {}}
-          onOpenPins={() => {
-            setShowPinnedOnly(true);
-            if (onToggleMemberList) onToggleMemberList(false);
-            else setLocalShowMemberList(false);
-          }}
-          isDragging={isDraggingMemberList}
-          dragOffset={memberListDragOffset}
-          dragProgress={memberListDragProgress}
-        />
+        {/* Right-side: Search Results Panel (on top of member list when search is active) OR Member List Sidebar */}
+        {appliedSearchQuery ? (
+          <SearchResultsPanel
+            isOpen={Boolean(appliedSearchQuery)}
+            onClose={() => {
+              setAppliedSearchQuery('');
+              setSearchQuery('');
+            }}
+            rawQuery={appliedSearchQuery}
+            parsedQuery={parsedSearch}
+            messages={searchResults}
+            contextName={`#${activeChannel.name}`}
+            contextCategory={activeGuild?.name}
+            contextType="guild"
+            onJumpToMessage={handleJumpToMessage}
+          />
+        ) : (
+          <MemberList
+            isOpen={showMembers}
+            onClose={() => {
+              if (onToggleMemberList) onToggleMemberList(false);
+              else setLocalShowMemberList(false);
+            }}
+            onSelectUser={onOpenUserProfile}
+            onOpenDM={onOpenDM}
+            onOpenSearch={() => {}}
+            onOpenPins={() => {
+              setShowPinnedOnly(true);
+              if (onToggleMemberList) onToggleMemberList(false);
+              else setLocalShowMemberList(false);
+            }}
+            isDragging={isDraggingMemberList}
+            dragOffset={memberListDragOffset}
+            dragProgress={memberListDragProgress}
+          />
+        )}
       </div>
     </div>
   );

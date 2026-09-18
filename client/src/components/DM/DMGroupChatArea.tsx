@@ -16,6 +16,7 @@ import { livekit } from '../../lib/livekit';
 import { MessageItem } from '../Chat/MessageItem';
 import { MessageInput } from '../Chat/MessageInput';
 import { SearchAutocompletePopout } from '../Chat/SearchAutocompletePopout';
+import { SearchResultsPanel } from '../Chat/SearchResultsPanel';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { User, DMGroupMessage } from '../../types';
 
@@ -172,9 +173,25 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
   const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
 
-  const displayedMessages = useMemo(() => {
+  // Main chat messages stay normal
+  const displayedMessages = messages;
+
+  // Search results for right-side SearchResultsPanel
+  const searchResults = useMemo(() => {
+    if (!appliedSearchQuery) return [];
     return filterMessages(messages, parsedSearch);
-  }, [messages, parsedSearch]);
+  }, [messages, appliedSearchQuery, parsedSearch]);
+
+  const handleJumpToMessage = (messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-brand-500/20', 'transition-colors', 'duration-500');
+      setTimeout(() => {
+        el.classList.remove('bg-brand-500/20');
+      }, 2500);
+    }
+  };
 
   const handleEditLastMessage = () => {
     if (!user || !displayedMessages || displayedMessages.length === 0) return;
@@ -385,25 +402,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
         </div>
       </div>
 
-      {/* Search Active Notice Banner */}
-      {appliedSearchQuery && (
-        <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
-          <span>
-            Resultados da busca para "<strong className="text-white font-mono font-semibold">{appliedSearchQuery}</strong>" ({displayedMessages.length} encontradas)
-          </span>
-          <button
-            onClick={() => {
-              setSearchQuery('');
-              setAppliedSearchQuery('');
-            }}
-            className="text-brand-400 hover:underline font-semibold cursor-pointer"
-          >
-            Limpar busca
-          </button>
-        </div>
-      )}
-
-      {/* Main Area (Messages + optional Member List) */}
+      {/* Main Area (Messages + SearchResultsPanel OR Member List) */}
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Messages Scroll Area */}
@@ -516,54 +515,71 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           />
         </div>
 
-        {/* Right Member Sidebar (if toggled) */}
-        {showMemberList && (
-          <div className="w-56 bg-background-darker border-l border-white/5 p-3 flex flex-col select-none overflow-y-auto no-scrollbar">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-              Membros — {activeGroup.members?.length || 0}
-            </span>
+        {/* Right Sidebar: Search Results Panel (when search is active) OR Member Sidebar */}
+        {appliedSearchQuery ? (
+          <SearchResultsPanel
+            isOpen={Boolean(appliedSearchQuery)}
+            onClose={() => {
+              setAppliedSearchQuery('');
+              setSearchQuery('');
+            }}
+            rawQuery={appliedSearchQuery}
+            parsedQuery={parsedSearch}
+            messages={searchResults}
+            contextName={groupName}
+            contextCategory="Grupo"
+            contextType="dm_group"
+            onJumpToMessage={handleJumpToMessage}
+          />
+        ) : (
+          showMemberList && (
+            <div className="w-56 bg-background-darker border-l border-white/5 p-3 flex flex-col select-none overflow-y-auto no-scrollbar">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+                Membros — {activeGroup.members?.length || 0}
+              </span>
 
-            <div className="space-y-1 flex-1">
-              {(activeGroup.members || []).map((m) => (
-                <div
-                  key={m.id}
-                  onClick={(e) => onOpenUserProfile?.(m, { x: e.clientX, y: e.clientY })}
-                  className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors"
-                >
-                  <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                    {m.avatar_url ? (
-                      <img src={formatAssetUrl(m.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      <span>{m.display_name?.[0]?.toUpperCase() || m.username?.[0]?.toUpperCase()}</span>
-                    )}
+              <div className="space-y-1 flex-1">
+                {(activeGroup.members || []).map((m) => (
+                  <div
+                    key={m.id}
+                    onClick={(e) => onOpenUserProfile?.(m, { x: e.clientX, y: e.clientY })}
+                    className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                      {m.avatar_url ? (
+                        <img src={formatAssetUrl(m.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        <span>{m.display_name?.[0]?.toUpperCase() || m.username?.[0]?.toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div className="truncate">
+                      <span className="text-gray-200 font-medium block truncate">
+                        {m.display_name || m.username}
+                      </span>
+                      {m.id === activeGroup.owner_id && (
+                        <span className="text-[9px] text-brand-400 block">Dono</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="truncate">
-                    <span className="text-gray-200 font-medium block truncate">
-                      {m.display_name || m.username}
-                    </span>
-                    {m.id === activeGroup.owner_id && (
-                      <span className="text-[9px] text-brand-400 block">Dono</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
-            {/* Leave Group Button */}
-            <button
-              onClick={async () => {
-                if (confirm('Tem certeza que deseja sair deste grupo?')) {
-                  if (user) {
-                    await removeMember(activeGroup.id, user.id);
+              {/* Leave Group Button */}
+              <button
+                onClick={async () => {
+                  if (confirm('Tem certeza que deseja sair deste grupo?')) {
+                    if (user) {
+                      await removeMember(activeGroup.id, user.id);
+                    }
                   }
-                }
-              }}
-              className="mt-4 flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold text-dnd hover:bg-dnd/10 transition-colors cursor-pointer border border-dnd/20"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Sair do Grupo</span>
-            </button>
-          </div>
+                }}
+                className="mt-4 flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold text-dnd hover:bg-dnd/10 transition-colors cursor-pointer border border-dnd/20"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sair do Grupo</span>
+              </button>
+            </div>
+          )
         )}
       </div>
     </div>

@@ -17,6 +17,7 @@ import { ActiveCallOverlay } from './ActiveCallOverlay';
 import { MessageItem } from '../Chat/MessageItem';
 import { MessageInput } from '../Chat/MessageInput';
 import { SearchAutocompletePopout } from '../Chat/SearchAutocompletePopout';
+import { SearchResultsPanel } from '../Chat/SearchResultsPanel';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { User, DMMessage } from '../../types';
 
@@ -189,13 +190,30 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
   const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
 
+  // Main chat messages stay normal (or show pinned if toggled)
   const displayedMessages = useMemo(() => {
-    let list = messages;
     if (showPinnedOnly && activeRoom) {
-      list = pinnedMessagesByRoom[activeRoom.id] || [];
+      return pinnedMessagesByRoom[activeRoom.id] || [];
     }
-    return filterMessages(list, parsedSearch);
-  }, [messages, showPinnedOnly, activeRoom, pinnedMessagesByRoom, parsedSearch]);
+    return messages;
+  }, [messages, showPinnedOnly, activeRoom, pinnedMessagesByRoom]);
+
+  // Search results for the right-side SearchResultsPanel
+  const searchResults = useMemo(() => {
+    if (!appliedSearchQuery) return [];
+    return filterMessages(messages || [], parsedSearch);
+  }, [messages, appliedSearchQuery, parsedSearch]);
+
+  const handleJumpToMessage = (messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-brand-500/20', 'transition-colors', 'duration-500');
+      setTimeout(() => {
+        el.classList.remove('bg-brand-500/20');
+      }, 2500);
+    }
+  };
 
   const handleEditLastMessage = () => {
     if (!user || !displayedMessages || displayedMessages.length === 0) return;
@@ -417,20 +435,14 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         <ActiveCallOverlay onOpenScreenShare={onOpenScreenShare} />
       )}
 
-      {/* Pinned or Search Active Notice Banner */}
-      {(showPinnedOnly || appliedSearchQuery) && (
+      {/* Pinned Messages Active Notice Banner */}
+      {showPinnedOnly && (
         <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
           <span>
-            {showPinnedOnly
-              ? `Exibindo apenas mensagens fixadas (${displayedMessages.length})`
-              : `Resultados da busca para "${appliedSearchQuery}" (${displayedMessages.length})`}
+            Exibindo apenas mensagens fixadas ({displayedMessages.length})
           </span>
           <button
-            onClick={() => {
-              setShowPinnedOnly(false);
-              setSearchQuery('');
-              setAppliedSearchQuery('');
-            }}
+            onClick={() => setShowPinnedOnly(false)}
             className="text-brand-400 hover:underline font-semibold cursor-pointer"
           >
             Limpar filtro
@@ -438,7 +450,9 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       )}
 
-      {/* Messages Scroll Area */}
+      {/* Main Body Row: Messages Area + SearchResultsPanel */}
+      <div className="flex-1 flex flex-row h-full overflow-hidden min-h-0 w-full relative">
+        <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -568,6 +582,26 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         contextType="dm"
         customMentions={mentionSuggestions}
       />
+      </div>
+
+      {/* Search Results Panel for DM */}
+      {appliedSearchQuery && (
+        <SearchResultsPanel
+          isOpen={Boolean(appliedSearchQuery)}
+          onClose={() => {
+            setAppliedSearchQuery('');
+            setSearchQuery('');
+          }}
+          rawQuery={appliedSearchQuery}
+          parsedQuery={parsedSearch}
+          messages={searchResults}
+          contextName={`@${recipient.display_name || recipient.username}`}
+          contextCategory="Mensagem Direta"
+          contextType="dm"
+          onJumpToMessage={handleJumpToMessage}
+        />
+      )}
+    </div>
     </div>
   );
 };

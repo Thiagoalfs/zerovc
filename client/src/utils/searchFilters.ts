@@ -253,3 +253,96 @@ export function filterMessages<T extends BaseMessage>(messages: T[], parsed: Par
     return true;
   });
 }
+
+export type SearchSortOption = 'newest' | 'oldest' | 'relevant';
+
+/**
+ * Sorts filtered search results according to the selected option:
+ * - newest: Descending by timestamp
+ * - oldest: Ascending by timestamp
+ * - relevant: Ranked by match relevance score (keyword frequency, exact match, mentions)
+ */
+export function sortFilteredMessages<T extends BaseMessage>(
+  messages: T[],
+  sortOption: SearchSortOption = 'newest',
+  parsed?: ParsedSearchQuery
+): T[] {
+  if (!messages || messages.length <= 1) return [...(messages || [])];
+  const list = [...messages];
+
+  if (sortOption === 'newest') {
+    return list.sort((a, b) => {
+      const timeA = new Date(a.created_at).getTime() || 0;
+      const timeB = new Date(b.created_at).getTime() || 0;
+      return timeB - timeA;
+    });
+  }
+
+  if (sortOption === 'oldest') {
+    return list.sort((a, b) => {
+      const timeA = new Date(a.created_at).getTime() || 0;
+      const timeB = new Date(b.created_at).getTime() || 0;
+      return timeA - timeB;
+    });
+  }
+
+  if (sortOption === 'relevant') {
+    const freeText = (parsed?.freeText || '').toLowerCase().trim();
+    const authors = (parsed?.fromAuthors || []).map((a) => a.toLowerCase());
+    const mentions = (parsed?.mentionsUsers || []).map((m) => m.toLowerCase());
+
+    const scoreMessage = (m: T): number => {
+      let score = 0;
+      const content = (m.content || '').toLowerCase();
+      const authorU = (m.author?.username || '').toLowerCase();
+      const authorD = (m.author?.display_name || '').toLowerCase();
+
+      // Exact phrase match
+      if (freeText && content.includes(freeText)) {
+        score += 50;
+        if (content === freeText) score += 50;
+      }
+
+      // Individual keyword match
+      if (freeText) {
+        const words = freeText.split(/\s+/).filter(Boolean);
+        for (const word of words) {
+          if (content.includes(word)) score += 10;
+          if (authorU.includes(word) || authorD.includes(word)) score += 15;
+        }
+      }
+
+      // Author filter matching
+      for (const a of authors) {
+        if (authorU === a || authorD === a) score += 30;
+      }
+
+      // Mentions matching
+      for (const men of mentions) {
+        if (content.includes(`@${men}`)) score += 25;
+      }
+
+      // Pinned bonus
+      if (m.is_pinned) score += 5;
+
+      // Attachments bonus
+      if (m.attachments && m.attachments.length > 0) score += 5;
+
+      return score;
+    };
+
+    return list.sort((a, b) => {
+      const scoreA = scoreMessage(a);
+      const scoreB = scoreMessage(b);
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+      // Tie break with newest
+      const timeA = new Date(a.created_at).getTime() || 0;
+      const timeB = new Date(b.created_at).getTime() || 0;
+      return timeB - timeA;
+    });
+  }
+
+  return list;
+}
