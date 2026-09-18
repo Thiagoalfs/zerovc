@@ -34,6 +34,7 @@ const ServerSettingsModal = React.lazy(() => import('./components/Modals/ServerS
 const ChannelSettingsModal = React.lazy(() => import('./components/Modals/ChannelSettingsModal').then(m => ({ default: m.ChannelSettingsModal })));
 const InviteModal = React.lazy(() => import('./components/Modals/InviteModal').then(m => ({ default: m.InviteModal })));
 const UserProfileModal = React.lazy(() => import('./components/Modals/UserProfileModal').then(m => ({ default: m.UserProfileModal })));
+const UserProfileModalFocus = React.lazy(() => import('./components/Modals/UserProfileModalFocus').then(m => ({ default: m.UserProfileModalFocus })));
 const ImageModal = React.lazy(() => import('./components/Modals/ImageModal').then(m => ({ default: m.ImageModal })));
 import { IncomingCallModal } from './components/DM/IncomingCallModal';
 import { TitleBar } from './components/Desktop/TitleBar';
@@ -90,6 +91,7 @@ export const App: React.FC = () => {
     user: User;
     position?: { x: number; y: number };
   } | null>(null);
+  const [focusedUserProfile, setFocusedUserProfile] = useState<User | null>(null);
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -1702,6 +1704,10 @@ export const App: React.FC = () => {
           position={selectedUserForProfile?.position || null}
           isOpen={!!selectedUserForProfile}
           onClose={() => setSelectedUserForProfile(null)}
+          onOpenFullProfile={(u) => {
+            setSelectedUserForProfile(null);
+            setFocusedUserProfile(u);
+          }}
           onOpenDM={async (userId) => {
             setSelectedUserForProfile(null);
             setIsHomeActive(true);
@@ -1715,6 +1721,29 @@ export const App: React.FC = () => {
           onEditOwnProfile={() => {
             setSelectedUserForProfile(null);
             setIsProfileModalOpen(true);
+          }}
+        />
+
+        <UserProfileModalFocus
+          user={focusedUserProfile}
+          isOpen={!!focusedUserProfile}
+          onClose={() => setFocusedUserProfile(null)}
+          onOpenDM={async (userId) => {
+            setFocusedUserProfile(null);
+            setIsHomeActive(true);
+            setHomeView('dm');
+            setIsMobileDrawerOpen(false);
+            const room = await useDMStore.getState().openDMWithUser(userId);
+            if (room) {
+              navigateTo(`/@me/${room.id}`);
+            }
+          }}
+          onEditOwnProfile={() => {
+            setFocusedUserProfile(null);
+            setIsProfileModalOpen(true);
+          }}
+          onPreviewImage={(url) => {
+            setPreviewImageUrl(url);
           }}
         />
 
