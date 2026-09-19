@@ -745,7 +745,7 @@ function parseRunningProcesses(stdout: string): Set<string> {
 function startActiveActivityCloseWatcher() {
   if (activeActivityCloseWatcherTimer) return;
 
-  // Poll only while an activity is actively running to catch termination quickly
+  // Poll while an activity is actively running to catch termination quickly
   activeActivityCloseWatcherTimer = setInterval(() => {
     if (!lastDetectedActivity || !activeActivityProcesses) {
       stopActiveActivityCloseWatcher();
@@ -762,7 +762,7 @@ function startActiveActivityCloseWatcher() {
       return;
     }
 
-    exec(cmd, { maxBuffer: 1024 * 512, windowsHide: true }, (err: any, stdout: string) => {
+    exec(cmd, { maxBuffer: 1024 * 1024 * 4, windowsHide: true }, (err: any, stdout: string) => {
       if (err || !stdout) return;
 
       const procSet = parseRunningProcesses(stdout);
@@ -780,10 +780,10 @@ function startActiveActivityCloseWatcher() {
         }
 
         // Check immediately if another game/app is running
-        setTimeout(scanProcessesForActivity, 500);
+        setTimeout(scanProcessesForActivity, 300);
       }
     });
-  }, 3000);
+  }, 2000);
 }
 
 function stopActiveActivityCloseWatcher() {
@@ -808,7 +808,7 @@ function scanProcessesForActivity() {
     return;
   }
 
-  exec(cmd, { maxBuffer: 1024 * 512, windowsHide: true }, (err: any, stdout: string) => {
+  exec(cmd, { maxBuffer: 1024 * 1024 * 4, windowsHide: true }, (err: any, stdout: string) => {
     isScanning = false;
     if (err || !stdout) return;
 
@@ -889,9 +889,9 @@ function startActivityScanner() {
     });
   }
 
-  // Relaxed background fallback scanner every 30s
+  // Periodic background scanner every 5s
   if (!backgroundScanTimer) {
-    backgroundScanTimer = setInterval(scanProcessesForActivity, 30000);
+    backgroundScanTimer = setInterval(scanProcessesForActivity, 5000);
   }
 }
 

@@ -253,7 +253,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               <Settings className="w-3.5 h-3.5 text-gray-400 group-hover/usercard:text-brand-400 md:hidden flex-shrink-0 transition-transform group-hover/usercard:rotate-45" />
             </div>
             <span className="text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">
-              {user?.custom_activity && user?.show_activity_status !== false ? (
+              {user?.status !== 'offline' && user?.custom_activity && user?.show_activity_status !== false ? (
                 <span className="text-brand-300 font-medium flex items-center gap-1 truncate">
                   <span className="truncate">
                     {user.custom_activity.type === 'playing' ? 'Jogando ' :

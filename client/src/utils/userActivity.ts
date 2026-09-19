@@ -29,7 +29,9 @@ export function getUserActivity(
   if (!targetUser) return null;
 
   const isMe = currentUser?.id === targetUser.id;
-  const user = isMe && currentUser ? { ...targetUser, ...currentUser } : targetUser;
+  const user = isMe && currentUser ? currentUser : targetUser;
+
+  if (user.status === 'offline') return null;
 
   const customAct = user.custom_activity;
   const showActivity = user.show_activity_status !== false;

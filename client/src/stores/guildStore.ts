@@ -901,10 +901,31 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       if (!state.activeGuild) return state;
       const members = (state.activeGuild.members || []).map((m) =>
-        m.id === updatedUser.id ? ({ ...m, ...updatedUser } as User) : m
+        m.id === updatedUser.id
+          ? ({
+              ...m,
+              ...updatedUser,
+              custom_activity:
+                'custom_activity' in updatedUser
+                  ? (updatedUser.custom_activity || null)
+                  : (updatedUser.status === 'offline' ? null : m.custom_activity),
+            } as User)
+          : m
       );
       const messages = state.messages.map((msg) =>
-        msg.author_id === updatedUser.id ? { ...msg, author: { ...msg.author, ...updatedUser } as User } : msg
+        msg.author_id === updatedUser.id
+          ? {
+              ...msg,
+              author: {
+                ...msg.author,
+                ...updatedUser,
+                custom_activity:
+                  'custom_activity' in updatedUser
+                    ? (updatedUser.custom_activity || null)
+                    : (updatedUser.status === 'offline' ? null : msg.author?.custom_activity),
+              } as User,
+            }
+          : msg
       );
       return {
         activeGuild: { ...state.activeGuild, members },
@@ -951,7 +972,16 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
       const members = (state.activeGuild.members || []).map((m) =>
-        m.id === userId ? ({ ...m, ...data } as User) : m
+        m.id === userId
+          ? ({
+              ...m,
+              ...data,
+              custom_activity:
+                'custom_activity' in data
+                  ? (data.custom_activity || null)
+                  : (data.status === 'offline' ? null : m.custom_activity),
+            } as User)
+          : m
       );
       return {
         activeGuild: {
@@ -966,7 +996,14 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       if (!state.activeGuild) return state;
       const members = (state.activeGuild.members || []).map((m) =>
-        m.id === userId ? ({ ...m, status: status as any, custom_status: customStatus } as User) : m
+        m.id === userId
+          ? ({
+              ...m,
+              status: status as any,
+              custom_status: customStatus !== undefined ? customStatus : m.custom_status,
+              custom_activity: status === 'offline' ? null : m.custom_activity,
+            } as User)
+          : m
       );
       return {
         activeGuild: {

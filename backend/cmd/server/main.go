@@ -124,13 +124,14 @@ func main() {
 			}
 		}
 
-		// Update database status to offline and broadcast
-		db.Pool.Exec(ctx, "UPDATE users SET status = 'offline' WHERE id = $1", userID)
+		// Update database status to offline, clear activity and broadcast
+		db.Pool.Exec(ctx, "UPDATE users SET status = 'offline', custom_activity = NULL WHERE id = $1", userID)
 		hub.BroadcastGlobal(models.WSEvent{
 			Type: models.EventUserUpdate,
 			Data: map[string]any{
-				"id":     userID,
-				"status": "offline",
+				"id":              userID,
+				"status":          "offline",
+				"custom_activity": nil,
 			},
 		})
 	}

@@ -260,7 +260,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setUser: (user: Partial<User> & { id?: string }) => {
     set((state) => ({
-      user: state.user ? { ...state.user, ...user } : (user as User),
+      user: state.user
+        ? {
+            ...state.user,
+            ...user,
+            custom_activity:
+              'custom_activity' in user
+                ? (user.custom_activity || null)
+                : (user.status === 'offline' ? null : state.user.custom_activity),
+          }
+        : (user as User),
     }));
   },
 }));

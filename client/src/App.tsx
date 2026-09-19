@@ -682,10 +682,17 @@ export const App: React.FC = () => {
             const currentUser = useAuthStore.getState().user;
             if (!currentUser || currentUser.auto_detect_activity === false) return;
             if (!currentAct && currentUser.custom_activity) {
+              useAuthStore.getState().setUser({ custom_activity: null });
+              if (currentUser.id) {
+                useGuildStore.getState().updateMemberInGuild({ id: currentUser.id, custom_activity: null });
+              }
               api.users
                 .updateProfile({ custom_activity: null })
                 .then((updated) => {
                   useAuthStore.getState().setUser(updated);
+                  if (updated.id) {
+                    useGuildStore.getState().updateMemberInGuild(updated);
+                  }
                 })
                 .catch(() => {});
             }
@@ -706,10 +713,20 @@ export const App: React.FC = () => {
             return;
           }
 
+          // Optimistically update store immediately
+          const targetActivity = detectedActivity || null;
+          useAuthStore.getState().setUser({ custom_activity: targetActivity });
+          if (currentUser.id) {
+            useGuildStore.getState().updateMemberInGuild({ id: currentUser.id, custom_activity: targetActivity });
+          }
+
           api.users
-            .updateProfile({ custom_activity: detectedActivity || null })
+            .updateProfile({ custom_activity: targetActivity })
             .then((updated) => {
               useAuthStore.getState().setUser(updated);
+              if (updated.id) {
+                useGuildStore.getState().updateMemberInGuild(updated);
+              }
             })
             .catch((err) => {
               console.warn('[Activity] Failed to auto-update activity:', err);
