@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Monitor, AppWindow, Sparkles, Volume2, Check } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
+import { useCallStore } from '../../stores/callStore';
 
 interface ScreenShareModalProps {
   isOpen: boolean;
@@ -25,7 +26,8 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
   const [fps, setFps] = useState<ScreenFPS>(30);
   const [includeAudio, setIncludeAudio] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
-  const { startScreenShare } = useVoiceStore();
+  const { startScreenShare: startVoiceScreenShare } = useVoiceStore();
+  const { callState, startScreenShare: startCallScreenShare } = useCallStore();
 
   const isElectron = !!(window as any).electronAPI?.getScreenSources;
 
@@ -70,7 +72,11 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
 
   const handleShare = async () => {
     if (!selectedSourceId) return;
-    await startScreenShare(selectedSourceId, { resolution, fps, includeAudio: isElectron && includeAudio });
+    if (callState === 'connected' || callState === 'calling') {
+      await startCallScreenShare(selectedSourceId, { resolution, fps, includeAudio });
+    } else {
+      await startVoiceScreenShare(selectedSourceId, { resolution, fps, includeAudio });
+    }
     onClose();
   };
 

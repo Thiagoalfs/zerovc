@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { Channel, Guild, Message, Role, VoiceSession, User, ChannelPermissionOverwrite, GuildEmoji } from '../types';
 import { api } from '../lib/api';
-import { playMessageSound } from '../utils/audio';
+import { playMessageSound, speakText } from '../utils/audio';
 import { useAuthStore } from './authStore';
+import { useSettingsStore } from './settingsStore';
 
 interface GuildState {
   guilds: Guild[];
@@ -30,7 +31,7 @@ interface GuildState {
   createGuild: (name: string, iconUrl?: string) => Promise<Guild>;
   updateGuild: (guildId: string, data: { name?: string; icon_url?: string; banner_url?: string; system_channel_id?: string; clear_system_channel?: boolean }) => Promise<void>;
   transferOwnership: (guildId: string, newOwnerId: string) => Promise<void>;
-  deleteGuild: (guildId: string) => Promise<void>;
+  deleteGuild: (guildId: string, code?: string) => Promise<void>;
   leaveGuild: (guildId: string) => Promise<void>;
   toggleMuteGuild: (guildId: string) => Promise<void>;
   markGuildAsRead: (guildId: string) => void;
@@ -304,8 +305,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     });
   },
 
-  deleteGuild: async (guildId: string) => {
-    await api.guilds.delete(guildId);
+  deleteGuild: async (guildId: string, code?: string) => {
+    await api.guilds.delete(guildId, code);
     set((state) => {
       const guilds = state.guilds.filter((g) => g.id !== guildId);
       const activeGuild = state.activeGuild?.id === guildId ? null : state.activeGuild;
@@ -656,6 +657,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         updatedChannelMsgs.push({ ...message, status: 'sent' });
       }
 
+      // Cap memory at 200 messages per channel
+      if (updatedChannelMsgs.length > 200) {
+        updatedChannelMsgs = updatedChannelMsgs.slice(-200);
+      }
+
       const nextMessagesByChannel = {
         ...state.messagesByChannel,
         [message.channel_id]: updatedChannelMsgs,
@@ -690,8 +696,15 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           nextMessages.push({ ...message, status: 'sent' });
         }
 
+        if (nextMessages.length > 200) {
+          nextMessages = nextMessages.slice(-200);
+        }
+
         if (message.author_id !== currentUser?.id && !isServerMuted && !isDND) {
           playMessageSound(isMention);
+          if (useSettingsStore.getState().textToSpeechEnabled && message.content) {
+            speakText(message.content, message.author?.display_name || message.author?.username);
+          }
         }
         return {
           messages: nextMessages,

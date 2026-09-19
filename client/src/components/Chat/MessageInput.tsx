@@ -1,21 +1,37 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock } from 'lucide-react';
+import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock, Mic } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { api, formatAssetUrl } from '../../lib/api';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { EmojiAndGifPicker } from './EmojiAndGifPicker';
+import { VoiceRecorder } from './VoiceRecorder';
 import { useGuildStore } from '../../stores/guildStore';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
+import { optimizeImageForUpload } from '../../lib/imageOptimizer';
+
+interface MentionSuggestionItem {
+  id: string;
+  name: string;
+  username: string;
+  avatar_url?: string;
+  isSpecial?: boolean;
+  isRole?: boolean;
+  roleColor?: string;
+}
 
 interface MessageInputProps {
-  channel: Channel;
-  replyingTo?: Message | null;
+  channel?: { id?: string; name?: string; type?: string } | null;
+  placeholder?: string;
+  replyingTo?: { id: string; author?: { username?: string; display_name?: string }; content: string } | null;
   onCancelReply?: () => void;
   onSendMessage: (content: string, replyToId?: string) => Promise<void>;
   onEditLastMessage?: () => void;
   droppedFile?: File | null;
   onClearDroppedFile?: () => void;
+  contextType?: 'channel' | 'dm' | 'dm_group';
+  customMentions?: MentionSuggestionItem[];
+  onTyping?: () => void;
 }
 
 const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
@@ -24,12 +40,16 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export const MessageInput: React.FC<MessageInputProps> = ({
   channel,
+  placeholder,
   replyingTo,
   onCancelReply,
   onSendMessage,
   onEditLastMessage,
   droppedFile,
   onClearDroppedFile,
+  contextType = 'channel',
+  customMentions,
+  onTyping,
 }) => {
   const { activeGuild, guilds } = useGuildStore();
   const [content, setContent] = useState('');
@@ -37,6 +57,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
   
   // Channel (#) Autocomplete State
@@ -82,30 +103,36 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     return list;
   }, [activeGuild?.emojis, guilds]);
 
-  // Compute filtered channel suggestions
+  // Compute filtered channel suggestions (only in server channel context)
   const channelSuggestions = useMemo(() => {
-    if (channelQuery === null) return [];
+    if (contextType !== 'channel' || channelQuery === null) return [];
     const q = channelQuery.toLowerCase();
     const channels = activeGuild?.channels || [];
     const list = channels.filter(
       (c) => c.type !== 'category' && c.name.toLowerCase().includes(q)
     );
     return list.slice(0, 8);
-  }, [channelQuery, activeGuild?.channels]);
+  }, [contextType, channelQuery, activeGuild?.channels]);
 
   // Compute filtered mention suggestions
   const mentionSuggestions = useMemo(() => {
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
-    const list: Array<{
-      id: string;
-      name: string;
-      username: string;
-      avatar_url?: string;
-      isSpecial?: boolean;
-      isRole?: boolean;
-      roleColor?: string;
-    }> = [];
+    const list: MentionSuggestionItem[] = [];
+
+    // If custom mentions provided (e.g. DM recipient or DM group members)
+    if (customMentions && customMentions.length > 0) {
+      for (const m of customMentions) {
+        const uName = (m.username || '').toLowerCase();
+        const dName = (m.name || '').toLowerCase();
+        if (uName.includes(q) || dName.includes(q)) {
+          list.push(m);
+        }
+      }
+      return list.slice(0, 8);
+    }
+
+    if (contextType !== 'channel') return [];
 
     // Special global tags
     if ('everyone'.startsWith(q) || 'todos'.startsWith(q)) {
@@ -150,12 +177,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     return list.slice(0, 8);
-  }, [mentionQuery, activeGuild?.members, activeGuild?.roles]);
+  }, [mentionQuery, customMentions, contextType, activeGuild?.members, activeGuild?.roles]);
 
   // Compute filtered emoji suggestions
   const emojiSuggestions = useMemo(() => {
     if (emojiQuery === null) return [];
-    return searchEmojiSuggestions(emojiQuery, allAvailableEmojis, activeGuild?.name, 8);
+    return searchEmojiSuggestions(emojiQuery, allAvailableEmojis, activeGuild?.name || 'ZeroVC', 8);
   }, [emojiQuery, allAvailableEmojis, activeGuild?.name]);
 
   useEffect(() => {
@@ -270,6 +297,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setChannelQuery(null);
     setMentionQuery(null);
     setEmojiQuery(null);
+    lastTypingTime.current = 0;
     onCancelReply?.();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -278,7 +306,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     try {
       if (fileToUpload) {
         setIsUploading(true);
-        const uploaded = await api.upload.attachment(fileToUpload);
+        const optimizedFile = await optimizeImageForUpload(fileToUpload, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
+        const uploaded = await api.upload.attachment(optimizedFile);
         finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
       }
 
@@ -288,6 +317,24 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       setLimitAlert({
         title: 'Erro ao Enviar Mensagem',
         message: err.message || 'Não foi possível enviar a mensagem. Verifique sua conexão.',
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSendVoice = async (audioFile: File) => {
+    setIsRecordingVoice(false);
+    setIsUploading(true);
+    try {
+      const uploaded = await api.upload.attachment(audioFile);
+      await onSendMessage(uploaded.url, replyingTo?.id);
+      onCancelReply?.();
+    } catch (err: any) {
+      console.error('Failed to send voice note:', err);
+      setLimitAlert({
+        title: 'Erro ao Enviar Mensagem de Voz',
+        message: err.message || 'Não foi possível enviar o áudio gravado.',
       });
     } finally {
       setIsUploading(false);
@@ -427,9 +474,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     const now = Date.now();
-    if (now - lastTypingTime.current > 2000) {
+    if (now - lastTypingTime.current > 3500) {
       lastTypingTime.current = now;
-      socket.send('TYPING_START', { channel_id: channel.id });
+      if (onTyping) {
+        onTyping();
+      } else if (channel?.id) {
+        socket.send('TYPING_START', { channel_id: channel.id });
+      }
     }
   };
 
@@ -740,58 +791,83 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         className="hidden"
       />
 
-      <div
-        className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2 border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
-          replyingTo ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl'
-        }`}
-      >
-        {/* Attachment Upload Button */}
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
-          className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
-          title="Anexar Arquivo ou Imagem (até 20 MB)"
-        >
-          <PlusCircle className="w-5 h-5" />
-        </button>
-
-        {/* Text Input */}
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder={replyingTo ? `Respondendo a @${replyingTo.author?.username}...` : `Conversar em #${channel.name}`}
-          rows={1}
-          disabled={isUploading}
-          className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1 max-h-40 leading-relaxed font-normal no-scrollbar"
+      {isRecordingVoice ? (
+        <VoiceRecorder
+          onSendVoice={handleSendVoice}
+          onCancel={() => setIsRecordingVoice(false)}
         />
-
-        {/* Emoji Button */}
-        <button
-          type="button"
-          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          className={`p-1.5 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer ${
-            showEmojiPicker ? 'text-brand-500' : 'text-gray-400 hover:text-white'
+      ) : (
+        <div
+          className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 min-h-[48px] md:min-h-[52px] border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
+            replyingTo ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl'
           }`}
-          title="Inserir Emoji"
         >
-          <Smile className="w-5 h-5" />
-        </button>
+          {/* Attachment Upload Button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
+            title="Anexar Arquivo ou Imagem (até 20 MB)"
+          >
+            <PlusCircle className="w-5 h-5" />
+          </button>
 
-        {/* Send Button */}
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={(!content.trim() && !selectedFile) || isUploading}
-          className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white p-2 rounded-xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0 cursor-pointer"
-          title="Enviar Mensagem"
-        >
-          {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
-        </button>
-      </div>
+          {/* Text Input */}
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={
+              replyingTo
+                ? (replyingTo.author?.display_name || replyingTo.author?.username
+                    ? `Respondendo a @${replyingTo.author.display_name || replyingTo.author.username}...`
+                    : 'Respondendo à mensagem...')
+                : (placeholder || (channel?.name ? `Conversar em #${channel.name}` : 'Conversar...'))
+            }
+            rows={1}
+            disabled={isUploading}
+            className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1.5 min-h-[26px] max-h-40 leading-relaxed font-normal no-scrollbar"
+          />
+
+          {/* Emoji Button */}
+          <button
+            type="button"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className={`p-1.5 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer ${
+              showEmojiPicker ? 'text-brand-500' : 'text-gray-400 hover:text-white'
+            }`}
+            title="Inserir Emoji"
+          >
+            <Smile className="w-5 h-5" />
+          </button>
+
+          {/* Voice Record Button or Send Button */}
+          {!content.trim() && !selectedFile ? (
+            <button
+              type="button"
+              onClick={() => setIsRecordingVoice(true)}
+              disabled={isUploading}
+              className="text-gray-400 hover:text-red-400 hover:bg-red-500/10 p-2 rounded-xl transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+              title="Gravar Mensagem de Voz"
+            >
+              <Mic className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={isUploading}
+              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white p-2 rounded-xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0 cursor-pointer"
+              title="Enviar Mensagem"
+            >
+              {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 2k Char / 20MB Limit Modal */}
       {limitAlert && (

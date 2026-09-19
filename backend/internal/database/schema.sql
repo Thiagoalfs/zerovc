@@ -342,6 +342,10 @@ CREATE INDEX IF NOT EXISTS idx_channels_category_id ON channels (category_id);
 CREATE INDEX IF NOT EXISTS idx_channel_role_access_chan ON channel_role_access (channel_id);
 CREATE INDEX IF NOT EXISTS idx_channel_role_access_role ON channel_role_access (role_id);
 CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions (channel_id);
+CREATE INDEX IF NOT EXISTS idx_voice_sessions_user ON voice_sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_guild_member_roles_lookup ON guild_member_roles (guild_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_guild_member_roles_role ON guild_member_roles (role_id);
+CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages (reply_to_id) WHERE reply_to_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_user_favorite_gifs_user ON user_favorite_gifs (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_guild_created ON audit_logs (guild_id, created_at DESC);
 -- 22. User 2FA Backup Codes
@@ -399,4 +403,33 @@ SELECT gm.guild_id, gm.user_id, gr.id
 FROM guild_members gm
 JOIN guild_roles gr ON gr.guild_id = gm.guild_id AND gr.name = '@everyone'
 ON CONFLICT (guild_id, user_id, role_id) DO NOTHING;
+
+-- 26. Full-Text Search TSVector and GIN Index
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS search_vector tsvector GENERATED ALWAYS AS (to_tsvector('portuguese', coalesce(content, ''))) STORED;
+CREATE INDEX IF NOT EXISTS idx_messages_search_vector ON messages USING gin(search_vector);
+
+-- 27. Rich Presence, Activity & Server Folders
+ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_activity JSONB DEFAULT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS show_activity_status BOOLEAN DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_detect_activity BOOLEAN DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS server_folders JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS guild_positions JSONB DEFAULT '[]'::jsonb;
+
+-- 28. User Active Sessions & Devices
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL,
+    ip_address VARCHAR(45) DEFAULT '',
+    user_agent TEXT DEFAULT '',
+    device_type VARCHAR(32) DEFAULT 'web',
+    os VARCHAR(32) DEFAULT '',
+    browser VARCHAR(32) DEFAULT '',
+    last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions (token_hash);
+
 

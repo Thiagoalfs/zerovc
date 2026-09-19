@@ -32,3 +32,43 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+:root {
+  --chat-font-size: 14px;
+}
+
+.chat-message-content {
+  font-size: var(--chat-font-size, 14px) !important;
+  line-height: 1.45 !important;
+}
+
+/* Accessibility Suite: Reduced Motion */
+html.reduced-motion *,
+html.reduced-motion *::before,
+html.reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Accessibility Suite: High Contrast */
+html.high-contrast {
+  --contrast-border: rgba(255, 255, 255, 0.45);
+}
+html.high-contrast .border-black\/20,
+html.high-contrast .border-white\/5,
+html.high-contrast .border-white\/10 {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+html.high-contrast .text-gray-400,
+html.high-contrast .text-gray-500 {
+  color: #e5e7eb !important;
+}
+html.high-contrast input,
+html.high-contrast textarea,
+html.high-contrast select,
+html.high-contrast button {
+  border-color: rgba(255, 255, 255, 0.35) !important;
+}
+

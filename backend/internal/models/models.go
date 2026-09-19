@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,24 +20,33 @@ type User struct {
 	AvatarURL        string    `json:"avatar_url"`
 	BannerURL        string    `json:"banner_url"`
 	Bio              string    `json:"bio"`
-	Status           string    `json:"status"` // online, idle, dnd, offline
-	CustomStatus     string    `json:"custom_status"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	Status             string          `json:"status"` // online, idle, dnd, offline
+	CustomStatus       string          `json:"custom_status"`
+	CustomActivity     json.RawMessage `json:"custom_activity,omitempty"`
+	ShowActivityStatus bool            `json:"show_activity_status"`
+	AutoDetectActivity bool            `json:"auto_detect_activity"`
+	ServerFolders      json.RawMessage `json:"server_folders,omitempty"`
+	GuildPositions     json.RawMessage `json:"guild_positions,omitempty"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
 type UserPublic struct {
-	ID               uuid.UUID `json:"id"`
-	Username         string    `json:"username"`
-	DisplayName      string    `json:"display_name"`
-	AvatarURL        string    `json:"avatar_url"`
-	BannerURL        string    `json:"banner_url"`
-	Bio              string    `json:"bio"`
-	Status           string    `json:"status"`
-	CustomStatus     string    `json:"custom_status"`
-	TwoFactorEnabled bool      `json:"two_factor_enabled"`
-	EmailVerified    bool      `json:"email_verified"`
-	Roles            []Role    `json:"roles,omitempty"`
+	ID                 uuid.UUID       `json:"id"`
+	Username           string          `json:"username"`
+	DisplayName        string          `json:"display_name"`
+	AvatarURL          string          `json:"avatar_url"`
+	BannerURL          string          `json:"banner_url"`
+	Bio                string          `json:"bio"`
+	Status             string          `json:"status"`
+	CustomStatus       string          `json:"custom_status"`
+	CustomActivity     json.RawMessage `json:"custom_activity,omitempty"`
+	ShowActivityStatus bool            `json:"show_activity_status"`
+	AutoDetectActivity bool            `json:"auto_detect_activity"`
+	TwoFactorEnabled   bool            `json:"two_factor_enabled"`
+	EmailVerified      bool            `json:"email_verified"`
+	CSRFToken          string          `json:"csrf_token,omitempty"`
+	Roles              []Role          `json:"roles,omitempty"`
 }
 
 type FavoriteGIF struct {
@@ -49,17 +59,24 @@ type FavoriteGIF struct {
 }
 
 func (u *User) ToPublic() UserPublic {
+	var act json.RawMessage
+	if u.ShowActivityStatus {
+		act = u.CustomActivity
+	}
 	return UserPublic{
-		ID:               u.ID,
-		Username:         u.Username,
-		DisplayName:      u.DisplayName,
-		AvatarURL:        u.AvatarURL,
-		BannerURL:        u.BannerURL,
-		Bio:              u.Bio,
-		Status:           u.Status,
-		CustomStatus:     u.CustomStatus,
-		TwoFactorEnabled: u.TwoFactorSecret != "",
-		EmailVerified:    u.EmailVerified,
+		ID:                 u.ID,
+		Username:           u.Username,
+		DisplayName:        u.DisplayName,
+		AvatarURL:          u.AvatarURL,
+		BannerURL:          u.BannerURL,
+		Bio:                u.Bio,
+		Status:             u.Status,
+		CustomStatus:       u.CustomStatus,
+		CustomActivity:     act,
+		ShowActivityStatus: u.ShowActivityStatus,
+		AutoDetectActivity: u.AutoDetectActivity,
+		TwoFactorEnabled:   u.TwoFactorSecret != "",
+		EmailVerified:      u.EmailVerified,
 	}
 }
 
@@ -326,11 +343,26 @@ const (
 	EventCallReject             WSEventType = "CALL_REJECT"
 	EventAuditLogCreate         WSEventType = "AUDIT_LOG_CREATE"
 	EventChannelAck             WSEventType = "CHANNEL_ACK"
+	EventSessionRevoked         WSEventType = "SESSION_REVOKED"
 )
 
 type WSEvent struct {
 	Type WSEventType `json:"type"`
 	Data any         `json:"data"`
+}
+
+type UserSession struct {
+	ID           uuid.UUID `json:"id"`
+	UserID       uuid.UUID `json:"user_id"`
+	TokenHash    string    `json:"-"`
+	IPAddress    string    `json:"ip_address"`
+	UserAgent    string    `json:"user_agent"`
+	DeviceType   string    `json:"device_type"`
+	OS           string    `json:"os"`
+	Browser      string    `json:"browser"`
+	IsCurrent    bool      `json:"is_current"`
+	LastActiveAt time.Time `json:"last_active_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type AuditLog struct {

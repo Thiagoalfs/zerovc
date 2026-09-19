@@ -21,6 +21,23 @@ export const Permissions = {
   CREATE_INSTANT_INVITE: 1 << 16, // 65536: Criar Convite Instantâneo
 } as const;
 
+export interface CustomActivity {
+  type: 'playing' | 'listening' | 'watching' | 'streaming' | 'competing' | 'custom';
+  name: string;
+  details?: string;
+  state?: string;
+  emoji?: string;
+  start_time?: number;
+}
+
+export interface ServerFolder {
+  id: string;
+  name: string;
+  color?: string;
+  guild_ids: string[];
+  is_collapsed?: boolean;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -32,11 +49,30 @@ export interface User {
   bio?: string;
   status: 'online' | 'idle' | 'dnd' | 'offline';
   custom_status?: string;
+  custom_activity?: CustomActivity | null;
+  show_activity_status?: boolean;
+  auto_detect_activity?: boolean;
+  server_folders?: ServerFolder[];
+  guild_positions?: string[];
   roles?: Role[];
   two_factor_enabled?: boolean;
   email_verified?: boolean;
+  csrf_token?: string;
   muted_until?: string;
   created_at?: string;
+}
+
+export interface UserSession {
+  id: string;
+  user_id: string;
+  ip_address: string;
+  user_agent: string;
+  device_type: 'desktop' | 'mobile' | 'web';
+  os: string;
+  browser: string;
+  is_current: boolean;
+  last_active_at: string;
+  created_at: string;
 }
 
 export interface FavoriteGIF {
@@ -125,38 +161,8 @@ export interface MessageReplyInfo {
   content: string;
 }
 
-export interface Message {
+export interface BaseMessage {
   id: string;
-  channel_id: string;
-  author_id: string;
-  author: User;
-  content: string;
-  attachments?: Attachment[];
-  reply_to_id?: string;
-  reply_to?: MessageReplyInfo;
-  reactions?: MessageReaction[];
-  is_pinned: boolean;
-  is_edited?: boolean;
-  edited_at?: string;
-  created_at: string;
-  updated_at: string;
-  status?: 'sending' | 'sent' | 'failed';
-  tempId?: string;
-  error?: string;
-}
-
-export interface DMRoom {
-  id: string;
-  user1_id: string;
-  user2_id: string;
-  recipient: User;
-  last_message?: DMMessage;
-  created_at: string;
-}
-
-export interface DMMessage {
-  id: string;
-  dm_room_id: string;
   author_id: string;
   author: User;
   content: string;
@@ -172,6 +178,29 @@ export interface DMMessage {
   tempId?: string;
   error?: string;
 }
+
+export interface Message extends BaseMessage {
+  channel_id: string;
+  is_pinned: boolean;
+  updated_at: string;
+}
+
+export type ChannelMessage = Message;
+
+export interface DMRoom {
+  id: string;
+  user1_id: string;
+  user2_id: string;
+  recipient: User;
+  last_message?: DMMessage;
+  created_at: string;
+}
+
+export interface DMMessage extends BaseMessage {
+  dm_room_id: string;
+}
+
+export type DirectMessage = DMMessage;
 
 export interface DMGroup {
   id: string;
@@ -183,23 +212,20 @@ export interface DMGroup {
   created_at: string;
 }
 
-export interface DMGroupMessage {
-  id: string;
+export interface DMGroupMessage extends BaseMessage {
   group_id: string;
-  author_id: string;
-  author: User;
-  content: string;
-  attachments?: Attachment[];
-  reply_to_id?: string;
-  reply_to?: MessageReplyInfo;
-  reactions?: MessageReaction[];
-  is_pinned?: boolean;
-  is_edited?: boolean;
-  edited_at?: string;
-  created_at: string;
-  status?: 'sending' | 'sent' | 'failed';
-  tempId?: string;
-  error?: string;
+}
+
+export type GroupMessage = DMGroupMessage;
+
+export type UniversalMessage = Message | DMMessage | DMGroupMessage;
+
+export interface WSEvent<T = unknown> {
+  type: string;
+  data: T;
+  guild_id?: string;
+  channel_id?: string;
+  user_id?: string;
 }
 
 export interface VoiceSession {
@@ -302,6 +328,8 @@ declare global {
       setHardwareAcceleration?: (enabled: boolean) => void;
       getHardwareAcceleration?: () => Promise<boolean>;
       relaunchApp?: () => void;
+      onActivityDetected?: (callback: (activity: any) => void) => () => void;
+      getCurrentActivity?: () => Promise<any>;
     };
   }
 }

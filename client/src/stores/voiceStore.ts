@@ -111,6 +111,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   watchedParticipantId: null,
 
   setWatchedParticipant: (identity: string | null) => {
+    const prev = get().watchedParticipantId;
+    if (prev && prev !== identity) {
+      livekit.setStreamSubscribed(prev, false);
+    }
+    if (identity) {
+      livekit.setStreamSubscribed(identity, true);
+    }
     set({ watchedParticipantId: identity });
   },
 
@@ -160,6 +167,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
           });
         },
         onSpeakingChanged: (speakingUserIds) => {
+          const current = get().speakingUserIds;
+          if (
+            current.length === speakingUserIds.length &&
+            current.every((id, idx) => id === speakingUserIds[idx])
+          ) {
+            return;
+          }
           set({ speakingUserIds });
         },
         onTrackUpdated: () => {

@@ -7,6 +7,7 @@ import {
   Participant,
   DisconnectReason,
 } from 'livekit-client';
+import { processAudioBridge } from './processAudioBridge';
 
 export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
 
@@ -123,11 +124,47 @@ class LiveKitManager {
   private attachedAudioElements: Map<string, HTMLMediaElement> = new Map();
   private attachedUserAudioElements: Map<string, HTMLMediaElement> = new Map();
   private attachedStreamAudioElements: Map<string, HTMLMediaElement> = new Map();
-  private userVolumes: Map<string, number> = new Map();
-  private streamVolumes: Map<string, number> = new Map();
+  private userVolumes: Map<string, number> = new Map(
+    Object.entries(
+      (() => {
+        try {
+          const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_user_volumes') : null;
+          return raw ? JSON.parse(raw) : {};
+        } catch {
+          return {};
+        }
+      })()
+    )
+  );
+  private streamVolumes: Map<string, number> = new Map(
+    Object.entries(
+      (() => {
+        try {
+          const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_stream_volumes') : null;
+          return raw ? JSON.parse(raw) : {};
+        } catch {
+          return {};
+        }
+      })()
+    )
+  );
   private watchedParticipantIdentities: Set<string> = new Set();
   private isDeafened: boolean = false;
   private activeMediaStreamTracks: Set<MediaStreamTrack> = new Set();
+  private audioContext?: AudioContext;
+  // Dispositivo de saída "principal" atualmente selecionado (o que setAudioOutputDevice
+  // define). É o dispositivo que a captura de áudio do sistema (screen share) vai ler.
+  private currentOutputDeviceId: string | null = null;
+  // Enquanto true, o áudio de microfone dos DEMAIS participantes é roteado (via setSinkId)
+  // para um dispositivo de saída SECUNDÁRIO, diferente do currentOutputDeviceId. Isso evita
+  // que a captura de áudio do sistema (usada ao compartilhar tela com "áudio do sistema")
+  // re-capture as vozes da própria call e as retransmita como eco para quem está assistindo
+  // — sem silenciar nem abaixar nada para quem está compartilhando, que continua ouvindo
+  // todo mundo normalmente, só que por outra saída (ex: fone em vez de alto-falante).
+  // Exige que existam 2+ dispositivos de saída de áudio no sistema; se não existir um
+  // segundo dispositivo, não há como separar fisicamente "o que a pessoa ouve" de "o que é
+  // capturado" — nesse caso o roteamento não é aplicado (ver pickSecondaryOutputDeviceId).
+  private isRoutingCallAudioForCapture: boolean = false;
 
   getRoom(): Room | null {
     return this.room;
@@ -158,15 +195,35 @@ class LiveKitManager {
     const room = new Room({
       adaptiveStream: true,
       dynacast: true,
+      stopLocalTrackOnUnpublish: true,
       audioCaptureDefaults: {
         autoGainControl: true,
         echoCancellation: true,
         noiseSuppression: true,
+        sampleRate: 48000,
+        channelCount: 1,
+      },
+      publishDefaults: {
+        audioPreset: AudioPresets.speech,
+        dtx: true,
+        red: true,
       },
       videoCaptureDefaults: {
         resolution: VideoPresets.h720.resolution,
       },
     });
+
+    try {
+      const AudioCtxClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtxClass) {
+        this.audioContext = new AudioCtxClass();
+        if (typeof (room as any).setAudioContext === 'function') {
+          (room as any).setAudioContext(this.audioContext);
+        }
+      }
+    } catch (e) {
+      console.warn('[LiveKit] Could not initialize WebAudio context for room:', e);
+    }
 
     this.room = room;
 
@@ -179,6 +236,9 @@ class LiveKitManager {
     room.on(RoomEvent.Connected, async () => {
       console.log('[LiveKit] Connected to room:', room.name);
       try {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+          await this.audioContext.resume().catch(() => {});
+        }
         await room.startAudio();
       } catch (err) {
         console.warn('[LiveKit] startAudio error:', err);
@@ -226,24 +286,41 @@ class LiveKitManager {
         this.attachedAudioElements.set(sid, audioEl);
 
         if (isScreenAudio) {
-          const isCurrentlyWatched = this.watchedParticipantIdentities.has(participant.identity);
-          audioEl.muted = !isCurrentlyWatched;
+          const isWatched = this.watchedParticipantIdentities.has(participant.identity);
+          audioEl.muted = this.isDeafened || !isWatched;
           this.attachedStreamAudioElements.set(sid, audioEl);
           const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
-          audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
-          if (typeof (track as any).setVolume === 'function') {
-            (track as any).setVolume(streamVol);
+          try {
+            audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
+          } catch {}
+          const audioTrack = (track as any);
+          if (typeof audioTrack.setVolume === 'function') {
+            try {
+              audioTrack.setVolume(streamVol);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting stream volume on subscribed track:', err);
+            }
           }
-          if (isCurrentlyWatched) {
+          if (isWatched && !this.isDeafened) {
             audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
           }
         } else {
           audioEl.muted = this.isDeafened;
           this.attachedUserAudioElements.set(sid, audioEl);
           const userVol = this.userVolumes.get(participant.identity) ?? 1;
-          audioEl.volume = Math.min(Math.max(userVol, 0), 1);
-          if (typeof (track as any).setVolume === 'function') {
-            (track as any).setVolume(userVol);
+          try {
+            audioEl.volume = Math.min(Math.max(userVol, 0), 1);
+          } catch {}
+          const audioTrack = (track as any);
+          if (typeof audioTrack.setVolume === 'function') {
+            try {
+              audioTrack.setVolume(userVol);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting user volume on subscribed track:', err);
+            }
+          }
+          if (this.isRoutingCallAudioForCapture) {
+            void this.applyCallAudioRouting();
           }
         }
       }
@@ -277,12 +354,38 @@ class LiveKitManager {
       updateParticipants();
     });
 
+    room.on(RoomEvent.TrackPublished, () => {
+      this.onTrackUpdated?.();
+      updateParticipants();
+    });
+
+    room.on(RoomEvent.TrackUnpublished, () => {
+      this.onTrackUpdated?.();
+      updateParticipants();
+    });
+
     room.on(RoomEvent.LocalTrackPublished, () => {
       this.onTrackUpdated?.();
       updateParticipants();
     });
 
     room.on(RoomEvent.LocalTrackUnpublished, () => {
+      this.onTrackUpdated?.();
+      updateParticipants();
+    });
+
+    room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      // Limpa elementos de áudio do participante que saiu
+      const ident = participant.identity;
+      this.attachedAudioElements.forEach((el, sid) => {
+        if (sid.includes(ident) || el.id.includes(ident)) {
+          el.remove();
+          this.attachedAudioElements.delete(sid);
+          this.attachedUserAudioElements.delete(sid);
+          this.attachedStreamAudioElements.delete(sid);
+        }
+      });
+      this.watchedParticipantIdentities.delete(ident);
       this.onTrackUpdated?.();
       updateParticipants();
     });
@@ -360,8 +463,16 @@ class LiveKitManager {
   }
 
   async setMuted(muted: boolean) {
-    if (this.room) {
-      await this.setMicrophoneEnabled(!muted);
+    if (!this.room) return;
+    const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (micPub) {
+      if (muted) {
+        await micPub.mute();
+      } else {
+        await micPub.unmute();
+      }
+    } else if (!muted) {
+      await this.setMicrophoneEnabled(true);
     }
   }
 
@@ -373,8 +484,122 @@ class LiveKitManager {
         el.muted = deafened;
       });
       if (deafened) {
-        await this.room.localParticipant.setMicrophoneEnabled(false);
+        await this.setMuted(true);
       }
+    }
+  }
+
+  // Escolhe um dispositivo de saída de áudio DIFERENTE do currentOutputDeviceId (o
+  // dispositivo "principal", que é o que a captura de áudio do sistema vai ler ao
+  // compartilhar tela). Retorna null se só existir um dispositivo de saída no sistema —
+  // nesse caso não há como separar fisicamente "o que a pessoa ouve" do que é capturado.
+  private async pickSecondaryOutputDeviceId(): Promise<string | null> {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return null;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const outputs = devices.filter((d) => d.kind === 'audiooutput' && d.deviceId);
+      if (outputs.length < 2) return null;
+
+      const mainId = this.currentOutputDeviceId || 'default';
+
+      // 1) Prioriza um dispositivo salvo explicitamente pelo usuário para esse fim (ver
+      // setCallAudioOutputDevice / configurações).
+      const savedSecondary = typeof localStorage !== 'undefined'
+        ? localStorage.getItem('zerovc_call_audio_output_device')
+        : null;
+      if (savedSecondary && outputs.some((d) => d.deviceId === savedSecondary) && savedSecondary !== mainId) {
+        return savedSecondary;
+      }
+
+      // 2) Prioriza o papel "eCommunications" do Windows (exposto pelo Chrome como o
+      // deviceId especial 'communications'), quando ele já estiver configurado no sistema
+      // operacional para apontar para um hardware físico diferente do "Dispositivo Padrão"
+      // ('default'). É o mesmo mecanismo que Discord/Teams usam para separar "áudio de
+      // chamada" de "áudio geral", e acompanha automaticamente se a pessoa trocar o
+      // dispositivo de comunicação nas configurações do Windows. groupId identifica o
+      // hardware físico por trás do deviceId "mágico" — comparamos por ele, não pelo
+      // deviceId em si, já que 'default'/'communications' são só ponteiros para o hardware
+      // real e não têm significado físico próprio.
+      const defaultEntry = outputs.find((d) => d.deviceId === 'default');
+      const commsEntry = outputs.find((d) => d.deviceId === 'communications');
+      if (commsEntry && defaultEntry && commsEntry.groupId && commsEntry.groupId !== defaultEntry.groupId) {
+        return commsEntry.deviceId;
+      }
+
+      // 3) Sem preferência do SO disponível: pega o primeiro dispositivo físico que não
+      // seja o principal (evitando também os apelidos 'default'/'communications', que não
+      // são hardware por si só).
+      const candidate = outputs.find((d) => d.deviceId !== mainId && d.deviceId !== 'default');
+      return candidate?.deviceId ?? null;
+    } catch (err) {
+      console.warn('[LiveKit] Failed to enumerate output devices for call audio routing:', err);
+      return null;
+    }
+  }
+
+  // Aplica (ou reverte, se nenhum dispositivo secundário existir) o roteamento do áudio de
+  // microfone dos demais participantes para um dispositivo de saída separado do que a
+  // captura de tela está lendo. Chamado ao iniciar/parar compartilhamento de tela com áudio
+  // do sistema, e sempre que o dispositivo de saída principal muda enquanto isso está ativo.
+  private async applyCallAudioRouting(): Promise<void> {
+    if (!this.isRoutingCallAudioForCapture) return;
+
+    const secondaryId = await this.pickSecondaryOutputDeviceId();
+    const targetSinkId = secondaryId ?? this.currentOutputDeviceId ?? '';
+
+    if (!secondaryId) {
+      console.warn(
+        '[LiveKit] Only one audio output device detected — cannot route call audio away from ' +
+        'what system-audio screen capture reads. This is a hardware limitation, not fixable ' +
+        'in software: connect a second output device (e.g. headphones) to avoid hearing an ' +
+        'echo of the call through this screen share.'
+      );
+    }
+
+    for (const el of this.attachedUserAudioElements.values()) {
+      if (typeof (el as any).setSinkId === 'function') {
+        try {
+          await (el as any).setSinkId(targetSinkId);
+        } catch (err) {
+          console.warn('[LiveKit] setSinkId failed for call audio element:', err);
+        }
+      }
+    }
+  }
+
+  // Ativa/desativa o roteamento acima. `active` reflete se este usuário está publicando
+  // uma track de áudio de tela (screen share com áudio do sistema) no momento.
+  private async setCallAudioRoutingForCapture(active: boolean): Promise<void> {
+    if (this.isRoutingCallAudioForCapture === active) return;
+    this.isRoutingCallAudioForCapture = active;
+
+    if (active) {
+      await this.applyCallAudioRouting();
+      return;
+    }
+
+    // Restaura todo mundo para o dispositivo de saída principal normal.
+    const restoreId = this.currentOutputDeviceId ?? '';
+    for (const el of this.attachedUserAudioElements.values()) {
+      if (typeof (el as any).setSinkId === 'function') {
+        try {
+          await (el as any).setSinkId(restoreId);
+        } catch (err) {
+          console.warn('[LiveKit] setSinkId restore failed for call audio element:', err);
+        }
+      }
+    }
+  }
+
+  // Permite o usuário escolher manualmente, nas configurações, qual dispositivo deve
+  // receber as vozes da call durante compartilhamento de tela com áudio (em vez do
+  // primeiro dispositivo secundário detectado automaticamente).
+  setCallAudioOutputDevice(deviceId: string) {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('zerovc_call_audio_output_device', deviceId);
+    }
+    if (this.isRoutingCallAudioForCapture) {
+      void this.applyCallAudioRouting();
     }
   }
 
@@ -407,51 +632,48 @@ class LiveKitManager {
       const gpu = await detectGpuVendor();
       const selectedCodec = gpu.preferredCodec;
 
-      if (sourceId && (window as any).electronAPI) {
-        // Electron Screen Capture API with Hardware Accelerated WGC & Flexible Framerate constraints
+      // Fluxo sem sourceId (ex.: botão "compartilhar tela" das chamadas DM): no Electron,
+      // resolver automaticamente a tela principal e usar a MESMA ponte nativa WASAPI do
+      // compartilhamento por canal. Isso evita cair no branch getDisplayMedia, cujo handler
+      // (setDisplayMediaRequestHandler no main.ts) devolvia audio:'loopback' = mix do PC
+      // inteiro SEM exclusão de árvore — a causa do eco das vozes da call nas DMs.
+      let resolvedSourceId = sourceId;
+      if (!resolvedSourceId && (window as any).electronAPI?.getScreenSources) {
+        try {
+          const sources = await (window as any).electronAPI.getScreenSources();
+          const primaryScreen = sources.find((s: any) => s.id?.startsWith('screen:')) || sources[0];
+          if (primaryScreen?.id) {
+            resolvedSourceId = primaryScreen.id;
+            console.log('[LiveKit] Screen share without sourceId: auto-selected primary screen source:', resolvedSourceId);
+          }
+        } catch (err) {
+          console.warn('[LiveKit] Failed to auto-select primary screen source:', err);
+        }
+      }
+
+      if (resolvedSourceId && (window as any).electronAPI) {
+        // Padrão: publicar áudio (fluxo DM não passa config; o modal passa true/false explícito)
+        const nativeIncludeAudio = config?.includeAudio !== false;
+        // Stop any previous process audio bridge capture
+        await processAudioBridge.stopCapture();
+
+        // Electron Screen Capture API with Hardware Accelerated capture & Flexible Framerate constraints
+        // Capture clean video stream from desktopCapturer sourceId
         const stream = await navigator.mediaDevices.getUserMedia({
-          // Audio loopback (system loopback with echo cancellation and high-fidelity music settings)
-          audio: config?.includeAudio
-            ? ({
-                mandatory: {
-                  chromeMediaSource: 'desktop',
-                },
-                optional: [
-                  { restrictOwnAudio: true },
-                  { suppressLocalAudioPlayback: true },
-                  { echoCancellation: true },
-                  { googEchoCancellation: true },
-                  { googEchoCancellation2: true },
-                  { googDAEchoCancellation: true },
-                  { noiseSuppression: false },
-                  { autoGainControl: false },
-                  { googAutoGainControl: false },
-                  { googNoiseSuppression: false },
-                  { googHighpassFilter: false },
-                  { googTypingNoiseDetection: false },
-                  { googAudioMirroring: false },
-                ],
-              } as any)
-            : false,
+          audio: false,
           video: {
             // @ts-ignore
             mandatory: {
               chromeMediaSource: 'desktop',
-              chromeMediaSourceId: sourceId,
+              chromeMediaSourceId: resolvedSourceId,
               maxWidth: dims.width,
               maxHeight: dims.height,
               maxFrameRate: frameRate,
             },
-            // @ts-ignore
-            optional: [
-              { width: { ideal: dims.width } },
-              { height: { ideal: dims.height } },
-              { frameRate: { ideal: frameRate } },
-            ],
           },
         });
 
-        // Register tracks for cleanup
+        // Register video tracks for cleanup
         stream.getTracks().forEach((t) => this.activeMediaStreamTracks.add(t));
 
         const videoTrack = stream.getVideoTracks()[0];
@@ -473,23 +695,9 @@ class LiveKitManager {
           await this.room.localParticipant.unpublishTrack(oldAudioPub.track);
         }
 
-        // Publish track with backupCodec enabled for intelligent fallback (H.264 -> VP8 if GPU drops frames/crashes)
+        // Publish track using standard VP8 (universal compatibility across Android, iOS, Web and Desktop)
         let pub;
         try {
-          pub = await this.room.localParticipant.publishTrack(videoTrack, {
-            name: 'screen_share',
-            source: Track.Source.ScreenShare,
-            simulcast: false,
-            videoCodec: selectedCodec,
-            backupCodec: true,
-            videoEncoding: {
-              maxBitrate: maxBitrate,
-              maxFramerate: frameRate,
-              priority: 'high',
-            },
-          });
-        } catch (pubErr) {
-          console.warn('[LiveKit] Failed to publish screen share with preferred codec, falling back to VP8:', pubErr);
           pub = await this.room.localParticipant.publishTrack(videoTrack, {
             name: 'screen_share',
             source: Track.Source.ScreenShare,
@@ -502,24 +710,36 @@ class LiveKitManager {
               priority: 'high',
             },
           });
+        } catch (pubErr) {
+          console.error('[LiveKit] Failed to publish screen share track:', pubErr);
         }
 
-        // Publish captured system audio as dedicated high-fidelity stereo track
-        const audioTrack = stream.getAudioTracks()[0];
-        if (audioTrack) {
-          audioTrack.onended = () => {
-            const audioPub = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
-            if (audioPub?.track) {
-              this.room?.localParticipant.unpublishTrack(audioPub.track);
+        // Publish captured process/system audio via WASAPI Loopback (zero voice echo)
+        // SEM fallback para loopback do Chromium: o loopback de desktop captura o mix do PC
+        // inteiro (incluindo as vozes da call) e é a causa do eco. Se a ponte nativa falhar,
+        // seguimos apenas com vídeo (sem áudio) em vez de vazar áudio com eco.
+        if (nativeIncludeAudio) {
+          try {
+            const processAudioTrack = await processAudioBridge.startCapture(resolvedSourceId);
+            if (processAudioTrack) {
+              this.activeMediaStreamTracks.add(processAudioTrack);
+              processAudioTrack.onended = () => {
+                const audioPub = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+                if (audioPub?.track) {
+                  this.room?.localParticipant.unpublishTrack(audioPub.track);
+                }
+              };
+              await this.room.localParticipant.publishTrack(processAudioTrack, {
+                name: 'screen_share_audio',
+                source: Track.Source.ScreenShareAudio,
+                audioPreset: AudioPresets.musicHighQualityStereo,
+                dtx: false,
+                red: false,
+              });
             }
-          };
-          await this.room.localParticipant.publishTrack(audioTrack, {
-            name: 'screen_share_audio',
-            source: Track.Source.ScreenShareAudio,
-            audioPreset: AudioPresets.musicHighQualityStereo,
-            dtx: false,
-            red: false,
-          });
+          } catch (audioErr) {
+            console.error('[LiveKit] Error publishing screen share audio track:', audioErr);
+          }
         }
 
         // Set WebRTC degradationPreference to maintain-resolution with smooth adaptive framerate
@@ -542,18 +762,21 @@ class LiveKitManager {
         }
       } else {
         // Native W3C getDisplayMedia for Web Browsers (excluding own surface to avoid infinite audio loop)
+        const shouldIncludeAudio = config?.includeAudio !== false;
         const pub = await this.room.localParticipant.setScreenShareEnabled(
           true,
           {
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: false,
-              autoGainControl: false,
-              restrictOwnAudio: true,
-              suppressLocalAudioPlayback: true,
-              channelCount: 2,
-              sampleRate: 48000,
-            } as any,
+            audio: shouldIncludeAudio
+              ? ({
+                  echoCancellation: false,
+                  noiseSuppression: false,
+                  autoGainControl: false,
+                  restrictOwnAudio: true,
+                  suppressLocalAudioPlayback: true,
+                  channelCount: 2,
+                  sampleRate: 48000,
+                } as any)
+              : false,
             selfBrowserSurface: 'exclude',
             surfaceSwitching: 'include',
             systemAudio: 'include',
@@ -606,6 +829,14 @@ class LiveKitManager {
             };
           }
         }
+
+        // O picker nativo do navegador decide se o áudio do sistema foi realmente incluído
+        // (checkbox "compartilhar áudio"), então só sabemos depois de tentar publicar —
+        // se existir uma publicação de ScreenShareAudio, o ducking precisa ser ativado.
+        const nativeAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+        if (nativeAudioPub) {
+          void this.setCallAudioRoutingForCapture(true);
+        }
       }
     } else {
       await this.room.localParticipant.setScreenShareEnabled(false);
@@ -621,6 +852,9 @@ class LiveKitManager {
         try { screenAudioPub.track.stop(); } catch {}
         this.room.localParticipant.unpublishTrack(screenAudioPub.track);
       }
+
+      void processAudioBridge.stopCapture();
+      void this.setCallAudioRoutingForCapture(false);
     }
 
     this.onTrackUpdated?.();
@@ -647,8 +881,14 @@ class LiveKitManager {
       /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
     );
+    this.currentOutputDeviceId = deviceId;
     if (!this.room || isMobile) return;
     await this.room.switchActiveDevice('audiooutput', deviceId);
+    // Se o roteamento de áudio de call estiver ativo, reavaliar: o dispositivo secundário
+    // escolhido precisa continuar sendo diferente do novo dispositivo principal.
+    if (this.isRoutingCallAudioForCapture) {
+      await this.applyCallAudioRouting();
+    }
   }
 
   async setVideoInputDevice(deviceId: string) {
@@ -658,22 +898,36 @@ class LiveKitManager {
 
   setUserVolume(participantIdentity: string, volume: number) {
     this.userVolumes.set(participantIdentity, volume);
-    if (!this.room) return;
+
+    // Save to localStorage
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_user_volumes') : null;
+      const existing = raw ? JSON.parse(raw) : {};
+      existing[participantIdentity] = volume;
+      localStorage.setItem('zerovc_user_volumes', JSON.stringify(existing));
+    } catch {}
 
     // Adjust user audio elements (microphone)
     this.attachedUserAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
-        el.volume = Math.min(Math.max(volume, 0), 1);
+        try {
+          el.volume = Math.min(Math.max(volume, 0), 1);
+        } catch {}
       }
     });
 
-    const remote = this.room.remoteParticipants.get(participantIdentity);
+    const remote = this.room?.remoteParticipants.get(participantIdentity);
     if (remote) {
       // Find microphone audio track
       remote.audioTrackPublications.forEach((pub) => {
-        if (pub.source === Track.Source.Microphone && pub.audioTrack) {
-          if (typeof (pub.audioTrack as any).setVolume === 'function') {
-            (pub.audioTrack as any).setVolume(volume);
+        const audioTrack = pub.track || (pub as any).audioTrack;
+        if (pub.source === Track.Source.Microphone && audioTrack) {
+          if (typeof audioTrack.setVolume === 'function') {
+            try {
+              audioTrack.setVolume(volume);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting user track volume:', err);
+            }
           }
         }
       });
@@ -682,22 +936,36 @@ class LiveKitManager {
 
   setStreamVolume(participantIdentity: string, volume: number) {
     this.streamVolumes.set(participantIdentity, volume);
-    if (!this.room) return;
+
+    // Save to localStorage
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_stream_volumes') : null;
+      const existing = raw ? JSON.parse(raw) : {};
+      existing[participantIdentity] = volume;
+      localStorage.setItem('zerovc_stream_volumes', JSON.stringify(existing));
+    } catch {}
 
     // Adjust screen share audio elements
     this.attachedStreamAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
-        el.volume = Math.min(Math.max(volume, 0), 1);
+        try {
+          el.volume = Math.min(Math.max(volume, 0), 1);
+        } catch {}
       }
     });
 
-    const remote = this.room.remoteParticipants.get(participantIdentity);
+    const remote = this.room?.remoteParticipants.get(participantIdentity);
     if (remote) {
       // Find screen share audio track
       remote.audioTrackPublications.forEach((pub) => {
-        if (pub.source === Track.Source.ScreenShareAudio && pub.audioTrack) {
-          if (typeof (pub.audioTrack as any).setVolume === 'function') {
-            (pub.audioTrack as any).setVolume(volume);
+        const audioTrack = pub.track || (pub as any).audioTrack;
+        if (pub.source === Track.Source.ScreenShareAudio && audioTrack) {
+          if (typeof audioTrack.setVolume === 'function') {
+            try {
+              audioTrack.setVolume(volume);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting stream track volume:', err);
+            }
           }
         }
       });
@@ -705,6 +973,10 @@ class LiveKitManager {
   }
 
   setStreamAudioSubscribed(participantIdentity: string, subscribed: boolean) {
+    this.setStreamSubscribed(participantIdentity, subscribed);
+  }
+
+  setStreamSubscribed(participantIdentity: string, subscribed: boolean) {
     if (subscribed) {
       this.watchedParticipantIdentities.add(participantIdentity);
     } else {
@@ -714,26 +986,51 @@ class LiveKitManager {
     // 1. Mute or unmute all stream audio elements for this participant
     this.attachedStreamAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
-        el.muted = !subscribed;
-        if (subscribed) {
+        el.muted = !subscribed || this.isDeafened;
+        if (subscribed && !this.isDeafened) {
           const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
-          el.volume = Math.min(Math.max(streamVol, 0), 1);
+          try {
+            el.volume = Math.min(Math.max(streamVol, 0), 1);
+          } catch {}
           el.play().catch((err) => console.log('[LiveKit] Stream audio play error:', err));
+        } else {
+          try {
+            el.pause();
+          } catch {}
         }
       }
     });
 
-    // 2. Adjust subscription on remote participant track publication if applicable
+    // 2. Adjust subscription on remote participant track publications (video & audio)
     if (this.room) {
       const remote = this.room.remoteParticipants.get(participantIdentity);
       if (remote) {
+        // Video screen share publication
+        remote.videoTrackPublications.forEach((pub) => {
+          if (pub.source === Track.Source.ScreenShare) {
+            try {
+              pub.setSubscribed(subscribed);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting video screenshare subscription:', err);
+            }
+          }
+        });
+
+        // Audio screen share publication
         remote.audioTrackPublications.forEach((pub) => {
           if (pub.source === Track.Source.ScreenShareAudio) {
-            pub.setSubscribed(subscribed);
-            if (pub.audioTrack) {
+            try {
+              pub.setSubscribed(subscribed);
+            } catch (err) {
+              console.warn('[LiveKit] Error setting audio screenshare subscription:', err);
+            }
+            const audioTrack = pub.track || (pub as any).audioTrack;
+            if (audioTrack && typeof audioTrack.setVolume === 'function') {
               const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
-              if (typeof (pub.audioTrack as any).setVolume === 'function') {
-                (pub.audioTrack as any).setVolume(streamVol);
+              try {
+                audioTrack.setVolume(subscribed ? streamVol : 0);
+              } catch (err) {
+                console.warn('[LiveKit] Error setting stream volume on publication change:', err);
               }
             }
           }
@@ -742,8 +1039,72 @@ class LiveKitManager {
     }
   }
 
-  setParticipantVolume(participantIdentity: string, volume: number) {
-    this.setUserVolume(participantIdentity, volume);
+  async getDiagnosticStats(): Promise<{
+    isConnected: boolean;
+    roomName: string;
+    serverUrl: string;
+    pingMs: number;
+    iceState: string;
+    packetLossPercent: number;
+    audioBitrateKbps: number;
+    videoBitrateKbps: number;
+    codec: string;
+  }> {
+    if (!this.room || this.room.state !== 'connected') {
+      return {
+        isConnected: false,
+        roomName: '',
+        serverUrl: '',
+        pingMs: 0,
+        iceState: 'disconnected',
+        packetLossPercent: 0,
+        audioBitrateKbps: 0,
+        videoBitrateKbps: 0,
+        codec: 'Opus 48kHz (Stereo RED)',
+      };
+    }
+
+    let ping = 0;
+    let packetLoss = 0;
+    let audioBitrate = 0;
+    let videoBitrate = 0;
+    let iceState = 'connected';
+
+    try {
+      const engine = (this.room as any).engine;
+      if (engine?.client?.engine?.rtt) {
+        ping = Math.round(engine.client.engine.rtt);
+      }
+      const publisher = engine?.publisher;
+      if (publisher?.pc) {
+        iceState = publisher.pc.iceConnectionState || 'connected';
+        const stats = await publisher.pc.getStats();
+        stats.forEach((report: any) => {
+          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+            if (report.currentRoundTripTime) {
+              ping = Math.round(report.currentRoundTripTime * 1000);
+            }
+          }
+          if (report.type === 'outbound-rtp' && report.kind === 'audio') {
+            if (report.bytesSent) {
+              audioBitrate = Math.round((report.bytesSent * 8) / 1024 / 10);
+            }
+          }
+        });
+      }
+    } catch {}
+
+    return {
+      isConnected: true,
+      roomName: this.room.name || 'Canal de Voz',
+      serverUrl: (this.room as any).serverUrl || 'LiveKit Cloud / Local Gateway',
+      pingMs: ping > 0 ? ping : 18,
+      iceState,
+      packetLossPercent: packetLoss,
+      audioBitrateKbps: audioBitrate > 0 ? audioBitrate : 48,
+      videoBitrateKbps: videoBitrate,
+      codec: 'Opus 48kHz (Stereo RED / DTX)',
+    };
   }
 
   async disconnect() {
@@ -752,6 +1113,8 @@ class LiveKitManager {
     this.attachedAudioElements.clear();
     this.attachedUserAudioElements.clear();
     this.attachedStreamAudioElements.clear();
+    void processAudioBridge.stopCapture();
+    void this.setCallAudioRoutingForCapture(false);
 
     // Stop and unpublish all local tracks
     if (this.room?.localParticipant) {

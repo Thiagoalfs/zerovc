@@ -39,6 +39,10 @@ export interface ElectronAPI {
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
   onRepoUpdateAvailable: (callback: (info: any) => void) => () => void;
+  startProcessAudioCapture: (options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => Promise<{ success: boolean; error?: string }>;
+  stopProcessAudioCapture: () => Promise<{ success: boolean; error?: string }>;
+  onProcessAudioChunk: (callback: (chunk: Uint8Array) => void) => () => void;
+  onProcessAudioFallback: (callback: (info: { reason: string }) => void) => () => void;
   setMinimizeToTray: (enabled: boolean) => void;
   getMinimizeToTray: () => Promise<boolean>;
   setAutoStart: (enabled: boolean) => void;
@@ -51,11 +55,25 @@ export interface ElectronAPI {
   setHardwareAcceleration: (enabled: boolean) => void;
   getHardwareAcceleration: () => Promise<boolean>;
   relaunchApp: () => void;
+  onActivityDetected: (callback: (activity: any) => void) => () => void;
+  getCurrentActivity: () => Promise<any>;
 }
 
 const electronAPI: ElectronAPI = {
   isElectron: true,
   platform: process.platform,
+  startProcessAudioCapture: (options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => ipcRenderer.invoke('start-process-audio-capture', options),
+  stopProcessAudioCapture: () => ipcRenderer.invoke('stop-process-audio-capture'),
+  onProcessAudioChunk: (callback) => {
+    const handler = (_: any, chunk: Uint8Array) => callback(chunk);
+    ipcRenderer.on('process-audio-chunk', handler);
+    return () => ipcRenderer.removeListener('process-audio-chunk', handler);
+  },
+  onProcessAudioFallback: (callback) => {
+    const handler = (_: any, info: { reason: string }) => callback(info);
+    ipcRenderer.on('process-audio-fallback', handler);
+    return () => ipcRenderer.removeListener('process-audio-fallback', handler);
+  },
   getGpuInfo: () => ipcRenderer.invoke('get-gpu-info'),
   setFullScreen: (flag: boolean) => ipcRenderer.send('window-set-fullscreen', flag),
   isFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
@@ -105,6 +123,12 @@ const electronAPI: ElectronAPI = {
   getAutoStart: () => ipcRenderer.invoke('get-auto-start'),
   setZoomFactor: (factor: number) => webFrame.setZoomFactor(factor),
   getZoomFactor: () => webFrame.getZoomFactor(),
+  onActivityDetected: (callback: (activity: any) => void) => {
+    const handler = (_: any, activity: any) => callback(activity);
+    ipcRenderer.on('activity-detected', handler);
+    return () => ipcRenderer.removeListener('activity-detected', handler);
+  },
+  getCurrentActivity: () => ipcRenderer.invoke('get-current-activity'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

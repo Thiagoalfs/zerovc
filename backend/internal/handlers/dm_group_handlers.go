@@ -88,9 +88,17 @@ func (h *DMGroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Begin Atomic Transaction
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
 	// Create Group
 	var group models.DMGroup
-	err := h.db.Pool.QueryRow(r.Context(), `
+	err = tx.QueryRow(r.Context(), `
 		INSERT INTO dm_groups (name, owner_id)
 		VALUES ($1, $2)
 		RETURNING id, name, icon_url, owner_id, created_at
@@ -102,11 +110,19 @@ func (h *DMGroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 
 	// Insert Members
 	for _, mID := range totalMembers {
-		h.db.Pool.Exec(r.Context(), `
+		if _, err := tx.Exec(r.Context(), `
 			INSERT INTO dm_group_members (group_id, user_id)
 			VALUES ($1, $2)
 			ON CONFLICT DO NOTHING
-		`, group.ID, mID)
+		`, group.ID, mID); err != nil {
+			http.Error(w, `{"error":"failed to add group members"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit group creation"}`, http.StatusInternalServerError)
+		return
 	}
 
 	// Fetch full member objects
@@ -335,23 +351,47 @@ func (h *DMGroupHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Begin Atomic Transaction
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
 	// Remove member
-	h.db.Pool.Exec(r.Context(), "DELETE FROM dm_group_members WHERE group_id = $1 AND user_id = $2", groupID, targetUserID)
+	if _, err := tx.Exec(r.Context(), "DELETE FROM dm_group_members WHERE group_id = $1 AND user_id = $2", groupID, targetUserID); err != nil {
+		http.Error(w, `{"error":"failed to remove member"}`, http.StatusInternalServerError)
+		return
+	}
 
 	// Count remaining members
 	var remainingCount int
-	h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm_group_members WHERE group_id = $1", groupID).Scan(&remainingCount)
+	if err := tx.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm_group_members WHERE group_id = $1", groupID).Scan(&remainingCount); err != nil {
+		http.Error(w, `{"error":"failed to check remaining members"}`, http.StatusInternalServerError)
+		return
+	}
 
 	if remainingCount == 0 {
 		// Delete group
-		h.db.Pool.Exec(r.Context(), "DELETE FROM dm_groups WHERE id = $1", groupID)
+		if _, err := tx.Exec(r.Context(), "DELETE FROM dm_groups WHERE id = $1", groupID); err != nil {
+			http.Error(w, `{"error":"failed to delete group"}`, http.StatusInternalServerError)
+			return
+		}
 	} else if targetUserID == ownerID {
 		// Transfer ownership to oldest remaining member
 		var newOwnerID uuid.UUID
-		h.db.Pool.QueryRow(r.Context(), "SELECT user_id FROM dm_group_members WHERE group_id = $1 ORDER BY joined_at ASC LIMIT 1", groupID).Scan(&newOwnerID)
-		if newOwnerID != uuid.Nil {
-			h.db.Pool.Exec(r.Context(), "UPDATE dm_groups SET owner_id = $1 WHERE id = $2", newOwnerID, groupID)
+		if err := tx.QueryRow(r.Context(), "SELECT user_id FROM dm_group_members WHERE group_id = $1 ORDER BY joined_at ASC LIMIT 1", groupID).Scan(&newOwnerID); err == nil && newOwnerID != uuid.Nil {
+			if _, err := tx.Exec(r.Context(), "UPDATE dm_groups SET owner_id = $1 WHERE id = $2", newOwnerID, groupID); err != nil {
+				http.Error(w, `{"error":"failed to transfer group ownership"}`, http.StatusInternalServerError)
+				return
+			}
 		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit member removal"}`, http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

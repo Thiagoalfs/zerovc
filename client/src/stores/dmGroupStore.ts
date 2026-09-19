@@ -296,6 +296,10 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         updatedGroupMsgs.push({ ...message, status: 'sent' });
       }
 
+      if (updatedGroupMsgs.length > 200) {
+        updatedGroupMsgs = updatedGroupMsgs.slice(-200);
+      }
+
       const isCurrentActive = state.activeGroup?.id === message.group_id;
       let updatedMessages = state.messages;
       if (isCurrentActive) {
@@ -310,6 +314,9 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           nextMsgs[activeTempIdx] = { ...message, status: 'sent' };
         } else {
           nextMsgs.push({ ...message, status: 'sent' });
+        }
+        if (nextMsgs.length > 200) {
+          nextMsgs = nextMsgs.slice(-200);
         }
         updatedMessages = nextMsgs;
       }

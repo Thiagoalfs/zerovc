@@ -291,8 +291,24 @@ func (h *RoleHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Begin Atomic Transaction
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
 	for _, item := range items {
-		h.db.Pool.Exec(r.Context(), "UPDATE guild_roles SET position = $1 WHERE id = $2 AND guild_id = $3", item.Position, item.ID, guildID)
+		if _, err := tx.Exec(r.Context(), "UPDATE guild_roles SET position = $1 WHERE id = $2 AND guild_id = $3", item.Position, item.ID, guildID); err != nil {
+			http.Error(w, `{"error":"failed to update role position"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit role reorder"}`, http.StatusInternalServerError)
+		return
 	}
 
 	// Fetch updated roles list

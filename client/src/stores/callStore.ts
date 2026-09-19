@@ -30,7 +30,10 @@ interface CallStoreState {
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
   toggleCamera: () => Promise<void>;
-  startScreenShare: () => Promise<void>;
+  startScreenShare: (
+    sourceId?: string,
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }
+  ) => Promise<void>;
   stopScreenShare: () => Promise<void>;
 }
 
@@ -265,9 +268,13 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     set({ isCameraOn: nextCamera });
   },
 
-  startScreenShare: async () => {
+  startScreenShare: async (sourceId?: string, config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }) => {
     try {
-      await livekit.setScreenShareEnabled(true);
+      await livekit.setScreenShareEnabled(true, sourceId, {
+        resolution: config?.resolution || '720p',
+        fps: config?.fps || 30,
+        includeAudio: config?.includeAudio ?? true,
+      });
       set({ isScreensharing: true });
     } catch (err) {
       console.error('[Call] Screen share error:', err);
