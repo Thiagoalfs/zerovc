@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { DMRoom, DMMessage } from '../types';
 import { api } from '../lib/api';
-import { playMessageSound } from '../utils/audio';
+import { playMessageSound, speakText } from '../utils/audio';
 import { useAuthStore } from './authStore';
+import { useSettingsStore } from './settingsStore';
 
 interface DMState {
   rooms: DMRoom[];
@@ -284,6 +285,11 @@ export const useDMStore = create<DMState>((set, get) => ({
         updatedRoomMsgs.push({ ...message, status: 'sent' });
       }
 
+      // Cap memory at 200 messages per DM room
+      if (updatedRoomMsgs.length > 200) {
+        updatedRoomMsgs = updatedRoomMsgs.slice(-200);
+      }
+
       const nextMessagesByRoom = {
         ...state.messagesByRoom,
         [message.dm_room_id]: updatedRoomMsgs,
@@ -304,8 +310,15 @@ export const useDMStore = create<DMState>((set, get) => ({
           nextMessages.push({ ...message, status: 'sent' });
         }
 
+        if (nextMessages.length > 200) {
+          nextMessages = nextMessages.slice(-200);
+        }
+
         if (message.author_id !== currentUser?.id) {
           playMessageSound(false);
+          if (useSettingsStore.getState().textToSpeechEnabled && message.content) {
+            speakText(message.content, message.author?.display_name || message.author?.username);
+          }
         }
         return {
           messages: nextMessages,

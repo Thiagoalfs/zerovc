@@ -1,10 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Hash, Users, Menu, Pin, Search, X, UploadCloud } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
 import { MemberList } from '../Sidebar/MemberList';
+import { SearchAutocompletePopout } from './SearchAutocompletePopout';
+import { SearchResultsPanel } from './SearchResultsPanel';
+import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { User, Message } from '../../types';
 
 interface ChatAreaProps {
@@ -32,6 +35,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 }) => {
   const { user } = useAuthStore();
   const {
+    activeGuild,
     activeChannel,
     messages,
     pinnedMessagesByChannel,
@@ -56,22 +60,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
+  const [isSearchAutocompleteOpen, setIsSearchAutocompleteOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const dragCounterRef = useRef<number>(0);
-
-  const handleEditLastMessage = () => {
-    if (!user || !displayedMessages || displayedMessages.length === 0) return;
-    for (let i = displayedMessages.length - 1; i >= 0; i--) {
-      const msg = displayedMessages[i];
-      if (msg.author_id === user.id) {
-        setEditingMessageId(msg.id);
-        break;
-      }
-    }
-  };
 
   // Fetch pinned messages from backend whenever showPinnedOnly is toggled or channel changes
   useEffect(() => {
@@ -138,7 +134,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const scrollToBottom = (smooth = false) => {
-    if (!showPinnedOnly && !searchQuery) {
+    if (!showPinnedOnly) {
       if (scrollContainerRef.current) {
         if (smooth) {
           scrollContainerRef.current.scrollTo({
@@ -214,6 +210,49 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
+  // Filter messages based on pinned filter
+  const baseMessages = showPinnedOnly && activeChannel
+    ? pinnedMessagesByChannel?.[activeChannel.id] || []
+    : messages || [];
+
+  const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
+
+  // Main chat messages stay normal (or show pinned if toggled)
+  const displayedMessages = useMemo(() => {
+    if (showPinnedOnly && activeChannel) {
+      return pinnedMessagesByChannel?.[activeChannel.id] || [];
+    }
+    return baseMessages;
+  }, [baseMessages, showPinnedOnly, activeChannel, pinnedMessagesByChannel]);
+
+  // Search Results for the right-side SearchResultsPanel
+  const searchResults = useMemo(() => {
+    if (!appliedSearchQuery) return [];
+    return filterMessages(messages || [], parsedSearch);
+  }, [messages, appliedSearchQuery, parsedSearch]);
+
+  const handleJumpToMessage = (messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-brand-500/20', 'transition-colors', 'duration-500');
+      setTimeout(() => {
+        el.classList.remove('bg-brand-500/20');
+      }, 2500);
+    }
+  };
+
+  const handleEditLastMessage = () => {
+    if (!user || !displayedMessages || displayedMessages.length === 0) return;
+    for (let i = displayedMessages.length - 1; i >= 0; i--) {
+      const msg = displayedMessages[i];
+      if (msg.author_id === user.id) {
+        setEditingMessageId(msg.id);
+        break;
+      }
+    }
+  };
+
   if (!activeChannel) {
     return (
       <div className="flex-1 bg-background-dark flex flex-col items-center justify-center text-gray-500 font-medium p-4">
@@ -231,23 +270,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     );
   }
 
-  const typingForThisChannel = activeChannel ? typingUsers.get(activeChannel.id) : null;
+  const typingForThisChannel = typingUsers.get(activeChannel.id);
   const isSomeoneTyping = typingForThisChannel && typingForThisChannel.size > 0;
-
-  // Filter messages based on search & pinned filter
-  const baseMessages = showPinnedOnly
-    ? pinnedMessagesByChannel[activeChannel.id] || []
-    : messages;
-
-  const displayedMessages = baseMessages.filter((msg) => {
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchContent = msg.content.toLowerCase().includes(q);
-      const matchAuthor = (msg.author?.display_name || msg.author?.username || '').toLowerCase().includes(q);
-      if (!matchContent && !matchAuthor) return false;
-    }
-    return true;
-  });
 
   return (
     <div
@@ -255,7 +279,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="flex-1 w-full min-w-0 bg-background-dark flex flex-row h-full overflow-hidden relative min-h-0"
+      className="flex-1 w-full min-w-0 bg-background-dark flex flex-col h-full overflow-hidden relative min-h-0"
     >
       {/* Drag & Drop Files Overlay */}
       {isDraggingFile && (
@@ -270,250 +294,295 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
       )}
 
-      {/* Center Chat View */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
-        {/* Channel Header */}
-        <div
-          onClick={() => {
-            if (typeof window !== 'undefined' && window.innerWidth < 768) {
-              toggleMembers();
-            }
-          }}
-          className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0 cursor-pointer md:cursor-default"
-        >
-          <div className="flex items-center gap-2.5 md:gap-2 truncate flex-1 min-w-0">
-            {/* Mobile Hamburger Drawer Toggle */}
-            {onOpenMobileDrawer && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenMobileDrawer();
-                }}
-                className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0"
-                title="Menu de Canais"
-              >
-                <Menu className="w-6 h-6" />
-              </button>
-            )}
-            <Hash className="w-6 h-6 text-gray-400 flex-shrink-0" />
-            <span className="font-bold text-gray-100 truncate text-[17px] md:text-base">{activeChannel.name}</span>
-          </div>
-
-          {/* Right Header Actions (Desktop Only / Search Bar when active) */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className={`${isSearchOpen ? 'flex' : 'hidden md:flex'} items-center gap-1 md:gap-2 flex-shrink-0`}
-          >
-            {/* Search Input / Toggle */}
-            {isSearchOpen ? (
-              <div className="flex items-center gap-1 bg-background-darkest px-2 py-1 rounded-xl border border-white/10 text-xs">
-                <Search className="w-3.5 h-3.5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar mensagens..."
-                  autoFocus
-                  className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-32 md:w-48"
-                />
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setIsSearchOpen(false);
-                  }}
-                  className="p-0.5 text-gray-400 hover:text-white"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setIsSearchOpen(true)}
-                className="p-2 md:p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
-                title="Buscar no canal"
-              >
-                <Search className="w-5 h-5" />
-              </button>
-            )}
-
-            {/* Pinned Messages Filter Toggle */}
+      {/* 1. Full-Width Channel Header (spans 100% all the way to the right across member list) */}
+      <div
+        onClick={() => {
+          if (typeof window !== 'undefined' && window.innerWidth < 768) {
+            toggleMembers();
+          }
+        }}
+        className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0 cursor-pointer md:cursor-default w-full"
+      >
+        <div className="flex items-center gap-2.5 md:gap-2 truncate flex-1 min-w-0 mr-2">
+          {/* Mobile Hamburger Drawer Toggle */}
+          {onOpenMobileDrawer && (
             <button
-              onClick={() => setShowPinnedOnly(!showPinnedOnly)}
-              className={`p-1.5 rounded-lg transition-colors ${
-                showPinnedOnly
-                  ? 'text-amber-400 bg-amber-400/15'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-              }`}
-              title={showPinnedOnly ? 'Mostrar todas as mensagens' : 'Mensagens Fixadas'}
-            >
-              <Pin className="w-5 h-5" />
-            </button>
-
-            {/* Member List Toggle */}
-            <button
-              onClick={toggleMembers}
-              className={`p-1.5 rounded-lg transition-colors ${
-                showMembers
-                  ? 'text-brand-400 bg-white/10'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-              }`}
-              title="Lista de Membros"
-            >
-              <Users className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Pinned or Search Active Notice Banner */}
-        {(showPinnedOnly || searchQuery) && (
-          <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
-            <span>
-              {showPinnedOnly
-                ? `Exibindo apenas mensagens fixadas (${displayedMessages.length})`
-                : `Resultados da busca para "${searchQuery}" (${displayedMessages.length})`}
-            </span>
-            <button
-              onClick={() => {
-                setShowPinnedOnly(false);
-                setSearchQuery('');
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenMobileDrawer();
               }}
-              className="text-brand-400 hover:underline font-semibold"
+              className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0"
+              title="Menu de Canais"
             >
-              Limpar filtro
+              <Menu className="w-6 h-6" />
             </button>
-          </div>
-        )}
-
-        {/* Messages Scroll Area */}
-        <div
-          ref={scrollContainerRef}
-          onScroll={handleScroll}
-          className="flex-1 overflow-y-auto px-2 md:px-4 py-2 no-scrollbar"
-        >
-          {/* Loading older messages indicator */}
-          {isLoadingMoreMessages && (
-            <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
-              <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
-              <span>Carregando mensagens anteriores...</span>
-            </div>
           )}
-
-          {/* Welcome Header (show only when reached the absolute top / no more older messages) */}
-          {!showPinnedOnly && !searchQuery && hasMoreByChannel[activeChannel.id] === false && (
-            <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
-              <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-background-light flex items-center justify-center mb-3">
-                <Hash className="w-6 h-6 md:w-10 md:h-10 text-white" />
-              </div>
-              <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Bem-vindo a #{activeChannel.name}!</h2>
-              <p className="text-xs md:text-sm text-gray-400">Este é o início do canal #{activeChannel.name}.</p>
-            </div>
+          <Hash className="w-6 h-6 text-gray-400 flex-shrink-0" />
+          <span className="font-bold text-gray-100 truncate text-[17px] md:text-base">{activeChannel.name}</span>
+          {activeChannel.topic && (
+            <>
+              <div className="hidden md:block w-[1px] h-4 bg-white/10 mx-2 flex-shrink-0" />
+              <span className="hidden md:block text-xs text-gray-400 truncate max-w-sm">{activeChannel.topic}</span>
+            </>
           )}
-
-          {isLoadingMessages || (showPinnedOnly && isLoadingPinned[activeChannel.id]) ? (
-            <div className="flex justify-center items-center gap-2 py-10 text-sm text-gray-500">
-              <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
-              <span>{showPinnedOnly ? 'Carregando mensagens fixadas...' : 'Carregando mensagens...'}</span>
-            </div>
-          ) : displayedMessages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 select-none">
-              {showPinnedOnly ? (
-                <>
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-amber-400">
-                    <Pin className="w-6 h-6" />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-300">Nenhuma mensagem fixada</span>
-                  <span className="text-xs text-gray-500">Fixe mensagens importantes para que todos possam consultá-las facilmente.</span>
-                </>
-              ) : searchQuery ? (
-                <>
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-400">
-                    <Search className="w-6 h-6" />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-300">Nenhum resultado encontrado</span>
-                  <span className="text-xs text-gray-500">Tente buscar por termos diferentes ou verifique a ortografia.</span>
-                </>
-              ) : (
-                <span>Nenhuma mensagem encontrada.</span>
-              )}
-            </div>
-          ) : (
-            displayedMessages.map((message, index) => {
-              const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
-              const isCompact = (() => {
-                if (!prevMessage) return false;
-                if (prevMessage.author_id !== message.author_id) return false;
-                if (message.reply_to) return false;
-                const prevTime = new Date(prevMessage.created_at).getTime();
-                const currTime = new Date(message.created_at).getTime();
-                if (isNaN(prevTime) || isNaN(currTime)) return false;
-                const diffMs = currTime - prevTime;
-                return diffMs >= 0 && diffMs <= 5 * 60 * 1000;
-              })();
-
-              return (
-                <MessageItem
-                  key={message.id}
-                  message={message}
-                  isCompact={isCompact}
-                  isEditing={editingMessageId === message.id}
-                  onStartEdit={() => setEditingMessageId(message.id)}
-                  onStopEdit={() => setEditingMessageId(null)}
-                  onOpenUserProfile={onOpenUserProfile}
-                  onOpenDM={onOpenDM}
-                  onPreviewImage={onPreviewImage}
-                  onReply={(msg) => setReplyingTo(msg)}
-                  onImageLoad={handleMediaLoad}
-                />
-              );
-            })
-          )}
-
-          <div ref={messagesEndRef} />
         </div>
 
-        {/* Typing Indicator */}
-        {isSomeoneTyping && (
-          <div className="h-5 px-3 md:px-4 text-xs text-gray-400 flex items-center gap-1.5 animate-pulse">
-            <span className="font-semibold text-gray-300">Alguém</span>
-            <span>está digitando...</span>
-          </div>
-        )}
+        {/* Right Header Actions (Pinned, Member Toggle, Search Input Box) */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-1.5 md:gap-2 flex-shrink-0 relative"
+        >
+          {/* Pinned Messages Filter Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowPinnedOnly(!showPinnedOnly)}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              showPinnedOnly
+                ? 'text-amber-400 bg-amber-400/15'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+            title={showPinnedOnly ? 'Mostrar todas as mensagens' : 'Mensagens Fixadas'}
+          >
+            <Pin className="w-5 h-5" />
+          </button>
 
-        {/* Message Input */}
-        <MessageInput
-          channel={activeChannel}
-          replyingTo={replyingTo}
-          onCancelReply={() => setReplyingTo(null)}
-          onSendMessage={sendMessage}
-          onEditLastMessage={handleEditLastMessage}
-          droppedFile={droppedFile}
-          onClearDroppedFile={() => setDroppedFile(null)}
-        />
+          {/* Member List Toggle */}
+          <button
+            type="button"
+            onClick={toggleMembers}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              showMembers
+                ? 'text-brand-400 bg-white/10'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+            title="Lista de Membros"
+          >
+            <Users className="w-5 h-5" />
+          </button>
+
+          {/* Discord-style Search Input Box (Last element on the right) */}
+          <div
+            ref={searchContainerRef}
+            className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64 relative"
+          >
+            <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setAppliedSearchQuery(searchQuery.trim());
+                  setIsSearchAutocompleteOpen(false);
+                }
+              }}
+              onFocus={() => setIsSearchAutocompleteOpen(true)}
+              placeholder="Buscar..."
+              className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
+            />
+            {(searchQuery || appliedSearchQuery) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setAppliedSearchQuery('');
+                  setIsSearchAutocompleteOpen(false);
+                }}
+                className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
+                title="Limpar busca"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Floating Search Autocomplete Popout Modal */}
+          <SearchAutocompletePopout
+            isOpen={isSearchAutocompleteOpen}
+            onClose={() => setIsSearchAutocompleteOpen(false)}
+            query={searchQuery}
+            onSelectFilter={(newQ) => {
+              setSearchQuery(newQ);
+              searchInputRef.current?.focus();
+            }}
+            onSearchSubmit={(q) => {
+              setAppliedSearchQuery(q.trim());
+            }}
+            anchorRef={searchContainerRef}
+            members={activeGuild?.members || []}
+            channels={activeGuild?.channels || []}
+            contextType="guild"
+          />
+        </div>
       </div>
 
-      {/* Right-side Member List Sidebar */}
-      <MemberList
-        isOpen={showMembers}
-        onClose={() => {
-          if (onToggleMemberList) onToggleMemberList(false);
-          else setLocalShowMemberList(false);
-        }}
-        onSelectUser={onOpenUserProfile}
-        onOpenDM={onOpenDM}
-        onOpenSearch={() => {
-          setIsSearchOpen(true);
-          if (onToggleMemberList) onToggleMemberList(false);
-          else setLocalShowMemberList(false);
-        }}
-        onOpenPins={() => {
-          setShowPinnedOnly(true);
-          if (onToggleMemberList) onToggleMemberList(false);
-          else setLocalShowMemberList(false);
-        }}
-        isDragging={isDraggingMemberList}
-        dragOffset={memberListDragOffset}
-        dragProgress={memberListDragProgress}
-      />
+      {/* Pinned Messages Active Notice Banner */}
+      {showPinnedOnly && (
+        <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300 flex-shrink-0">
+          <span>
+            Exibindo <strong className="text-white font-semibold">{displayedMessages.length}</strong> mensagens fixadas neste canal
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowPinnedOnly(false)}
+            className="text-brand-400 hover:underline font-semibold cursor-pointer ml-2 flex-shrink-0"
+          >
+            Limpar Filtros
+          </button>
+        </div>
+      )}
+
+      {/* 2. Main Body Row: (Messages Column + Right-side Member List) */}
+      <div className="flex-1 flex flex-row h-full overflow-hidden min-h-0 w-full relative">
+        {/* Messages Column */}
+        <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
+          {/* Messages Scroll Area */}
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto px-2 md:px-4 py-3 no-scrollbar"
+          >
+            {isLoadingMoreMessages && (
+              <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
+                <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+                <span>Carregando mensagens anteriores...</span>
+              </div>
+            )}
+
+            {/* Welcome banner when at the very beginning of the channel history */}
+            {hasMoreByChannel[activeChannel.id] === false && (
+              <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-3xl bg-brand-500/20 border border-brand-500/30 text-brand-400 flex items-center justify-center mb-3 shadow-lg">
+                  <Hash className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl md:text-2xl font-bold text-white mb-1">
+                  Bem-vindo a #{activeChannel.name}!
+                </h2>
+                <p className="text-xs md:text-sm text-gray-400 max-w-lg leading-relaxed">
+                  {activeChannel.topic
+                    ? activeChannel.topic
+                    : `Este é o início do canal #${activeChannel.name}. Envie uma mensagem para começar a conversar.`}
+                </p>
+              </div>
+            )}
+
+            {isLoadingMessages || (showPinnedOnly && isLoadingPinned[activeChannel.id]) ? (
+              <div className="flex justify-center items-center gap-2 py-10 text-sm text-gray-500">
+                <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+                <span>{showPinnedOnly ? 'Carregando mensagens fixadas...' : 'Carregando mensagens...'}</span>
+              </div>
+            ) : displayedMessages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 select-none">
+                {showPinnedOnly ? (
+                  <>
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-amber-400">
+                      <Pin className="w-6 h-6" />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-300">Nenhuma mensagem fixada</span>
+                    <span className="text-xs text-gray-500">Fixe mensagens importantes para que todos possam consultá-las facilmente.</span>
+                  </>
+                ) : appliedSearchQuery ? (
+                  <>
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-400">
+                      <Search className="w-6 h-6" />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-300">Nenhum resultado encontrado</span>
+                    <span className="text-xs text-gray-500">Tente buscar por termos diferentes ou verifique a ortografia.</span>
+                  </>
+                ) : (
+                  <span>Nenhuma mensagem encontrada.</span>
+                )}
+              </div>
+            ) : (
+              displayedMessages.map((msg, index) => {
+                const prevMsg = index > 0 ? displayedMessages[index - 1] : null;
+                const isCompact = prevMsg !== null &&
+                  prevMsg.author_id === msg.author_id &&
+                  (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 5 * 60 * 1000;
+
+                return (
+                  <MessageItem
+                    key={msg.id}
+                    message={msg}
+                    isCompact={isCompact}
+                    isEditing={editingMessageId === msg.id}
+                    onStartEdit={() => setEditingMessageId(msg.id)}
+                    onStopEdit={() => setEditingMessageId(null)}
+                    onOpenUserProfile={onOpenUserProfile}
+                    onOpenDM={onOpenDM}
+                    onPreviewImage={onPreviewImage}
+                    onReply={(message) => setReplyingTo(message)}
+                    onImageLoad={handleMediaLoad}
+                  />
+                );
+              })
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Typing Indicator */}
+          {isSomeoneTyping && (
+            <div className="h-5 px-3 md:px-4 text-xs text-gray-400 flex items-center gap-1.5 animate-pulse">
+              <span className="font-semibold text-gray-300">Alguém</span>
+              <span>está digitando...</span>
+            </div>
+          )}
+
+          {/* Message Input */}
+          <MessageInput
+            channel={activeChannel}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+            onSendMessage={sendMessage}
+            onEditLastMessage={handleEditLastMessage}
+            droppedFile={droppedFile}
+            onClearDroppedFile={() => setDroppedFile(null)}
+          />
+        </div>
+
+        {/* Right-side: Search Results Panel (on top of member list when search is active) OR Member List Sidebar */}
+        {appliedSearchQuery ? (
+          <SearchResultsPanel
+            isOpen={Boolean(appliedSearchQuery)}
+            onClose={() => {
+              setAppliedSearchQuery('');
+              setSearchQuery('');
+            }}
+            rawQuery={appliedSearchQuery}
+            parsedQuery={parsedSearch}
+            messages={searchResults}
+            contextName={`#${activeChannel.name}`}
+            contextCategory={activeGuild?.name}
+            contextType="guild"
+            onJumpToMessage={handleJumpToMessage}
+          />
+        ) : (
+          <MemberList
+            isOpen={showMembers}
+            onClose={() => {
+              if (onToggleMemberList) onToggleMemberList(false);
+              else setLocalShowMemberList(false);
+            }}
+            onSelectUser={onOpenUserProfile}
+            onOpenDM={onOpenDM}
+            onOpenSearch={() => {}}
+            onOpenPins={() => {
+              setShowPinnedOnly(true);
+              if (onToggleMemberList) onToggleMemberList(false);
+              else setLocalShowMemberList(false);
+            }}
+            isDragging={isDraggingMemberList}
+            dragOffset={memberListDragOffset}
+            dragProgress={memberListDragProgress}
+          />
+        )}
+      </div>
     </div>
   );
 };

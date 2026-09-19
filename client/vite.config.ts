@@ -29,5 +29,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-livekit': ['livekit-client'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'zustand'],
+        },
+      },
+    },
   },
 });

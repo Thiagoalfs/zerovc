@@ -330,6 +330,13 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
     );
   }, [emojiSearch]);
 
+  const visibleStandardEmojis = useMemo(() => {
+    if (emojiSearch.trim()) {
+      return filteredStandardEmojis.slice(0, 200);
+    }
+    return filteredStandardEmojis.slice(0, 140);
+  }, [filteredStandardEmojis, emojiSearch]);
+
   const displayedGifs = useMemo(() => {
     if (activeCategory === 'Favoritos') {
       return favoriteGifs.map((f) => ({
@@ -498,7 +505,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                   </div>
                 ) : (
                   <div className={`grid gap-1.5 ${pickerWidth >= 640 ? 'grid-cols-10' : pickerWidth >= 500 ? 'grid-cols-8' : 'grid-cols-6'}`}>
-                    {filteredStandardEmojis.map((emoji, idx) => (
+                    {visibleStandardEmojis.map((emoji, idx) => (
                       <button
                         key={`${emoji.unicode}-${idx}`}
                         type="button"

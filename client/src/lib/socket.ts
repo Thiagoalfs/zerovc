@@ -14,14 +14,18 @@ class SocketClient {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isExplicitlyClosed = false;
   private reconnectAttempts = 0;
+  private hadConnectedOnce = false;
+  private reconnectListeners: Set<() => void> = new Set();
+
+  onReconnect(callback: () => void): () => void {
+    this.reconnectListeners.add(callback);
+    return () => this.reconnectListeners.delete(callback);
+  }
 
   connect() {
     const baseUrl = getApiBaseUrl().replace(/^http/, 'ws');
     let wsUrl = `${baseUrl}/ws`;
 
-    // No Electron o handshake do WS é cross-site (client em file://), então precisa do
-    // token na query string. No navegador o cookie httpOnly já autentica automaticamente
-    // (mesma origem: a SPA é servida pelo próprio backend), sem expor o token à URL/JS.
     if (isElectron()) {
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
       if (!token) return;
@@ -35,10 +39,18 @@ class SocketClient {
 
       this.ws.onopen = () => {
         console.log('[Socket] Connected to ZeroVC Gateway');
+        const isReconnection = this.hadConnectedOnce && this.reconnectAttempts > 0;
+        this.hadConnectedOnce = true;
         this.reconnectAttempts = 0;
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
+        }
+        if (isReconnection) {
+          console.log('[Socket] Reconnected to gateway. Triggering resync...');
+          this.reconnectListeners.forEach((fn) => {
+            try { fn(); } catch (err) { console.error('[Socket] Resync error:', err); }
+          });
         }
       };
 

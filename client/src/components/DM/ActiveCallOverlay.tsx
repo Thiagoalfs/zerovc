@@ -17,7 +17,11 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
 
-export const ActiveCallOverlay: React.FC = () => {
+interface ActiveCallOverlayProps {
+  onOpenScreenShare?: () => void;
+}
+
+export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({ onOpenScreenShare }) => {
   const {
     callState,
     targetUser,
@@ -54,7 +58,11 @@ export const ActiveCallOverlay: React.FC = () => {
           label: 'Trocar tela',
           icon: <Monitor className="w-4 h-4" />,
           onClick: () => {
-            startScreenShare();
+            if (onOpenScreenShare) {
+              onOpenScreenShare();
+            } else {
+              startScreenShare();
+            }
           },
         },
         {
@@ -72,7 +80,11 @@ export const ActiveCallOverlay: React.FC = () => {
         'Transmissão de Tela'
       );
     } else {
-      startScreenShare();
+      if (onOpenScreenShare) {
+        onOpenScreenShare();
+      } else {
+        startScreenShare();
+      }
     }
   };
 

@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
 
@@ -43,15 +43,66 @@ export const formatAssetUrl = (url?: string | null): string => {
   return `${base}${cleanPath}`;
 };
 
+let memoryCsrfToken: string | null = null;
+
+export const setCsrfToken = (token: string): void => {
+  memoryCsrfToken = token;
+  try {
+    localStorage.setItem('zerovc_csrf_token', token);
+  } catch {}
+};
+
+export const getCsrfToken = (): string => {
+  if (memoryCsrfToken) return memoryCsrfToken;
+  try {
+    const stored = localStorage.getItem('zerovc_csrf_token');
+    if (stored) {
+      memoryCsrfToken = stored;
+      return stored;
+    }
+  } catch {}
+  if (typeof document !== 'undefined' && document.cookie) {
+    const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+    if (match) {
+      const token = decodeURIComponent(match[1]);
+      memoryCsrfToken = token;
+      return token;
+    }
+  }
+  return '';
+};
+
 export const API_BASE_URL = getApiBaseUrl();
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const baseUrl = getApiBaseUrl();
+  const method = (options.method || 'GET').toUpperCase();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
+  const isPublicAuth =
+    endpoint.startsWith('/auth/login') ||
+    endpoint.startsWith('/auth/register') ||
+    endpoint.startsWith('/auth/verify') ||
+    endpoint.startsWith('/auth/resend') ||
+    endpoint.startsWith('/auth/forgot') ||
+    endpoint.startsWith('/auth/reset');
+
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    let csrf = getCsrfToken();
+    if (!csrf && !isPublicAuth && !isRetry) {
+      try {
+        await request<User>('/auth/me', {}, true);
+        csrf = getCsrfToken();
+      } catch {}
+    }
+    if (csrf && !headers['X-CSRF-Token']) {
+      headers['X-CSRF-Token'] = csrf;
+    }
+  }
 
   // Só o Electron precisa do Bearer token (ver client/src/lib/platform.ts).
   // No navegador a sessão é 100% via cookie httpOnly enviado por credentials: 'include'.
@@ -68,12 +119,27 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers,
   });
 
+  // Captura CSRF token retornado no cabeçalho se disponível
+  const resCsrf = response.headers.get('X-CSRF-Token');
+  if (resCsrf) {
+    setCsrfToken(resCsrf);
+  }
+
   if (!response.ok) {
     let errorMsg = `HTTP Error ${response.status}`;
     try {
       const errJson = await response.json();
       if (errJson.error) errorMsg = errJson.error;
     } catch {}
+
+    // Auto-recuperação transparente se o token CSRF expirou ou dessincronizou
+    if (response.status === 403 && errorMsg.toLowerCase().includes('csrf') && !isRetry && !isPublicAuth) {
+      try {
+        await request<User>('/auth/me', {}, true);
+        return await request<T>(endpoint, options, true);
+      } catch {}
+    }
+
     throw new Error(errorMsg);
   }
 
@@ -81,18 +147,24 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     return {} as T;
   }
 
-  return response.json();
+  const data = await response.json();
+  if (data && typeof data === 'object') {
+    if ('csrf_token' in data && typeof (data as any).csrf_token === 'string') {
+      setCsrfToken((data as any).csrf_token);
+    }
+  }
+  return data as T;
 }
 
 export const api = {
   auth: {
     register: (data: { username: string; email: string; password: string }) =>
-      request<{ token?: string; requires_verification?: boolean; email?: string; user?: User }>('/auth/register', {
+      request<{ token?: string; csrf_token?: string; requires_verification?: boolean; email?: string; user?: User }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     verifyEmail: (data: { email: string; code: string }) =>
-      request<{ token: string; user: User }>('/auth/verify-email', {
+      request<{ token: string; csrf_token?: string; user: User }>('/auth/verify-email', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -117,7 +189,7 @@ export const api = {
         body: JSON.stringify(data),
       }),
     login: (data: { email: string; password: string; code?: string }) =>
-      request<{ token?: string; requires_2fa?: boolean; requires_verification?: boolean; email?: string; user?: User }>('/auth/login', {
+      request<{ token?: string; csrf_token?: string; requires_2fa?: boolean; requires_verification?: boolean; email?: string; user?: User }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -161,6 +233,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    getSessions: () => request<UserSession[]>('/auth/sessions'),
+    revokeSession: (id: string) =>
+      request<{ message: string }>(`/auth/sessions/${id}/revoke`, {
+        method: 'POST',
+      }),
+    revokeOtherSessions: () =>
+      request<{ message: string }>('/auth/sessions/revoke-others', {
+        method: 'POST',
+      }),
   },
 
   users: {
@@ -173,6 +254,11 @@ export const api = {
       bio?: string;
       status?: 'online' | 'idle' | 'dnd' | 'offline';
       custom_status?: string;
+      custom_activity?: CustomActivity | null;
+      show_activity_status?: boolean;
+      auto_detect_activity?: boolean;
+      server_folders?: ServerFolder[];
+      guild_positions?: string[];
     }) =>
       request<User>('/users/@me', {
         method: 'PATCH',
@@ -218,10 +304,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ new_owner_id: newOwnerId }),
       }),
-    delete: (id: string) =>
-      request<{ success: boolean; guild_id: string }>(`/guilds/${id}`, {
-        method: 'DELETE',
-      }),
+    delete: (id: string, code?: string) =>
+      request<{ success: boolean; guild_id: string }>(
+        `/guilds/${id}${code ? `?code=${encodeURIComponent(code)}` : ''}`,
+        {
+          method: 'DELETE',
+          headers: code ? { 'X-2FA-Code': code } : undefined,
+        }
+      ),
     join: (id: string) =>
       request<{ success: boolean }>(`/guilds/${id}/join`, {
         method: 'POST',
@@ -575,11 +665,15 @@ export const api = {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
+      const headers: Record<string, string> = {};
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const csrf = getCsrfToken();
+      if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/avatar`, {
         method: 'POST',
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
         body: formData,
       });
       if (!res.ok) {
@@ -596,11 +690,15 @@ export const api = {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
+      const headers: Record<string, string> = {};
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const csrf = getCsrfToken();
+      if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-icon`, {
         method: 'POST',
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
         body: formData,
       });
       if (!res.ok) {
@@ -617,11 +715,15 @@ export const api = {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
+      const headers: Record<string, string> = {};
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const csrf = getCsrfToken();
+      if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-banner`, {
         method: 'POST',
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
         body: formData,
       });
       if (!res.ok) {
@@ -638,11 +740,15 @@ export const api = {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
+      const headers: Record<string, string> = {};
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const csrf = getCsrfToken();
+      if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/banner`, {
         method: 'POST',
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
         body: formData,
       });
       if (!res.ok) {
@@ -659,11 +765,15 @@ export const api = {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
+      const headers: Record<string, string> = {};
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const csrf = getCsrfToken();
+      if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/attachment`, {
         method: 'POST',
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
         body: formData,
       });
       if (!res.ok) {

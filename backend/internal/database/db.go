@@ -72,6 +72,39 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	// Ensure email_verifications attempts column exists
 	db.Pool.Exec(ctx, "ALTER TABLE email_verifications ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0")
 
+	// Ensure performance indexes exist
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_voice_sessions_user ON voice_sessions (user_id)")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_guild_member_roles_lookup ON guild_member_roles (guild_id, user_id)")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_guild_member_roles_role ON guild_member_roles (role_id)")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages (reply_to_id) WHERE reply_to_id IS NOT NULL")
+	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS search_vector tsvector GENERATED ALWAYS AS (to_tsvector('portuguese', coalesce(content, ''))) STORED")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_messages_search_vector ON messages USING gin(search_vector)")
+
+	// Ensure user custom_activity and server_folders exist
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_activity JSONB DEFAULT NULL")
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS show_activity_status BOOLEAN DEFAULT TRUE")
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_detect_activity BOOLEAN DEFAULT TRUE")
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS server_folders JSONB DEFAULT '[]'::jsonb")
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS guild_positions JSONB DEFAULT '[]'::jsonb")
+
+	// Ensure user_sessions table and indexes exist
+	db.Pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS user_sessions (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_hash VARCHAR(64) NOT NULL,
+			ip_address VARCHAR(45) DEFAULT '',
+			user_agent TEXT DEFAULT '',
+			device_type VARCHAR(32) DEFAULT 'web',
+			os VARCHAR(32) DEFAULT '',
+			browser VARCHAR(32) DEFAULT '',
+			last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions (user_id)")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions (token_hash)")
+
 	log.Println("Database schema migration executed successfully")
 	return nil
 }

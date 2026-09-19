@@ -9,16 +9,20 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/email"
+	"github.com/zerovc/zerovc/backend/internal/gateway"
+	"github.com/zerovc/zerovc/backend/internal/middleware"
 	"github.com/zerovc/zerovc/backend/internal/models"
 )
 
@@ -33,15 +37,19 @@ type AuthHandler struct {
 	db            *database.DB
 	auth          *auth.Service
 	email         *email.Service
+	csrf          *middleware.CSRFService
+	hub           *gateway.Hub
 	twoFAMutex    sync.Mutex
 	twoFAAttempts map[uuid.UUID]*failed2FAAttempt
 }
 
-func NewAuthHandler(db *database.DB, authService *auth.Service, emailService *email.Service) *AuthHandler {
+func NewAuthHandler(db *database.DB, authService *auth.Service, emailService *email.Service, csrfService *middleware.CSRFService, hub *gateway.Hub) *AuthHandler {
 	handler := &AuthHandler{
 		db:            db,
 		auth:          authService,
 		email:         emailService,
+		csrf:          csrfService,
+		hub:           hub,
 		twoFAAttempts: make(map[uuid.UUID]*failed2FAAttempt),
 	}
 
@@ -61,6 +69,11 @@ func NewAuthHandler(db *database.DB, authService *auth.Service, emailService *em
 	}()
 
 	return handler
+}
+
+// ContextWithUserID injects a user ID into the context (helper function).
+func ContextWithUserID(ctx context.Context, userID uuid.UUID) context.Context {
+	return auth.ContextWithUserID(ctx, userID)
 }
 
 type RegisterRequest struct {
@@ -100,6 +113,7 @@ type ResetPasswordRequest struct {
 
 type AuthResponse struct {
 	Token                string            `json:"token,omitempty"`
+	CSRFToken            string            `json:"csrf_token,omitempty"`
 	Requires2FA          bool              `json:"requires_2fa,omitempty"`
 	RequiresVerification bool              `json:"requires_verification,omitempty"`
 	Email                string            `json:"email,omitempty"`
@@ -263,15 +277,30 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update user as verified
-	_, err = h.db.Pool.Exec(r.Context(), "UPDATE users SET email_verified = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1", userID)
+	// Update user as verified and clean verification records atomically
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	_, err = tx.Exec(r.Context(), "UPDATE users SET email_verified = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1", userID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to update verification status"}`, http.StatusInternalServerError)
 		return
 	}
 
 	// Clean used verification records
-	h.db.Pool.Exec(r.Context(), "DELETE FROM email_verifications WHERE user_id = $1 OR LOWER(email) = $2", userID, req.Email)
+	if _, err := tx.Exec(r.Context(), "DELETE FROM email_verifications WHERE user_id = $1 OR LOWER(email) = $2", userID, req.Email); err != nil {
+		http.Error(w, `{"error":"failed to clean verification records"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit verification transaction"}`, http.StatusInternalServerError)
+		return
+	}
 
 	// Fetch updated user
 	var user models.User
@@ -292,12 +321,21 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.recordSession(r.Context(), user.ID, token, r)
+
 	setAuthCookie(w, token)
+
+	var csrfToken string
+	if h.csrf != nil {
+		csrfToken, _ = h.csrf.GenerateToken(user.ID)
+		h.csrf.SetCookie(w, csrfToken, r.TLS != nil)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		Token: token,
-		User:  user.ToPublic(),
+		Token:     token,
+		CSRFToken: csrfToken,
+		User:      user.ToPublic(),
 	})
 }
 
@@ -665,18 +703,35 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.recordSession(r.Context(), user.ID, token, r)
+
 	// Set HttpOnly session cookie
 	setAuthCookie(w, token)
 
+	var csrfToken string
+	if h.csrf != nil {
+		csrfToken, _ = h.csrf.GenerateToken(user.ID)
+		h.csrf.SetCookie(w, csrfToken, r.TLS != nil)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		Token: token,
-		User:  user.ToPublic(),
+		Token:     token,
+		CSRFToken: csrfToken,
+		User:      user.ToPublic(),
 	})
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	currentToken := extractTokenFromRequest(r)
+	if currentToken != "" {
+		tokenHash := hashToken(currentToken)
+		h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE token_hash = $1", tokenHash)
+	}
 	clearAuthCookie(w)
+	if h.csrf != nil {
+		h.csrf.ClearCookie(w)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message":"logged out successfully"}`))
 }
@@ -688,14 +743,27 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currentToken := extractTokenFromRequest(r)
+	if currentToken != "" {
+		h.touchSession(r.Context(), currentToken)
+	}
+
 	var user models.User
 	query := `
-		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), created_at, updated_at
+		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status,
+		       COALESCE(two_factor_secret, ''), email_verified,
+		       COALESCE(custom_activity, 'null'::jsonb), COALESCE(show_activity_status, true), COALESCE(auto_detect_activity, true),
+		       COALESCE(server_folders, '[]'::jsonb), COALESCE(guild_positions, '[]'::jsonb),
+		       created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, userID).Scan(
-		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus,
+		&user.TwoFactorSecret, &user.EmailVerified,
+		&user.CustomActivity, &user.ShowActivityStatus, &user.AutoDetectActivity,
+		&user.ServerFolders, &user.GuildPositions,
+		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
@@ -704,8 +772,246 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	user.TwoFactorEnabled = user.TwoFactorSecret != ""
 
+	var csrfToken string
+	if h.csrf != nil {
+		csrfToken, _ = h.csrf.GenerateToken(userID)
+		h.csrf.SetCookie(w, csrfToken, r.TLS != nil)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	if csrfToken != "" {
+		w.Header().Set("X-CSRF-Token", csrfToken)
+	}
+	response := struct {
+		models.User
+		CSRFToken string `json:"csrf_token,omitempty"`
+	}{
+		User:      user,
+		CSRFToken: csrfToken,
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+// Session Helpers and Handlers
+
+func extractTokenFromRequest(r *http.Request) string {
+	if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		return strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	}
+	return ""
+}
+
+func hashToken(token string) string {
+	if token == "" {
+		return ""
+	}
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}
+
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
+		return strings.TrimSpace(xrip)
+	}
+	ip := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		return host
+	}
+	return ip
+}
+
+func parseUserAgent(ua string) (deviceType, os, browser string) {
+	if ua == "" {
+		return "web", "Desconhecido", "Navegador Web"
+	}
+	uaLower := strings.ToLower(ua)
+
+	// OS detection
+	if strings.Contains(uaLower, "windows") {
+		os = "Windows"
+	} else if strings.Contains(uaLower, "android") {
+		os = "Android"
+	} else if strings.Contains(uaLower, "iphone") || strings.Contains(uaLower, "ipad") || strings.Contains(uaLower, "ipod") {
+		os = "iOS"
+	} else if strings.Contains(uaLower, "macintosh") || strings.Contains(uaLower, "mac os") {
+		os = "macOS"
+	} else if strings.Contains(uaLower, "linux") {
+		os = "Linux"
+	} else {
+		os = "Desconhecido"
+	}
+
+	// Browser / App detection
+	if strings.Contains(uaLower, "electron") || strings.Contains(uaLower, "zerovc-desktop") {
+		browser = "ZeroVC Desktop"
+		deviceType = "desktop"
+	} else if strings.Contains(uaLower, "capacitor") || strings.Contains(uaLower, "zerovc-mobile") || (strings.Contains(uaLower, "android") && strings.Contains(uaLower, "version/")) {
+		browser = "ZeroVC Mobile"
+		deviceType = "mobile"
+	} else if strings.Contains(uaLower, "edg/") || strings.Contains(uaLower, "edge/") {
+		browser = "Microsoft Edge"
+		deviceType = "web"
+	} else if strings.Contains(uaLower, "opr/") || strings.Contains(uaLower, "opera") {
+		browser = "Opera"
+		deviceType = "web"
+	} else if strings.Contains(uaLower, "chrome") || strings.Contains(uaLower, "crios") {
+		browser = "Google Chrome"
+		deviceType = "web"
+	} else if strings.Contains(uaLower, "firefox") || strings.Contains(uaLower, "fxios") {
+		browser = "Mozilla Firefox"
+		deviceType = "web"
+	} else if strings.Contains(uaLower, "safari") && !strings.Contains(uaLower, "chrome") {
+		browser = "Apple Safari"
+		deviceType = "web"
+	} else {
+		browser = "Navegador Web"
+		deviceType = "web"
+	}
+
+	if (os == "Android" || os == "iOS") && deviceType != "mobile" {
+		deviceType = "mobile"
+	} else if (os == "Windows" || os == "macOS" || os == "Linux") && browser == "ZeroVC Desktop" {
+		deviceType = "desktop"
+	}
+
+	return deviceType, os, browser
+}
+
+func (h *AuthHandler) recordSession(ctx context.Context, userID uuid.UUID, token string, r *http.Request) {
+	if token == "" {
+		return
+	}
+	tokenHash := hashToken(token)
+	ip := getClientIP(r)
+	ua := r.UserAgent()
+	deviceType, os, browser := parseUserAgent(ua)
+
+	query := `
+		INSERT INTO user_sessions (user_id, token_hash, ip_address, user_agent, device_type, os, browser, last_active_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`
+	_, _ = h.db.Pool.Exec(ctx, query, userID, tokenHash, ip, ua, deviceType, os, browser)
+}
+
+func (h *AuthHandler) touchSession(ctx context.Context, token string) {
+	if token == "" {
+		return
+	}
+	tokenHash := hashToken(token)
+	_, _ = h.db.Pool.Exec(ctx, "UPDATE user_sessions SET last_active_at = CURRENT_TIMESTAMP WHERE token_hash = $1", tokenHash)
+}
+
+func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	currentToken := extractTokenFromRequest(r)
+	currentTokenHash := hashToken(currentToken)
+
+	if currentTokenHash != "" {
+		h.touchSession(r.Context(), currentToken)
+	}
+
+	query := `
+		SELECT id, user_id, token_hash, ip_address, user_agent, device_type, os, browser, last_active_at, created_at
+		FROM user_sessions
+		WHERE user_id = $1
+		ORDER BY last_active_at DESC
+	`
+	rows, err := h.db.Pool.Query(r.Context(), query, userID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch sessions"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	sessions := make([]models.UserSession, 0)
+	for rows.Next() {
+		var s models.UserSession
+		if err := rows.Scan(&s.ID, &s.UserID, &s.TokenHash, &s.IPAddress, &s.UserAgent, &s.DeviceType, &s.OS, &s.Browser, &s.LastActiveAt, &s.CreatedAt); err != nil {
+			continue
+		}
+		s.IsCurrent = (s.TokenHash == currentTokenHash)
+		sessions = append(sessions, s)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sessions)
+}
+
+func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	sessionIDStr := chi.URLParam(r, "id")
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid session id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var tokenHash string
+	err = h.db.Pool.QueryRow(r.Context(), "DELETE FROM user_sessions WHERE id = $1 AND user_id = $2 RETURNING token_hash", sessionID, userID).Scan(&tokenHash)
+	if err != nil {
+		http.Error(w, `{"error":"sessão não encontrada ou já revogada"}`, http.StatusNotFound)
+		return
+	}
+
+	if h.hub != nil {
+		h.hub.SendToUser(userID, models.WSEvent{
+			Type: models.EventSessionRevoked,
+			Data: map[string]any{
+				"session_id": sessionID,
+				"token_hash": tokenHash,
+			},
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"message":"Sessão encerrada com sucesso."}`))
+}
+
+func (h *AuthHandler) RevokeOtherSessions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	currentToken := extractTokenFromRequest(r)
+	currentTokenHash := hashToken(currentToken)
+
+	_, err := h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1 AND token_hash != $2", userID, currentTokenHash)
+	if err != nil {
+		http.Error(w, `{"error":"falha ao revogar outras sessões"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if h.hub != nil {
+		h.hub.SendToUser(userID, models.WSEvent{
+			Type: models.EventSessionRevoked,
+			Data: map[string]any{
+				"except_token_hash": currentTokenHash,
+			},
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"message":"Todas as outras sessões foram encerradas com sucesso."}`))
 }
 
 func (h *AuthHandler) ChangePhone(w http.ResponseWriter, r *http.Request) {

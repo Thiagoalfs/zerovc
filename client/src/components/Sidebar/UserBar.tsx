@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff, Activity } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { UserAvatar } from '../Common/UserAvatar';
+import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
+import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -14,6 +17,9 @@ interface UserBarProps {
 export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenShare }) => {
   const { user, updateProfile } = useAuthStore();
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [showVoicePopout, setShowVoicePopout] = useState(false);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const voiceBarRef = useRef<HTMLDivElement>(null);
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const {
     currentChannelId,
@@ -97,10 +103,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       {showStatusMenu && (
         <>
           <div
-            className="fixed inset-0 z-40"
-            onClick={() => setShowStatusMenu(false)}
+            className="fixed inset-0 z-[99]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowStatusMenu(false);
+            }}
           />
-          <div className="absolute bottom-16 left-2 z-50 bg-background-darkest border border-white/10 rounded-2xl p-2 shadow-2xl w-48 animate-in fade-in zoom-in-95">
+          <div className="fixed bottom-16 left-3 sm:left-4 z-[100] bg-background-darkest border border-white/10 rounded-2xl p-2 shadow-2xl w-52 animate-in fade-in zoom-in-95">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1 block">
               Definir Status
             </span>
@@ -108,7 +117,10 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               {(['online', 'idle', 'dnd', 'offline'] as const).map((st) => (
                 <button
                   key={st}
-                  onClick={() => handleSetStatus(st)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSetStatus(st);
+                  }}
                   className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     user?.status === st ? 'bg-brand-500 text-white' : 'text-gray-300 hover:bg-white/5'
                   }`}
@@ -124,27 +136,62 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
       {/* Active Voice Connection Bar */}
       {(isConnected || isConnecting) && (
-        <div className="w-full min-w-0 max-w-full bg-background-darkest/90 border-b border-white/5 p-2 px-2.5 flex flex-col gap-1.5 overflow-hidden">
+        <div
+          ref={voiceBarRef}
+          className="w-full min-w-0 max-w-full bg-background-darkest/90 border-b border-white/5 p-2 px-2.5 flex flex-col gap-1.5 overflow-visible relative"
+        >
+          {/* Discord-style Floating Voice Connection Popout */}
+          <VoiceConnectionPopout
+            isOpen={showVoicePopout}
+            onClose={() => setShowVoicePopout(false)}
+            onOpenDiagnostic={() => setShowDiagnostic(true)}
+            channelName={activeVoiceChannel?.name}
+            serverName={activeGuild?.name}
+            anchorRef={voiceBarRef}
+          />
+
           <div className="flex items-center justify-between min-w-0 gap-1.5">
             <div
-              onClick={() => {
-                if (activeVoiceChannel) selectChannel(activeVoiceChannel);
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowVoicePopout(!showVoicePopout);
               }}
-              className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden"
-              title="Abrir canal de voz"
+              className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden group"
+              title="Clique para ver o status da conexão (Ping / WebRTC)"
             >
               <div className="w-2.5 h-2.5 rounded-full bg-online animate-pulse flex-shrink-0" />
               <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                <span className="text-xs font-bold text-online leading-tight truncate">
+                <span className="text-xs font-bold text-online leading-tight truncate group-hover:underline">
                   {isConnecting ? 'Conectando...' : 'Voz Conectada'}
                 </span>
-                <span className="text-[11px] text-gray-400 truncate leading-tight block min-w-0">
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (activeVoiceChannel) selectChannel(activeVoiceChannel);
+                  }}
+                  className="text-[11px] text-gray-400 hover:text-gray-200 truncate leading-tight block min-w-0 cursor-pointer"
+                  title="Ir para o canal de voz"
+                >
                   {activeVoiceChannel?.name || 'Canal de Voz'}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-1 flex-shrink-0 ml-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowVoicePopout(!showVoicePopout);
+                }}
+                className={`p-1.5 rounded hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0 ${
+                  showVoicePopout ? 'text-brand-400 bg-white/10' : 'text-gray-400 hover:text-brand-400'
+                }`}
+                title="Status da Conexão WebRTC (Ping / Servidor)"
+              >
+                <Activity className="w-4 h-4" />
+              </button>
+
               <button
                 onClick={handleScreenShareClick}
                 className={`hidden md:inline-flex p-1.5 rounded hover:bg-background-light transition-colors cursor-pointer flex-shrink-0 ${
@@ -167,6 +214,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         </div>
       )}
 
+      {/* Full WebRTC Technical Diagnostics Modal */}
+      <VoiceDiagnosticModal
+        isOpen={showDiagnostic}
+        onClose={() => setShowDiagnostic(false)}
+      />
+
       {/* User Info and Controls */}
       <div
         onClick={() => {
@@ -178,27 +231,19 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       >
         <div
           onClick={(e) => {
-            if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-              setShowStatusMenu(!showStatusMenu);
-            }
+            e.stopPropagation();
+            setShowStatusMenu((prev) => !prev);
           }}
           className="flex items-center gap-2 p-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 transition-colors group/usercard overflow-hidden"
-          title="Editar Meu Perfil e Configurações"
+          title="Definir Status"
         >
           {/* Avatar */}
-          <div className="relative w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm">
-            {user?.avatar_url ? (
-              <img src={formatAssetUrl(user.avatar_url)} alt={user.username} className="w-full h-full rounded-full object-cover" />
-            ) : (
-              <span>{user?.display_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'U'}</span>
-            )}
-            {/* Status dot */}
-            <div
-              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background-darkest ${getStatusColor(
-                user?.status
-              )}`}
-            />
-          </div>
+          <UserAvatar
+            user={user}
+            size="lg"
+            showStatus={true}
+            statusBorderColor="border-background-darkest"
+          />
 
           <div className="flex flex-col truncate min-w-0 flex-1 overflow-hidden">
             <div className="flex items-center gap-1.5 min-w-0 w-full overflow-hidden">
@@ -208,7 +253,18 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               <Settings className="w-3.5 h-3.5 text-gray-400 group-hover/usercard:text-brand-400 md:hidden flex-shrink-0 transition-transform group-hover/usercard:rotate-45" />
             </div>
             <span className="text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">
-              {user?.custom_status || getStatusLabel(user?.status)}
+              {user?.custom_activity && user?.show_activity_status !== false ? (
+                <span className="text-brand-300 font-medium flex items-center gap-1 truncate">
+                  <span className="truncate">
+                    {user.custom_activity.type === 'playing' ? 'Jogando ' :
+                     user.custom_activity.type === 'listening' ? 'Ouvindo ' :
+                     user.custom_activity.type === 'watching' ? 'Assistindo ' : ''}
+                    {user.custom_activity.name}
+                  </span>
+                </span>
+              ) : (
+                user?.custom_status || getStatusLabel(user?.status)
+              )}
             </span>
           </div>
         </div>

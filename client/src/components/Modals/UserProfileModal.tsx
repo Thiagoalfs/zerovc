@@ -1,23 +1,39 @@
 import React, { useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageSquare, Shield, Calendar, Edit3 } from 'lucide-react';
+import {
+  MessageSquare,
+  Shield,
+  Calendar,
+  Edit3,
+  Gamepad2,
+  Music,
+  Tv,
+  Radio,
+  Trophy,
+  Sparkles,
+  Volume2,
+  Maximize2,
+} from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
+import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
+import { getUserActivity } from '../../utils/userActivity';
 
 export interface UserProfilePosition {
   x: number;
   y: number;
 }
 
-interface UserProfileModalProps {
+export interface UserProfileModalProps {
   user: User | null;
   position?: UserProfilePosition | null;
   isOpen: boolean;
   onClose: () => void;
   onOpenDM?: (userId: string) => void;
   onEditOwnProfile?: () => void;
+  onOpenFullProfile?: (user: User) => void;
 }
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
@@ -27,8 +43,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onClose,
   onOpenDM,
   onEditOwnProfile,
+  onOpenFullProfile,
 }) => {
   const { user: currentUser } = useAuthStore();
+  const guilds = useGuildStore((s) => s.guilds);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -41,13 +59,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  const activity = useMemo(() => {
+    return getUserActivity(user, currentUser, guilds);
+  }, [user, currentUser, guilds]);
+
   const popoverStyle: React.CSSProperties = useMemo(() => {
     if (!position || typeof window === 'undefined' || window.innerWidth < 640) {
       return {};
     }
 
     const cardWidth = 300;
-    const cardHeight = 360;
+    const cardHeight = 380;
     const margin = 16;
 
     let left = position.x + 16;
@@ -115,18 +137,25 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   };
 
+  const handleAvatarClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onOpenFullProfile) {
+      onOpenFullProfile(user);
+    }
+  };
+
   return (
     <>
       {/* Invisible/Subtle Backdrop: Closes on outside click */}
       <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs sm:bg-black/20"
+        className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs sm:bg-black/20"
         onClick={(e) => {
           e.stopPropagation();
           onClose();
         }}
       />
 
-      {/* Floating Popover Card / Centered on Mobile */}
+      {/* Floating Popover Card */}
       <div
         style={popoverStyle}
         onClick={(e) => e.stopPropagation()}
@@ -136,22 +165,35 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             : ''
         }`}
       >
-        {/* Banner */}
+        {/* Banner with expand action */}
         <div
-          className="h-20 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-cover bg-center"
+          className="h-20 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-cover bg-center relative group/banner cursor-pointer"
           style={user.banner_url ? { backgroundImage: `url(${formatAssetUrl(user.banner_url)})` } : {}}
-        />
+          onClick={handleAvatarClick}
+          title="Clique para abrir perfil completo no centro da tela"
+        >
+          <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-black/80 text-white opacity-0 group-hover/banner:opacity-100 transition-opacity">
+            <Maximize2 className="w-3.5 h-3.5" />
+          </div>
+        </div>
 
         {/* Profile Details */}
         <div className="px-4 pb-4 relative bg-background-darkest">
-          {/* Avatar */}
-          <div className="relative -mt-9 mb-2 inline-block">
-            <div className="w-16 h-16 rounded-full bg-brand-500 border-4 border-background-darkest flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden">
+          {/* Avatar with Click to Expand */}
+          <div className="relative -mt-9 mb-2 inline-block group/avatar">
+            <div
+              onClick={handleAvatarClick}
+              className="w-16 h-16 rounded-full bg-brand-500 border-4 border-background-darkest flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden cursor-pointer relative transition-transform group-hover/avatar:scale-105 active:scale-95"
+              title="Clique para abrir perfil completo no centro da tela"
+            >
               {user.avatar_url ? (
                 <img src={formatAssetUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase() || 'U'}</span>
               )}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center text-white">
+                <Maximize2 className="w-4 h-4 drop-shadow" />
+              </div>
             </div>
             <div
               className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-background-darkest shadow-md ${getStatusColor(
@@ -178,6 +220,39 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
             )}
 
+            {/* Atividade Category - Only rendered if an activity is active */}
+            {activity && (
+              <div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                  Atividade
+                </span>
+                <div className="p-2.5 bg-background-darkest/90 rounded-xl border border-brand-500/20 flex flex-col gap-1 shadow-sm animate-in fade-in">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-400 uppercase tracking-wider">
+                    {activity.kind === 'game' ? <Gamepad2 className="w-3.5 h-3.5 text-green-400" /> :
+                     activity.kind === 'music' ? <Music className="w-3.5 h-3.5 text-emerald-400" /> :
+                     activity.kind === 'call' ? <Volume2 className="w-3.5 h-3.5 text-brand-400 animate-pulse" /> :
+                     activity.type === 'watching' ? <Tv className="w-3.5 h-3.5 text-purple-400" /> :
+                     activity.type === 'streaming' ? <Radio className="w-3.5 h-3.5 text-red-400" /> :
+                     activity.type === 'competing' ? <Trophy className="w-3.5 h-3.5 text-amber-400" /> :
+                     <Sparkles className="w-3.5 h-3.5 text-brand-400" />}
+                    <span>{activity.header}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-100 flex items-center gap-1">
+                      {activity.emoji && <span>{activity.emoji}</span>}
+                      <span>{activity.name}</span>
+                    </span>
+                    {activity.details && (
+                      <span className="text-[11px] text-gray-300">{activity.details}</span>
+                    )}
+                    {activity.state && (
+                      <span className="text-[10px] text-gray-400">{activity.state}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* About Me / Bio */}
             {user.bio ? (
               <div>
@@ -186,14 +261,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </span>
                 <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{user.bio}</p>
               </div>
-            ) : (
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
-                  Sobre mim
-                </span>
-                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap"></p>
-              </div>
-            )}
+            ) : null}
 
             {/* Server Roles */}
             {user.roles && user.roles.length > 0 && (
@@ -274,3 +342,4 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     </>
   );
 };
+

@@ -252,3 +252,25 @@ export const playUndeafenSound = () => {
     osc.stop(now + 0.12);
   } catch {}
 };
+
+// Text-to-Speech synthesizer helper
+export const speakText = (text: string, authorName?: string) => {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    // Strip raw URLs or long markdown links for clearer speech
+    const cleanText = text
+      .replace(/https?:\/\/[^\s]+/g, 'link')
+      .replace(/```[\s\S]*?```/g, 'bloco de código')
+      .replace(/`([^`]+)`/g, '$1')
+      .slice(0, 300);
+
+    const fullMessage = authorName ? `${authorName} disse: ${cleanText}` : cleanText;
+    const utterance = new SpeechSynthesisUtterance(fullMessage);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.0;
+    utterance.volume = getSoundVolume();
+    window.speechSynthesis.speak(utterance);
+  } catch {}
+};
+

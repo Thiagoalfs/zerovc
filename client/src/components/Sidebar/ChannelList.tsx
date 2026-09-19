@@ -80,6 +80,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     channelMentions,
     reorderChannels,
     deleteChannel,
+    deleteGuild,
     kickMember,
     banMember,
     muteMember,
