@@ -99,7 +99,11 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		    status = COALESCE($7, status),
 		    saved_status = COALESCE($7, saved_status),
 		    custom_status = COALESCE($8, custom_status),
-		    custom_activity = CASE WHEN $9::boolean THEN $10::jsonb ELSE custom_activity END,
+		    custom_activity = CASE 
+		        WHEN $9::boolean THEN 
+		            CASE WHEN $10::text IS NULL OR $10::text = '' OR $10::text = 'null' THEN NULL ELSE $10::jsonb END
+		        ELSE custom_activity 
+		    END,
 		    show_activity_status = COALESCE($11, show_activity_status),
 		    auto_detect_activity = COALESCE($12, auto_detect_activity),
 		    server_folders = CASE WHEN $13::boolean THEN $14::jsonb ELSE server_folders END,
@@ -115,6 +119,9 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	var customActivityBytes []byte
 	if hasCustomActivity && req.CustomActivity != nil {
 		customActivityBytes = *req.CustomActivity
+		if string(customActivityBytes) == "null" || len(customActivityBytes) == 0 {
+			customActivityBytes = nil
+		}
 	}
 
 	hasServerFolders := req.ServerFolders != nil
@@ -145,6 +152,10 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, `{"error":"falha ao atualizar perfil"}`, http.StatusInternalServerError)
 		return
+	}
+
+	if string(user.CustomActivity) == "null" || len(user.CustomActivity) == 0 {
+		user.CustomActivity = nil
 	}
 
 	publicUser := user.ToPublic()

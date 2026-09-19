@@ -22,7 +22,7 @@ type User struct {
 	Bio              string    `json:"bio"`
 	Status             string          `json:"status"` // online, idle, dnd, offline
 	CustomStatus       string          `json:"custom_status"`
-	CustomActivity     json.RawMessage `json:"custom_activity,omitempty"`
+	CustomActivity     json.RawMessage `json:"custom_activity"`
 	ShowActivityStatus bool            `json:"show_activity_status"`
 	AutoDetectActivity bool            `json:"auto_detect_activity"`
 	ServerFolders      json.RawMessage `json:"server_folders,omitempty"`
@@ -40,7 +40,7 @@ type UserPublic struct {
 	Bio                string          `json:"bio"`
 	Status             string          `json:"status"`
 	CustomStatus       string          `json:"custom_status"`
-	CustomActivity     json.RawMessage `json:"custom_activity,omitempty"`
+	CustomActivity     json.RawMessage `json:"custom_activity"`
 	ShowActivityStatus bool            `json:"show_activity_status"`
 	AutoDetectActivity bool            `json:"auto_detect_activity"`
 	TwoFactorEnabled   bool            `json:"two_factor_enabled"`
@@ -60,7 +60,7 @@ type FavoriteGIF struct {
 
 func (u *User) ToPublic() UserPublic {
 	var act json.RawMessage
-	if u.ShowActivityStatus {
+	if u.ShowActivityStatus && u.Status != "offline" && string(u.CustomActivity) != "null" && len(u.CustomActivity) > 0 {
 		act = u.CustomActivity
 	}
 	return UserPublic{

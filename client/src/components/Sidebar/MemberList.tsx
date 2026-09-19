@@ -185,9 +185,11 @@ export const MemberList: React.FC<MemberListProps> = ({
           </div>
 
           {/* Activity / Custom Status / Roles Badges */}
-          {((isMe && currentUser ? currentUser.show_activity_status !== false && (currentUser.custom_activity || member.custom_activity) : member.show_activity_status !== false && member.custom_activity)) ? (
+          {((isMe && currentUser
+            ? currentUser.show_activity_status !== false && !!currentUser.custom_activity
+            : member.status !== 'offline' && member.show_activity_status !== false && !!member.custom_activity)) ? (
             (() => {
-              const act = (isMe && currentUser?.custom_activity) ? currentUser.custom_activity : member.custom_activity!;
+              const act = isMe && currentUser ? currentUser.custom_activity! : member.custom_activity!;
               return (
                 <p className="text-[11px] text-brand-300 font-medium truncate flex items-center gap-1">
                   {act.type === 'playing' ? <Gamepad2 className="w-3 h-3 flex-shrink-0" /> :
