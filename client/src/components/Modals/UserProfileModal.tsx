@@ -96,6 +96,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     };
   }, [position]);
 
+  const [quickMessage, setQuickMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setQuickMessage('');
+      setSendError(null);
+      const t = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(t);
+    }
+  }, [isOpen, user?.id]);
+
   if (!isOpen || !user) return null;
 
   const isMe = currentUser?.id === user.id;
@@ -126,22 +142,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       return '';
     }
   })();
-
-  const [quickMessage, setQuickMessage] = useState('');
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setQuickMessage('');
-      setSendError(null);
-      const t = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-      return () => clearTimeout(t);
-    }
-  }, [isOpen, user?.id]);
 
 
 
