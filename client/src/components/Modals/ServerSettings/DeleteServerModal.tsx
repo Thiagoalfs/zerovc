@@ -19,6 +19,7 @@ interface DeleteServerModalProps {
   isDeleting: boolean;
   onConfirmDelete: () => Promise<void>;
   membersCount: number;
+  is2FARequired?: boolean;
 }
 
 export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
@@ -37,8 +38,11 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
   isDeleting,
   onConfirmDelete,
   membersCount,
+  is2FARequired,
 }) => {
   if (!isOpen) return null;
+
+  const has2FA = Boolean(user?.two_factor_enabled) || Boolean(is2FARequired);
 
   const initials = activeGuild.name
     .split(' ')
@@ -135,8 +139,8 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
             />
           </div>
 
-          {Boolean(user?.two_factor_enabled) && (
-            <div className="mt-4 space-y-1.5">
+          {has2FA && (
+            <div className="mt-4 space-y-1.5 animate-in fade-in">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 font-mono flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-brand-400" />
@@ -195,7 +199,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
 
           <button
             type="button"
-            disabled={isDeleting || (Boolean(user?.two_factor_enabled) && !twoFactorCode.trim())}
+            disabled={isDeleting || (has2FA && !twoFactorCode.trim())}
             onClick={onConfirmDelete}
             className="bg-dnd hover:bg-red-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-red-500/20 flex items-center gap-2 cursor-pointer"
           >

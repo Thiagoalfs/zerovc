@@ -1,8 +1,7 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  MessageSquare,
   Shield,
   Calendar,
   Edit3,
@@ -14,12 +13,17 @@ import {
   Sparkles,
   Volume2,
   Maximize2,
+  Send,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
+import { useDMStore } from '../../stores/dmStore';
 import { formatAssetUrl } from '../../lib/api';
 import { getUserActivity } from '../../utils/userActivity';
+import { UserRolesSection } from './UserRolesSection';
 
 export interface UserProfilePosition {
   x: number;
@@ -123,10 +127,51 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   })();
 
-  const handleStartChat = () => {
-    onClose();
-    if (onOpenDM) {
-      onOpenDM(user.id);
+  const [quickMessage, setQuickMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setQuickMessage('');
+      setSendError(null);
+      const t = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(t);
+    }
+  }, [isOpen, user?.id]);
+
+
+
+  const handleQuickSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = quickMessage.trim();
+    if (!text || !user || isMe || isSendingMessage) return;
+
+    setIsSendingMessage(true);
+    setSendError(null);
+    try {
+      const room = await useDMStore.getState().openDMWithUser(user.id);
+      if (!room) {
+        throw new Error('Não foi possível iniciar a conversa.');
+      }
+      await useDMStore.getState().sendMessage(text);
+      setQuickMessage('');
+      onClose();
+      if (onOpenDM) {
+        onOpenDM(user.id);
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Falha ao enviar mensagem.';
+      if (msg.toLowerCase().includes('bloque') || msg.includes('block') || msg.includes('403')) {
+        setSendError('Não é possível enviar mensagem para este usuário.');
+      } else {
+        setSendError(msg);
+      }
+    } finally {
+      setIsSendingMessage(false);
     }
   };
 
@@ -263,27 +308,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
             ) : null}
 
-            {/* Server Roles */}
-            {user.roles && user.roles.length > 0 && (
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1 flex items-center gap-1">
-                  <Shield className="w-3 h-3 text-brand-400" />
-                  Cargos
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {user.roles.map((role) => (
-                    <span
-                      key={role.id}
-                      className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/5 border border-white/10 flex items-center gap-1"
-                      style={{ color: role.color }}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: role.color }} />
-                      {role.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Server Roles with Dropdown */}
+            <UserRolesSection user={user} size="sm" />
 
             {/* Account Created Date */}
             {joinDateStr && (
@@ -307,33 +333,41 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </button>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={handleStartChat}
-                  className="w-full bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-brand-500/20 cursor-pointer"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Enviar Mensagem</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (confirm(`Tem certeza que deseja bloquear ${user.display_name || user.username}? Isso removerá a amizade e impedirá mensagens diretas.`)) {
-                      try {
-                        const { api } = await import('../../lib/api');
-                        await api.users.block(user.id);
-                        alert(`Usuário ${user.display_name || user.username} bloqueado.`);
-                        onClose();
-                      } catch (err: any) {
-                        alert(err.message || 'Falha ao bloquear usuário');
-                      }
-                    }
-                  }}
-                  className="w-full text-gray-400 hover:text-dnd hover:bg-dnd/10 py-1.5 rounded-xl text-[11px] font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  <span>Bloquear Usuário</span>
-                </button>
+                <form onSubmit={handleQuickSendMessage} className="space-y-1">
+                  <div className="relative flex items-center">
+                    <input
+                      ref={inputRef}
+                      autoFocus
+                      type="text"
+                      value={quickMessage}
+                      onChange={(e) => {
+                        setQuickMessage(e.target.value);
+                        if (sendError) setSendError(null);
+                      }}
+                      placeholder={`Conversar com @${user.display_name || user.username}`}
+                      disabled={isSendingMessage}
+                      className="w-full bg-background-darker border border-white/10 focus:border-brand-500 rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-gray-500 outline-none transition-all shadow-inner"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!quickMessage.trim() || isSendingMessage}
+                      className="absolute right-1.5 p-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 transition-colors cursor-pointer"
+                      title="Enviar mensagem"
+                    >
+                      {isSendingMessage ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5 text-brand-400" />
+                      )}
+                    </button>
+                  </div>
+                  {sendError && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 rounded-xl">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      <span>{sendError}</span>
+                    </div>
+                  )}
+                </form>
               </>
             )}
           </div>

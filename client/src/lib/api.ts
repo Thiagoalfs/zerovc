@@ -127,9 +127,14 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
 
   if (!response.ok) {
     let errorMsg = `HTTP Error ${response.status}`;
+    let isRequires2FA = response.status === 428;
     try {
       const errJson = await response.json();
-      if (errJson.error) errorMsg = errJson.error;
+      if (errJson.message) errorMsg = errJson.message;
+      else if (errJson.error) errorMsg = errJson.error;
+      if (errJson.requires_2fa || errJson.error === '2fa_required' || response.status === 428) {
+        isRequires2FA = true;
+      }
     } catch {}
 
     // Auto-recuperação transparente se o token CSRF expirou ou dessincronizou
@@ -140,7 +145,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
       } catch {}
     }
 
-    throw new Error(errorMsg);
+    const error: any = new Error(errorMsg);
+    error.status = response.status;
+    error.requires_2fa = isRequires2FA;
+    throw error;
   }
 
   if (response.status === 204) {

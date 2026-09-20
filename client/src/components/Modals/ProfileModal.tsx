@@ -43,6 +43,7 @@ import {
   Brain,
   Globe,
   Activity,
+  Gamepad2,
   Zap,
   Gauge,
   Headphones,
@@ -77,6 +78,8 @@ import { ImageCropModal } from './ImageCropModal';
 import { KeybindSettingsView } from './KeybindSettingsView';
 import { SessionsSettingsView } from './SessionsSettingsView';
 import { AccessibilitySettingsView } from './AccessibilitySettingsView';
+import { RegisteredGamesView } from './RegisteredGamesView';
+import { ActivityPrivacySettingsView } from './ActivityPrivacySettingsView';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -85,9 +88,21 @@ interface ProfileModalProps {
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   const { user, updateProfile, logout, setUser } = useAuthStore();
+  const reducedMotion = useSettingsStore((state) => state.reducedMotion);
 
   const [activeTab, setActiveTab] = useState<
-    'account' | 'profile' | 'privacy' | 'sessions' | 'appearance' | 'accessibility' | 'audio' | 'notifications' | 'preferences' | 'keybinds'
+    | 'account'
+    | 'profile'
+    | 'privacy'
+    | 'sessions'
+    | 'registered_games'
+    | 'activity_privacy'
+    | 'appearance'
+    | 'accessibility'
+    | 'audio'
+    | 'notifications'
+    | 'preferences'
+    | 'keybinds'
   >('account');
 
   // Mobile full-screen drilldown navigation state ('menu' -> 'content')
@@ -101,6 +116,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   useEffect(() => {
     if (isOpen) {
       setMobileView('menu');
+      initialHwAccelRef.current = hardwareAcceleration;
     }
   }, [isOpen]);
 
@@ -177,6 +193,66 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Desktop ESC key handling
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isCropOpen) {
+          setIsCropOpen(false);
+          return;
+        }
+        if (isEditDisplayNameOpen) {
+          setIsEditDisplayNameOpen(false);
+          return;
+        }
+        if (isEditUsernameOpen) {
+          setIsEditUsernameOpen(false);
+          return;
+        }
+        if (isEditEmailOpen) {
+          setIsEditEmailOpen(false);
+          return;
+        }
+        if (isEditPhoneOpen) {
+          setIsEditPhoneOpen(false);
+          return;
+        }
+        if (isChangePasswordOpen) {
+          setIsChangePasswordOpen(false);
+          return;
+        }
+        if (is2FAModalOpen) {
+          setIs2FAModalOpen(false);
+          return;
+        }
+        if (showBackupCodesModal) {
+          setShowBackupCodesModal(false);
+          return;
+        }
+        if (isDeleteAccountOpen) {
+          setIsDeleteAccountOpen(false);
+          return;
+        }
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    isOpen,
+    onClose,
+    isCropOpen,
+    isEditDisplayNameOpen,
+    isEditUsernameOpen,
+    isEditEmailOpen,
+    isEditPhoneOpen,
+    isChangePasswordOpen,
+    is2FAModalOpen,
+    showBackupCodesModal,
+    isDeleteAccountOpen,
+  ]);
 
   // Hardware Back Button integration for mobile
   useEffect(() => {
@@ -384,6 +460,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setAutoGainControl,
     setDmPrivacy,
   } = useSettingsStore();
+
+  const initialHwAccelRef = useRef(hardwareAcceleration);
+  const hasHwAccelChanged = hardwareAcceleration !== initialHwAccelRef.current;
 
   // Audio Processing Dropdown & Live VAD state
   const [isProcDropdownOpen, setIsProcDropdownOpen] = useState(false);
@@ -909,8 +988,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-0 md:p-4 overflow-hidden animate-in fade-in"
     >
-      {/* Unified Fixed Container (Full-screen on mobile, centered card on desktop) */}
-      <div className="bg-background-dark w-full h-full md:max-w-5xl md:h-[680px] md:max-h-[92dvh] md:my-auto md:rounded-3xl rounded-none overflow-hidden shadow-2xl border-0 md:border md:border-white/10 flex flex-col md:flex-row relative animate-in zoom-in-95">
+      {/* Unified Container (Full-screen on mobile, matching ServerSettingsModal on desktop) */}
+      <div className={`flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-[#18191c] rounded-none md:rounded-2xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200 ${reducedMotion ? '' : 'animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none'}`}>
         
         {/* ======================================================== */}
         {/* MOBILE MENU VIEW (Visible only on mobile when mobileView === 'menu') */}
@@ -1029,6 +1108,54 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
               </div>
 
+              {/* Group: Configurações de Atividade */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
+                  Configurações de Atividade
+                </span>
+                <div className="bg-background-darker rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('registered_games');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Gamepad2 className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Jogos Registrados</div>
+                        <div className="text-xs text-gray-400">Jogos detectados e customizados</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('activity_privacy');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
+                        <Activity className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Privacidade de Atividade</div>
+                        <div className="text-xs text-gray-400">Exibição de status e detecção de jogos</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+                </div>
+              </div>
+
               {/* Group 2: Configurações do App */}
               <div className="space-y-1.5">
                 <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
@@ -1049,7 +1176,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">Aparência</div>
-                        <div className="text-xs text-gray-400">Temas visuais, cores de destaque, densidade</div>
+                        <div className="text-xs text-gray-400">Temas, cores, densidade, escala</div>
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
@@ -1069,7 +1196,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">Acessibilidade</div>
-                        <div className="text-xs text-gray-400">Escala da fonte, alto contraste, daltonismo, TTS</div>
+                        <div className="text-xs text-gray-400">Tamanho do texto, contraste, movimento</div>
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
@@ -1145,149 +1272,190 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* ======================================================== */}
         {/* DESKTOP SIDEBAR (Visible on md: and above) */}
         {/* ======================================================== */}
-        <div className="hidden md:flex w-60 bg-background-darker p-4 flex-col justify-between border-r border-white/5 flex-shrink-0">
-          <div className="flex flex-col items-stretch gap-1 flex-shrink-0">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 mb-2">
-              Configurações de Usuário
-            </span>
+        <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar justify-between">
+          <div className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
+            <div className="px-3 py-2 mb-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono truncate">
+                {user.display_name || user.username}
+              </h2>
+              <div className="text-[11px] text-gray-500 mt-0.5">Configurações de Usuário</div>
+            </div>
 
-            {/* Tab 1: Minha Conta */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('account')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'account'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              <span>Minha Conta</span>
-            </button>
+            <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
+                Configurações de Usuário
+              </span>
 
-            {/* Tab: Privacidade e Segurança */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('privacy')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'privacy'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <Shield className="w-4 h-4" />
-              <span>Privacidade e Segurança</span>
-            </button>
+              {/* Tab 1: Minha Conta */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('account')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'account' || activeTab === 'profile'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <User className="w-4 h-4 shrink-0" />
+                <span>Minha Conta</span>
+              </button>
 
-            {/* Tab: Dispositivos & Sessões */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('sessions')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'sessions'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <Smartphone className="w-4 h-4" />
-              <span>Dispositivos & Sessões</span>
-            </button>
+              {/* Tab: Privacidade e Segurança */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('privacy')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'privacy'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Shield className="w-4 h-4 shrink-0" />
+                <span>Privacidade e Segurança</span>
+              </button>
 
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-2 pt-2">
-              Configurações do App
-            </span>
+              {/* Tab: Dispositivos & Sessões */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('sessions')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'sessions'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Smartphone className="w-4 h-4 shrink-0" />
+                <span>Dispositivos & Sessões</span>
+              </button>
 
-            {/* Tab: Aparência */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('appearance')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'appearance'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <Palette className="w-4 h-4" />
-              <span>Aparência</span>
-            </button>
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1 pt-2">
+                Configurações de Atividade
+              </span>
 
-            {/* Tab: Acessibilidade */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('accessibility')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'accessibility'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <Eye className="w-4 h-4" />
-              <span>Acessibilidade</span>
-            </button>
+              {/* Tab: Jogos Registrados */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('registered_games')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'registered_games'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Gamepad2 className="w-4 h-4 shrink-0" />
+                <span>Jogos Registrados</span>
+              </button>
 
-            {/* Tab: Voz & Vídeo */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('audio')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'audio'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <Volume2 className="w-4 h-4" />
-              <span>Voz & Vídeo</span>
-            </button>
+              {/* Tab: Privacidade de Atividade */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('activity_privacy')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'activity_privacy'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Activity className="w-4 h-4 shrink-0" />
+                <span>Privacidade de Atividade</span>
+              </button>
 
-            {/* Tab: Notificações & Sons */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('notifications')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'notifications'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <Bell className="w-4 h-4" />
-              <span>Notificações & Sons</span>
-            </button>
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1 pt-2">
+                Configurações do App
+              </span>
 
-            {/* Tab: Preferências */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('preferences')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'preferences'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <Sliders className="w-4 h-4" />
-              <span>Preferências</span>
-            </button>
+              {/* Tab: Aparência */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('appearance')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'appearance'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Palette className="w-4 h-4 shrink-0" />
+                <span>Aparência</span>
+              </button>
 
-            {/* Tab: Atalhos do Teclado */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('keybinds')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'keybinds'
-                  ? 'bg-brand-500 text-white shadow-md'
-                  : 'text-gray-400 hover:text-gray-100 hover:bg-white/5'
-              }`}
-            >
-              <Keyboard className="w-4 h-4" />
-              <span>Atalhos do Teclado</span>
-            </button>
+              {/* Tab: Acessibilidade */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('accessibility')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'accessibility'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Eye className="w-4 h-4 shrink-0" />
+                <span>Acessibilidade</span>
+              </button>
+
+              {/* Tab: Voz & Vídeo */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('audio')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'audio'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Volume2 className="w-4 h-4 shrink-0" />
+                <span>Voz & Vídeo</span>
+              </button>
+
+              {/* Tab: Notificações & Sons */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('notifications')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'notifications'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Bell className="w-4 h-4 shrink-0" />
+                <span>Notificações & Sons</span>
+              </button>
+
+              {/* Tab: Preferências */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('preferences')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'preferences'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Sliders className="w-4 h-4 shrink-0" />
+                <span>Preferências</span>
+              </button>
+
+              {/* Tab: Atalhos do Teclado */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('keybinds')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'keybinds'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <Keyboard className="w-4 h-4 shrink-0" />
+                <span>Atalhos do Teclado</span>
+              </button>
+            </nav>
           </div>
 
           {/* Bottom Logout */}
-          <div className="pt-3 border-t border-white/5 flex-shrink-0">
+          <div className="pt-4 border-t border-white/10 flex flex-col gap-1.5 flex-shrink-0 mt-auto">
             <button
               type="button"
               onClick={logout}
-              className="flex items-center gap-2.5 px-3 py-2 rounded-2xl text-xs font-semibold text-dnd hover:bg-dnd/10 transition-colors cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
               <span>Sair da Conta</span>
@@ -1298,12 +1466,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* ======================================================== */}
         {/* MAIN CONTENT AREA (Visible on desktop OR on mobile when mobileView === 'content') */}
         {/* ======================================================== */}
-        <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 overflow-hidden bg-background-dark/95`}>
+        <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden bg-[#18191c] relative min-w-0 min-h-0`}>
           
           {/* Mobile Drilldown Top Bar (Back Arrow + Title + Close) */}
           <div
             style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
-            className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/5 bg-background-darker/70 flex-shrink-0"
+            className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex-shrink-0"
           >
             <div className="flex items-center gap-2">
               <button
@@ -1320,6 +1488,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               {activeTab === 'profile' && 'Perfil de Usuário'}
               {activeTab === 'privacy' && 'Privacidade'}
               {activeTab === 'sessions' && 'Sessões & Dispositivos'}
+              {activeTab === 'registered_games' && 'Jogos Registrados'}
+              {activeTab === 'activity_privacy' && 'Privacidade de Atividade'}
               {activeTab === 'appearance' && 'Aparência'}
               {activeTab === 'accessibility' && 'Acessibilidade'}
               {activeTab === 'audio' && 'Voz & Vídeo'}
@@ -1337,14 +1507,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </button>
           </div>
 
-          {/* Desktop Top Bar with Title and Close Button */}
-          <div className="hidden md:flex min-h-14 sm:h-16 px-4 sm:px-6 py-2 border-b border-white/5 items-center justify-between flex-shrink-0">
+          {/* Desktop Top Header */}
+          <div className="hidden md:flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-[#1e1f22]/40">
             <div className="flex items-center gap-3">
               {activeTab === 'profile' && (
                 <button
                   type="button"
                   onClick={() => setActiveTab('account')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer border border-white/5"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer border border-white/10"
                   title="Voltar para Minha Conta"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -1352,23 +1522,27 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </button>
               )}
               <div>
-                <h3 className="text-lg font-bold text-white">
-                  {activeTab === 'account' && 'Minha Conta'}
+                <h1 className="text-lg font-bold text-white flex items-center gap-2">
+                  {activeTab === 'account' && 'Minha Conta e Perfil'}
                   {activeTab === 'profile' && 'Perfil de Usuário'}
                   {activeTab === 'privacy' && 'Privacidade e Segurança'}
                   {activeTab === 'sessions' && 'Sessões Ativas e Dispositivos'}
+                  {activeTab === 'registered_games' && 'Jogos Registrados'}
+                  {activeTab === 'activity_privacy' && 'Privacidade de Atividade'}
                   {activeTab === 'appearance' && 'Aparência & Customização'}
                   {activeTab === 'accessibility' && 'Central de Acessibilidade'}
                   {activeTab === 'audio' && 'Voz & Vídeo'}
                   {activeTab === 'notifications' && 'Notificações & Sons'}
                   {activeTab === 'preferences' && 'Preferências do Sistema'}
                   {activeTab === 'keybinds' && 'Atalhos do Teclado'}
-                </h3>
-                <p className="text-xs text-gray-400">
+                </h1>
+                <p className="text-xs text-gray-400 mt-0.5">
                   {activeTab === 'account' && 'Personalize seu perfil, avatar, banner, nome de exibição e recado.'}
                   {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
-                  {activeTab === 'privacy' && 'Gerencie credenciais de acesso, e-mail, senha, autenticação 2FA, atividade e dados.'}
+                  {activeTab === 'privacy' && 'Gerencie credenciais de acesso, e-mail, senha, autenticação 2FA e dados.'}
                   {activeTab === 'sessions' && 'Visualize aparelhos conectados e encerre sessões ativas remotamente.'}
+                  {activeTab === 'registered_games' && 'Gerencie jogos detectados no seu computador, adicione jogos customizados e controle status.'}
+                  {activeTab === 'activity_privacy' && 'Configure a exibição de status de jogo e detecção automática de processos em segundo plano.'}
                   {activeTab === 'appearance' && 'Personalize temas visuais, cores de destaque, densidade e zoom.'}
                   {activeTab === 'accessibility' && 'Ajuste escala tipográfica do chat, alto contraste, redução de movimento, daltonismo e TTS.'}
                   {activeTab === 'audio' && 'Ajuste dispositivos, microfone, webcam e filtros avançados de áudio WebRTC.'}
@@ -1380,10 +1554,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </div>
 
             <button
-              type="button"
               onClick={onClose}
-              className="p-2 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
-              title="Fechar (Esc)"
+              className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Fechar Configurações (ESC)"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1406,7 +1579,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           />
 
           {/* Scrollable Tab Content Container */}
-          <div className="flex-1 p-4 sm:p-6 overflow-y-auto no-scrollbar space-y-5 min-h-0 overscroll-contain touch-pan-y">
+          <div className="flex-1 p-4 sm:p-8 overflow-y-auto no-scrollbar md:custom-scrollbar space-y-5 min-h-0 overscroll-contain touch-pan-y">
             {/* TAB 1: MINHA CONTA (UNIFIED WITH PROFILE CUSTOMIZATION) */}
             {activeTab === 'account' && (
               <div className="space-y-5 animate-in fade-in">
@@ -1637,7 +1810,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             {/* TAB: PRIVACIDADE E SEGURANÇA */}
             {activeTab === 'privacy' && (
               <div className="space-y-6 animate-in fade-in">
-                {/* 1. Credenciais de Acesso (E-mail & Senha) */}
+                {/* 1. Credenciais de Acesso (E-mail, Senha & 2FA) */}
                 <div>
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <Key className="w-3.5 h-3.5 text-brand-400" />
@@ -1699,18 +1872,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         Mudar Senha
                       </button>
                     </div>
-                  </div>
-                </div>
 
-                {/* 2. Autenticação & Sessões (2FA & Sessão Atual) */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <ShieldCheck className="w-3.5 h-3.5 text-brand-400" />
-                    <span>Autenticação & Sessões</span>
-                  </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
-                    {/* 2FA */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 first:pt-0">
+                    {/* Autenticação de Dois Fatores (2FA) */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3.5">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-white">Autenticação de Dois Fatores (2FA)</span>
@@ -1741,29 +1905,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         {user.two_factor_enabled ? 'Desativar 2FA' : 'Habilitar 2FA'}
                       </button>
                     </div>
-
-                    {/* Sessão Atual */}
-                    <div className="flex items-center justify-between pt-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
-                          <Laptop className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-white">Sessão Atual</span>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                              Dispositivo Atual
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-gray-400">ZeroVC Desktop • Online agora</span>
-                        </div>
-                      </div>
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
-                    </div>
                   </div>
                 </div>
 
-                {/* 3. Mensagens Diretas (DMs) */}
+                {/* 2. Mensagens Diretas (DMs) */}
                 <div>
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <Lock className="w-3.5 h-3.5 text-brand-400" />
@@ -1813,86 +1958,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* 4. Atividade de Jogo e Rich Presence */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Activity className="w-3.5 h-3.5 text-brand-400" />
-                    <span>Status de Atividade & Jogos</span>
-                  </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
-                    {/* Show Activity Status */}
-                    <div className="flex items-center justify-between pt-1 first:pt-0">
-                      <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">
-                          Exibir atividade atual como mensagem de status
-                        </span>
-                        <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
-                          Permite que outros usuários vejam qual jogo ou aplicativo você está executando em seu perfil e na lista de membros.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={user.show_activity_status !== false}
-                        onClick={async () => {
-                          const currentVal = user.show_activity_status !== false;
-                          try {
-                            const updated = await updateProfile({ show_activity_status: !currentVal });
-                            setUser(updated);
-                          } catch (err) {
-                            console.error('Failed to toggle show_activity_status:', err);
-                          }
-                        }}
-                        className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                          user.show_activity_status !== false ? 'bg-brand-500' : 'bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                            user.show_activity_status !== false ? 'translate-x-6' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {/* Auto-detect activity in Electron */}
-                    <div className="flex items-center justify-between pt-3.5">
-                      <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">
-                          Detectar automaticamente jogos em execução
-                        </span>
-                        <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
-                          Escaneia processos em segundo plano no desktop e sincroniza seu status de jogo em tempo real.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={user.auto_detect_activity !== false}
-                        onClick={async () => {
-                          const currentVal = user.auto_detect_activity !== false;
-                          try {
-                            const updated = await updateProfile({ auto_detect_activity: !currentVal });
-                            setUser(updated);
-                          } catch (err) {
-                            console.error('Failed to toggle auto_detect_activity:', err);
-                          }
-                        }}
-                        className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                          user.auto_detect_activity !== false ? 'bg-brand-500' : 'bg-white/10'
-                        }`}
-                      >
-                        <div
-                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                            user.auto_detect_activity !== false ? 'translate-x-6' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 5. Gestão de Dados e Conta (LGPD / GDPR) */}
+                {/* 4. Gestão de Dados e Conta (LGPD / GDPR) */}
                 <div>
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <Shield className="w-3.5 h-3.5 text-brand-400" />
@@ -1959,6 +2025,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             {activeTab === 'sessions' && (
               <div className="animate-in fade-in">
                 <SessionsSettingsView />
+              </div>
+            )}
+
+            {/* TAB: JOGOS REGISTRADOS */}
+            {activeTab === 'registered_games' && (
+              <div className="animate-in fade-in">
+                <RegisteredGamesView />
+              </div>
+            )}
+
+            {/* TAB: PRIVACIDADE DE ATIVIDADE */}
+            {activeTab === 'activity_privacy' && (
+              <div className="animate-in fade-in">
+                <ActivityPrivacySettingsView />
               </div>
             )}
 
@@ -3193,8 +3273,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         </button>
                       </div>
 
-                      {typeof window !== 'undefined' && window.electronAPI?.relaunchApp && (
-                        <div className="p-3 bg-brand-500/10 border border-brand-500/20 rounded-xl flex items-center justify-between gap-3 text-xs text-brand-300">
+                      {hasHwAccelChanged && typeof window !== 'undefined' && window.electronAPI?.relaunchApp && (
+                        <div className="p-3 bg-brand-500/10 border border-brand-500/20 rounded-xl flex items-center justify-between gap-3 text-xs text-brand-300 animate-in fade-in">
                           <span>A alteração da aceleração de hardware no Electron requer reiniciar o app.</span>
                           <button
                             type="button"

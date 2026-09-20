@@ -7,7 +7,9 @@ import { MessageInput } from './MessageInput';
 import { MemberList } from '../Sidebar/MemberList';
 import { SearchAutocompletePopout } from './SearchAutocompletePopout';
 import { SearchResultsPanel } from './SearchResultsPanel';
+import { TypingIndicator } from './TypingIndicator';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
+import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
 import { User, Message } from '../../types';
 
 interface ChatAreaProps {
@@ -134,18 +136,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const scrollToBottom = (smooth = false) => {
-    if (!showPinnedOnly) {
-      if (scrollContainerRef.current) {
-        if (smooth) {
-          scrollContainerRef.current.scrollTo({
-            top: scrollContainerRef.current.scrollHeight,
-            behavior: 'smooth',
-          });
-        } else {
-          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-        }
+    if (!showPinnedOnly && scrollContainerRef.current) {
+      if (smooth) {
+        smoothScrollToBottomExponential(scrollContainerRef.current);
+      } else {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
       }
     }
+  };
+
+  const handleSendMessage = async (content: string, replyToId?: string) => {
+    scrollToBottom(true);
+    await sendMessage(content, replyToId);
+    setTimeout(() => scrollToBottom(true), 60);
+    setTimeout(() => scrollToBottom(true), 200);
   };
 
   // Reset initial load flag on channel change
@@ -159,7 +163,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   }, [activeChannel?.id]);
 
-  // Keep scroll position when loading older messages OR scroll instantly to bottom on initial load
+  // Keep scroll position when loading older messages OR scroll smoothly/instantly to bottom on initial load / new messages
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -181,14 +185,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       return;
     }
 
+    const lastMessage = messages[messages.length - 1];
+    const isMyMessage = Boolean(lastMessage && user && lastMessage.author_id === user.id);
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
-    if (isNearBottom && !isAutoScrollingRef.current) {
+
+    if ((isNearBottom || isMyMessage) && !isAutoScrollingRef.current) {
       scrollToBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
       setTimeout(() => scrollToBottom(true), 300);
-      setTimeout(() => scrollToBottom(true), 600);
     }
-  }, [messages]);
+  }, [messages, user?.id]);
 
   const handleMediaLoad = () => {
     const container = scrollContainerRef.current;
@@ -270,8 +276,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     );
   }
 
-  const typingForThisChannel = typingUsers.get(activeChannel.id);
-  const isSomeoneTyping = typingForThisChannel && typingForThisChannel.size > 0;
+  const typingUserIds = useMemo(() => {
+    if (!activeChannel) return [];
+    return Array.from(typingUsers.get(activeChannel.id) || []).filter((id) => id !== user?.id);
+  }, [typingUsers, activeChannel, user?.id]);
 
   return (
     <div
@@ -527,19 +535,17 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
 
           {/* Typing Indicator */}
-          {isSomeoneTyping && (
-            <div className="h-5 px-3 md:px-4 text-xs text-gray-400 flex items-center gap-1.5 animate-pulse">
-              <span className="font-semibold text-gray-300">Alguém</span>
-              <span>está digitando...</span>
-            </div>
-          )}
+          <TypingIndicator
+            typingUserIds={typingUserIds}
+            members={activeGuild?.members || []}
+          />
 
           {/* Message Input */}
           <MessageInput
             channel={activeChannel}
             replyingTo={replyingTo}
             onCancelReply={() => setReplyingTo(null)}
-            onSendMessage={sendMessage}
+            onSendMessage={handleSendMessage}
             onEditLastMessage={handleEditLastMessage}
             droppedFile={droppedFile}
             onClearDroppedFile={() => setDroppedFile(null)}

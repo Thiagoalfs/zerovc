@@ -113,6 +113,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		RETURNING id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status,
 		          COALESCE(custom_activity, 'null'::jsonb), COALESCE(show_activity_status, true), COALESCE(auto_detect_activity, true),
 		          COALESCE(server_folders, '[]'::jsonb), COALESCE(guild_positions, '[]'::jsonb),
+		          COALESCE(two_factor_secret, ''), email_verified,
 		          created_at, updated_at
 	`
 	hasCustomActivity := req.CustomActivity != nil
@@ -147,12 +148,15 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		&user.Bio, &user.Status, &user.CustomStatus,
 		&user.CustomActivity, &user.ShowActivityStatus, &user.AutoDetectActivity,
 		&user.ServerFolders, &user.GuildPositions,
+		&user.TwoFactorSecret, &user.EmailVerified,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"falha ao atualizar perfil"}`, http.StatusInternalServerError)
 		return
 	}
+
+	user.TwoFactorEnabled = user.TwoFactorSecret != ""
 
 	if string(user.CustomActivity) == "null" || len(user.CustomActivity) == 0 {
 		user.CustomActivity = nil

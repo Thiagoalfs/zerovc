@@ -104,6 +104,7 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	`)
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions (user_id)")
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions (token_hash)")
+	db.Pool.Exec(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_sessions_token_hash_unique ON user_sessions (token_hash)")
 
 	log.Println("Database schema migration executed successfully")
 	return nil

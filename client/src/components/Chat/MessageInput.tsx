@@ -474,12 +474,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     const now = Date.now();
-    if (now - lastTypingTime.current > 3500) {
+    if (now - lastTypingTime.current > 1800) {
       lastTypingTime.current = now;
       if (onTyping) {
         onTyping();
       } else if (channel?.id) {
-        socket.send('TYPING_START', { channel_id: channel.id });
+        socket.send('TYPING_START', {
+          channel_id: channel.id,
+          guild_id: activeGuild?.id,
+        });
       }
     }
   };

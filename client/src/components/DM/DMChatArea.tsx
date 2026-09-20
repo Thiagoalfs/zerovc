@@ -18,7 +18,11 @@ import { MessageItem } from '../Chat/MessageItem';
 import { MessageInput } from '../Chat/MessageInput';
 import { SearchAutocompletePopout } from '../Chat/SearchAutocompletePopout';
 import { SearchResultsPanel } from '../Chat/SearchResultsPanel';
+import { socket } from '../../lib/socket';
+import { useGuildStore } from '../../stores/guildStore';
+import { TypingIndicator } from '../Chat/TypingIndicator';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
+import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
 import { User, DMMessage } from '../../types';
 
 interface DMChatAreaProps {
@@ -68,6 +72,12 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const dragCounterRef = useRef<number>(0);
 
   const recipient = activeRoom?.recipient;
+  const typingUsers = useGuildStore((s) => s.typingUsers);
+
+  const typingUserIds = useMemo(() => {
+    if (!activeRoom) return [];
+    return Array.from(typingUsers.get(activeRoom.id) || []).filter((id) => id !== user?.id);
+  }, [typingUsers, activeRoom, user?.id]);
 
   useEffect(() => {
     if (showPinnedOnly && activeRoom) {
@@ -129,10 +139,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const scrollToBottom = (smooth = false) => {
     if (!appliedSearchQuery && scrollContainerRef.current) {
       if (smooth) {
-        scrollContainerRef.current.scrollTo({
-          top: scrollContainerRef.current.scrollHeight,
-          behavior: 'smooth',
-        });
+        smoothScrollToBottomExponential(scrollContainerRef.current);
       } else {
         scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
       }
@@ -170,13 +177,16 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       return;
     }
 
+    const lastMessage = messages[messages.length - 1];
+    const isMyMessage = Boolean(lastMessage && user && lastMessage.author_id === user.id);
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
-    if (isNearBottom) {
+
+    if (isNearBottom || isMyMessage) {
       scrollToBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
       setTimeout(() => scrollToBottom(true), 300);
     }
-  }, [messages]);
+  }, [messages, user?.id]);
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
@@ -567,14 +577,31 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Typing Indicator */}
+      <TypingIndicator
+        typingUserIds={typingUserIds}
+        members={recipient ? [recipient] : []}
+      />
+
       {/* Universal Message Input */}
       <MessageInput
-        placeholder={`Conversar com @${recipient.display_name || recipient.username}`}
+        placeholder={recipient ? `Conversar com @${recipient.display_name || recipient.username}` : 'Conversar...'}
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
         onSendMessage={async (content, replyToId) => {
+          scrollToBottom(true);
           await sendMessage(content, undefined, replyToId);
           setReplyingTo(null);
+          setTimeout(() => scrollToBottom(true), 60);
+          setTimeout(() => scrollToBottom(true), 200);
+        }}
+        onTyping={() => {
+          if (activeRoom && recipient) {
+            socket.send('TYPING_START', {
+              channel_id: activeRoom.id,
+              recipient_id: recipient.id,
+            });
+          }
         }}
         onEditLastMessage={handleEditLastMessage}
         droppedFile={droppedFile}

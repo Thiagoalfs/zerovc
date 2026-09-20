@@ -14,7 +14,6 @@ import {
   Sparkles,
   Volume2,
   X,
-  UserX,
   ExternalLink,
   Copy,
   Check,
@@ -24,6 +23,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
 import { getUserActivity } from '../../utils/userActivity';
+import { UserRolesSection } from './UserRolesSection';
 
 export interface UserProfileModalFocusProps {
   user: User | null;
@@ -309,27 +309,8 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
               )}
             </div>
 
-              {/* Server Roles */}
-              {user.roles && user.roles.length > 0 && (
-                <div>
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                    <Shield className="w-3.5 h-3.5 text-brand-400" />
-                    Cargos ({user.roles.length})
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {user.roles.map((role) => (
-                      <span
-                        key={role.id}
-                        className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 flex items-center gap-1.5 shadow-sm"
-                        style={{ color: role.color }}
-                      >
-                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: role.color }} />
-                        {role.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Server Roles with Dropdown */}
+              <UserRolesSection user={user} size="md" />
 
               {/* Account Created Date */}
               {joinDateStr && (
@@ -339,31 +320,6 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                 </div>
               )}
             </div>
-
-          {/* Bottom Actions */}
-          {!isMe && (
-            <div className="mt-4 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (confirm(`Tem certeza que deseja bloquear ${user.display_name || user.username}? Isso removerá a amizade e impedirá mensagens diretas.`)) {
-                    try {
-                      const { api } = await import('../../lib/api');
-                      await api.users.block(user.id);
-                      alert(`Usuário ${user.display_name || user.username} bloqueado.`);
-                      onClose();
-                    } catch (err: any) {
-                      alert(err.message || 'Falha ao bloquear usuário');
-                    }
-                  }
-                }}
-                className="text-gray-400 hover:text-dnd hover:bg-dnd/10 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <UserX className="w-3.5 h-3.5" />
-                <span>Bloquear Usuário</span>
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
