@@ -24,28 +24,51 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
 
   // Sync with active guild member if inside a server context
   const memberInGuild = useMemo(() => {
-    if (!activeGuild || !user) return null;
-    return activeGuild.members?.find((m) => m.id === user.id) || null;
+    if (!activeGuild || !user || !Array.isArray(activeGuild.members)) return null;
+    return activeGuild.members.find((m) => m && m.id === user.id) || null;
   }, [activeGuild, user]);
 
-  const displayRoles = useMemo(() => {
-    if (memberInGuild) {
-      return memberInGuild.roles || [];
-    }
-    return user?.roles || [];
-  }, [memberInGuild, user?.roles]);
+  const displayRoles: Role[] = useMemo(() => {
+    const rawRoles = memberInGuild?.roles || user?.roles || [];
+    if (!Array.isArray(rawRoles)) return [];
+
+    return rawRoles
+      .map((r: any) => {
+        if (!r) return null;
+        if (typeof r === 'string' && activeGuild?.roles) {
+          return activeGuild.roles.find((gr) => gr && gr.id === r) || null;
+        }
+        if (typeof r === 'object' && r.id && r.name) {
+          if (activeGuild?.roles) {
+            return activeGuild.roles.find((gr) => gr && gr.id === r.id) || r;
+          }
+          return r;
+        }
+        return null;
+      })
+      .filter((r): r is Role => !!r && typeof r.id === 'string' && typeof r.name === 'string');
+  }, [memberInGuild, user?.roles, activeGuild?.roles]);
 
   const canManageMemberRoles = useMemo(() => {
-    if (!activeGuild || !memberInGuild || !perms.canManageRoles) return false;
-    const mod = perms.canModerateMember(memberInGuild);
-    return perms.isCurrentOwner || (!mod.isTargetOwner && mod.isHierarchyAllowed);
+    if (!activeGuild || !memberInGuild || !perms?.canManageRoles) return false;
+    try {
+      const mod = perms.canModerateMember?.(memberInGuild);
+      if (!mod) return false;
+      return Boolean(perms.isCurrentOwner || (!mod.isTargetOwner && mod.isHierarchyAllowed));
+    } catch {
+      return false;
+    }
   }, [activeGuild, memberInGuild, perms]);
 
   const availableRoles = useMemo(() => {
-    if (!activeGuild?.roles) return [];
+    if (!activeGuild?.roles || !Array.isArray(activeGuild.roles)) return [];
     return [...activeGuild.roles]
-      .filter((r) => r.name !== '@everyone')
-      .sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+      .filter((r) => r && typeof r === 'object' && r.name && r.name !== '@everyone')
+      .sort(
+        (a, b) =>
+          (typeof a.position === 'number' ? a.position : 999) -
+          (typeof b.position === 'number' ? b.position : 999)
+      );
   }, [activeGuild?.roles]);
 
   useEffect(() => {
@@ -74,11 +97,12 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
   if (displayRoles.length === 0 && !canManageMemberRoles) return null;
 
   const handleToggleRole = async (role: Role) => {
-    if (!activeGuild || operatingRoleId) return;
-    const isManageable = perms.isCurrentOwner || role.position > perms.currentUserHighestPos;
+    if (!activeGuild || !role?.id || operatingRoleId) return;
+    const rolePos = typeof role.position === 'number' ? role.position : 999;
+    const isManageable = perms.isCurrentOwner || rolePos > (perms.currentUserHighestPos ?? 999999);
     if (!isManageable) return;
 
-    const hasRole = displayRoles.some((r) => r.id === role.id);
+    const hasRole = displayRoles.some((r) => r && r.id === role.id);
     setOperatingRoleId(role.id);
     try {
       if (hasRole) {
