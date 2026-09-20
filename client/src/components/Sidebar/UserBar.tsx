@@ -100,7 +100,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   return (
     <div
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
-      className="w-full min-w-0 max-w-full flex-shrink-0 overflow-hidden flex flex-col bg-background-darkest select-none relative px-2 md:px-2.5 pt-0"
+      className="w-full min-w-0 max-w-full flex-shrink-0 overflow-hidden flex flex-col bg-background-darker border-r border-black/20 select-none relative px-2 md:px-2.5 pt-0"
     >
       {/* Quick Status Menu Popover */}
       {showStatusMenu && (
@@ -141,7 +141,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       {(isConnected || isConnecting) && (
         <div
           ref={voiceBarRef}
-          className="w-full min-w-0 max-w-full bg-background-darker border border-white/5 rounded-2xl p-2 px-2.5 mb-1.5 flex flex-col gap-1.5 overflow-visible relative shadow-sm"
+          className="w-full min-w-0 max-w-full bg-background-darkest border border-white/5 rounded-2xl p-2 px-2.5 mb-1.5 flex flex-col gap-1.5 overflow-visible relative shadow-sm"
         >
           {/* Discord-style Floating Voice Connection Popout */}
           <VoiceConnectionPopout
@@ -180,37 +180,26 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               </div>
             </div>
 
-            <div className="flex items-center gap-1 flex-shrink-0 ml-1">
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              {/* Screen Share Quick Button */}
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowVoicePopout(!showVoicePopout);
-                }}
-                className={`p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0 ${
-                  showVoicePopout ? 'text-brand-400 bg-white/10' : 'text-gray-400 hover:text-brand-400'
-                }`}
-                title="Status da Conexão WebRTC (Ping / Servidor)"
-              >
-                <Activity className="w-4 h-4" />
-              </button>
-
-              <button
                 onClick={handleScreenShareClick}
                 className={`hidden md:inline-flex p-1.5 rounded-lg hover:bg-background-light transition-colors cursor-pointer flex-shrink-0 ${
-                  isScreensharing ? 'text-online bg-online/10' : 'text-gray-300'
+                  isScreensharing ? 'text-brand-400 bg-brand-500/10' : 'text-gray-400 hover:text-gray-200'
                 }`}
-                title={isScreensharing ? 'Opções de Compartilhamento' : 'Transmitir Tela'}
+                title={isScreensharing ? 'Opções de transmissão (Clique para trocar tela)' : 'Compartilhar tela'}
               >
-                <Monitor className="w-4 h-4" />
+                {isScreensharing ? <Monitor className="w-3.5 h-3.5 animate-pulse" /> : <Monitor className="w-3.5 h-3.5" />}
               </button>
 
               <button
+                type="button"
                 onClick={leaveVoice}
-                className="p-1.5 rounded-lg hover:bg-dnd/20 text-gray-300 hover:text-dnd transition-colors cursor-pointer flex-shrink-0"
+                className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
                 title="Desconectar"
               >
-                <PhoneOff className="w-4 h-4" />
+                <PhoneOff className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -230,22 +219,26 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             onOpenSettings();
           }
         }}
-        className="h-[48px] md:h-[52px] min-h-[48px] md:min-h-[52px] px-2 md:px-2.5 w-full min-w-0 max-w-full flex items-center justify-between bg-background-darker rounded-2xl border border-white/5 shadow-inner hover:border-white/10 cursor-pointer md:cursor-default overflow-hidden gap-1.5 transition-all"
+        className="h-[48px] md:h-[52px] min-h-[48px] md:min-h-[52px] px-2 md:px-2.5 w-full min-w-0 max-w-full flex items-center justify-between bg-background-darkest rounded-2xl border border-white/5 shadow-inner hover:border-white/10 cursor-pointer md:cursor-default overflow-hidden gap-1.5 transition-all"
       >
         <div
           onClick={(e) => {
             e.stopPropagation();
-            setShowStatusMenu((prev) => !prev);
+            if (typeof window !== 'undefined' && window.innerWidth < 768) {
+              onOpenSettings();
+            } else {
+              setShowStatusMenu((prev) => !prev);
+            }
           }}
           className="flex items-center gap-2 p-1 -ml-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 transition-colors group/usercard overflow-hidden"
-          title="Definir Status"
+          title={typeof window !== 'undefined' && window.innerWidth < 768 ? 'Abrir Configurações' : 'Definir Status'}
         >
           {/* Avatar */}
           <UserAvatar
             user={user}
             size="md"
             showStatus={true}
-            statusBorderColor="border-background-darker"
+            statusBorderColor="border-background-darkest"
           />
 
           <div className="flex flex-col truncate min-w-0 flex-1 overflow-hidden">
@@ -253,7 +246,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               <span className="text-[13px] md:text-[14px] font-bold text-white truncate leading-tight group-hover/usercard:text-brand-300 transition-colors block min-w-0 flex-1">
                 {user?.display_name || user?.username || 'Usuário'}
               </span>
-              <Settings className="w-3.5 h-3.5 text-gray-400 group-hover/usercard:text-brand-400 md:hidden flex-shrink-0 transition-transform group-hover/usercard:rotate-45" />
             </div>
             <span className="text-[11px] md:text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">
               {user?.status !== 'offline' && user?.custom_activity && user?.show_activity_status !== false ? (

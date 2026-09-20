@@ -208,13 +208,6 @@ export const MemberList: React.FC<MemberListProps> = ({
             })()
           ) : member.custom_status ? (
             <p className="text-[11px] text-gray-400 truncate">{member.custom_status}</p>
-          ) : topRole ? (
-            <span
-              className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white/5 truncate max-w-fit block"
-              style={{ color: roleColor || topRole.color || '#99aab5' }}
-            >
-              {topRole.name}
-            </span>
           ) : null}
         </div>
       </div>

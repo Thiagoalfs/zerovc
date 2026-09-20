@@ -253,9 +253,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             {/* Names */}
             <div>
               <h2 className="text-base font-bold text-white leading-snug">
-                {user.display_name || user.username}
+                {user.display_name || user.username || 'Usuário'}
               </h2>
-              <span className="text-xs text-gray-400 font-medium">@{user.username}</span>
+              {user.username && <span className="text-xs text-gray-400 font-medium">@{user.username}</span>}
             </div>
 
             {/* Custom Status */}

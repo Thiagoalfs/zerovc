@@ -1778,53 +1778,57 @@ export const App: React.FC = () => {
           onClose={() => setIsProfileModalOpen(false)}
         />
 
-        <UserProfileModal
-          user={selectedUserForProfile?.user || null}
-          position={selectedUserForProfile?.position || null}
-          isOpen={!!selectedUserForProfile}
-          onClose={() => setSelectedUserForProfile(null)}
-          onOpenFullProfile={(u) => {
-            setSelectedUserForProfile(null);
-            setFocusedUserProfile(u);
-          }}
-          onOpenDM={async (userId) => {
-            setSelectedUserForProfile(null);
-            setIsHomeActive(true);
-            setHomeView('dm');
-            setIsMobileDrawerOpen(false);
-            const room = await useDMStore.getState().openDMWithUser(userId);
-            if (room) {
-              navigateTo(`/@me/${room.id}`);
-            }
-          }}
-          onEditOwnProfile={() => {
-            setSelectedUserForProfile(null);
-            setIsProfileModalOpen(true);
-          }}
-        />
+        <ErrorBoundary>
+          <UserProfileModal
+            user={selectedUserForProfile?.user || null}
+            position={selectedUserForProfile?.position || null}
+            isOpen={!!selectedUserForProfile}
+            onClose={() => setSelectedUserForProfile(null)}
+            onOpenFullProfile={(u) => {
+              setSelectedUserForProfile(null);
+              setFocusedUserProfile(u);
+            }}
+            onOpenDM={async (userId) => {
+              setSelectedUserForProfile(null);
+              setIsHomeActive(true);
+              setHomeView('dm');
+              setIsMobileDrawerOpen(false);
+              const room = await useDMStore.getState().openDMWithUser(userId);
+              if (room) {
+                navigateTo(`/@me/${room.id}`);
+              }
+            }}
+            onEditOwnProfile={() => {
+              setSelectedUserForProfile(null);
+              setIsProfileModalOpen(true);
+            }}
+          />
+        </ErrorBoundary>
 
-        <UserProfileModalFocus
-          user={focusedUserProfile}
-          isOpen={!!focusedUserProfile}
-          onClose={() => setFocusedUserProfile(null)}
-          onOpenDM={async (userId) => {
-            setFocusedUserProfile(null);
-            setIsHomeActive(true);
-            setHomeView('dm');
-            setIsMobileDrawerOpen(false);
-            const room = await useDMStore.getState().openDMWithUser(userId);
-            if (room) {
-              navigateTo(`/@me/${room.id}`);
-            }
-          }}
-          onEditOwnProfile={() => {
-            setFocusedUserProfile(null);
-            setIsProfileModalOpen(true);
-          }}
-          onPreviewImage={(url) => {
-            setPreviewImageUrl(url);
-          }}
-        />
+        <ErrorBoundary>
+          <UserProfileModalFocus
+            user={focusedUserProfile}
+            isOpen={!!focusedUserProfile}
+            onClose={() => setFocusedUserProfile(null)}
+            onOpenDM={async (userId) => {
+              setFocusedUserProfile(null);
+              setIsHomeActive(true);
+              setHomeView('dm');
+              setIsMobileDrawerOpen(false);
+              const room = await useDMStore.getState().openDMWithUser(userId);
+              if (room) {
+                navigateTo(`/@me/${room.id}`);
+              }
+            }}
+            onEditOwnProfile={() => {
+              setFocusedUserProfile(null);
+              setIsProfileModalOpen(true);
+            }}
+            onPreviewImage={(url) => {
+              setPreviewImageUrl(url);
+            }}
+          />
+        </ErrorBoundary>
 
         <ImageModal
           imageUrl={previewImageUrl}

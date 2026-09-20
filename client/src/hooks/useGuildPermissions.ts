@@ -64,9 +64,10 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
     let currentUserPerms = 0;
     let currentUserHighestPos = 999999;
 
-    currentUserRoles.forEach((r) => {
+    (currentUserRoles || []).forEach((r: any) => {
+      if (!r) return;
       currentUserPerms |= Number(r.permissions || 0);
-      if (r.position < currentUserHighestPos) {
+      if (typeof r.position === 'number' && r.position < currentUserHighestPos) {
         currentUserHighestPos = r.position;
       }
     });
@@ -82,14 +83,23 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
     const canMuteVoice = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_VOICE) !== 0;
     const canDeafenVoice = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.DEAFEN_VOICE) !== 0;
 
-    const canModerateMember = (targetUser: User | { id: string; roles?: Role[] }) => {
+    const canModerateMember = (targetUser?: User | { id: string; roles?: Role[] } | null) => {
+      if (!targetUser || !targetUser.id) {
+        return {
+          isMe: false,
+          isTargetOwner: false,
+          targetHighestPos: 999999,
+          isHierarchyAllowed: false,
+        };
+      }
       const isMe = targetUser.id === user.id;
       const isTargetOwner = targetUser.id === guild.owner_id;
 
       const targetMember = guild.members?.find((m) => m.id === targetUser.id) || targetUser;
       let targetHighestPos = 999999;
-      (targetMember.roles || []).forEach((r) => {
-        if (r.position < targetHighestPos) {
+      (targetMember.roles || []).forEach((r: any) => {
+        if (!r) return;
+        if (typeof r.position === 'number' && r.position < targetHighestPos) {
           targetHighestPos = r.position;
         }
       });
