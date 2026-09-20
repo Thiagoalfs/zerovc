@@ -79,22 +79,63 @@ export const RegisteredGamesView: React.FC = () => {
           console.error('Failed to clear activity:', err);
         }
       }
+    } else if (willBeEnabled && !activeActivity) {
+      // If no game is active and user enabled this, set as current activity
+      const newActivity = { name: game.name, type: 'playing' as const, start_time: Math.floor(Date.now() / 1000) };
+      setUser({ custom_activity: newActivity });
+      if (user?.id) {
+        useGuildStore.getState().updateMemberInGuild({ id: user.id, custom_activity: newActivity });
+      }
+      try {
+        const updated = await updateProfile({ custom_activity: newActivity });
+        setUser(updated);
+      } catch (err) {
+        console.error('Failed to set activity:', err);
+      }
     }
   };
 
-  const handleAddCustomGame = (e?: React.FormEvent) => {
+  const handleAddCustomGame = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!customGameName.trim()) return;
-    addOrUpdateGame(customGameName.trim(), false);
+    const name = customGameName.trim();
+    addOrUpdateGame(name, false);
     setCustomGameName('');
     setIsAddingGame(false);
+
+    // Set as active running game immediately
+    const newActivity = { name, type: 'playing' as const, start_time: Math.floor(Date.now() / 1000) };
+    setUser({ custom_activity: newActivity });
+    if (user?.id) {
+      useGuildStore.getState().updateMemberInGuild({ id: user.id, custom_activity: newActivity });
+    }
+    try {
+      const updated = await updateProfile({ custom_activity: newActivity });
+      setUser(updated);
+    } catch (err) {
+      console.error('Failed to set custom activity:', err);
+    }
   };
 
-  const handleSelectWindow = (name: string) => {
+  const handleSelectWindow = async (name: string) => {
     if (!name.trim()) return;
-    addOrUpdateGame(name.trim(), false);
+    const cleanName = name.trim();
+    addOrUpdateGame(cleanName, false);
     setCustomGameName('');
     setIsAddingGame(false);
+
+    // Set as active running game immediately
+    const newActivity = { name: cleanName, type: 'playing' as const, start_time: Math.floor(Date.now() / 1000) };
+    setUser({ custom_activity: newActivity });
+    if (user?.id) {
+      useGuildStore.getState().updateMemberInGuild({ id: user.id, custom_activity: newActivity });
+    }
+    try {
+      const updated = await updateProfile({ custom_activity: newActivity });
+      setUser(updated);
+    } catch (err) {
+      console.error('Failed to set custom activity:', err);
+    }
   };
 
   const handleSaveRename = (id: string) => {

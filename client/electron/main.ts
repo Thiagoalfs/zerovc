@@ -700,7 +700,7 @@ const KNOWN_GAMES_AND_APPS: Array<{
   { processes: ['deadbydaylight-win64-shipping.exe', 'deadbydaylight.exe'], name: 'Dead by Daylight', type: 'playing' },
   { processes: ['rustclient.exe'], name: 'Rust', type: 'playing' },
   { processes: ['among us.exe'], name: 'Among Us', type: 'playing' },
-  { processes: ['osu!.exe', 'osu.exe'], name: 'osu!', type: 'playing' },
+  { processes: ['osu!.exe', 'osu.exe', 'osu!lazer.exe'], name: 'osu!', type: 'playing' },
   { processes: ['rainbowsix.exe', 'rainbowsix_vulkan.exe'], name: 'Rainbow Six Siege', type: 'playing' },
   { processes: ['worldoftanks.exe'], name: 'World of Tanks', type: 'playing' },
   { processes: ['warframe.x64.exe', 'warframe.exe'], name: 'Warframe', type: 'playing' },
