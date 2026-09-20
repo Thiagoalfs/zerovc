@@ -17,10 +17,12 @@ import {
   ExternalLink,
   Copy,
   Check,
+  UserPlus,
 } from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
+import { useFriendStore } from '../../stores/friendStore';
 import { formatAssetUrl } from '../../lib/api';
 import { getUserActivity } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
@@ -44,7 +46,14 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 }) => {
   const { user: currentUser } = useAuthStore();
   const guilds = useGuildStore((s) => s.guilds);
+  const { friends, pending, sendRequest } = useFriendStore();
   const [copied, setCopied] = useState(false);
+  const [isSendingRequest, setIsSendingRequest] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+
+  useEffect(() => {
+    setRequestSent(false);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -56,6 +65,21 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const friendship = useMemo(() => {
+    if (!user) return null;
+    return friends.find(
+      (f) => f.friend?.id === user.id || f.user?.id === user.id
+    );
+  }, [friends, user]);
+
+  const isFriend = !!friendship && friendship.status === 'accepted';
+  const isPending = useMemo(() => {
+    if (!user) return false;
+    return pending.some(
+      (f) => f.friend?.id === user.id || f.user?.id === user.id
+    );
+  }, [pending, user]);
 
   const activity = useMemo(() => {
     return getUserActivity(user, currentUser, guilds);
@@ -104,6 +128,20 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
     onClose();
     if (onOpenDM) {
       onOpenDM(user.id);
+    }
+  };
+
+  const handleAddFriend = async () => {
+    if (!user || isSendingRequest || isPending || requestSent) return;
+    setIsSendingRequest(true);
+    try {
+      await sendRequest(user.username);
+      setRequestSent(true);
+      alert(`Pedido de amizade enviado para @${user.username}!`);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao enviar pedido de amizade');
+    } finally {
+      setIsSendingRequest(false);
     }
   };
 
@@ -218,7 +256,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                   <Edit3 className="w-4 h-4" />
                   <span>Editar Perfil</span>
                 </button>
-              ) : (
+              ) : isFriend ? (
                 <button
                   type="button"
                   onClick={handleStartChat}
@@ -227,6 +265,40 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                   <MessageSquare className="w-4 h-4" />
                   <span>Enviar Mensagem</span>
                 </button>
+              ) : (
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddFriend}
+                    disabled={isSendingRequest || isPending || requestSent}
+                    className={`active:scale-95 text-white font-semibold px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
+                      isPending || requestSent
+                        ? 'bg-emerald-600/80 hover:bg-emerald-600 shadow-emerald-600/20'
+                        : 'bg-online hover:bg-online/90 shadow-online/20'
+                    }`}
+                  >
+                    {isPending || requestSent ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Pedido Enviado</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        <span>{isSendingRequest ? 'Enviando...' : 'Adicionar amigo'}</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleStartChat}
+                    className="bg-background-darker hover:bg-white/10 active:scale-95 text-gray-300 hover:text-white p-2 sm:p-2.5 rounded-xl transition-all border border-white/10 cursor-pointer shadow-md flex items-center justify-center"
+                    title="Enviar Mensagem"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
+                </div>
               )}
             </div>
           </div>

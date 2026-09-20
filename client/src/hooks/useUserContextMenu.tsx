@@ -13,11 +13,13 @@ import {
   MicOff,
   Headphones,
   PhoneOff,
+  UserPlus,
 } from 'lucide-react';
 import { User, Role } from '../types';
 import { useAuthStore } from '../stores/authStore';
 import { useGuildStore } from '../stores/guildStore';
 import { useDMStore } from '../stores/dmStore';
+import { useFriendStore } from '../stores/friendStore';
 import { useContextMenu, ContextMenuItem } from '../components/ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from '../components/Voice/VolumeSliders';
 import { useGuildPermissions } from './useGuildPermissions';
@@ -44,6 +46,7 @@ export function useUserContextMenu() {
     banMember,
   } = useGuildStore();
   const { openDMWithUser } = useDMStore();
+  const { friends, sendRequest } = useFriendStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const perms = useGuildPermissions();
 
@@ -54,6 +57,11 @@ export function useUserContextMenu() {
 
       const isMe = targetUser.id === currentUser?.id;
       const isGuildContext = options.contextType === 'guild' || (!options.contextType && Boolean(activeGuild));
+
+      const friendship = friends.find(
+        (f) => f.friend?.id === targetUser.id || f.user?.id === targetUser.id
+      );
+      const isFriend = !!friendship && friendship.status === 'accepted';
 
       const items: ContextMenuItem[] = [
         {
@@ -75,6 +83,21 @@ export function useUserContextMenu() {
             }
           },
         });
+
+        if (!isFriend) {
+          items.push({
+            label: 'Adicionar Amigo',
+            icon: <UserPlus className="w-4 h-4 text-online" />,
+            onClick: async () => {
+              try {
+                await sendRequest(targetUser.username);
+                alert(`Pedido de amizade enviado para @${targetUser.username}!`);
+              } catch (err: any) {
+                alert(err?.message || 'Erro ao enviar pedido de amizade');
+              }
+            },
+          });
+        }
 
         items.push({ label: '', separator: true });
         items.push({
@@ -253,7 +276,7 @@ export function useUserContextMenu() {
 
       openContextMenu(e, items, `@${targetUser.username}`);
     },
-    [currentUser, activeGuild, openDMWithUser, perms, assignRole, removeRole, muteMember, kickMember, banMember, openContextMenu]
+    [currentUser, activeGuild, openDMWithUser, perms, assignRole, removeRole, muteMember, kickMember, banMember, openContextMenu, friends, sendRequest]
   );
 
   return {

@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Activity, ShieldCheck, Eye, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -10,14 +10,13 @@ export const ActivityPrivacySettingsView: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in">
       <div>
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <Activity className="w-3.5 h-3.5 text-brand-400" />
-          <span>Status de Atividade & Jogos</span>
+        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">
+          Status de Atividade & Jogos
         </h4>
 
-        <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+        <div className="divide-y divide-white/5 space-y-4">
           {/* Show Activity Status */}
-          <div className="flex items-center justify-between pt-1 first:pt-0">
+          <div className="flex items-center justify-between pt-2 first:pt-0">
             <div className="space-y-0.5 pr-4">
               <span className="text-xs font-bold text-white block">
                 Exibir atividade atual como mensagem de status

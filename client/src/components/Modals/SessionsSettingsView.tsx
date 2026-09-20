@@ -113,9 +113,8 @@ export const SessionsSettingsView: React.FC = () => {
       <div>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Shield className="w-5 h-5 text-brand-400" />
-              <span>Sessões Ativas e Dispositivos</span>
+            <h3 className="text-base font-bold text-white">
+              Sessões Ativas e Dispositivos
             </h3>
             <p className="text-xs text-gray-400 mt-1">
               Gerencie todos os computadores, celulares e navegadores com acesso à sua conta.
@@ -125,7 +124,7 @@ export const SessionsSettingsView: React.FC = () => {
             type="button"
             onClick={fetchSessions}
             disabled={isLoading}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+            className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
             title="Atualizar lista de sessões"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -135,7 +134,7 @@ export const SessionsSettingsView: React.FC = () => {
 
       {/* Success Banner */}
       {successMessage && (
-        <div className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs animate-in fade-in">
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{successMessage}</span>
         </div>
@@ -143,7 +142,7 @@ export const SessionsSettingsView: React.FC = () => {
 
       {/* Error Banner */}
       {error && (
-        <div className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs animate-in fade-in">
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs animate-in fade-in">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -155,21 +154,21 @@ export const SessionsSettingsView: React.FC = () => {
           <span className="text-xs font-medium">Buscando dispositivos conectados...</span>
         </div>
       ) : (
-        <div className="space-y-5">
-          {/* Current Device Card */}
+        <div className="space-y-6">
+          {/* Current Device */}
           {currentSession && (
             <div className="space-y-2">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1 block">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
                 Este Dispositivo
               </span>
-              <div className="p-4 rounded-2xl bg-brand-500/10 border border-brand-500/30 flex items-start justify-between gap-3 shadow-lg shadow-brand-500/5">
+              <div className="py-2.5 flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3.5 min-w-0">
-                  <div className="p-2.5 rounded-xl bg-brand-500/20 text-brand-300 shrink-0">
+                  <div className="p-2 rounded-xl bg-white/5 text-brand-300 shrink-0 mt-0.5">
                     {getDeviceIcon(currentSession.device_type, currentSession.os)}
                   </div>
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-bold text-white truncate">
+                      <span className="text-sm font-semibold text-white truncate">
                         {currentSession.os || 'Dispositivo'} • {currentSession.browser || 'Navegador'}
                       </span>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
@@ -195,9 +194,12 @@ export const SessionsSettingsView: React.FC = () => {
             </div>
           )}
 
+          {/* Divider */}
+          <div className="border-t border-white/5" />
+
           {/* Other Devices List */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
+            <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
                 Outros Dispositivos ({otherSessions.length})
               </span>
@@ -214,19 +216,15 @@ export const SessionsSettingsView: React.FC = () => {
             </div>
 
             {otherSessions.length === 0 ? (
-              <div className="p-6 rounded-2xl bg-background-darker border border-white/5 text-center text-gray-400 space-y-1">
-                <Shield className="w-8 h-8 text-gray-500 mx-auto mb-2 opacity-60" />
-                <p className="text-xs font-medium text-gray-300">Nenhum outro dispositivo conectado</p>
-                <p className="text-[11px] text-gray-500">
-                  Sua conta está ativa apenas nesta sessão no momento.
-                </p>
+              <div className="py-4 text-xs text-gray-500">
+                Nenhum outro dispositivo conectado no momento.
               </div>
             ) : (
-              <div className="bg-background-darker rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
+              <div className="divide-y divide-white/5">
                 {otherSessions.map((session) => (
                   <div
                     key={session.id}
-                    className="p-3.5 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors"
+                    className="py-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors"
                   >
                     <div className="flex items-start gap-3 min-w-0">
                       <div className="p-2 rounded-xl bg-white/5 text-gray-400 shrink-0 mt-0.5">
