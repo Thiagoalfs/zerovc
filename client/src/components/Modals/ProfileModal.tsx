@@ -1054,14 +1054,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     }}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <User className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Minha Conta</div>
-                        <div className="text-xs text-gray-400">Perfil, avatar, display name, dados</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Minha Conta</div>
+                      <div className="text-xs text-gray-400">Perfil, avatar, display name, dados</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
@@ -1074,14 +1069,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     }}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Shield className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Privacidade e Segurança</div>
-                        <div className="text-xs text-gray-400">E-mail, senha, 2FA, atividade</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Privacidade e Segurança</div>
+                      <div className="text-xs text-gray-400">E-mail, senha, 2FA, atividade</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
@@ -1094,14 +1084,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     }}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Smartphone className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Dispositivos & Sessões</div>
-                        <div className="text-xs text-gray-400">Aparelhos conectados, encerrar sessões</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Dispositivos & Sessões</div>
+                      <div className="text-xs text-gray-400">Aparelhos conectados, encerrar sessões</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
@@ -1122,14 +1107,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     }}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Gamepad2 className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Jogos Registrados</div>
-                        <div className="text-xs text-gray-400">Jogos detectados e customizados</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Jogos Registrados</div>
+                      <div className="text-xs text-gray-400">Jogos detectados e customizados</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
@@ -1142,14 +1122,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     }}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Activity className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Privacidade de Atividade</div>
-                        <div className="text-xs text-gray-400">Exibição de status e detecção de jogos</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Privacidade de Atividade</div>
+                      <div className="text-xs text-gray-400">Exibição de status e detecção de jogos</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
@@ -1170,14 +1145,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     }}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Palette className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Aparência</div>
-                        <div className="text-xs text-gray-400">Temas, cores, densidade, escala</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Aparência</div>
+                      <div className="text-xs text-gray-400">Temas, cores, densidade, escala</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
@@ -1190,14 +1160,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     }}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Eye className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Acessibilidade</div>
-                        <div className="text-xs text-gray-400">Tamanho do texto, contraste, movimento</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Acessibilidade</div>
+                      <div className="text-xs text-gray-400">Tamanho do texto, contraste, movimento</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
@@ -1210,14 +1175,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     }}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Volume2 className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Voz & Vídeo</div>
-                        <div className="text-xs text-gray-400">Microfone, autofalante, câmera, VAD</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Voz & Vídeo</div>
+                      <div className="text-xs text-gray-400">Microfone, autofalante, câmera, VAD</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
@@ -1230,14 +1190,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     }}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-300">
-                        <Bell className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Notificações & Sons</div>
-                        <div className="text-xs text-gray-400">Sons do sistema, alertas na área de trabalho</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Notificações & Sons</div>
+                      <div className="text-xs text-gray-400">Sons do sistema, alertas na área de trabalho</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
@@ -1252,14 +1207,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     onClick={logout}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-red-500/10 active:bg-red-500/20 text-red-400 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-red-500/10 text-red-400">
-                        <LogOut className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold">Sair da Conta</div>
-                        <div className="text-xs text-red-400/70">Desconectar desta sessão</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">Sair da Conta</div>
+                      <div className="text-xs text-red-400/70">Desconectar desta sessão</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-red-400/50 shrink-0" />
                   </button>
@@ -1290,13 +1240,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('account')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'account' || activeTab === 'profile'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <User className="w-4 h-4 shrink-0" />
                 <span>Minha Conta</span>
               </button>
 
@@ -1304,13 +1253,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('privacy')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'privacy'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Shield className="w-4 h-4 shrink-0" />
                 <span>Privacidade e Segurança</span>
               </button>
 
@@ -1318,17 +1266,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('sessions')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'sessions'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Smartphone className="w-4 h-4 shrink-0" />
                 <span>Dispositivos & Sessões</span>
               </button>
 
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1 pt-2">
+              <div className="h-[1px] bg-white/10 my-2 mx-1" />
+
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
                 Configurações de Atividade
               </span>
 
@@ -1336,13 +1285,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('registered_games')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'registered_games'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Gamepad2 className="w-4 h-4 shrink-0" />
                 <span>Jogos Registrados</span>
               </button>
 
@@ -1350,17 +1298,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('activity_privacy')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'activity_privacy'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Activity className="w-4 h-4 shrink-0" />
                 <span>Privacidade de Atividade</span>
               </button>
 
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1 pt-2">
+              <div className="h-[1px] bg-white/10 my-2 mx-1" />
+
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
                 Configurações do App
               </span>
 
@@ -1368,13 +1317,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('appearance')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'appearance'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Palette className="w-4 h-4 shrink-0" />
                 <span>Aparência</span>
               </button>
 
@@ -1382,13 +1330,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('accessibility')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'accessibility'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Eye className="w-4 h-4 shrink-0" />
                 <span>Acessibilidade</span>
               </button>
 
@@ -1396,13 +1343,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('audio')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'audio'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Volume2 className="w-4 h-4 shrink-0" />
                 <span>Voz & Vídeo</span>
               </button>
 
@@ -1410,13 +1356,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('notifications')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'notifications'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Bell className="w-4 h-4 shrink-0" />
                 <span>Notificações & Sons</span>
               </button>
 
@@ -1424,13 +1369,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('preferences')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'preferences'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Sliders className="w-4 h-4 shrink-0" />
                 <span>Preferências</span>
               </button>
 
@@ -1438,26 +1382,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('keybinds')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'keybinds'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
                 }`}
               >
-                <Keyboard className="w-4 h-4 shrink-0" />
                 <span>Atalhos do Teclado</span>
               </button>
             </nav>
           </div>
 
           {/* Bottom Logout */}
-          <div className="pt-4 border-t border-white/10 flex flex-col gap-1.5 flex-shrink-0 mt-auto">
+          <div className="pt-2 border-t border-white/10 flex flex-col gap-1.5 flex-shrink-0 mt-auto">
             <button
               type="button"
               onClick={logout}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+              className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
             >
-              <LogOut className="w-4 h-4" />
               <span>Sair da Conta</span>
             </button>
           </div>
