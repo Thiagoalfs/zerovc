@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { Permissions, GuildEmoji, GuildInvite, User } from '../../types';
 import { api, formatAssetUrl, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
@@ -39,6 +40,7 @@ interface ServerSettingsModalProps {
 
 export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen, onClose }) => {
   const { user } = useAuthStore();
+  const reducedMotion = useSettingsStore((state) => state.reducedMotion);
   const {
     activeGuild,
     updateGuild,
@@ -128,6 +130,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [is2FARequiredByServer, setIs2FARequiredByServer] = useState(false);
 
   // Transfer Ownership Modal State
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -684,7 +687,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       return;
     }
 
-    if (user?.two_factor_enabled && !twoFactorCode.trim()) {
+    const requires2FA = Boolean(user?.two_factor_enabled) || is2FARequiredByServer;
+    if (requires2FA && !twoFactorCode.trim()) {
       setDeleteError('Por favor, digite seu código de autenticação 2FA (TOTP ou código de backup).');
       return;
     }
@@ -697,11 +701,19 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       setDeleteConfirmText('');
       setIsDeleteAcknowledged(false);
       setTwoFactorCode('');
+      setIs2FARequiredByServer(false);
       onClose();
       useGuildStore.getState().handleGuildDeleteEvent(activeGuild.id);
     } catch (err: any) {
       console.error('Failed to delete guild:', err);
-      setDeleteError(err.message || 'Erro ao excluir servidor');
+      const is2FA = err.requires_2fa || err.status === 428 || err.message?.includes('2fa_required') || err.message?.includes('Autenticação de dois fatores') || err.message?.includes('2FA');
+      if (is2FA) {
+        setIs2FARequiredByServer(true);
+        useAuthStore.getState().setUser({ two_factor_enabled: true });
+        setDeleteError('Autenticação 2FA necessária. Digite o código de 6 dígitos ou backup abaixo.');
+      } else {
+        setDeleteError(err.message || 'Erro ao excluir servidor');
+      }
       setIsDeleting(false);
     }
   };
@@ -714,7 +726,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         }}
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-0 md:p-4 overflow-hidden animate-fade-in"
       >
-        <div className="flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-[#18191c] rounded-none md:rounded-2xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200">
+        <div className={`flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-[#18191c] rounded-none md:rounded-2xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200 ${reducedMotion ? '' : 'animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none'}`}>
           
           {/* MOBILE MENU VIEW */}
           {mobileView === 'menu' && (
@@ -1312,6 +1324,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           setIsDeleteAcknowledged(false);
           setTwoFactorCode('');
           setDeleteError('');
+          setIs2FARequiredByServer(false);
         }}
         activeGuild={activeGuild}
         user={user}
@@ -1326,6 +1339,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         isDeleting={isDeleting}
         onConfirmDelete={handleConfirmDeleteGuild}
         membersCount={members.length}
+        is2FARequired={is2FARequiredByServer}
       />
     </>
   );

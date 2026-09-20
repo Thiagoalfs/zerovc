@@ -79,14 +79,16 @@ func (c *Client) ReadPump() {
 		switch incomingEvent.Type {
 		case "TYPING_START":
 			now := time.Now()
-			if now.Sub(c.lastTyping) < 2*time.Second {
+			if now.Sub(c.lastTyping) < 1500*time.Millisecond {
 				continue
 			}
 			c.lastTyping = now
 
 			var typingData struct {
-				ChannelID uuid.UUID  `json:"channel_id"`
-				GuildID   *uuid.UUID `json:"guild_id,omitempty"`
+				ChannelID   uuid.UUID   `json:"channel_id"`
+				GuildID     *uuid.UUID  `json:"guild_id,omitempty"`
+				RecipientID *uuid.UUID  `json:"recipient_id,omitempty"`
+				UserIDs     []uuid.UUID `json:"user_ids,omitempty"`
 			}
 			if err := json.Unmarshal(incomingEvent.Data, &typingData); err == nil && typingData.ChannelID != uuid.Nil {
 				event := models.WSEvent{
@@ -96,10 +98,22 @@ func (c *Client) ReadPump() {
 						"user_id":    c.UserID,
 					},
 				}
-				if typingData.GuildID != nil {
+				if typingData.GuildID != nil && *typingData.GuildID != uuid.Nil {
 					if c.Hub.IsGuildMember(*typingData.GuildID, c.UserID) {
 						c.Hub.BroadcastToGuild(*typingData.GuildID, event)
 					}
+				} else if len(typingData.UserIDs) > 0 {
+					c.Hub.BroadcastToUsers(typingData.UserIDs, event)
+				} else if typingData.RecipientID != nil && *typingData.RecipientID != uuid.Nil {
+					c.Hub.BroadcastToUsers([]uuid.UUID{*typingData.RecipientID}, event)
+				} else {
+					c.Hub.mu.RLock()
+					for gID, members := range c.Hub.guildMembers {
+						if members[c.UserID] {
+							c.Hub.BroadcastToGuild(gID, event)
+						}
+					}
+					c.Hub.mu.RUnlock()
 				}
 			}
 

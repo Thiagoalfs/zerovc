@@ -21,6 +21,7 @@ import { DMChatArea } from './components/DM/DMChatArea';
 import { DMGroupChatArea } from './components/DM/DMGroupChatArea';
 import { useDMGroupStore } from './stores/dmGroupStore';
 import { useSettingsStore } from './stores/settingsStore';
+import { useRegisteredGamesStore } from './stores/registeredGamesStore';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { LandingPage } from './components/Landing/LandingPage';
 import { DownloadPage } from './components/Landing/DownloadPage';
@@ -695,6 +696,16 @@ export const App: React.FC = () => {
                   }
                 })
                 .catch(() => {});
+            } else if (currentAct && currentAct.name) {
+              useRegisteredGamesStore.getState().addOrUpdateGame(currentAct.name, true);
+              const isEnabled = useRegisteredGamesStore.getState().isGameEnabled(currentAct.name);
+              if (!isEnabled && currentUser.custom_activity) {
+                useAuthStore.getState().setUser({ custom_activity: null });
+                if (currentUser.id) {
+                  useGuildStore.getState().updateMemberInGuild({ id: currentUser.id, custom_activity: null });
+                }
+                api.users.updateProfile({ custom_activity: null }).catch(() => {});
+              }
             }
           })
           .catch(() => {});
@@ -705,16 +716,25 @@ export const App: React.FC = () => {
           const currentUser = useAuthStore.getState().user;
           if (!currentUser || currentUser.auto_detect_activity === false) return;
 
+          let resolvedActivity = detectedActivity;
+          if (detectedActivity && detectedActivity.name) {
+            useRegisteredGamesStore.getState().addOrUpdateGame(detectedActivity.name, true);
+            const isEnabled = useRegisteredGamesStore.getState().isGameEnabled(detectedActivity.name);
+            if (!isEnabled) {
+              resolvedActivity = null;
+            }
+          }
+
           const currentAct = currentUser.custom_activity;
           if (
-            (!currentAct && !detectedActivity) ||
-            (currentAct && detectedActivity && currentAct.name === detectedActivity.name && currentAct.type === detectedActivity.type)
+            (!currentAct && !resolvedActivity) ||
+            (currentAct && resolvedActivity && currentAct.name === resolvedActivity.name && currentAct.type === resolvedActivity.type)
           ) {
             return;
           }
 
           // Optimistically update store immediately
-          const targetActivity = detectedActivity || null;
+          const targetActivity = resolvedActivity || null;
           useAuthStore.getState().setUser({ custom_activity: targetActivity });
           if (currentUser.id) {
             useGuildStore.getState().updateMemberInGuild({ id: currentUser.id, custom_activity: targetActivity });
@@ -1131,8 +1151,29 @@ export const App: React.FC = () => {
         }
       };
 
-      const handleSessionRevoked = () => {
-        useAuthStore.getState().logout();
+      const handleSessionRevoked = async (event: any) => {
+        try {
+          const data = event?.data || {};
+          const currentToken = useAuthStore.getState().token;
+          if (!currentToken) return;
+
+          const msgUint8 = new TextEncoder().encode(currentToken);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const currentTokenHash = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+          if (data.except_token_hash && data.except_token_hash === currentTokenHash) {
+            return;
+          }
+
+          if (data.token_hash && data.token_hash !== currentTokenHash) {
+            return;
+          }
+
+          useAuthStore.getState().logout();
+        } catch {
+          // Prevent accidental logout on hashing exception
+        }
       };
 
       socket.on('MESSAGE_CREATE', handleMessageCreate);

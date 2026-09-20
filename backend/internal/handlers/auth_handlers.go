@@ -745,7 +745,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	currentToken := extractTokenFromRequest(r)
 	if currentToken != "" {
-		h.touchSession(r.Context(), currentToken)
+		h.touchSession(r.Context(), userID, currentToken, r)
 	}
 
 	var user models.User
@@ -813,19 +813,70 @@ func hashToken(token string) string {
 	return hex.EncodeToString(h[:])
 }
 
+func cleanIP(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(s); err == nil {
+		s = host
+	}
+	s = strings.Trim(s, "[]")
+	parsed := net.ParseIP(s)
+	if parsed == nil {
+		return ""
+	}
+	return parsed.String()
+}
+
 func getClientIP(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+
+	// 1. Cloudflare / CDN headers (most accurate when behind reverse proxy / CDN)
+	headers := []string{
+		"CF-Connecting-IP",
+		"True-Client-IP",
+		"X-Real-IP",
+		"X-Client-IP",
+		"Fastly-Client-IP",
+	}
+
+	for _, h := range headers {
+		if val := r.Header.Get(h); val != "" {
+			if ip := cleanIP(val); ip != "" {
+				return ip
+			}
+		}
+	}
+
+	// 2. X-Forwarded-For header (comma-separated list of client, proxy1, proxy2...)
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
+		var firstValid string
+		for _, part := range parts {
+			if ip := cleanIP(part); ip != "" {
+				parsed := net.ParseIP(ip)
+				if parsed != nil && !parsed.IsLoopback() && !parsed.IsPrivate() && !parsed.IsUnspecified() {
+					return ip
+				}
+				if firstValid == "" {
+					firstValid = ip
+				}
+			}
+		}
+		if firstValid != "" {
+			return firstValid
+		}
 	}
-	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
-		return strings.TrimSpace(xrip)
+
+	// 3. Fallback to RemoteAddr
+	if ip := cleanIP(r.RemoteAddr); ip != "" {
+		return ip
 	}
-	ip := r.RemoteAddr
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		return host
-	}
-	return ip
+
+	return ""
 }
 
 func parseUserAgent(ua string) (deviceType, os, browser string) {
@@ -891,22 +942,49 @@ func (h *AuthHandler) recordSession(ctx context.Context, userID uuid.UUID, token
 	}
 	tokenHash := hashToken(token)
 	ip := getClientIP(r)
-	ua := r.UserAgent()
+	ua := ""
+	if r != nil {
+		ua = r.UserAgent()
+	}
 	deviceType, os, browser := parseUserAgent(ua)
 
 	query := `
 		INSERT INTO user_sessions (user_id, token_hash, ip_address, user_agent, device_type, os, browser, last_active_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT (token_hash) DO UPDATE
+		SET last_active_at = CURRENT_TIMESTAMP,
+		    ip_address = CASE WHEN EXCLUDED.ip_address <> '' THEN EXCLUDED.ip_address ELSE user_sessions.ip_address END,
+		    user_agent = CASE WHEN EXCLUDED.user_agent <> '' THEN EXCLUDED.user_agent ELSE user_sessions.user_agent END,
+		    device_type = EXCLUDED.device_type,
+		    os = EXCLUDED.os,
+		    browser = EXCLUDED.browser
 	`
 	_, _ = h.db.Pool.Exec(ctx, query, userID, tokenHash, ip, ua, deviceType, os, browser)
 }
 
-func (h *AuthHandler) touchSession(ctx context.Context, token string) {
+func (h *AuthHandler) touchSession(ctx context.Context, userID uuid.UUID, token string, r *http.Request) {
 	if token == "" {
 		return
 	}
 	tokenHash := hashToken(token)
-	_, _ = h.db.Pool.Exec(ctx, "UPDATE user_sessions SET last_active_at = CURRENT_TIMESTAMP WHERE token_hash = $1", tokenHash)
+	ip := getClientIP(r)
+
+	var rowsAffected int64
+	if ip != "" {
+		res, err := h.db.Pool.Exec(ctx, "UPDATE user_sessions SET last_active_at = CURRENT_TIMESTAMP, ip_address = $1 WHERE token_hash = $2", ip, tokenHash)
+		if err == nil {
+			rowsAffected = res.RowsAffected()
+		}
+	} else {
+		res, err := h.db.Pool.Exec(ctx, "UPDATE user_sessions SET last_active_at = CURRENT_TIMESTAMP WHERE token_hash = $1", tokenHash)
+		if err == nil {
+			rowsAffected = res.RowsAffected()
+		}
+	}
+
+	if rowsAffected == 0 && userID != uuid.Nil {
+		h.recordSession(ctx, userID, token, r)
+	}
 }
 
 func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
@@ -920,7 +998,7 @@ func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	currentTokenHash := hashToken(currentToken)
 
 	if currentTokenHash != "" {
-		h.touchSession(r.Context(), currentToken)
+		h.touchSession(r.Context(), userID, currentToken, r)
 	}
 
 	query := `
