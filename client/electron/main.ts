@@ -680,12 +680,12 @@ const KNOWN_GAMES_AND_APPS: Array<{
   type: DetectedActivity['type'];
 }> = [
   // Popular Games
-  { processes: ['minecraft.exe', 'javaw.exe', 'bedrock_server.exe', 'minecraft.windows.exe'], name: 'Minecraft', type: 'playing' },
+  { processes: ['minecraft.exe', 'bedrock_server.exe', 'minecraft.windows.exe'], name: 'Minecraft', type: 'playing' },
   { processes: ['leagueclient.exe', 'leagueclientux.exe'], name: 'League of Legends', type: 'playing' },
   { processes: ['valorant.exe', 'valorant-win64-shipping.exe'], name: 'VALORANT', type: 'playing' },
   { processes: ['cs2.exe', 'csgo.exe'], name: 'Counter-Strike 2', type: 'playing' },
   { processes: ['gta5.exe', 'fivem.exe', 'fivem_b2699_gtaprocess.exe'], name: 'Grand Theft Auto V', type: 'playing' },
-  { processes: ['robloxplayerbeta.exe', 'robloxplayerlauncher.exe', 'roblox.exe'], name: 'Roblox', type: 'playing' },
+  { processes: ['robloxplayerbeta.exe', 'roblox.exe'], name: 'Roblox', type: 'playing' },
   { processes: ['fortniteclient-win64-shipping.exe', 'fortnitelauncher.exe'], name: 'Fortnite', type: 'playing' },
   { processes: ['overwatch.exe'], name: 'Overwatch 2', type: 'playing' },
   { processes: ['genshinimpact.exe', 'yuanshen.exe'], name: 'Genshin Impact', type: 'playing' },
@@ -698,7 +698,7 @@ const KNOWN_GAMES_AND_APPS: Array<{
   { processes: ['stardew valley.exe', 'stardewvalley.exe'], name: 'Stardew Valley', type: 'playing' },
   { processes: ['dota2.exe'], name: 'Dota 2', type: 'playing' },
   { processes: ['deadbydaylight-win64-shipping.exe', 'deadbydaylight.exe'], name: 'Dead by Daylight', type: 'playing' },
-  { processes: ['rustclient.exe', 'rust.exe'], name: 'Rust', type: 'playing' },
+  { processes: ['rustclient.exe'], name: 'Rust', type: 'playing' },
   { processes: ['among us.exe'], name: 'Among Us', type: 'playing' },
   { processes: ['osu!.exe', 'osu.exe'], name: 'osu!', type: 'playing' },
   { processes: ['rainbowsix.exe', 'rainbowsix_vulkan.exe'], name: 'Rainbow Six Siege', type: 'playing' },
@@ -711,7 +711,6 @@ const KNOWN_GAMES_AND_APPS: Array<{
   { processes: ['ts4_x64.exe', 'thesims4.exe'], name: 'The Sims 4', type: 'playing' },
   // Apps & Creative
   { processes: ['spotify.exe', 'spotify'], name: 'Spotify', type: 'listening' },
-  { processes: ['code.exe', 'code'], name: 'Visual Studio Code', type: 'playing' },
   { processes: ['blender.exe'], name: 'Blender', type: 'playing' },
   { processes: ['photoshop.exe'], name: 'Adobe Photoshop', type: 'playing' },
   { processes: ['obs64.exe', 'obs32.exe'], name: 'OBS Studio', type: 'streaming' },
@@ -731,6 +730,20 @@ function parseRunningProcesses(stdout: string): Set<string> {
     const trimmed = line.trim();
     if (!trimmed) continue;
     // Tasklist CSV format: "image_name.exe","pid","session","session_num","mem"
+    if (process.platform === 'win32') {
+      const parts = trimmed.split('","').map((p) => p.replace(/^"|"$/g, ''));
+      if (parts.length >= 3) {
+        const imageName = parts[0].toLowerCase();
+        const sessionName = (parts[2] || '').toLowerCase();
+        const sessionNum = parts[3] || '';
+        // Skip background system services (Session "Services" / 0)
+        if (sessionName === 'services' || sessionNum === '0') {
+          continue;
+        }
+        set.add(imageName);
+        continue;
+      }
+    }
     const match = trimmed.match(/^"([^"]+)"/);
     if (match) {
       set.add(match[1].toLowerCase());
