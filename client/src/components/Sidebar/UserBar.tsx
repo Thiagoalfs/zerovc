@@ -100,8 +100,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   return (
     <div
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
-      className="w-full min-w-0 max-w-full flex-shrink-0 overflow-hidden flex flex-col bg-background-darker border-r border-black/20 select-none relative px-2 md:px-2.5 pt-0"
+      className="w-full min-w-0 max-w-full flex-shrink-0 overflow-hidden flex flex-col border-r border-black/20 select-none relative px-2 md:px-2.5 pt-0"
     >
+      {/* Background Columns: 72px ServerList Darkest + Remainder ChannelList Darker */}
+      <div className="absolute inset-0 flex pointer-events-none -z-10">
+        <div className="w-[72px] h-full bg-background-darkest border-r border-black/20 hidden md:block flex-shrink-0" />
+        <div className="flex-1 h-full bg-background-darker" />
+      </div>
       {/* Quick Status Menu Popover */}
       {showStatusMenu && (
         <>

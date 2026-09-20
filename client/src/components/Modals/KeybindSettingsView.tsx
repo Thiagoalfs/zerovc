@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Keyboard, Mic, Headphones, Monitor, Radio, RotateCcw, Check, Sparkles, X } from 'lucide-react';
 import { isElectron } from '../../lib/platform';
 
@@ -158,8 +158,7 @@ export const KeybindSettingsView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-200">
       <div className="flex items-center justify-between pb-2 border-b border-white/5">
         <div>
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Keyboard className="w-4 h-4 text-brand-400" />
+          <h3 className="text-sm font-bold text-white">
             Atalhos do Teclado
           </h3>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -175,7 +174,7 @@ export const KeybindSettingsView: React.FC = () => {
         )}
       </div>
 
-      <div className="space-y-3">
+      <div className="divide-y divide-white/5">
         {SHORTCUTS.map((sc) => {
           const isRecording = recordingId === sc.id;
           const currentKey = bindings[sc.id] || sc.defaultKey;
@@ -183,19 +182,19 @@ export const KeybindSettingsView: React.FC = () => {
           return (
             <div
               key={sc.id}
-              className={`p-4 rounded-2xl border transition-all ${
+              className={`py-3.5 transition-all ${
                 isRecording
-                  ? 'bg-brand-500/15 border-brand-500 shadow-lg shadow-brand-500/10 ring-2 ring-brand-500/30'
-                  : 'bg-background-darker/60 border-white/5 hover:border-white/10'
+                  ? 'bg-brand-500/10 px-3 rounded-xl'
+                  : ''
               }`}
             >
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <div className="p-2.5 bg-black/20 border border-white/5 rounded-xl flex-shrink-0 mt-0.5">
+                  <div className="p-2 bg-white/5 rounded-xl flex-shrink-0 mt-0.5">
                     {sc.icon}
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-white">{sc.name}</h4>
+                    <h4 className="text-xs font-semibold text-white">{sc.name}</h4>
                     <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
                       {sc.description}
                     </p>
@@ -247,12 +246,9 @@ export const KeybindSettingsView: React.FC = () => {
         })}
       </div>
 
-      <div className="p-3.5 bg-brand-500/10 border border-brand-500/20 rounded-2xl flex items-start gap-3 text-xs text-brand-300">
-        <Sparkles className="w-4 h-4 flex-shrink-0 mt-0.5 text-brand-400" />
-        <div>
-          <span className="font-semibold block text-brand-200">Dica de Produtividade</span>
-          No aplicativo desktop (Electron), estes atalhos funcionam globalmente enquanto você joga ou utiliza outros programas em segundo plano.
-        </div>
+      <div className="p-3.5 bg-white/[0.02] border border-white/5 rounded-xl text-xs text-gray-400">
+        <span className="font-semibold text-gray-300 block mb-0.5">Dica</span>
+        No aplicativo desktop (Electron), estes atalhos funcionam globalmente enquanto você joga ou utiliza outros programas em segundo plano.
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Shield, Plus, Check, Loader2 } from 'lucide-react';
 import { User, Role } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
@@ -20,6 +21,8 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [operatingRoleId, setOperatingRoleId] = useState<string | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Sync with active guild member if inside a server context
@@ -71,10 +74,44 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
       );
   }, [activeGuild?.roles]);
 
+  const updateDropdownPos = () => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const dropdownWidth = 224;
+    const dropdownHeight = 220;
+    const margin = 12;
+
+    let left = rect.left;
+    let top = rect.bottom + 6;
+
+    if (top + dropdownHeight > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - dropdownHeight - 6);
+    }
+
+    if (left + dropdownWidth > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - dropdownWidth - margin);
+    }
+
+    setDropdownPos({ top, left });
+  };
+
+  useLayoutEffect(() => {
+    if (!isDropdownOpen) return;
+    updateDropdownPos();
+  }, [isDropdownOpen]);
+
   useEffect(() => {
     if (!isDropdownOpen) return;
+    const handleScrollOrResize = () => {
+      updateDropdownPos();
+    };
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
+      ) {
         setIsDropdownOpen(false);
       }
     };
@@ -86,10 +123,14 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('touchstart', handleClickOutside);
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
     };
   }, [isDropdownOpen]);
 
@@ -150,8 +191,9 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
         ))}
 
         {canManageMemberRoles && (
-          <div className="relative inline-block" ref={dropdownRef}>
+          <>
             <button
+              ref={buttonRef}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
@@ -165,70 +207,80 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
               <Plus className={isSmall ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
             </button>
 
-            {isDropdownOpen && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute left-0 top-full mt-1.5 z-50 w-52 sm:w-56 bg-background-darkest border border-white/10 rounded-xl shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-0.5"
-              >
-                <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-0.5 flex items-center justify-between">
-                  <span>Cargos do Servidor</span>
-                  <span className="text-[9px] text-gray-500 font-normal">{availableRoles.length}</span>
-                </div>
+            {isDropdownOpen && typeof document !== 'undefined' &&
+              createPortal(
+                <div
+                  ref={dropdownRef}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'fixed',
+                    top: `${dropdownPos.top}px`,
+                    left: `${dropdownPos.left}px`,
+                    width: '224px',
+                    zIndex: 99999,
+                  }}
+                  className="bg-background-darkest border border-white/10 rounded-2xl shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-0.5 select-none"
+                >
+                  <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-0.5 flex items-center justify-between">
+                    <span>Cargos do Servidor</span>
+                    <span className="text-[9px] text-gray-500 font-normal">{availableRoles.length}</span>
+                  </div>
 
-                <div className="max-h-[160px] overflow-y-auto no-scrollbar space-y-0.5">
-                  {availableRoles.length === 0 ? (
-                    <div className="p-2.5 text-center text-xs text-gray-500">
-                      Nenhum outro cargo disponível
-                    </div>
-                  ) : (
-                    availableRoles.map((role) => {
-                      const hasRole = displayRoles.some((r) => r.id === role.id);
-                      const isManageable =
-                        perms.isCurrentOwner || role.position > perms.currentUserHighestPos;
-                      const isCurrentOperating = operatingRoleId === role.id;
+                  <div className="max-h-[160px] overflow-y-auto no-scrollbar space-y-0.5">
+                    {availableRoles.length === 0 ? (
+                      <div className="p-2.5 text-center text-xs text-gray-500">
+                        Nenhum outro cargo disponível
+                      </div>
+                    ) : (
+                      availableRoles.map((role) => {
+                        const hasRole = displayRoles.some((r) => r && r.id === role.id);
+                        const isManageable =
+                          perms.isCurrentOwner || (role.position ?? 999) > (perms.currentUserHighestPos ?? 999999);
+                        const isCurrentOperating = operatingRoleId === role.id;
 
-                      return (
-                        <button
-                          key={role.id}
-                          type="button"
-                          disabled={!isManageable || isCurrentOperating}
-                          onClick={() => handleToggleRole(role)}
-                          className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors text-left ${
-                            !isManageable
-                              ? 'opacity-40 cursor-not-allowed text-gray-500'
-                              : 'hover:bg-white/10 text-gray-200 cursor-pointer'
-                          } ${hasRole ? 'bg-brand-500/10 text-brand-300 font-medium' : ''}`}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: role.color || '#99aab5' }}
-                            />
-                            <span
-                              className="truncate text-xs font-medium"
-                              style={{ color: role.color || undefined }}
-                            >
-                              {role.name}
-                            </span>
-                          </div>
+                        return (
+                          <button
+                            key={role.id}
+                            type="button"
+                            disabled={!isManageable || isCurrentOperating}
+                            onClick={() => handleToggleRole(role)}
+                            className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors text-left ${
+                              !isManageable
+                                ? 'opacity-40 cursor-not-allowed text-gray-500'
+                                : 'hover:bg-white/10 text-gray-200 cursor-pointer'
+                            } ${hasRole ? 'bg-brand-500/10 text-brand-300 font-medium' : ''}`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: role.color || '#99aab5' }}
+                              />
+                              <span
+                                className="truncate text-xs font-medium"
+                                style={{ color: role.color || undefined }}
+                              >
+                                {role.name}
+                              </span>
+                            </div>
 
-                          <div className="shrink-0 flex items-center">
-                            {isCurrentOperating ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400" />
-                            ) : hasRole ? (
-                              <Check className="w-3.5 h-3.5 text-online" />
-                            ) : (
-                              <div className="w-3.5 h-3.5 rounded border border-white/20" />
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+                            <div className="shrink-0 flex items-center">
+                              {isCurrentOperating ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400" />
+                              ) : hasRole ? (
+                                <Check className="w-3.5 h-3.5 text-online" />
+                              ) : (
+                                <div className="w-3.5 h-3.5 rounded border border-white/20" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>,
+                document.body
+              )}
+          </>
         )}
       </div>
     </div>

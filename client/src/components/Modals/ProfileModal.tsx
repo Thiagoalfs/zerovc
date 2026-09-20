@@ -1656,9 +1656,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
 
                   {/* Group 1: Informações da Conta */}
-                  <div className="m-4 mt-1 p-4 bg-background-darkest/90 rounded-2xl border border-white/5 space-y-3.5">
+                  <div className="m-4 mt-1 p-4 bg-background-darkest/60 rounded-2xl border border-white/5 divide-y divide-white/5">
                     {/* Display Name (Nome de Exibição) row */}
-                    <div className="flex items-center justify-between py-1 border-b border-white/5">
+                    <div className="flex items-center justify-between pb-3 first:pt-0">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                           Nome de Exibição
@@ -1680,7 +1680,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Username row */}
-                    <div className="flex items-center justify-between py-1 border-b border-white/5">
+                    <div className="flex items-center justify-between py-3">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                           Nome de Usuário
@@ -1701,7 +1701,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Phone row */}
-                    <div className="flex items-center justify-between py-1">
+                    <div className="flex items-center justify-between pt-3">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                           Número de Telefone
@@ -1738,11 +1738,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Group 2: Personalização do Perfil (Recado & Bio) */}
-                <div className="p-5 bg-background-darker/80 rounded-3xl border border-white/5 space-y-4 shadow-lg">
+                <div className="space-y-4 pt-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                      <Smile className="w-3.5 h-3.5 text-brand-400" />
-                      <span>Recado e Sobre Mim</span>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                      Recado e Sobre Mim
                     </h4>
                   </div>
 
@@ -1765,9 +1764,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Bio / Sobre Mim */}
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <FileText className="w-3 h-3 text-brand-400" />
-                          <span>Sobre Mim (Bio)</span>
+                        <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">
+                          Sobre Mim (Bio)
                         </label>
                         <span className="text-[10px] text-gray-500">{bio.length}/255</span>
                       </div>
@@ -1812,11 +1810,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <div className="space-y-6 animate-in fade-in">
                 {/* 1. Credenciais de Acesso (E-mail, Senha & 2FA) */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Key className="w-3.5 h-3.5 text-brand-400" />
-                    <span>Credenciais de Acesso</span>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Credenciais de Acesso
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+                  <div className="divide-y divide-white/5 space-y-3.5">
                     {/* E-mail */}
                     <div className="flex items-center justify-between pt-1 first:pt-0">
                       <div>
@@ -1909,13 +1906,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* 2. Mensagens Diretas (DMs) */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Lock className="w-3.5 h-3.5 text-brand-400" />
-                    <span>Mensagens Diretas (DMs)</span>
+                <div className="pt-2">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Mensagens Diretas (DMs)
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-3">
-                    <span className="text-xs font-semibold text-white block">
+                  <div className="space-y-3">
+                    <span className="text-xs text-gray-400 block">
                       Quem pode enviar mensagens diretas para você:
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1959,12 +1955,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* 4. Gestão de Dados e Conta (LGPD / GDPR) */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 text-brand-400" />
-                    <span>Gestão de Dados e Conta (LGPD)</span>
+                <div className="pt-2">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Gestão de Dados e Conta (LGPD)
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+                  <div className="divide-y divide-white/5 space-y-3.5">
                     {/* Export Data */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 first:pt-0">
                       <div className="space-y-0.5">
@@ -2128,7 +2123,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Cor de Destaque
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 flex flex-wrap gap-3 items-center">
+                  <div className="flex flex-wrap gap-2.5 items-center">
                     {[
                       { id: 'indigo', name: 'Índigo', color: '#5865F2' },
                       { id: 'purple', name: 'Roxo Elétrico', color: '#8b5cf6' },
@@ -2208,7 +2203,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Escala da Interface (Zoom)
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-3">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-white">Nível de Zoom</span>
                       <span className="text-xs font-bold font-mono text-brand-400">{uiZoom}%</span>
@@ -2251,11 +2246,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Media and GIFs */}
-                <div>
+                <div className="pt-2">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Mídia & Animações
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 flex items-center justify-between">
+                  <div className="flex items-center justify-between">
                     <div className="space-y-0.5 pr-4">
                       <span className="text-xs font-bold text-white block">Reproduzir GIFs automaticamente</span>
                       <p className="text-[11px] text-gray-400">
@@ -2289,8 +2284,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 {!isMobileDevice ? (
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <Mic className="w-3.5 h-3.5 text-brand-400" />
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
                         Dispositivo de Entrada (Microfone)
                       </label>
                       <select
@@ -2308,8 +2302,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <Volume2 className="w-3.5 h-3.5 text-brand-400" />
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
                         Dispositivo de Saída (Fone / Alto-falante)
                       </label>
                       <select
@@ -2341,7 +2334,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 )}
 
                 {/* Mic Test Section */}
-                <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 space-y-3">
+                <div className="space-y-3 pt-1">
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-xs font-bold text-gray-200 block">Teste de Microfone</span>
@@ -2369,7 +2362,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Voice Mode: Activity vs PTT */}
-                <div>
+                <div className="pt-2">
                   <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
                     Modo de Entrada de Voz
                   </label>
@@ -2385,7 +2378,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-bold text-xs">Detecção de Voz</span>
-                        <Radio className="w-4 h-4 text-brand-400" />
                       </div>
                       <span className="text-[11px] text-gray-400">Transmite automaticamente ao falar</span>
                     </button>
@@ -2401,7 +2393,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-bold text-xs">Push-to-Talk (PTT)</span>
-                        <Keyboard className="w-4 h-4 text-brand-400" />
                       </div>
                       <span className="text-[11px] text-gray-400">Transmite apenas ao segurar a tecla configurada</span>
                     </button>
@@ -2409,10 +2400,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Audio Processing Mode Dropdown & Interactive Sub-Settings */}
-                <div className="space-y-3">
+                <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <Sliders className="w-3.5 h-3.5 text-brand-400" />
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
                       Processamento de Áudio
                     </label>
                     <span className="text-[10px] font-bold text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-md border border-brand-500/20">
@@ -2578,7 +2568,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
 
                   {/* Interactive Sub-Settings Panel based on selected mode */}
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-4">
+                  <div className="space-y-4 pt-1">
                     {/* MODE 1: WEBRTC STANDARD */}
                     {audioProcessingMode === 'webrtc' && (
                       <div className="divide-y divide-white/5 space-y-3.5 animate-in fade-in duration-150">
@@ -2665,12 +2655,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         {/* RNNoise Aggressiveness Level */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                              <Gauge className="w-3.5 h-3.5 text-amber-400" />
+                            <span className="text-xs font-bold text-white">
                               Intensidade da Supressão de Ruído (IA)
                             </span>
                             <span className="text-[11px] text-amber-400 font-bold uppercase">
-                              {rnnoiseLevel === 'light' ? 'Leve (70%)' : rnnoiseLevel === 'aggressive' ? 'Agressivo (140%)' : 'Equilibrado (100%)'}
+                              {rnnoiseLevel === 'light' ? 'Leve (70%)' : rnnoiseLevel === 'aggressive' ? 'Agressivo (100%)' : 'Equilibrado (90%)'}
                             </span>
                           </div>
 
@@ -2680,23 +2669,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                                 key={lvl}
                                 type="button"
                                 onClick={() => setRnnoiseLevel(lvl)}
-                                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center ${
                                   rnnoiseLevel === lvl
-                                    ? 'bg-amber-500/20 border-amber-500 text-white shadow-sm'
-                                    : 'bg-background-darker border-white/5 text-gray-400 hover:text-white hover:bg-white/5'
+                                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-sm'
+                                    : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
                                 }`}
                               >
-                                {lvl === 'light' ? 'Leve' : lvl === 'balanced' ? 'Equilibrado' : 'Agressivo'}
+                                {lvl === 'light' && 'Leve'}
+                                {lvl === 'balanced' && 'Equilibrado'}
+                                {lvl === 'aggressive' && 'Agressivo'}
                               </button>
                             ))}
                           </div>
-                          <p className="text-[11px] text-gray-400 mt-2">
-                            {rnnoiseLevel === 'light'
-                              ? 'Preserva 100% dos tons e nuances da voz, ideal para ambientes silenciosos.'
-                              : rnnoiseLevel === 'aggressive'
-                              ? 'Filtra ruídos pesados e cliques altos de teclado mecânico.'
-                              : 'Equilíbrio perfeito entre clareza vocal e remoção profunda de ruídos.'}
-                          </p>
                         </div>
 
                         <div className="pt-3 border-t border-white/5 divide-y divide-white/5 space-y-3.5">
@@ -2897,14 +2881,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Webcam & Video Section with Live Preview */}
-                <div>
+                <div className="pt-2">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Configuração de Vídeo / Câmera
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-3">
+                  <div className="space-y-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <Video className="w-3.5 h-3.5 text-brand-400" />
+                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
                         Dispositivo de Câmera / Webcam
                       </label>
                       <select
@@ -2949,7 +2932,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           : 'bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white shadow-md'
                       }`}
                     >
-                      <Video className="w-3.5 h-3.5" />
                       <span>{isTestingCamera ? 'Parar Teste de Vídeo' : 'Testar Câmera'}</span>
                     </button>
                   </div>
@@ -2965,7 +2947,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Notificações de Área de Trabalho
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 flex items-center justify-between">
+                  <div className="flex items-center justify-between">
                     <div className="space-y-0.5 pr-4">
                       <span className="text-xs font-bold text-white block">
                         Exibir Notificações no Computador
@@ -2993,11 +2975,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Sound Volume Slider */}
-                <div>
+                <div className="pt-2">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Volume dos Efeitos Sonoros
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 space-y-3">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {soundVolume === 0 ? (
@@ -3022,11 +3004,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Individual Sound Toggles with Test Buttons */}
-                <div>
+                <div className="pt-2">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Efeitos Sonoros do Aplicativo
                   </h4>
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-3.5">
+                  <div className="divide-y divide-white/5 space-y-3.5">
                     {/* Voice Channel Join / Leave */}
                     <div className="flex items-center justify-between pt-1 first:pt-0">
                       <div className="space-y-0.5 pr-4">
@@ -3135,10 +3117,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Haptic Feedback (Mobile Vibration) */}
                     <div className="flex items-center justify-between pt-3.5">
                       <div className="space-y-0.5 pr-4">
-                        <div className="flex items-center gap-1.5">
-                          <Smartphone className="w-3.5 h-3.5 text-brand-400" />
-                          <span className="text-xs font-bold text-white block">Resposta Tátil (Vibração no Celular)</span>
-                        </div>
+                        <span className="text-xs font-bold text-white block">Resposta Tátil (Vibração no Celular)</span>
                         <p className="text-[11px] text-gray-400">Vibrações sutis ao segurar mensagens, reagir com emojis, mutar microfone e navegar.</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -3148,7 +3127,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/5"
                           title="Testar vibração"
                         >
-                          <Smartphone className="w-3 h-3 text-brand-400" />
                           <span>Testar</span>
                         </button>
                         <button
@@ -3182,7 +3160,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     Comportamento do Aplicativo (Desktop)
                   </h4>
 
-                  <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 divide-y divide-white/5 space-y-4">
+                  <div className="divide-y divide-white/5 space-y-4">
                     {/* Item: Manter na Gaveta / Bandeja */}
                     <div className="flex items-center justify-between pt-1 first:pt-0">
                       <div className="space-y-1 pr-4">
@@ -3676,9 +3654,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-brand-400" />
-                <span>{user.two_factor_enabled ? 'Desativar Autenticação 2FA' : 'Configurar Autenticação 2FA (TOTP)'}</span>
+              <h4 className="text-sm font-bold text-white">
+                {user.two_factor_enabled ? 'Desativar Autenticação 2FA' : 'Configurar Autenticação 2FA (TOTP)'}
               </h4>
               <button
                 type="button"
@@ -3755,9 +3732,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <div className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-6 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <Key className="w-4 h-4 text-emerald-400" />
-                <span>Códigos de Backup de 2FA</span>
+              <h4 className="text-sm font-bold text-white">
+                Códigos de Backup de 2FA
               </h4>
               <button
                 type="button"
@@ -3844,9 +3820,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-3xl p-4 sm:p-6 border border-dnd/30 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-dnd flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                <span>Excluir Conta Permanentemente</span>
+              <h4 className="text-sm font-bold text-dnd">
+                Excluir Conta Permanentemente
               </h4>
               <button
                 type="button"

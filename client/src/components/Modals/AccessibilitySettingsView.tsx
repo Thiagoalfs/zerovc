@@ -39,9 +39,8 @@ export const AccessibilitySettingsView: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h3 className="text-base font-bold text-white flex items-center gap-2">
-          <Eye className="w-5 h-5 text-brand-400" />
-          <span>Central de Acessibilidade</span>
+        <h3 className="text-base font-bold text-white">
+          Central de Acessibilidade
         </h3>
         <p className="text-xs text-gray-400 mt-1">
           Personalize a legibilidade, escala de texto, animações e leitor por voz para a melhor experiência.
@@ -50,12 +49,11 @@ export const AccessibilitySettingsView: React.FC = () => {
 
       {/* Group 1: Tipografia & Escala de Texto */}
       <div className="space-y-3">
-        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1 block flex items-center gap-1.5">
-          <Type className="w-3.5 h-3.5 text-gray-400" />
-          <span>Tamanho da Fonte das Mensagens</span>
+        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+          Tamanho da Fonte das Mensagens
         </span>
 
-        <div className="p-4 rounded-2xl bg-background-darker border border-white/5 space-y-4">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-white">Escala Tipográfica do Chat</span>
             <span className="text-xs font-bold text-brand-400 bg-brand-500/10 px-2.5 py-1 rounded-xl border border-brand-500/20">
@@ -82,11 +80,11 @@ export const AccessibilitySettingsView: React.FC = () => {
           </div>
 
           {/* Live Chat Message Preview */}
-          <div className="pt-2 border-t border-white/5">
+          <div className="pt-2">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-              Pré-visualização em Tempo Real
+              Pré-visualização
             </span>
-            <div className="p-3 rounded-xl bg-black/20 border border-white/5 flex items-start gap-3">
+            <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-start gap-3">
               <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-md">
                 Z
               </div>
@@ -107,20 +105,20 @@ export const AccessibilitySettingsView: React.FC = () => {
         </div>
       </div>
 
+      <div className="border-t border-white/5" />
+
       {/* Group 2: Movimento & Contraste */}
       <div className="space-y-3">
-        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1 block flex items-center gap-1.5">
-          <Contrast className="w-3.5 h-3.5 text-gray-400" />
-          <span>Visão & Movimento</span>
+        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+          Visão & Movimento
         </span>
 
-        <div className="bg-background-darker rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5">
+        <div className="divide-y divide-white/5">
           {/* Reduced Motion Toggle */}
-          <div className="p-4 flex items-center justify-between gap-4">
+          <div className="py-3 flex items-center justify-between gap-4">
             <div className="space-y-0.5 min-w-0">
-              <div className="text-xs font-semibold text-white flex items-center gap-1.5">
-                <ZapOff className="w-4 h-4 text-amber-400" />
-                <span>Reduzir Movimento</span>
+              <div className="text-xs font-semibold text-white">
+                Reduzir Movimento
               </div>
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Desativa transições, animações rápidas e efeitos de movimento intenso para maior conforto visual.
@@ -138,11 +136,10 @@ export const AccessibilitySettingsView: React.FC = () => {
           </div>
 
           {/* High Contrast Toggle */}
-          <div className="p-4 flex items-center justify-between gap-4">
+          <div className="py-3 flex items-center justify-between gap-4">
             <div className="space-y-0.5 min-w-0">
-              <div className="text-xs font-semibold text-white flex items-center gap-1.5">
-                <Contrast className="w-4 h-4 text-cyan-400" />
-                <span>Modo de Alto Contraste</span>
+              <div className="text-xs font-semibold text-white">
+                Modo de Alto Contraste
               </div>
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Realça bordas de botões, divisórias e textos para facilitar a distinção de elementos da interface.
@@ -161,19 +158,20 @@ export const AccessibilitySettingsView: React.FC = () => {
         </div>
       </div>
 
+      <div className="border-t border-white/5" />
+
       {/* Group 3: Leitor de Mensagens (TTS) */}
       <div className="space-y-3">
-        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1 block flex items-center gap-1.5">
-          <Volume2 className="w-3.5 h-3.5 text-gray-400" />
-          <span>Leitor de Mensagens por Voz (Text-to-Speech)</span>
+        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+          Leitor de Mensagens por Voz (Text-to-Speech)
         </span>
 
-        <div className="bg-background-darker rounded-2xl border border-white/5 p-4 space-y-3">
+        <div className="space-y-3">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 min-w-0">
               <div className="text-xs font-semibold text-white">Leitura Automática de Novas Mensagens</div>
               <p className="text-[11px] text-gray-400 leading-relaxed">
-                Quando ativado, novas mensagens recebidas no canal ativo são narradas automaticamente. Você também pode clicar com o botão direito em qualquer mensagem para ouvi-la individualmente.
+                Quando ativado, novas mensagens recebidas no canal ativo são narradas automaticamente.
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -187,7 +185,7 @@ export const AccessibilitySettingsView: React.FC = () => {
             </label>
           </div>
 
-          <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+          <div className="pt-2 flex items-center justify-between">
             <span className="text-[11px] text-gray-400">Verifique a saída do sintetizador no seu dispositivo</span>
             <button
               type="button"

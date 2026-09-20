@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Gamepad2, Check, Plus, Trash2, Edit2, X, ChevronDown, Monitor, Sparkles } from 'lucide-react';
 import { useRegisteredGamesStore, RegisteredGame } from '../../stores/registeredGamesStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -109,20 +109,19 @@ export const RegisteredGamesView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in">
       {/* 1. CURRENT GAME SECTION */}
       <div>
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <Gamepad2 className="w-3.5 h-3.5 text-brand-400" />
-          <span>Jogo Atual</span>
+        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+          Jogo Atual
         </h4>
 
         {currentRunningGame ? (
-          <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-4 flex items-center justify-between gap-4">
+          <div className="py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-white/5 text-brand-400 flex items-center justify-center shrink-0">
                 <Gamepad2 className="w-5 h-5" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white truncate">{currentRunningGame.name}</span>
+                  <span className="text-sm font-semibold text-white truncate">{currentRunningGame.name}</span>
                   {currentRunningGame.isVerified && (
                     <span
                       className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#5865F2] text-white shadow-xs shrink-0"
@@ -156,9 +155,9 @@ export const RegisteredGamesView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="bg-background-darkest/90 rounded-2xl border border-white/5 p-5">
-            <h5 className="text-sm font-bold text-white mb-1">Nenhum jogo detectado</h5>
-            <p className="text-xs text-gray-400">
+          <div className="py-2">
+            <h5 className="text-xs font-semibold text-white mb-0.5">Nenhum jogo detectado</h5>
+            <p className="text-[11px] text-gray-400">
               Não está vendo seu jogo?{' '}
               <button
                 type="button"
