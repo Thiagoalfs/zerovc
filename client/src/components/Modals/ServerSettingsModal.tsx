@@ -296,8 +296,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           label: 'Visão Geral',
           icon: <SettingsIcon className="w-4 h-4" />,
           subcategories: [
-            { id: 'overview-identity', label: 'Identidade do Servidor' },
-            { id: 'overview-system', label: 'Canal de Notificações' },
+            { id: 'overview-identity', label: 'Identidade Visual' },
+            { id: 'overview-system', label: 'Canal do Sistema' },
             ...(isOwner ? [{ id: 'overview-danger', label: 'Zona de Perigo' }] : []),
           ],
         },
@@ -306,45 +306,34 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           label: 'Cargos',
           icon: <Shield className="w-4 h-4" />,
           badge: roles.length,
-          subcategories: [
-            { id: 'roles-list', label: 'Gerenciamento de Cargos' },
-            { id: 'roles-permissions', label: 'Permissões' },
-          ],
+          subcategories: [],
         },
         {
           id: 'emojis' as const,
           label: 'Emojis',
           icon: <Smile className="w-4 h-4" />,
           badge: emojisList.length,
-          subcategories: [
-            { id: 'emojis-custom', label: 'Emojis Customizados' },
-          ],
+          subcategories: [],
         },
         {
           id: 'invites' as const,
           label: 'Convites',
           icon: <LinkIcon className="w-4 h-4" />,
           badge: invitesList.length,
-          subcategories: [
-            { id: 'invites-active', label: 'Links de Convite' },
-          ],
+          subcategories: [],
         },
         {
           id: 'members' as const,
           label: 'Membros',
           icon: <Users className="w-4 h-4" />,
           badge: members.length,
-          subcategories: [
-            { id: 'members-list', label: 'Lista de Membros' },
-          ],
+          subcategories: [],
         },
         {
           id: 'audit_log' as const,
           label: 'Registro de Auditoria',
           icon: <ScrollText className="w-4 h-4" />,
-          subcategories: [
-            { id: 'audit-actions', label: 'Histórico de Moderação' },
-          ],
+          subcategories: [],
         },
       ],
     },

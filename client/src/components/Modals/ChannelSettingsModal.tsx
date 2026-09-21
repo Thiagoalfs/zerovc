@@ -156,17 +156,14 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           icon: <SettingsIcon className="w-4 h-4" />,
           subcategories: [
             { id: 'overview-basic', label: 'Configurações Básicas' },
-            { id: 'overview-delete', label: isCategory ? 'Excluir Categoria' : 'Excluir Canal' },
+            { id: 'overview-delete', label: 'Zona de Perigo' },
           ],
         },
         {
           id: 'permissions' as const,
           label: 'Permissões',
           icon: <Shield className="w-4 h-4" />,
-          subcategories: [
-            { id: 'permissions-roles', label: 'Cargos & Membros' },
-            { id: 'permissions-advanced', label: 'Permissões Avançadas' },
-          ],
+          subcategories: [],
         },
       ],
     },
