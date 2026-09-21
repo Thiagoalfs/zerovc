@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ExternalLink, Globe, Play } from 'lucide-react';
 import { LinkMetadata } from '../../types';
 import { api } from '../../lib/api';
@@ -17,6 +17,7 @@ export const LinkEmbed: React.FC<LinkEmbedProps> = ({ url, onPreviewImage, class
   const [metadata, setMetadata] = useState<LinkMetadata | null>(() => metadataCache.get(url) || null);
   const [loading, setLoading] = useState<boolean>(() => !metadataCache.has(url));
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     if (metadataCache.has(url)) {
@@ -63,7 +64,7 @@ export const LinkEmbed: React.FC<LinkEmbedProps> = ({ url, onPreviewImage, class
   }
 
   // If no meaningful title or description or image was found, don't show an empty box
-  if (!metadata || (!metadata.title && !metadata.description && !metadata.image_url)) {
+  if (!metadata || (!metadata.title && !metadata.description && (!metadata.image_url || imageError))) {
     return null;
   }
 
@@ -161,11 +162,12 @@ export const LinkEmbed: React.FC<LinkEmbedProps> = ({ url, onPreviewImage, class
             className="w-full h-full border-0"
           />
         </div>
-      ) : metadata.image_url ? (
+      ) : metadata.image_url && !imageError ? (
         <div className="relative w-full max-h-72 overflow-hidden bg-black/40 group/embed-img">
           <img
             src={metadata.image_url}
             alt={metadata.title || 'Preview do link'}
+            onError={() => setImageError(true)}
             className="w-full h-auto max-h-72 object-cover cursor-pointer hover:opacity-95 transition-opacity"
             onClick={(e) => {
               e.stopPropagation();
