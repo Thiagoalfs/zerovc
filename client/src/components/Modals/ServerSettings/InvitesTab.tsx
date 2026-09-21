@@ -31,9 +31,10 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
 }) => {
   return (
     <div id="invites-active" className="max-w-4xl space-y-6 animate-fade-in scroll-mt-6">
-      <div className="flex items-center justify-between p-5 rounded-2xl bg-[#1e1f22] border border-white/10">
+      {/* Header Info */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
         <div>
-          <h3 className="text-sm font-bold text-white">Gerenciamento de Links de Convite</h3>
+          <h2 className="text-base font-bold text-white">Convites do Servidor</h2>
           <p className="text-xs text-gray-400 mt-0.5">
             Veja todos os links de convite ativos gerados para este servidor.
           </p>
@@ -42,7 +43,7 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
           type="button"
           onClick={handleGenerateNewInvite}
           disabled={isCreatingInvite}
-          className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+          className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>{isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}</span>
@@ -54,7 +55,7 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500" />
         </div>
       ) : invitesList.length === 0 ? (
-        <div className="text-center py-16 px-4 rounded-2xl bg-[#1e1f22]/60 border border-white/10">
+        <div className="text-center py-16 px-4 rounded-2xl border border-white/10 bg-[#111214]/30">
           <LinkIcon className="w-12 h-12 stroke-1 text-gray-500 mx-auto mb-3" />
           <h4 className="text-base font-semibold text-white">Nenhum link de convite ativo</h4>
           <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
@@ -62,7 +63,7 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="border border-white/10 rounded-2xl bg-[#111214]/50 overflow-hidden divide-y divide-white/5">
           {invitesList.map((inv) => {
             const origin = typeof window !== 'undefined' ? window.location.origin : 'https://zerovc.safiroko.xyz';
             const fullLink = `${origin}/invite/${inv.code}`;
@@ -71,14 +72,14 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
             return (
               <div
                 key={inv.code}
-                className="p-4 rounded-2xl bg-[#1e1f22] border border-white/10 flex items-center justify-between gap-4"
+                className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono font-bold text-brand-400">{inv.code}</span>
                     <span className="text-xs text-gray-500 truncate font-mono">({fullLink})</span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
+                  <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
                     <span>Criado por @{inv.creator?.username || 'membro'}</span>
                     <span>•</span>
                     <span className="text-white font-medium">{inv.uses} {inv.uses === 1 ? 'uso' : 'usos'}</span>
@@ -87,7 +88,7 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                   <button
                     type="button"
                     onClick={() => handleCopyInviteLink(inv.code)}

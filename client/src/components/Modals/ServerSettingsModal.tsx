@@ -15,7 +15,7 @@ import {
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { Permissions, GuildEmoji, GuildInvite, User } from '../../types';
+import { Permissions, GuildEmoji, GuildInvite, User, Role } from '../../types';
 import { api, formatAssetUrl, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
 import { convertToWebP } from '../../utils/image';
@@ -501,6 +501,19 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       await updateRole(activeGuild.id, selectedRole.id, { mentionable: !Boolean(selectedRole.mentionable) });
     } catch (err) {
       console.error('Failed to toggle mentionable:', err);
+    }
+  };
+
+  const handleReorderRoles = async (newOrderedRoles: Role[]) => {
+    if (!canManageRoles || isReorderingRoles || !activeGuild) return;
+    setIsReorderingRoles(true);
+    try {
+      const payload = newOrderedRoles.map((r, idx) => ({ id: r.id, position: idx }));
+      await reorderRoles(activeGuild.id, payload);
+    } catch (err) {
+      console.error('Failed to reorder roles:', err);
+    } finally {
+      setIsReorderingRoles(false);
     }
   };
 
@@ -1243,6 +1256,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   setNewRoleName={setNewRoleName}
                   isCreatingRole={isCreatingRole}
                   isReorderingRoles={isReorderingRoles}
+                  handleReorderRoles={handleReorderRoles}
                   handleMoveRoleHierarchy={handleMoveRoleHierarchy}
                   handleCreateRole={handleCreateRole}
                   handleDeleteRole={handleDeleteRole}
