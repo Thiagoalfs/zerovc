@@ -8,6 +8,8 @@ import {
   AlertTriangle,
   Upload,
   Image as ImageIcon,
+  Crown,
+  Trash2,
 } from 'lucide-react';
 import { Guild, Channel, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
@@ -34,6 +36,8 @@ interface OverviewTabProps {
   handleRemoveBanner: () => Promise<void>;
   isUploadingIcon: boolean;
   isUploadingBanner: boolean;
+  onOpenTransferModal: () => void;
+  onOpenDeleteModal: () => void;
 }
 
 export const OverviewTab: React.FC<OverviewTabProps> = ({
@@ -58,6 +62,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   handleRemoveBanner,
   isUploadingIcon,
   isUploadingBanner,
+  onOpenTransferModal,
+  onOpenDeleteModal,
 }) => {
   const initials = activeGuild.name
     .split(' ')
@@ -289,6 +295,59 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         )}
       </form>
+
+      {/* Danger Zone / Owner Actions */}
+      {isOwner && (
+        <div id="overview-danger" className="pt-6 border-t border-white/10 space-y-4 scroll-mt-6">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-red-400 font-mono">
+            Zona de Perigo & Ações do Dono
+          </h3>
+          
+          <div className="space-y-3">
+            {/* Transfer Ownership */}
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-amber-400" />
+                  Transferir Posse do Servidor
+                </h4>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Passe a posse total deste servidor para outro membro. Você perderá os privilégios exclusivos de proprietário.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenTransferModal}
+                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-semibold px-4 py-2 rounded-xl text-xs transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Crown className="w-3.5 h-3.5" />
+                <span>Transferir Posse</span>
+              </button>
+            </div>
+
+            {/* Delete Server */}
+            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Trash2 className="w-4 h-4 text-red-400" />
+                  Excluir Servidor
+                </h4>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Esta ação é permanente e irreversível. Todos os canais, mensagens, cargos e dados serão excluídos imediatamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenDeleteModal}
+                className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-semibold px-4 py-2 rounded-xl text-xs transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Excluir Servidor</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

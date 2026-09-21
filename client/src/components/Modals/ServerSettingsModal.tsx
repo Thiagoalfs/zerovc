@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Shield,
-  Trash2,
   Users,
   Crown,
   Settings as SettingsIcon,
@@ -299,6 +298,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           subcategories: [
             { id: 'overview-identity', label: 'Identidade do Servidor' },
             { id: 'overview-system', label: 'Canal de Notificações' },
+            ...(isOwner ? [{ id: 'overview-danger', label: 'Zona de Perigo' }] : []),
           ],
         },
         {
@@ -1132,30 +1132,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 ))}
               </nav>
             </div>
-
-            {isOwner && (
-              <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2 my-0.5">
-                  Ações do Dono
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsTransferModalOpen(true)}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer"
-                >
-                  <Crown className="w-3.5 h-3.5" />
-                  <span>Transferir Posse</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsDeleteModalOpen(true)}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Excluir Servidor</span>
-                </button>
-              </div>
-            )}
           </div>
 
           {/* MAIN CONTENT AREA */}
@@ -1260,6 +1236,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   handleRemoveBanner={handleRemoveBanner}
                   isUploadingIcon={isUploadingIcon}
                   isUploadingBanner={isUploadingBanner}
+                  onOpenTransferModal={() => setIsTransferModalOpen(true)}
+                  onOpenDeleteModal={() => setIsDeleteModalOpen(true)}
                 />
               )}
 
