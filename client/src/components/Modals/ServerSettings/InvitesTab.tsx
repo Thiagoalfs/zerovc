@@ -17,6 +17,8 @@ interface InvitesTabProps {
   handleRevokeInvite: (code: string) => Promise<void>;
   copiedCode: string | null;
   isOwner: boolean;
+  canManageGuild?: boolean;
+  hasAdmin?: boolean;
 }
 
 export const InvitesTab: React.FC<InvitesTabProps> = ({
@@ -28,7 +30,10 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
   handleRevokeInvite,
   copiedCode,
   isOwner,
+  canManageGuild = false,
+  hasAdmin = false,
 }) => {
+  const canManage = isOwner || hasAdmin || canManageGuild;
   return (
     <div id="invites-active" className="max-w-4xl space-y-6 animate-fade-in scroll-mt-6">
       {/* Header Info */}
@@ -102,7 +107,7 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
                     <span>{isCopied ? 'Copiado!' : 'Copiar'}</span>
                   </button>
 
-                  {isOwner && (
+                  {canManage && (
                     <button
                       type="button"
                       onClick={() => handleRevokeInvite(inv.code)}

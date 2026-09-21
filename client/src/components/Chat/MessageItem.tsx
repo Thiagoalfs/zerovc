@@ -199,7 +199,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const isAuthor = user?.id === message.author_id;
   const isOwner = contextType === 'channel' && activeGuild ? activeGuild.owner_id === user?.id : false;
-  const canDelete = isAuthor || isOwner;
+  const canDelete = isAuthor || isOwner || (contextType === 'channel' && (perms.hasAdmin || perms.canManageMessages));
 
   const currentUserRoles = contextType === 'channel' ? (activeGuild?.members?.find((m) => m.id === user?.id)?.roles || []) : [];
 

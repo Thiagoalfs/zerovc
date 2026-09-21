@@ -1231,6 +1231,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 <OverviewTab
                   activeGuild={activeGuild}
                   isOwner={isOwner}
+                  canManageGuild={canManageGuild}
+                  hasAdmin={hasAdmin}
                   members={members}
                   onlineMembersCount={onlineMembersCount}
                   textChannels={textChannels}
@@ -1309,6 +1311,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   handleRevokeInvite={handleRevokeInvite}
                   copiedCode={copiedCode}
                   isOwner={isOwner}
+                  canManageGuild={canManageGuild}
+                  hasAdmin={hasAdmin}
                 />
               )}
 

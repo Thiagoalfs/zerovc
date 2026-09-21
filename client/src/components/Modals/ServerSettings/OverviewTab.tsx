@@ -17,6 +17,8 @@ import { formatAssetUrl } from '../../../lib/api';
 interface OverviewTabProps {
   activeGuild: Guild;
   isOwner: boolean;
+  canManageGuild?: boolean;
+  hasAdmin?: boolean;
   members: User[];
   onlineMembersCount: number;
   textChannels: Channel[];
@@ -43,6 +45,8 @@ interface OverviewTabProps {
 export const OverviewTab: React.FC<OverviewTabProps> = ({
   activeGuild,
   isOwner,
+  canManageGuild = false,
+  hasAdmin = false,
   members,
   onlineMembersCount,
   textChannels,
@@ -65,6 +69,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   onOpenTransferModal,
   onOpenDeleteModal,
 }) => {
+  const canEdit = isOwner || hasAdmin || canManageGuild;
   const initials = activeGuild.name
     .split(' ')
     .map((w) => w[0])
@@ -173,13 +178,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 <button
                   type="button"
                   onClick={() => iconInputRef.current?.click()}
-                  disabled={!isOwner || isUploadingIcon}
+                  disabled={!canEdit || isUploadingIcon}
                   className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>{isUploadingIcon ? 'Enviando...' : 'Trocar Ícone'}</span>
                 </button>
-                {activeGuild.icon_url && isOwner && (
+                {activeGuild.icon_url && canEdit && (
                   <button
                     type="button"
                     onClick={handleRemoveIcon}
@@ -222,13 +227,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 <button
                   type="button"
                   onClick={() => bannerInputRef.current?.click()}
-                  disabled={!isOwner || isUploadingBanner}
+                  disabled={!canEdit || isUploadingBanner}
                   className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>{isUploadingBanner ? 'Enviando...' : 'Trocar Banner'}</span>
                 </button>
-                {activeGuild.banner_url && isOwner && (
+                {activeGuild.banner_url && canEdit && (
                   <button
                     type="button"
                     onClick={handleRemoveBanner}
@@ -254,7 +259,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             type="text"
             value={guildName}
             onChange={(e) => setGuildName(e.target.value)}
-            disabled={!isOwner}
+            disabled={!canEdit}
             placeholder="Nome do servidor"
             className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-60"
           />
@@ -271,7 +276,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           <select
             value={systemChannelId}
             onChange={(e) => setSystemChannelId(e.target.value)}
-            disabled={!isOwner}
+            disabled={!canEdit}
             className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-60"
           >
             <option value="">Nenhum (Desativado)</option>
@@ -283,7 +288,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </select>
         </div>
 
-        {isOwner && (
+        {canEdit && (
           <div className="flex justify-end pt-2">
             <button
               type="submit"
