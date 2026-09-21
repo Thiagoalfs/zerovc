@@ -11,6 +11,7 @@ import {
   Link as LinkIcon,
   ChevronRight,
   ArrowLeft,
+  Search,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -59,6 +60,23 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
   const [activeTab, setActiveTab] = useState<'overview' | 'roles' | 'emojis' | 'invites' | 'members' | 'audit_log'>('overview');
   const [mobileView, setMobileView] = useState<'menu' | 'content'>('menu');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSubcategory, setActiveSubcategory] = useState<string>('overview-identity');
+
+  const handleSelectSubcategory = (tab: typeof activeTab, subId?: string) => {
+    setActiveTab(tab);
+    if (subId) {
+      setActiveSubcategory(subId);
+      setTimeout(() => {
+        const el = document.getElementById(subId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 50);
+    }
+  };
+
+
 
   useEffect(() => {
     if (isOpen) {
@@ -269,6 +287,81 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
   const isRoleAdmin = selectedRole ? (Number(selectedRole.permissions || 0) & Permissions.ADMINISTRATOR) !== 0 : false;
+
+  const serverCategoriesList = [
+    {
+      group: 'Configurações do Servidor',
+      items: [
+        {
+          id: 'overview' as const,
+          label: 'Visão Geral',
+          icon: <SettingsIcon className="w-4 h-4" />,
+          subcategories: [
+            { id: 'overview-identity', label: 'Identidade do Servidor' },
+            { id: 'overview-system', label: 'Canal de Notificações' },
+          ],
+        },
+        {
+          id: 'roles' as const,
+          label: 'Cargos',
+          icon: <Shield className="w-4 h-4" />,
+          badge: roles.length,
+          subcategories: [
+            { id: 'roles-list', label: 'Gerenciamento de Cargos' },
+            { id: 'roles-permissions', label: 'Permissões' },
+          ],
+        },
+        {
+          id: 'emojis' as const,
+          label: 'Emojis',
+          icon: <Smile className="w-4 h-4" />,
+          badge: emojisList.length,
+          subcategories: [
+            { id: 'emojis-custom', label: 'Emojis Customizados' },
+          ],
+        },
+        {
+          id: 'invites' as const,
+          label: 'Convites',
+          icon: <LinkIcon className="w-4 h-4" />,
+          badge: invitesList.length,
+          subcategories: [
+            { id: 'invites-active', label: 'Links de Convite' },
+          ],
+        },
+        {
+          id: 'members' as const,
+          label: 'Membros',
+          icon: <Users className="w-4 h-4" />,
+          badge: members.length,
+          subcategories: [
+            { id: 'members-list', label: 'Lista de Membros' },
+          ],
+        },
+        {
+          id: 'audit_log' as const,
+          label: 'Registro de Auditoria',
+          icon: <ScrollText className="w-4 h-4" />,
+          subcategories: [
+            { id: 'audit-actions', label: 'Histórico de Moderação' },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const filteredServerCategories = serverCategoriesList
+    .map((group) => {
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return group;
+      const items = group.items.filter((item) => {
+        const itemMatch = item.label.toLowerCase().includes(q);
+        const subMatch = item.subcategories.some((sub) => sub.label.toLowerCase().includes(q));
+        return itemMatch || subMatch;
+      });
+      return { ...group, items };
+    })
+    .filter((group) => group.items.length > 0);
 
   // 1. Overview Actions
   const handleSaveOverview = async (e: React.FormEvent) => {
@@ -724,11 +817,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-0 md:p-4 overflow-hidden animate-fade-in"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 md:bg-[#1e1f22] p-0 overflow-hidden animate-fade-in"
       >
-        <div className={`flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-[#18191c] rounded-none md:rounded-2xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200 ${reducedMotion ? '' : 'animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none'}`}>
+        <div className="flex flex-col md:flex-row w-full h-full bg-[#18191c] md:bg-[#1e1f22] overflow-hidden text-gray-200">
           
-          {/* MOBILE MENU VIEW */}
+          {/* MOBILE MENU VIEW (100% Preserved) */}
           {mobileView === 'menu' && (
             <div className="flex md:hidden flex-col w-full h-full bg-[#18191c] overflow-hidden">
               <div
@@ -913,119 +1006,142 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             </div>
           )}
 
-          {/* DESKTOP SIDEBAR TABS */}
-          <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar">
-            <div className="px-3 py-2 mb-2">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono truncate">
-                {activeGuild.name}
-              </h2>
-              <div className="text-[11px] text-gray-500 mt-0.5">Configurações do Servidor</div>
+          {/* DESKTOP SIDEBAR TABS (Discord Design) */}
+          <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-3.5 shrink-0 overflow-y-auto no-scrollbar justify-between select-none">
+            <div className="flex flex-col items-stretch flex-1 flex-shrink-0 min-h-0">
+              {/* Server Mini Header */}
+              <div className="flex items-center gap-3 px-2 py-1.5 mb-2 rounded-xl">
+                <div className="w-10 h-10 rounded-2xl bg-brand-500 overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow">
+                  {activeGuild.icon_url ? (
+                    <img src={formatAssetUrl(activeGuild.icon_url)} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{activeGuild.name.slice(0, 2).toUpperCase()}</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold text-white truncate leading-tight flex items-center gap-1.5">
+                    <span className="truncate">{activeGuild.name}</span>
+                    {isOwner && <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                  </h3>
+                  <span className="text-xs text-gray-400 block mt-0.5 truncate">
+                    {members.length} membros
+                  </span>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative mb-3 px-1">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-[#1e1f22] text-xs text-gray-200 pl-8 pr-7 py-2 rounded-xl border border-transparent focus:border-brand-500/50 focus:outline-none placeholder-gray-500 transition-colors"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Navigation Groups & Items */}
+              <nav className="flex flex-col gap-3 flex-1 overflow-y-auto no-scrollbar pr-0.5">
+                {filteredServerCategories.map((group, gIdx) => (
+                  <div key={gIdx} className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2 block">
+                      {group.group}
+                    </span>
+                    <div className="space-y-0.5">
+                      {group.items.map((item) => {
+                        const isActiveCategory = activeTab === item.id;
+                        return (
+                          <div key={item.id} className="flex flex-col">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab(item.id);
+                                if (item.subcategories.length > 0) {
+                                  handleSelectSubcategory(item.id, item.subcategories[0].id);
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                                isActiveCategory
+                                  ? 'bg-white/10 text-white shadow-xs'
+                                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className={isActiveCategory ? 'text-brand-400' : 'text-gray-400'}>
+                                  {item.icon}
+                                </span>
+                                <span className="truncate">{item.label}</span>
+                              </div>
+                              {typeof item.badge === 'number' && (
+                                <span className="text-[10px] bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400 font-mono">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </button>
+
+                            {/* Subcategories with Vertical Indicator */}
+                            {(isActiveCategory || searchQuery.trim().length > 0) && item.subcategories.length > 0 && (
+                              <div className="ml-5 pl-2.5 border-l-2 border-white/10 flex flex-col gap-1 my-1">
+                                {item.subcategories.map((sub) => {
+                                  const isSubActive = activeSubcategory === sub.id && isActiveCategory;
+                                  return (
+                                    <button
+                                      key={sub.id}
+                                      type="button"
+                                      onClick={() => handleSelectSubcategory(item.id, sub.id)}
+                                      className={`flex items-center text-left py-1 text-xs transition-colors cursor-pointer relative ${
+                                        isSubActive
+                                          ? 'text-white font-bold pl-2'
+                                          : 'text-gray-400 hover:text-gray-200 pl-2'
+                                      }`}
+                                    >
+                                      {isSubActive && (
+                                        <span className="absolute -left-[12px] top-1 bottom-1 w-[2.5px] bg-white rounded-r" />
+                                      )}
+                                      <span className="truncate">{sub.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </nav>
             </div>
-
-            <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
-                Configurações do Servidor
-              </span>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('overview')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'overview'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Visão Geral</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('roles')}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'roles'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Cargos</span>
-                <span className="text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400">
-                  {roles.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('emojis')}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'emojis'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Emojis</span>
-                <span className="text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400">
-                  {emojisList.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('invites')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'invites'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Convites</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('members')}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'members'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Membros</span>
-                <span className="text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-gray-400">
-                  {members.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('audit_log')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'audit_log'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Auditoria</span>
-              </button>
-            </nav>
 
             {isOwner && (
               <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2 my-0.5">
                   Ações do Dono
                 </span>
                 <button
                   type="button"
                   onClick={() => setIsTransferModalOpen(true)}
-                  className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer"
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer"
                 >
+                  <Crown className="w-3.5 h-3.5" />
                   <span>Transferir Posse</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsDeleteModalOpen(true)}
-                  className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
                 >
+                  <Trash2 className="w-3.5 h-3.5" />
                   <span>Excluir Servidor</span>
                 </button>
               </div>
@@ -1033,7 +1149,19 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           </div>
 
           {/* MAIN CONTENT AREA */}
-          <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden bg-[#18191c] relative min-w-0 min-h-0`}>
+          <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden bg-[#18191c] md:bg-[#1e1f22] relative min-w-0 min-h-0`}>
+            {/* Discord Style ESC Button (Desktop) */}
+            <div className="hidden md:flex flex-col items-center gap-1 absolute top-6 right-8 z-30">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-9 h-9 rounded-full border-2 border-gray-400/60 hover:border-white hover:bg-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-all cursor-pointer group shadow-lg"
+                title="Fechar (ESC)"
+              >
+                <X className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              </button>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">ESC</span>
+            </div>
             
             {/* Mobile Drilldown Top Bar */}
             <div 
