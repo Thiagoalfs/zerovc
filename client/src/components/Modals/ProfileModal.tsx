@@ -132,10 +132,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           label: 'Conta',
           icon: <User className="w-4 h-4" />,
           subcategories: [
-            { id: 'account-profile', label: 'Perfil & Customização' },
+            { id: 'account-profile', label: 'Perfil' },
             { id: 'account-info', label: 'Informações da Conta' },
-            { id: 'account-security', label: 'Senha & Autenticação 2FA' },
-            { id: 'account-danger', label: 'Exportação & Exclusão' },
+            { id: 'account-bio', label: 'Recado & Sobre Mim' },
           ],
         },
         {
@@ -143,17 +142,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           label: 'Privacidade & Segurança',
           icon: <Shield className="w-4 h-4" />,
           subcategories: [
-            { id: 'privacy-credentials', label: 'Credenciais & 2FA' },
+            { id: 'privacy-credentials', label: 'Credenciais de Acesso' },
             { id: 'privacy-dm', label: 'Mensagens Diretas' },
+            { id: 'privacy-data', label: 'Gestão de Dados & Conta' },
           ],
         },
         {
           id: 'sessions' as const,
           label: 'Dispositivos & Sessões',
           icon: <Laptop className="w-4 h-4" />,
-          subcategories: [
-            { id: 'sessions-list', label: 'Sessões Ativas' },
-          ],
+          subcategories: [],
         },
       ],
     },
@@ -164,17 +162,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           id: 'registered_games' as const,
           label: 'Jogos Registrados',
           icon: <Gamepad2 className="w-4 h-4" />,
-          subcategories: [
-            { id: 'activity-games', label: 'Jogos Detectados' },
-          ],
+          subcategories: [],
         },
         {
           id: 'activity_privacy' as const,
           label: 'Privacidade de Atividade',
           icon: <Activity className="w-4 h-4" />,
-          subcategories: [
-            { id: 'activity-privacy', label: 'Exibição de Status' },
-          ],
+          subcategories: [],
         },
       ],
     },
@@ -186,9 +180,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           label: 'Aparência',
           icon: <Palette className="w-4 h-4" />,
           subcategories: [
-            { id: 'appearance-theme', label: 'Tema & Cores' },
+            { id: 'appearance-theme', label: 'Tema da Interface' },
             { id: 'appearance-density', label: 'Densidade do Chat' },
-            { id: 'appearance-zoom', label: 'Zoom da Interface' },
+            { id: 'appearance-zoom', label: 'Escala da Interface' },
           ],
         },
         {
@@ -196,7 +190,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           label: 'Acessibilidade',
           icon: <Sliders className="w-4 h-4" />,
           subcategories: [
-            { id: 'accessibility-settings', label: 'Configurações de Acesso' },
+            { id: 'accessibility-font', label: 'Tamanho da Fonte' },
+            { id: 'accessibility-vision', label: 'Visão & Movimento' },
+            { id: 'accessibility-tts', label: 'Leitor por Voz (TTS)' },
           ],
         },
         {
@@ -206,8 +202,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           subcategories: [
             { id: 'audio-devices', label: 'Dispositivos de Áudio' },
             { id: 'audio-mode', label: 'Modo de Entrada' },
-            { id: 'audio-processing', label: 'Filtros & IA' },
-            { id: 'audio-video', label: 'Câmera & Vídeo' },
+            { id: 'audio-processing', label: 'Processamento de Áudio' },
+            { id: 'audio-video', label: 'Vídeo & Câmera' },
           ],
         },
         {
@@ -215,17 +211,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           label: 'Notificações & Sons',
           icon: <Bell className="w-4 h-4" />,
           subcategories: [
-            { id: 'notifications-sounds', label: 'Sons do Sistema' },
-            { id: 'notifications-desktop', label: 'Alertas de Desktop' },
+            { id: 'notifications-desktop', label: 'Notificações de Desktop' },
+            { id: 'notifications-sounds', label: 'Efeitos Sonoros' },
           ],
         },
         {
           id: 'keybinds' as const,
           label: 'Atalhos do Teclado',
           icon: <Keyboard className="w-4 h-4" />,
-          subcategories: [
-            { id: 'keybinds-global', label: 'Atalhos Globais' },
-          ],
+          subcategories: [],
         },
       ],
     },
@@ -1770,7 +1764,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Group 2: Personalização do Perfil (Recado & Bio) */}
-                <div className="space-y-4 pt-2">
+                <div id="account-bio" className="space-y-4 pt-2 scroll-mt-6">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                       Recado e Sobre Mim
@@ -1987,7 +1981,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* 4. Gestão de Dados e Conta (LGPD / GDPR) */}
-                <div id="account-danger" className="pt-2 scroll-mt-6">
+                <div id="privacy-data" className="pt-2 scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Gestão de Dados e Conta (LGPD)
                   </h4>
