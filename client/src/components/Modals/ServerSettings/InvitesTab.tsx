@@ -30,7 +30,7 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
   isOwner,
 }) => {
   return (
-    <div className="max-w-4xl space-y-6 animate-fade-in">
+    <div id="invites-active" className="max-w-4xl space-y-6 animate-fade-in scroll-mt-6">
       <div className="flex items-center justify-between p-5 rounded-2xl bg-[#1e1f22] border border-white/10">
         <div>
           <h3 className="text-sm font-bold text-white">Gerenciamento de Links de Convite</h3>

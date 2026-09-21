@@ -135,7 +135,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       )}
 
       {/* Visual Identity (Icon & Banner) */}
-      <div className="space-y-4">
+      <div id="overview-identity" className="space-y-4 scroll-mt-6">
         <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
           Identidade Visual
         </h3>
@@ -255,7 +255,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         </div>
 
         {/* System Welcome Channel Selector */}
-        <div className="space-y-2">
+        <div id="overview-system" className="space-y-2 scroll-mt-6">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
             Canal de Mensagens do Sistema (Boas-Vindas)
           </label>

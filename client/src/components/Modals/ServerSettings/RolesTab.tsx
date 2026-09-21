@@ -58,7 +58,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   return (
     <div className="flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 h-auto md:h-[68vh] animate-fade-in">
       {/* Roles Sidebar / Hierarchy List */}
-      <div className="w-full md:w-72 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-3 shrink-0 max-h-56 md:max-h-none">
+      <div id="roles-list" className="w-full md:w-72 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-3 shrink-0 max-h-56 md:max-h-none scroll-mt-6">
         <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 px-2">
           <span className="text-xs font-bold uppercase text-gray-400 font-mono">
             Cargos ({roles.length})
@@ -351,7 +351,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
             </div>
 
             {/* Permission Groups */}
-            <div className="space-y-5 pt-3 border-t border-white/10">
+            <div id="roles-permissions" className="space-y-5 pt-3 border-t border-white/10 scroll-mt-6">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
                 Permissões do Cargo
               </label>

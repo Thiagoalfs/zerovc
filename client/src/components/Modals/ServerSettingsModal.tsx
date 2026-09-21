@@ -1089,29 +1089,39 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                               )}
                             </button>
 
-                            {/* Subcategories with Vertical Indicator */}
-                            {(isActiveCategory || searchQuery.trim().length > 0) && item.subcategories.length > 0 && (
-                              <div className="ml-5 pl-2.5 border-l-2 border-white/10 flex flex-col gap-1 my-1">
-                                {item.subcategories.map((sub) => {
-                                  const isSubActive = activeSubcategory === sub.id && isActiveCategory;
-                                  return (
-                                    <button
-                                      key={sub.id}
-                                      type="button"
-                                      onClick={() => handleSelectSubcategory(item.id, sub.id)}
-                                      className={`flex items-center text-left py-1 text-xs transition-colors cursor-pointer relative ${
-                                        isSubActive
-                                          ? 'text-white font-bold pl-2'
-                                          : 'text-gray-400 hover:text-gray-200 pl-2'
-                                      }`}
-                                    >
-                                      {isSubActive && (
-                                        <span className="absolute -left-[12px] top-1 bottom-1 w-[2.5px] bg-white rounded-r" />
-                                      )}
-                                      <span className="truncate">{sub.label}</span>
-                                    </button>
-                                  );
-                                })}
+                            {/* Subcategories with Vertical Indicator (Smooth Top-to-Bottom Accordion Animation) */}
+                            {item.subcategories.length > 0 && (
+                              <div
+                                className={`grid transition-all duration-300 ease-in-out ${
+                                  isActiveCategory || searchQuery.trim().length > 0
+                                    ? 'grid-rows-[1fr] opacity-100 my-1'
+                                    : 'grid-rows-[0fr] opacity-0 my-0 pointer-events-none'
+                                }`}
+                              >
+                                <div className="overflow-hidden">
+                                  <div className="ml-5 pl-2.5 border-l-2 border-white/10 flex flex-col gap-1">
+                                    {item.subcategories.map((sub) => {
+                                      const isSubActive = activeSubcategory === sub.id && isActiveCategory;
+                                      return (
+                                        <button
+                                          key={sub.id}
+                                          type="button"
+                                          onClick={() => handleSelectSubcategory(item.id, sub.id)}
+                                          className={`flex items-center text-left py-1 text-xs transition-colors cursor-pointer relative ${
+                                            isSubActive
+                                              ? 'text-white font-bold pl-2'
+                                              : 'text-gray-400 hover:text-gray-200 pl-2'
+                                          }`}
+                                        >
+                                          {isSubActive && (
+                                            <span className="absolute -left-[12px] top-1 bottom-1 w-[2.5px] bg-white rounded-r" />
+                                          )}
+                                          <span className="truncate">{sub.label}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                               </div>
                             )}
                           </div>
