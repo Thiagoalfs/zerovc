@@ -80,7 +80,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           Métricas do Servidor
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
+          <div className="p-4 rounded-2xl bg-[#111214]/50 border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Total Membros</span>
               <Users className="w-4 h-4 text-brand-400" />
@@ -92,7 +92,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             </span>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
+          <div className="p-4 rounded-2xl bg-[#111214]/50 border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Canais Texto</span>
               <Hash className="w-4 h-4 text-sky-400" />
@@ -101,7 +101,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <span className="text-[11px] text-gray-500 mt-1">salas de bate-papo</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
+          <div className="p-4 rounded-2xl bg-[#111214]/50 border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Canais Voz</span>
               <Volume2 className="w-4 h-4 text-emerald-400" />
@@ -110,7 +110,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <span className="text-[11px] text-gray-500 mt-1">com áudio & vídeo</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
+          <div className="p-4 rounded-2xl bg-[#111214]/50 border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Criação</span>
               <Calendar className="w-4 h-4 text-purple-400" />
@@ -141,12 +141,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       )}
 
       {/* Visual Identity (Icon & Banner) */}
-      <div id="overview-identity" className="space-y-4 scroll-mt-6">
+      <div id="overview-identity" className="space-y-4 pt-4 border-t border-white/10 scroll-mt-6">
         <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
           Identidade Visual
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#1e1f22] p-5 rounded-2xl border border-white/10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border border-white/10 rounded-2xl bg-[#111214]/50 p-5">
           {/* Icon */}
           <div className="flex flex-col gap-3">
             <label className="text-xs font-medium text-gray-300">Ícone do Servidor</label>
@@ -174,7 +174,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   type="button"
                   onClick={() => iconInputRef.current?.click()}
                   disabled={!isOwner || isUploadingIcon}
-                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>{isUploadingIcon ? 'Enviando...' : 'Trocar Ícone'}</span>
@@ -223,7 +223,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   type="button"
                   onClick={() => bannerInputRef.current?.click()}
                   disabled={!isOwner || isUploadingBanner}
-                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>{isUploadingBanner ? 'Enviando...' : 'Trocar Banner'}</span>
