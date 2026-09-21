@@ -48,6 +48,8 @@ import {
   Gauge,
   Headphones,
   Smartphone,
+  Search,
+  PenLine,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import {
@@ -104,6 +106,143 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     | 'preferences'
     | 'keybinds'
   >('account');
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSubcategory, setActiveSubcategory] = useState<string>('account-profile');
+
+  const handleSelectSubcategory = (tab: typeof activeTab, subId?: string) => {
+    setActiveTab(tab);
+    if (subId) {
+      setActiveSubcategory(subId);
+      setTimeout(() => {
+        const el = document.getElementById(subId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 50);
+    }
+  };
+
+  const categoriesList = [
+    {
+      group: 'Configurações de Usuário',
+      items: [
+        {
+          id: 'account' as const,
+          label: 'Conta',
+          icon: <User className="w-4 h-4" />,
+          subcategories: [
+            { id: 'account-profile', label: 'Perfil & Customização' },
+            { id: 'account-info', label: 'Informações da Conta' },
+            { id: 'account-security', label: 'Senha & Autenticação 2FA' },
+            { id: 'account-danger', label: 'Exportação & Exclusão' },
+          ],
+        },
+        {
+          id: 'privacy' as const,
+          label: 'Privacidade & Segurança',
+          icon: <Shield className="w-4 h-4" />,
+          subcategories: [
+            { id: 'privacy-credentials', label: 'Credenciais & 2FA' },
+            { id: 'privacy-dm', label: 'Mensagens Diretas' },
+          ],
+        },
+        {
+          id: 'sessions' as const,
+          label: 'Dispositivos & Sessões',
+          icon: <Laptop className="w-4 h-4" />,
+          subcategories: [
+            { id: 'sessions-list', label: 'Sessões Ativas' },
+          ],
+        },
+      ],
+    },
+    {
+      group: 'Configurações de Atividade',
+      items: [
+        {
+          id: 'registered_games' as const,
+          label: 'Jogos Registrados',
+          icon: <Gamepad2 className="w-4 h-4" />,
+          subcategories: [
+            { id: 'activity-games', label: 'Jogos Detectados' },
+          ],
+        },
+        {
+          id: 'activity_privacy' as const,
+          label: 'Privacidade de Atividade',
+          icon: <Activity className="w-4 h-4" />,
+          subcategories: [
+            { id: 'activity-privacy', label: 'Exibição de Status' },
+          ],
+        },
+      ],
+    },
+    {
+      group: 'Configurações do App',
+      items: [
+        {
+          id: 'appearance' as const,
+          label: 'Aparência',
+          icon: <Palette className="w-4 h-4" />,
+          subcategories: [
+            { id: 'appearance-theme', label: 'Tema & Cores' },
+            { id: 'appearance-density', label: 'Densidade do Chat' },
+            { id: 'appearance-zoom', label: 'Zoom da Interface' },
+          ],
+        },
+        {
+          id: 'accessibility' as const,
+          label: 'Acessibilidade',
+          icon: <Sliders className="w-4 h-4" />,
+          subcategories: [
+            { id: 'accessibility-settings', label: 'Configurações de Acesso' },
+          ],
+        },
+        {
+          id: 'audio' as const,
+          label: 'Voz & Vídeo',
+          icon: <Mic className="w-4 h-4" />,
+          subcategories: [
+            { id: 'audio-devices', label: 'Dispositivos de Áudio' },
+            { id: 'audio-mode', label: 'Modo de Entrada' },
+            { id: 'audio-processing', label: 'Filtros & IA' },
+            { id: 'audio-video', label: 'Câmera & Vídeo' },
+          ],
+        },
+        {
+          id: 'notifications' as const,
+          label: 'Notificações & Sons',
+          icon: <Bell className="w-4 h-4" />,
+          subcategories: [
+            { id: 'notifications-sounds', label: 'Sons do Sistema' },
+            { id: 'notifications-desktop', label: 'Alertas de Desktop' },
+          ],
+        },
+        {
+          id: 'keybinds' as const,
+          label: 'Atalhos do Teclado',
+          icon: <Keyboard className="w-4 h-4" />,
+          subcategories: [
+            { id: 'keybinds-global', label: 'Atalhos Globais' },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const filteredCategories = categoriesList
+    .map((group) => {
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return group;
+      const items = group.items.filter((item) => {
+        const itemMatch = item.label.toLowerCase().includes(q);
+        const subMatch = item.subcategories.some((sub) => sub.label.toLowerCase().includes(q));
+        return itemMatch || subMatch;
+      });
+      return { ...group, items };
+    })
+    .filter((group) => group.items.length > 0);
 
   // Mobile full-screen drilldown navigation state ('menu' -> 'content')
   const [mobileView, setMobileView] = useState<'menu' | 'content'>('menu');
@@ -1220,176 +1359,116 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         )}
 
         {/* ======================================================== */}
-        {/* DESKTOP SIDEBAR (Visible on md: and above) */}
+        {/* DESKTOP SIDEBAR (Visible on md: and above - Discord Design) */}
         {/* ======================================================== */}
-        <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar justify-between">
-          <div className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
-            <div className="px-3 py-2 mb-2">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono truncate">
-                {user.display_name || user.username}
-              </h2>
-              <div className="text-[11px] text-gray-500 mt-0.5">Configurações de Usuário</div>
+        <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-3.5 shrink-0 overflow-y-auto no-scrollbar justify-between select-none">
+          <div className="flex flex-col items-stretch flex-1 flex-shrink-0 min-h-0">
+            {/* User Profile Mini Header */}
+            <div className="flex items-center gap-3 px-2 py-1.5 mb-2 rounded-xl">
+              <div className="w-10 h-10 rounded-full bg-brand-500 overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow">
+                {user.avatar_url ? (
+                  <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase()}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-bold text-white truncate leading-tight">{user.display_name || user.username}</h3>
+                <button
+                  type="button"
+                  onClick={() => handleSelectSubcategory('account', 'account-profile')}
+                  className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 mt-0.5 transition-colors cursor-pointer group"
+                >
+                  <span>Edit Profiles</span>
+                  <PenLine className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </div>
             </div>
 
-            <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
-                Configurações de Usuário
-              </span>
+            {/* Search Input Box */}
+            <div className="relative mb-3 px-1">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#1e1f22] text-xs text-gray-200 pl-8 pr-7 py-2 rounded-xl border border-transparent focus:border-brand-500/50 focus:outline-none placeholder-gray-500 transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-0.5 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
-              {/* Tab 1: Minha Conta */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('account')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'account' || activeTab === 'profile'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Minha Conta</span>
-              </button>
+            {/* Navigation Groups & Items */}
+            <nav className="flex flex-col gap-3 flex-1 overflow-y-auto no-scrollbar pr-0.5">
+              {filteredCategories.map((group, gIdx) => (
+                <div key={gIdx} className="space-y-1">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2 block">
+                    {group.group}
+                  </span>
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => {
+                      const isActiveCategory = activeTab === item.id || (item.id === 'account' && activeTab === 'profile');
+                      return (
+                        <div key={item.id} className="flex flex-col">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              if (item.subcategories.length > 0) {
+                                handleSelectSubcategory(item.id, item.subcategories[0].id);
+                              }
+                            }}
+                            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                              isActiveCategory
+                                ? 'bg-white/10 text-white shadow-xs'
+                                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                            }`}
+                          >
+                            <span className={isActiveCategory ? 'text-brand-400' : 'text-gray-400'}>
+                              {item.icon}
+                            </span>
+                            <span className="truncate">{item.label}</span>
+                          </button>
 
-              {/* Tab: Privacidade e Segurança */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('privacy')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'privacy'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Privacidade e Segurança</span>
-              </button>
-
-              {/* Tab: Dispositivos & Sessões */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('sessions')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'sessions'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Dispositivos & Sessões</span>
-              </button>
-
-              <div className="h-[1px] bg-white/10 my-2 mx-1" />
-
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
-                Configurações de Atividade
-              </span>
-
-              {/* Tab: Jogos Registrados */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('registered_games')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'registered_games'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Jogos Registrados</span>
-              </button>
-
-              {/* Tab: Privacidade de Atividade */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('activity_privacy')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'activity_privacy'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Privacidade de Atividade</span>
-              </button>
-
-              <div className="h-[1px] bg-white/10 my-2 mx-1" />
-
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
-                Configurações do App
-              </span>
-
-              {/* Tab: Aparência */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('appearance')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'appearance'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Aparência</span>
-              </button>
-
-              {/* Tab: Acessibilidade */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('accessibility')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'accessibility'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Acessibilidade</span>
-              </button>
-
-              {/* Tab: Voz & Vídeo */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('audio')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'audio'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Voz & Vídeo</span>
-              </button>
-
-              {/* Tab: Notificações & Sons */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('notifications')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'notifications'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Notificações & Sons</span>
-              </button>
-
-              {/* Tab: Preferências */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('preferences')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'preferences'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Preferências</span>
-              </button>
-
-              {/* Tab: Atalhos do Teclado */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('keybinds')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'keybinds'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Atalhos do Teclado</span>
-              </button>
+                          {/* Subcategories with Vertical Indicator Guide */}
+                          {(isActiveCategory || searchQuery.trim().length > 0) && item.subcategories.length > 0 && (
+                            <div className="ml-5 pl-2.5 border-l-2 border-white/10 flex flex-col gap-1 my-1">
+                              {item.subcategories.map((sub) => {
+                                const isSubActive = activeSubcategory === sub.id && isActiveCategory;
+                                return (
+                                  <button
+                                    key={sub.id}
+                                    type="button"
+                                    onClick={() => handleSelectSubcategory(item.id, sub.id)}
+                                    className={`flex items-center text-left py-1 text-xs transition-colors cursor-pointer relative ${
+                                      isSubActive
+                                        ? 'text-white font-bold pl-2'
+                                        : 'text-gray-400 hover:text-gray-200 pl-2'
+                                    }`}
+                                  >
+                                    {isSubActive && (
+                                      <span className="absolute -left-[12px] top-1 bottom-1 w-[2.5px] bg-white rounded-r" />
+                                    )}
+                                    <span className="truncate">{sub.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </nav>
           </div>
 
@@ -1398,8 +1477,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={logout}
-              className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
             >
+              <LogOut className="w-4 h-4" />
               <span>Sair da Conta</span>
             </button>
           </div>
@@ -1526,7 +1606,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             {activeTab === 'account' && (
               <div className="space-y-5 animate-in fade-in">
                 {/* Profile Top Banner Card with Clickable Banner & Avatar Upload */}
-                <div className="rounded-3xl overflow-hidden bg-background-darker border border-white/5 shadow-lg relative">
+                <div id="account-profile" className="rounded-3xl overflow-hidden bg-background-darker border border-white/5 shadow-lg relative scroll-mt-6">
                   {/* Banner (Interactive / Click to Upload) */}
                   <div
                     className="h-32 w-full bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center"
@@ -1598,7 +1678,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
 
                   {/* Group 1: Informações da Conta */}
-                  <div className="m-4 mt-1 p-4 bg-background-darkest/60 rounded-2xl border border-white/5 divide-y divide-white/5">
+                  <div id="account-info" className="m-4 mt-1 p-4 bg-background-darkest/60 rounded-2xl border border-white/5 divide-y divide-white/5 scroll-mt-6">
                     {/* Display Name (Nome de Exibição) row */}
                     <div className="flex items-center justify-between pb-3 first:pt-0">
                       <div>
