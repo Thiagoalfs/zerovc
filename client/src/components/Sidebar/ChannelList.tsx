@@ -39,6 +39,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { UserBar } from './UserBar';
 import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 
 interface ChannelListProps {
   isHomeActive: boolean;
@@ -107,8 +108,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   const [dragOverTarget, setDragOverTarget] = useState<{ id: string; isCategory?: boolean } | null>(null);
 
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+  const perms = useGuildPermissions(activeGuild);
 
-  const isOwner = activeGuild?.owner_id === user?.id;
+  const isOwner = perms.isCurrentOwner;
+  const canManageChannels = perms.canManageChannels;
+  const canManageServer = perms.canManageGuild || perms.hasAdmin || isOwner;
   const channels = activeGuild?.channels || [];
 
   // Group channels
@@ -223,7 +227,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             { label: '', separator: true },
           ]
         : []),
-      ...(isOwner
+      ...(canManageChannels
         ? [
             {
               label: 'Configurações do Canal',
@@ -261,7 +265,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         icon: isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />,
         onClick: () => toggleCategoryCollapse(category.id),
       },
-      ...(isOwner
+      ...(canManageChannels
         ? [
             {
               label: 'Criar Canal',
@@ -293,7 +297,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
   const handleSidebarContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!isOwner) return;
+    if (!canManageChannels) return;
 
     const items: ContextMenuItem[] = [
       {
@@ -600,15 +604,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     return (
       <div key={channel.id} className="space-y-0.5">
         <div
-          draggable={isOwner}
+          draggable={canManageChannels}
           onDragStart={(e) => {
-            if (!isOwner) return;
+            if (!canManageChannels) return;
             e.dataTransfer.setData('text/plain', channel.id);
             e.dataTransfer.effectAllowed = 'move';
             setDraggedChannelId(channel.id);
           }}
           onDragOver={(e) => {
-            if (!isOwner || !draggedChannelId) return;
+            if (!canManageChannels || !draggedChannelId) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             setDragOverTarget({ id: channel.id });
@@ -628,7 +632,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           }}
           onContextMenu={(e) => handleChannelContextMenu(e, channel)}
           className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
-            isOwner ? 'cursor-grab active:cursor-grabbing' : ''
+            canManageChannels ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
             isDragOver ? 'border-t-2 border-brand-500 bg-brand-500/10' : ''
           } ${
@@ -646,8 +650,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             <div className="absolute -left-1 w-1.5 h-2 rounded-r-full bg-white shadow-sm" />
           )}
 
-          {/* Drag Handle icon for owner */}
-          {isOwner && (
+          {/* Drag Handle icon for managers */}
+          {canManageChannels && (
             <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 -ml-0.5 mr-0.5 transition-opacity" />
           )}
 
@@ -677,7 +681,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             </div>
           )}
 
-          {isOwner && onOpenChannelSettings && (
+          {canManageChannels && onOpenChannelSettings && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -856,7 +860,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     <UserPlus className="w-4 h-4" />
                   </button>
 
-                  {isOwner && (
+                  {canManageChannels && (
                     <>
                       <button
                         onClick={() => {
@@ -882,7 +886,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     </>
                   )}
 
-                  {isOwner && onOpenServerSettings && (
+                  {canManageServer && onOpenServerSettings && (
                     <button
                       onClick={() => {
                         setIsDropdownOpen(false);
@@ -934,7 +938,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   <div
                     key={category.id}
                     onDragOver={(e) => {
-                      if (!isOwner || !draggedChannelId) return;
+                      if (!canManageChannels || !draggedChannelId) return;
                       e.preventDefault();
                       e.dataTransfer.dropEffect = 'move';
                       setDragOverTarget({ id: category.id, isCategory: true });
@@ -967,7 +971,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         <span className="truncate">{category.name}</span>
                       </div>
 
-                      {isOwner && (
+                      {canManageChannels && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1000,7 +1004,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               {channels.length === 0 && (
                 <div className="text-center py-6 px-3">
                   <p className="text-xs text-gray-400 mb-2">Nenhum canal criado ainda.</p>
-                  {isOwner && (
+                  {canManageChannels && (
                     <button
                       onClick={() => onOpenCreateChannel('text')}
                       className="text-xs text-brand-400 hover:underline font-semibold"
