@@ -22,6 +22,7 @@ import {
   Search,
   ArrowLeft,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 import { Channel, Permissions, ChannelPermissionOverwrite } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
@@ -62,6 +63,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   // Permissions State: map of roleId -> { allow: number, deny: number }
   const [overwrites, setOverwrites] = useState<Record<string, { allow: number; deny: number }>>({});
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
+  const [addedRoleIds, setAddedRoleIds] = useState<string[]>([]);
+  const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
   
   // Status
   const [isSaving, setIsSaving] = useState(false);
@@ -79,13 +82,17 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
       setTopic(channel.topic || '');
       setCategoryId(channel.category_id);
       setSaveStatus(null);
+      setIsAddRoleOpen(false);
 
-      // Load overwrites
+      // Load overwrites & added roles
       const owMap: Record<string, { allow: number; deny: number }> = {};
+      const initialAdded: string[] = [];
       (channel.permission_overwrites || []).forEach((ow) => {
         owMap[ow.role_id] = { allow: Number(ow.allow || 0), deny: Number(ow.deny || 0) };
+        if (ow.role_id) initialAdded.push(ow.role_id);
       });
       setOverwrites(owMap);
+      setAddedRoleIds(initialAdded);
 
       // Select @everyone role or first available role by default
       const everyoneRole = activeGuild?.roles?.find((r) => r.name === '@everyone');
@@ -144,7 +151,20 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
     return (a.position || 0) - (b.position || 0);
   });
 
-  const selectedRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
+  // Visible roles in permissions: @everyone by default, plus any added/configured roles
+  const visibleRoles = roles.filter((r) => {
+    if (r.name === '@everyone') return true;
+    if (addedRoleIds.includes(r.id)) return true;
+    const ow = overwrites[r.id];
+    if (ow && (ow.allow !== 0 || ow.deny !== 0)) return true;
+    return false;
+  });
+
+  const availableToAddRoles = roles.filter(
+    (r) => r.name !== '@everyone' && !visibleRoles.some((vr) => vr.id === r.id)
+  );
+
+  const selectedRole = roles.find((r) => r.id === selectedRoleId) || visibleRoles[0] || roles[0];
 
   const channelCategoriesList = [
     {
@@ -397,7 +417,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
     >
       <div className="flex flex-col md:flex-row w-full h-full bg-[#18191c] md:bg-[#1e1f22] overflow-hidden text-gray-200">
         
-        {/* MOBILE MENU VIEW (100% Preserved) */}
+        {/* MOBILE MENU VIEW */}
         {mobileView === 'menu' && (
           <div className="flex md:hidden flex-col w-full h-full bg-[#18191c] overflow-hidden">
             <div
@@ -466,7 +486,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                       <SettingsIcon className="w-5 h-5 text-gray-400" />
                       <div>
                         <div className="text-sm font-semibold text-white">Visão Geral</div>
-                        <div className="text-xs text-gray-400">Nome, tópico e categoria do canal</div>
+                        <div className="text-xs text-gray-400">Nome e tópico do canal</div>
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
@@ -519,8 +539,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           </div>
         )}
 
-        {/* DESKTOP SIDEBAR TABS (Discord Design) */}
-        <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-3.5 shrink-0 overflow-y-auto no-scrollbar justify-between select-none">
+        {/* DESKTOP SIDEBAR TABS */}
+        <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-3.5 shrink-0 overflow-y-auto no-scrollbar select-none">
           <div className="flex flex-col items-stretch flex-1 flex-shrink-0 min-h-0">
             {/* Channel Mini Header */}
             <div className="flex items-center gap-3 px-2 py-1.5 mb-2 rounded-xl">
@@ -598,7 +618,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                             </div>
                           </button>
 
-                          {/* Subcategories with Vertical Indicator Guide (Smooth Top-to-Bottom Accordion Animation) */}
+                          {/* Subcategories */}
                           {item.subcategories.length > 0 && (
                             <div
                               className={`grid transition-all duration-300 ease-in-out ${
@@ -640,21 +660,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 </div>
               ))}
             </nav>
-          </div>
-
-          <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2 my-0.5">
-              Ações
-            </span>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
-            </button>
           </div>
         </div>
 
@@ -710,7 +715,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 {activeTab === 'permissions' && 'Permissões por Cargo'}
               </h1>
               <p className="text-xs text-gray-400 mt-0.5">
-                {activeTab === 'overview' && 'Configure nome, categoria e tópico descritivo.'}
+                {activeTab === 'overview' && 'Configure nome e tópico descritivo do canal.'}
                 {activeTab === 'permissions' && 'Defina quem pode acessar, falar e interagir neste canal.'}
               </p>
             </div>
@@ -763,26 +768,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                       </div>
                     </div>
 
-                    {!isCategory && categories.length > 0 && (
-                      <div>
-                        <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                          Categoria Pai
-                        </label>
-                        <select
-                          value={categoryId || ''}
-                          onChange={(e) => setCategoryId(e.target.value ? e.target.value : undefined)}
-                          className="w-full bg-[#111214] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
-                        >
-                          <option value="">Nenhuma (Canal na Raiz)</option>
-                          {categories.map((cat) => (
-                            <option key={cat.id} value={cat.id}>
-                              📁 {cat.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
                     {!isCategory && (
                       <div>
                         <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
@@ -832,12 +817,52 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 <div className="flex flex-col md:flex-row gap-6 min-h-0">
                   {/* Left Column: Roles list selector */}
                   <div id="permissions-roles" className="w-full md:w-56 flex flex-col gap-2 shrink-0 pr-0 md:pr-4 border-b md:border-b-0 md:border-r border-white/10 pb-4 md:pb-0 scroll-mt-6">
-                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-1">
-                      Cargos do Servidor
-                    </span>
+                    <div className="flex items-center justify-between mb-1 px-1 relative">
+                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                        Cargos do Servidor
+                      </span>
+                      {availableToAddRoles.length > 0 && (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsAddRoleOpen((prev) => !prev)}
+                            className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                            title="Adicionar Cargo Específico"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+
+                          {isAddRoleOpen && (
+                            <div className="absolute right-0 top-7 z-40 w-48 bg-[#111214] border border-white/10 rounded-xl shadow-2xl p-1.5 space-y-1 animate-fade-in max-h-52 overflow-y-auto custom-scrollbar">
+                              <div className="text-[10px] font-bold uppercase text-gray-400 px-2 py-1 font-mono">
+                                Adicionar Cargo
+                              </div>
+                              {availableToAddRoles.map((role) => (
+                                <button
+                                  key={role.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setAddedRoleIds((prev) => [...prev, role.id]);
+                                    setSelectedRoleId(role.id);
+                                    setIsAddRoleOpen(false);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-200 hover:bg-white/10 text-left transition-colors cursor-pointer"
+                                >
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: role.color || '#99AAB5' }}
+                                  />
+                                  <span className="truncate">{role.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto max-h-none md:max-h-[460px] gap-1.5 md:gap-1 pr-0 md:pr-1 no-scrollbar">
-                      {roles.map((role) => {
+                      {visibleRoles.map((role) => {
                         const isSelected = selectedRole?.id === role.id;
                         const hasCustomOw = overwrites[role.id] && (overwrites[role.id].allow !== 0 || overwrites[role.id].deny !== 0);
 
@@ -887,17 +912,36 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                             )}
                           </div>
 
-                          {overwrites[selectedRole.id] && (
-                            <button
-                              type="button"
-                              onClick={() => handleResetRolePermissions(selectedRole.id)}
-                              className="text-[11px] text-gray-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-                              title="Restaurar todas as permissões para o padrão do servidor"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                              <span>Redefinir</span>
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {overwrites[selectedRole.id] && (
+                              <button
+                                type="button"
+                                onClick={() => handleResetRolePermissions(selectedRole.id)}
+                                className="text-[11px] text-gray-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                                title="Restaurar todas as permissões para o padrão do servidor"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Redefinir</span>
+                              </button>
+                            )}
+
+                            {selectedRole.name !== '@everyone' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleResetRolePermissions(selectedRole.id);
+                                  setAddedRoleIds((prev) => prev.filter((id) => id !== selectedRole.id));
+                                  const everyoneRole = activeGuild?.roles?.find((r) => r.name === '@everyone');
+                                  if (everyoneRole) setSelectedRoleId(everyoneRole.id);
+                                }}
+                                className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
+                                title="Remover cargo das permissões deste canal"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Remover Cargo</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         {/* Permissions Groups */}
@@ -987,17 +1031,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           </div>
 
           {/* Sticky Footer Actions Bar */}
-          <div className="px-6 sm:px-8 py-4 bg-[#111214] border-t border-white/10 flex items-center justify-between flex-shrink-0">
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="text-dnd hover:bg-dnd/10 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
-            </button>
-
+          <div className="px-6 sm:px-8 py-4 bg-[#111214] border-t border-white/10 flex items-center justify-end flex-shrink-0">
             <div className="flex items-center gap-3">
               <button
                 type="button"
