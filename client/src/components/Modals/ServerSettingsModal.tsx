@@ -452,15 +452,27 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   // 2. Roles Actions
-  const handleCreateRole = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRoleName.trim() || !canManageRoles) return;
+  const handleCreateRole = async () => {
+    if (!canManageRoles || !activeGuild || isCreatingRole) return;
 
     setIsCreatingRole(true);
     try {
-      const created = await createRole(activeGuild.id, newRoleName.trim(), newRoleColor, 0, false, false);
+      const created = await createRole(activeGuild.id, 'novo cargo', '#99AAB5', 0, false, false);
+
+      // Reorder so the new role is below all custom roles, but above @everyone
+      const currentRoles = (activeGuild.roles || []).filter((r) => r.id !== created.id);
+      const customRoles = currentRoles.filter((r) => r.name !== '@everyone').sort((a, b) => a.position - b.position);
+      const everyoneRole = currentRoles.find((r) => r.name === '@everyone');
+
+      const reorderedList = [...customRoles, created];
+      if (everyoneRole) {
+        reorderedList.push(everyoneRole);
+      }
+
+      const payload = reorderedList.map((r, idx) => ({ id: r.id, position: idx }));
+      await reorderRoles(activeGuild.id, payload);
+
       setSelectedRoleId(created.id);
-      setNewRoleName('');
     } catch (err) {
       console.error('Failed to create role:', err);
     } finally {
@@ -1252,8 +1264,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   selectedRoleId={selectedRoleId}
                   setSelectedRoleId={setSelectedRoleId}
                   selectedRole={selectedRole}
-                  newRoleName={newRoleName}
-                  setNewRoleName={setNewRoleName}
                   isCreatingRole={isCreatingRole}
                   isReorderingRoles={isReorderingRoles}
                   handleReorderRoles={handleReorderRoles}

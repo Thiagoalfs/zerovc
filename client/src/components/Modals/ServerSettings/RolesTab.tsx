@@ -17,13 +17,11 @@ interface RolesTabProps {
   selectedRoleId: string | null;
   setSelectedRoleId: (id: string | null) => void;
   selectedRole: Role | undefined;
-  newRoleName: string;
-  setNewRoleName: (val: string) => void;
   isCreatingRole: boolean;
   isReorderingRoles: boolean;
   handleReorderRoles?: (newOrderedRoles: Role[]) => Promise<void>;
   handleMoveRoleHierarchy?: (roleId: string, direction: 'up' | 'down') => Promise<void>;
-  handleCreateRole: (e: React.FormEvent) => Promise<void>;
+  handleCreateRole: () => Promise<void>;
   handleDeleteRole: (roleId: string) => Promise<void>;
   handleUpdateRoleName: (name: string) => Promise<void>;
   handleUpdateRoleColor: (color: string) => Promise<void>;
@@ -41,8 +39,6 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   selectedRoleId,
   setSelectedRoleId,
   selectedRole,
-  newRoleName,
-  setNewRoleName,
   isCreatingRole,
   isReorderingRoles,
   handleReorderRoles,
@@ -124,14 +120,13 @@ export const RolesTab: React.FC<RolesTabProps> = ({
               Cargos do Servidor
             </span>
           </div>
-          {isOwner && (
+          {canManageRoles && (
             <button
-              onClick={() => {
-                setSelectedRoleId(null);
-                setNewRoleName('');
-              }}
-              className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-              title="Novo Cargo"
+              type="button"
+              onClick={() => handleCreateRole()}
+              disabled={isCreatingRole}
+              className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-40"
+              title="Criar Novo Cargo"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -196,27 +191,6 @@ export const RolesTab: React.FC<RolesTabProps> = ({
             );
           })}
         </div>
-
-        {canManageRoles && (
-          <form onSubmit={handleCreateRole} className="mt-2 pt-2 border-t border-white/10 space-y-2">
-            <div className="flex gap-1.5">
-              <input
-                type="text"
-                value={newRoleName}
-                onChange={(e) => setNewRoleName(e.target.value)}
-                placeholder="Nome do cargo..."
-                className="flex-1 px-3 py-1.5 bg-[#111214] border border-white/10 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
-              />
-              <button
-                type="submit"
-                disabled={isCreatingRole || !newRoleName.trim()}
-                className="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer shrink-0"
-              >
-                Criar
-              </button>
-            </div>
-          </form>
-        )}
       </div>
 
       {/* Role Details & Permissions / Right Column */}
