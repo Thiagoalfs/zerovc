@@ -49,7 +49,7 @@ export const MembersTab: React.FC<MembersTabProps> = ({
   isOwner,
 }) => {
   return (
-    <div className="max-w-4xl space-y-6 animate-fade-in">
+    <div id="members-list" className="max-w-4xl space-y-6 animate-fade-in scroll-mt-6">
       {/* Search and Role Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">

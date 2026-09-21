@@ -194,7 +194,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-      }, 50);
+      }, 70);
     }
   };
 
@@ -601,29 +601,39 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                             </div>
                           </button>
 
-                          {/* Subcategories with Vertical Indicator */}
-                          {(isActiveCategory || searchQuery.trim().length > 0) && item.subcategories.length > 0 && (
-                            <div className="ml-5 pl-2.5 border-l-2 border-white/10 flex flex-col gap-1 my-1">
-                              {item.subcategories.map((sub) => {
-                                const isSubActive = activeSubcategory === sub.id && isActiveCategory;
-                                return (
-                                  <button
-                                    key={sub.id}
-                                    type="button"
-                                    onClick={() => handleSelectSubcategory(item.id, sub.id)}
-                                    className={`flex items-center text-left py-1 text-xs transition-colors cursor-pointer relative ${
-                                      isSubActive
-                                        ? 'text-white font-bold pl-2'
-                                        : 'text-gray-400 hover:text-gray-200 pl-2'
-                                    }`}
-                                  >
-                                    {isSubActive && (
-                                      <span className="absolute -left-[12px] top-1 bottom-1 w-[2.5px] bg-white rounded-r" />
-                                    )}
-                                    <span className="truncate">{sub.label}</span>
-                                  </button>
-                                );
-                              })}
+                          {/* Subcategories with Vertical Indicator Guide (Smooth Top-to-Bottom Accordion Animation) */}
+                          {item.subcategories.length > 0 && (
+                            <div
+                              className={`grid transition-all duration-300 ease-in-out ${
+                                isActiveCategory || searchQuery.trim().length > 0
+                                  ? 'grid-rows-[1fr] opacity-100 my-1'
+                                  : 'grid-rows-[0fr] opacity-0 my-0 pointer-events-none'
+                              }`}
+                            >
+                              <div className="overflow-hidden">
+                                <div className="ml-5 pl-2.5 border-l-2 border-white/10 flex flex-col gap-1">
+                                  {item.subcategories.map((sub) => {
+                                    const isSubActive = activeSubcategory === sub.id && isActiveCategory;
+                                    return (
+                                      <button
+                                        key={sub.id}
+                                        type="button"
+                                        onClick={() => handleSelectSubcategory(item.id, sub.id)}
+                                        className={`flex items-center text-left py-1 text-xs transition-colors cursor-pointer relative ${
+                                          isSubActive
+                                            ? 'text-white font-bold pl-2'
+                                            : 'text-gray-400 hover:text-gray-200 pl-2'
+                                        }`}
+                                      >
+                                        {isSubActive && (
+                                          <span className="absolute -left-[12px] top-1 bottom-1 w-[2.5px] bg-white rounded-r" />
+                                        )}
+                                        <span className="truncate">{sub.label}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -734,7 +744,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               {activeTab === 'overview' && (
                 <div className="space-y-6">
                   {/* Basic Settings Section */}
-                  <div id="overview-basic" className="space-y-4">
+                  <div id="overview-basic" className="space-y-4 scroll-mt-6">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Configurações Básicas</h3>
                     
                     <div>
@@ -793,7 +803,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                   </div>
 
                   {/* Danger Zone Section */}
-                  <div id="overview-delete" className="pt-6 border-t border-white/10 space-y-3">
+                  <div id="overview-delete" className="pt-6 border-t border-white/10 space-y-3 scroll-mt-6">
                     <h3 className="text-xs font-bold text-red-400 uppercase tracking-wider">Zona de Perigo</h3>
                     <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div>
@@ -824,7 +834,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               {activeTab === 'permissions' && (
                 <div className="flex flex-col md:flex-row gap-6 min-h-0">
                   {/* Left Column: Roles list selector */}
-                  <div id="permissions-roles" className="w-full md:w-56 flex flex-col gap-2 shrink-0 pr-0 md:pr-4 border-b md:border-b-0 md:border-r border-white/10 pb-4 md:pb-0">
+                  <div id="permissions-roles" className="w-full md:w-56 flex flex-col gap-2 shrink-0 pr-0 md:pr-4 border-b md:border-b-0 md:border-r border-white/10 pb-4 md:pb-0 scroll-mt-6">
                     <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-1">
                       Cargos do Servidor
                     </span>
@@ -862,7 +872,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                   </div>
 
                   {/* Right Column: Permissions for selected role */}
-                  <div id="permissions-advanced" className="flex-1 space-y-6 overflow-y-auto max-h-[500px] pr-2 no-scrollbar">
+                  <div id="permissions-advanced" className="flex-1 space-y-6 overflow-y-auto max-h-[500px] pr-2 no-scrollbar scroll-mt-6">
                     {selectedRole && (
                       <>
                         {/* Header info of selected role */}

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollText,
   Shield,
@@ -116,7 +116,7 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({ guildId 
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div id="audit-actions" className="flex flex-col h-full overflow-hidden scroll-mt-6">
       {/* Header & Filter Controls */}
       <div className="p-4 border-b border-white/5 flex items-center justify-between gap-4 flex-shrink-0 bg-background-darker/40">
         <div>

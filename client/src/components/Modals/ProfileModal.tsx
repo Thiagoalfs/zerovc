@@ -1438,29 +1438,39 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                             <span className="truncate">{item.label}</span>
                           </button>
 
-                          {/* Subcategories with Vertical Indicator Guide */}
-                          {(isActiveCategory || searchQuery.trim().length > 0) && item.subcategories.length > 0 && (
-                            <div className="ml-5 pl-2.5 border-l-2 border-white/10 flex flex-col gap-1 my-1">
-                              {item.subcategories.map((sub) => {
-                                const isSubActive = activeSubcategory === sub.id && isActiveCategory;
-                                return (
-                                  <button
-                                    key={sub.id}
-                                    type="button"
-                                    onClick={() => handleSelectSubcategory(item.id, sub.id)}
-                                    className={`flex items-center text-left py-1 text-xs transition-colors cursor-pointer relative ${
-                                      isSubActive
-                                        ? 'text-white font-bold pl-2'
-                                        : 'text-gray-400 hover:text-gray-200 pl-2'
-                                    }`}
-                                  >
-                                    {isSubActive && (
-                                      <span className="absolute -left-[12px] top-1 bottom-1 w-[2.5px] bg-white rounded-r" />
-                                    )}
-                                    <span className="truncate">{sub.label}</span>
-                                  </button>
-                                );
-                              })}
+                          {/* Subcategories with Vertical Indicator Guide (Smooth Top-to-Bottom Accordion Animation) */}
+                          {item.subcategories.length > 0 && (
+                            <div
+                              className={`grid transition-all duration-300 ease-in-out ${
+                                isActiveCategory || searchQuery.trim().length > 0
+                                  ? 'grid-rows-[1fr] opacity-100 my-1'
+                                  : 'grid-rows-[0fr] opacity-0 my-0 pointer-events-none'
+                              }`}
+                            >
+                              <div className="overflow-hidden">
+                                <div className="ml-5 pl-2.5 border-l-2 border-white/10 flex flex-col gap-1">
+                                  {item.subcategories.map((sub) => {
+                                    const isSubActive = activeSubcategory === sub.id && isActiveCategory;
+                                    return (
+                                      <button
+                                        key={sub.id}
+                                        type="button"
+                                        onClick={() => handleSelectSubcategory(item.id, sub.id)}
+                                        className={`flex items-center text-left py-1 text-xs transition-colors cursor-pointer relative ${
+                                          isSubActive
+                                            ? 'text-white font-bold pl-2'
+                                            : 'text-gray-400 hover:text-gray-200 pl-2'
+                                        }`}
+                                      >
+                                        {isSubActive && (
+                                          <span className="absolute -left-[12px] top-1 bottom-1 w-[2.5px] bg-white rounded-r" />
+                                        )}
+                                        <span className="truncate">{sub.label}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1831,7 +1841,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             {activeTab === 'privacy' && (
               <div className="space-y-6 animate-in fade-in">
                 {/* 1. Credenciais de Acesso (E-mail, Senha & 2FA) */}
-                <div>
+                <div id="privacy-credentials" className="scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Credenciais de Acesso
                   </h4>
@@ -1928,7 +1938,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* 2. Mensagens Diretas (DMs) */}
-                <div className="pt-2">
+                <div id="privacy-dm" className="pt-2 scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Mensagens Diretas (DMs)
                   </h4>
@@ -1977,7 +1987,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* 4. Gestão de Dados e Conta (LGPD / GDPR) */}
-                <div className="pt-2">
+                <div id="account-danger" className="pt-2 scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Gestão de Dados e Conta (LGPD)
                   </h4>
@@ -2040,28 +2050,28 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
             {/* TAB: SESSÕES ATIVAS & DISPOSITIVOS */}
             {activeTab === 'sessions' && (
-              <div className="animate-in fade-in">
+              <div id="sessions-list" className="animate-in fade-in scroll-mt-6">
                 <SessionsSettingsView />
               </div>
             )}
 
             {/* TAB: JOGOS REGISTRADOS */}
             {activeTab === 'registered_games' && (
-              <div className="animate-in fade-in">
+              <div id="activity-games" className="animate-in fade-in scroll-mt-6">
                 <RegisteredGamesView />
               </div>
             )}
 
             {/* TAB: PRIVACIDADE DE ATIVIDADE */}
             {activeTab === 'activity_privacy' && (
-              <div className="animate-in fade-in">
+              <div id="activity-privacy" className="animate-in fade-in scroll-mt-6">
                 <ActivityPrivacySettingsView />
               </div>
             )}
 
             {/* TAB: CENTRAL DE ACESSIBILIDADE */}
             {activeTab === 'accessibility' && (
-              <div className="animate-in fade-in">
+              <div id="accessibility-settings" className="animate-in fade-in scroll-mt-6">
                 <AccessibilitySettingsView />
               </div>
             )}
@@ -2070,7 +2080,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             {activeTab === 'appearance' && (
               <div className="space-y-6 animate-in fade-in">
                 {/* Theme Selector */}
-                <div>
+                <div id="appearance-theme" className="scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Tema da Interface
                   </h4>
@@ -2177,7 +2187,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Chat Density */}
-                <div>
+                <div id="appearance-density" className="scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Densidade de Exibição do Chat
                   </h4>
@@ -2221,7 +2231,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* UI Scale / Zoom */}
-                <div>
+                <div id="appearance-zoom" className="scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Escala da Interface (Zoom)
                   </h4>
@@ -2304,7 +2314,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <div className="space-y-6 animate-in fade-in">
                 {/* Audio Devices */}
                 {!isMobileDevice ? (
-                  <div className="space-y-4">
+                  <div id="audio-devices" className="space-y-4 scroll-mt-6">
                     <div>
                       <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
                         Dispositivo de Entrada (Microfone)
@@ -2342,7 +2352,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
                   </div>
                 ) : (
-                  <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 flex items-start gap-3">
+                  <div id="audio-devices" className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 flex items-start gap-3 scroll-mt-6">
                     <div className="w-8 h-8 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-400 flex-shrink-0 mt-0.5">
                       <Headphones className="w-4 h-4" />
                     </div>
@@ -2384,7 +2394,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Voice Mode: Activity vs PTT */}
-                <div className="pt-2">
+                <div id="audio-mode" className="pt-2 scroll-mt-6">
                   <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
                     Modo de Entrada de Voz
                   </label>
@@ -2422,7 +2432,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Audio Processing Mode Dropdown & Interactive Sub-Settings */}
-                <div className="space-y-3 pt-2">
+                <div id="audio-processing" className="space-y-3 pt-2 scroll-mt-6">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
                       Processamento de Áudio
@@ -2903,7 +2913,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Webcam & Video Section with Live Preview */}
-                <div className="pt-2">
+                <div id="audio-video" className="pt-2 scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Configuração de Vídeo / Câmera
                   </h4>
@@ -2965,7 +2975,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             {activeTab === 'notifications' && (
               <div className="space-y-6 animate-in fade-in">
                 {/* Desktop Notifications */}
-                <div>
+                <div id="notifications-desktop" className="scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Notificações de Área de Trabalho
                   </h4>
@@ -2997,7 +3007,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </div>
 
                 {/* Sound Volume Slider */}
-                <div className="pt-2">
+                <div id="notifications-sounds" className="pt-2 scroll-mt-6">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Volume dos Efeitos Sonoros
                   </h4>
@@ -3293,7 +3303,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
             {/* TAB: ATALHOS DO TECLADO */}
             {activeTab === 'keybinds' && (
-              <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar pr-1">
+              <div id="keybinds-global" className="space-y-6 flex-1 overflow-y-auto no-scrollbar pr-1 scroll-mt-6">
                 <KeybindSettingsView />
               </div>
             )}
