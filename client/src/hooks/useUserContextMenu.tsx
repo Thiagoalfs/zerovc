@@ -113,7 +113,7 @@ export function useUserContextMenu() {
         }
       }
 
-      // Voice Channel Moderation
+      // Voice Call Controls (Mute/Deafen)
       if (options.voiceChannelId && (perms.canMuteVoice || perms.isCurrentOwner || perms.hasAdmin)) {
         items.push({ label: '', separator: true });
 
@@ -136,27 +136,14 @@ export function useUserContextMenu() {
             });
           },
         });
-
-        if (!isMe) {
-          items.push({
-            label: 'Desconectar da Call',
-            icon: <PhoneOff className="w-4 h-4 text-dnd" />,
-            onClick: async () => {
-              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
-                disconnect: true,
-              });
-            },
-          });
-        }
       }
 
-      // Server Member Moderation Actions (Roles, Timeout, Kick, Ban)
+      // Server Roles Assignment
       if (isGuildContext && activeGuild) {
         const targetMember = activeGuild.members?.find((m) => m.id === targetUser.id) || targetUser;
         const mod = perms.canModerateMember(targetMember);
 
         if (perms.isCurrentOwner || isMe || (!mod.isTargetOwner && mod.isHierarchyAllowed)) {
-          // Change Roles Submenu
           if (perms.canManageRoles && activeGuild.roles && activeGuild.roles.length > 0) {
             const roleSubItems: ContextMenuItem[] = activeGuild.roles
               .filter((role) => role.name !== '@everyone')
@@ -187,86 +174,113 @@ export function useUserContextMenu() {
               });
             }
           }
-
-          // Timeout / Mute Submenu
-          if (perms.canMute) {
-            const isMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
-            const muteSubItems: ContextMenuItem[] = [
-              {
-                label: 'Por 60 segundos',
-                onClick: () => muteMember(activeGuild.id, targetMember.id, 60),
-              },
-              {
-                label: 'Por 5 minutos',
-                onClick: () => muteMember(activeGuild.id, targetMember.id, 300),
-              },
-              {
-                label: 'Por 1 hora',
-                onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
-              },
-              {
-                label: 'Por 1 dia',
-                onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
-              },
-              { label: '', separator: true },
-              {
-                label: 'Remover Silenciamento',
-                onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
-              },
-            ];
-
-            items.push({
-              label: isMuted ? 'Membro Silenciado' : 'Silenciar Membro',
-              icon: <VolumeX className="w-4 h-4 text-amber-400" />,
-              subItems: muteSubItems,
-            });
-          }
-
-          // Kick & Ban (only for other members)
-          if (!isMe && !mod.isTargetOwner && mod.isHierarchyAllowed) {
-            if (perms.canKick) {
-              items.push({
-                label: `Expulsar ${targetMember.display_name || targetMember.username}`,
-                icon: <UserMinus className="w-4 h-4 text-amber-400" />,
-                variant: 'danger',
-                onClick: () => {
-                  if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
-                    kickMember(activeGuild.id, targetMember.id);
-                  }
-                },
-              });
-            }
-
-            if (perms.canBan) {
-              items.push({
-                label: `Banir ${targetMember.display_name || targetMember.username}`,
-                icon: <Ban className="w-4 h-4 text-dnd" />,
-                variant: 'danger',
-                onClick: () => {
-                  if (confirm(`Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor?`)) {
-                    banMember(activeGuild.id, targetMember.id);
-                  }
-                },
-              });
-            }
-          }
         }
       }
 
-      if (!isMe) {
+      // Admin & Moderation Section (Red at base, above Copy ID)
+      const targetMember = (isGuildContext && activeGuild) ? (activeGuild.members?.find((m) => m.id === targetUser.id) || targetUser) : null;
+      const mod = targetMember ? perms.canModerateMember(targetMember) : { isTargetOwner: false, isHierarchyAllowed: false };
+      const canModMember = isGuildContext && activeGuild && (perms.isCurrentOwner || (!mod.isTargetOwner && mod.isHierarchyAllowed));
+      const canDisconnectVoice = options.voiceChannelId && (perms.canMuteVoice || perms.isCurrentOwner || perms.hasAdmin) && !isMe;
+
+      const hasModGroup = canDisconnectVoice || (canModMember && (perms.canMute || (!isMe && (perms.canKick || perms.canBan)))) || !isMe;
+
+      if (hasModGroup) {
         items.push({ label: '', separator: true });
-        items.push({
-          label: 'Bloquear Usuário',
-          icon: <UserX className="w-4 h-4 text-dnd" />,
-          variant: 'danger',
-          onClick: async () => {
-            if (confirm(`Deseja bloquear @${targetUser.username}? Você não receberá mais mensagens diretas deste usuário.`)) {
-              await api.users.block(targetUser.id);
-            }
-          },
-        });
+
+        // Timeout / Mute Submenu (in red)
+        if (canModMember && perms.canMute) {
+          const isMuted = targetMember?.muted_until && new Date(targetMember.muted_until) > new Date();
+          const muteSubItems: ContextMenuItem[] = [
+            {
+              label: 'Por 60 segundos',
+              onClick: () => muteMember(activeGuild!.id, targetMember!.id, 60),
+            },
+            {
+              label: 'Por 5 minutos',
+              onClick: () => muteMember(activeGuild!.id, targetMember!.id, 300),
+            },
+            {
+              label: 'Por 1 hora',
+              onClick: () => muteMember(activeGuild!.id, targetMember!.id, 3600),
+            },
+            {
+              label: 'Por 1 dia',
+              onClick: () => muteMember(activeGuild!.id, targetMember!.id, 86400),
+            },
+            { label: '', separator: true },
+            {
+              label: 'Remover Silenciamento',
+              onClick: () => muteMember(activeGuild!.id, targetMember!.id, 0),
+            },
+          ];
+
+          items.push({
+            label: isMuted ? 'Membro Silenciado' : 'Silenciar Membro',
+            icon: <VolumeX className="w-4 h-4 text-[#f23f43]" />,
+            variant: 'danger',
+            subItems: muteSubItems,
+          });
+        }
+
+        // Disconnect from voice
+        if (canDisconnectVoice) {
+          items.push({
+            label: 'Desconectar da Call',
+            icon: <PhoneOff className="w-4 h-4" />,
+            variant: 'danger',
+            onClick: async () => {
+              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+                disconnect: true,
+              });
+            },
+          });
+        }
+
+        // Kick & Ban (only for other members)
+        if (canModMember && !isMe) {
+          if (perms.canKick) {
+            items.push({
+              label: `Expulsar ${targetMember!.display_name || targetMember!.username}`,
+              icon: <UserMinus className="w-4 h-4" />,
+              variant: 'danger',
+              onClick: () => {
+                if (confirm(`Tem certeza que deseja expulsar ${targetMember!.display_name || targetMember!.username}?`)) {
+                  kickMember(activeGuild!.id, targetMember!.id);
+                }
+              },
+            });
+          }
+
+          if (perms.canBan) {
+            items.push({
+              label: `Banir ${targetMember!.display_name || targetMember!.username}`,
+              icon: <Ban className="w-4 h-4" />,
+              variant: 'danger',
+              onClick: () => {
+                if (confirm(`Tem certeza que deseja banir ${targetMember!.display_name || targetMember!.username} do servidor?`)) {
+                  banMember(activeGuild!.id, targetMember!.id);
+                }
+              },
+            });
+          }
+        }
+
+        if (!isMe) {
+          items.push({
+            label: 'Bloquear Usuário',
+            icon: <UserX className="w-4 h-4" />,
+            variant: 'danger',
+            onClick: async () => {
+              if (confirm(`Deseja bloquear @${targetUser.username}? Você não receberá mais mensagens diretas deste usuário.`)) {
+                await api.users.block(targetUser.id);
+              }
+            },
+          });
+        }
       }
 
+      // Copy ID at the very bottom
       items.push({ label: '', separator: true });
       items.push({
         label: 'Copiar ID do Usuário',

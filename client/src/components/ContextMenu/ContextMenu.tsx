@@ -154,7 +154,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
             transition: isDragging ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
             paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)',
           }}
-          className="relative z-[100000] w-full max-h-[50vh] bg-[#111214] border-t border-white/10 rounded-t-3xl shadow-2xl flex flex-col text-gray-200 select-none animate-in slide-in-from-bottom duration-200 font-sans overflow-hidden"
+          className="relative z-[100000] w-full max-h-[60vh] bg-[#111214] border-t border-[#1e1f22] rounded-t-3xl shadow-2xl flex flex-col text-[#dbdee1] select-none animate-in slide-in-from-bottom duration-200 font-sans overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Interactive Drag Pill Handle Area */}
@@ -164,9 +164,9 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
             onTouchEnd={handleDragEnd}
             className="w-full pt-3 pb-2 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none flex-shrink-0 select-none"
           >
-            <div className="w-12 h-1.5 bg-white/30 rounded-full hover:bg-white/40 transition-colors" />
+            <div className="w-10 h-1 bg-white/20 rounded-full hover:bg-white/30 transition-colors" />
             {menu.title && (
-              <div className="mt-2.5 px-4 w-full text-center text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
+              <div className="mt-2.5 px-4 w-full text-center text-xs font-semibold text-[#949ba4] uppercase tracking-wider truncate">
                 {menu.title}
               </div>
             )}
@@ -175,14 +175,14 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
           {/* Scrollable Menu Items List */}
           <div
             ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto overscroll-contain px-4 pb-2 space-y-1"
+            className="flex-1 overflow-y-auto overscroll-contain px-3 pb-2 space-y-0.5"
           >
             {menu.items.map((item, index) => {
               if (item.separator) {
                 return (
                   <div
                     key={`sep-${index}`}
-                    className="h-px bg-white/10 my-1.5 mx-1"
+                    className="h-[1px] bg-[#2b2d31] my-1.5 mx-1"
                   />
                 );
               }
@@ -215,21 +215,21 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                       item.onClick?.();
                       onClose();
                     }}
-                    className={`w-full min-h-[46px] flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors text-left ${
+                    className={`w-full min-h-[44px] flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors text-left ${
                       item.disabled
-                        ? 'opacity-40 cursor-not-allowed text-gray-500'
+                        ? 'opacity-40 cursor-not-allowed text-[#80848e]'
                         : isDanger
-                        ? 'text-red-400 hover:bg-red-500/15 active:bg-red-500/25'
+                        ? 'text-[#f23f43] active:bg-[#da373c] active:text-white'
                         : isSubmenuOpen
-                        ? 'bg-white/10 text-white'
-                        : 'text-gray-200 hover:bg-white/5 active:bg-white/10'
+                        ? 'bg-[#5865F2] text-white'
+                        : 'text-[#dbdee1] active:bg-[#35373c]'
                     }`}
                   >
                     <div className="flex items-center gap-3 truncate">
                       {item.icon && (
                         <span
-                          className={`w-5 h-5 flex items-center justify-center flex-shrink-0 ${
-                            isDanger ? 'text-red-400' : 'text-gray-400'
+                          className={`w-4 h-4 flex items-center justify-center flex-shrink-0 ${
+                            isDanger ? 'text-[#f23f43]' : 'text-[#949ba4]'
                           }`}
                         >
                           {item.icon}
@@ -240,7 +240,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
 
                     {hasSubmenu && (
                       <ChevronDown
-                        className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${
+                        className={`w-4 h-4 text-[#949ba4] flex-shrink-0 transition-transform duration-200 ${
                           isSubmenuOpen ? 'rotate-180 text-white' : ''
                         }`}
                       />
@@ -249,13 +249,13 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
 
                   {/* Accordion Submenu on Mobile */}
                   {hasSubmenu && isSubmenuOpen && (
-                    <div className="mt-1 ml-4 pl-3.5 border-l-2 border-brand-500/40 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="mt-1 ml-4 pl-3.5 border-l-2 border-[#5865F2]/40 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
                       {item.subItems!.map((subItem, subIndex) => {
                         if (subItem.separator) {
                           return (
                             <div
                               key={`sub-sep-${subIndex}`}
-                              className="h-px bg-white/10 my-1 mx-1"
+                              className="h-[1px] bg-[#2b2d31] my-1 mx-1"
                             />
                           );
                         }
@@ -274,17 +274,17 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                               subItem.onClick?.();
                               onClose();
                             }}
-                            className={`w-full min-h-[42px] flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-colors text-left ${
+                            className={`w-full min-h-[40px] flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors text-left ${
                               subItem.disabled
-                                ? 'opacity-40 cursor-not-allowed text-gray-500'
+                                ? 'opacity-40 cursor-not-allowed text-[#80848e]'
                                 : isSubDanger
-                                ? 'text-red-400 hover:bg-red-500/15 active:bg-red-500/25'
-                                : 'text-gray-300 hover:bg-white/5 active:bg-white/10'
+                                ? 'text-[#f23f43] active:bg-[#da373c] active:text-white'
+                                : 'text-[#dbdee1] active:bg-[#35373c]'
                             }`}
                           >
                             <div className="flex items-center gap-2.5 truncate">
                               {subItem.icon && (
-                                <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-gray-400">
+                                <span className={`w-4 h-4 flex items-center justify-center flex-shrink-0 ${isSubDanger ? 'text-[#f23f43]' : 'text-[#949ba4]'}`}>
                                   {subItem.icon}
                                 </span>
                               )}
@@ -327,7 +327,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
           left: `${position.x}px`,
           transition: 'none',
         }}
-        className="fixed z-[100000] min-w-[200px] max-w-[280px] bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 text-gray-200 select-none animate-in fade-in zoom-in-95 duration-75 font-sans"
+        className="fixed z-[100000] min-w-[216px] max-w-[260px] bg-[#111214] rounded-lg p-1.5 shadow-2xl border border-[#1e1f22] text-[#dbdee1] select-none animate-in fade-in zoom-in-95 duration-75 font-sans"
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -335,7 +335,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
         }}
       >
         {menu.title && (
-          <div className="px-2.5 py-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1 truncate">
+          <div className="px-2.5 py-1.5 text-[11px] font-bold text-[#949ba4] uppercase tracking-wider border-b border-[#2b2d31] mb-1 truncate">
             {menu.title}
           </div>
         )}
@@ -346,7 +346,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
               return (
                 <div
                   key={`sep-${index}`}
-                  className="h-px bg-white/10 my-1 mx-1.5"
+                  className="h-[1px] bg-[#2b2d31] my-1 mx-1"
                 />
               );
             }
@@ -389,21 +389,21 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                     item.onClick?.();
                     onClose();
                   }}
-                  className={`w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-left group ${
+                  className={`w-full flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors text-left group cursor-pointer ${
                     item.disabled
-                      ? 'opacity-40 cursor-not-allowed text-gray-500'
+                      ? 'opacity-40 cursor-not-allowed text-[#80848e]'
                       : isDanger
-                      ? 'text-red-500 hover:bg-red-500/15 hover:text-red-400 cursor-pointer font-medium'
+                      ? 'text-[#f23f43] hover:bg-[#da373c] hover:text-white'
                       : isSubmenuOpen
-                      ? 'bg-brand-500/20 text-brand-300'
-                      : 'text-gray-200 hover:bg-brand-500 hover:text-white cursor-pointer'
+                      ? 'bg-[#5865F2] text-white'
+                      : 'text-[#dbdee1] hover:bg-[#5865F2] hover:text-white'
                   }`}
                 >
-                  <div className="flex items-center gap-2 truncate">
+                  <div className="flex items-center gap-2.5 truncate">
                     {item.icon && (
                       <span
                         className={`w-4 h-4 flex items-center justify-center flex-shrink-0 ${
-                          isDanger ? 'text-red-500 group-hover:text-red-400' : 'text-gray-400 group-hover:text-white'
+                          isDanger ? 'text-[#f23f43] group-hover:text-white' : 'text-[#949ba4] group-hover:text-white'
                         }`}
                       >
                         {item.icon}
@@ -415,15 +415,15 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                   {hasSubmenu && (
                     <ChevronRight
                       className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${
-                        submenuSide === 'left' ? 'rotate-180 text-gray-400 group-hover:text-white' : 'text-gray-400 group-hover:text-white'
-                      }`}
+                        submenuSide === 'left' ? 'rotate-180' : ''
+                      } ${isSubmenuOpen ? 'text-white' : 'text-[#949ba4] group-hover:text-white'}`}
                     />
                   )}
                 </button>
 
                 {hasSubmenu && isSubmenuOpen && (
                   <div
-                    className={`absolute top-0 min-w-[190px] max-w-[260px] max-h-[300px] overflow-y-auto no-scrollbar bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-0.5 z-[100001] animate-in fade-in zoom-in-95 duration-100 ${
+                    className={`absolute top-0 min-w-[200px] max-w-[260px] max-h-[320px] overflow-y-auto no-scrollbar bg-[#111214] rounded-lg p-1.5 shadow-2xl border border-[#1e1f22] space-y-0.5 z-[100001] animate-in fade-in zoom-in-95 duration-100 ${
                       submenuSide === 'left'
                         ? 'right-full mr-1'
                         : 'left-full ml-1'
@@ -435,7 +435,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                         return (
                           <div
                             key={`sub-sep-${subIndex}`}
-                            className="h-px bg-white/10 my-1 mx-1.5"
+                            className="h-[1px] bg-[#2b2d31] my-1 mx-1"
                           />
                         );
                       }
@@ -454,17 +454,17 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                             subItem.onClick?.();
                             onClose();
                           }}
-                          className={`w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-left group ${
+                          className={`w-full flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors text-left group cursor-pointer ${
                             subItem.disabled
-                              ? 'opacity-40 cursor-not-allowed text-gray-500'
+                              ? 'opacity-40 cursor-not-allowed text-[#80848e]'
                               : isSubDanger
-                              ? 'text-dnd hover:bg-dnd/15 hover:text-red-400 cursor-pointer'
-                              : 'text-gray-200 hover:bg-brand-500 hover:text-white cursor-pointer'
+                              ? 'text-[#f23f43] hover:bg-[#da373c] hover:text-white'
+                              : 'text-[#dbdee1] hover:bg-[#5865F2] hover:text-white'
                           }`}
                         >
-                          <div className="flex items-center gap-2 truncate">
+                          <div className="flex items-center gap-2.5 truncate">
                             {subItem.icon && (
-                              <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-gray-400 group-hover:text-white">
+                              <span className={`w-4 h-4 flex items-center justify-center flex-shrink-0 ${isSubDanger ? 'text-[#f23f43] group-hover:text-white' : 'text-[#949ba4] group-hover:text-white'}`}>
                                 {subItem.icon}
                               </span>
                             )}

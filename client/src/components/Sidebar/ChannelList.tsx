@@ -28,6 +28,7 @@ import {
   Headphones,
   PhoneOff,
   Monitor,
+  Copy,
 } from 'lucide-react';
 import { Channel, User, Permissions } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
@@ -247,6 +248,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             },
           ]
         : []),
+      { label: '', separator: true },
+      {
+        label: 'Copiar ID do Canal',
+        icon: <Copy className="w-4 h-4" />,
+        onClick: () => navigator.clipboard.writeText(channel.id),
+      },
     ];
 
     if (items.length > 0) {
@@ -290,6 +297,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             },
           ]
         : []),
+      { label: '', separator: true },
+      {
+        label: 'Copiar ID da Categoria',
+        icon: <Copy className="w-4 h-4" />,
+        onClick: () => navigator.clipboard.writeText(category.id),
+      },
     ];
 
     openContextMenu(e, items, category.name);
@@ -378,7 +391,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         : []),
     ];
 
-    // Voice Call Moderation (Admin)
+    // Voice Call Controls (Admin / Permissions)
     if (canMute || isCurrentOwner || hasAdmin) {
       items.push({ label: '', separator: true });
 
@@ -401,18 +414,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           });
         },
       });
-
-      if (!isMe) {
-        items.push({
-          label: 'Desconectar da Call',
-          icon: <PhoneOff className="w-4 h-4 text-dnd" />,
-          onClick: async () => {
-            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-              disconnect: true,
-            });
-          },
-        });
-      }
     }
 
     // User & Stream Volume Sliders (0 - 200%, default 100%, saved locally)
@@ -509,58 +510,77 @@ export const ChannelList: React.FC<ChannelListProps> = ({
       });
     }
 
-    // Mute/Timeout Submenu
-    if (canMute && (isCurrentOwner || isMe || isHierarchyAllowed)) {
-      const isServerMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
+    // Admin & Moderation Section (Red / Danger at base)
+    const canMod = !isMe && !isTargetOwner && isHierarchyAllowed;
+    const canDisconnect = (canMute || isCurrentOwner || hasAdmin) && !isMe;
 
-      const muteSubItems: ContextMenuItem[] = [
-        {
-          label: '15 minutos',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
-        },
-        {
-          label: '1 hora',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
-        },
-        {
-          label: '24 horas',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
-        },
-        {
-          label: '1 semana',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
-        },
-        {
-          label: 'Permanente',
-          icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
-        },
-        ...(isServerMuted
-          ? [
-              { label: '', separator: true },
-              {
-                label: 'Remover Silenciamento',
-                icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
-                onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
-              },
-            ]
-          : []),
-      ];
+    if (canMod || canDisconnect) {
+      items.push({ label: '', separator: true });
 
-      items.push({
-        label: isServerMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
-        icon: <VolumeX className={`w-4 h-4 ${isServerMuted ? 'text-dnd' : 'text-gray-400'}`} />,
-        subItems: muteSubItems,
-      });
-    }
+      // Mute/Timeout Submenu
+      if (canMute && canMod) {
+        const isServerMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
 
-    // Kick and Ban
-    if (!isMe && !isTargetOwner && isHierarchyAllowed) {
-      if (canKick) {
+        const muteSubItems: ContextMenuItem[] = [
+          {
+            label: '15 minutos',
+            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+            onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
+          },
+          {
+            label: '1 hora',
+            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+            onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
+          },
+          {
+            label: '24 horas',
+            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+            onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
+          },
+          {
+            label: '1 semana',
+            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+            onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
+          },
+          {
+            label: 'Permanente',
+            icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
+            onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
+          },
+          ...(isServerMuted
+            ? [
+                { label: '', separator: true },
+                {
+                  label: 'Remover Silenciamento',
+                  icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
+                  onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
+                },
+              ]
+            : []),
+        ];
+
+        items.push({
+          label: isServerMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
+          icon: <VolumeX className="w-4 h-4 text-[#f23f43]" />,
+          variant: 'danger',
+          subItems: muteSubItems,
+        });
+      }
+
+      if (canDisconnect) {
+        items.push({
+          label: 'Desconectar da Call',
+          icon: <PhoneOff className="w-4 h-4" />,
+          variant: 'danger',
+          onClick: async () => {
+            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+              disconnect: true,
+            });
+          },
+        });
+      }
+
+      if (canMod && canKick) {
         items.push({
           label: `Expulsar ${targetMember.display_name || targetMember.username}`,
           icon: <UserMinus className="w-4 h-4" />,
@@ -573,7 +593,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         });
       }
 
-      if (canBan) {
+      if (canMod && canBan) {
         items.push({
           label: `Banir ${targetMember.display_name || targetMember.username}`,
           icon: <Ban className="w-4 h-4" />,
@@ -587,6 +607,14 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         });
       }
     }
+
+    // Copy ID at the bottom
+    items.push({ label: '', separator: true });
+    items.push({
+      label: 'Copiar ID do Usuário',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(targetMember.id),
+    });
 
     openContextMenu(e, items, targetMember.display_name || targetMember.username);
   };
