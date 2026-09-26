@@ -256,7 +256,6 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       await get().stopScreenShare();
     } catch {}
     await livekit.disconnect();
-    playLeaveVoiceSound();
     set({
       callState: 'idle',
       roomId: null,
@@ -274,7 +273,6 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       await get().stopScreenShare();
     } catch {}
     await livekit.disconnect();
-    playLeaveVoiceSound();
     set({
       callState: 'idle',
       roomId: null,

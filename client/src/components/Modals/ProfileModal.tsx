@@ -78,6 +78,7 @@ import {
 } from '../../utils/audio';
 import { livekit } from '../../lib/livekit';
 import { api, formatAssetUrl } from '../../lib/api';
+import { copyToClipboard } from '../../utils/clipboard';
 import { ImageCropModal } from './ImageCropModal';
 import { KeybindSettingsView } from './KeybindSettingsView';
 import { SessionsSettingsView } from './SessionsSettingsView';
@@ -3787,7 +3788,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(backupCodes.join('\n'));
+                    copyToClipboard(backupCodes.join('\n'));
                     setCopiedBackupCodes(true);
                     setTimeout(() => setCopiedBackupCodes(false), 2000);
                   }}

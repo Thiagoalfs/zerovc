@@ -378,7 +378,6 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       console.warn('[Voice] Failed to notify leave API:', err);
     }
 
-    playLeaveVoiceSound();
     try {
       await get().stopScreenShare();
     } catch {}

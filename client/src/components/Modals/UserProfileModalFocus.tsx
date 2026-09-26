@@ -23,6 +23,7 @@ import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useFriendStore } from '../../stores/friendStore';
+import { copyToClipboard } from '../../utils/clipboard';
 import { formatAssetUrl } from '../../lib/api';
 import { getUserActivity } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
@@ -168,7 +169,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 
   const handleCopyUsername = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(user.username);
+    copyToClipboard(user.username);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

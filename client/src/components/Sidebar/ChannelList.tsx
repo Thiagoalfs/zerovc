@@ -28,6 +28,7 @@ import {
   Headphones,
   PhoneOff,
   Monitor,
+  Copy,
 } from 'lucide-react';
 import { Channel, User, Permissions, VoiceSession } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
@@ -35,6 +36,7 @@ import { useVoiceStore } from '../../stores/voiceStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useDMStore } from '../../stores/dmStore';
 import { api, formatAssetUrl } from '../../lib/api';
+import { copyToClipboard } from '../../utils/clipboard';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { UserBar } from './UserBar';
 import { SidebarResizer } from './SidebarResizer';
@@ -243,6 +245,14 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             },
           ]
         : []),
+      { label: '', separator: true },
+      {
+        label: 'Copiar ID do Canal',
+        icon: <Copy className="w-4 h-4" />,
+        onClick: () => {
+          copyToClipboard(channel.id);
+        },
+      },
     ];
 
     if (items.length > 0) {
@@ -286,6 +296,14 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             },
           ]
         : []),
+      { label: '', separator: true },
+      {
+        label: 'Copiar ID da Categoria',
+        icon: <Copy className="w-4 h-4" />,
+        onClick: () => {
+          copyToClipboard(category.id);
+        },
+      },
     ];
 
     openContextMenu(e, items, category.name);
@@ -583,6 +601,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         });
       }
     }
+
+    items.push({ label: '', separator: true });
+    items.push({
+      label: 'Copiar ID do Usuário',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => {
+        copyToClipboard(targetMember.id);
+      },
+    });
 
     openContextMenu(e, items, targetMember.display_name || targetMember.username);
   };

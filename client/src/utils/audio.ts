@@ -71,10 +71,15 @@ export const playMessageSound = (isMention = false) => {
   } catch {}
 };
 
+let lastJoinVoiceSoundTime = 0;
 // Play join voice chime (Ascending chord)
 export const playJoinVoiceSound = () => {
   if (!isSoundsEnabled()) return;
   if (localStorage.getItem('zerovc_sound_channel_events') === 'false') return;
+
+  const nowMs = Date.now();
+  if (nowMs - lastJoinVoiceSoundTime < 500) return;
+  lastJoinVoiceSoundTime = nowMs;
 
   try {
     const ctx = getAudioContext();
@@ -104,10 +109,15 @@ export const playJoinVoiceSound = () => {
   } catch {}
 };
 
+let lastLeaveVoiceSoundTime = 0;
 // Play leave voice chime (Descending chord)
 export const playLeaveVoiceSound = () => {
   if (!isSoundsEnabled()) return;
   if (localStorage.getItem('zerovc_sound_channel_events') === 'false') return;
+
+  const nowMs = Date.now();
+  if (nowMs - lastLeaveVoiceSoundTime < 500) return;
+  lastLeaveVoiceSoundTime = nowMs;
 
   try {
     const ctx = getAudioContext();
