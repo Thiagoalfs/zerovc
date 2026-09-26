@@ -245,11 +245,6 @@ export const KeybindSettingsView: React.FC = () => {
           );
         })}
       </div>
-
-      <div className="p-3.5 bg-white/[0.02] border border-white/5 rounded-xl text-xs text-gray-400">
-        <span className="font-semibold text-gray-300 block mb-0.5">Dica</span>
-        No aplicativo desktop (Electron), estes atalhos funcionam globalmente enquanto você joga ou utiliza outros programas em segundo plano.
-      </div>
     </div>
   );
 };

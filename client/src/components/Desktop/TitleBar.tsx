@@ -6,6 +6,7 @@ import {
   X,
   RefreshCw,
   Sparkles,
+  Download,
 } from 'lucide-react';
 import { UpdateInfo, UpdateProgress } from '../../types/electron';
 import { ZeroVCLogo } from '../Common/ZeroVCLogo';
@@ -23,6 +24,13 @@ export const TitleBar: React.FC = () => {
   const isElectron =
     typeof window !== 'undefined' &&
     (!!window.electronAPI?.isElectron || navigator.userAgent.includes('Electron'));
+
+  const isCapacitor =
+    typeof window !== 'undefined' &&
+    (typeof (window as any).Capacitor !== 'undefined' &&
+      ((window as any).Capacitor?.isNativePlatform?.() ||
+        (window as any).Capacitor?.getPlatform?.() === 'android' ||
+        (window as any).Capacitor?.getPlatform?.() === 'ios'));
 
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'available' | 'downloading' | 'downloaded'>('idle');
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
@@ -85,9 +93,28 @@ export const TitleBar: React.FC = () => {
     };
   }, [isElectron, checkServerVersion]);
 
-  if (!isElectron) {
+  if (isCapacitor) {
     return null;
   }
+
+  const isMobile =
+    typeof window !== 'undefined' &&
+    (/Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent) ||
+      window.innerWidth < 768);
+
+  const downloadHref = isMobile ? '/downloads/ZeroVC.apk' : '/downloads/ZeroVC-Setup.exe';
+  const downloadFileName = isMobile ? 'ZeroVC.apk' : 'ZeroVC-Setup.exe';
+  const downloadTitle = isMobile ? 'Baixar ZeroVC para Celular (.apk)' : 'Baixar ZeroVC para Computador (.exe)';
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const link = document.createElement('a');
+    link.href = downloadHref;
+    link.setAttribute('download', downloadFileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Handle update action (Instant Web Sync or binary install)
   const handleDirectUpdate = () => {
@@ -118,11 +145,22 @@ export const TitleBar: React.FC = () => {
       className="h-8 bg-background-darkest/95 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-3 select-none flex-shrink-0 z-50 relative"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      {/* Left Branding / Title */}
+      {/* Left Branding / Title & Download Button */}
       <div
         className="flex items-center gap-2 text-xs font-bold text-gray-300"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
+        {!isElectron && (
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="flex items-center justify-center p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 active:scale-95 rounded-md transition-all cursor-pointer mr-0.5"
+            title={downloadTitle}
+            aria-label={downloadTitle}
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+          </button>
+        )}
         <ZeroVCLogo className="w-4 h-4 shadow-sm flex-shrink-0" />
         <span className="tracking-wide text-[11px] font-semibold text-gray-300">ZeroVC</span>
         {currentBuildCommit && (
@@ -133,10 +171,11 @@ export const TitleBar: React.FC = () => {
       </div>
 
       {/* Right Actions: Update Button + Window Controls */}
-      <div
-        className="flex items-center gap-1.5"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
+      {isElectron && (
+        <div
+          className="flex items-center gap-1.5"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
         {/* Direct One-Click Update Button with FontAwesome Download Icon */}
         {updateStatus === 'available' && (
           <button
@@ -220,6 +259,7 @@ export const TitleBar: React.FC = () => {
           </button>
         </div>
       </div>
+      )}
     </header>
   );
 };

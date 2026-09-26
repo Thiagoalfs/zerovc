@@ -79,6 +79,7 @@ import {
 import { livekit } from '../../lib/livekit';
 import { api, formatAssetUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
+import { isElectron } from '../../lib/platform';
 import { ImageCropModal } from './ImageCropModal';
 import { KeybindSettingsView } from './KeybindSettingsView';
 import { SessionsSettingsView } from './SessionsSettingsView';
@@ -1387,18 +1388,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <span>Preferências</span>
               </button>
 
-              {/* Tab: Atalhos do Teclado */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('keybinds')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'keybinds'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Atalhos do Teclado</span>
-              </button>
+              {/* Tab: Atalhos do Teclado (Apenas Electron) */}
+              {isElectron() && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('keybinds')}
+                  className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    activeTab === 'keybinds'
+                      ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                  }`}
+                >
+                  <span>Atalhos do Teclado</span>
+                </button>
+              )}
             </nav>
           </div>
 
@@ -3292,8 +3295,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               </div>
             )}
 
-            {/* TAB: ATALHOS DO TECLADO */}
-            {activeTab === 'keybinds' && (
+            {/* TAB: ATALHOS DO TECLADO (Apenas Electron) */}
+            {activeTab === 'keybinds' && isElectron() && (
               <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar pr-1">
                 <KeybindSettingsView />
               </div>
