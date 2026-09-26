@@ -311,6 +311,7 @@ func main() {
 		r.With(emojiLimiter.Middleware).Patch("/api/guilds/{id}/emojis/{emojiID}", guildHandler.UpdateEmoji)
 		r.With(emojiLimiter.Middleware).Delete("/api/guilds/{id}/emojis/{emojiID}", guildHandler.DeleteEmoji)
 		r.Get("/api/guilds/{id}/audit-logs", guildHandler.ListAuditLogs)
+		r.Get("/api/guilds/{id}/voice-states", guildHandler.GetGuildVoiceStates)
 		r.Get("/api/guilds/{guildID}/read-states", messageHandler.GetGuildReadStates)
 		r.With(searchLimiter.Middleware).Get("/api/guilds/{guildID}/messages/search", messageHandler.Search)
 

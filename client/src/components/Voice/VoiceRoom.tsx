@@ -122,10 +122,11 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     const H = dimensions.height;
     const gap = count > 1 ? (W < 640 ? 8 : 14) : 0;
     const paddingX = W < 640 ? 8 : 16;
-    const paddingY = H < 640 ? 8 : 16;
+    const buttonReservedH = (!isConnectedToThisChannel && !isConnecting) ? 56 : 0;
+    const paddingY = (H < 640 ? 8 : 16) + (buttonReservedH > 0 ? 8 : 0);
 
     const availableW = Math.max(60, W - paddingX * 2);
-    const availableH = Math.max(60, H - paddingY * 2);
+    const availableH = Math.max(60, H - paddingY * 2 - buttonReservedH);
     const targetAspect = 16 / 9;
 
     let bestCols = 1;
@@ -218,50 +219,84 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
             <span className="text-sm font-medium">Conectando ao canal de voz...</span>
           </div>
         ) : participants.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 text-gray-500">
-            <Volume2 className="w-12 h-12 stroke-1" />
-            <span className="text-sm">Nenhum participante conectado</span>
+          <div className="flex flex-col items-center gap-4 text-gray-500 animate-in fade-in">
+            <div className="flex flex-col items-center gap-2">
+              <Volume2 className="w-12 h-12 stroke-1 text-gray-500" />
+              <span className="text-sm font-medium text-gray-400">Nenhum participante conectado</span>
+            </div>
+
+            {!isConnectedToThisChannel && !isConnecting && (
+              <button
+                onClick={() => {
+                  hapticMedium();
+                  joinVoice(channel.id, channel.guild_id);
+                }}
+                className="bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm px-6 py-2.5 rounded-xl shadow-lg hover:shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 animate-in zoom-in-95"
+              >
+                <Volume2 className="w-4 h-4" />
+                <span>Conectar à Voz</span>
+              </button>
+            )}
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 sm:gap-3 overflow-hidden">
-            {stageLayout.rows.map((row, rIdx) => (
-              <div
-                key={rIdx}
-                className="flex items-center justify-center gap-2 sm:gap-3 flex-shrink-0"
-                style={{
-                  height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
-                }}
-              >
-                {row.map((p) => (
-                  <div
-                    key={p.sid || p.identity}
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{
-                      width: stageLayout.cardWidth > 0 ? `${stageLayout.cardWidth}px` : 'auto',
-                      height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
-                      maxWidth: '100%',
-                      maxHeight: '100%',
-                    }}
-                  >
-                    <ParticipantCard
-                      participant={p}
-                      onOpenUserProfile={onOpenUserProfile}
-                      onOpenDM={onOpenDM}
-                    />
-                  </div>
-                ))}
+          <div className="w-full h-full flex flex-col items-center justify-center gap-3 overflow-hidden">
+            {/* Participant Cards Grid */}
+            <div className="flex flex-col items-center justify-center gap-2 sm:gap-3 overflow-hidden">
+              {stageLayout.rows.map((row, rIdx) => (
+                <div
+                  key={rIdx}
+                  className="flex items-center justify-center gap-2 sm:gap-3 flex-shrink-0"
+                  style={{
+                    height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
+                  }}
+                >
+                  {row.map((p) => (
+                    <div
+                      key={p.sid || p.identity}
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: stageLayout.cardWidth > 0 ? `${stageLayout.cardWidth}px` : 'auto',
+                        height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
+                        maxWidth: '100%',
+                        maxHeight: '100%',
+                      }}
+                    >
+                      <ParticipantCard
+                        participant={p}
+                        onOpenUserProfile={onOpenUserProfile}
+                        onOpenDM={onOpenDM}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {/* Connect to Voice Button (Always centered below cards) */}
+            {!isConnectedToThisChannel && !isConnecting && (
+              <div className="pt-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    hapticMedium();
+                    joinVoice(channel.id, channel.guild_id);
+                  }}
+                  className="bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm px-6 py-2.5 rounded-xl shadow-lg hover:shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 animate-in zoom-in-95"
+                >
+                  <Volume2 className="w-4 h-4" />
+                  <span>Conectar à Voz</span>
+                </button>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
 
-      {/* Floating Bottom Voice Controls */}
-      <div 
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
-        className="p-3 md:p-4 flex justify-center bg-background-darker/80 backdrop-blur-md border-t border-black/20 select-none"
-      >
-        {isConnectedToThisChannel ? (
+      {/* Floating Bottom Voice Controls (Only rendered when user is connected to this voice channel) */}
+      {isConnectedToThisChannel && (
+        <div 
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
+          className="p-3 md:p-4 flex justify-center bg-background-darker/80 backdrop-blur-md border-t border-black/20 select-none z-10 flex-shrink-0 animate-in slide-in-from-bottom-2 duration-200"
+        >
           <div className="bg-background-darkest/95 px-4 md:px-6 py-2 rounded-2xl shadow-2xl flex items-center gap-3 md:gap-4 border border-white/10">
             {/* Mute Mic */}
             <button
@@ -338,31 +373,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
               <PhoneOff className="w-5 h-5" />
             </button>
           </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                hapticMedium();
-                joinVoice(channel.id);
-              }}
-              disabled={isConnecting}
-              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold text-sm px-6 py-2.5 rounded-xl shadow-lg hover:shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-            >
-              {isConnecting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Conectando...</span>
-                </>
-              ) : (
-                <>
-                  <Volume2 className="w-4 h-4" />
-                  <span>Conectar à Voz</span>
-                </>
-              )}
-            </button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Context Menu Component */}
       <ContextMenu menu={menu} onClose={closeContextMenu} />

@@ -67,6 +67,10 @@ import {
   playMessageSound,
   playJoinVoiceSound,
   playLeaveVoiceSound,
+  playUserJoinCallSound,
+  playUserLeaveCallSound,
+  playStartStreamSound,
+  playStopStreamSound,
   playMuteSound,
   playUnmuteSound,
   playDeafenSound,
@@ -424,6 +428,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     soundsEnabled,
     soundVolume,
     soundChannelEvents,
+    soundUserJoinLeave,
+    soundStreamEvents,
     soundMuteEvents,
     soundMessageEvents,
     notificationsDesktop,
@@ -447,6 +453,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setSoundsEnabled,
     setSoundVolume,
     setSoundChannelEvents,
+    setSoundUserJoinLeave,
+    setSoundStreamEvents,
     setSoundMuteEvents,
     setSoundMessageEvents,
     setNotificationsDesktop,
@@ -2951,11 +2959,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     Efeitos Sonoros do Aplicativo
                   </h4>
                   <div className="divide-y divide-white/5 space-y-3.5">
-                    {/* Voice Channel Join / Leave */}
+                    {/* Voice Channel Join / Leave (Local User) */}
                     <div className="flex items-center justify-between pt-1 first:pt-0">
                       <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Entrada e Saída de Chamadas</span>
-                        <p className="text-[11px] text-gray-400">Toca o chime ao entrar ou desconectar de um canal de voz.</p>
+                        <span className="text-xs font-bold text-white block">Sua Entrada e Saída de Chamadas</span>
+                        <p className="text-[11px] text-gray-400">Toca o chime ao você entrar ou desconectar de um canal de voz.</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <button
@@ -2981,6 +2989,78 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           <div
                             className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
                               soundChannelEvents ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Member Join / Leave Call (Other Users) */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">Entrada e Saída de Outros Usuários</span>
+                        <p className="text-[11px] text-gray-400">Aviso sonoro suave quando alguém entra ou sai da chamada que você está participando.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playUserJoinCallSound();
+                            setTimeout(playUserLeaveCallSound, 350);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/5"
+                        >
+                          <Play className="w-3 h-3 text-brand-400" />
+                          <span>Ouvir</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={soundUserJoinLeave}
+                          onClick={() => setSoundUserJoinLeave(!soundUserJoinLeave)}
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                            soundUserJoinLeave ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              soundUserJoinLeave ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Screen Share / Live Stream Start & Stop */}
+                    <div className="flex items-center justify-between pt-3.5">
+                      <div className="space-y-0.5 pr-4">
+                        <span className="text-xs font-bold text-white block">Transmissão de Tela (Ao Vivo)</span>
+                        <p className="text-[11px] text-gray-400">Alerta sonoro ao iniciar, entrar ou encerrar uma transmissão de tela na call.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playStartStreamSound();
+                            setTimeout(playStopStreamSound, 350);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/5"
+                        >
+                          <Play className="w-3 h-3 text-brand-400" />
+                          <span>Ouvir</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={soundStreamEvents}
+                          onClick={() => setSoundStreamEvents(!soundStreamEvents)}
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                            soundStreamEvents ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              soundStreamEvents ? 'translate-x-6' : 'translate-x-0'
                             }`}
                           />
                         </button>

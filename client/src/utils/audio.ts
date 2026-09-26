@@ -137,6 +137,156 @@ export const playLeaveVoiceSound = () => {
   } catch {}
 };
 
+const lastSoundDebounceTimes: Record<string, number> = {};
+const isSoundDebounced = (key: string, ms = 600) => {
+  const now = Date.now();
+  if (lastSoundDebounceTimes[key] && now - lastSoundDebounceTimes[key] < ms) {
+    return true;
+  }
+  lastSoundDebounceTimes[key] = now;
+  return false;
+};
+
+// Play notification when someone enters the call
+export const playUserJoinCallSound = () => {
+  if (!isSoundsEnabled()) return;
+  if (localStorage.getItem('zerovc_sound_user_join_leave') === 'false') return;
+  if (isSoundDebounced('user_join', 600)) return;
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const vol = getSoundVolume();
+    const now = ctx.currentTime;
+
+    // Pleasant high melodic pop/chime (B4 -> E5)
+    const notes = [493.88, 659.25];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + i * 0.05);
+
+      gain.gain.setValueAtTime(0, now + i * 0.05);
+      gain.gain.linearRampToValueAtTime(0.14 * vol, now + i * 0.05 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.18);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + i * 0.05);
+      osc.stop(now + i * 0.05 + 0.2);
+    });
+  } catch {}
+};
+
+// Play notification when someone leaves the call
+export const playUserLeaveCallSound = () => {
+  if (!isSoundsEnabled()) return;
+  if (localStorage.getItem('zerovc_sound_user_join_leave') === 'false') return;
+  if (isSoundDebounced('user_leave', 600)) return;
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const vol = getSoundVolume();
+    const now = ctx.currentTime;
+
+    // Pleasant descending pop (E5 -> B4)
+    const notes = [659.25, 493.88];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + i * 0.045);
+
+      gain.gain.setValueAtTime(0, now + i * 0.045);
+      gain.gain.linearRampToValueAtTime(0.13 * vol, now + i * 0.045 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.045 + 0.16);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + i * 0.045);
+      osc.stop(now + i * 0.045 + 0.18);
+    });
+  } catch {}
+};
+
+// Play notification when someone starts screenshare / live stream
+export const playStartStreamSound = () => {
+  if (!isSoundsEnabled()) return;
+  if (localStorage.getItem('zerovc_sound_stream_events') === 'false') return;
+  if (isSoundDebounced('stream_start', 600)) return;
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const vol = getSoundVolume();
+    const now = ctx.currentTime;
+
+    // Crisp ascending tech harmonic (D5 -> G5 -> B5)
+    const notes = [587.33, 783.99, 987.77];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + i * 0.04);
+
+      gain.gain.setValueAtTime(0, now + i * 0.04);
+      gain.gain.linearRampToValueAtTime(0.13 * vol, now + i * 0.04 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.2);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + i * 0.04);
+      osc.stop(now + i * 0.04 + 0.22);
+    });
+  } catch {}
+};
+
+// Play notification when someone stops screenshare / leaves live stream
+export const playStopStreamSound = () => {
+  if (!isSoundsEnabled()) return;
+  if (localStorage.getItem('zerovc_sound_stream_events') === 'false') return;
+  if (isSoundDebounced('stream_stop', 600)) return;
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const vol = getSoundVolume();
+    const now = ctx.currentTime;
+
+    // Crisp descending tech tone (B5 -> G5 -> D5)
+    const notes = [987.77, 783.99, 587.33];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + i * 0.035);
+
+      gain.gain.setValueAtTime(0, now + i * 0.035);
+      gain.gain.linearRampToValueAtTime(0.12 * vol, now + i * 0.035 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.035 + 0.16);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + i * 0.035);
+      osc.stop(now + i * 0.035 + 0.18);
+    });
+  } catch {}
+};
+
 // Play mute mic sound
 export const playMuteSound = () => {
   if (!isSoundsEnabled()) return;

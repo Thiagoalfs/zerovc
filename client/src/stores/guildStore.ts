@@ -60,6 +60,7 @@ interface GuildState {
   handleGuildMemberUpdate: (guildId: string, userId: string, data: Partial<User>) => void;
   handlePresenceUpdate: (userId: string, status: string, customStatus?: string) => void;
 
+  syncVoiceStates: (guildId: string) => Promise<void>;
   updateVoiceState: (action: string, session?: VoiceSession, channelId?: string, userId?: string) => void;
   setTyping: (channelId: string, userId: string) => void;
 
@@ -1014,44 +1015,98 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     });
   },
 
+  syncVoiceStates: async (guildId: string) => {
+    try {
+      const res = await api.guilds.getVoiceStates(guildId);
+      if (!res || !res.voice_states) return;
+
+      set((state) => {
+        if (!state.activeGuild || state.activeGuild.id !== guildId || !state.activeGuild.channels) {
+          return state;
+        }
+
+        const voiceStatesMap = res.voice_states;
+        const channels = state.activeGuild.channels.map((channel) => {
+          if (channel.type === 'voice') {
+            const sessions = voiceStatesMap[channel.id] || [];
+            return {
+              ...channel,
+              voice_sessions: sessions,
+            };
+          }
+          return channel;
+        });
+
+        return {
+          activeGuild: {
+            ...state.activeGuild,
+            channels,
+          },
+        };
+      });
+    } catch (err) {
+      console.error('[guildStore] Failed to sync voice states:', err);
+    }
+  },
+
   updateVoiceState: (action: string, session?: VoiceSession, channelId?: string, userId?: string) => {
     set((state) => {
       if (!state.activeGuild || !state.activeGuild.channels) return state;
 
       const targetUserId = session?.user_id || userId;
+      if (!targetUserId) return state;
+
       const targetChannelId = session?.channel_id || channelId;
+      const guildMember = state.activeGuild.members?.find((m) => m.id === targetUserId);
+
+      const enhancedSession = session
+        ? {
+            ...session,
+            user: session.user || guildMember ? {
+              id: targetUserId,
+              username: session.user?.username || guildMember?.username || 'Usuário',
+              display_name: session.user?.display_name || guildMember?.display_name || '',
+              avatar_url: session.user?.avatar_url || guildMember?.avatar_url || '',
+              status: session.user?.status || guildMember?.status || 'online',
+              roles: session.user?.roles || guildMember?.roles || [],
+            } : undefined,
+          }
+        : undefined;
 
       const channels = state.activeGuild.channels.map((channel) => {
-        if (action === 'join' && session) {
-          if (channel.id === session.channel_id) {
-            const sessions = channel.voice_sessions || [];
-            const exists = sessions.some((s) => s.user_id === session.user_id);
-            if (exists) {
-              return {
-                ...channel,
-                voice_sessions: sessions.map((s) =>
-                  s.user_id === session.user_id ? { ...s, ...session, user: session.user || s.user } : s
-                ),
-              };
-            }
-            return { ...channel, voice_sessions: [...sessions, session] };
+        if (channel.type !== 'voice') return channel;
+
+        if (action === 'join' && enhancedSession) {
+          if (channel.id === enhancedSession.channel_id) {
+            const currentSessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
+            return {
+              ...channel,
+              voice_sessions: [...currentSessions, enhancedSession as VoiceSession],
+            };
           } else {
-            // Clean up from other voice channels in same server when moving
-            const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== session.user_id);
+            // Remove user from any other voice channels in the same guild
+            const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
             return { ...channel, voice_sessions: sessions };
           }
-        } else if (action === 'leave' && targetUserId) {
+        } else if (action === 'leave') {
           if (!targetChannelId || channel.id === targetChannelId) {
             const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
             return { ...channel, voice_sessions: sessions };
           }
           return channel;
-        } else if ((action === 'update' || action === 'state') && session) {
-          if (channel.id === session.channel_id) {
-            const sessions = (channel.voice_sessions || []).map((s) =>
-              s.user_id === session.user_id ? { ...s, ...session, user: session.user || s.user } : s
-            );
-            return { ...channel, voice_sessions: sessions };
+        } else if ((action === 'update' || action === 'state') && enhancedSession) {
+          if (channel.id === enhancedSession.channel_id) {
+            const sessions = channel.voice_sessions || [];
+            const exists = sessions.some((s) => s.user_id === targetUserId);
+            if (exists) {
+              return {
+                ...channel,
+                voice_sessions: sessions.map((s) =>
+                  s.user_id === targetUserId ? { ...s, ...enhancedSession, user: enhancedSession.user || s.user } : s
+                ),
+              };
+            }
+            return { ...channel, voice_sessions: [...sessions, enhancedSession as VoiceSession] };
           }
           return channel;
         }
