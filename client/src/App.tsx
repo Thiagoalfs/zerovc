@@ -46,6 +46,12 @@ import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
 import { initMobileBackHandler, pushBackHandler } from './lib/mobileBackHandler';
 import { initAudioRouting } from './lib/audioRouting';
+import {
+  playUserJoinCallSound,
+  playUserLeaveCallSound,
+  playStartStreamSound,
+  playStopStreamSound,
+} from './utils/audio';
 
 export const App: React.FC = () => {
   const { user, token, isCheckingAuth, checkAuth, setUser } = useAuthStore();
@@ -155,6 +161,25 @@ export const App: React.FC = () => {
   useEffect(() => {
     initMobileBackHandler();
     initAudioRouting();
+  }, []);
+
+  // Periodic and focus/visibility voice state sync
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const curActiveGuild = useGuildStore.getState().activeGuild;
+        if (curActiveGuild) {
+          useGuildStore.getState().syncVoiceStates(curActiveGuild.id).catch(() => {});
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
   }, []);
 
   // Back button stack for modals and mobile drawers in App.tsx
@@ -960,6 +985,29 @@ export const App: React.FC = () => {
         updateVoiceState(event.data.action, event.data.session, event.data.channel_id, event.data.user_id);
 
         const currentUserId = useAuthStore.getState().user?.id;
+        const currentVoiceChannelId = useVoiceStore.getState().currentChannelId;
+        const isVoiceConnected = useVoiceStore.getState().isConnected;
+
+        // Sound triggers when another user joins, leaves or updates stream in the current active voice channel
+        if (
+          isVoiceConnected &&
+          currentVoiceChannelId &&
+          event.data.channel_id === currentVoiceChannelId &&
+          event.data.user_id !== currentUserId
+        ) {
+          if (event.data.action === 'join') {
+            playUserJoinCallSound();
+          } else if (event.data.action === 'leave') {
+            playUserLeaveCallSound();
+          } else if ((event.data.action === 'update' || event.data.action === 'state') && event.data.session) {
+            if (event.data.session.is_screensharing === true) {
+              playStartStreamSound();
+            } else if (event.data.session.is_screensharing === false) {
+              playStopStreamSound();
+            }
+          }
+        }
+
         if (event.data.forced) {
           if (event.data.action === 'leave' && event.data.user_id === currentUserId) {
             useVoiceStore.getState().leaveVoice();
@@ -1231,9 +1279,10 @@ export const App: React.FC = () => {
             }));
           }
 
-          // 2. Resync active guild read states
+          // 2. Resync active guild read states & voice states
           const curActiveGuild = useGuildStore.getState().activeGuild;
           if (curActiveGuild) {
+            useGuildStore.getState().syncVoiceStates(curActiveGuild.id).catch(() => {});
             const readStates = await api.guilds.getReadStates(curActiveGuild.id);
             if (readStates) {
               useGuildStore.setState((state) => {

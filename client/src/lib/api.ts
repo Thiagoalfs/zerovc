@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession, VoiceSession } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
 
@@ -403,6 +403,8 @@ export const api = {
       return request<AuditLog[]>(`/guilds/${guildId}/audit-logs${queryStr}`);
     },
     getReadStates: (guildId: string) => request<ChannelReadState[]>(`/guilds/${guildId}/read-states`),
+    getVoiceStates: (guildId: string) =>
+      request<{ voice_states: Record<string, VoiceSession[]> }>(`/guilds/${guildId}/voice-states`),
     searchMessages: (guildId: string, query: string) => {
       const q = new URLSearchParams({ q: query });
       return request<Message[]>(`/guilds/${guildId}/messages/search?${q.toString()}`);

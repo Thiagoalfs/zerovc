@@ -33,6 +33,8 @@ interface SettingsState {
   soundsEnabled: boolean;
   soundVolume: number;
   soundChannelEvents: boolean;
+  soundUserJoinLeave: boolean;
+  soundStreamEvents: boolean;
   soundMuteEvents: boolean;
   soundMessageEvents: boolean;
   notificationsDesktop: boolean;
@@ -68,6 +70,8 @@ interface SettingsState {
   setSoundsEnabled: (enabled: boolean) => void;
   setSoundVolume: (vol: number) => void;
   setSoundChannelEvents: (enabled: boolean) => void;
+  setSoundUserJoinLeave: (enabled: boolean) => void;
+  setSoundStreamEvents: (enabled: boolean) => void;
   setSoundMuteEvents: (enabled: boolean) => void;
   setSoundMessageEvents: (enabled: boolean) => void;
   setNotificationsDesktop: (enabled: boolean) => void;
@@ -198,6 +202,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   soundsEnabled: getStoredBoolean('zerovc_sounds_enabled', true),
   soundVolume: getStoredNumber('zerovc_sound_volume', 80),
   soundChannelEvents: getStoredBoolean('zerovc_sound_channel_events', true),
+  soundUserJoinLeave: getStoredBoolean('zerovc_sound_user_join_leave', true),
+  soundStreamEvents: getStoredBoolean('zerovc_sound_stream_events', true),
   soundMuteEvents: getStoredBoolean('zerovc_sound_mute_events', true),
   soundMessageEvents: getStoredBoolean('zerovc_sound_message_events', true),
   notificationsDesktop: getStoredBoolean('zerovc_notifications_desktop', true),
@@ -309,6 +315,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setSoundChannelEvents: (soundChannelEvents) => {
     localStorage.setItem('zerovc_sound_channel_events', String(soundChannelEvents));
     set({ soundChannelEvents });
+  },
+
+  setSoundUserJoinLeave: (soundUserJoinLeave) => {
+    localStorage.setItem('zerovc_sound_user_join_leave', String(soundUserJoinLeave));
+    set({ soundUserJoinLeave });
+  },
+
+  setSoundStreamEvents: (soundStreamEvents) => {
+    localStorage.setItem('zerovc_sound_stream_events', String(soundStreamEvents));
+    set({ soundStreamEvents });
   },
 
   setSoundMuteEvents: (soundMuteEvents) => {

@@ -29,7 +29,7 @@ import {
   PhoneOff,
   Monitor,
 } from 'lucide-react';
-import { Channel, User, Permissions } from '../../types';
+import { Channel, User, Permissions, VoiceSession } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -692,85 +692,118 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         </div>
 
         {/* Connected Voice Members */}
-        {!isText && channel.voice_sessions && channel.voice_sessions.length > 0 && (
-          <div className="pl-6 pr-2 py-1 space-y-0.5">
-            {channel.voice_sessions.map((vs) => {
-              const isSpeaking = speakingUserIds.includes(vs.user_id) && !vs.is_muted && !vs.is_deafened;
-              const guildMember = activeGuild?.members?.find((m) => m.id === vs.user_id);
-              const targetUser: User = {
-                id: vs.user_id,
-                username: guildMember?.username || vs.user?.username || 'Usuário',
-                display_name: guildMember?.display_name || vs.user?.display_name || '',
-                avatar_url: guildMember?.avatar_url || vs.user?.avatar_url || '',
-                status: guildMember?.status || vs.user?.status || 'online',
-                roles: guildMember?.roles || vs.user?.roles || [],
-              };
+        {(() => {
+          if (isText) return null;
 
-              return (
-                <div
-                  key={vs.id || vs.user_id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectUser?.(targetUser, { x: e.clientX, y: e.clientY });
-                  }}
-                  onContextMenu={(e) => handleVoiceMemberContextMenu(e, channel, vs, targetUser)}
-                  className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-background-light/40 text-[13.5px] text-gray-300 cursor-pointer transition-colors group/voice-member"
-                  title="Clique com botão esquerdo para perfil ou direito para opções"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <div
-                      style={
-                        isSpeaking
-                          ? { boxShadow: '0 0 0 2px #23a55a' }
-                          : undefined
-                      }
-                      className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all flex-shrink-0 overflow-hidden"
-                    >
-                      {targetUser.avatar_url ? (
-                        <img
-                          src={formatAssetUrl(targetUser.avatar_url)}
-                          alt=""
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <span>
-                          {targetUser.display_name?.[0]?.toUpperCase() ||
-                            targetUser.username?.[0]?.toUpperCase() ||
-                            'U'}
+          let voiceSessions = channel.voice_sessions || [];
+
+          // Optimistic inclusion: If current user is connected to this voice channel,
+          // ensure they are displayed even if the socket/backend update was delayed
+          if (user && isConnected && currentChannelId === channel.id) {
+            const userAlreadyPresent = voiceSessions.some((s) => s.user_id === user.id);
+            if (!userAlreadyPresent) {
+              const currentGuildMember = activeGuild?.members?.find((m) => m.id === user.id);
+              const selfSession: VoiceSession = {
+                id: `self-${user.id}-${channel.id}`,
+                channel_id: channel.id,
+                user_id: user.id,
+                is_muted: useVoiceStore.getState().isMuted,
+                is_deafened: useVoiceStore.getState().isDeafened,
+                is_screensharing: useVoiceStore.getState().isScreensharing,
+                joined_at: new Date().toISOString(),
+                user: {
+                  ...user,
+                  display_name: currentGuildMember?.display_name || user.display_name,
+                  avatar_url: currentGuildMember?.avatar_url || user.avatar_url,
+                  roles: currentGuildMember?.roles || user.roles || [],
+                },
+              };
+              voiceSessions = [...voiceSessions, selfSession];
+            }
+          }
+
+          if (voiceSessions.length === 0) return null;
+
+          return (
+            <div className="pl-6 pr-2 py-1 space-y-0.5">
+              {voiceSessions.map((vs) => {
+                const isSpeaking = speakingUserIds.includes(vs.user_id) && !vs.is_muted && !vs.is_deafened;
+                const guildMember = activeGuild?.members?.find((m) => m.id === vs.user_id);
+                const targetUser: User = {
+                  id: vs.user_id,
+                  username: guildMember?.username || vs.user?.username || 'Usuário',
+                  display_name: guildMember?.display_name || vs.user?.display_name || '',
+                  avatar_url: guildMember?.avatar_url || vs.user?.avatar_url || '',
+                  status: guildMember?.status || vs.user?.status || 'online',
+                  roles: guildMember?.roles || vs.user?.roles || [],
+                };
+
+                return (
+                  <div
+                    key={vs.id || vs.user_id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectUser?.(targetUser, { x: e.clientX, y: e.clientY });
+                    }}
+                    onContextMenu={(e) => handleVoiceMemberContextMenu(e, channel, vs, targetUser)}
+                    className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-background-light/40 text-[13.5px] text-gray-300 cursor-pointer transition-colors group/voice-member"
+                    title="Clique com botão esquerdo para perfil ou direito para opções"
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <div
+                        style={
+                          isSpeaking
+                            ? { boxShadow: '0 0 0 2px #23a55a' }
+                            : undefined
+                        }
+                        className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white transition-all flex-shrink-0 overflow-hidden"
+                      >
+                        {targetUser.avatar_url ? (
+                          <img
+                            src={formatAssetUrl(targetUser.avatar_url)}
+                            alt=""
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <span>
+                            {targetUser.display_name?.[0]?.toUpperCase() ||
+                              targetUser.username?.[0]?.toUpperCase() ||
+                              'U'}
+                          </span>
+                        )}
+                      </div>
+                      <span className={`truncate font-medium ${isSpeaking ? 'text-white font-semibold' : 'text-gray-300'}`}>
+                        {targetUser.display_name || targetUser.username || 'Usuário'}
+                      </span>
+                    </div>
+
+                    {/* Voice state indicators */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0 opacity-70 group-hover/voice-member:opacity-100">
+                      {vs.is_screensharing && (
+                        <span
+                          className="bg-[#f23f43] text-white text-[9px] font-black px-1.5 py-0.5 rounded flex items-center leading-none tracking-wider uppercase shadow-sm"
+                          title="Transmitindo ao vivo"
+                        >
+                          LIVE
+                        </span>
+                      )}
+                      {vs.is_muted && (
+                        <span title="Microfone Mutado">
+                          <MicOff className="w-3 h-3 text-dnd" />
+                        </span>
+                      )}
+                      {vs.is_deafened && (
+                        <span title="Áudio Desativado">
+                          <Headphones className="w-3 h-3 text-dnd" />
                         </span>
                       )}
                     </div>
-                    <span className={`truncate font-medium ${isSpeaking ? 'text-white font-semibold' : 'text-gray-300'}`}>
-                      {targetUser.display_name || targetUser.username || 'Usuário'}
-                    </span>
                   </div>
-
-                  {/* Voice state indicators */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0 opacity-70 group-hover/voice-member:opacity-100">
-                    {vs.is_screensharing && (
-                      <span
-                        className="bg-[#f23f43] text-white text-[9px] font-black px-1.5 py-0.5 rounded flex items-center leading-none tracking-wider uppercase shadow-sm"
-                        title="Transmitindo ao vivo"
-                      >
-                        LIVE
-                      </span>
-                    )}
-                    {vs.is_muted && (
-                      <span title="Microfone Mutado">
-                        <MicOff className="w-3 h-3 text-dnd" />
-                      </span>
-                    )}
-                    {vs.is_deafened && (
-                      <span title="Áudio Desativado">
-                        <Headphones className="w-3 h-3 text-dnd" />
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     );
   };

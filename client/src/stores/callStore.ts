@@ -3,7 +3,14 @@ import { Participant, DisconnectReason } from 'livekit-client';
 import { api } from '../lib/api';
 import { livekit } from '../lib/livekit';
 import { User } from '../types';
-import { playJoinVoiceSound, playLeaveVoiceSound } from '../utils/audio';
+import {
+  playJoinVoiceSound,
+  playLeaveVoiceSound,
+  playUserJoinCallSound,
+  playUserLeaveCallSound,
+  playStartStreamSound,
+  playStopStreamSound,
+} from '../utils/audio';
 
 export type CallState = 'idle' | 'calling' | 'ringing' | 'connected' | 'ended';
 
@@ -119,13 +126,61 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       const shouldDeafen = get().isDeafened;
       const shouldMute = shouldDeafen || isPTT || get().isMuted;
 
+      let prevParticipantIds = new Set<string>();
+      let prevScreenShareIds = new Set<string>();
+      let isInitialSync = true;
+
       await livekit.connect(livekitUrl, token, {
         autoEnableMicrophone: !shouldMute,
         onParticipantsChanged: (participants) => {
           set({ participants });
+
+          if (!isInitialSync && get().callState === 'connected') {
+            const currentIds = new Set(participants.map((p) => p.identity));
+            for (const p of participants) {
+              if (!p.isLocal && !prevParticipantIds.has(p.identity)) {
+                playUserJoinCallSound();
+                break;
+              }
+            }
+            for (const prevId of prevParticipantIds) {
+              if (!currentIds.has(prevId)) {
+                playUserLeaveCallSound();
+                break;
+              }
+            }
+          }
+          prevParticipantIds = new Set(participants.map((p) => p.identity));
         },
         onSpeakingChanged: (speakingUserIds) => {
           set({ speakingUserIds });
+        },
+        onTrackUpdated: () => {
+          const room = livekit.getRoom();
+          if (room) {
+            const participants = [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
+            set({ participants });
+
+            const currentScreenShares = new Set(
+              participants.filter((p) => p.isScreenShareEnabled).map((p) => p.identity)
+            );
+
+            if (!isInitialSync && get().callState === 'connected') {
+              for (const id of currentScreenShares) {
+                if (!prevScreenShareIds.has(id)) {
+                  playStartStreamSound();
+                  break;
+                }
+              }
+              for (const prevId of prevScreenShareIds) {
+                if (!currentScreenShares.has(prevId)) {
+                  playStopStreamSound();
+                  break;
+                }
+              }
+            }
+            prevScreenShareIds = currentScreenShares;
+          }
         },
         onDisconnected: (reason) => {
           console.warn('[DMCall] LiveKit disconnected. Reason:', reason);
@@ -150,6 +205,10 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       });
 
       playJoinVoiceSound();
+
+      setTimeout(() => {
+        isInitialSync = false;
+      }, 500);
 
       if (shouldDeafen) {
         await livekit.setDeafened(true);

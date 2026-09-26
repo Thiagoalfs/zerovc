@@ -5,6 +5,10 @@ import { livekit } from '../lib/livekit';
 import {
   playJoinVoiceSound,
   playLeaveVoiceSound,
+  playUserJoinCallSound,
+  playUserLeaveCallSound,
+  playStartStreamSound,
+  playStopStreamSound,
   playMuteSound,
   playUnmuteSound,
   playDeafenSound,
@@ -207,10 +211,34 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       // Check if user changed mind or joined another channel while requesting
       if (get().currentChannelId !== channelId) return;
 
+      let prevParticipantIds = new Set<string>();
+      let prevScreenShareIds = new Set<string>();
+      let isInitialSync = true;
+
       await livekit.connect(res.livekit_url, res.token, {
         autoEnableMicrophone: !shouldMute,
         onParticipantsChanged: (participants) => {
           set({ participants });
+
+          if (!isInitialSync && get().isConnected) {
+            const currentIds = new Set(participants.map((p) => p.identity));
+            // Another user joined
+            for (const p of participants) {
+              if (!p.isLocal && !prevParticipantIds.has(p.identity)) {
+                playUserJoinCallSound();
+                break;
+              }
+            }
+            // Another user left
+            for (const prevId of prevParticipantIds) {
+              if (!currentIds.has(prevId)) {
+                playUserLeaveCallSound();
+                break;
+              }
+            }
+          }
+          prevParticipantIds = new Set(participants.map((p) => p.identity));
+
           // Apply saved user & stream volumes to participants
           const { userVolumes, streamVolumes } = get();
           participants.forEach((p) => {
@@ -239,6 +267,29 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
           if (room) {
             const participants = [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
             set({ participants });
+
+            const currentScreenShares = new Set(
+              participants.filter((p) => p.isScreenShareEnabled).map((p) => p.identity)
+            );
+
+            if (!isInitialSync && get().isConnected) {
+              // Screen share started
+              for (const id of currentScreenShares) {
+                if (!prevScreenShareIds.has(id)) {
+                  playStartStreamSound();
+                  break;
+                }
+              }
+              // Screen share stopped
+              for (const prevId of prevScreenShareIds) {
+                if (!currentScreenShares.has(prevId)) {
+                  playStopStreamSound();
+                  break;
+                }
+              }
+            }
+            prevScreenShareIds = currentScreenShares;
+
             const { userVolumes, streamVolumes } = get();
             participants.forEach((p) => {
               if (!p.isLocal) {
@@ -254,6 +305,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
         },
         onScreenShareEnded: () => {
           set({ isScreensharing: false });
+          playStopStreamSound();
           const { currentChannelId } = get();
           if (currentChannelId) {
             api.channels.updateVoiceState(currentChannelId, { is_screensharing: false }).catch(() => {});
@@ -298,6 +350,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
         isDeafened: shouldDeafen,
         isCameraOn: false,
       });
+
+      setTimeout(() => {
+        isInitialSync = false;
+      }, 500);
 
       // Sync initial voice state with backend
       if (shouldMute || shouldDeafen) {

@@ -1729,5 +1729,70 @@ func (h *GuildHandler) UpdateEmoji(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(emoji)
 }
 
+// GetGuildVoiceStates returns all active voice sessions for the given guild indexed by channel_id
+func (h *GuildHandler) GetGuildVoiceStates(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	guildIDStr := chi.URLParam(r, "id")
+	if guildIDStr == "" {
+		guildIDStr = chi.URLParam(r, "guildId")
+	}
+	if guildIDStr == "" {
+		guildIDStr = chi.URLParam(r, "guildID")
+	}
+	guildID, err := uuid.Parse(guildIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guild id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 1. Enforce Guild Membership Authorization
+	var isMember bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you are not a member of this server"}`, http.StatusForbidden)
+		return
+	}
+
+	// 2. Query all active voice sessions for channels in this guild
+	voiceStates := make(map[string][]models.VoiceSession)
+	vQuery := `
+		SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, vs.is_screensharing, vs.joined_at,
+		       u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, '')
+		FROM voice_sessions vs
+		INNER JOIN channels c ON c.id = vs.channel_id
+		INNER JOIN users u ON u.id = vs.user_id
+		WHERE c.guild_id = $1
+		ORDER BY vs.joined_at ASC
+	`
+	rows, err := h.db.Pool.Query(r.Context(), vQuery, guildID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch voice states"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var vs models.VoiceSession
+		if scanErr := rows.Scan(
+			&vs.ID, &vs.ChannelID, &vs.UserID, &vs.IsMuted, &vs.IsDeafened, &vs.IsScreensharing, &vs.JoinedAt,
+			&vs.User.Username, &vs.User.DisplayName, &vs.User.AvatarURL, &vs.User.BannerURL, &vs.User.Bio, &vs.User.Status, &vs.User.CustomStatus,
+		); scanErr == nil {
+			vs.User.ID = vs.UserID
+			chKey := vs.ChannelID.String()
+			voiceStates[chKey] = append(voiceStates[chKey], vs)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"voice_states": voiceStates,
+	})
+}
+
 
 
