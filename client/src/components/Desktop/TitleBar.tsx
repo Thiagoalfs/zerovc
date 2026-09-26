@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { UpdateInfo, UpdateProgress } from '../../types/electron';
 import { ZeroVCLogo } from '../Common/ZeroVCLogo';
+import { useGuildStore } from '../../stores/guildStore';
+import { formatAssetUrl } from '../../lib/api';
 
 interface RepoUpdateInfo {
   latestSha: string;
@@ -140,27 +142,22 @@ export const TitleBar: React.FC = () => {
     window.electronAPI?.close();
   };
 
+  const activeGuild = useGuildStore((state) => state.activeGuild);
+  const isMeRoute =
+    typeof window !== 'undefined' &&
+    (window.location.pathname.startsWith('/@me') || window.location.hash.includes('@me'));
+  const currentGuild = !isMeRoute ? activeGuild : null;
+
   return (
     <header
       className="h-8 bg-background-darkest/95 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-3 select-none flex-shrink-0 z-50 relative"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      {/* Left Branding / Title & Download Button */}
+      {/* Left Branding / Title */}
       <div
         className="flex items-center gap-2 text-xs font-bold text-gray-300"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        {!isElectron && (
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="flex items-center justify-center p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 active:scale-95 rounded-md transition-all cursor-pointer mr-0.5"
-            title={downloadTitle}
-            aria-label={downloadTitle}
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-400" />
-          </button>
-        )}
         <ZeroVCLogo className="w-4 h-4 shadow-sm flex-shrink-0" />
         <span className="tracking-wide text-[11px] font-semibold text-gray-300">ZeroVC</span>
         {currentBuildCommit && (
@@ -170,96 +167,133 @@ export const TitleBar: React.FC = () => {
         )}
       </div>
 
-      {/* Right Actions: Update Button + Window Controls */}
-      {isElectron && (
+      {/* Center: Active Server Icon & Name */}
+      {currentGuild && (
         <div
-          className="flex items-center gap-1.5"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 max-w-[45%] pointer-events-none select-none z-10"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-        {/* Direct One-Click Update Button with FontAwesome Download Icon */}
-        {updateStatus === 'available' && (
-          <button
-            type="button"
-            onClick={handleDirectUpdate}
-            className="flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md shadow-brand-500/25 transition-all cursor-pointer mr-1"
-            title="Nova atualização disponível! Clique para atualizar agora."
-          >
-            {/* FontAwesome Download Icon (SVG) */}
-            <svg
-              className="w-3 h-3 fill-current"
-              viewBox="0 0 512 512"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d="M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32V274.7l-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7V32zM64 352c-35.3 0-64 28.7-64 64v32c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V416c0-35.3-28.7-64-64-64H346.5l-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352H64zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z" />
-            </svg>
-            <span>Update</span>
-          </button>
-        )}
-
-        {/* Update: Downloading */}
-        {updateStatus === 'downloading' && (
-          <div className="flex items-center gap-2 bg-background-darker border border-brand-500/30 px-2.5 py-0.5 rounded-full text-[11px] text-brand-400 mr-1">
-            <RefreshCw className="w-3 h-3 animate-spin text-brand-400" />
-            <span className="font-mono">{downloadProgress}%</span>
-            <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-brand-500 transition-all duration-200"
-                style={{ width: `${downloadProgress}%` }}
-              />
+          {currentGuild.icon_url ? (
+            <img
+              src={formatAssetUrl(currentGuild.icon_url)}
+              alt={currentGuild.name}
+              className="w-4 h-4 rounded-full object-cover flex-shrink-0 shadow-sm"
+            />
+          ) : (
+            <div className="w-4 h-4 rounded-full bg-brand-500/30 text-brand-300 text-[9px] font-bold flex items-center justify-center flex-shrink-0">
+              {currentGuild.name.charAt(0).toUpperCase()}
             </div>
-          </div>
-        )}
-
-        {/* Update: Downloaded & Ready */}
-        {updateStatus === 'downloaded' && (
-          <button
-            type="button"
-            onClick={handleDirectUpdate}
-            className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-[11px] font-bold px-3 py-0.5 rounded-full shadow-lg shadow-emerald-500/30 transition-all cursor-pointer mr-1 animate-bounce"
-            title="Clique para reiniciar e aplicar a atualização agora."
-          >
-            <svg
-              className="w-3 h-3 fill-current"
-              viewBox="0 0 512 512"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d="M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32V274.7l-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7V32zM64 352c-35.3 0-64 28.7-64 64v32c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V416c0-35.3-28.7-64-64-64H346.5l-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352H64zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z" />
-            </svg>
-            <span>Update</span>
-          </button>
-        )}
-
-        {/* Window Controls (Windows _ ▢ ✕) */}
-        <div className="flex items-center ml-1">
-          <button
-            type="button"
-            onClick={handleMinimize}
-            className="w-8 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
-            title="Minimizar"
-          >
-            <Minus className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleMaximize}
-            className="w-8 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
-            title={isMaximized ? 'Restaurar' : 'Maximizar'}
-          >
-            {isMaximized ? <Copy className="w-3 h-3 rotate-180" /> : <Square className="w-3 h-3" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-8 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-rose-600 rounded transition-colors cursor-pointer"
-            title="Fechar"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
+          )}
+          <span className="text-[11px] font-semibold text-gray-200 truncate tracking-wide">
+            {currentGuild.name}
+          </span>
         </div>
-      </div>
       )}
+
+      {/* Right Actions: Download Button (Web) / Update & Window Controls (Electron) */}
+      <div
+        className="flex items-center gap-1.5"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
+        {!isElectron && (
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="flex items-center justify-center p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 active:scale-95 rounded-md transition-all cursor-pointer"
+            title={downloadTitle}
+            aria-label={downloadTitle}
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+          </button>
+        )}
+
+        {isElectron && (
+          <>
+            {/* Direct One-Click Update Button with FontAwesome Download Icon */}
+            {updateStatus === 'available' && (
+              <button
+                type="button"
+                onClick={handleDirectUpdate}
+                className="flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md shadow-brand-500/25 transition-all cursor-pointer mr-1"
+                title="Nova atualização disponível! Clique para atualizar agora."
+              >
+                {/* FontAwesome Download Icon (SVG) */}
+                <svg
+                  className="w-3 h-3 fill-current"
+                  viewBox="0 0 512 512"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path d="M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32V274.7l-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7V32zM64 352c-35.3 0-64 28.7-64 64v32c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V416c0-35.3-28.7-64-64-64H346.5l-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352H64zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z" />
+                </svg>
+                <span>Update</span>
+              </button>
+            )}
+
+            {/* Update: Downloading */}
+            {updateStatus === 'downloading' && (
+              <div className="flex items-center gap-2 bg-background-darker border border-brand-500/30 px-2.5 py-0.5 rounded-full text-[11px] text-brand-400 mr-1">
+                <RefreshCw className="w-3 h-3 animate-spin text-brand-400" />
+                <span className="font-mono">{downloadProgress}%</span>
+                <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-brand-500 transition-all duration-200"
+                    style={{ width: `${downloadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Update: Downloaded & Ready */}
+            {updateStatus === 'downloaded' && (
+              <button
+                type="button"
+                onClick={handleDirectUpdate}
+                className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-[11px] font-bold px-3 py-0.5 rounded-full shadow-lg shadow-emerald-500/30 transition-all cursor-pointer mr-1 animate-bounce"
+                title="Clique para reiniciar e aplicar a atualização agora."
+              >
+                <svg
+                  className="w-3 h-3 fill-current"
+                  viewBox="0 0 512 512"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path d="M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32V274.7l-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7V32zM64 352c-35.3 0-64 28.7-64 64v32c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V416c0-35.3-28.7-64-64-64H346.5l-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352H64zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z" />
+                </svg>
+                <span>Update</span>
+              </button>
+            )}
+
+            {/* Window Controls (Windows _ ▢ ✕) */}
+            <div className="flex items-center ml-1">
+              <button
+                type="button"
+                onClick={handleMinimize}
+                className="w-8 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
+                title="Minimizar"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleMaximize}
+                className="w-8 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
+                title={isMaximized ? 'Restaurar' : 'Maximizar'}
+              >
+                {isMaximized ? <Copy className="w-3 h-3 rotate-180" /> : <Square className="w-3 h-3" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClose}
+                className="w-8 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-rose-600 rounded transition-colors cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </header>
   );
 };
