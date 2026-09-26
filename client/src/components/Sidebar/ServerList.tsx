@@ -321,6 +321,16 @@ export const ServerList: React.FC<ServerListProps> = ({
           ]
         : []),
       {
+        id: 'copy-id',
+        label: copiedGuildId === guild.id ? 'ID Copiado!' : 'Copiar ID do Servidor',
+        icon: copiedGuildId === guild.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />,
+        onClick: () => {
+          navigator.clipboard.writeText(guild.id);
+          setCopiedGuildId(guild.id);
+          setTimeout(() => setCopiedGuildId(null), 2000);
+        },
+      },
+      {
         separator: true,
         label: '',
       },
@@ -346,20 +356,6 @@ export const ServerList: React.FC<ServerListProps> = ({
               alert(err?.message || 'Erro ao sair do servidor');
             }
           }
-        },
-      },
-      {
-        separator: true,
-        label: '',
-      },
-      {
-        id: 'copy-id',
-        label: copiedGuildId === guild.id ? 'ID Copiado!' : 'Copiar ID do Servidor',
-        icon: copiedGuildId === guild.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />,
-        onClick: () => {
-          navigator.clipboard.writeText(guild.id);
-          setCopiedGuildId(guild.id);
-          setTimeout(() => setCopiedGuildId(null), 2000);
         },
       },
     ];
@@ -400,6 +396,7 @@ export const ServerList: React.FC<ServerListProps> = ({
 
         <button
           onClick={() => {
+            if (isActive) return;
             if (onSelectGuild) {
               onSelectGuild(guild.id);
             } else {

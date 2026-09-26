@@ -113,16 +113,6 @@ export const App: React.FC = () => {
     } catch {}
   };
 
-  // Disable native browser context menu globally so only custom context menus appear
-  useEffect(() => {
-    const handleGlobalContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-    };
-
-    window.addEventListener('contextmenu', handleGlobalContextMenu);
-    return () => window.removeEventListener('contextmenu', handleGlobalContextMenu);
-  }, []);
-
   // Dynamic visual viewport height for mobile browsers (keeps header stuck at top when keyboard opens)
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [viewportTop, setViewportTop] = useState<number>(0);
@@ -1534,6 +1524,11 @@ export const App: React.FC = () => {
                 setIsMobileDrawerOpen(false);
               }}
               onSelectGuild={async (guildId) => {
+                const currentActive = useGuildStore.getState().activeGuild;
+                if (!isHomeActive && currentActive?.id === guildId) {
+                  setIsMobileDrawerOpen(false);
+                  return;
+                }
                 setIsHomeActive(false);
                 await selectGuild(guildId);
                 const active = useGuildStore.getState().activeGuild;

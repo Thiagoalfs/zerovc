@@ -28,7 +28,6 @@ import {
   Headphones,
   PhoneOff,
   Monitor,
-  Copy,
 } from 'lucide-react';
 import { Channel, User, Permissions } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
@@ -40,7 +39,6 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { UserBar } from './UserBar';
 import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
-import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 
 interface ChannelListProps {
   isHomeActive: boolean;
@@ -109,11 +107,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   const [dragOverTarget, setDragOverTarget] = useState<{ id: string; isCategory?: boolean } | null>(null);
 
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
-  const perms = useGuildPermissions(activeGuild);
 
-  const isOwner = perms.isCurrentOwner;
-  const canManageChannels = perms.canManageChannels;
-  const canManageServer = perms.canManageGuild || perms.hasAdmin || isOwner;
+  const isOwner = activeGuild?.owner_id === user?.id;
   const channels = activeGuild?.channels || [];
 
   // Group channels
@@ -228,7 +223,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             { label: '', separator: true },
           ]
         : []),
-      ...(canManageChannels
+      ...(isOwner
         ? [
             {
               label: 'Configurações do Canal',
@@ -248,12 +243,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             },
           ]
         : []),
-      { label: '', separator: true },
-      {
-        label: 'Copiar ID do Canal',
-        icon: <Copy className="w-4 h-4" />,
-        onClick: () => navigator.clipboard.writeText(channel.id),
-      },
     ];
 
     if (items.length > 0) {
@@ -272,7 +261,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         icon: isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />,
         onClick: () => toggleCategoryCollapse(category.id),
       },
-      ...(canManageChannels
+      ...(isOwner
         ? [
             {
               label: 'Criar Canal',
@@ -297,12 +286,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             },
           ]
         : []),
-      { label: '', separator: true },
-      {
-        label: 'Copiar ID da Categoria',
-        icon: <Copy className="w-4 h-4" />,
-        onClick: () => navigator.clipboard.writeText(category.id),
-      },
     ];
 
     openContextMenu(e, items, category.name);
@@ -310,7 +293,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
   const handleSidebarContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!canManageChannels) return;
+    if (!isOwner) return;
 
     const items: ContextMenuItem[] = [
       {
@@ -391,7 +374,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         : []),
     ];
 
-    // Voice Call Controls (Admin / Permissions)
+    // Voice Call Moderation (Admin)
     if (canMute || isCurrentOwner || hasAdmin) {
       items.push({ label: '', separator: true });
 
@@ -414,6 +397,18 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           });
         },
       });
+
+      if (!isMe) {
+        items.push({
+          label: 'Desconectar da Call',
+          icon: <PhoneOff className="w-4 h-4 text-dnd" />,
+          onClick: async () => {
+            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+              disconnect: true,
+            });
+          },
+        });
+      }
     }
 
     // User & Stream Volume Sliders (0 - 200%, default 100%, saved locally)
@@ -510,77 +505,58 @@ export const ChannelList: React.FC<ChannelListProps> = ({
       });
     }
 
-    // Admin & Moderation Section (Red / Danger at base)
-    const canMod = !isMe && !isTargetOwner && isHierarchyAllowed;
-    const canDisconnect = (canMute || isCurrentOwner || hasAdmin) && !isMe;
+    // Mute/Timeout Submenu
+    if (canMute && (isCurrentOwner || isMe || isHierarchyAllowed)) {
+      const isServerMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
 
-    if (canMod || canDisconnect) {
-      items.push({ label: '', separator: true });
+      const muteSubItems: ContextMenuItem[] = [
+        {
+          label: '15 minutos',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
+        },
+        {
+          label: '1 hora',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
+        },
+        {
+          label: '24 horas',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
+        },
+        {
+          label: '1 semana',
+          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
+        },
+        {
+          label: 'Permanente',
+          icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
+          onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
+        },
+        ...(isServerMuted
+          ? [
+              { label: '', separator: true },
+              {
+                label: 'Remover Silenciamento',
+                icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
+                onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
+              },
+            ]
+          : []),
+      ];
 
-      // Mute/Timeout Submenu
-      if (canMute && canMod) {
-        const isServerMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
+      items.push({
+        label: isServerMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
+        icon: <VolumeX className={`w-4 h-4 ${isServerMuted ? 'text-dnd' : 'text-gray-400'}`} />,
+        subItems: muteSubItems,
+      });
+    }
 
-        const muteSubItems: ContextMenuItem[] = [
-          {
-            label: '15 minutos',
-            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
-          },
-          {
-            label: '1 hora',
-            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
-          },
-          {
-            label: '24 horas',
-            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
-          },
-          {
-            label: '1 semana',
-            icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
-          },
-          {
-            label: 'Permanente',
-            icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
-            onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
-          },
-          ...(isServerMuted
-            ? [
-                { label: '', separator: true },
-                {
-                  label: 'Remover Silenciamento',
-                  icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
-                  onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
-                },
-              ]
-            : []),
-        ];
-
-        items.push({
-          label: isServerMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
-          icon: <VolumeX className="w-4 h-4 text-[#f23f43]" />,
-          variant: 'danger',
-          subItems: muteSubItems,
-        });
-      }
-
-      if (canDisconnect) {
-        items.push({
-          label: 'Desconectar da Call',
-          icon: <PhoneOff className="w-4 h-4" />,
-          variant: 'danger',
-          onClick: async () => {
-            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-              disconnect: true,
-            });
-          },
-        });
-      }
-
-      if (canMod && canKick) {
+    // Kick and Ban
+    if (!isMe && !isTargetOwner && isHierarchyAllowed) {
+      if (canKick) {
         items.push({
           label: `Expulsar ${targetMember.display_name || targetMember.username}`,
           icon: <UserMinus className="w-4 h-4" />,
@@ -593,7 +569,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         });
       }
 
-      if (canMod && canBan) {
+      if (canBan) {
         items.push({
           label: `Banir ${targetMember.display_name || targetMember.username}`,
           icon: <Ban className="w-4 h-4" />,
@@ -607,14 +583,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         });
       }
     }
-
-    // Copy ID at the bottom
-    items.push({ label: '', separator: true });
-    items.push({
-      label: 'Copiar ID do Usuário',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => navigator.clipboard.writeText(targetMember.id),
-    });
 
     openContextMenu(e, items, targetMember.display_name || targetMember.username);
   };
@@ -632,15 +600,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     return (
       <div key={channel.id} className="space-y-0.5">
         <div
-          draggable={canManageChannels}
+          draggable={isOwner}
           onDragStart={(e) => {
-            if (!canManageChannels) return;
+            if (!isOwner) return;
             e.dataTransfer.setData('text/plain', channel.id);
             e.dataTransfer.effectAllowed = 'move';
             setDraggedChannelId(channel.id);
           }}
           onDragOver={(e) => {
-            if (!canManageChannels || !draggedChannelId) return;
+            if (!isOwner || !draggedChannelId) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             setDragOverTarget({ id: channel.id });
@@ -660,7 +628,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           }}
           onContextMenu={(e) => handleChannelContextMenu(e, channel)}
           className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
-            canManageChannels ? 'cursor-grab active:cursor-grabbing' : ''
+            isOwner ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
             isDragOver ? 'border-t-2 border-brand-500 bg-brand-500/10' : ''
           } ${
@@ -678,8 +646,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             <div className="absolute -left-1 w-1.5 h-2 rounded-r-full bg-white shadow-sm" />
           )}
 
-          {/* Drag Handle icon for managers */}
-          {canManageChannels && (
+          {/* Drag Handle icon for owner */}
+          {isOwner && (
             <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 -ml-0.5 mr-0.5 transition-opacity" />
           )}
 
@@ -709,7 +677,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             </div>
           )}
 
-          {canManageChannels && onOpenChannelSettings && (
+          {isOwner && onOpenChannelSettings && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -888,7 +856,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     <UserPlus className="w-4 h-4" />
                   </button>
 
-                  {canManageChannels && (
+                  {isOwner && (
                     <>
                       <button
                         onClick={() => {
@@ -914,7 +882,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     </>
                   )}
 
-                  {canManageServer && onOpenServerSettings && (
+                  {isOwner && onOpenServerSettings && (
                     <button
                       onClick={() => {
                         setIsDropdownOpen(false);
@@ -966,7 +934,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   <div
                     key={category.id}
                     onDragOver={(e) => {
-                      if (!canManageChannels || !draggedChannelId) return;
+                      if (!isOwner || !draggedChannelId) return;
                       e.preventDefault();
                       e.dataTransfer.dropEffect = 'move';
                       setDragOverTarget({ id: category.id, isCategory: true });
@@ -999,7 +967,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         <span className="truncate">{category.name}</span>
                       </div>
 
-                      {canManageChannels && (
+                      {isOwner && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1032,7 +1000,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               {channels.length === 0 && (
                 <div className="text-center py-6 px-3">
                   <p className="text-xs text-gray-400 mb-2">Nenhum canal criado ainda.</p>
-                  {canManageChannels && (
+                  {isOwner && (
                     <button
                       onClick={() => onOpenCreateChannel('text')}
                       className="text-xs text-brand-400 hover:underline font-semibold"

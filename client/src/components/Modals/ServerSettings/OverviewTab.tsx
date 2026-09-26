@@ -8,8 +8,6 @@ import {
   AlertTriangle,
   Upload,
   Image as ImageIcon,
-  Crown,
-  Trash2,
 } from 'lucide-react';
 import { Guild, Channel, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
@@ -17,8 +15,6 @@ import { formatAssetUrl } from '../../../lib/api';
 interface OverviewTabProps {
   activeGuild: Guild;
   isOwner: boolean;
-  canManageGuild?: boolean;
-  hasAdmin?: boolean;
   members: User[];
   onlineMembersCount: number;
   textChannels: Channel[];
@@ -38,15 +34,11 @@ interface OverviewTabProps {
   handleRemoveBanner: () => Promise<void>;
   isUploadingIcon: boolean;
   isUploadingBanner: boolean;
-  onOpenTransferModal: () => void;
-  onOpenDeleteModal: () => void;
 }
 
 export const OverviewTab: React.FC<OverviewTabProps> = ({
   activeGuild,
   isOwner,
-  canManageGuild = false,
-  hasAdmin = false,
   members,
   onlineMembersCount,
   textChannels,
@@ -66,10 +58,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   handleRemoveBanner,
   isUploadingIcon,
   isUploadingBanner,
-  onOpenTransferModal,
-  onOpenDeleteModal,
 }) => {
-  const canEdit = isOwner || hasAdmin || canManageGuild;
   const initials = activeGuild.name
     .split(' ')
     .map((w) => w[0])
@@ -85,7 +74,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           Métricas do Servidor
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-4 rounded-2xl bg-[#111214]/50 border border-white/10 flex flex-col">
+          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Total Membros</span>
               <Users className="w-4 h-4 text-brand-400" />
@@ -97,7 +86,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             </span>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#111214]/50 border border-white/10 flex flex-col">
+          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Canais Texto</span>
               <Hash className="w-4 h-4 text-sky-400" />
@@ -106,7 +95,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <span className="text-[11px] text-gray-500 mt-1">salas de bate-papo</span>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#111214]/50 border border-white/10 flex flex-col">
+          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Canais Voz</span>
               <Volume2 className="w-4 h-4 text-emerald-400" />
@@ -115,7 +104,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <span className="text-[11px] text-gray-500 mt-1">com áudio & vídeo</span>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#111214]/50 border border-white/10 flex flex-col">
+          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Criação</span>
               <Calendar className="w-4 h-4 text-purple-400" />
@@ -146,12 +135,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       )}
 
       {/* Visual Identity (Icon & Banner) */}
-      <div id="overview-identity" className="space-y-4 pt-4 border-t border-white/10 scroll-mt-6">
+      <div className="space-y-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
           Identidade Visual
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border border-white/10 rounded-2xl bg-[#111214]/50 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#1e1f22] p-5 rounded-2xl border border-white/10">
           {/* Icon */}
           <div className="flex flex-col gap-3">
             <label className="text-xs font-medium text-gray-300">Ícone do Servidor</label>
@@ -178,13 +167,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 <button
                   type="button"
                   onClick={() => iconInputRef.current?.click()}
-                  disabled={!canEdit || isUploadingIcon}
-                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  disabled={!isOwner || isUploadingIcon}
+                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>{isUploadingIcon ? 'Enviando...' : 'Trocar Ícone'}</span>
                 </button>
-                {activeGuild.icon_url && canEdit && (
+                {activeGuild.icon_url && isOwner && (
                   <button
                     type="button"
                     onClick={handleRemoveIcon}
@@ -227,13 +216,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 <button
                   type="button"
                   onClick={() => bannerInputRef.current?.click()}
-                  disabled={!canEdit || isUploadingBanner}
-                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  disabled={!isOwner || isUploadingBanner}
+                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>{isUploadingBanner ? 'Enviando...' : 'Trocar Banner'}</span>
                 </button>
-                {activeGuild.banner_url && canEdit && (
+                {activeGuild.banner_url && isOwner && (
                   <button
                     type="button"
                     onClick={handleRemoveBanner}
@@ -259,14 +248,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             type="text"
             value={guildName}
             onChange={(e) => setGuildName(e.target.value)}
-            disabled={!canEdit}
+            disabled={!isOwner}
             placeholder="Nome do servidor"
             className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-60"
           />
         </div>
 
         {/* System Welcome Channel Selector */}
-        <div id="overview-system" className="space-y-2 scroll-mt-6">
+        <div className="space-y-2">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
             Canal de Mensagens do Sistema (Boas-Vindas)
           </label>
@@ -276,7 +265,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           <select
             value={systemChannelId}
             onChange={(e) => setSystemChannelId(e.target.value)}
-            disabled={!canEdit}
+            disabled={!isOwner}
             className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-60"
           >
             <option value="">Nenhum (Desativado)</option>
@@ -288,7 +277,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </select>
         </div>
 
-        {canEdit && (
+        {isOwner && (
           <div className="flex justify-end pt-2">
             <button
               type="submit"
@@ -300,59 +289,6 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         )}
       </form>
-
-      {/* Danger Zone / Owner Actions */}
-      {isOwner && (
-        <div id="overview-danger" className="pt-6 border-t border-white/10 space-y-4 scroll-mt-6">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-red-400 font-mono">
-            Zona de Perigo & Ações do Dono
-          </h3>
-          
-          <div className="space-y-3">
-            {/* Transfer Ownership */}
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Crown className="w-4 h-4 text-amber-400" />
-                  Transferir Posse do Servidor
-                </h4>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Passe a posse total deste servidor para outro membro. Você perderá os privilégios exclusivos de proprietário.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onOpenTransferModal}
-                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-semibold px-4 py-2 rounded-xl text-xs transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer shadow-sm"
-              >
-                <Crown className="w-3.5 h-3.5" />
-                <span>Transferir Posse</span>
-              </button>
-            </div>
-
-            {/* Delete Server */}
-            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Trash2 className="w-4 h-4 text-red-400" />
-                  Excluir Servidor
-                </h4>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Esta ação é permanente e irreversível. Todos os canais, mensagens, cargos e dados serão excluídos imediatamente.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onOpenDeleteModal}
-                className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-semibold px-4 py-2 rounded-xl text-xs transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer shadow-sm"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Excluir Servidor</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

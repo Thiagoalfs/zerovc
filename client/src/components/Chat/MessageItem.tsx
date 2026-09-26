@@ -199,7 +199,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const isAuthor = user?.id === message.author_id;
   const isOwner = contextType === 'channel' && activeGuild ? activeGuild.owner_id === user?.id : false;
-  const canDelete = isAuthor || isOwner || (contextType === 'channel' && (perms.hasAdmin || perms.canManageMessages));
+  const canDelete = isAuthor || isOwner;
 
   const currentUserRoles = contextType === 'channel' ? (activeGuild?.members?.find((m) => m.id === user?.id)?.roles || []) : [];
 
@@ -325,62 +325,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
     const items: ContextMenuItem[] = [
       {
-        label: 'Reações Rápidas',
-        customRender: (
-          <div className="flex items-center justify-between gap-1 p-0.5 mb-1" onClick={(e) => e.stopPropagation()}>
-            {['🔥', '❤️', '🎉', '✅'].map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => {
-                  handleActionToggleReaction(message.id, emoji);
-                  closeContextMenu();
-                }}
-                className="w-8 h-8 rounded-md bg-[#232428] hover:bg-[#35373c] hover:scale-110 flex items-center justify-center text-base transition-all cursor-pointer select-none"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        ),
-      },
-      {
-        label: 'Responder',
-        icon: <Reply className="w-4 h-4" />,
-        onClick: () => onReply?.(message),
-      },
-      {
-        label: message.is_pinned ? 'Desafixar Mensagem' : 'Fixar Mensagem',
-        icon: <Pin className="w-4 h-4" />,
-        onClick: () => handleActionTogglePin(message.id),
-      },
-      {
-        label: 'Copiar Texto',
-        icon: <Copy className="w-4 h-4" />,
-        onClick: () => navigator.clipboard.writeText(message.content),
-      },
-      {
-        label: 'Ouvir Mensagem (TTS)',
-        icon: <Volume2 className="w-4 h-4 text-brand-400" />,
-        onClick: () => speakText(message.content, author.display_name || author.username),
+        label: 'Ver Perfil',
+        icon: <UserIcon className="w-4 h-4" />,
+        onClick: () => onOpenUserProfile?.(author, { x: e.clientX, y: e.clientY }),
       },
     ];
-
-    if (isAuthor) {
-      items.push({
-        label: 'Editar Mensagem',
-        icon: <Pencil className="w-4 h-4" />,
-        onClick: () => setIsEditing(true),
-      });
-    }
-
-    items.push({ label: '', separator: true });
-
-    items.push({
-      label: 'Ver Perfil',
-      icon: <UserIcon className="w-4 h-4" />,
-      onClick: () => onOpenUserProfile?.(author, { x: e.clientX, y: e.clientY }),
-    });
 
     if (!isMe) {
       items.push({
@@ -395,53 +344,91 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         },
       });
 
+      items.push({ label: '', separator: true });
       items.push({
         label: 'Volume de Usuário',
         customRender: <UserVolumeSlider userId={author.id} />,
       });
     }
 
-    // Server Member Role Assignment (only in server channel context)
+    // Message Specific Actions
+    items.push({ label: '', separator: true });
+
+    items.push({
+      label: 'Responder',
+      icon: <Reply className="w-4 h-4" />,
+      onClick: () => onReply?.(message),
+    });
+
+    items.push({
+      label: message.is_pinned ? 'Desafixar Mensagem' : 'Fixar Mensagem',
+      icon: <Pin className="w-4 h-4" />,
+      onClick: () => handleActionTogglePin(message.id),
+    });
+
+    items.push({
+      label: 'Copiar Texto',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigator.clipboard.writeText(message.content),
+    });
+
+    items.push({
+      label: 'Ouvir Mensagem (TTS)',
+      icon: <Volume2 className="w-4 h-4 text-brand-400" />,
+      onClick: () => speakText(message.content, author.display_name || author.username),
+    });
+
+    if (isAuthor) {
+      items.push({
+        label: 'Editar Mensagem',
+        icon: <Pencil className="w-4 h-4" />,
+        onClick: () => setIsEditing(true),
+      });
+    }
+
+    if (canDelete) {
+      items.push({
+        label: 'Excluir Mensagem',
+        icon: <Trash2 className="w-4 h-4" />,
+        variant: 'danger',
+        onClick: () => setIsDeleteModalOpen(true),
+      });
+    }
+
+    // Server Member Moderation Actions (only in server channel context)
     if (isChannel && activeGuild && targetMember && (isCurrentOwner || isMe || (!isTargetOwner && isHierarchyAllowed))) {
+      // Change Roles Submenu
       if (canManageRoles && guildRoles.length > 0) {
         const roleSubItems: ContextMenuItem[] = guildRoles
           .filter((role) => role.name !== '@everyone')
           .map((role) => {
-            const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
-            return {
-              label: role.name,
-              icon: hasRole ? (
-                <Check className="w-3.5 h-3.5 text-online" />
-              ) : (
-                <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
-              ),
-              onClick: async () => {
-                if (hasRole) {
-                  await removeRole(activeGuild.id, targetMember.id, role.id);
-                } else {
-                  await assignRole(activeGuild.id, targetMember.id, role.id);
-                }
-              },
-            };
-          });
+          const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
+          return {
+            label: role.name,
+            icon: hasRole ? (
+              <Check className="w-3.5 h-3.5 text-online" />
+            ) : (
+              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
+            ),
+            onClick: async () => {
+              if (hasRole) {
+                await removeRole(activeGuild.id, targetMember.id, role.id);
+              } else {
+                await assignRole(activeGuild.id, targetMember.id, role.id);
+              }
+            },
+          };
+        });
 
-        if (roleSubItems.length > 0) {
-          items.push({
-            label: 'Alterar Cargos',
-            icon: <Shield className="w-4 h-4 text-brand-400" />,
-            subItems: roleSubItems,
-          });
-        }
+        items.push({
+          label: 'Alterar Cargos',
+          icon: <Shield className="w-4 h-4 text-brand-400" />,
+          subItems: roleSubItems,
+        });
       }
-    }
 
-    // Admin & Moderation Section (Red / Danger at base)
-    const hasModActions = canDelete || (!isMe && !isTargetOwner && isHierarchyAllowed && (canMute || canKick || canBan)) || !isMe;
-    if (hasModActions) {
-      items.push({ label: '', separator: true });
-
-      // Server Timeout / Mute Submenu
-      if (isChannel && activeGuild && targetMember && !isMe && !isTargetOwner && isHierarchyAllowed && canMute) {
+      // Timeout / Mute Submenu
+      if (canMute) {
         const isMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
         const muteSubItems: ContextMenuItem[] = [
           {
@@ -469,18 +456,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
         items.push({
           label: isMuted ? 'Membro Silenciado' : 'Silenciar Membro',
-          icon: <VolumeX className="w-4 h-4 text-[#f23f43]" />,
-          variant: 'danger',
+          icon: <VolumeX className="w-4 h-4 text-amber-400" />,
           subItems: muteSubItems,
         });
       }
 
       // Kick & Ban (only for other members)
-      if (isChannel && activeGuild && targetMember && !isMe && !isTargetOwner && isHierarchyAllowed) {
+      if (!isMe && !isTargetOwner && isHierarchyAllowed) {
         if (canKick) {
           items.push({
             label: `Expulsar ${targetMember.display_name || targetMember.username}`,
-            icon: <UserMinus className="w-4 h-4" />,
+            icon: <UserMinus className="w-4 h-4 text-amber-400" />,
             variant: 'danger',
             onClick: () => {
               if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
@@ -493,7 +479,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         if (canBan) {
           items.push({
             label: `Banir ${targetMember.display_name || targetMember.username}`,
-            icon: <Ban className="w-4 h-4" />,
+            icon: <Ban className="w-4 h-4 text-dnd" />,
             variant: 'danger',
             onClick: () => {
               if (confirm(`Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor?`)) {
@@ -503,31 +489,23 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           });
         }
       }
-
-      if (!isMe) {
-        items.push({
-          label: 'Bloquear Usuário',
-          icon: <UserX className="w-4 h-4" />,
-          variant: 'danger',
-          onClick: async () => {
-            if (confirm(`Deseja bloquear @${author.username}? Você não receberá mais mensagens diretas deste usuário.`)) {
-              await api.users.block(author.id);
-            }
-          },
-        });
-      }
-
-      if (canDelete) {
-        items.push({
-          label: 'Excluir Mensagem',
-          icon: <Trash2 className="w-4 h-4" />,
-          variant: 'danger',
-          onClick: () => setIsDeleteModalOpen(true),
-        });
-      }
     }
 
-    // Copy IDs at the very bottom
+    if (!isMe) {
+      items.push({ label: '', separator: true });
+      items.push({
+        label: 'Bloquear Usuário',
+        icon: <UserX className="w-4 h-4 text-dnd" />,
+        variant: 'danger',
+        onClick: async () => {
+          if (confirm(`Deseja bloquear @${author.username}? Você não receberá mais mensagens diretas deste usuário.`)) {
+            await api.users.block(author.id);
+          }
+        },
+      });
+    }
+
+    // IDs at the very bottom
     items.push({ label: '', separator: true });
     items.push({
       label: 'Copiar ID da Mensagem',

@@ -48,7 +48,7 @@ export const AccessibilitySettingsView: React.FC = () => {
       </div>
 
       {/* Group 1: Tipografia & Escala de Texto */}
-      <div id="accessibility-font" className="space-y-3 scroll-mt-6">
+      <div className="space-y-3">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
           Tamanho da Fonte das Mensagens
         </span>
@@ -108,7 +108,7 @@ export const AccessibilitySettingsView: React.FC = () => {
       <div className="border-t border-white/5" />
 
       {/* Group 2: Movimento & Contraste */}
-      <div id="accessibility-vision" className="space-y-3 scroll-mt-6">
+      <div className="space-y-3">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
           Visão & Movimento
         </span>
@@ -161,7 +161,7 @@ export const AccessibilitySettingsView: React.FC = () => {
       <div className="border-t border-white/5" />
 
       {/* Group 3: Leitor de Mensagens (TTS) */}
-      <div id="accessibility-tts" className="space-y-3 scroll-mt-6">
+      <div className="space-y-3">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
           Leitor de Mensagens por Voz (Text-to-Speech)
         </span>
