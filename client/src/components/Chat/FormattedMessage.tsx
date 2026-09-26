@@ -106,16 +106,6 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   const { joinVoice } = useVoiceStore();
   const { user: currentUser } = useAuthStore();
   const [permissionAlert, setPermissionAlert] = useState<string | null>(null);
-  const [failedMediaUrls, setFailedMediaUrls] = useState<Set<string>>(new Set());
-
-  const handleMediaError = React.useCallback((url: string) => {
-    setFailedMediaUrls((prev) => {
-      if (prev.has(url)) return prev;
-      const next = new Set(prev);
-      next.add(url);
-      return next;
-    });
-  }, []);
 
   const activeGuildChannels = activeGuild?.channels || [];
   const guildEmojis = useMemo(() => {
@@ -267,14 +257,10 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     }
   }
 
-  // Filter out any media URLs that failed to load (Discord-style embed fail fallback to plain link)
-  const activeMediaEmbeds = mediaEmbeds.filter((m) => !failedMediaUrls.has(m.url));
-
-  // Remove extracted active media URLs from text to display so raw link is not shown alongside the embed.
-  // If an embed fails (embed fail), the raw link remains in textToDisplay and will be rendered inline as a plain link.
+  // Remove extracted media URLs from text to display so raw link is not shown alongside the embed
   let textToDisplay = content;
-  if (activeMediaEmbeds.length > 0) {
-    for (const media of activeMediaEmbeds) {
+  if (mediaEmbeds.length > 0) {
+    for (const media of mediaEmbeds) {
       textToDisplay = textToDisplay.split(media.url).join('');
     }
     textToDisplay = textToDisplay.trim();
@@ -341,7 +327,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   }
 
   const hasText = parts.length > 0;
-  const hasEmbeds = activeMediaEmbeds.length > 0;
+  const hasEmbeds = mediaEmbeds.length > 0;
   const hasLinkEmbeds = linkEmbedUrls.length > 0;
 
   if (!hasText && !hasEmbeds && !hasLinkEmbeds) return null;
@@ -357,7 +343,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
       {/* Discord-like Rich Embeds / Image / GIF / Video Previews */}
       {hasEmbeds && (
         <div className={`${hasText ? 'mt-2' : ''} space-y-2 flex flex-col items-start select-none`}>
-          {activeMediaEmbeds.map((media, idx) => {
+          {mediaEmbeds.map((media, idx) => {
             const resolvedSrc = formatAssetUrl(media.url);
             const isGif =
               resolvedSrc.includes('.gif') ||
@@ -376,7 +362,6 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
                     src={resolvedSrc}
                     controls
                     preload="metadata"
-                    onError={() => handleMediaError(media.url)}
                     className="max-h-[350px] max-w-full w-auto h-auto rounded-2xl block"
                   />
                 </div>
@@ -401,7 +386,6 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
                 isGif={isGif}
                 onPreviewImage={onPreviewImage}
                 onImageLoad={onImageLoad}
-                onError={() => handleMediaError(media.url)}
                 className="mt-2 mb-1"
               />
             );

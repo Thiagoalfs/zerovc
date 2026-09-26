@@ -26,7 +26,12 @@ interface VoiceState {
   streamVolumes: Record<string, number>;
   participantVolumes: Record<string, number>;
   watchedParticipantId: string | null;
+  watchedParticipantIds: string[];
 
+  watchParticipant: (identity: string, mode?: 'exclusive' | 'additive') => void;
+  unwatchParticipant: (identity: string) => void;
+  toggleWatchParticipant: (identity: string) => void;
+  unwatchAll: () => void;
   setWatchedParticipant: (identity: string | null) => void;
   joinVoice: (channelId: string, guildId?: string) => Promise<void>;
   leaveVoice: () => Promise<void>;
@@ -109,16 +114,69 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   streamVolumes: initialStreamVolumes,
   participantVolumes: initialUserVolumes,
   watchedParticipantId: null,
+  watchedParticipantIds: [],
+
+  watchParticipant: (identity: string, mode: 'exclusive' | 'additive' = 'exclusive') => {
+    const current = get().watchedParticipantIds;
+    if (mode === 'exclusive') {
+      current.forEach((id) => {
+        if (id !== identity) {
+          livekit.setStreamSubscribed(id, false);
+        }
+      });
+      livekit.setStreamSubscribed(identity, true);
+      set({
+        watchedParticipantIds: [identity],
+        watchedParticipantId: identity,
+      });
+    } else {
+      if (!current.includes(identity)) {
+        livekit.setStreamSubscribed(identity, true);
+        const next = [...current, identity];
+        set({
+          watchedParticipantIds: next,
+          watchedParticipantId: identity,
+        });
+      }
+    }
+  },
+
+  unwatchParticipant: (identity: string) => {
+    const current = get().watchedParticipantIds;
+    livekit.setStreamSubscribed(identity, false);
+    const next = current.filter((id) => id !== identity);
+    set({
+      watchedParticipantIds: next,
+      watchedParticipantId: next.length > 0 ? next[next.length - 1] : null,
+    });
+  },
+
+  toggleWatchParticipant: (identity: string) => {
+    const current = get().watchedParticipantIds;
+    if (current.includes(identity)) {
+      get().unwatchParticipant(identity);
+    } else {
+      get().watchParticipant(identity, 'additive');
+    }
+  },
+
+  unwatchAll: () => {
+    const current = get().watchedParticipantIds;
+    current.forEach((id) => {
+      livekit.setStreamSubscribed(id, false);
+    });
+    set({
+      watchedParticipantIds: [],
+      watchedParticipantId: null,
+    });
+  },
 
   setWatchedParticipant: (identity: string | null) => {
-    const prev = get().watchedParticipantId;
-    if (prev && prev !== identity) {
-      livekit.setStreamSubscribed(prev, false);
+    if (!identity) {
+      get().unwatchAll();
+    } else {
+      get().watchParticipant(identity, 'exclusive');
     }
-    if (identity) {
-      livekit.setStreamSubscribed(identity, true);
-    }
-    set({ watchedParticipantId: identity });
   },
 
   joinVoice: async (channelId: string, guildId?: string) => {
@@ -215,6 +273,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
             participants: [],
             speakingUserIds: [],
             watchedParticipantId: null,
+            watchedParticipantIds: [],
           });
 
           if (isDuplicate) {
@@ -278,6 +337,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       participants: [],
       speakingUserIds: [],
       watchedParticipantId: null,
+      watchedParticipantIds: [],
     });
   },
 
@@ -353,8 +413,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   toggleCamera: async () => {
     const { isCameraOn } = get();
     const nextCamera = !isCameraOn;
-    await livekit.setCameraEnabled(nextCamera);
-    set({ isCameraOn: nextCamera });
+    try {
+      await livekit.setCameraEnabled(nextCamera);
+      set({ isCameraOn: nextCamera });
+    } catch (err) {
+      console.error('[Voice] Failed to toggle camera:', err);
+      set({ isCameraOn: false });
+    }
   },
 
   setUserVolume: (userId: string, volume: number) => {

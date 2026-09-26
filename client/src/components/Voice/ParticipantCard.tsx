@@ -10,6 +10,7 @@ import {
   Maximize2,
   Minimize2,
   Play,
+  Eye,
   EyeOff,
   Radio,
   Video,
@@ -67,6 +68,9 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     setUserVolume,
     setStreamVolume,
     watchedParticipantId,
+    watchedParticipantIds,
+    watchParticipant,
+    unwatchParticipant,
     setWatchedParticipant,
   } = useVoiceStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -158,7 +162,13 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
   const currentUVol = userVolumes[participant.identity] ?? 1;
   const currentSVol = streamVolumes[participant.identity] ?? 1;
-  const isWatching = (isLocal && isScreenSharing) || watchedParticipantId === participant.identity;
+  const isWatching =
+    (isLocal && isScreenSharing) ||
+    (watchedParticipantIds
+      ? watchedParticipantIds.includes(participant.identity)
+      : watchedParticipantId === participant.identity);
+  const hasAnyActiveWatch =
+    (watchedParticipantIds && watchedParticipantIds.length > 0) || !!watchedParticipantId;
 
   const fullscreenVideoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -238,8 +248,20 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     };
   }, [isFullscreen, isScreenSharing, isWatching, screenPub?.track, hasCameraVideoTrack, cameraPub?.track]);
 
-  const handleToggleWatch = (watch: boolean) => {
-    setWatchedParticipant(watch ? participant.identity : null);
+  const handleToggleWatch = (watch: boolean, mode: 'exclusive' | 'additive' = 'exclusive') => {
+    if (watch) {
+      if (watchParticipant) {
+        watchParticipant(participant.identity, mode);
+      } else {
+        setWatchedParticipant(participant.identity);
+      }
+    } else {
+      if (unwatchParticipant) {
+        unwatchParticipant(participant.identity);
+      } else {
+        setWatchedParticipant(null);
+      }
+    }
   };
 
   const toggleFullscreen = () => {
@@ -369,13 +391,28 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               <p className="text-xs text-brand-400 font-medium">está transmitindo tela</p>
             </div>
 
-            <button
-              onClick={() => handleToggleWatch(true)}
-              className="mt-1 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-lg shadow-brand-500/30 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Assistir Transmissão</span>
-            </button>
+            <div className="mt-1 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleToggleWatch(true, 'exclusive')}
+                className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-lg shadow-brand-500/30 flex items-center gap-1.5 cursor-pointer"
+                title="Assistir esta transmissão"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Assistir Transmissão</span>
+              </button>
+
+              {hasAnyActiveWatch && (
+                <button
+                  type="button"
+                  onClick={() => handleToggleWatch(true, 'additive')}
+                  className="bg-[#2b2d31] hover:bg-[#383a40] active:scale-95 text-gray-200 hover:text-white border border-white/10 hover:border-brand-500/50 p-2 rounded-xl transition-all shadow-md flex items-center justify-center cursor-pointer group/eye"
+                  title="Assistir junto com as outras telas"
+                >
+                  <Eye className="w-4 h-4 text-brand-400 group-hover/eye:scale-110 transition-transform" />
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           /* 4. Default Voice Participant Avatar View */

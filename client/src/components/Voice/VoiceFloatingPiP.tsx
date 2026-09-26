@@ -73,6 +73,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     participants,
     speakingUserIds,
     watchedParticipantId,
+    watchedParticipantIds,
+    watchParticipant,
+    unwatchParticipant,
     setWatchedParticipant,
     toggleMute,
     toggleDeafen,
@@ -129,9 +132,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
   // Determine if user explicitly requested to watch a stream (or is local streamer)
   const streamParticipant =
-    (watchedParticipantId
+    (watchedParticipantIds?.length > 0
       ? participants.find((p) => {
-          if (p.identity !== watchedParticipantId) return false;
+          if (!watchedParticipantIds.includes(p.identity)) return false;
           const pub = p.getTrackPublication(Track.Source.ScreenShare);
           return (p.isScreenShareEnabled || !!pub) && (!pub || !pub.isMuted);
         })
@@ -493,7 +496,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setWatchedParticipant(null);
+                    if (streamParticipant) {
+                      unwatchParticipant(streamParticipant.identity);
+                    }
                   }}
                   className="p-1 rounded-lg bg-black/60 hover:bg-dnd/80 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
                   title="Fechar transmissão"
@@ -563,7 +568,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => setWatchedParticipant(activeScreenSharer.identity)}
+              onClick={() => watchParticipant(activeScreenSharer.identity, 'exclusive')}
               className="w-full py-2 px-3 bg-brand-500 hover:bg-brand-600 active:scale-98 text-white text-xs font-semibold rounded-xl shadow-lg shadow-brand-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               title="Assistir Transmissão"
             >
@@ -761,7 +766,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleFullscreen();
-                    setWatchedParticipant(null);
+                    if (streamParticipant) {
+                      unwatchParticipant(streamParticipant.identity);
+                    }
                   }}
                   className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 text-xs flex items-center gap-1.5 font-medium transition-colors cursor-pointer"
                   title="Parar de assistir transmissão"

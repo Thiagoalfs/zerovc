@@ -9,7 +9,6 @@ interface GifEmbedProps {
   isGif?: boolean;
   onPreviewImage?: (url: string) => void;
   onImageLoad?: () => void;
-  onError?: () => void;
   className?: string;
 }
 
@@ -19,14 +18,12 @@ export const GifEmbed: React.FC<GifEmbedProps> = ({
   isGif = false,
   onPreviewImage,
   onImageLoad,
-  onError,
   className = '',
 }) => {
   const autoplayGifs = useSettingsStore((s) => s.autoplayGifs);
   const { isFavorited, toggleFavorite } = useFavoriteGifStore();
   const favorited = isFavorited(src);
 
-  const [hasError, setHasError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isPlayingManual, setIsPlayingManual] = useState(false);
   const [frozenSrc, setFrozenSrc] = useState<string | null>(null);
@@ -64,20 +61,10 @@ export const GifEmbed: React.FC<GifEmbedProps> = ({
       }
     };
 
-    img.onerror = () => {
-      if (!isMounted) return;
-      setHasError(true);
-      onError?.();
-    };
-
     return () => {
       isMounted = false;
     };
-  }, [src, isGif, autoplayGifs, onError]);
-
-  if (hasError) {
-    return null;
-  }
+  }, [src, isGif, autoplayGifs]);
 
   const activeSrc = shouldAnimate ? src : frozenSrc || src;
 
@@ -92,10 +79,6 @@ export const GifEmbed: React.FC<GifEmbedProps> = ({
         src={activeSrc}
         alt={alt}
         onLoad={() => onImageLoad?.()}
-        onError={() => {
-          setHasError(true);
-          onError?.();
-        }}
         onClick={(e) => {
           e.stopPropagation();
           if (onPreviewImage) {

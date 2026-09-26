@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff, Activity } from 'lucide-react';
+import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, Video, VideoOff } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -28,8 +28,10 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     isMuted,
     isDeafened,
     isScreensharing,
+    isCameraOn,
     toggleMute,
     toggleDeafen,
+    toggleCamera,
     leaveVoice,
     stopScreenShare,
   } = useVoiceStore();
@@ -107,6 +109,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         <div className="w-[72px] h-full bg-background-darkest border-r border-black/20 hidden md:block flex-shrink-0" />
         <div className="flex-1 h-full bg-background-darker" />
       </div>
+
       {/* Quick Status Menu Popover */}
       {showStatusMenu && (
         <>
@@ -142,13 +145,23 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         </>
       )}
 
-      {/* Active Voice Connection Bar */}
-      {(isConnected || isConnecting) && (
-        <div
-          ref={voiceBarRef}
-          className="w-full min-w-0 max-w-full bg-background-darkest border border-white/5 rounded-2xl p-2 px-2.5 mb-1.5 flex flex-col gap-1.5 overflow-visible relative shadow-sm"
-        >
-          {/* Discord-style Floating Voice Connection Popout */}
+      {/* Full WebRTC Technical Diagnostics Modal */}
+      <VoiceDiagnosticModal
+        isOpen={showDiagnostic}
+        onClose={() => setShowDiagnostic(false)}
+      />
+
+      {/* Unified User & Voice Container */}
+      <div
+        ref={voiceBarRef}
+        className={`w-full min-w-0 max-w-full bg-background-darkest border border-white/5 rounded-2xl shadow-inner overflow-visible relative transition-all ${
+          isConnected || isConnecting
+            ? 'p-2 md:p-2.5 flex flex-col gap-2'
+            : 'h-[48px] md:h-[52px] min-h-[48px] md:min-h-[52px] px-2 md:px-2.5 flex items-center justify-between'
+        }`}
+      >
+        {/* Discord-style Floating Voice Connection Popout */}
+        {(isConnected || isConnecting) && (
           <VoiceConnectionPopout
             isOpen={showVoicePopout}
             onClose={() => setShowVoicePopout(false)}
@@ -157,7 +170,10 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             serverName={activeGuild?.name}
             anchorRef={voiceBarRef}
           />
+        )}
 
+        {/* 1. Voice Connection Status Bar (Shown ONLY when connected/connecting) */}
+        {(isConnected || isConnecting) && (
           <div className="flex items-center justify-between min-w-0 gap-1.5">
             <div
               onClick={(e) => {
@@ -186,127 +202,154 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             </div>
 
             <div className="flex items-center gap-0.5 flex-shrink-0">
-              {/* Screen Share Quick Button */}
-              <button
-                type="button"
-                onClick={handleScreenShareClick}
-                className={`hidden md:inline-flex p-1.5 rounded-lg hover:bg-background-light transition-colors cursor-pointer flex-shrink-0 ${
-                  isScreensharing ? 'text-brand-400 bg-brand-500/10' : 'text-gray-400 hover:text-gray-200'
-                }`}
-                title={isScreensharing ? 'Opções de transmissão (Clique para trocar tela)' : 'Compartilhar tela'}
-              >
-                {isScreensharing ? <Monitor className="w-3.5 h-3.5 animate-pulse" /> : <Monitor className="w-3.5 h-3.5" />}
-              </button>
-
               <button
                 type="button"
                 onClick={leaveVoice}
                 className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
                 title="Desconectar"
               >
-                <PhoneOff className="w-3.5 h-3.5" />
+                <PhoneOff className="w-4 h-4" />
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Full WebRTC Technical Diagnostics Modal */}
-      <VoiceDiagnosticModal
-        isOpen={showDiagnostic}
-        onClose={() => setShowDiagnostic(false)}
-      />
+        {/* 2. Large Action Buttons (Camera & Screen Share) - Discord Style (Shown ONLY when connected/connecting) */}
+        {(isConnected || isConnecting) && (
+          <div className="grid grid-cols-2 gap-1.5 w-full">
+            {/* Webcam / Camera Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleCamera();
+              }}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 ${
+                isCameraOn
+                  ? 'bg-online text-white shadow-md shadow-online/20 hover:bg-online/90'
+                  : 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/5'
+              }`}
+              title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
+            >
+              {isCameraOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+              <span>Câmera</span>
+            </button>
 
-      {/* User Info and Controls - Floating pill matching MessageInput */}
-      <div
-        onClick={() => {
-          if (typeof window !== 'undefined' && window.innerWidth < 768) {
-            onOpenSettings();
-          }
-        }}
-        className="h-[48px] md:h-[52px] min-h-[48px] md:min-h-[52px] px-2 md:px-2.5 w-full min-w-0 max-w-full flex items-center justify-between bg-background-darkest rounded-2xl border border-white/5 shadow-inner hover:border-white/10 cursor-pointer md:cursor-default overflow-hidden gap-1.5 transition-all"
-      >
+            {/* Screen Share Button */}
+            <button
+              type="button"
+              onClick={handleScreenShareClick}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 ${
+                isScreensharing
+                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 hover:bg-brand-600'
+                  : 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/5'
+              }`}
+              title={isScreensharing ? 'Opções de transmissão (Clique para trocar de tela)' : 'Compartilhar Tela'}
+            >
+              <Monitor className="w-4 h-4" />
+              <span>Tela</span>
+            </button>
+          </div>
+        )}
+
+        {/* Subtle Divider when connected */}
+        {(isConnected || isConnecting) && (
+          <div className="h-[1px] bg-white/5 -mx-1" />
+        )}
+
+        {/* 3. User Info & Controls Row */}
         <div
-          onClick={(e) => {
-            e.stopPropagation();
+          onClick={() => {
             if (typeof window !== 'undefined' && window.innerWidth < 768) {
               onOpenSettings();
-            } else {
-              setShowStatusMenu((prev) => !prev);
             }
           }}
-          className="flex items-center gap-2 p-1 -ml-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 transition-colors group/usercard overflow-hidden"
-          title={typeof window !== 'undefined' && window.innerWidth < 768 ? 'Abrir Configurações' : 'Definir Status'}
+          className={`w-full min-w-0 max-w-full flex items-center justify-between cursor-pointer md:cursor-default overflow-hidden gap-1.5 transition-all ${
+            isConnected || isConnecting ? 'pt-0.5' : 'h-full'
+          }`}
         >
-          {/* Avatar */}
-          <UserAvatar
-            user={user}
-            size="md"
-            showStatus={true}
-            statusBorderColor="border-background-darkest"
-          />
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                onOpenSettings();
+              } else {
+                setShowStatusMenu((prev) => !prev);
+              }
+            }}
+            className="flex items-center gap-2 p-1 -ml-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 transition-colors group/usercard overflow-hidden"
+            title={typeof window !== 'undefined' && window.innerWidth < 768 ? 'Abrir Configurações' : 'Definir Status'}
+          >
+            {/* Avatar */}
+            <UserAvatar
+              user={user}
+              size="md"
+              showStatus={true}
+              statusBorderColor="border-background-darkest"
+            />
 
-          <div className="flex flex-col truncate min-w-0 flex-1 overflow-hidden">
-            <div className="flex items-center gap-1 min-w-0 w-full overflow-hidden">
-              <span className="text-[13px] md:text-[14px] font-bold text-white truncate leading-tight group-hover/usercard:text-brand-300 transition-colors block min-w-0 flex-1">
-                {user?.display_name || user?.username || 'Usuário'}
+            <div className="flex flex-col truncate min-w-0 flex-1 overflow-hidden">
+              <div className="flex items-center gap-1 min-w-0 w-full overflow-hidden">
+                <span className="text-[13px] md:text-[14px] font-bold text-white truncate leading-tight group-hover/usercard:text-brand-300 transition-colors block min-w-0 flex-1">
+                  {user?.display_name || user?.username || 'Usuário'}
+                </span>
+              </div>
+              <span className="text-[11px] md:text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">
+                {user?.status !== 'offline' && user?.custom_activity && user?.show_activity_status !== false ? (
+                  <span className="text-brand-300 font-medium flex items-center gap-1 truncate">
+                    <span className="truncate">
+                      {user.custom_activity.type === 'playing' ? 'Jogando ' :
+                       user.custom_activity.type === 'listening' ? 'Ouvindo ' :
+                       user.custom_activity.type === 'watching' ? 'Assistindo ' : ''}
+                      {user.custom_activity.name}
+                    </span>
+                  </span>
+                ) : (
+                  user?.custom_status || getStatusLabel(user?.status)
+                )}
               </span>
             </div>
-            <span className="text-[11px] md:text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">
-              {user?.status !== 'offline' && user?.custom_activity && user?.show_activity_status !== false ? (
-                <span className="text-brand-300 font-medium flex items-center gap-1 truncate">
-                  <span className="truncate">
-                    {user.custom_activity.type === 'playing' ? 'Jogando ' :
-                     user.custom_activity.type === 'listening' ? 'Ouvindo ' :
-                     user.custom_activity.type === 'watching' ? 'Assistindo ' : ''}
-                    {user.custom_activity.name}
-                  </span>
-                </span>
-              ) : (
-                user?.custom_status || getStatusLabel(user?.status)
-              )}
-            </span>
           </div>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="hidden md:flex items-center gap-0.5 text-gray-400 flex-shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleMute();
-            }}
-            className={`w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
-              isMuted ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
-            }`}
-            title={isMuted ? 'Desmutar' : 'Mutar'}
-          >
-            {isMuted ? <MicOff className="w-4 h-4 md:w-[18px] md:h-[18px]" /> : <Mic className="w-4 h-4 md:w-[18px] md:h-[18px]" />}
-          </button>
+          {/* Action Buttons */}
+          <div className="hidden md:flex items-center gap-0.5 text-gray-400 flex-shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMute();
+              }}
+              className={`w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
+                isMuted ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
+              }`}
+              title={isMuted ? 'Desmutar' : 'Mutar'}
+            >
+              {isMuted ? <MicOff className="w-4 h-4 md:w-[18px] md:h-[18px]" /> : <Mic className="w-4 h-4 md:w-[18px] md:h-[18px]" />}
+            </button>
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleDeafen();
-            }}
-            className={`w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
-              isDeafened ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
-            }`}
-            title={isDeafened ? 'Ensurdecer' : 'Desensurdecer'}
-          >
-            <Headphones className="w-4 h-4 md:w-[18px] md:h-[18px]" />
-          </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleDeafen();
+              }}
+              className={`w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
+                isDeafened ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
+              }`}
+              title={isDeafened ? 'Ensurdecer' : 'Desensurdecer'}
+            >
+              <Headphones className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+            </button>
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenSettings();
-            }}
-            className="w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer"
-            title="Configurações de Usuário"
-          >
-            <Settings className="w-4 h-4 md:w-[18px] md:h-[18px]" />
-          </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSettings();
+              }}
+              className="w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer"
+              title="Configurações de Usuário"
+            >
+              <Settings className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+            </button>
+          </div>
         </div>
       </div>
 
