@@ -3,6 +3,7 @@ import { Star, Hash, Volume2 } from 'lucide-react';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { formatAssetUrl } from '../../lib/api';
 import { GifEmbed } from './GifEmbed';
+import { SmartGifEmbed } from './SmartGifEmbed';
 import { LinkEmbed } from './LinkEmbed';
 import { VoiceNotePlayer } from './VoiceNotePlayer';
 import { LimitAlertModal } from '../Modals/LimitAlertModal';
@@ -24,6 +25,26 @@ interface FormattedMessageProps {
   onOpenUserContextMenu?: (e: React.MouseEvent, user: User) => void;
 }
 
+const isSmartGifPageUrl = (url: string) => {
+  const lower = url.toLowerCase();
+  const isDirectMediaHost =
+    lower.includes('media.tenor.com') ||
+    lower.includes('c.tenor.com') ||
+    lower.includes('static.klipy.co') ||
+    lower.includes('media.giphy.com') ||
+    lower.includes('i.giphy.com');
+  if (isDirectMediaHost) return false;
+
+  return (
+    lower.includes('tenor.com/view/') ||
+    lower.includes('tenor.com/') ||
+    lower.includes('klipy.co/') ||
+    lower.includes('klipy.com/') ||
+    lower.includes('giphy.com/gifs/') ||
+    lower.includes('giphy.com/clips/')
+  );
+};
+
 const isMediaUrl = (url: string) => {
   const clean = url.split('?')[0].toLowerCase();
   const isVoiceMsg = clean.includes('voice-message') || clean.includes('voice_message') || clean.includes('/audio/');
@@ -40,13 +61,11 @@ const isMediaUrl = (url: string) => {
       clean.endsWith('.avif') ||
       url.includes('/assets/user/') ||
       url.includes('/assets/guild/') ||
-      url.includes('tenor.com/view/') ||
-      url.includes('giphy.com/gifs/') ||
       url.includes('media.tenor.com') ||
       url.includes('c.tenor.com') ||
       url.includes('media.giphy.com') ||
       url.includes('i.giphy.com') ||
-      url.includes('klipy') ||
+      url.includes('static.klipy.co') ||
       url.startsWith('data:image/'));
 
   const isAud =
@@ -239,6 +258,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
   const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|data:image\/[^\s]+)/g;
   const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
+  const smartGifEmbeds: string[] = [];
   const linkEmbedUrls: string[] = [];
   const foundUrls = new Set<string>();
 
@@ -250,6 +270,8 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
       const mediaInfo = isMediaUrl(rawUrl);
       if (mediaInfo.isMedia) {
         mediaEmbeds.push({ url: rawUrl, ...mediaInfo });
+      } else if (isSmartGifPageUrl(rawUrl)) {
+        smartGifEmbeds.push(rawUrl);
       } else if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
         // HTTP/HTTPS links eligible for OpenGraph embed preview (YouTube, Twitter, GitHub, news, blogs, etc.)
         linkEmbedUrls.push(rawUrl);
@@ -257,11 +279,14 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     }
   }
 
-  // Remove extracted media URLs from text to display so raw link is not shown alongside the embed
+  // Remove extracted media URLs and smart GIF URLs from text to display so raw link is not shown alongside the embed
   let textToDisplay = content;
-  if (mediaEmbeds.length > 0) {
+  if (mediaEmbeds.length > 0 || smartGifEmbeds.length > 0) {
     for (const media of mediaEmbeds) {
       textToDisplay = textToDisplay.split(media.url).join('');
+    }
+    for (const gifUrl of smartGifEmbeds) {
+      textToDisplay = textToDisplay.split(gifUrl).join('');
     }
     textToDisplay = textToDisplay.trim();
   }
@@ -328,9 +353,10 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
 
   const hasText = parts.length > 0;
   const hasEmbeds = mediaEmbeds.length > 0;
+  const hasSmartGifs = smartGifEmbeds.length > 0;
   const hasLinkEmbeds = linkEmbedUrls.length > 0;
 
-  if (!hasText && !hasEmbeds && !hasLinkEmbeds) return null;
+  if (!hasText && !hasEmbeds && !hasSmartGifs && !hasLinkEmbeds) return null;
 
   return (
     <div className={`leading-[1.375rem] break-words chat-message-content ${className}`}>
@@ -340,7 +366,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
         </div>
       )}
 
-      {/* Discord-like Rich Embeds / Image / GIF / Video Previews */}
+      {/* Discord-like Rich Embeds / Direct Image / GIF / Video Previews */}
       {hasEmbeds && (
         <div className={`${hasText ? 'mt-2' : ''} space-y-2 flex flex-col items-start select-none`}>
           {mediaEmbeds.map((media, idx) => {
@@ -393,9 +419,24 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
         </div>
       )}
 
+      {/* Smart GIF Embeds (Tenor, Klipy, GIPHY pages without file extensions) */}
+      {hasSmartGifs && (
+        <div className={`${hasText || hasEmbeds ? 'mt-2' : ''} space-y-2 flex flex-col items-start select-none`}>
+          {smartGifEmbeds.map((gifUrl, idx) => (
+            <SmartGifEmbed
+              key={`smart-gif-${idx}`}
+              url={gifUrl}
+              onPreviewImage={onPreviewImage}
+              onImageLoad={onImageLoad}
+              className="mt-1 mb-1"
+            />
+          ))}
+        </div>
+      )}
+
       {/* Rich Link Previews / OpenGraph Cards (YouTube, Twitter, GitHub, etc.) */}
       {hasLinkEmbeds && (
-        <div className={`${hasText || hasEmbeds ? 'mt-2' : ''} space-y-2 flex flex-col items-start`}>
+        <div className={`${hasText || hasEmbeds || hasSmartGifs ? 'mt-2' : ''} space-y-2 flex flex-col items-start`}>
           {linkEmbedUrls.slice(0, 3).map((linkUrl, idx) => (
             <LinkEmbed
               key={idx}

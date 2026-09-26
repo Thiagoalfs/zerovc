@@ -282,6 +282,7 @@ export interface LinkMetadata {
   description?: string;
   site_name?: string;
   image_url?: string;
+  video_url?: string;
   favicon?: string;
   theme_color?: string;
   media_type?: string;

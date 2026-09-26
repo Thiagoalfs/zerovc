@@ -21,6 +21,7 @@ type LinkMetadata struct {
 	Description string `json:"description,omitempty"`
 	SiteName    string `json:"site_name,omitempty"`
 	ImageURL    string `json:"image_url,omitempty"`
+	VideoURL    string `json:"video_url,omitempty"`
 	Favicon     string `json:"favicon,omitempty"`
 	ThemeColor  string `json:"theme_color,omitempty"`
 	MediaType   string `json:"media_type,omitempty"`
@@ -113,7 +114,8 @@ var (
 	ogTitleRegex    = regexp.MustCompile(`(?i)<meta\s+[^>]*?(?:property|name)=["'](?:og:title|twitter:title)["'][^>]*?content=["']([^"']*)["']|<meta\s+[^>]*?content=["']([^"']*)["'][^>]*?(?:property|name)=["'](?:og:title|twitter:title)["']`)
 	ogDescRegex     = regexp.MustCompile(`(?i)<meta\s+[^>]*?(?:property|name)=["'](?:og:description|twitter:description|description)["'][^>]*?content=["']([^"']*)["']|<meta\s+[^>]*?content=["']([^"']*)["'][^>]*?(?:property|name)=["'](?:og:description|twitter:description|description)["']`)
 	ogSiteNameRegex = regexp.MustCompile(`(?i)<meta\s+[^>]*?(?:property|name)=["'](?:og:site_name|twitter:site)["'][^>]*?content=["']([^"']*)["']|<meta\s+[^>]*?content=["']([^"']*)["'][^>]*?(?:property|name)=["'](?:og:site_name|twitter:site)["']`)
-	ogImageRegex    = regexp.MustCompile(`(?i)<meta\s+[^>]*?(?:property|name)=["'](?:og:image|og:image:url|twitter:image|twitter:image:src)["'][^>]*?content=["']([^"']*)["']|<meta\s+[^>]*?content=["']([^"']*)["'][^>]*?(?:property|name)=["'](?:og:image|og:image:url|twitter:image|twitter:image:src)["']`)
+	ogImageRegex    = regexp.MustCompile(`(?i)<meta\s+[^>]*?(?:property|name)=["'](?:og:image|og:image:url|og:image:secure_url|twitter:image|twitter:image:src)["'][^>]*?content=["']([^"']*)["']|<meta\s+[^>]*?content=["']([^"']*)["'][^>]*?(?:property|name)=["'](?:og:image|og:image:url|og:image:secure_url|twitter:image|twitter:image:src)["']`)
+	ogVideoRegex    = regexp.MustCompile(`(?i)<meta\s+[^>]*?(?:property|name)=["'](?:og:video|og:video:url|og:video:secure_url|twitter:player:stream)["'][^>]*?content=["']([^"']*)["']|<meta\s+[^>]*?content=["']([^"']*)["'][^>]*?(?:property|name)=["'](?:og:video|og:video:url|og:video:secure_url|twitter:player:stream)["']`)
 	ogTypeRegex     = regexp.MustCompile(`(?i)<meta\s+[^>]*?(?:property|name)=["'](?:og:type)["'][^>]*?content=["']([^"']*)["']|<meta\s+[^>]*?content=["']([^"']*)["'][^>]*?(?:property|name)=["'](?:og:type)["']`)
 	themeColorRegex = regexp.MustCompile(`(?i)<meta\s+[^>]*?name=["']theme-color["'][^>]*?content=["']([^"']*)["']|<meta\s+[^>]*?content=["']([^"']*)["'][^>]*?name=["']theme-color["']`)
 	htmlTitleRegex  = regexp.MustCompile(`(?i)<title[^>]*>([^<]+)</title>`)
@@ -213,6 +215,13 @@ func (h *LinkPreviewHandler) GetMetadata(w http.ResponseWriter, r *http.Request)
 		rawImg := cleanMetaValue(match[1], match[2])
 		if rawImg != "" {
 			meta.ImageURL = resolveAbsoluteURL(parsedURL, rawImg)
+		}
+	}
+
+	if match := ogVideoRegex.FindStringSubmatch(htmlContent); len(match) > 0 {
+		rawVid := cleanMetaValue(match[1], match[2])
+		if rawVid != "" {
+			meta.VideoURL = resolveAbsoluteURL(parsedURL, rawVid)
 		}
 	}
 
