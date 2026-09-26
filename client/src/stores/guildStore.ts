@@ -22,8 +22,10 @@ interface GuildState {
   isLoadingMessages: boolean;
   isLoadingMoreMessages: boolean;
   typingUsers: Map<string, Set<string>>;
+  guildVoiceStates: Record<string, VoiceSession[]>;
 
   fetchGuilds: () => Promise<void>;
+  fetchGuildVoiceStates: (guildId: string) => Promise<VoiceSession[]>;
   selectGuild: (guildId: string, initialChannelId?: string) => Promise<void>;
   selectChannel: (channel: Channel) => Promise<void>;
   loadMoreMessages: (channelId: string) => Promise<void>;
@@ -114,15 +116,36 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   isLoadingMessages: false,
   isLoadingMoreMessages: false,
   typingUsers: new Map(),
+  guildVoiceStates: {},
 
   fetchGuilds: async () => {
     set({ isLoadingGuilds: true });
     try {
       const guilds = await api.guilds.list();
       set({ guilds, isLoadingGuilds: false });
+      guilds.forEach((g) => {
+        get().fetchGuildVoiceStates(g.id).catch(() => {});
+      });
     } catch (err) {
       console.error('Failed to fetch guilds:', err);
       set({ isLoadingGuilds: false });
+    }
+  },
+
+  fetchGuildVoiceStates: async (guildId: string) => {
+    try {
+      const res = await api.guilds.getVoiceStates(guildId);
+      if (!res || !res.voice_states) return [];
+      const allSessions = Object.values(res.voice_states).flat();
+      set((state) => ({
+        guildVoiceStates: {
+          ...state.guildVoiceStates,
+          [guildId]: allSessions,
+        },
+      }));
+      return allSessions;
+    } catch {
+      return [];
     }
   },
 
@@ -1020,12 +1043,19 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const res = await api.guilds.getVoiceStates(guildId);
       if (!res || !res.voice_states) return;
 
+      const voiceStatesMap = res.voice_states;
+      const allSessions = Object.values(voiceStatesMap).flat();
+
       set((state) => {
+        const nextGuildVoiceStates = {
+          ...state.guildVoiceStates,
+          [guildId]: allSessions,
+        };
+
         if (!state.activeGuild || state.activeGuild.id !== guildId || !state.activeGuild.channels) {
-          return state;
+          return { guildVoiceStates: nextGuildVoiceStates };
         }
 
-        const voiceStatesMap = res.voice_states;
         const channels = state.activeGuild.channels.map((channel) => {
           if (channel.type === 'voice') {
             const sessions = voiceStatesMap[channel.id] || [];
@@ -1038,6 +1068,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         });
 
         return {
+          guildVoiceStates: nextGuildVoiceStates,
           activeGuild: {
             ...state.activeGuild,
             channels,
@@ -1051,13 +1082,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
   updateVoiceState: (action: string, session?: VoiceSession, channelId?: string, userId?: string) => {
     set((state) => {
-      if (!state.activeGuild || !state.activeGuild.channels) return state;
-
       const targetUserId = session?.user_id || userId;
       if (!targetUserId) return state;
 
       const targetChannelId = session?.channel_id || channelId;
-      const guildMember = state.activeGuild.members?.find((m) => m.id === targetUserId);
+      const guildMember = state.activeGuild?.members?.find((m) => m.id === targetUserId);
 
       const enhancedSession = session
         ? {
@@ -1072,6 +1101,37 @@ export const useGuildStore = create<GuildState>((set, get) => ({
             } : undefined,
           }
         : undefined;
+
+      // Update guildVoiceStates
+      const nextGuildVoiceStates = { ...state.guildVoiceStates };
+      Object.keys(nextGuildVoiceStates).forEach((gid) => {
+        let sessions = nextGuildVoiceStates[gid] || [];
+        if (action === 'join' && enhancedSession) {
+          const isThisGuildChannel =
+            sessions.some((s) => s.channel_id === enhancedSession.channel_id) ||
+            (state.activeGuild?.id === gid && state.activeGuild?.channels?.some((c) => c.id === enhancedSession.channel_id));
+
+          if (isThisGuildChannel) {
+            sessions = sessions.filter((s) => s.user_id !== targetUserId);
+            sessions.push(enhancedSession as VoiceSession);
+          } else {
+            sessions = sessions.filter((s) => s.user_id !== targetUserId);
+          }
+        } else if (action === 'leave') {
+          sessions = sessions.filter((s) => s.user_id !== targetUserId);
+        } else if ((action === 'update' || action === 'state') && enhancedSession) {
+          sessions = sessions.map((s) =>
+            s.user_id === targetUserId
+              ? { ...s, ...enhancedSession, user: enhancedSession.user || s.user }
+              : s
+          );
+        }
+        nextGuildVoiceStates[gid] = sessions;
+      });
+
+      if (!state.activeGuild || !state.activeGuild.channels) {
+        return { guildVoiceStates: nextGuildVoiceStates };
+      }
 
       const channels = state.activeGuild.channels.map((channel) => {
         if (channel.type !== 'voice') return channel;
@@ -1113,7 +1173,10 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         return channel;
       });
 
-      return { activeGuild: { ...state.activeGuild, channels } };
+      return {
+        guildVoiceStates: nextGuildVoiceStates,
+        activeGuild: { ...state.activeGuild, channels },
+      };
     });
   },
 

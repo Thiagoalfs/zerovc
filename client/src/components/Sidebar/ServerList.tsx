@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, MessageSquare, CheckCheck, Bell, BellOff, Copy, LogOut, Check, Folder, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Plus, MessageSquare, CheckCheck, Bell, BellOff, Copy, LogOut, Check, Folder, ChevronDown, ChevronRight, Trash2, Volume2 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -34,10 +35,13 @@ export const ServerList: React.FC<ServerListProps> = ({
     isGuildMuted,
     leaveGuild,
     deleteGuild,
+    guildVoiceStates,
+    fetchGuildVoiceStates,
   } = useGuildStore();
   const { roomUnreadCounts } = useDMStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const [copiedGuildId, setCopiedGuildId] = useState<string | null>(null);
+  const [hoveredGuild, setHoveredGuild] = useState<{ guild: (typeof guilds)[0]; rect: DOMRect } | null>(null);
 
   // Server Folders State with Local Storage Cache & Database Sync
   const [folders, setFolders] = useState<ServerFolder[]>(() => {
@@ -395,6 +399,7 @@ export const ServerList: React.FC<ServerListProps> = ({
 
         <button
           onClick={() => {
+            setHoveredGuild(null);
             if (isActive) return;
             if (onSelectGuild) {
               onSelectGuild(guild.id);
@@ -402,7 +407,16 @@ export const ServerList: React.FC<ServerListProps> = ({
               selectGuild(guild.id);
             }
           }}
-          onContextMenu={(e) => handleServerContextMenu(e, guild)}
+          onMouseEnter={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setHoveredGuild({ guild, rect });
+            fetchGuildVoiceStates(guild.id).catch(() => {});
+          }}
+          onMouseLeave={() => setHoveredGuild(null)}
+          onContextMenu={(e) => {
+            setHoveredGuild(null);
+            handleServerContextMenu(e, guild);
+          }}
           className={`relative group w-12 h-12 flex items-center justify-center font-semibold text-sm transition-all duration-150 origin-center ${
             isCenterOver
               ? 'scale-[0.80] rounded-[18px] ring-2 ring-brand-400 bg-brand-500/40 shadow-inner'
@@ -412,7 +426,6 @@ export const ServerList: React.FC<ServerListProps> = ({
               ? 'rounded-[24px] hover:rounded-[16px] bg-background-darkest/90 hover:bg-brand-500 text-gray-200 hover:text-white'
               : 'rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white'
           }`}
-          title={guild.name}
         >
           {/* Left Indicator Pill */}
           <div
@@ -476,6 +489,7 @@ export const ServerList: React.FC<ServerListProps> = ({
 
         {/* Guilds & Folders List */}
         <div
+          onScroll={() => setHoveredGuild(null)}
           onDragOver={(e) => {
             e.preventDefault();
           }}
@@ -563,6 +577,95 @@ export const ServerList: React.FC<ServerListProps> = ({
       </div>
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />
+
+      {/* Discord-style Hover Tooltip for Servers */}
+      {hoveredGuild &&
+        createPortal(
+          (() => {
+            const activeSessions =
+              activeGuild?.id === hoveredGuild.guild.id && activeGuild.channels
+                ? activeGuild.channels.flatMap((c) => (c.type === 'voice' ? c.voice_sessions || [] : []))
+                : guildVoiceStates[hoveredGuild.guild.id] || [];
+
+            // Deduplicate sessions by user_id
+            const uniqueSessionsMap = new Map<string, typeof activeSessions[0]>();
+            activeSessions.forEach((s) => {
+              if (s.user_id && !uniqueSessionsMap.has(s.user_id)) {
+                uniqueSessionsMap.set(s.user_id, s);
+              }
+            });
+            const uniqueVoiceUsers = Array.from(uniqueSessionsMap.values());
+
+            const displayUsers = uniqueVoiceUsers.slice(0, 3);
+            const extraCount = uniqueVoiceUsers.length > 3 ? uniqueVoiceUsers.length - 3 : 0;
+
+            return (
+              <div
+                style={{
+                  left: `${hoveredGuild.rect.right + 12}px`,
+                  top: `${hoveredGuild.rect.top + hoveredGuild.rect.height / 2}px`,
+                  transform: 'translateY(-50%)',
+                }}
+                className="fixed z-[9999] pointer-events-none flex items-center animate-in fade-in duration-150"
+              >
+                {/* Left Arrow Pointer / Caret */}
+                <div className="w-0 h-0 border-y-[6px] border-y-transparent border-r-[6px] border-r-[#111214] -mr-[1px] flex-shrink-0" />
+
+                {/* Tooltip Card Body */}
+                <div className="bg-[#111214] text-white px-3 py-2 rounded-lg shadow-2xl border border-white/10 flex flex-col gap-1.5 max-w-xs select-none">
+                  <span className="font-bold text-sm text-gray-100 truncate leading-tight">
+                    {hoveredGuild.guild.name}
+                  </span>
+
+                  {uniqueVoiceUsers.length > 0 && (
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Volume2 className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+
+                      <div className="flex items-center">
+                        {displayUsers.map((session, idx) => {
+                          const u = session.user;
+                          const avatar = u?.avatar_url;
+                          const name = u?.display_name || u?.username || 'Usuário';
+                          const initial = name.charAt(0).toUpperCase();
+
+                          return (
+                            <div
+                              key={session.id || session.user_id || idx}
+                              className={`w-5 h-5 rounded-full ring-2 ring-[#111214] overflow-hidden bg-[#2b2d31] flex items-center justify-center flex-shrink-0 ${
+                                idx > 0 ? '-ml-1.5' : ''
+                              }`}
+                              style={{ zIndex: 10 - idx }}
+                            >
+                              {avatar ? (
+                                <img
+                                  src={formatAssetUrl(avatar)}
+                                  alt={name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-[9px] font-bold text-gray-300">{initial}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {extraCount > 0 && (
+                          <div
+                            className="w-5 h-5 rounded-full ring-2 ring-[#111214] bg-[#2b2d31] text-[10px] font-bold text-gray-300 flex items-center justify-center -ml-1.5 flex-shrink-0"
+                            style={{ zIndex: 5 }}
+                          >
+                            +{extraCount}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })(),
+          document.body
+        )}
     </>
   );
 };
