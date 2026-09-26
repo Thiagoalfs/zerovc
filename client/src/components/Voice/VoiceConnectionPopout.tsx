@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Bug, Upload, Lock, Check } from 'lucide-react';
 import { livekit } from '../../lib/livekit';
 import { useVoiceStore } from '../../stores/voiceStore';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface VoiceConnectionPopoutProps {
   isOpen: boolean;
@@ -145,7 +146,7 @@ export const VoiceConnectionPopout: React.FC<VoiceConnectionPopoutProps> = ({
         packetLoss: `${packetLoss}%`,
         livekitStats: stats,
       };
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      await copyToClipboard(JSON.stringify(payload, null, 2));
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {}

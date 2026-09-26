@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { GuildEmoji } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
+import { copyToClipboard } from '../../../utils/clipboard';
 
 interface EmojisTabProps {
   emojisList: GuildEmoji[];
@@ -166,7 +167,7 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          navigator.clipboard.writeText(`:${em.name}:`);
+                          copyToClipboard(`:${em.name}:`);
                           setCopiedEmojiId(em.id);
                           setTimeout(() => setCopiedEmojiId(null), 2000);
                         }}

@@ -6,6 +6,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
 import { api, formatAssetUrl } from '../../lib/api';
+import { copyToClipboard } from '../../utils/clipboard';
 import { DMRoom, User } from '../../types';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
@@ -182,12 +183,10 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
         : []),
       {
         id: 'copy-user-id',
-        label: copiedUserId === targetUser.id ? 'ID Copiado!' : 'Copiar ID de Usuário',
-        icon: copiedUserId === targetUser.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />,
+        label: 'Copiar ID de Usuário',
+        icon: <Copy className="w-4 h-4" />,
         onClick: () => {
-          navigator.clipboard.writeText(targetUser.id);
-          setCopiedUserId(targetUser.id);
-          setTimeout(() => setCopiedUserId(null), 2000);
+          copyToClipboard(targetUser.id);
         },
       },
     ];

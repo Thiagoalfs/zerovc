@@ -13,6 +13,7 @@ import { SidebarResizer } from '../Sidebar/SidebarResizer';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { api, formatAssetUrl } from '../../lib/api';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface DMChannelListProps {
   currentView: 'friends' | 'dm' | 'group';
@@ -199,12 +200,10 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
         : []),
       {
         id: 'copy-user-id',
-        label: copiedUserId === targetUser.id ? 'ID Copiado!' : 'Copiar ID de Usuário',
-        icon: copiedUserId === targetUser.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />,
+        label: 'Copiar ID de Usuário',
+        icon: <Copy className="w-4 h-4" />,
         onClick: () => {
-          navigator.clipboard.writeText(targetUser.id);
-          setCopiedUserId(targetUser.id);
-          setTimeout(() => setCopiedUserId(null), 2000);
+          copyToClipboard(targetUser.id);
         },
       },
     ];

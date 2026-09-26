@@ -38,6 +38,7 @@ import { UserAvatar } from '../Common/UserAvatar';
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { speakText } from '../../utils/audio';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export interface UniversalMessage {
   id: string;
@@ -369,7 +370,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     items.push({
       label: 'Copiar Texto',
       icon: <Copy className="w-4 h-4" />,
-      onClick: () => navigator.clipboard.writeText(message.content),
+      onClick: () => copyToClipboard(message.content),
     });
 
     items.push({
@@ -510,12 +511,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     items.push({
       label: 'Copiar ID da Mensagem',
       icon: <Copy className="w-4 h-4" />,
-      onClick: () => navigator.clipboard.writeText(message.id),
+      onClick: () => copyToClipboard(message.id),
     });
     items.push({
       label: 'Copiar ID do Usuário',
       icon: <Copy className="w-4 h-4" />,
-      onClick: () => navigator.clipboard.writeText(author.id),
+      onClick: () => copyToClipboard(author.id),
     });
 
     openContextMenu(e, items, `@${author.username}`);

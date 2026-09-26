@@ -4,6 +4,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
 import { formatAssetUrl, api } from '../../lib/api';
+import { copyToClipboard } from '../../utils/clipboard';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { ServerFolder } from '../../types';
@@ -322,12 +323,10 @@ export const ServerList: React.FC<ServerListProps> = ({
         : []),
       {
         id: 'copy-id',
-        label: copiedGuildId === guild.id ? 'ID Copiado!' : 'Copiar ID do Servidor',
-        icon: copiedGuildId === guild.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />,
+        label: 'Copiar ID do Servidor',
+        icon: <Copy className="w-4 h-4" />,
         onClick: () => {
-          navigator.clipboard.writeText(guild.id);
-          setCopiedGuildId(guild.id);
-          setTimeout(() => setCopiedGuildId(null), 2000);
+          copyToClipboard(guild.id);
         },
       },
       {

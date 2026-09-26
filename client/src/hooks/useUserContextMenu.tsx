@@ -24,6 +24,7 @@ import { useContextMenu, ContextMenuItem } from '../components/ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from '../components/Voice/VolumeSliders';
 import { useGuildPermissions } from './useGuildPermissions';
 import { api } from '../lib/api';
+import { copyToClipboard } from '../utils/clipboard';
 
 export interface UserContextMenuOptions {
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
@@ -271,7 +272,7 @@ export function useUserContextMenu() {
       items.push({
         label: 'Copiar ID do Usuário',
         icon: <Copy className="w-4 h-4" />,
-        onClick: () => navigator.clipboard.writeText(targetUser.id),
+        onClick: () => copyToClipboard(targetUser.id),
       });
 
       openContextMenu(e, items, `@${targetUser.username}`);
