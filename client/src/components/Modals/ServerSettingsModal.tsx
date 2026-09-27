@@ -721,14 +721,9 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   return (
     <>
       <div
-        onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-0 md:p-4 overflow-hidden animate-fade-in"
+        className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen bg-[#18191c] overflow-hidden text-gray-200 select-none ${reducedMotion ? '' : 'animate-in fade-in duration-150'}`}
       >
-        <div className={`flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-[#18191c] rounded-none md:rounded-2xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200 ${reducedMotion ? '' : 'animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none'}`}>
-          
-          {/* MOBILE MENU VIEW */}
+        {/* MOBILE MENU VIEW */}
           {mobileView === 'menu' && (
             <div className="flex md:hidden flex-col w-full h-full bg-[#18191c] overflow-hidden">
               <div
@@ -1212,7 +1207,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             </div>
           </div>
         </div>
-      </div>
 
       {/* MODAL 1: CROP IMAGE */}
       {isCropOpen && cropFile && (
