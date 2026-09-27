@@ -19,9 +19,12 @@ import {
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
+  ArrowLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Channel, Role, Permissions, ChannelPermissionOverwrite } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 interface ChannelSettingsModalProps {
   channel: Channel | null;
@@ -43,19 +46,21 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   onClose,
 }) => {
   const { activeGuild, updateChannel, deleteChannel } = useGuildStore();
-  
-  // Tab state
+  const reducedMotion = useSettingsStore((state) => state.reducedMotion);
+
+  // Tab & View state
   const [activeTab, setActiveTab] = useState<'overview' | 'permissions'>('overview');
-  
+  const [mobileView, setMobileView] = useState<'menu' | 'content'>('menu');
+
   // Overview Form
   const [name, setName] = useState('');
   const [topic, setTopic] = useState('');
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
-  
+
   // Permissions State: map of roleId -> { allow: number, deny: number }
   const [overwrites, setOverwrites] = useState<Record<string, { allow: number; deny: number }>>({});
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
-  
+
   // Status
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -65,6 +70,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   useEffect(() => {
     if (channel && isOpen) {
       setActiveTab('overview');
+      setMobileView('menu');
       setName(channel.name || '');
       setTopic(channel.topic || '');
       setCategoryId(channel.category_id);
@@ -310,73 +316,282 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
     }
   };
 
+  const customOverwritesCount = Object.values(overwrites).filter(
+    (ow) => ow.allow !== 0 || ow.deny !== 0
+  ).length;
+
   return (
     <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-0 md:p-4 overflow-hidden animate-in fade-in duration-150"
+      className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen bg-[#18191c] overflow-hidden text-gray-200 select-none ${
+        reducedMotion ? '' : 'animate-in fade-in duration-150'
+      }`}
     >
-      <div className="bg-background-darkest w-full h-full md:max-w-2xl md:h-auto md:max-h-[92dvh] md:my-auto flex flex-col rounded-none md:rounded-3xl overflow-hidden shadow-2xl border-0 md:border md:border-white/10 animate-in fade-in zoom-in-95">
-        {/* Header */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 bg-background-darker/60 flex-shrink-0">
-          <div className="flex items-center gap-2.5">
-            {isCategory ? (
-              <Folder className="w-5 h-5 text-brand-400" />
-            ) : channel.type === 'text' ? (
-              <Hash className="w-5 h-5 text-gray-400" />
-            ) : (
-              <Volume2 className="w-5 h-5 text-online" />
-            )}
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-white leading-tight">
-                {isCategory ? `Categoria: ${channel.name}` : `#${channel.name}`}
-              </h2>
-              <p className="text-[11px] text-gray-400">Configurações do Canal</p>
+      {/* MOBILE MENU VIEW */}
+      {mobileView === 'menu' && (
+        <div className="flex md:hidden flex-col w-full h-full bg-[#18191c] overflow-hidden">
+          <div
+            style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
+            className="px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex items-center justify-between flex-shrink-0"
+          >
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-base font-bold text-white">Configurações do Canal</h2>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y no-scrollbar">
+            {/* Channel Mini Card */}
+            <div
+              onClick={() => {
+                setActiveTab('overview');
+                setMobileView('content');
+              }}
+              className="p-3.5 bg-[#1e1f22] rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer active:bg-white/5 transition-colors shadow-sm"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-background-darker flex items-center justify-center text-gray-300 flex-shrink-0 border border-white/10">
+                  {isCategory ? (
+                    <Folder className="w-5 h-5 text-brand-400" />
+                  ) : isText ? (
+                    <Hash className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-online" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-white truncate">
+                    {isCategory ? channel.name : `#${channel.name}`}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {isCategory ? 'Categoria' : isText ? 'Canal de Texto' : 'Canal de Voz'}
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-500 shrink-0" />
+            </div>
+
+            {/* Navigation Group */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
+                Navegação
+              </span>
+              <div className="bg-[#1e1f22] rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('overview');
+                    setMobileView('content');
+                  }}
+                  className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white">Visão Geral</div>
+                    <div className="text-xs text-gray-400">Nome, tópico e categoria pai</div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('permissions');
+                    setMobileView('content');
+                  }}
+                  className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white">Permissões</div>
+                    <div className="text-xs text-gray-400">
+                      {customOverwritesCount > 0
+                        ? `${customOverwritesCount} cargos personalizados`
+                        : 'Configurar acesso por cargo'}
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                </button>
+              </div>
+            </div>
+
+            {/* Danger Actions */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
+                Ações
+              </span>
+              <div className="bg-[#1e1f22] rounded-2xl border border-white/10 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="w-full flex items-center justify-between p-3.5 text-left hover:bg-red-500/10 active:bg-red-500/20 text-red-400 transition-colors cursor-pointer"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">
+                      {isCategory ? 'Excluir Categoria' : 'Excluir Canal'}
+                    </div>
+                    <div className="text-xs text-red-400/70">
+                      {isCategory
+                        ? 'Remove a categoria (move canais para a raiz)'
+                        : 'Apagar permanentemente este canal'}
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-red-400/50 shrink-0" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DESKTOP SIDEBAR TABS */}
+      <div className="hidden md:flex w-60 lg:w-64 bg-[#111214] border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar">
+        <div className="px-3 py-2 mb-2">
+          <div className="flex items-center gap-2">
+            {isCategory ? (
+              <Folder className="w-4 h-4 text-brand-400 flex-shrink-0" />
+            ) : isText ? (
+              <Hash className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            ) : (
+              <Volume2 className="w-4 h-4 text-online flex-shrink-0" />
+            )}
+            <h2 className="text-xs font-bold uppercase tracking-wider text-gray-300 font-mono truncate">
+              {channel.name}
+            </h2>
+          </div>
+          <div className="text-[11px] text-gray-500 mt-0.5">
+            {isCategory ? 'Configurações da Categoria' : 'Configurações do Canal'}
+          </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex border-b border-white/5 px-4 sm:px-6 gap-2 bg-background-darker/30 flex-shrink-0 overflow-x-auto no-scrollbar touch-pan-x">
+        <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
+            Configurações
+          </span>
+
           <button
             type="button"
             onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer flex-shrink-0 ${
+            className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
               activeTab === 'overview'
-                ? 'border-brand-500 text-white'
-                : 'border-transparent text-gray-400 hover:text-gray-200'
+                ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
             }`}
           >
-            <SettingsIcon className="w-4 h-4" />
             <span>Visão Geral</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('permissions')}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer flex-shrink-0 ${
+            className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
               activeTab === 'permissions'
-                ? 'border-brand-500 text-white'
-                : 'border-transparent text-gray-400 hover:text-gray-200'
+                ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
             }`}
           >
-            <Shield className="w-4 h-4" />
-            <span>Permissões por Cargo</span>
+            <span>Permissões</span>
+            {customOverwritesCount > 0 && (
+              <span className="text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-brand-400 font-bold">
+                {customOverwritesCount}
+              </span>
+            )}
           </button>
+        </nav>
+
+        <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-2" />
+            <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* MAIN CONTENT AREA */}
+      <div
+        className={`${
+          mobileView === 'content' ? 'flex' : 'hidden md:flex'
+        } flex-1 flex-col overflow-hidden bg-[#18191c] relative min-w-0 min-h-0`}
+      >
+        {/* Mobile Drilldown Top Bar */}
+        <div
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
+          className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex-shrink-0"
+        >
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileView('menu')}
+              className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Voltar</span>
+            </button>
+          </div>
+          <h2 className="text-sm font-bold text-white truncate max-w-[180px]">
+            {activeTab === 'overview' ? 'Visão Geral' : 'Permissões'}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer"
+            title="Fechar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Desktop Top Header */}
+        <div className="hidden md:flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-[#1e1f22]/40">
+          <div>
+            <h1 className="text-lg font-bold text-white flex items-center gap-2">
+              {activeTab === 'overview'
+                ? isCategory
+                  ? 'Visão Geral da Categoria'
+                  : 'Visão Geral do Canal'
+                : 'Permissões por Cargo'}
+            </h1>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {activeTab === 'overview'
+                ? isCategory
+                  ? 'Altere o nome da categoria para organizar melhor os canais do servidor'
+                  : 'Defina o nome, tópico e categoria deste canal'
+                : 'Personalize o acesso e as ações permitidas ou negadas para cada cargo'}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleSave()}
+              disabled={isSaving}
+              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-xs transition-all shadow-md shadow-brand-500/25 cursor-pointer"
+            >
+              {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Fechar Configurações (ESC)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Status Toast Notification */}
         {saveStatus && (
           <div
-            className={`mx-6 mt-3 p-3 rounded-xl text-xs flex items-center gap-2.5 animate-in fade-in ${
+            className={`mx-4 sm:mx-8 mt-4 p-3 rounded-xl text-xs flex items-center gap-2.5 animate-in fade-in flex-shrink-0 ${
               saveStatus.type === 'success'
                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                 : 'bg-red-500/15 text-red-300 border border-red-500/30'
@@ -391,90 +606,101 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           </div>
         )}
 
-        {/* Body Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 no-scrollbar min-h-0 overscroll-contain touch-pan-y">
+        {/* TAB CONTENTS */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 no-scrollbar min-h-0 overscroll-contain touch-pan-y">
           {/* TAB 1: Visão Geral */}
           {activeTab === 'overview' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  {isCategory ? 'Nome da Categoria' : 'Nome do Canal'}
-                </label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-gray-400">
-                    {isCategory ? <Folder className="w-4 h-4" /> : isText ? '#' : <Volume2 className="w-4 h-4" />}
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={isCategory ? 'COMUNIDADE' : 'novo-canal'}
-                    className="w-full bg-background-darker border border-white/10 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
+            <div className="max-w-2xl space-y-6">
+              <div className="bg-[#1e1f22] p-5 rounded-2xl border border-white/10 space-y-4 shadow-sm">
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                    {isCategory ? 'Nome da Categoria' : 'Nome do Canal'}
+                  </label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3.5 text-gray-400">
+                      {isCategory ? (
+                        <Folder className="w-4 h-4" />
+                      ) : isText ? (
+                        '#'
+                      ) : (
+                        <Volume2 className="w-4 h-4" />
+                      )}
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={isCategory ? 'COMUNIDADE' : 'novo-canal'}
+                      className="w-full bg-[#111214] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
+                    />
+                  </div>
                 </div>
+
+                {!isCategory && categories.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                      Categoria Pai
+                    </label>
+                    <select
+                      value={categoryId || ''}
+                      onChange={(e) =>
+                        setCategoryId(e.target.value ? e.target.value : undefined)
+                      }
+                      className="w-full bg-[#111214] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
+                    >
+                      <option value="">Nenhuma (Canal na Raiz)</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          📁 {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {!isCategory && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                      Tópico do Canal
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                      placeholder="Descreva o propósito deste canal..."
+                      className="w-full bg-[#111214] border border-white/10 rounded-xl p-3.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none transition-colors"
+                    />
+                  </div>
+                )}
               </div>
-
-              {!isCategory && categories.length > 0 && (
-                <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Categoria Pai
-                  </label>
-                  <select
-                    value={categoryId || ''}
-                    onChange={(e) => setCategoryId(e.target.value ? e.target.value : undefined)}
-                    className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
-                  >
-                    <option value="">Nenhuma (Canal na Raiz)</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        📁 {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {!isCategory && (
-                <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Tópico do Canal
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    placeholder="Descreva o propósito deste canal..."
-                    className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none"
-                  />
-                </div>
-              )}
             </div>
           )}
 
           {/* TAB 2: Permissões de Cargos */}
           {activeTab === 'permissions' && (
-            <div className="flex flex-col md:flex-row gap-4 sm:gap-5 min-h-0 md:min-h-[380px]">
+            <div className="flex flex-col md:flex-row gap-6 min-h-0 h-full">
               {/* Left Column: Roles list selector */}
-              <div className="w-full md:w-52 flex flex-col gap-1.5 shrink-0 pr-0 md:pr-2 border-b md:border-b-0 md:border-r border-white/5 pb-3 md:pb-0">
+              <div className="w-full md:w-60 flex flex-col gap-2 shrink-0 bg-[#1e1f22] p-4 rounded-2xl border border-white/10 shadow-sm">
                 <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-1">
                   Cargos do Servidor
                 </span>
 
-                <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto max-h-none md:max-h-96 gap-1.5 md:gap-1 pr-0 md:pr-1 no-scrollbar">
+                <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto max-h-none md:max-h-[calc(100vh-280px)] gap-1.5 md:gap-1 no-scrollbar">
                   {roles.map((role) => {
                     const isSelected = selectedRole?.id === role.id;
-                    const isEveryone = role.name === '@everyone';
-                    const hasCustomOw = overwrites[role.id] && (overwrites[role.id].allow !== 0 || overwrites[role.id].deny !== 0);
+                    const hasCustomOw =
+                      overwrites[role.id] &&
+                      (overwrites[role.id].allow !== 0 || overwrites[role.id].deny !== 0);
 
                     return (
                       <div
                         key={role.id}
                         onClick={() => setSelectedRoleId(role.id)}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium cursor-pointer transition-all flex-shrink-0 ${
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-all flex-shrink-0 ${
                           isSelected
-                            ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
-                            : 'text-gray-300 hover:bg-white/5 bg-background-darker/60 md:bg-transparent'
+                            ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
+                            : 'text-gray-300 hover:bg-white/5 bg-[#111214] md:bg-transparent'
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate min-w-0">
@@ -486,7 +712,12 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                         </div>
 
                         {hasCustomOw && (
-                          <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-brand-400'} shrink-0 ml-1`} title="Possui permissões configuradas neste canal" />
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              isSelected ? 'bg-white' : 'bg-brand-400'
+                            } shrink-0 ml-1`}
+                            title="Possui permissões configuradas neste canal"
+                          />
                         )}
                       </div>
                     );
@@ -495,17 +726,17 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               </div>
 
               {/* Right Column: Permissions for selected role */}
-              <div className="flex-1 space-y-5 overflow-y-auto max-h-96 pr-2 no-scrollbar">
+              <div className="flex-1 bg-[#1e1f22] p-5 sm:p-6 rounded-2xl border border-white/10 space-y-6 overflow-y-auto max-h-[calc(100vh-220px)] no-scrollbar shadow-sm">
                 {selectedRole && (
                   <>
                     {/* Header info of selected role */}
-                    <div className="flex items-center justify-between pb-3 border-b border-white/5">
-                      <div className="flex items-center gap-2.5">
+                    <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                      <div className="flex items-center gap-3">
                         <span
-                          className="w-4 h-4 rounded-full"
+                          className="w-4 h-4 rounded-full shadow-sm"
                           style={{ backgroundColor: selectedRole.color || '#99AAB5' }}
                         />
-                        <span className="font-bold text-sm text-white">{selectedRole.name}</span>
+                        <span className="font-bold text-base text-white">{selectedRole.name}</span>
                         {selectedRole.name === '@everyone' && (
                           <span className="text-[10px] bg-white/10 text-gray-300 px-2 py-0.5 rounded-full font-medium">
                             Cargo Padrão
@@ -517,11 +748,11 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleResetRolePermissions(selectedRole.id)}
-                          className="text-[11px] text-gray-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                          className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
                           title="Restaurar todas as permissões para o padrão do servidor"
                         >
-                          <RotateCcw className="w-3 h-3" />
-                          <span>Redefinir</span>
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Redefinir Cargo</span>
                         </button>
                       )}
                     </div>
@@ -529,8 +760,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                     {/* Permissions Groups */}
                     <div className="space-y-6">
                       {channelPermsList.map((group) => (
-                        <div key={group.category} className="space-y-2.5">
-                          <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                        <div key={group.category} className="space-y-3">
+                          <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                             {group.category}
                           </h4>
 
@@ -541,12 +772,14 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                               return (
                                 <div
                                   key={perm.key}
-                                  className="p-3 rounded-2xl bg-background-darker/70 border border-white/5 flex items-center justify-between gap-4 transition-all hover:border-white/10"
+                                  className="p-3.5 rounded-xl bg-[#111214] border border-white/5 flex items-center justify-between gap-4 transition-all hover:border-white/10"
                                 >
                                   <div className="space-y-0.5 min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
                                       {perm.icon}
-                                      <span className="text-xs font-bold text-gray-100">{perm.name}</span>
+                                      <span className="text-xs font-bold text-gray-100">
+                                        {perm.name}
+                                      </span>
                                     </div>
                                     <p className="text-[11px] text-gray-400 leading-tight">
                                       {perm.desc}
@@ -554,11 +787,17 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                   </div>
 
                                   {/* 3-State Toggle: ❌ Negar | ⚪ Herdar | ✅ Permitir */}
-                                  <div className="flex items-center bg-background-darkest p-1 rounded-xl border border-white/10 shrink-0">
+                                  <div className="flex items-center bg-[#1e1f22] p-1 rounded-xl border border-white/10 shrink-0">
                                     {/* Deny Button ❌ */}
                                     <button
                                       type="button"
-                                      onClick={() => setPermissionState(selectedRole.id, perm.flag, state === 'deny' ? 'inherit' : 'deny')}
+                                      onClick={() =>
+                                        setPermissionState(
+                                          selectedRole.id,
+                                          perm.flag,
+                                          state === 'deny' ? 'inherit' : 'deny'
+                                        )
+                                      }
                                       className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
                                         state === 'deny'
                                           ? 'bg-red-500 text-white shadow-md shadow-red-500/30'
@@ -572,7 +811,9 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                     {/* Inherit Button ⚪ */}
                                     <button
                                       type="button"
-                                      onClick={() => setPermissionState(selectedRole.id, perm.flag, 'inherit')}
+                                      onClick={() =>
+                                        setPermissionState(selectedRole.id, perm.flag, 'inherit')
+                                      }
                                       className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
                                         state === 'inherit'
                                           ? 'bg-white/15 text-gray-100'
@@ -586,7 +827,13 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                     {/* Allow Button ✅ */}
                                     <button
                                       type="button"
-                                      onClick={() => setPermissionState(selectedRole.id, perm.flag, state === 'allow' ? 'inherit' : 'allow')}
+                                      onClick={() =>
+                                        setPermissionState(
+                                          selectedRole.id,
+                                          perm.flag,
+                                          state === 'allow' ? 'inherit' : 'allow'
+                                        )
+                                      }
                                       className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
                                         state === 'allow'
                                           ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
@@ -611,35 +858,23 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="px-6 py-4 bg-background-darker/60 border-t border-white/5 flex items-center justify-between flex-shrink-0">
+        {/* Mobile Floating Save Button */}
+        <div className="flex md:hidden p-4 bg-[#111214] border-t border-white/10 items-center justify-between flex-shrink-0">
           <button
             type="button"
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="text-dnd hover:bg-dnd/10 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-medium text-gray-300 hover:underline cursor-pointer"
           >
-            <Trash2 className="w-4 h-4" />
-            <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
+            Cancelar
           </button>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-gray-300 hover:underline cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSave()}
-              disabled={isSaving}
-              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-brand-500/25 cursor-pointer"
-            >
-              {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => handleSave()}
+            disabled={isSaving}
+            className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-brand-500/25 cursor-pointer"
+          >
+            {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+          </button>
         </div>
       </div>
     </div>

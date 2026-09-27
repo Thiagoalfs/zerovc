@@ -270,6 +270,7 @@ func main() {
 		profileUpdateLimiter := ratelimit.NewUserRateLimiter(10, 10.0/60.0, "Você está atualizando seu perfil muito rápido. Aguarde um instante.")
 		moderationLimiter := ratelimit.NewUserRateLimiter(10, 10.0/60.0, "Você está realizando ações de moderação muito rápido. Aguarde um instante.")
 		guildStructureLimiter := ratelimit.NewUserRateLimiter(10, 10.0/60.0, "Você está alterando a estrutura do servidor muito rápido. Aguarde um instante.")
+		guildReorderLimiter := ratelimit.NewUserRateLimiter(30, 1.0, "Você está reordenando canais ou cargos muito rápido. Aguarde um instante.")
 		messageMutationLimiter := ratelimit.NewUserRateLimiter(15, 15.0/60.0, "Você está editando ou excluindo mensagens muito rápido. Aguarde um instante.")
 		channelAckLimiter := ratelimit.NewUserRateLimiter(30, 30.0/60.0, "Você está confirmando leitura de canais muito rápido. Aguarde um instante.")
 
@@ -327,7 +328,7 @@ func main() {
 		r.With(guildStructureLimiter.Middleware).Delete("/api/channels/{id}", channelHandler.Delete)
 		r.With(guildStructureLimiter.Middleware).Put("/api/channels/{id}/permissions/{roleID}", channelHandler.UpdatePermissionOverwrite)
 		r.With(guildStructureLimiter.Middleware).Delete("/api/channels/{id}/permissions/{roleID}", channelHandler.DeletePermissionOverwrite)
-		r.With(guildStructureLimiter.Middleware).Put("/api/guilds/{guildID}/channels/positions", channelHandler.Reorder)
+		r.With(guildReorderLimiter.Middleware).Put("/api/guilds/{guildID}/channels/positions", channelHandler.Reorder)
 		r.With(searchLimiter.Middleware).Get("/api/channels/{channelID}/messages/search", messageHandler.Search)
 		r.With(channelAckLimiter.Middleware).Post("/api/channels/{channelID}/ack", messageHandler.AckChannel)
 
@@ -335,7 +336,7 @@ func main() {
 		r.Get("/api/guilds/{guildID}/roles", roleHandler.List)
 		r.With(guildStructureLimiter.Middleware).Post("/api/guilds/{guildID}/roles", roleHandler.Create)
 		r.With(guildStructureLimiter.Middleware).Patch("/api/guilds/{guildID}/roles/{roleID}", roleHandler.Update)
-		r.With(guildStructureLimiter.Middleware).Put("/api/guilds/{guildID}/roles/positions", roleHandler.Reorder)
+		r.With(guildReorderLimiter.Middleware).Put("/api/guilds/{guildID}/roles/positions", roleHandler.Reorder)
 		r.With(guildStructureLimiter.Middleware).Delete("/api/guilds/{guildID}/roles/{roleID}", roleHandler.Delete)
 		r.With(guildStructureLimiter.Middleware).Post("/api/guilds/{guildID}/members/{userID}/roles/{roleID}", roleHandler.AssignRole)
 		r.With(guildStructureLimiter.Middleware).Delete("/api/guilds/{guildID}/members/{userID}/roles/{roleID}", roleHandler.RemoveRole)
