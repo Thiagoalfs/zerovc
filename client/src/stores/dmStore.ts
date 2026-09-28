@@ -11,6 +11,7 @@ interface DMState {
   messages: DMMessage[];
   unreadRooms: Set<string>;
   roomUnreadCounts: Record<string, number>;
+  firstUnreadMessageIdByRoom: Record<string, string | null>;
   messagesByRoom: Record<string, DMMessage[]>;
   pinnedMessagesByRoom: Record<string, DMMessage[]>;
   isLoadingPinned: Record<string, boolean>;
@@ -21,6 +22,8 @@ interface DMState {
 
   fetchRooms: () => Promise<void>;
   selectRoom: (room: DMRoom) => Promise<void>;
+  markRoomAsRead: (roomId: string) => void;
+  clearUnreadDivider: (roomId: string) => void;
   loadMoreMessages: (roomId: string) => Promise<void>;
   fetchPinnedMessages: (roomId: string) => Promise<void>;
   openDMWithUser: (recipientId: string) => Promise<DMRoom>;
@@ -43,6 +46,7 @@ export const useDMStore = create<DMState>((set, get) => ({
   messages: [],
   unreadRooms: new Set(),
   roomUnreadCounts: {},
+  firstUnreadMessageIdByRoom: {},
   messagesByRoom: {},
   pinnedMessagesByRoom: {},
   isLoadingPinned: {},
@@ -55,7 +59,12 @@ export const useDMStore = create<DMState>((set, get) => ({
     set({ isLoadingRooms: true });
     try {
       const rooms = await api.dms.listRooms();
-      set({ rooms, isLoadingRooms: false });
+      const sortedRooms = [...rooms].sort((a, b) => {
+        const aTime = a.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : new Date(a.created_at).getTime();
+        const bTime = b.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : new Date(b.created_at).getTime();
+        return bTime - aTime;
+      });
+      set({ rooms: sortedRooms, isLoadingRooms: false });
     } catch (err) {
       console.error('Failed to fetch DM rooms:', err);
       set({ isLoadingRooms: false });
@@ -100,6 +109,31 @@ export const useDMStore = create<DMState>((set, get) => ({
         set({ isLoadingMessages: false });
       }
     }
+  },
+
+  markRoomAsRead: (roomId: string) => {
+    set((state) => {
+      const unread = new Set(state.unreadRooms);
+      unread.delete(roomId);
+      const counts = { ...state.roomUnreadCounts };
+      delete counts[roomId];
+      const nextFirstUnread = { ...state.firstUnreadMessageIdByRoom };
+      nextFirstUnread[roomId] = null;
+      return {
+        unreadRooms: unread,
+        roomUnreadCounts: counts,
+        firstUnreadMessageIdByRoom: nextFirstUnread,
+      };
+    });
+  },
+
+  clearUnreadDivider: (roomId: string) => {
+    set((state) => ({
+      firstUnreadMessageIdByRoom: {
+        ...state.firstUnreadMessageIdByRoom,
+        [roomId]: null,
+      },
+    }));
   },
 
   loadMoreMessages: async (roomId: string) => {
@@ -221,7 +255,16 @@ export const useDMStore = create<DMState>((set, get) => ({
           nextByRoom[activeRoom.id] = replaceTemp(nextByRoom[activeRoom.id]);
         }
 
+        const nextRooms = [...state.rooms];
+        const roomIdx = nextRooms.findIndex((r) => r.id === activeRoom.id);
+        if (roomIdx !== -1) {
+          const updatedRoom = { ...nextRooms[roomIdx], last_message: readyMsg };
+          nextRooms.splice(roomIdx, 1);
+          nextRooms.unshift(updatedRoom);
+        }
+
         return {
+          rooms: nextRooms,
           messages: state.activeRoom?.id === activeRoom.id ? replaceTemp(state.messages) : state.messages,
           messagesByRoom: nextByRoom,
         };
@@ -295,6 +338,19 @@ export const useDMStore = create<DMState>((set, get) => ({
         [message.dm_room_id]: updatedRoomMsgs,
       };
 
+      // Reorder rooms: move this room to top and update last_message
+      const nextRooms = [...state.rooms];
+      const roomIdx = nextRooms.findIndex((r) => r.id === message.dm_room_id);
+      if (roomIdx !== -1) {
+        const updatedRoom = { ...nextRooms[roomIdx], last_message: message };
+        nextRooms.splice(roomIdx, 1);
+        nextRooms.unshift(updatedRoom);
+      } else {
+        setTimeout(() => {
+          get().fetchRooms();
+        }, 50);
+      }
+
       if (state.activeRoom && state.activeRoom.id === message.dm_room_id) {
         const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
         const activeTempIdx = state.messages.findIndex(
@@ -321,6 +377,7 @@ export const useDMStore = create<DMState>((set, get) => ({
           }
         }
         return {
+          rooms: nextRooms,
           messages: nextMessages,
           messagesByRoom: nextMessagesByRoom,
         };
@@ -332,10 +389,18 @@ export const useDMStore = create<DMState>((set, get) => ({
           counts[message.dm_room_id] = (counts[message.dm_room_id] || 0) + 1;
         }
         playMessageSound(false);
+
+        const nextFirstUnread = { ...state.firstUnreadMessageIdByRoom };
+        if (!nextFirstUnread[message.dm_room_id]) {
+          nextFirstUnread[message.dm_room_id] = message.id;
+        }
+
         return {
+          rooms: nextRooms,
           unreadRooms: unread,
           roomUnreadCounts: counts,
           messagesByRoom: nextMessagesByRoom,
+          firstUnreadMessageIdByRoom: nextFirstUnread,
         };
       }
     });

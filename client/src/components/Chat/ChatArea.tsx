@@ -49,6 +49,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     loadMoreMessages,
     sendMessage,
     typingUsers,
+    firstUnreadMessageIdByChannel,
+    clearUnreadDivider,
   } = useGuildStore();
   const [localShowMemberList, setLocalShowMemberList] = useState<boolean>(() => {
     try {
@@ -205,6 +207,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
+  const firstUnreadId = activeChannel ? firstUnreadMessageIdByChannel[activeChannel.id] : null;
+
   const handleScroll = () => {
     const container = scrollContainerRef.current;
     if (!container || !activeChannel) return;
@@ -213,6 +217,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (container.scrollTop < 60 && !isLoadingMoreMessages && hasMoreByChannel[activeChannel.id] !== false) {
       prevScrollHeightRef.current = container.scrollHeight;
       loadMoreMessages(activeChannel.id);
+    }
+
+    // Clear unread divider line when scrolled to bottom
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
+    if (isAtBottom && firstUnreadId) {
+      clearUnreadDivider(activeChannel.id);
     }
   };
 
@@ -508,25 +518,38 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               </div>
             ) : (
               displayedMessages.map((msg, index) => {
+                const isFirstUnread = firstUnreadId === msg.id;
                 const prevMsg = index > 0 ? displayedMessages[index - 1] : null;
-                const isCompact = prevMsg !== null &&
+                const isCompact = !isFirstUnread &&
+                  prevMsg !== null &&
                   prevMsg.author_id === msg.author_id &&
                   (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 5 * 60 * 1000;
 
                 return (
-                  <MessageItem
-                    key={msg.id}
-                    message={msg}
-                    isCompact={isCompact}
-                    isEditing={editingMessageId === msg.id}
-                    onStartEdit={() => setEditingMessageId(msg.id)}
-                    onStopEdit={() => setEditingMessageId(null)}
-                    onOpenUserProfile={onOpenUserProfile}
-                    onOpenDM={onOpenDM}
-                    onPreviewImage={onPreviewImage}
-                    onReply={(message) => setReplyingTo(message)}
-                    onImageLoad={handleMediaLoad}
-                  />
+                  <React.Fragment key={msg.id}>
+                    {isFirstUnread && (
+                      <div className="flex items-center gap-3 my-4 mx-2 select-none">
+                        <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+                        <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          Mensagens não lidas
+                        </span>
+                        <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+                      </div>
+                    )}
+                    <MessageItem
+                      message={msg}
+                      isCompact={isCompact}
+                      isEditing={editingMessageId === msg.id}
+                      onStartEdit={() => setEditingMessageId(msg.id)}
+                      onStopEdit={() => setEditingMessageId(null)}
+                      onOpenUserProfile={onOpenUserProfile}
+                      onOpenDM={onOpenDM}
+                      onPreviewImage={onPreviewImage}
+                      onReply={(message) => setReplyingTo(message)}
+                      onImageLoad={handleMediaLoad}
+                    />
+                  </React.Fragment>
                 );
               })
             )}

@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, MessageSquare, CheckCheck, Bell, BellOff, Copy, LogOut, Check, Folder, ChevronDown, ChevronRight, Trash2, Volume2 } from 'lucide-react';
+import { Plus, MessageSquare, CheckCheck, Bell, BellOff, Copy, LogOut, Check, Folder, ChevronDown, ChevronRight, Trash2, Volume2, Users } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
+import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useAuthStore } from '../../stores/authStore';
 import { formatAssetUrl, api } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
-import { ServerFolder } from '../../types';
+import { ServerFolder, DMRoom, DMGroup } from '../../types';
 
 interface ServerListProps {
   isHomeActive: boolean;
   onSelectHome: () => void;
+  onSelectDM?: (room: DMRoom) => void;
+  onSelectGroup?: (group: DMGroup) => void;
   onSelectGuild?: (guildId: string) => void;
   onOpenCreateServer: () => void;
 }
@@ -20,6 +23,8 @@ interface ServerListProps {
 export const ServerList: React.FC<ServerListProps> = ({
   isHomeActive,
   onSelectHome,
+  onSelectDM,
+  onSelectGroup,
   onSelectGuild,
   onOpenCreateServer,
 }) => {
@@ -38,10 +43,16 @@ export const ServerList: React.FC<ServerListProps> = ({
     guildVoiceStates,
     fetchGuildVoiceStates,
   } = useGuildStore();
-  const { roomUnreadCounts } = useDMStore();
+  const { rooms, unreadRooms, roomUnreadCounts, selectRoom, activeRoom, fetchRooms } = useDMStore();
+  const { groups, unreadGroups, groupUnreadCounts, selectGroup, activeGroup, fetchGroups } = useDMGroupStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const [copiedGuildId, setCopiedGuildId] = useState<string | null>(null);
   const [hoveredGuild, setHoveredGuild] = useState<{ guild: (typeof guilds)[0]; rect: DOMRect } | null>(null);
+
+  useEffect(() => {
+    fetchRooms();
+    fetchGroups();
+  }, []);
 
   // Server Folders State with Local Storage Cache & Database Sync
   const [folders, setFolders] = useState<ServerFolder[]>(() => {
@@ -94,7 +105,24 @@ export const ServerList: React.FC<ServerListProps> = ({
     }, 800);
   };
 
-  const totalUnreadDMs = Object.values(roomUnreadCounts).reduce((acc, count) => acc + count, 0);
+  const totalUnreadDMGroups = Object.values(groupUnreadCounts).reduce((acc, count) => acc + count, 0);
+  const totalUnreadDMs = Object.values(roomUnreadCounts).reduce((acc, count) => acc + count, 0) + totalUnreadDMGroups;
+
+  const unreadDMRooms = useMemo(() => {
+    return rooms.filter((r) => {
+      const count = roomUnreadCounts[r.id] || (unreadRooms.has(r.id) ? 1 : 0);
+      const isCurrentActive = isHomeActive && activeRoom?.id === r.id;
+      return count > 0 && !isCurrentActive;
+    });
+  }, [rooms, roomUnreadCounts, unreadRooms, isHomeActive, activeRoom]);
+
+  const unreadDMGroups = useMemo(() => {
+    return groups.filter((g) => {
+      const count = groupUnreadCounts[g.id] || (unreadGroups.has(g.id) ? 1 : 0);
+      const isCurrentActive = isHomeActive && activeGroup?.id === g.id;
+      return count > 0 && !isCurrentActive;
+    });
+  }, [groups, groupUnreadCounts, unreadGroups, isHomeActive, activeGroup]);
 
   // Map of guild ID to folder ID
   const guildToFolderMap = useMemo(() => {
@@ -288,12 +316,14 @@ export const ServerList: React.FC<ServerListProps> = ({
     const isOwner = user?.id === guild.owner_id;
     const isMuted = isGuildMuted(guild.id);
     const currentFolder = guildToFolderMap.get(guild.id);
+    const hasUnread = (guild.channels || []).some((c) => unreadChannels.has(c.id)) || (guildMentions[guild.id] || 0) > 0;
 
     const items: ContextMenuItem[] = [
       {
         id: 'mark-as-read',
         label: 'Marcar como lido',
-        icon: <CheckCheck className="w-4 h-4 text-emerald-400" />,
+        icon: <CheckCheck className="w-4 h-4" />,
+        disabled: !hasUnread,
         onClick: () => {
           markGuildAsRead(guild.id);
         },
@@ -397,6 +427,13 @@ export const ServerList: React.FC<ServerListProps> = ({
           <div className="absolute -bottom-1.5 inset-x-2 h-1 bg-brand-400 rounded-full z-30 animate-pulse shadow-md shadow-brand-500/50" />
         )}
 
+        {/* Left Indicator Pill */}
+        <div
+          className={`absolute -left-3 w-1 bg-white rounded-r-full transition-all duration-200 ${
+            isActive ? 'h-10' : hasUnread ? 'h-2' : 'h-0 group-hover:h-5'
+          }`}
+        />
+
         <button
           onClick={() => {
             setHoveredGuild(null);
@@ -427,13 +464,6 @@ export const ServerList: React.FC<ServerListProps> = ({
               : 'rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white'
           }`}
         >
-          {/* Left Indicator Pill */}
-          <div
-            className={`absolute left-0 w-1 bg-white rounded-r-full transition-all duration-200 ${
-              isActive ? 'h-10' : hasUnread ? 'h-2' : 'h-0 group-hover:h-5'
-            }`}
-          />
-
           {guild.icon_url ? (
             <img
               src={formatAssetUrl(guild.icon_url)}
@@ -443,14 +473,17 @@ export const ServerList: React.FC<ServerListProps> = ({
           ) : (
             <span>{initials}</span>
           )}
-
-          {/* Mention Notification Badge */}
-          {mentionCount > 0 && !isActive && (
-            <div className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg animate-in zoom-in-50">
-              {mentionCount > 99 ? '99+' : mentionCount}
-            </div>
-          )}
         </button>
+
+        {/* Mention Notification Badge (Elevated z-index to stay above server image rounding) */}
+        {mentionCount > 0 && !isActive && (
+          <div
+            className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50"
+            title={`${mentionCount} menções não lidas`}
+          >
+            {mentionCount > 9 ? '9+' : mentionCount}
+          </div>
+        )}
       </div>
     );
   };
@@ -477,29 +510,145 @@ export const ServerList: React.FC<ServerListProps> = ({
             }`}
           />
 
-          {/* Discord-style Unread DM Notification Badge */}
-          {totalUnreadDMs > 0 && !isHomeActive && (
-            <div className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg animate-in zoom-in-50">
-              {totalUnreadDMs > 99 ? '99+' : totalUnreadDMs}
-            </div>
-          )}
-        </button>
+        {/* Discord-style Unread DM Notification Badge (when there are unreads in total) */}
+        {totalUnreadDMs > 0 && !isHomeActive && (
+          <div className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50">
+            {totalUnreadDMs > 99 ? '99+' : totalUnreadDMs}
+          </div>
+        )}
+      </button>
 
-        <div className="w-8 h-[2px] bg-white/10 rounded-full my-1" />
+      <div className="w-8 h-[2px] bg-white/10 rounded-full my-1" />
 
-        {/* Guilds & Folders List */}
-        <div
-          onScroll={() => setHoveredGuild(null)}
-          onDragOver={(e) => {
-            e.preventDefault();
-          }}
-          onDrop={(e) => {
-            if (draggedGuildId) {
-              handleDrop(e, '', 'root');
-            }
-          }}
-          className="flex-1 w-full flex flex-col items-center gap-2 overflow-y-auto overflow-x-hidden no-scrollbar pb-6"
-        >
+      {/* Guilds & Folders List */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+        }}
+        onDrop={(e) => {
+          if (draggedGuildId) {
+            handleDrop(e, '', 'root');
+          }
+        }}
+        className="flex-1 w-full flex flex-col items-center gap-2 overflow-y-auto overflow-x-hidden no-scrollbar pb-6"
+      >
+        {/* Unread DM User Avatars & Group Icons (Above all servers) */}
+        {(unreadDMRooms.length > 0 || unreadDMGroups.length > 0) && (
+          <div className="w-full flex flex-col items-center gap-2">
+            {/* 1x1 DMs */}
+            {unreadDMRooms.map((room) => {
+              const recipient = room.recipient;
+              const unreadCount = roomUnreadCounts[room.id] || (unreadRooms.has(room.id) ? 1 : 0);
+              const isRoomActive = isHomeActive && activeRoom?.id === room.id;
+              const initials = (recipient?.display_name?.[0] || recipient?.username?.[0] || 'U').toUpperCase();
+
+              return (
+                <div key={room.id} className="relative group flex items-center justify-center">
+                  {/* Left Indicator Pill */}
+                  <div
+                    className={`absolute -left-3 w-1 bg-white rounded-r-full transition-all duration-200 ${
+                      isRoomActive ? 'h-10' : 'h-2 group-hover:h-5'
+                    }`}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onSelectDM) {
+                        onSelectDM(room);
+                      } else {
+                        selectRoom(room);
+                        onSelectHome();
+                      }
+                    }}
+                    className={`relative group w-12 h-12 flex items-center justify-center font-semibold text-sm transition-all duration-150 origin-center rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white shadow-md cursor-pointer ${
+                      isRoomActive ? 'rounded-[16px] bg-brand-500 text-white shadow-lg shadow-brand-500/30' : ''
+                    }`}
+                    title={`DM de ${recipient?.display_name || recipient?.username} (${unreadCount} mensagem${unreadCount > 1 ? 's' : ''} não lida${unreadCount > 1 ? 's' : ''})`}
+                  >
+                    {recipient?.avatar_url ? (
+                      <img
+                        src={formatAssetUrl(recipient.avatar_url)}
+                        alt={recipient.display_name || recipient.username}
+                        className="w-full h-full object-cover rounded-[inherit] transition-all duration-150"
+                      />
+                    ) : (
+                      <span>{initials}</span>
+                    )}
+                  </button>
+
+                  {/* Red Notification Badge with White Number (99+ max, high z-index) */}
+                  {unreadCount > 0 && !isRoomActive && (
+                    <div
+                      className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50"
+                      title={`${unreadCount} mensagens não lidas de ${recipient?.display_name || recipient?.username}`}
+                    >
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* DM Groups */}
+            {unreadDMGroups.map((group) => {
+              const unreadCount = groupUnreadCounts[group.id] || (unreadGroups.has(group.id) ? 1 : 0);
+              const isGroupActive = isHomeActive && activeGroup?.id === group.id;
+              const groupDisplayName = group.name || group.members?.map((m) => m.display_name || m.username).join(', ') || 'Grupo';
+
+              return (
+                <div key={group.id} className="relative group flex items-center justify-center">
+                  {/* Left Indicator Pill */}
+                  <div
+                    className={`absolute -left-3 w-1 bg-white rounded-r-full transition-all duration-200 ${
+                      isGroupActive ? 'h-10' : 'h-2 group-hover:h-5'
+                    }`}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onSelectGroup) {
+                        onSelectGroup(group);
+                      } else {
+                        selectGroup(group);
+                        onSelectHome();
+                      }
+                    }}
+                    className={`relative group w-12 h-12 flex items-center justify-center font-semibold text-sm transition-all duration-150 origin-center rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white shadow-md cursor-pointer ${
+                      isGroupActive ? 'rounded-[16px] bg-brand-500 text-white shadow-lg shadow-brand-500/30' : ''
+                    }`}
+                    title={`Grupo: ${groupDisplayName} (${unreadCount} mensagem${unreadCount > 1 ? 's' : ''} não lida${unreadCount > 1 ? 's' : ''})`}
+                  >
+                    {group.icon_url ? (
+                      <img
+                        src={formatAssetUrl(group.icon_url)}
+                        alt={groupDisplayName}
+                        className="w-full h-full object-cover rounded-[inherit] transition-all duration-150"
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-[inherit] bg-brand-600 flex items-center justify-center text-white">
+                        <Users className="w-5 h-5" />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Red Notification Badge with White Number (99+ max, high z-index) */}
+                  {unreadCount > 0 && !isGroupActive && (
+                    <div
+                      className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50"
+                      title={`${unreadCount} mensagens não lidas no grupo ${groupDisplayName}`}
+                    >
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <div className="w-8 h-[2px] bg-white/10 rounded-full my-1" />
+          </div>
+        )}
           {displayItems.map((item) => {
             if (item.type === 'folder') {
               const folder = item.folder;
@@ -507,6 +656,7 @@ export const ServerList: React.FC<ServerListProps> = ({
               const folderGuilds = folder.guild_ids
                 .map((gid) => guilds.find((g) => g.id === gid))
                 .filter(Boolean) as typeof guilds;
+              const folderMentions = folderGuilds.reduce((acc, g) => acc + (guildMentions[g.id] || 0), 0);
 
               const isOverFolder = dragOverTarget?.id === folder.id;
 
@@ -524,33 +674,45 @@ export const ServerList: React.FC<ServerListProps> = ({
                   }`}
                 >
                   {/* Folder Icon Button (Toggles collapse) */}
-                  <button
-                    type="button"
-                    onClick={() => toggleFolderCollapse(folder.id)}
-                    className={`relative w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 cursor-pointer shadow-md overflow-hidden ${
-                      isCollapsed ? 'bg-background-dark hover:bg-brand-500/30' : 'bg-brand-500/20 text-brand-300'
-                    }`}
-                    title={`${folder.name} (${folderGuilds.length} servidores)`}
-                  >
-                    {isCollapsed ? (
-                      <div className="grid grid-cols-2 gap-1 p-2 w-full h-full">
-                        {folderGuilds.slice(0, 4).map((fg) => (
-                          <div
-                            key={fg.id}
-                            className="w-full h-full rounded-md bg-background-darkest flex items-center justify-center overflow-hidden text-[8px] font-bold text-gray-300"
-                          >
-                            {fg.icon_url ? (
-                              <img src={formatAssetUrl(fg.icon_url)} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <span>{fg.name.slice(0, 1)}</span>
-                            )}
-                          </div>
-                        ))}
+                  <div className="relative flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={() => toggleFolderCollapse(folder.id)}
+                      className={`relative w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 cursor-pointer shadow-md overflow-hidden ${
+                        isCollapsed ? 'bg-background-dark hover:bg-brand-500/30' : 'bg-brand-500/20 text-brand-300'
+                      }`}
+                      title={`${folder.name} (${folderGuilds.length} servidores)`}
+                    >
+                      {isCollapsed ? (
+                        <div className="grid grid-cols-2 gap-1 p-2 w-full h-full">
+                          {folderGuilds.slice(0, 4).map((fg) => (
+                            <div
+                              key={fg.id}
+                              className="w-full h-full rounded-md bg-background-darkest flex items-center justify-center overflow-hidden text-[8px] font-bold text-gray-300"
+                            >
+                              {fg.icon_url ? (
+                                <img src={formatAssetUrl(fg.icon_url)} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span>{fg.name.slice(0, 1)}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Folder className="w-6 h-6 text-brand-400" />
+                      )}
+                    </button>
+
+                    {/* Collapsed Folder Mention Badge */}
+                    {isCollapsed && folderMentions > 0 && (
+                      <div
+                        className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50"
+                        title={`${folderMentions} menções não lidas nesta pasta`}
+                      >
+                        {folderMentions > 9 ? '9+' : folderMentions}
                       </div>
-                    ) : (
-                      <Folder className="w-6 h-6 text-brand-400" />
                     )}
-                  </button>
+                  </div>
 
                   {/* Expanded Server Items in Folder */}
                   {!isCollapsed && (

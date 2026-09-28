@@ -16,6 +16,7 @@ interface GuildState {
   channelMentions: Record<string, number>;
   messagesByChannel: Record<string, Message[]>;
   pinnedMessagesByChannel: Record<string, Message[]>;
+  firstUnreadMessageIdByChannel: Record<string, string | null>;
   isLoadingPinned: Record<string, boolean>;
   hasMoreByChannel: Record<string, boolean>;
   isLoadingGuilds: boolean;
@@ -37,6 +38,8 @@ interface GuildState {
   leaveGuild: (guildId: string) => Promise<void>;
   toggleMuteGuild: (guildId: string) => Promise<void>;
   markGuildAsRead: (guildId: string) => void;
+  markChannelAsRead: (channelId: string) => void;
+  clearUnreadDivider: (channelId: string) => void;
   isGuildMuted: (guildId: string) => boolean;
   handleGuildUpdateEvent: (guild: Guild) => void;
   handleGuildDeleteEvent: (guildId: string) => void;
@@ -110,6 +113,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   channelMentions: {},
   messagesByChannel: {},
   pinnedMessagesByChannel: {},
+  firstUnreadMessageIdByChannel: {},
   isLoadingPinned: {},
   hasMoreByChannel: {},
   isLoadingGuilds: false,
@@ -374,15 +378,18 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   markGuildAsRead: (guildId: string) => {
     set((state) => {
       const targetGuild = state.guilds.find((g) => g.id === guildId) || (state.activeGuild?.id === guildId ? state.activeGuild : null);
-      if (!targetGuild || !targetGuild.channels) return state;
+      const channels = targetGuild?.channels || state.activeGuild?.channels || [];
 
       const nextUnread = new Set(state.unreadChannels);
       const nextChannelMentions = { ...state.channelMentions };
       const nextGuildMentions = { ...state.guildMentions };
+      const nextFirstUnread = { ...state.firstUnreadMessageIdByChannel };
 
-      targetGuild.channels.forEach((ch) => {
+      channels.forEach((ch) => {
         nextUnread.delete(ch.id);
         delete nextChannelMentions[ch.id];
+        nextFirstUnread[ch.id] = null;
+        api.channels.ack(ch.id).catch(() => {});
       });
       delete nextGuildMentions[guildId];
 
@@ -390,8 +397,55 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         unreadChannels: nextUnread,
         channelMentions: nextChannelMentions,
         guildMentions: nextGuildMentions,
+        firstUnreadMessageIdByChannel: nextFirstUnread,
       };
     });
+  },
+
+  markChannelAsRead: (channelId: string) => {
+    api.channels.ack(channelId).catch(() => {});
+    set((state) => {
+      const nextUnread = new Set(state.unreadChannels);
+      nextUnread.delete(channelId);
+      const nextChannelMentions = { ...state.channelMentions };
+      const chMentions = nextChannelMentions[channelId] || 0;
+      delete nextChannelMentions[channelId];
+
+      const nextGuildMentions = { ...state.guildMentions };
+      let targetGuildId = '';
+      for (const g of state.guilds) {
+        if (g.channels?.some((c) => c.id === channelId)) {
+          targetGuildId = g.id;
+          break;
+        }
+      }
+      if (!targetGuildId && state.activeGuild?.channels?.some((c) => c.id === channelId)) {
+        targetGuildId = state.activeGuild.id;
+      }
+      if (targetGuildId && chMentions > 0) {
+        nextGuildMentions[targetGuildId] = Math.max(0, (nextGuildMentions[targetGuildId] || 0) - chMentions);
+        if (nextGuildMentions[targetGuildId] === 0) delete nextGuildMentions[targetGuildId];
+      }
+
+      const nextFirstUnread = { ...state.firstUnreadMessageIdByChannel };
+      nextFirstUnread[channelId] = null;
+
+      return {
+        unreadChannels: nextUnread,
+        channelMentions: nextChannelMentions,
+        guildMentions: nextGuildMentions,
+        firstUnreadMessageIdByChannel: nextFirstUnread,
+      };
+    });
+  },
+
+  clearUnreadDivider: (channelId: string) => {
+    set((state) => ({
+      firstUnreadMessageIdByChannel: {
+        ...state.firstUnreadMessageIdByChannel,
+        [channelId]: null,
+      },
+    }));
   },
 
   isGuildMuted: (guildId: string) => {
@@ -763,11 +817,17 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           }
         }
 
+        const nextFirstUnread = { ...state.firstUnreadMessageIdByChannel };
+        if (!nextFirstUnread[message.channel_id]) {
+          nextFirstUnread[message.channel_id] = message.id;
+        }
+
         return {
           unreadChannels: unread,
           guildMentions: nextGuildMentions,
           channelMentions: nextChannelMentions,
           messagesByChannel: nextMessagesByChannel,
+          firstUnreadMessageIdByChannel: nextFirstUnread,
         };
       }
     });

@@ -80,6 +80,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     selectChannel,
     unreadChannels,
     channelMentions,
+    markChannelAsRead,
     reorderChannels,
     deleteChannel,
     deleteGuild,
@@ -212,15 +213,17 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     e.preventDefault();
     e.stopPropagation();
     const isText = channel.type === 'text';
-    const isUnread = unreadChannels.has(channel.id);
+    const isUnread = isText && (unreadChannels.has(channel.id) || (channelMentions[channel.id] || 0) > 0);
 
     const items: ContextMenuItem[] = [
-      ...(isText && isUnread
+      ...(isText
         ? [
             {
+              id: 'mark-channel-read',
               label: 'Marcar como Lido',
               icon: <CheckCheck className="w-4 h-4" />,
-              onClick: () => selectChannel(channel),
+              disabled: !isUnread,
+              onClick: () => markChannelAsRead(channel.id),
             },
             { label: '', separator: true },
           ]
@@ -264,8 +267,26 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     e.preventDefault();
     e.stopPropagation();
     const isCollapsed = !!collapsedCategories[category.id];
+    const catChannels = categoryChannelsMap[category.id] || [];
+    const isCatUnread = catChannels.some(
+      (c) => c.type === 'text' && (unreadChannels.has(c.id) || (channelMentions[c.id] || 0) > 0)
+    );
 
     const items: ContextMenuItem[] = [
+      {
+        id: 'mark-category-read',
+        label: 'Marcar como Lido',
+        icon: <CheckCheck className="w-4 h-4" />,
+        disabled: !isCatUnread,
+        onClick: () => {
+          catChannels.forEach((c) => {
+            if (c.type === 'text') {
+              markChannelAsRead(c.id);
+            }
+          });
+        },
+      },
+      { label: '', separator: true },
       {
         label: isCollapsed ? 'Expandir Categoria' : 'Colapsar Categoria',
         icon: isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />,
@@ -664,7 +685,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               : isInThisVoice
               ? 'bg-online/15 text-online font-medium'
               : isUnread
-              ? 'text-white font-semibold'
+              ? 'text-white font-semibold hover:bg-background-light/40'
               : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
           }`}
         >
@@ -683,13 +704,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             className="flex items-center gap-2 truncate flex-1 text-left min-w-0"
           >
             {isText ? (
-              <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread ? 'text-white' : 'text-gray-400'}`} />
+              <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread || isActive ? 'text-white' : 'text-gray-400 group-hover:text-gray-200'}`} />
             ) : (
               <Volume2
-                className={`w-4 h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400'}`}
+                className={`w-4 h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400 group-hover:text-gray-200'}`}
               />
             )}
-            <span className="truncate font-medium">{channel.name}</span>
+            <span className={`truncate ${isUnread || isActive ? 'text-white font-semibold' : 'text-gray-400 group-hover:text-gray-200 font-medium'}`}>
+              {channel.name}
+            </span>
             {channel.is_private && (
               <span title="Canal Privado">
                 <Lock className="w-3 h-3 text-gray-400 flex-shrink-0 ml-0.5" />
@@ -697,11 +720,23 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             )}
           </button>
 
-          {/* Mention Badge */}
-          {mentionCount > 0 && !isActive && (
-            <div className="ml-1 px-1.5 py-0.5 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
-              {mentionCount > 99 ? '99+' : mentionCount}
-            </div>
+          {/* Unread Dot / Mention Badge on the Right */}
+          {!isActive && (
+            <>
+              {mentionCount > 0 ? (
+                <div
+                  className="ml-1.5 px-1 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50"
+                  title={`${mentionCount} menções não lidas`}
+                >
+                  {mentionCount > 9 ? '9+' : mentionCount}
+                </div>
+              ) : isUnread ? (
+                <div
+                  className="ml-1.5 w-2 h-2 rounded-full bg-white flex-shrink-0 shadow-sm animate-in zoom-in-50"
+                  title="Mensagens não lidas"
+                />
+              ) : null}
+            </>
           )}
 
           {isOwner && onOpenChannelSettings && (

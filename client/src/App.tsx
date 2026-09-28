@@ -1572,6 +1572,20 @@ export const App: React.FC = () => {
                 navigateTo('/@me');
                 setIsMobileDrawerOpen(false);
               }}
+              onSelectDM={(room) => {
+                setIsHomeActive(true);
+                setHomeView('dm');
+                useDMStore.getState().selectRoom(room);
+                navigateTo(`/@me/${room.id}`);
+                setIsMobileDrawerOpen(false);
+              }}
+              onSelectGroup={(group) => {
+                setIsHomeActive(true);
+                setHomeView('group');
+                useDMGroupStore.getState().selectGroup(group);
+                navigateTo(`/@me/group/${group.id}`);
+                setIsMobileDrawerOpen(false);
+              }}
               onSelectGuild={async (guildId) => {
                 const currentActive = useGuildStore.getState().activeGuild;
                 if (!isHomeActive && currentActive?.id === guildId) {
