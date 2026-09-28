@@ -1,12 +1,17 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
 import { useAuthStore } from './authStore';
+import { useSettingsStore } from './settingsStore';
+import { playMessageSound, speakText } from '../utils/audio';
 import { DMGroup, DMGroupMessage, User } from '../types';
 
 interface DMGroupState {
   groups: DMGroup[];
   activeGroup: DMGroup | null;
   messages: DMGroupMessage[];
+  unreadGroups: Set<string>;
+  groupUnreadCounts: Record<string, number>;
+  firstUnreadMessageIdByGroup: Record<string, string | null>;
   messagesByGroup: Record<string, DMGroupMessage[]>;
   hasMoreByGroup: Record<string, boolean>;
   isLoadingGroups: boolean;
@@ -16,6 +21,8 @@ interface DMGroupState {
   fetchGroups: () => Promise<void>;
   selectGroup: (group: DMGroup) => Promise<void>;
   selectGroupById: (id: string) => Promise<void>;
+  markGroupAsRead: (groupId: string) => void;
+  clearUnreadDivider: (groupId: string) => void;
   loadMoreMessages: (groupId: string) => Promise<void>;
   createGroup: (name?: string, memberIds?: string[]) => Promise<DMGroup>;
   updateGroup: (groupId: string, data: { name?: string; icon_url?: string }) => Promise<void>;
@@ -34,6 +41,9 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   groups: [],
   activeGroup: null,
   messages: [],
+  unreadGroups: new Set(),
+  groupUnreadCounts: {},
+  firstUnreadMessageIdByGroup: {},
   messagesByGroup: {},
   hasMoreByGroup: {},
   isLoadingGroups: false,
@@ -44,7 +54,12 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     set({ isLoadingGroups: true });
     try {
       const groups = await api.dmGroups.list();
-      set({ groups: groups || [] });
+      const sortedGroups = (groups || []).sort((a, b) => {
+        const aTime = a.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : new Date(a.created_at).getTime();
+        const bTime = b.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : new Date(b.created_at).getTime();
+        return bTime - aTime;
+      });
+      set({ groups: sortedGroups });
     } catch (err) {
       console.error('Failed to fetch dm groups:', err);
     } finally {
@@ -55,10 +70,19 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   selectGroup: async (group: DMGroup) => {
     const cachedMessages = get().messagesByGroup[group.id];
 
-    set({
-      activeGroup: group,
-      messages: cachedMessages || [],
-      isLoadingMessages: !cachedMessages,
+    set((state) => {
+      const unread = new Set(state.unreadGroups);
+      unread.delete(group.id);
+      const counts = { ...state.groupUnreadCounts };
+      delete counts[group.id];
+
+      return {
+        activeGroup: group,
+        messages: cachedMessages || [],
+        unreadGroups: unread,
+        groupUnreadCounts: counts,
+        isLoadingMessages: !cachedMessages,
+      };
     });
 
     if (!cachedMessages) {
@@ -81,6 +105,31 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         set({ isLoadingMessages: false });
       }
     }
+  },
+
+  markGroupAsRead: (groupId: string) => {
+    set((state) => {
+      const unread = new Set(state.unreadGroups);
+      unread.delete(groupId);
+      const counts = { ...state.groupUnreadCounts };
+      delete counts[groupId];
+      const nextFirstUnread = { ...state.firstUnreadMessageIdByGroup };
+      nextFirstUnread[groupId] = null;
+      return {
+        unreadGroups: unread,
+        groupUnreadCounts: counts,
+        firstUnreadMessageIdByGroup: nextFirstUnread,
+      };
+    });
+  },
+
+  clearUnreadDivider: (groupId: string) => {
+    set((state) => ({
+      firstUnreadMessageIdByGroup: {
+        ...state.firstUnreadMessageIdByGroup,
+        [groupId]: null,
+      },
+    }));
   },
 
   selectGroupById: async (id: string) => {
@@ -247,13 +296,21 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         const groupMsgs = state.messagesByGroup[activeGroup.id] || [];
         const nextGroupMsgs = replaceTemp(groupMsgs);
 
+        const nextGroups = [...state.groups];
+        const groupIdx = nextGroups.findIndex((g) => g.id === activeGroup.id);
+        if (groupIdx !== -1) {
+          const updatedGroup = { ...nextGroups[groupIdx], last_message: readyMsg };
+          nextGroups.splice(groupIdx, 1);
+          nextGroups.unshift(updatedGroup);
+        }
+
         return {
+          groups: nextGroups,
           messages: replaceTemp(state.messages),
           messagesByGroup: {
             ...state.messagesByGroup,
             [activeGroup.id]: nextGroupMsgs,
           },
-          groups: state.groups.map((g) => (g.id === activeGroup.id ? { ...g, last_message: readyMsg } : g)),
         };
       });
     } catch (err: any) {
@@ -280,6 +337,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   },
 
   handleGroupMessageCreate: (message: DMGroupMessage) => {
+    const currentUser = useAuthStore.getState().user;
     set((state) => {
       const groupMsgs = state.messagesByGroup[message.group_id] || [];
       const existingExactIdx = groupMsgs.findIndex((m) => m.id === message.id);
@@ -300,8 +358,25 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         updatedGroupMsgs = updatedGroupMsgs.slice(-200);
       }
 
+      const nextMessagesByGroup = {
+        ...state.messagesByGroup,
+        [message.group_id]: updatedGroupMsgs,
+      };
+
+      // Reorder groups: move to top
+      const nextGroups = [...state.groups];
+      const groupIdx = nextGroups.findIndex((g) => g.id === message.group_id);
+      if (groupIdx !== -1) {
+        const updatedGroup = { ...nextGroups[groupIdx], last_message: message };
+        nextGroups.splice(groupIdx, 1);
+        nextGroups.unshift(updatedGroup);
+      } else {
+        setTimeout(() => {
+          get().fetchGroups();
+        }, 50);
+      }
+
       const isCurrentActive = state.activeGroup?.id === message.group_id;
-      let updatedMessages = state.messages;
       if (isCurrentActive) {
         const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
         const activeTempIdx = state.messages.findIndex(
@@ -318,21 +393,41 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         if (nextMsgs.length > 200) {
           nextMsgs = nextMsgs.slice(-200);
         }
-        updatedMessages = nextMsgs;
+
+        if (message.author_id !== currentUser?.id) {
+          playMessageSound(false);
+          if (useSettingsStore.getState().textToSpeechEnabled && message.content) {
+            speakText(message.content, message.author?.display_name || message.author?.username);
+          }
+        }
+
+        return {
+          groups: nextGroups,
+          messages: nextMsgs,
+          messagesByGroup: nextMessagesByGroup,
+        };
+      } else {
+        const unread = new Set(state.unreadGroups);
+        unread.add(message.group_id);
+        const counts = { ...state.groupUnreadCounts };
+        if (message.author_id !== currentUser?.id) {
+          counts[message.group_id] = (counts[message.group_id] || 0) + 1;
+        }
+        playMessageSound(false);
+
+        const nextFirstUnread = { ...state.firstUnreadMessageIdByGroup };
+        if (!nextFirstUnread[message.group_id]) {
+          nextFirstUnread[message.group_id] = message.id;
+        }
+
+        return {
+          groups: nextGroups,
+          unreadGroups: unread,
+          groupUnreadCounts: counts,
+          messagesByGroup: nextMessagesByGroup,
+          firstUnreadMessageIdByGroup: nextFirstUnread,
+        };
       }
-
-      const updatedGroups = state.groups.map((g) =>
-        g.id === message.group_id ? { ...g, last_message: message } : g
-      );
-
-      return {
-        messages: updatedMessages,
-        messagesByGroup: {
-          ...state.messagesByGroup,
-          [message.group_id]: updatedGroupMsgs,
-        },
-        groups: updatedGroups,
-      };
     });
   },
 

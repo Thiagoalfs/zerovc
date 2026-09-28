@@ -55,6 +55,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     isLoadingMoreMessages,
     hasMoreByRoom,
     loadMoreMessages,
+    firstUnreadMessageIdByRoom,
+    clearUnreadDivider,
   } = useDMStore();
   const { friends } = useFriendStore();
   const { startCall, callState, roomId } = useCallStore();
@@ -188,6 +190,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     }
   }, [messages, user?.id]);
 
+  const firstUnreadId = activeRoom ? firstUnreadMessageIdByRoom[activeRoom.id] : null;
+
   const handleScroll = () => {
     const container = scrollContainerRef.current;
     if (!container || !activeRoom) return;
@@ -195,6 +199,11 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     if (container.scrollTop < 60 && !isLoadingMoreMessages && hasMoreByRoom[activeRoom.id] !== false) {
       prevScrollHeightRef.current = container.scrollHeight;
       loadMoreMessages(activeRoom.id);
+    }
+
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
+    if (isAtBottom && firstUnreadId) {
+      clearUnreadDivider(activeRoom.id);
     }
   };
 
@@ -527,8 +536,9 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           </div>
         ) : (
           displayedMessages.map((message, index) => {
+            const isFirstUnread = firstUnreadId === message.id;
             const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
-            const isCompact = (() => {
+            const isCompact = !isFirstUnread && (() => {
               if (!prevMessage) return false;
               if (prevMessage.author_id !== message.author_id) return false;
               if (message.reply_to) return false;
@@ -540,37 +550,48 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
             })();
 
             return (
-              <MessageItem
-                key={message.id}
-                message={message}
-                isCompact={isCompact}
-                isEditing={editingMessageId === message.id}
-                onStartEdit={() => setEditingMessageId(message.id)}
-                onStopEdit={() => setEditingMessageId(null)}
-                onOpenUserProfile={onOpenUserProfile}
-                onPreviewImage={onPreviewImage}
-                onReply={(msg) => setReplyingTo(msg)}
-                onEditMessage={async (id, newContent) => {
-                  await editMessage(id, newContent);
-                }}
-                onDeleteMessage={async (id) => {
-                  await deleteMessage(id);
-                }}
-                onToggleReaction={async (id, emoji) => {
-                  await toggleReaction(id, emoji);
-                }}
-                onTogglePin={async (id) => {
-                  await togglePin(id);
-                }}
-                onRetryMessage={async (msg) => {
-                  removeMessageFromStore(msg.id, activeRoom.id);
-                  await sendMessage(msg.content, undefined, msg.reply_to_id);
-                }}
-                onRemoveFailedMessage={(id) => {
-                  removeMessageFromStore(id, activeRoom.id);
-                }}
-                contextType="dm"
-              />
+              <React.Fragment key={message.id}>
+                {isFirstUnread && (
+                  <div className="flex items-center gap-3 my-4 mx-2 select-none">
+                    <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+                    <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                      Mensagens não lidas
+                    </span>
+                    <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+                  </div>
+                )}
+                <MessageItem
+                  message={message}
+                  isCompact={isCompact}
+                  isEditing={editingMessageId === message.id}
+                  onStartEdit={() => setEditingMessageId(message.id)}
+                  onStopEdit={() => setEditingMessageId(null)}
+                  onOpenUserProfile={onOpenUserProfile}
+                  onPreviewImage={onPreviewImage}
+                  onReply={(msg) => setReplyingTo(msg)}
+                  onEditMessage={async (id, newContent) => {
+                    await editMessage(id, newContent);
+                  }}
+                  onDeleteMessage={async (id) => {
+                    await deleteMessage(id);
+                  }}
+                  onToggleReaction={async (id, emoji) => {
+                    await toggleReaction(id, emoji);
+                  }}
+                  onTogglePin={async (id) => {
+                    await togglePin(id);
+                  }}
+                  onRetryMessage={async (msg) => {
+                    removeMessageFromStore(msg.id, activeRoom.id);
+                    await sendMessage(msg.content, undefined, msg.reply_to_id);
+                  }}
+                  onRemoveFailedMessage={(id) => {
+                    removeMessageFromStore(id, activeRoom.id);
+                  }}
+                  contextType="dm"
+                />
+              </React.Fragment>
             );
           })
         )}

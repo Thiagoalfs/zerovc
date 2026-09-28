@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Plus, MessageSquare, User as UserIcon, Phone, UserPlus, UserMinus, Ban, Copy, Check, Server } from 'lucide-react';
+import { Users, Plus, MessageSquare, User as UserIcon, Phone, UserPlus, UserMinus, Ban, Copy, Check, CheckCheck, Server } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -39,8 +39,8 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   onCloseMobileDrawer,
 }) => {
   const { user: currentUser } = useAuthStore();
-  const { rooms, activeRoom, selectRoom, fetchRooms, roomUnreadCounts, unreadRooms, openDMWithUser } = useDMStore();
-  const { groups, activeGroup, selectGroup, fetchGroups } = useDMGroupStore();
+  const { rooms, activeRoom, selectRoom, fetchRooms, roomUnreadCounts, unreadRooms, openDMWithUser, markRoomAsRead } = useDMStore();
+  const { groups, activeGroup, selectGroup, fetchGroups, groupUnreadCounts, unreadGroups, markGroupAsRead } = useDMGroupStore();
   const { guilds } = useGuildStore();
   const { friends, fetchFriends, sendRequest, removeFriend } = useFriendStore();
   const { startCall } = useCallStore();
@@ -52,6 +52,22 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
     fetchRooms();
     fetchGroups();
   }, []);
+
+  const sortedGroups = React.useMemo(() => {
+    return [...groups].sort((a, b) => {
+      const aTime = a.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : new Date(a.created_at).getTime();
+      const bTime = b.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : new Date(b.created_at).getTime();
+      return bTime - aTime;
+    });
+  }, [groups]);
+
+  const sortedRooms = React.useMemo(() => {
+    return [...rooms].sort((a, b) => {
+      const aTime = a.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : new Date(a.created_at).getTime();
+      const bTime = b.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : new Date(b.created_at).getTime();
+      return bTime - aTime;
+    });
+  }, [rooms]);
 
   const handleSelectRoom = (room: DMRoom) => {
     selectRoom(room);
@@ -86,6 +102,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
       (f) => (f.friend?.id === targetUser.id || f.user?.id === targetUser.id)
     );
     const isFriend = !!friendship && friendship.status === 'accepted';
+    const unreadCount = roomId ? (roomUnreadCounts[roomId] || (unreadRooms.has(roomId) ? 1 : 0)) : 0;
 
     // Submenu para convidar para servidor
     const inviteSubmenu: ContextMenuItem[] = (guilds || []).map((g) => ({
@@ -105,6 +122,23 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
     }));
 
     const items: ContextMenuItem[] = [
+      ...(roomId
+        ? [
+            {
+              id: 'mark-dm-read',
+              label: 'Marcar como Lido',
+              icon: <CheckCheck className="w-4 h-4" />,
+              disabled: unreadCount === 0,
+              onClick: () => {
+                if (roomId) markRoomAsRead(roomId);
+              },
+            },
+            {
+              separator: true,
+              label: '',
+            },
+          ]
+        : []),
       {
         id: 'view-profile',
         label: 'Ver Perfil',
@@ -211,6 +245,39 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
     openContextMenu(e, items, targetUser.display_name || `@${targetUser.username}`);
   };
 
+  const handleGroupContextMenu = (e: React.MouseEvent, group: DMGroup) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const unreadCount = groupUnreadCounts[group.id] || (unreadGroups.has(group.id) ? 1 : 0);
+    const groupDisplayName = group.name || group.members?.map((m) => m.display_name || m.username).join(', ') || 'Grupo de DM';
+
+    const items: ContextMenuItem[] = [
+      {
+        id: 'mark-group-read',
+        label: 'Marcar como Lido',
+        icon: <CheckCheck className="w-4 h-4" />,
+        disabled: unreadCount === 0,
+        onClick: () => markGroupAsRead(group.id),
+      },
+      {
+        separator: true,
+        label: '',
+      },
+      {
+        id: 'copy-group-id',
+        label: copiedUserId === group.id ? 'ID Copiado!' : 'Copiar ID do Grupo',
+        icon: copiedUserId === group.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />,
+        onClick: () => {
+          navigator.clipboard.writeText(group.id);
+          setCopiedUserId(group.id);
+          setTimeout(() => setCopiedUserId(null), 2000);
+        },
+      },
+    ];
+
+    openContextMenu(e, items, groupDisplayName);
+  };
+
   return (
     <>
       <div
@@ -256,19 +323,23 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
               </button>
             </div>
 
-            {groups.length > 0 && (
+            {sortedGroups.length > 0 && (
               <div className="space-y-0.5 mt-1">
-                {groups.map((group) => {
+                {sortedGroups.map((group) => {
                   const isSelected = currentView === 'group' && activeGroup?.id === group.id;
                   const groupDisplayName = group.name || group.members?.map((m) => m.display_name || m.username).join(', ') || 'Grupo de DM';
+                  const unreadCount = groupUnreadCounts[group.id] || (unreadGroups.has(group.id) ? 1 : 0);
 
                   return (
                     <button
                       key={group.id}
                       onClick={() => handleSelectGroup(group)}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
+                      onContextMenu={(e) => handleGroupContextMenu(e, group)}
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer group ${
                         isSelected
                           ? 'bg-white/10 text-white'
+                          : unreadCount > 0
+                          ? 'text-white font-bold hover:bg-white/5'
                           : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                       }`}
                     >
@@ -276,11 +347,22 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                         <Users className="w-3.5 h-3.5" />
                       </div>
                       <div className="flex flex-col text-left truncate flex-1 min-w-0">
-                        <span className="text-gray-100 text-[14.5px] font-medium truncate">{groupDisplayName}</span>
+                        <span className={`text-[14.5px] font-medium truncate ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
+                          {groupDisplayName}
+                        </span>
                         <span className="text-[11px] text-gray-400 truncate">
                           {group.members?.length || 0} membros
                         </span>
                       </div>
+
+                      {unreadCount > 0 && !isSelected && (
+                        <div
+                          className="ml-auto px-1.5 min-w-[20px] h-5 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50"
+                          title={`${unreadCount} mensagens não lidas`}
+                        >
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -294,13 +376,13 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
               Mensagens Diretas
             </span>
 
-            {rooms.length === 0 ? (
+            {sortedRooms.length === 0 ? (
               <div className="px-2 py-2 text-xs text-gray-500">
                 Nenhuma conversa recente.
               </div>
             ) : (
               <div className="space-y-0.5 mt-1">
-                {rooms.map((room) => {
+                {sortedRooms.map((room) => {
                   const isSelected = currentView === 'dm' && activeRoom?.id === room.id;
                   const recipient = room.recipient;
                   const unreadCount = roomUnreadCounts[room.id] || (unreadRooms.has(room.id) ? 1 : 0);
@@ -310,7 +392,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                       key={room.id}
                       onClick={() => handleSelectRoom(room)}
                       onContextMenu={(e) => handleUserContextMenu(e, recipient, room.id)}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer group ${
                         isSelected
                           ? 'bg-white/10 text-white'
                           : unreadCount > 0
@@ -322,7 +404,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                         {recipient?.avatar_url ? (
                           <img src={formatAssetUrl(recipient.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
                         ) : (
-                          <span>{recipient?.display_name?.[0]?.toUpperCase() || recipient?.username[0]?.toUpperCase() || 'U'}</span>
+                          <span>{recipient?.display_name?.[0]?.toUpperCase() || recipient?.username?.[0]?.toUpperCase() || 'U'}</span>
                         )}
                         <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-background-darker ${getStatusColor(recipient?.status)}`} />
                       </div>
@@ -334,7 +416,10 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                       </div>
 
                       {unreadCount > 0 && !isSelected && (
-                        <div className="ml-1 px-1.5 py-0.5 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50">
+                        <div
+                          className="ml-auto px-1.5 min-w-[20px] h-5 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50"
+                          title={`${unreadCount} mensagens não lidas`}
+                        >
                           {unreadCount > 99 ? '99+' : unreadCount}
                         </div>
                       )}
