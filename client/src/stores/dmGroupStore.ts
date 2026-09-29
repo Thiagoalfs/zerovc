@@ -71,16 +71,22 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     const cachedMessages = get().messagesByGroup[group.id];
 
     set((state) => {
+      const wasUnread = state.unreadGroups.has(group.id);
       const unread = new Set(state.unreadGroups);
       unread.delete(group.id);
       const counts = { ...state.groupUnreadCounts };
       delete counts[group.id];
+      const nextFirstUnread = { ...state.firstUnreadMessageIdByGroup };
+      if (!wasUnread) {
+        nextFirstUnread[group.id] = null;
+      }
 
       return {
         activeGroup: group,
         messages: cachedMessages || [],
         unreadGroups: unread,
         groupUnreadCounts: counts,
+        firstUnreadMessageIdByGroup: nextFirstUnread,
         isLoadingMessages: !cachedMessages,
       };
     });
@@ -157,7 +163,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     const currentGroupMessages = state.messagesByGroup[groupId] || state.messages;
     if (currentGroupMessages.length === 0) return;
 
-    const oldestMessage = currentGroupMessages[0];
+    const oldestMessage = currentGroupMessages.find((m) => !m.id.startsWith('temp-')) || currentGroupMessages[0];
     set({ isLoadingMoreMessages: true });
 
     try {
@@ -266,6 +272,10 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         messagesByGroup: {
           ...state.messagesByGroup,
           [activeGroup.id]: [...groupMsgs, tempMsg],
+        },
+        firstUnreadMessageIdByGroup: {
+          ...state.firstUnreadMessageIdByGroup,
+          [activeGroup.id]: null,
         },
       };
     });

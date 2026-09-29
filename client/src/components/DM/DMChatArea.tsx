@@ -183,6 +183,10 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     const isMyMessage = Boolean(lastMessage && user && lastMessage.author_id === user.id);
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
 
+    if (isMyMessage && activeRoom) {
+      clearUnreadDivider(activeRoom.id);
+    }
+
     if (isNearBottom || isMyMessage) {
       scrollToBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
@@ -201,8 +205,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       loadMoreMessages(activeRoom.id);
     }
 
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
-    if (isAtBottom && firstUnreadId) {
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    if (isNearBottom && firstUnreadId) {
       clearUnreadDivider(activeRoom.id);
     }
   };
@@ -536,7 +540,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           </div>
         ) : (
           displayedMessages.map((message, index) => {
-            const isFirstUnread = firstUnreadId === message.id;
+            const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === message.id && index > 0);
             const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
             const isCompact = !isFirstUnread && (() => {
               if (!prevMessage) return false;
@@ -610,6 +614,9 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
         onSendMessage={async (content, replyToId) => {
+          if (activeRoom) {
+            clearUnreadDivider(activeRoom.id);
+          }
           scrollToBottom(true);
           await sendMessage(content, undefined, replyToId);
           setReplyingTo(null);

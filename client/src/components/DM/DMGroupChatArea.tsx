@@ -166,6 +166,10 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     const isMyMessage = Boolean(lastMessage && user && lastMessage.author_id === user.id);
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
 
+    if (isMyMessage && activeGroup) {
+      clearUnreadDivider(activeGroup.id);
+    }
+
     if (isNearBottom || isMyMessage) {
       scrollToBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
@@ -184,8 +188,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       loadMoreMessages(activeGroup.id);
     }
 
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
-    if (isAtBottom && firstUnreadId) {
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    if (isNearBottom && firstUnreadId) {
       clearUnreadDivider(activeGroup.id);
     }
   };
@@ -473,7 +477,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               </div>
             ) : (
               displayedMessages.map((message, index) => {
-                const isFirstUnread = firstUnreadId === message.id;
+                const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === message.id && index > 0);
                 const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
                 const isCompact = !isFirstUnread && (() => {
                   if (!prevMessage) return false;
@@ -541,6 +545,9 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             replyingTo={replyingTo}
             onCancelReply={() => setReplyingTo(null)}
             onSendMessage={async (content, replyToId) => {
+              if (activeGroup) {
+                clearUnreadDivider(activeGroup.id);
+              }
               scrollToBottom(true);
               await sendMessage(content, undefined, replyToId);
               setReplyingTo(null);
