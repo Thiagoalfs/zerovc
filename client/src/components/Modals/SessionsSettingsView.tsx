@@ -14,6 +14,38 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { UserSession } from '../../types';
+import { fetchLocationFromIP } from '../../utils/location';
+
+const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip, isSmall }) => {
+  const [location, setLocation] = useState<string>('Calculando localização...');
+  const [isLocLoading, setIsLocLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!ip) {
+      setLocation('Localização indisponível');
+      setIsLocLoading(false);
+      return;
+    }
+    setIsLocLoading(true);
+    fetchLocationFromIP(ip).then((loc) => {
+      if (isMounted) {
+        setLocation(loc);
+        setIsLocLoading(false);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [ip]);
+
+  return (
+    <span className="flex items-center gap-1">
+      <MapPin className={`${isSmall ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-gray-500 shrink-0`} />
+      <span className={isLocLoading ? 'text-gray-500 italic' : ''}>{location}</span>
+    </span>
+  );
+};
 
 export const SessionsSettingsView: React.FC = () => {
   const [sessions, setSessions] = useState<UserSession[]>([]);
@@ -181,12 +213,7 @@ export const SessionsSettingsView: React.FC = () => {
                         <Clock className="w-3.5 h-3.5 text-gray-500" />
                         {formatLastActive(currentSession.last_active_at)}
                       </span>
-                      {currentSession.ip_address && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5 text-gray-500" />
-                          IP: {currentSession.ip_address}
-                        </span>
-                      )}
+                      <SessionLocationItem ip={currentSession.ip_address} />
                     </div>
                   </div>
                 </div>
@@ -239,12 +266,7 @@ export const SessionsSettingsView: React.FC = () => {
                             <Clock className="w-3 h-3 text-gray-500" />
                             {formatLastActive(session.last_active_at)}
                           </span>
-                          {session.ip_address && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3 text-gray-500" />
-                              IP: {session.ip_address}
-                            </span>
-                          )}
+                          <SessionLocationItem ip={session.ip_address} isSmall />
                         </div>
                       </div>
                     </div>

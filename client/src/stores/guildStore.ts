@@ -156,7 +156,10 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   selectGuild: async (guildId: string, initialChannelId?: string) => {
     try {
       const fullGuild = await api.guilds.getDetails(guildId);
-      set({ activeGuild: fullGuild });
+      set((state) => ({
+        activeGuild: fullGuild,
+        guilds: state.guilds.map((g) => (g.id === fullGuild.id ? { ...g, ...fullGuild } : g)),
+      }));
 
       // Load read receipts for guild
       api.guilds.getReadStates(guildId).then((readStates) => {
@@ -746,11 +749,13 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       };
 
       // Find target guild for mute check
-      let targetGuildId = '';
-      for (const g of state.guilds) {
-        if (g.channels?.some((c) => c.id === message.channel_id)) {
-          targetGuildId = g.id;
-          break;
+      let targetGuildId = message.guild_id || '';
+      if (!targetGuildId) {
+        for (const g of state.guilds) {
+          if (g.channels?.some((c) => c.id === message.channel_id)) {
+            targetGuildId = g.id;
+            break;
+          }
         }
       }
       if (!targetGuildId && state.activeGuild?.channels?.some((c) => c.id === message.channel_id)) {
@@ -800,17 +805,6 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         const nextChannelMentions = { ...state.channelMentions };
 
         if (isMention) {
-          let targetGuildId = '';
-          for (const g of state.guilds) {
-            if (g.channels?.some((c) => c.id === message.channel_id)) {
-              targetGuildId = g.id;
-              break;
-            }
-          }
-          if (!targetGuildId && state.activeGuild?.channels?.some((c) => c.id === message.channel_id)) {
-            targetGuildId = state.activeGuild.id;
-          }
-
           nextChannelMentions[message.channel_id] = (nextChannelMentions[message.channel_id] || 0) + 1;
           if (targetGuildId) {
             nextGuildMentions[targetGuildId] = (nextGuildMentions[targetGuildId] || 0) + 1;

@@ -137,10 +137,15 @@ CREATE TABLE IF NOT EXISTS dm_rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user1_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     user2_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user1_closed_at TIMESTAMP WITH TIME ZONE,
+    user2_closed_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_dm_pair UNIQUE (user1_id, user2_id),
     CONSTRAINT different_users CHECK (user1_id <> user2_id)
 );
+
+ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS user1_closed_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS user2_closed_at TIMESTAMP WITH TIME ZONE;
 
 -- 9. Direct Messages
 CREATE TABLE IF NOT EXISTS dm_messages (

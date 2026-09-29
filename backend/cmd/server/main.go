@@ -353,6 +353,7 @@ func main() {
 		// Direct Messages 1x1 (Protected)
 		r.Get("/api/dms", dmHandler.ListRooms)
 		r.Post("/api/dms", dmHandler.CreateOrGetRoom)
+		r.Post("/api/dms/{roomID}/close", dmHandler.CloseRoom)
 		r.Get("/api/dms/{roomID}/messages", dmHandler.ListMessages)
 		r.Get("/api/dms/{roomID}/pins", dmHandler.ListPinned)
 		r.With(messageLimiter.Middleware).Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)

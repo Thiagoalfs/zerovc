@@ -167,6 +167,7 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to save message"}`, http.StatusInternalServerError)
 		return
 	}
+	msg.GuildID = &guildID
 	msg.Author = author
 	msg.Attachments = req.Attachments
 	msg.Reactions = make([]models.MessageReaction, 0)

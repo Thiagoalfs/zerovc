@@ -180,6 +180,7 @@ export interface BaseMessage {
 }
 
 export interface Message extends BaseMessage {
+  guild_id?: string;
   channel_id: string;
   is_pinned: boolean;
   updated_at: string;

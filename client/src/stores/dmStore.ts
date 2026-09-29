@@ -27,6 +27,7 @@ interface DMState {
   loadMoreMessages: (roomId: string) => Promise<void>;
   fetchPinnedMessages: (roomId: string) => Promise<void>;
   openDMWithUser: (recipientId: string) => Promise<DMRoom>;
+  closeRoom: (roomId: string) => Promise<void>;
   sendMessage: (content: string, attachments?: any[], replyToId?: string) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
@@ -182,6 +183,30 @@ export const useDMStore = create<DMState>((set, get) => ({
     });
     await get().selectRoom(room);
     return room;
+  },
+
+  closeRoom: async (roomId: string) => {
+    set((state) => {
+      const newRooms = state.rooms.filter((r) => r.id !== roomId);
+      const isActive = state.activeRoom?.id === roomId;
+      const unread = new Set(state.unreadRooms);
+      unread.delete(roomId);
+      const counts = { ...state.roomUnreadCounts };
+      delete counts[roomId];
+
+      return {
+        rooms: newRooms,
+        activeRoom: isActive ? null : state.activeRoom,
+        unreadRooms: unread,
+        roomUnreadCounts: counts,
+      };
+    });
+
+    try {
+      await api.dms.closeRoom(roomId);
+    } catch (err) {
+      console.error('Failed to close DM room:', err);
+    }
   },
 
   sendMessage: async (content: string, attachments?: any[], replyToId?: string) => {
