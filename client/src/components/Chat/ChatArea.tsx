@@ -168,7 +168,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   }, [activeChannel?.id]);
 
-  // Keep scroll position when loading older messages OR scroll smoothly/instantly to bottom on initial load / new messages
+  const firstUnreadId = activeChannel ? firstUnreadMessageIdByChannel[activeChannel.id] : null;
+
+  // Keep scroll position when loading older messages OR scroll smoothly/instantly to bottom / unread on initial load
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -183,9 +185,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
 
     if (isInitialLoadRef.current) {
-      container.scrollTop = container.scrollHeight;
       if (messages.length > 0) {
         isInitialLoadRef.current = false;
+        if (firstUnreadId && messages.some((m) => m.id === firstUnreadId)) {
+          setTimeout(() => {
+            const unreadEl = document.getElementById('unread-divider');
+            if (unreadEl) {
+              unreadEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+            } else {
+              container.scrollTop = container.scrollHeight;
+            }
+          }, 60);
+          return;
+        }
+        container.scrollTop = container.scrollHeight;
       }
       return;
     }
@@ -203,7 +216,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       setTimeout(() => scrollToBottom(true), 100);
       setTimeout(() => scrollToBottom(true), 300);
     }
-  }, [messages, user?.id]);
+  }, [messages, user?.id, firstUnreadId]);
 
   const handleMediaLoad = () => {
     const container = scrollContainerRef.current;
@@ -213,8 +226,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       scrollToBottom(true);
     }
   };
-
-  const firstUnreadId = activeChannel ? firstUnreadMessageIdByChannel[activeChannel.id] : null;
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
@@ -226,9 +237,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       loadMoreMessages(activeChannel.id);
     }
 
-    // Clear unread divider line when scrolled to or near bottom
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-    if (isNearBottom && firstUnreadId) {
+    // Clear unread divider line only when user scrolls down to the bottom
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
+    if (isAtBottom && firstUnreadId) {
       clearUnreadDivider(activeChannel.id);
     }
   };
@@ -525,7 +536,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               </div>
             ) : (
               displayedMessages.map((msg, index) => {
-                const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === msg.id && index > 0);
+                const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === msg.id);
                 const prevMsg = index > 0 ? displayedMessages[index - 1] : null;
                 const isCompact = !isFirstUnread &&
                   prevMsg !== null &&
@@ -535,7 +546,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 return (
                   <React.Fragment key={msg.id}>
                     {isFirstUnread && (
-                      <div className="flex items-center gap-3 my-4 mx-2 select-none">
+                      <div id="unread-divider" className="flex items-center gap-3 my-4 mx-2 select-none">
                         <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
                         <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
