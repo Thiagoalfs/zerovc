@@ -48,11 +48,24 @@ func (h *DMHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT r.id, r.user1_id, r.user2_id, r.created_at,
-		       u.id, u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
+		       u.id, u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
+		       lm.id, lm.content, lm.created_at
 		FROM dm_rooms r
 		INNER JOIN users u ON u.id = (CASE WHEN r.user1_id = $1 THEN r.user2_id ELSE r.user1_id END)
-		WHERE r.user1_id = $1 OR r.user2_id = $1
-		ORDER BY r.created_at DESC
+		LEFT JOIN LATERAL (
+			SELECT id, content, created_at
+			FROM dm_messages
+			WHERE dm_room_id = r.id
+			ORDER BY created_at DESC
+			LIMIT 1
+		) lm ON true
+		WHERE (r.user1_id = $1 OR r.user2_id = $1)
+		  AND (
+		      (r.user1_id = $1 AND (r.user1_closed_at IS NULL OR (lm.created_at IS NOT NULL AND lm.created_at > r.user1_closed_at)))
+		      OR
+		      (r.user2_id = $1 AND (r.user2_closed_at IS NULL OR (lm.created_at IS NOT NULL AND lm.created_at > r.user2_closed_at)))
+		  )
+		ORDER BY COALESCE(lm.created_at, r.created_at) DESC
 	`
 	rows, err := h.db.Pool.Query(r.Context(), query, userID)
 	if err != nil {
@@ -65,11 +78,22 @@ func (h *DMHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var room models.DMRoom
 		var recipient models.UserPublic
+		var lastMsgID *uuid.UUID
+		var lastMsgContent *string
+		var lastMsgCreatedAt *time.Time
 		if err := rows.Scan(
 			&room.ID, &room.User1ID, &room.User2ID, &room.CreatedAt,
 			&recipient.ID, &recipient.Username, &recipient.DisplayName, &recipient.AvatarURL, &recipient.BannerURL, &recipient.Bio, &recipient.Status, &recipient.CustomStatus,
+			&lastMsgID, &lastMsgContent, &lastMsgCreatedAt,
 		); err == nil {
 			room.Recipient = recipient
+			if lastMsgID != nil && lastMsgCreatedAt != nil {
+				room.LastMessage = &models.DMMessage{
+					ID:        *lastMsgID,
+					Content:   *lastMsgContent,
+					CreatedAt: *lastMsgCreatedAt,
+				}
+			}
 			rooms = append(rooms, room)
 		}
 	}
@@ -125,6 +149,14 @@ func (h *DMHandler) CreateOrGetRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reset closed status for the current user reopening this DM
+	h.db.Pool.Exec(r.Context(), `
+		UPDATE dm_rooms
+		SET user1_closed_at = CASE WHEN user1_id = $1 THEN NULL ELSE user1_closed_at END,
+		    user2_closed_at = CASE WHEN user2_id = $1 THEN NULL ELSE user2_closed_at END
+		WHERE id = $2
+	`, userID, room.ID)
+
 	var recipient models.UserPublic
 	h.db.Pool.QueryRow(r.Context(), "SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1", req.RecipientID).Scan(
 		&recipient.ID, &recipient.Username, &recipient.DisplayName, &recipient.AvatarURL, &recipient.BannerURL, &recipient.Bio, &recipient.Status, &recipient.CustomStatus,
@@ -133,6 +165,40 @@ func (h *DMHandler) CreateOrGetRoom(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(room)
+}
+
+func (h *DMHandler) CloseRoom(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.db.Pool.Exec(r.Context(), `
+		UPDATE dm_rooms
+		SET user1_closed_at = CASE WHEN user1_id = $1 THEN NOW() ELSE user1_closed_at END,
+		    user2_closed_at = CASE WHEN user2_id = $1 THEN NOW() ELSE user2_closed_at END
+		WHERE id = $2 AND (user1_id = $1 OR user2_id = $1)
+	`, userID, roomID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to close dm room"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if res.RowsAffected() == 0 {
+		http.Error(w, `{"error":"room not found or forbidden"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"ok"}`))
 }
 
 func (h *DMHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
@@ -359,6 +425,14 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to save dm message"}`, http.StatusInternalServerError)
 		return
 	}
+	// Reopen/unhide DM for sender
+	h.db.Pool.Exec(r.Context(), `
+		UPDATE dm_rooms
+		SET user1_closed_at = CASE WHEN user1_id = $1 THEN NULL ELSE user1_closed_at END,
+		    user2_closed_at = CASE WHEN user2_id = $1 THEN NULL ELSE user2_closed_at END
+		WHERE id = $2
+	`, userID, roomID)
+
 	msg.Author = author
 	msg.Attachments = req.Attachments
 	msg.Reactions = make([]models.MessageReaction, 0)

@@ -546,6 +546,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ recipient_id: recipientId }),
       }),
+    closeRoom: (roomId: string) =>
+      request<{ status: string }>(`/dms/${roomId}/close`, {
+        method: 'POST',
+      }),
     getMessages: (roomId: string, limit = 50, before?: string) => {
       const query = new URLSearchParams({ limit: String(limit) });
       if (before) query.append('before', before);

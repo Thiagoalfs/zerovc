@@ -140,11 +140,19 @@ func (h *DMGroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at
+		SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at,
+		       lm.id, lm.content, lm.created_at
 		FROM dm_groups g
 		INNER JOIN dm_group_members gm ON gm.group_id = g.id
+		LEFT JOIN LATERAL (
+			SELECT id, content, created_at
+			FROM dm_group_messages
+			WHERE group_id = g.id
+			ORDER BY created_at DESC
+			LIMIT 1
+		) lm ON true
 		WHERE gm.user_id = $1
-		ORDER BY g.created_at DESC
+		ORDER BY COALESCE(lm.created_at, g.created_at) DESC
 	`
 	rows, err := h.db.Pool.Query(r.Context(), query, userID)
 	if err != nil {
@@ -156,8 +164,21 @@ func (h *DMGroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 	groups := make([]models.DMGroup, 0)
 	for rows.Next() {
 		var g models.DMGroup
-		if err := rows.Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt); err == nil {
+		var lastMsgID *uuid.UUID
+		var lastMsgContent *string
+		var lastMsgCreatedAt *time.Time
+		if err := rows.Scan(
+			&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt,
+			&lastMsgID, &lastMsgContent, &lastMsgCreatedAt,
+		); err == nil {
 			g.Members = h.getGroupMembers(r.Context(), g.ID)
+			if lastMsgID != nil && lastMsgCreatedAt != nil {
+				g.LastMessage = &models.DMGroupMessage{
+					ID:        *lastMsgID,
+					Content:   *lastMsgContent,
+					CreatedAt: *lastMsgCreatedAt,
+				}
+			}
 			groups = append(groups, g)
 		}
 	}

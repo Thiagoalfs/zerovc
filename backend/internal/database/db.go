@@ -86,6 +86,8 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_detect_activity BOOLEAN DEFAULT TRUE")
 	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS server_folders JSONB DEFAULT '[]'::jsonb")
 	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS guild_positions JSONB DEFAULT '[]'::jsonb")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS user1_closed_at TIMESTAMP WITH TIME ZONE")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS user2_closed_at TIMESTAMP WITH TIME ZONE")
 
 	// Ensure user_sessions table and indexes exist
 	db.Pool.Exec(ctx, `

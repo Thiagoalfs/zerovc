@@ -170,7 +170,39 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&g.ID, &g.Name, &g.IconURL, &g.BannerURL, &g.OwnerID, &g.SystemChannelID, &g.CreatedAt, &g.UpdatedAt); err != nil {
 			continue
 		}
+		g.Channels = make([]models.Channel, 0)
 		guilds = append(guilds, g)
+	}
+
+	// Pre-load channels for all user's guilds so notifications and unread badges work across all servers
+	if len(guilds) > 0 {
+		guildIDs := make([]uuid.UUID, len(guilds))
+		guildIndexMap := make(map[uuid.UUID]int, len(guilds))
+		for i, g := range guilds {
+			guildIDs[i] = g.ID
+			guildIndexMap[g.ID] = i
+		}
+
+		chanQuery := `
+			SELECT id, guild_id, name, type, position, is_private, category_id, topic, created_at
+			FROM channels
+			WHERE guild_id = ANY($1)
+			ORDER BY position ASC, created_at ASC
+		`
+		chanRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildIDs)
+		if err == nil {
+			defer chanRows.Close()
+			for chanRows.Next() {
+				var ch models.Channel
+				if err := chanRows.Scan(
+					&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.Position, &ch.IsPrivate, &ch.CategoryID, &ch.Topic, &ch.CreatedAt,
+				); err == nil {
+					if idx, ok := guildIndexMap[ch.GuildID]; ok {
+						guilds[idx].Channels = append(guilds[idx].Channels, ch)
+					}
+				}
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -193,6 +193,7 @@ type MessageReplyInfo struct {
 
 type Message struct {
 	ID          uuid.UUID         `json:"id"`
+	GuildID     *uuid.UUID        `json:"guild_id,omitempty"`
 	ChannelID   uuid.UUID         `json:"channel_id"`
 	AuthorID    uuid.UUID         `json:"author_id"`
 	Author      UserPublic        `json:"author"`
