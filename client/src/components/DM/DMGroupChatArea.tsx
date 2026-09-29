@@ -141,6 +141,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   }, [activeGroup?.id]);
 
+  const firstUnreadId = activeGroup ? firstUnreadMessageIdByGroup[activeGroup.id] : null;
+
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -155,9 +157,20 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
 
     if (isInitialLoadRef.current) {
-      container.scrollTop = container.scrollHeight;
       if (messages.length > 0) {
         isInitialLoadRef.current = false;
+        if (firstUnreadId && messages.some((m) => m.id === firstUnreadId)) {
+          setTimeout(() => {
+            const unreadEl = document.getElementById('unread-divider');
+            if (unreadEl) {
+              unreadEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+            } else {
+              container.scrollTop = container.scrollHeight;
+            }
+          }, 60);
+          return;
+        }
+        container.scrollTop = container.scrollHeight;
       }
       return;
     }
@@ -175,9 +188,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       setTimeout(() => scrollToBottom(true), 100);
       setTimeout(() => scrollToBottom(true), 300);
     }
-  }, [messages, user?.id]);
-
-  const firstUnreadId = activeGroup ? firstUnreadMessageIdByGroup[activeGroup.id] : null;
+  }, [messages, user?.id, firstUnreadId]);
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
@@ -188,7 +199,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       loadMoreMessages(activeGroup.id);
     }
 
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
     if (isNearBottom && firstUnreadId) {
       clearUnreadDivider(activeGroup.id);
     }
@@ -477,7 +488,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               </div>
             ) : (
               displayedMessages.map((message, index) => {
-                const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === message.id && index > 0);
+                const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === message.id);
                 const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
                 const isCompact = !isFirstUnread && (() => {
                   if (!prevMessage) return false;
@@ -493,7 +504,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 return (
                   <React.Fragment key={message.id}>
                     {isFirstUnread && (
-                      <div className="flex items-center gap-3 my-4 mx-2 select-none">
+                      <div id="unread-divider" className="flex items-center gap-3 my-4 mx-2 select-none">
                         <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
                         <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
