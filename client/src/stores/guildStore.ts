@@ -198,6 +198,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }
 
     set((state) => {
+      const wasUnread = state.unreadChannels.has(channel.id);
       const unread = new Set(state.unreadChannels);
       unread.delete(channel.id);
 
@@ -205,6 +206,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const curGuild = state.activeGuild;
       const nextGuildMentions = { ...state.guildMentions };
       const nextChannelMentions = { ...state.channelMentions };
+      const nextFirstUnread = { ...state.firstUnreadMessageIdByChannel };
+
+      if (!wasUnread) {
+        nextFirstUnread[channel.id] = null;
+      }
 
       if (chMentions > 0) {
         delete nextChannelMentions[channel.id];
@@ -219,6 +225,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         unreadChannels: unread,
         guildMentions: nextGuildMentions,
         channelMentions: nextChannelMentions,
+        firstUnreadMessageIdByChannel: nextFirstUnread,
         isLoadingMessages: channel.type === 'text' && !cachedMessages,
       };
     });
@@ -252,11 +259,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     const currentChannelMessages = state.messagesByChannel[channelId] || state.messages;
     if (currentChannelMessages.length === 0) return;
 
-    const oldestMessage = currentChannelMessages[0];
+    const oldestMessage = currentChannelMessages.find((m) => !m.id.startsWith('temp-')) || currentChannelMessages[0];
     set({ isLoadingMoreMessages: true });
 
     try {
-      const olderMessages = await api.channels.getMessages(channelId, 50, oldestMessage.id);
+      const olderMessages = await api.channels.getMessages(channelId, 50, oldestMessage.created_at || oldestMessage.id);
       const hasMore = olderMessages.length === 50;
 
       // Filter out any duplicates
@@ -615,6 +622,10 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         messagesByChannel: {
           ...state.messagesByChannel,
           [activeChannel.id]: [...chMsgs, tempMessage],
+        },
+        firstUnreadMessageIdByChannel: {
+          ...state.firstUnreadMessageIdByChannel,
+          [activeChannel.id]: null,
         },
       };
     });

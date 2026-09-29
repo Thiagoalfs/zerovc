@@ -76,16 +76,22 @@ export const useDMStore = create<DMState>((set, get) => ({
     const cachedMessages = get().messagesByRoom[room.id];
 
     set((state) => {
+      const wasUnread = state.unreadRooms.has(room.id);
       const unread = new Set(state.unreadRooms);
       unread.delete(room.id);
       const counts = { ...state.roomUnreadCounts };
       delete counts[room.id];
+      const nextFirstUnread = { ...state.firstUnreadMessageIdByRoom };
+      if (!wasUnread) {
+        nextFirstUnread[room.id] = null;
+      }
 
       return {
         activeRoom: room,
         messages: cachedMessages || [],
         unreadRooms: unread,
         roomUnreadCounts: counts,
+        firstUnreadMessageIdByRoom: nextFirstUnread,
         isLoadingMessages: !cachedMessages,
       };
     });
@@ -144,7 +150,7 @@ export const useDMStore = create<DMState>((set, get) => ({
     const currentRoomMessages = state.messagesByRoom[roomId] || state.messages;
     if (currentRoomMessages.length === 0) return;
 
-    const oldestMessage = currentRoomMessages[0];
+    const oldestMessage = currentRoomMessages.find((m) => !m.id.startsWith('temp-')) || currentRoomMessages[0];
     set({ isLoadingMoreMessages: true });
 
     try {
@@ -253,6 +259,10 @@ export const useDMStore = create<DMState>((set, get) => ({
         messagesByRoom: {
           ...state.messagesByRoom,
           [activeRoom.id]: [...roomMsgs, tempMsg],
+        },
+        firstUnreadMessageIdByRoom: {
+          ...state.firstUnreadMessageIdByRoom,
+          [activeRoom.id]: null,
         },
       };
     });

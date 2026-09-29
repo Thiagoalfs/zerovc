@@ -148,6 +148,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const handleSendMessage = async (content: string, replyToId?: string) => {
+    if (activeChannel) {
+      clearUnreadDivider(activeChannel.id);
+    }
     scrollToBottom(true);
     await sendMessage(content, replyToId);
     setTimeout(() => scrollToBottom(true), 60);
@@ -191,6 +194,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     const isMyMessage = Boolean(lastMessage && user && lastMessage.author_id === user.id);
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
 
+    if (isMyMessage && activeChannel) {
+      clearUnreadDivider(activeChannel.id);
+    }
+
     if ((isNearBottom || isMyMessage) && !isAutoScrollingRef.current) {
       scrollToBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
@@ -219,9 +226,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       loadMoreMessages(activeChannel.id);
     }
 
-    // Clear unread divider line when scrolled to bottom
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
-    if (isAtBottom && firstUnreadId) {
+    // Clear unread divider line when scrolled to or near bottom
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    if (isNearBottom && firstUnreadId) {
       clearUnreadDivider(activeChannel.id);
     }
   };
@@ -518,7 +525,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               </div>
             ) : (
               displayedMessages.map((msg, index) => {
-                const isFirstUnread = firstUnreadId === msg.id;
+                const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === msg.id && index > 0);
                 const prevMsg = index > 0 ? displayedMessages[index - 1] : null;
                 const isCompact = !isFirstUnread &&
                   prevMsg !== null &&
