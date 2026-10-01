@@ -11,7 +11,8 @@ import { AudioProcessingMode, RNNoiseLevel } from '../stores/settingsStore';
 export interface AudioProcessorConfig {
   mode: AudioProcessingMode;
   rnnoiseLevel: RNNoiseLevel;
-  vadSensitivity: number; // 0.1 to 0.9
+  vadAutoSensitivity?: boolean;
+  vadSensitivity: number; // 0.05 to 0.95
   vadHangover: number; // 100 to 500ms
   echoCancellation: boolean;
   noiseSuppression: boolean;
@@ -38,6 +39,7 @@ class AudioProcessorManager {
   private currentTrack: MediaStreamTrack | null = null;
   private processedTrack: MediaStreamTrack | null = null;
   private vadCallback: VadStateCallback | null = null;
+  private activeConfig: AudioProcessorConfig | null = null;
 
   // Internal VAD state
   private lastSpeechTime = 0;
@@ -47,6 +49,12 @@ class AudioProcessorManager {
 
   public setVadCallback(cb: VadStateCallback | null) {
     this.vadCallback = cb;
+  }
+
+  public updateConfig(newConfig: Partial<AudioProcessorConfig>) {
+    if (this.activeConfig) {
+      this.activeConfig = { ...this.activeConfig, ...newConfig };
+    }
   }
 
   /**
@@ -65,6 +73,7 @@ class AudioProcessorManager {
     try {
       this.cleanup();
       this.currentTrack = rawTrack;
+      this.activeConfig = { ...config };
 
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) {
@@ -107,24 +116,30 @@ class AudioProcessorManager {
       const bufferSize = 512;
       this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
 
-      // Aggressiveness multipliers for spectral suppression
-      const suppressionMultiplier = (() => {
-        switch (config.rnnoiseLevel) {
-          case 'light': return 0.7;
-          case 'aggressive': return 1.4;
-          default: return 1.0;
-        }
-      })();
-
       // Noise floor tracking
       let noiseFloor = 0.005;
-      const vadThreshold = Math.max(0.05, Math.min(0.95, 1.0 - config.vadSensitivity * 0.9));
-      const hangoverMs = config.vadHangover || 250;
 
       this.processorNode.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
         const outputData = e.outputBuffer.getChannelData(0);
         const now = performance.now();
+
+        const currentCfg = this.activeConfig || config;
+        const suppressionMultiplier = (() => {
+          switch (currentCfg.rnnoiseLevel) {
+            case 'light': return 0.7;
+            case 'aggressive': return 1.4;
+            default: return 1.0;
+          }
+        })();
+
+        // Sensitivity threshold calculation:
+        // When vadAutoSensitivity is active, adapt to noise floor; otherwise use manual vadSensitivity slider (0.05 to 0.95)
+        const effectiveSensitivity = currentCfg.vadAutoSensitivity
+          ? Math.min(0.85, Math.max(0.3, 0.6 - noiseFloor * 5))
+          : currentCfg.vadSensitivity;
+        const vadThreshold = Math.max(0.05, Math.min(0.95, 1.0 - effectiveSensitivity * 0.9));
+        const hangoverMs = currentCfg.vadHangover || 250;
 
         let sumSquares = 0;
         let zeroCrossings = 0;

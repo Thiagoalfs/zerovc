@@ -56,10 +56,10 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   isRoleAdmin,
 }) => {
   return (
-    <div className="flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 h-auto md:h-[68vh] animate-fade-in">
+    <div className="flex flex-col md:flex-row gap-6 min-h-0 h-auto md:h-[calc(100vh-210px)] animate-fade-in">
       {/* Roles Sidebar / Hierarchy List */}
-      <div className="w-full md:w-72 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-3 shrink-0 max-h-56 md:max-h-none">
-        <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 px-2">
+      <div className="w-full md:w-72 flex flex-col p-1 md:pr-6 md:border-r border-white/10 shrink-0 max-h-56 md:max-h-none border-b md:border-b-0 pb-4 md:pb-0">
+        <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 px-1">
           <span className="text-xs font-bold uppercase text-gray-400 font-mono">
             Cargos ({roles.length})
           </span>
@@ -94,8 +94,8 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   onClick={() => setSelectedRoleId(role.id)}
                   className={`group flex items-center justify-between px-3 py-2 rounded-xl text-sm cursor-pointer transition-all ${
                     isSelected
-                      ? 'bg-brand-500/15 text-white border border-brand-500/30'
-                      : 'text-gray-300 hover:bg-[#18191c]/80'
+                      ? 'bg-brand-500/15 text-white border border-brand-500/30 font-semibold'
+                      : 'text-gray-300 hover:bg-white/5'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -167,7 +167,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
 
       {/* Role Details Editor */}
       {selectedRole ? (
-        <div className="flex-1 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col p-4 sm:p-6 overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 md:pl-2">
           <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
             <div className="flex items-center gap-3">
               <span
@@ -425,7 +425,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
           </div>
         </div>
       ) : (
-        <div className="flex-1 bg-[#1e1f22] rounded-2xl border border-white/10 flex flex-col items-center justify-center text-gray-400">
+        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
           <Shield className="w-12 h-12 stroke-1 mb-2 text-gray-500" />
           <p className="text-sm">Selecione ou crie um cargo na lista ao lado.</p>
         </div>

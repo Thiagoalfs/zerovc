@@ -681,8 +681,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           {activeTab === 'permissions' && (
             <div className="flex flex-col md:flex-row gap-6 min-h-0 h-full">
               {/* Left Column: Roles list selector */}
-              <div className="w-full md:w-60 flex flex-col gap-2 shrink-0 bg-[#1e1f22] p-4 rounded-2xl border border-white/10 shadow-sm">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-1">
+              <div className="w-full md:w-64 flex flex-col gap-2 shrink-0 md:pr-6 md:border-r border-white/10 border-b md:border-b-0 pb-4 md:pb-0">
+                <span className="text-xs font-bold uppercase text-gray-400 font-mono pb-2 mb-1 border-b border-white/10 px-1 block">
                   Cargos do Servidor
                 </span>
 
@@ -699,8 +699,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                         onClick={() => setSelectedRoleId(role.id)}
                         className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-all flex-shrink-0 ${
                           isSelected
-                            ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 font-bold'
-                            : 'text-gray-300 hover:bg-white/5 bg-[#111214] md:bg-transparent'
+                            ? 'bg-brand-500/15 text-white border border-brand-500/30 font-semibold'
+                            : 'text-gray-300 hover:bg-white/5'
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate min-w-0">
@@ -714,7 +714,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                         {hasCustomOw && (
                           <span
                             className={`w-2 h-2 rounded-full ${
-                              isSelected ? 'bg-white' : 'bg-brand-400'
+                              isSelected ? 'bg-brand-400' : 'bg-brand-400'
                             } shrink-0 ml-1`}
                             title="Possui permissões configuradas neste canal"
                           />
@@ -726,7 +726,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               </div>
 
               {/* Right Column: Permissions for selected role */}
-              <div className="flex-1 bg-[#1e1f22] p-5 sm:p-6 rounded-2xl border border-white/10 space-y-6 overflow-y-auto max-h-[calc(100vh-220px)] no-scrollbar shadow-sm">
+              <div className="flex-1 space-y-6 overflow-y-auto max-h-[calc(100vh-220px)] no-scrollbar md:pl-2">
                 {selectedRole && (
                   <>
                     {/* Header info of selected role */}

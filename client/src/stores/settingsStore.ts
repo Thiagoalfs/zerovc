@@ -43,6 +43,7 @@ interface SettingsState {
   // Audio Processing Modes & Filters
   audioProcessingMode: AudioProcessingMode;
   rnnoiseLevel: RNNoiseLevel;
+  vadAutoSensitivity: boolean;
   vadSensitivity: number;
   vadHangover: number;
   echoCancellation: boolean;
@@ -78,6 +79,7 @@ interface SettingsState {
   setHapticFeedback: (enabled: boolean) => void;
   setAudioProcessingMode: (mode: AudioProcessingMode) => void;
   setRnnoiseLevel: (level: RNNoiseLevel) => void;
+  setVadAutoSensitivity: (enabled: boolean) => void;
   setVadSensitivity: (sensitivity: number) => void;
   setVadHangover: (hangover: number) => void;
   setEchoCancellation: (enabled: boolean) => void;
@@ -212,6 +214,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   // Audio Processing Modes & Filters
   audioProcessingMode: getStoredString<AudioProcessingMode>('zerovc_audio_proc_mode', 'rnnoise_silero'),
   rnnoiseLevel: getStoredString<RNNoiseLevel>('zerovc_rnnoise_level', 'balanced'),
+  vadAutoSensitivity: getStoredBoolean('zerovc_vad_auto_sensitivity', true),
   vadSensitivity: getStoredNumber('zerovc_vad_sensitivity', 0.5),
   vadHangover: getStoredNumber('zerovc_vad_hangover', 250),
   echoCancellation: getStoredBoolean('zerovc_echo_cancellation', true),
@@ -358,6 +361,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setRnnoiseLevel: (rnnoiseLevel) => {
     localStorage.setItem('zerovc_rnnoise_level', rnnoiseLevel);
     set({ rnnoiseLevel });
+  },
+
+  setVadAutoSensitivity: (vadAutoSensitivity) => {
+    localStorage.setItem('zerovc_vad_auto_sensitivity', String(vadAutoSensitivity));
+    set({ vadAutoSensitivity });
   },
 
   setVadSensitivity: (vadSensitivity) => {

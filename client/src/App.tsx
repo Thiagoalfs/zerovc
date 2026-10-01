@@ -859,6 +859,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (token && user) {
       fetchGuilds();
+      useFriendStore.getState().fetchFriends().catch(() => {});
+      useDMStore.getState().fetchRooms().catch(() => {});
+      useDMGroupStore.getState().fetchGroups().catch(() => {});
 
       // Check pending invite or pending redirect
       const pendingInvite = sessionStorage.getItem('pending_invite_code');
