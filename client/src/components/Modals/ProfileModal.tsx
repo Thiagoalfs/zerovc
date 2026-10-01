@@ -438,6 +438,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     hapticFeedback,
     audioProcessingMode,
     rnnoiseLevel,
+    vadAutoSensitivity,
     vadSensitivity,
     vadHangover,
     echoCancellation,
@@ -463,6 +464,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setHapticFeedback,
     setAudioProcessingMode,
     setRnnoiseLevel,
+    setVadAutoSensitivity,
     setVadSensitivity,
     setVadHangover,
     setEchoCancellation,
@@ -924,6 +926,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         await audioProcessor.processMicrophoneTrack(track, {
           mode: audioProcessingMode,
           rnnoiseLevel,
+          vadAutoSensitivity,
           vadSensitivity,
           vadHangover,
           echoCancellation,
@@ -2315,41 +2318,110 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* Voice Mode: Activity vs PTT */}
-                <div className="pt-2">
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
-                    Modo de Entrada de Voz
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
+                {/* Input Sensitivity Section (Discord Style) */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5 pr-4">
+                      <span className="text-xs font-bold text-white block">
+                        Determinar sensibilidade de entrada automaticamente
+                      </span>
+                      <p className="text-[11px] text-gray-400">
+                        Controla a quantidade de som que o ZeroVC transmite do seu microfone.
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => handleInputModeChange('activity')}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                        inputMode === 'activity'
-                          ? 'bg-brand-500/15 border-brand-500 text-white'
-                          : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
+                      role="switch"
+                      aria-checked={vadAutoSensitivity}
+                      onClick={() => {
+                        const nextVal = !vadAutoSensitivity;
+                        setVadAutoSensitivity(nextVal);
+                        audioProcessor.updateConfig({ vadAutoSensitivity: nextVal, vadSensitivity });
+                      }}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                        vadAutoSensitivity ? 'bg-brand-500' : 'bg-white/10'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-xs">Detecção de Voz</span>
-                      </div>
-                      <span className="text-[11px] text-gray-400">Transmite automaticamente ao falar</span>
+                      <div
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                          vadAutoSensitivity ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
                     </button>
+                  </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleInputModeChange('ptt')}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                        inputMode === 'ptt'
-                          ? 'bg-brand-500/15 border-brand-500 text-white'
-                          : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-xs">Push-to-Talk (PTT)</span>
+                  {/* Dual-Color Discord Bar & Interactive Slider */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="relative w-full h-2.5 rounded-full overflow-hidden bg-background-darkest border border-white/10">
+                      {/* Background: Below Threshold (Yellow track) and Above Threshold (Green track) */}
+                      <div className="absolute inset-0 flex">
+                        <div
+                          className="h-full bg-amber-500/20 transition-all duration-75"
+                          style={{ width: `${vadSensitivity * 100}%` }}
+                        />
+                        <div className="h-full bg-emerald-500/20 flex-1" />
                       </div>
-                      <span className="text-[11px] text-gray-400">Transmite apenas ao segurar a tecla configurada</span>
-                    </button>
+
+                      {/* Active Mic Level Overlay */}
+                      {isTestingMic && micLevel > 0 && (
+                        <>
+                          {/* Below threshold active meter (Yellow) */}
+                          <div
+                            className="absolute top-0 bottom-0 left-0 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)] transition-all duration-75"
+                            style={{
+                              width: `${Math.min(micLevel, vadSensitivity * 100)}%`,
+                            }}
+                          />
+                          {/* Above threshold active meter (Green) */}
+                          {micLevel > vadSensitivity * 100 && (
+                            <div
+                              className="absolute top-0 bottom-0 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)] transition-all duration-75"
+                              style={{
+                                left: `${vadSensitivity * 100}%`,
+                                width: `${micLevel - vadSensitivity * 100}%`,
+                              }}
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Range input and visual thumb */}
+                    <div className="relative h-4 -mt-3.5">
+                      <input
+                        type="range"
+                        min="0.05"
+                        max="0.95"
+                        step="0.01"
+                        value={vadSensitivity}
+                        disabled={vadAutoSensitivity}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setVadSensitivity(val);
+                          audioProcessor.updateConfig({ vadSensitivity: val });
+                        }}
+                        className={`absolute inset-0 w-full opacity-0 z-10 ${
+                          vadAutoSensitivity ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
+                        }`}
+                      />
+
+                      {/* Custom Thumb */}
+                      <div
+                        className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full shadow-lg border border-black/20 pointer-events-none transition-all duration-75 ${
+                          vadAutoSensitivity ? 'opacity-40 scale-75' : 'hover:scale-110'
+                        }`}
+                        style={{ left: `${vadSensitivity * 100}%` }}
+                      />
+                    </div>
+
+                    {/* Scale labels */}
+                    <div className="flex justify-between items-center text-[10px] text-gray-500 font-mono pt-0.5">
+                      <span>-100 dB</span>
+                      <span className={`font-semibold ${vadAutoSensitivity ? 'text-brand-400' : 'text-gray-300'}`}>
+                        {vadAutoSensitivity ? 'Automático' : `${Math.round(-100 + vadSensitivity * 100)} dB`}
+                      </span>
+                      <span>0 dB</span>
+                    </div>
                   </div>
                 </div>
 
@@ -2600,6 +2672,31 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                             />
                           </button>
                         </div>
+
+                        {/* Push-to-Talk (PTT) */}
+                        <div className="flex items-center justify-between pt-3.5">
+                          <div className="space-y-0.5 pr-4">
+                            <span className="text-xs font-bold text-white block">Push-to-Talk (PTT)</span>
+                            <p className="text-[11px] text-gray-400">
+                              Transmite a voz apenas ao segurar a tecla configurada.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={inputMode === 'ptt'}
+                            onClick={() => handleInputModeChange(inputMode === 'ptt' ? 'activity' : 'ptt')}
+                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                              inputMode === 'ptt' ? 'bg-brand-500' : 'bg-white/10'
+                            }`}
+                          >
+                            <div
+                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                inputMode === 'ptt' ? 'translate-x-6' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -2687,147 +2784,111 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                               />
                             </button>
                           </div>
+
+                          {/* Push-to-Talk (PTT) */}
+                          <div className="flex items-center justify-between pt-3.5">
+                            <div className="space-y-0.5 pr-4">
+                              <span className="text-xs font-bold text-white block">Push-to-Talk (PTT)</span>
+                              <p className="text-[11px] text-gray-400">
+                                Transmite a voz apenas ao segurar a tecla configurada.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={inputMode === 'ptt'}
+                              onClick={() => handleInputModeChange(inputMode === 'ptt' ? 'activity' : 'ptt')}
+                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                                inputMode === 'ptt' ? 'bg-brand-500' : 'bg-white/10'
+                              }`}
+                            >
+                              <div
+                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                  inputMode === 'ptt' ? 'translate-x-6' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
 
                     {/* MODE 3: RNNOISE + SILERO VAD (IA AVANÇADA) */}
                     {audioProcessingMode === 'rnnoise_silero' && (
-                      <div className="space-y-4 animate-in fade-in duration-150">
-                        {/* Live VAD Intelligent Gate Status Banner */}
-                        <div className="p-3 bg-background-darker/90 rounded-xl border border-white/10 flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            {isTestingMic ? (
-                              vadLiveState.gateOpen ? (
-                                <span className="relative flex h-3 w-3">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
-                                </span>
-                              ) : (
-                                <span className="h-3 w-3 rounded-full bg-gray-500 inline-block" />
-                              )
-                            ) : (
-                              <Activity className="w-4 h-4 text-brand-400" />
-                            )}
-                            <div>
-                              <span className="text-xs font-bold text-white block">
-                                {isTestingMic
-                                  ? vadLiveState.gateOpen
-                                    ? 'Portão de Voz Aberto • Transmitindo'
-                                    : 'Silêncio Absoluto • Fundo Isolado (0 dB)'
-                                  : 'Portão Neural Inteligente Ativo'}
-                              </span>
-                              <span className="text-[10px] text-gray-400">
-                                {isTestingMic
-                                  ? `Probabilidade de voz: ${Math.round(vadLiveState.speechProbability * 100)}%`
-                                  : 'Corta 100% de respirações e barulhos residuais ao parar de falar'}
-                              </span>
-                            </div>
+                      <div className="space-y-3.5 divide-y divide-white/5 animate-in fade-in duration-150">
+                        {/* Echo Cancellation */}
+                        <div className="flex items-center justify-between pt-1 first:pt-0">
+                          <div className="space-y-0.5 pr-4">
+                            <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
+                            <p className="text-[11px] text-gray-400">
+                              Impede microfonia e retorno de caixas de som.
+                            </p>
                           </div>
-
-                          <span className="text-[10px] font-mono font-bold text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-md border border-brand-500/20">
-                            Silero VAD
-                          </span>
-                        </div>
-
-                        {/* VAD Sensitivity Slider */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-                            <span>Sensibilidade do Portão de Fala</span>
-                            <span className="text-brand-400 font-mono font-bold">
-                              {Math.round(vadSensitivity * 100)}%
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0.1"
-                            max="0.9"
-                            step="0.05"
-                            value={vadSensitivity}
-                            onChange={(e) => setVadSensitivity(parseFloat(e.target.value))}
-                            className="w-full accent-brand-500 h-1.5 bg-background-darker rounded-lg cursor-pointer"
-                          />
-                          <div className="flex justify-between text-[10px] text-gray-500">
-                            <span>Falar Firme (10%)</span>
-                            <span>Equilibrada (50%)</span>
-                            <span>Alta Sensibilidade (90%)</span>
-                          </div>
-                        </div>
-
-                        {/* VAD Hangover (ms) Slider */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-                            <span>Tempo de Liberação Suave (Hangover)</span>
-                            <span className="text-brand-400 font-mono font-bold">
-                              {vadHangover} ms
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min="100"
-                            max="500"
-                            step="25"
-                            value={vadHangover}
-                            onChange={(e) => setVadHangover(parseInt(e.target.value, 10))}
-                            className="w-full accent-brand-500 h-1.5 bg-background-darker rounded-lg cursor-pointer"
-                          />
-                          <div className="flex justify-between text-[10px] text-gray-500">
-                            <span>Corte Rápido (100ms)</span>
-                            <span>Suave Padrão (250ms)</span>
-                            <span>Frases Longas (500ms)</span>
-                          </div>
-                        </div>
-
-                        <div className="pt-3 border-t border-white/5 divide-y divide-white/5 space-y-3.5">
-                          {/* Echo Cancellation */}
-                          <div className="flex items-center justify-between pt-1 first:pt-0">
-                            <div className="space-y-0.5 pr-4">
-                              <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
-                              <p className="text-[11px] text-gray-400">
-                                Impede microfonia e retorno de caixas de som.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={echoCancellation}
-                              onClick={() => setEchoCancellation(!echoCancellation)}
-                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                                echoCancellation ? 'bg-brand-500' : 'bg-white/10'
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={echoCancellation}
+                            onClick={() => setEchoCancellation(!echoCancellation)}
+                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                              echoCancellation ? 'bg-brand-500' : 'bg-white/10'
+                            }`}
+                          >
+                            <div
+                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                echoCancellation ? 'translate-x-6' : 'translate-x-0'
                               }`}
-                            >
-                              <div
-                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                  echoCancellation ? 'translate-x-6' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
+                            />
+                          </button>
+                        </div>
 
-                          {/* Auto Gain Control */}
-                          <div className="flex items-center justify-between pt-3.5">
-                            <div className="space-y-0.5 pr-4">
-                              <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
-                              <p className="text-[11px] text-gray-400">
-                                Normaliza o ganho automaticamente.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={autoGainControl}
-                              onClick={() => setAutoGainControl(!autoGainControl)}
-                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                                autoGainControl ? 'bg-brand-500' : 'bg-white/10'
-                              }`}
-                            >
-                              <div
-                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                  autoGainControl ? 'translate-x-6' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
+                        {/* Auto Gain Control */}
+                        <div className="flex items-center justify-between pt-3.5">
+                          <div className="space-y-0.5 pr-4">
+                            <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
+                            <p className="text-[11px] text-gray-400">
+                              Normaliza o ganho automaticamente.
+                            </p>
                           </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={autoGainControl}
+                            onClick={() => setAutoGainControl(!autoGainControl)}
+                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                              autoGainControl ? 'bg-brand-500' : 'bg-white/10'
+                            }`}
+                          >
+                            <div
+                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                autoGainControl ? 'translate-x-6' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        {/* Push-to-Talk (PTT) */}
+                        <div className="flex items-center justify-between pt-3.5">
+                          <div className="space-y-0.5 pr-4">
+                            <span className="text-xs font-bold text-white block">Push-to-Talk (PTT)</span>
+                            <p className="text-[11px] text-gray-400">
+                              Transmite a voz apenas ao segurar a tecla configurada.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={inputMode === 'ptt'}
+                            onClick={() => handleInputModeChange(inputMode === 'ptt' ? 'activity' : 'ptt')}
+                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                              inputMode === 'ptt' ? 'bg-brand-500' : 'bg-white/10'
+                            }`}
+                          >
+                            <div
+                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                                inputMode === 'ptt' ? 'translate-x-6' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
                         </div>
                       </div>
                     )}
