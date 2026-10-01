@@ -64,8 +64,8 @@ class AudioProcessorManager {
     rawTrack: MediaStreamTrack,
     config: AudioProcessorConfig
   ): Promise<MediaStreamTrack> {
-    // If WebRTC native mode is chosen, we return the track directly as WebRTC handles it
-    if (config.mode === 'webrtc') {
+    // If WebRTC native mode or None is chosen, return the track directly without custom neural pipelines
+    if (config.mode === 'webrtc' || config.mode === 'none') {
       this.cleanup();
       return rawTrack;
     }
