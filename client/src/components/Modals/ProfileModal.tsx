@@ -955,6 +955,74 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setVadLiveState({ isSpeaking: false, volume: 0, speechProbability: 0, gateOpen: false });
   };
 
+  // Live mic volume monitoring for Discord-style input sensitivity preview
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'audio' || isTestingMic) return;
+
+    let localAudioCtx: AudioContext | null = null;
+    let localStream: MediaStream | null = null;
+    let localAnim: number | null = null;
+    let isMounted = true;
+
+    const startLiveMonitor = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
+        });
+        if (!isMounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        localStream = stream;
+
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        localAudioCtx = new AudioCtx();
+        if (localAudioCtx.state === 'suspended') {
+          await localAudioCtx.resume();
+        }
+
+        const source = localAudioCtx.createMediaStreamSource(stream);
+        const analyser = localAudioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.35;
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let smoothed = 0;
+
+        const tick = () => {
+          if (!isMounted) return;
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const avg = sum / dataArray.length;
+          const raw = Math.min(100, Math.round((avg / 110) * 100 * 1.6));
+          smoothed = smoothed * 0.7 + raw * 0.3;
+          setMicLevel(Math.round(smoothed));
+          localAnim = requestAnimationFrame(tick);
+        };
+        tick();
+      } catch {
+        // Microphone permission or device busy
+      }
+    };
+
+    startLiveMonitor();
+
+    return () => {
+      isMounted = false;
+      if (localAnim) cancelAnimationFrame(localAnim);
+      if (localStream) localStream.getTracks().forEach((t) => t.stop());
+      if (localAudioCtx && localAudioCtx.state !== 'closed') {
+        localAudioCtx.close().catch(() => {});
+      }
+      setMicLevel(0);
+    };
+  }, [isOpen, activeTab, isTestingMic, selectedInput]);
+
   const handleDeviceChange = async (type: 'input' | 'output' | 'video', deviceId: string) => {
     if (type === 'input') {
       setSelectedInput(deviceId);
@@ -2352,8 +2420,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                   {/* Dual-Color Discord Bar & Interactive Slider */}
                   <div className="space-y-1.5 pt-1">
-                    <div className="relative w-full h-2.5 rounded-full overflow-hidden bg-background-darkest border border-white/10">
-                      {/* Background: Below Threshold (Yellow track) and Above Threshold (Green track) */}
+                    <div className="relative w-full h-3 rounded-full overflow-hidden bg-[#202225] border border-white/10">
+                      {/* Background track: Dimmed Amber on left (below threshold), Dimmed Green on right (above threshold) */}
                       <div className="absolute inset-0 flex">
                         <div
                           className="h-full bg-amber-500/20 transition-all duration-75"
@@ -2362,23 +2430,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         <div className="h-full bg-emerald-500/20 flex-1" />
                       </div>
 
-                      {/* Active Mic Level Overlay */}
-                      {isTestingMic && micLevel > 0 && (
+                      {/* Live Mic Level Active Overlay (Discord style color fill) */}
+                      {micLevel > 0 && (
                         <>
-                          {/* Below threshold active meter (Yellow) */}
+                          {/* Below threshold fill (Vibrant Amber/Yellow #faa61a) */}
                           <div
-                            className="absolute top-0 bottom-0 left-0 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)] transition-all duration-75"
+                            className="absolute top-0 bottom-0 left-0 bg-[#faa61a] transition-all duration-75 shadow-[0_0_8px_rgba(250,166,26,0.6)]"
                             style={{
                               width: `${Math.min(micLevel, vadSensitivity * 100)}%`,
                             }}
                           />
-                          {/* Above threshold active meter (Green) */}
+                          {/* Above threshold fill (Vibrant Green #3ba55c) */}
                           {micLevel > vadSensitivity * 100 && (
                             <div
-                              className="absolute top-0 bottom-0 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)] transition-all duration-75"
+                              className="absolute top-0 bottom-0 bg-[#3ba55c] transition-all duration-75 shadow-[0_0_8px_rgba(59,165,92,0.7)]"
                               style={{
                                 left: `${vadSensitivity * 100}%`,
-                                width: `${micLevel - vadSensitivity * 100}%`,
+                                width: `${Math.min(micLevel - vadSensitivity * 100, 100 - vadSensitivity * 100)}%`,
                               }}
                             />
                           )}
@@ -2425,473 +2493,190 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* Audio Processing Mode Dropdown & Interactive Sub-Settings */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
-                      Processamento de Áudio
-                    </label>
-                    <span className="text-[10px] font-bold text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-md border border-brand-500/20">
-                      {audioProcessingMode === 'rnnoise_silero'
-                        ? 'IA Dupla Camada'
-                        : audioProcessingMode === 'rnnoise'
-                        ? 'RNNoise IA'
-                        : 'WebRTC Clássico'}
-                    </span>
-                  </div>
+                {/* Noise Suppression Selector (Discord Style Row) */}
+                <div className="space-y-4 pt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-xs font-bold text-white block">
+                        Redução de ruído
+                      </span>
+                      <p className="text-[11px] text-gray-400">
+                        Reduz o ruído de fundo do seu microfone.
+                      </p>
+                    </div>
 
-                  {/* Custom Modern Dropdown */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setIsProcDropdownOpen(!isProcDropdownOpen)}
-                      className="w-full bg-background-darkest/95 hover:bg-background-darkest border border-white/10 hover:border-white/20 p-3.5 rounded-2xl flex items-center justify-between transition-all cursor-pointer shadow-lg group"
-                    >
-                      <div className="flex items-center gap-3 text-left">
-                        <div className="w-9 h-9 rounded-xl bg-brand-500/15 border border-brand-500/30 flex items-center justify-center flex-shrink-0 text-brand-400 group-hover:scale-105 transition-transform">
-                          {audioProcessingMode === 'rnnoise_silero' ? (
-                            <Brain className="w-5 h-5 text-brand-400" />
-                          ) : audioProcessingMode === 'rnnoise' ? (
-                            <Zap className="w-5 h-5 text-amber-400" />
-                          ) : (
-                            <Globe className="w-5 h-5 text-blue-400" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-white block">
-                              {audioProcessingMode === 'rnnoise_silero'
-                                ? 'RNNoise + Silero VAD (IA Avançada)'
-                                : audioProcessingMode === 'rnnoise'
-                                ? 'RNNoise (IA)'
-                                : 'WebRTC Padrão'}
-                            </span>
-                            {audioProcessingMode === 'rnnoise_silero' && (
-                              <span className="bg-brand-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded uppercase">
-                                Recomendado
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-gray-400 line-clamp-1">
-                            {audioProcessingMode === 'rnnoise_silero'
-                              ? 'Filtro espectral neural com portão de voz inteligente (silêncio total)'
-                              : audioProcessingMode === 'rnnoise'
-                              ? 'Rede neural em tempo real para eliminação de ruídos e cliques'
-                              : 'Filtros tradicionais nativos do navegador'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <ChevronDown
-                        className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 ${
-                          isProcDropdownOpen ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </button>
-
-                    {/* Dropdown Menu Options */}
-                    {isProcDropdownOpen && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-40"
-                          onClick={() => setIsProcDropdownOpen(false)}
+                    {/* Compact Modern Dropdown Button & Popover */}
+                    <div className="relative flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsProcDropdownOpen(!isProcDropdownOpen)}
+                        className="w-56 bg-background-darkest hover:bg-[#202225] border border-white/10 hover:border-white/20 px-3.5 py-2 rounded-xl flex items-center justify-between text-xs font-medium text-gray-200 transition-all cursor-pointer shadow-sm group"
+                      >
+                        <span className="truncate pr-2 font-medium">
+                          {audioProcessingMode === 'rnnoise_silero'
+                            ? 'RNNoise + Silero VAD'
+                            : audioProcessingMode === 'none'
+                            ? 'Nenhum'
+                            : 'Padrão'}
+                        </span>
+                        <ChevronDown
+                          className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 flex-shrink-0 ${
+                            isProcDropdownOpen ? 'rotate-180' : ''
+                          }`}
                         />
-                        <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-background-darkest/95 backdrop-blur-md border border-white/10 p-2 rounded-2xl shadow-2xl space-y-1 animate-in fade-in zoom-in-95">
-                          {/* Option 1: WebRTC */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAudioProcessingMode('webrtc');
-                              setIsProcDropdownOpen(false);
-                            }}
-                            className={`w-full p-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
-                              audioProcessingMode === 'webrtc'
-                                ? 'bg-brand-500/20 border border-brand-500/40 text-white'
-                                : 'hover:bg-white/5 text-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
-                                <Globe className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <span className="text-xs font-bold block">WebRTC Padrão</span>
-                                <span className="text-[11px] text-gray-400">
-                                  Filtros nativos clássicos (baixo consumo de CPU)
-                                </span>
-                              </div>
-                            </div>
-                            {audioProcessingMode === 'webrtc' && (
-                              <Check className="w-4 h-4 text-brand-400" />
-                            )}
-                          </button>
+                      </button>
 
-                          {/* Option 2: RNNoise */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAudioProcessingMode('rnnoise');
-                              setIsProcDropdownOpen(false);
-                            }}
-                            className={`w-full p-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
-                              audioProcessingMode === 'rnnoise'
-                                ? 'bg-brand-500/20 border border-brand-500/40 text-white'
-                                : 'hover:bg-white/5 text-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400">
-                                <Zap className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <span className="text-xs font-bold block">RNNoise (IA)</span>
-                                <span className="text-[11px] text-gray-400">
-                                  Rede neural contínua para ventiladores, teclados e ruídos
-                                </span>
-                              </div>
-                            </div>
-                            {audioProcessingMode === 'rnnoise' && (
-                              <Check className="w-4 h-4 text-brand-400" />
-                            )}
-                          </button>
+                      {/* Dropdown Menu Options */}
+                      {isProcDropdownOpen && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setIsProcDropdownOpen(false)}
+                          />
+                          <div className="absolute right-0 top-full mt-1.5 w-56 z-50 bg-background-darkest/98 backdrop-blur-md border border-white/10 p-1.5 rounded-xl shadow-2xl space-y-0.5 animate-in fade-in zoom-in-95">
+                            {/* Option 1: RNNoise + Silero VAD */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAudioProcessingMode('rnnoise_silero');
+                                setIsProcDropdownOpen(false);
+                                audioProcessor.updateConfig({ mode: 'rnnoise_silero' });
+                              }}
+                              className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left text-xs transition-colors cursor-pointer ${
+                                audioProcessingMode === 'rnnoise_silero'
+                                  ? 'bg-brand-500/20 text-brand-400 font-semibold'
+                                  : 'hover:bg-white/5 text-gray-300 font-medium'
+                              }`}
+                            >
+                              <span>RNNoise + Silero VAD</span>
+                              {audioProcessingMode === 'rnnoise_silero' && (
+                                <Check className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
+                              )}
+                            </button>
 
-                          {/* Option 3: RNNoise + Silero VAD */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAudioProcessingMode('rnnoise_silero');
-                              setIsProcDropdownOpen(false);
-                            }}
-                            className={`w-full p-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
-                              audioProcessingMode === 'rnnoise_silero'
-                                ? 'bg-brand-500/20 border border-brand-500/40 text-white'
-                                : 'hover:bg-white/5 text-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-brand-500/20 flex items-center justify-center text-brand-400">
-                                <Brain className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-bold block">RNNoise + Silero VAD</span>
-                                  <span className="bg-brand-500 text-white text-[8px] font-bold px-1 rounded uppercase">
-                                    Recomendado
-                                  </span>
-                                </div>
-                                <span className="text-[11px] text-gray-400">
-                                  Filtro neural espectral com portão de voz (silêncio total sem falar)
-                                </span>
-                              </div>
-                            </div>
-                            {audioProcessingMode === 'rnnoise_silero' && (
-                              <Check className="w-4 h-4 text-brand-400" />
-                            )}
-                          </button>
-                        </div>
-                      </>
-                    )}
+                            {/* Option 2: Padrão */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAudioProcessingMode('webrtc');
+                                setIsProcDropdownOpen(false);
+                                audioProcessor.updateConfig({ mode: 'webrtc' });
+                              }}
+                              className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left text-xs transition-colors cursor-pointer ${
+                                audioProcessingMode === 'webrtc' || audioProcessingMode === 'rnnoise'
+                                  ? 'bg-brand-500/20 text-brand-400 font-semibold'
+                                  : 'hover:bg-white/5 text-gray-300 font-medium'
+                              }`}
+                            >
+                              <span>Padrão</span>
+                              {(audioProcessingMode === 'webrtc' || audioProcessingMode === 'rnnoise') && (
+                                <Check className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
+                              )}
+                            </button>
+
+                            {/* Option 3: Nenhum */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAudioProcessingMode('none');
+                                setIsProcDropdownOpen(false);
+                                audioProcessor.updateConfig({ mode: 'none' });
+                              }}
+                              className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left text-xs transition-colors cursor-pointer ${
+                                audioProcessingMode === 'none'
+                                  ? 'bg-brand-500/20 text-brand-400 font-semibold'
+                                  : 'hover:bg-white/5 text-gray-300 font-medium'
+                              }`}
+                            >
+                              <span>Nenhum</span>
+                              {audioProcessingMode === 'none' && (
+                                <Check className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
+                              )}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Interactive Sub-Settings Panel based on selected mode */}
-                  <div className="space-y-4 pt-1">
-                    {/* MODE 1: WEBRTC STANDARD */}
-                    {audioProcessingMode === 'webrtc' && (
-                      <div className="divide-y divide-white/5 space-y-3.5 animate-in fade-in duration-150">
-                        {/* Echo Cancellation */}
-                        <div className="flex items-center justify-between pt-1 first:pt-0">
-                          <div className="space-y-0.5 pr-4">
-                            <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
-                            <p className="text-[11px] text-gray-400">
-                              Impede que o áudio das caixas de som retorne ao microfone criando microfonia.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={echoCancellation}
-                            onClick={() => setEchoCancellation(!echoCancellation)}
-                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                              echoCancellation ? 'bg-brand-500' : 'bg-white/10'
-                            }`}
-                          >
-                            <div
-                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                echoCancellation ? 'translate-x-6' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
+                  {/* Sub-Settings Options (Echo Cancellation, Auto Gain, Push-to-Talk) */}
+                  <div className="pt-1">
+                    <div className="divide-y divide-white/5 space-y-3.5 animate-in fade-in duration-150">
+                      {/* Echo Cancellation */}
+                      <div className="flex items-center justify-between pt-1 first:pt-0">
+                        <div className="space-y-0.5 pr-4">
+                          <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
+                          <p className="text-[11px] text-gray-400">
+                            Impede que o áudio das caixas de som retorne ao microfone criando microfonia.
+                          </p>
                         </div>
-
-                        {/* Noise Suppression */}
-                        <div className="flex items-center justify-between pt-3.5">
-                          <div className="space-y-0.5 pr-4">
-                            <span className="text-xs font-bold text-white block">Supressão de Ruído de Fundo</span>
-                            <p className="text-[11px] text-gray-400">
-                              Filtra ruídos estáticos contínuos do ambiente.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={noiseSuppression}
-                            onClick={() => setNoiseSuppression(!noiseSuppression)}
-                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                              noiseSuppression ? 'bg-brand-500' : 'bg-white/10'
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={echoCancellation}
+                          onClick={() => setEchoCancellation(!echoCancellation)}
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                            echoCancellation ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              echoCancellation ? 'translate-x-6' : 'translate-x-0'
                             }`}
-                          >
-                            <div
-                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                noiseSuppression ? 'translate-x-6' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-
-                        {/* Auto Gain Control */}
-                        <div className="flex items-center justify-between pt-3.5">
-                          <div className="space-y-0.5 pr-4">
-                            <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
-                            <p className="text-[11px] text-gray-400">
-                              Normaliza o volume da voz automaticamente.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={autoGainControl}
-                            onClick={() => setAutoGainControl(!autoGainControl)}
-                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                              autoGainControl ? 'bg-brand-500' : 'bg-white/10'
-                            }`}
-                          >
-                            <div
-                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                autoGainControl ? 'translate-x-6' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-
-                        {/* Push-to-Talk (PTT) */}
-                        <div className="flex items-center justify-between pt-3.5">
-                          <div className="space-y-0.5 pr-4">
-                            <span className="text-xs font-bold text-white block">Push-to-Talk (PTT)</span>
-                            <p className="text-[11px] text-gray-400">
-                              Transmite a voz apenas ao segurar a tecla configurada.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={inputMode === 'ptt'}
-                            onClick={() => handleInputModeChange(inputMode === 'ptt' ? 'activity' : 'ptt')}
-                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                              inputMode === 'ptt' ? 'bg-brand-500' : 'bg-white/10'
-                            }`}
-                          >
-                            <div
-                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                inputMode === 'ptt' ? 'translate-x-6' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
+                          />
+                        </button>
                       </div>
-                    )}
 
-                    {/* MODE 2: RNNOISE (IA) */}
-                    {audioProcessingMode === 'rnnoise' && (
-                      <div className="space-y-4 animate-in fade-in duration-150">
-                        {/* RNNoise Aggressiveness Level */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-bold text-white">
-                              Intensidade da Supressão de Ruído (IA)
-                            </span>
-                            <span className="text-[11px] text-amber-400 font-bold uppercase">
-                              {rnnoiseLevel === 'light' ? 'Leve (70%)' : rnnoiseLevel === 'aggressive' ? 'Agressivo (100%)' : 'Equilibrado (90%)'}
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2">
-                            {(['light', 'balanced', 'aggressive'] as RNNoiseLevel[]).map((lvl) => (
-                              <button
-                                key={lvl}
-                                type="button"
-                                onClick={() => setRnnoiseLevel(lvl)}
-                                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center ${
-                                  rnnoiseLevel === lvl
-                                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-sm'
-                                    : 'bg-background-darker border-white/5 text-gray-400 hover:text-gray-200'
-                                }`}
-                              >
-                                {lvl === 'light' && 'Leve'}
-                                {lvl === 'balanced' && 'Equilibrado'}
-                                {lvl === 'aggressive' && 'Agressivo'}
-                              </button>
-                            ))}
-                          </div>
+                      {/* Auto Gain Control */}
+                      <div className="flex items-center justify-between pt-3.5">
+                        <div className="space-y-0.5 pr-4">
+                          <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
+                          <p className="text-[11px] text-gray-400">
+                            Normaliza o volume da voz automaticamente.
+                          </p>
                         </div>
-
-                        <div className="pt-3 border-t border-white/5 divide-y divide-white/5 space-y-3.5">
-                          {/* Echo Cancellation */}
-                          <div className="flex items-center justify-between pt-1 first:pt-0">
-                            <div className="space-y-0.5 pr-4">
-                              <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
-                              <p className="text-[11px] text-gray-400">
-                                Impede microfonia ao usar caixas de som.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={echoCancellation}
-                              onClick={() => setEchoCancellation(!echoCancellation)}
-                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                                echoCancellation ? 'bg-brand-500' : 'bg-white/10'
-                              }`}
-                            >
-                              <div
-                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                  echoCancellation ? 'translate-x-6' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
-
-                          {/* Auto Gain Control */}
-                          <div className="flex items-center justify-between pt-3.5">
-                            <div className="space-y-0.5 pr-4">
-                              <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
-                              <p className="text-[11px] text-gray-400">
-                                Estabiliza o ganho para não estourar.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={autoGainControl}
-                              onClick={() => setAutoGainControl(!autoGainControl)}
-                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                                autoGainControl ? 'bg-brand-500' : 'bg-white/10'
-                              }`}
-                            >
-                              <div
-                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                  autoGainControl ? 'translate-x-6' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
-
-                          {/* Push-to-Talk (PTT) */}
-                          <div className="flex items-center justify-between pt-3.5">
-                            <div className="space-y-0.5 pr-4">
-                              <span className="text-xs font-bold text-white block">Push-to-Talk (PTT)</span>
-                              <p className="text-[11px] text-gray-400">
-                                Transmite a voz apenas ao segurar a tecla configurada.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={inputMode === 'ptt'}
-                              onClick={() => handleInputModeChange(inputMode === 'ptt' ? 'activity' : 'ptt')}
-                              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                                inputMode === 'ptt' ? 'bg-brand-500' : 'bg-white/10'
-                              }`}
-                            >
-                              <div
-                                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                  inputMode === 'ptt' ? 'translate-x-6' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
-                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={autoGainControl}
+                          onClick={() => setAutoGainControl(!autoGainControl)}
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                            autoGainControl ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              autoGainControl ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
                       </div>
-                    )}
 
-                    {/* MODE 3: RNNOISE + SILERO VAD (IA AVANÇADA) */}
-                    {audioProcessingMode === 'rnnoise_silero' && (
-                      <div className="space-y-3.5 divide-y divide-white/5 animate-in fade-in duration-150">
-                        {/* Echo Cancellation */}
-                        <div className="flex items-center justify-between pt-1 first:pt-0">
-                          <div className="space-y-0.5 pr-4">
-                            <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
-                            <p className="text-[11px] text-gray-400">
-                              Impede microfonia e retorno de caixas de som.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={echoCancellation}
-                            onClick={() => setEchoCancellation(!echoCancellation)}
-                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                              echoCancellation ? 'bg-brand-500' : 'bg-white/10'
-                            }`}
-                          >
-                            <div
-                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                echoCancellation ? 'translate-x-6' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
+                      {/* Push-to-Talk (PTT) */}
+                      <div className="flex items-center justify-between pt-3.5">
+                        <div className="space-y-0.5 pr-4">
+                          <span className="text-xs font-bold text-white block">Push-to-Talk (PTT)</span>
+                          <p className="text-[11px] text-gray-400">
+                            Transmite a voz apenas ao segurar a tecla configurada.
+                          </p>
                         </div>
-
-                        {/* Auto Gain Control */}
-                        <div className="flex items-center justify-between pt-3.5">
-                          <div className="space-y-0.5 pr-4">
-                            <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
-                            <p className="text-[11px] text-gray-400">
-                              Normaliza o ganho automaticamente.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={autoGainControl}
-                            onClick={() => setAutoGainControl(!autoGainControl)}
-                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                              autoGainControl ? 'bg-brand-500' : 'bg-white/10'
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={inputMode === 'ptt'}
+                          onClick={() => handleInputModeChange(inputMode === 'ptt' ? 'activity' : 'ptt')}
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                            inputMode === 'ptt' ? 'bg-brand-500' : 'bg-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              inputMode === 'ptt' ? 'translate-x-6' : 'translate-x-0'
                             }`}
-                          >
-                            <div
-                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                autoGainControl ? 'translate-x-6' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-
-                        {/* Push-to-Talk (PTT) */}
-                        <div className="flex items-center justify-between pt-3.5">
-                          <div className="space-y-0.5 pr-4">
-                            <span className="text-xs font-bold text-white block">Push-to-Talk (PTT)</span>
-                            <p className="text-[11px] text-gray-400">
-                              Transmite a voz apenas ao segurar a tecla configurada.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={inputMode === 'ptt'}
-                            onClick={() => handleInputModeChange(inputMode === 'ptt' ? 'activity' : 'ptt')}
-                            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                              inputMode === 'ptt' ? 'bg-brand-500' : 'bg-white/10'
-                            }`}
-                          >
-                            <div
-                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                                inputMode === 'ptt' ? 'translate-x-6' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
+                          />
+                        </button>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
 

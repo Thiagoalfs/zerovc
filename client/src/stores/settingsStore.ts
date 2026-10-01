@@ -5,7 +5,7 @@ export type AccentColor = 'indigo' | 'purple' | 'emerald' | 'rose' | 'cyan' | 'a
 export type ChatDensity = 'cozy' | 'compact';
 export type DmPrivacy = 'everyone' | 'friends_only';
 
-export type AudioProcessingMode = 'webrtc' | 'rnnoise' | 'rnnoise_silero';
+export type AudioProcessingMode = 'webrtc' | 'rnnoise' | 'rnnoise_silero' | 'none';
 export type RNNoiseLevel = 'light' | 'balanced' | 'aggressive';
 
 interface SettingsState {
