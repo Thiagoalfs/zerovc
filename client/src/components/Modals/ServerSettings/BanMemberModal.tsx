@@ -31,7 +31,7 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
       style={{ zIndex: 99999 }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
     >
-      <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-red-500/30 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
+      <div className="w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-2xl border border-red-500/30 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
         <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
           <Ban className="w-5 h-5 text-red-500" />
           <span>Banir @{banModalUser.username}</span>
@@ -42,7 +42,7 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
 
         <form onSubmit={onConfirmBan} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
               Motivo do Banimento (Opcional)
             </label>
             <textarea
@@ -50,7 +50,7 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
               onChange={(e) => setBanReason(e.target.value)}
               placeholder="Ex: Violação das regras da comunidade..."
               rows={3}
-              className="w-full px-3 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-red-500 resize-none"
+              className="w-full px-3 py-2 bg-background-darkest border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-red-500 resize-none"
             />
           </div>
 

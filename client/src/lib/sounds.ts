@@ -1,4 +1,4 @@
-﻿// ZeroVC Audio Engine - Procedural Sound Effects via Web Audio API
+// ZeroVC Audio Engine - Procedural Sound Effects via Web Audio API
 
 class SoundManager {
   private ctx: AudioContext | null = null;
@@ -38,7 +38,7 @@ class SoundManager {
     }
   }
 
-  // Som ao entrar no canal de voz (Discord-like bright ascending chord)
+  // Som ao entrar no canal de voz (bright ascending chord)
   playVoiceJoin() {
     if (!this.isEnabled()) return;
     const ctx = this.getContext();

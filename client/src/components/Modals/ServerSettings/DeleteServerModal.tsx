@@ -98,7 +98,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
               <div className="font-semibold text-xs text-white truncate">
                 {activeGuild.name}
               </div>
-              <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+              <div className="text-[10px] text-gray-400 mt-0.5">
                 {membersCount} membro(s) • {(activeGuild.channels || []).length} canal(is)
               </div>
             </div>
@@ -112,7 +112,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
 
           <div className="mt-4 space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 font-mono">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
                 DIGITE O NOME DO SERVIDOR
               </label>
               <button
@@ -142,7 +142,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
           {has2FA && (
             <div className="mt-4 space-y-1.5 animate-in fade-in">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 font-mono flex items-center gap-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-brand-400" />
                   <span>CÓDIGO DE AUTENTICAÇÃO (2FA)</span>
                 </label>

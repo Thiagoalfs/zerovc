@@ -961,7 +961,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setVadLiveState({ isSpeaking: false, volume: 0, speechProbability: 0, gateOpen: false });
   };
 
-  // Live mic volume monitoring for Discord-style input sensitivity preview
+  // Live mic volume monitoring for input sensitivity preview
   useEffect(() => {
     if (!isOpen || activeTab !== 'audio' || isTestingMic) return;
 
@@ -1116,7 +1116,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-0 md:p-4 overflow-hidden animate-in fade-in"
     >
       {/* Unified Container (Full-screen on mobile, matching ServerSettingsModal on desktop) */}
-      <div className={`flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-[#18191c] rounded-none md:rounded-2xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200 ${reducedMotion ? '' : 'animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none'}`}>
+      <div className={`flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-background-dark rounded-none md:rounded-2xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200 ${reducedMotion ? '' : 'animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none'}`}>
         
         {/* ======================================================== */}
         {/* MOBILE MENU VIEW (Visible only on mobile when mobileView === 'menu') */}
@@ -1349,7 +1349,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* ======================================================== */}
         {/* DESKTOP SIDEBAR (Visible on md: and above) */}
         {/* ======================================================== */}
-        <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar justify-between">
+        <div className="hidden md:flex w-64 bg-background-darkest border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar justify-between">
           <div className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
             {/* Top User Profile Card Button (Navigates to Minha Conta / Perfil) */}
             <button
@@ -1391,7 +1391,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'privacy'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Privacidade e Segurança</span>
@@ -1404,7 +1404,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'sessions'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Dispositivos & Sessões</span>
@@ -1423,7 +1423,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'registered_games'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Jogos Registrados</span>
@@ -1436,7 +1436,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'activity_privacy'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Privacidade de Atividade</span>
@@ -1455,7 +1455,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'appearance'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Aparência</span>
@@ -1468,7 +1468,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'accessibility'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Acessibilidade</span>
@@ -1481,7 +1481,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'audio'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Voz & Vídeo</span>
@@ -1494,7 +1494,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'notifications'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Notificações & Sons</span>
@@ -1507,7 +1507,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'preferences'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Preferências</span>
@@ -1521,7 +1521,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                     activeTab === 'keybinds'
                       ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                   }`}
                 >
                   <span>Atalhos do Teclado</span>
@@ -1545,12 +1545,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* ======================================================== */}
         {/* MAIN CONTENT AREA (Visible on desktop OR on mobile when mobileView === 'content') */}
         {/* ======================================================== */}
-        <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden bg-[#18191c] relative min-w-0 min-h-0`}>
+        <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden bg-background-dark relative min-w-0 min-h-0`}>
           
           {/* Mobile Drilldown Top Bar (Back Arrow + Title + Close) */}
           <div
             style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
-            className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex-shrink-0"
+            className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex-shrink-0"
           >
             <div className="flex items-center gap-2">
               <button
@@ -1587,7 +1587,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           </div>
 
           {/* Desktop Top Header */}
-          <div className="hidden md:flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-[#1e1f22]/40">
+          <div className="hidden md:flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
             <div className="flex items-center gap-3">
               {activeTab === 'profile' && (
                 <button
@@ -2686,7 +2686,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* Input Sensitivity Section (Discord Style) */}
+                {/* Input Sensitivity Section */}
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5 pr-4">
@@ -2718,13 +2718,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </button>
                   </div>
 
-                  {/* Dual-Color Discord Bar & Interactive Slider */}
+                  {/* Dual-Color Volume Bar & Interactive Slider */}
                   <div className="space-y-1.5 pt-1">
-                    <div className="relative w-full h-3 rounded-full overflow-hidden bg-[#202225] border border-white/10">
+                    <div className="relative w-full h-3 rounded-full overflow-hidden bg-background-darkest border border-white/10">
                       {/* Background track */}
                       {vadAutoSensitivity ? (
                         /* Automatic Sensitivity: All gray neutral track */
-                        <div className="absolute inset-0 bg-[#2b2d31]/60" />
+                        <div className="absolute inset-0 bg-background-darker/60" />
                       ) : (
                         /* Manual Sensitivity: Dimmed Amber on left (below threshold), Dimmed Green on right (above threshold) */
                         <div className="absolute inset-0 flex">
@@ -2816,7 +2816,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* Noise Suppression Selector (Discord Style Row) */}
+                {/* Noise Suppression Selector Row */}
                 <div className="space-y-4 pt-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                     <div className="space-y-0.5 pr-2">

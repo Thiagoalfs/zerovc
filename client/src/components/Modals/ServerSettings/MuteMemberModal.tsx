@@ -25,7 +25,7 @@ export const MuteMemberModal: React.FC<MuteMemberModalProps> = ({
       style={{ zIndex: 99999 }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
     >
-      <div className="w-full max-w-md max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-white/10 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
+      <div className="w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-2xl border border-white/10 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
         <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
           <Clock className="w-5 h-5 text-amber-400" />
           <span>Silenciar @{muteModalUser.username}</span>
@@ -38,28 +38,28 @@ export const MuteMemberModal: React.FC<MuteMemberModalProps> = ({
           <button
             type="button"
             onClick={() => onMuteDuration(15 * 60)}
-            className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
+            className="p-3 bg-background-dark hover:bg-background-light text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
           >
             15 Minutos
           </button>
           <button
             type="button"
             onClick={() => onMuteDuration(60 * 60)}
-            className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
+            className="p-3 bg-background-dark hover:bg-background-light text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
           >
             1 Hora
           </button>
           <button
             type="button"
             onClick={() => onMuteDuration(24 * 60 * 60)}
-            className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
+            className="p-3 bg-background-dark hover:bg-background-light text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
           >
             24 Horas (1 Dia)
           </button>
           <button
             type="button"
             onClick={() => onMuteDuration(7 * 24 * 60 * 60)}
-            className="p-3 bg-[#18191c] hover:bg-[#2b2d31] text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
+            className="p-3 bg-background-dark hover:bg-background-light text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
           >
             7 Dias (1 Semana)
           </button>

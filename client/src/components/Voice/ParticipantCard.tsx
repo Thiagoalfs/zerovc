@@ -541,7 +541,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           )}
         </div>
 
-        {/* Bottom-left Discord-style Name Pill */}
+        {/* Bottom-left Name Pill */}
         {!(isScreenSharing && !isWatching) && (
           <div className="absolute bottom-2.5 left-2.5 bg-[#111214]/85 backdrop-blur-md px-2.5 py-1 rounded-md flex items-center gap-1.5 text-xs font-semibold text-white shadow-md max-w-[85%] z-20 pointer-events-none">
             <span className="truncate">{displayName} {isLocal && '(Você)'}</span>

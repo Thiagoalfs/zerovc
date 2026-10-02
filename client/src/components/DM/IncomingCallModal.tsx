@@ -10,7 +10,7 @@ export const IncomingCallModal: React.FC = () => {
 
   useEffect(() => {
     if (callState === 'ringing') {
-      // Synthesize Discord-like ringtone via Web Audio API
+      // Synthesize custom ringtone via Web Audio API
       try {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContextClass) {

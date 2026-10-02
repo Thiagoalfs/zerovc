@@ -414,7 +414,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
-    // 3. ArrowUp Shortcut to edit user's last message when input is empty (Discord feature)
+    // 3. ArrowUp Shortcut to edit user's last message when input is empty
     if (e.key === 'ArrowUp' && !content.trim() && !selectedFile && !replyingTo) {
       e.preventDefault();
       onEditLastMessage?.();

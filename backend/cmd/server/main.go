@@ -471,7 +471,7 @@ func main() {
 		http.StripPrefix("/downloads/", http.FileServer(http.Dir(downloadsDir))).ServeHTTP(w, r)
 	})
 
-	// 8. Serve Web Application (Single Page Application com SSR de Meta Tags para Discord / WhatsApp / Twitter)
+	// 8. Serve Web Application (Single Page Application com SSR de Meta Tags para redes sociais e mensageiros)
 	if _, err := os.Stat(webDir); err == nil {
 		fileServer := http.FileServer(http.Dir(webDir))
 		indexHTMLPath := filepath.Join(webDir, "index.html")

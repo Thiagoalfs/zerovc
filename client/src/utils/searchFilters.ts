@@ -14,7 +14,7 @@ export interface ParsedSearchQuery {
 }
 
 /**
- * Parses search query string containing Discord-like filter tags.
+ * Parses search query string containing advanced filter tags.
  * Supports both Portuguese and English syntax (e.g. `de:` / `from:`, `tem:` / `has:`).
  */
 export function parseSearchQuery(query: string): ParsedSearchQuery {

@@ -72,3 +72,163 @@ html.high-contrast button {
   border-color: rgba(255, 255, 255, 0.35) !important;
 }
 
+/* ==============================================================
+   LIGHT THEME OVERRIDES (High-Contrast & Enhanced Readability)
+   ============================================================== */
+html[data-theme="light"],
+html.light {
+  color-scheme: light;
+}
+
+html[data-theme="light"] body,
+html[data-theme="light"] #root,
+html.light body,
+html.light #root {
+  color: #0f172a;
+}
+
+/* Light Theme Text Contrast Inversion (White/Light-Gray -> Charcoal/Dark-Slate) */
+html[data-theme="light"] .text-white,
+html.light .text-white {
+  color: #0f172a !important; /* Near black / Slate-900 */
+}
+
+html[data-theme="light"] .text-gray-100,
+html[data-theme="light"] .text-gray-200,
+html[data-theme="light"] .text-gray-300,
+html.light .text-gray-100,
+html.light .text-gray-200,
+html.light .text-gray-300 {
+  color: #1e293b !important; /* Dark charcoal / Slate-800 */
+}
+
+html[data-theme="light"] .text-gray-400,
+html.light .text-gray-400 {
+  color: #334155 !important; /* Slate-700 for clear readability */
+}
+
+html[data-theme="light"] .text-gray-500,
+html.light .text-gray-500 {
+  color: #64748b !important; /* Slate-500 for secondary elements */
+}
+
+html[data-theme="light"] .text-gray-600,
+html.light .text-gray-600 {
+  color: #94a3b8 !important; /* Slate-400 */
+}
+
+/* Light Theme Hover Text Inversion */
+html[data-theme="light"] .hover\:text-white:hover,
+html.light .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .hover\:text-gray-200:hover,
+html[data-theme="light"] .hover\:text-gray-100:hover,
+html.light .hover\:text-gray-200:hover,
+html.light .hover\:text-gray-100:hover {
+  color: #1e293b !important;
+}
+
+/* Light Mode Input Placeholders */
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder,
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Preserve bright white text on filled action buttons & badges */
+html[data-theme="light"] .bg-brand-500,
+html[data-theme="light"] .bg-brand-600,
+html[data-theme="light"] .bg-brand-700,
+html[data-theme="light"] .bg-red-500,
+html[data-theme="light"] .bg-red-600,
+html[data-theme="light"] .bg-emerald-500,
+html[data-theme="light"] .bg-emerald-600,
+html[data-theme="light"] .bg-amber-500,
+html[data-theme="light"] .bg-amber-600,
+html[data-theme="light"] .bg-dnd,
+html[data-theme="light"] .bg-online,
+html[data-theme="light"] button.bg-brand-500 *,
+html[data-theme="light"] button.bg-brand-600 *,
+html[data-theme="light"] button.bg-red-500 *,
+html[data-theme="light"] button.bg-red-600 *,
+html[data-theme="light"] button.bg-emerald-500 *,
+html[data-theme="light"] button.bg-emerald-600 *,
+html.light .bg-brand-500,
+html.light .bg-brand-600,
+html.light .bg-brand-700,
+html.light .bg-red-500,
+html.light .bg-red-600,
+html.light .bg-emerald-500,
+html.light .bg-emerald-600,
+html.light .bg-amber-500,
+html.light .bg-amber-600,
+html.light .bg-dnd,
+html.light .bg-online,
+html.light button.bg-brand-500 *,
+html.light button.bg-brand-600 *,
+html.light button.bg-red-500 *,
+html.light button.bg-red-600 *,
+html.light button.bg-emerald-500 *,
+html.light button.bg-emerald-600 * {
+  color: #ffffff !important;
+}
+
+/* Light Mode Borders */
+html[data-theme="light"] .border-white\/5,
+html[data-theme="light"] .border-white\/10,
+html[data-theme="light"] .border-white\/15,
+html[data-theme="light"] .border-white\/20,
+html.light .border-white\/5,
+html.light .border-white\/10,
+html.light .border-white\/15,
+html.light .border-white\/20 {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+html[data-theme="light"] .divide-white\/5 > :not([hidden]) ~ :not([hidden]),
+html[data-theme="light"] .divide-white\/10 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-white\/5 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-white\/10 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Light Mode Hover and Translucencies */
+html[data-theme="light"] .hover\:bg-white\/5:hover,
+html.light .hover\:bg-white\/5:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+html[data-theme="light"] .hover\:bg-white\/10:hover,
+html.light .hover\:bg-white\/10:hover {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html[data-theme="light"] .bg-white\/5,
+html.light .bg-white\/5 {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+html[data-theme="light"] .bg-white\/10,
+html.light .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html[data-theme="light"] .bg-white\/15,
+html.light .bg-white\/15 {
+  background-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Light Mode Custom Scrollbars */
+html[data-theme="light"] ::-webkit-scrollbar-thumb,
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover,
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35);
+}
+

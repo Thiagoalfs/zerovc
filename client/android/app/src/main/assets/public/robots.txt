@@ -1,0 +1,25 @@
+﻿# Robots.txt para ZeroVC (https://zerovc.safiroko.xyz)
+User-agent: *
+
+# Permitir páginas públicas
+Allow: /$
+Allow: /login
+Allow: /register
+Allow: /invite/
+Allow: /verify-email
+Allow: /forgot-password
+Allow: /reset-password
+
+# Bloquear rotas internas do app (chats, servidores, DMs e configurações)
+Disallow: /@me/
+Disallow: /channels/
+Disallow: /guilds/
+Disallow: /settings/
+Disallow: /admin/
+
+# Bloquear endpoints de API e sockets para economizar recursos do backend
+Disallow: /api/
+Disallow: /ws
+
+# Informar o Sitemap
+Sitemap: https://zerovc.safiroko.xyz/sitemap.xml

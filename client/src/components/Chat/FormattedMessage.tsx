@@ -250,7 +250,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     navigateToTargetChannel(channel, targetGuild);
   };
 
-  // Extract all media links for Discord-like embeds below the text (ignoring code blocks / inline code / emoji tags)
+  // Extract all media links for embeds below the text (ignoring code blocks / inline code / emoji tags)
   const contentWithoutCode = content
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`[^`\n]+`/g, '')
@@ -366,7 +366,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
         </div>
       )}
 
-      {/* Discord-like Rich Embeds / Direct Image / GIF / Video Previews */}
+      {/* Rich Embeds / Direct Image / GIF / Video Previews */}
       {hasEmbeds && (
         <div className={`${hasText ? 'mt-2' : ''} space-y-2 flex flex-col items-start select-none`}>
           {mediaEmbeds.map((media, idx) => {

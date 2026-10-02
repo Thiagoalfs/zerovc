@@ -40,7 +40,7 @@ export const TitleBar: React.FC = () => {
   const [initialServerTime, setInitialServerTime] = useState<string | null>(null);
   const currentBuildCommit = typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : '';
 
-  // Check server version for Live Sync (Discord model)
+  // Check server version for Live Sync
   const checkServerVersion = useCallback(async () => {
     try {
       const res = await fetch('/api/version');
@@ -124,7 +124,7 @@ export const TitleBar: React.FC = () => {
     if (updateStatus === 'downloaded') {
       window.electronAPI?.quitAndInstall?.();
     } else {
-      // Discord Model: Instant reload with cache-bust to get the newest production bundle
+      // Instant reload with cache-bust to get the newest production bundle
       window.location.reload();
     }
   };

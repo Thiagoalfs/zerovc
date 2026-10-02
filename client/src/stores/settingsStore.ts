@@ -404,8 +404,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
     const root = document.documentElement;
 
-    // 1. Set data-theme attribute
+    // 1. Set data-theme attribute & classes
     root.setAttribute('data-theme', theme);
+    if (theme === 'light') {
+      root.classList.remove('dark');
+      root.classList.add('light');
+      root.style.colorScheme = 'light';
+    } else {
+      root.classList.remove('light');
+      root.classList.add('dark');
+      root.style.colorScheme = 'dark';
+    }
+
     if (theme === 'oled') {
       root.classList.add('theme-oled');
     } else {

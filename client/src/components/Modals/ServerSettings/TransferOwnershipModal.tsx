@@ -52,7 +52,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
       style={{ zIndex: 99999 }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
     >
-      <div className="w-full max-w-lg max-h-[92dvh] my-auto bg-[#1e1f22] rounded-2xl border border-amber-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
+      <div className="w-full max-w-lg max-h-[92dvh] my-auto bg-background-darker rounded-2xl border border-amber-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400">
             <Crown className="w-6 h-6" />
@@ -75,7 +75,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
 
         <form onSubmit={onConfirmTransfer} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
               1. Selecione o Novo Dono
             </label>
             <div className="relative">
@@ -85,11 +85,11 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
                 value={transferSearchQuery}
                 onChange={(e) => setTransferSearchQuery(e.target.value)}
                 placeholder="Filtrar membro..."
-                className="w-full pl-9 pr-4 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-xs mb-2 focus:outline-none focus:border-amber-500"
+                className="w-full pl-9 pr-4 py-2 bg-background-darkest border border-white/10 rounded-xl text-white text-xs mb-2 focus:outline-none focus:border-amber-500"
               />
             </div>
 
-            <div className="max-h-36 overflow-y-auto space-y-1 bg-[#111214]/60 p-2 rounded-xl border border-white/10 custom-scrollbar">
+            <div className="max-h-36 overflow-y-auto space-y-1 bg-background-darkest/60 p-2 rounded-xl border border-white/10 custom-scrollbar">
               {members
                 .filter((m) => m.id !== user?.id)
                 .filter((m) =>
@@ -104,7 +104,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
                       key={m.id}
                       onClick={() => setTransferTargetUser(m)}
                       className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                        isSelected ? 'bg-amber-500/20 border border-amber-500/40 text-white' : 'hover:bg-[#18191c] text-gray-300'
+                        isSelected ? 'bg-amber-500/20 border border-amber-500/40 text-white' : 'hover:bg-background-dark text-gray-300'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
@@ -134,7 +134,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
                   type="checkbox"
                   checked={transferAcknowledge}
                   onChange={(e) => setTransferAcknowledge(e.target.checked)}
-                  className="mt-0.5 rounded bg-[#111214] border-white/10 text-amber-500 focus:ring-0"
+                  className="mt-0.5 rounded bg-background-darkest border-white/10 text-amber-500 focus:ring-0"
                 />
                 <span>
                   Reconheço que estou transferindo irreversivelmente a posse para <strong>@{transferTargetUser.username}</strong>.
@@ -142,7 +142,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
               </label>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
                   2. Digite o nome do servidor para confirmar: <span className="text-white select-all">{activeGuild.name}</span>
                 </label>
                 <input
@@ -150,7 +150,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
                   value={transferConfirmText}
                   onChange={(e) => setTransferConfirmText(e.target.value)}
                   placeholder={activeGuild.name}
-                  className="w-full px-4 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
+                  className="w-full px-4 py-2 bg-background-darkest border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
                 />
               </div>
             </div>

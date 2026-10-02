@@ -48,7 +48,7 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
 }) => {
   return (
     <div className="max-w-4xl space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between p-5 rounded-2xl bg-[#1e1f22] border border-white/10">
+      <div className="flex items-center justify-between p-5 rounded-2xl bg-background-darker border border-white/10">
         <div>
           <h3 className="text-sm font-bold text-white">Slots de Emojis do Servidor</h3>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -102,7 +102,7 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500" />
         </div>
       ) : emojisList.length === 0 && !isUploadingEmoji ? (
-        <div className="text-center py-16 px-4 rounded-2xl bg-[#1e1f22]/60 border border-white/10">
+        <div className="text-center py-16 px-4 rounded-2xl bg-background-darker/60 border border-white/10">
           <Smile className="w-12 h-12 stroke-1 text-gray-500 mx-auto mb-3" />
           <h4 className="text-base font-semibold text-white">Nenhum emoji personalizado ainda</h4>
           <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
@@ -112,7 +112,7 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {isUploadingEmoji && (
-            <div className="p-3.5 rounded-2xl bg-[#1e1f22]/60 border border-brand-500/40 animate-pulse flex flex-col items-center justify-center min-h-[165px]">
+            <div className="p-3.5 rounded-2xl bg-background-darker/60 border border-brand-500/40 animate-pulse flex flex-col items-center justify-center min-h-[165px]">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-500/20 border-t-brand-500 mb-2" />
               <span className="text-xs text-brand-400 font-medium">Enviando emoji...</span>
             </div>
@@ -124,9 +124,9 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
             return (
               <div
                 key={em.id}
-                className="p-3.5 rounded-2xl bg-[#1e1f22] border border-white/10 hover:border-white/15 transition-all flex flex-col group relative"
+                className="p-3.5 rounded-2xl bg-background-darker border border-white/10 hover:border-white/15 transition-all flex flex-col group relative"
               >
-                <div className="w-full h-24 rounded-xl bg-[#111214] flex items-center justify-center p-2 mb-2.5 overflow-hidden">
+                <div className="w-full h-24 rounded-xl bg-background-darkest flex items-center justify-center p-2 mb-2.5 overflow-hidden">
                   <img
                     src={formatAssetUrl(em.image_url)}
                     alt={em.name}
@@ -136,7 +136,7 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
 
                 {/* Inline Rename Box */}
                 <div className="space-y-1.5 flex-1 flex flex-col justify-between">
-                  <div className="flex items-center bg-[#111214] border border-white/10 focus-within:border-brand-500 rounded-lg px-2 py-1 transition-all">
+                  <div className="flex items-center bg-background-darkest border border-white/10 focus-within:border-brand-500 rounded-lg px-2 py-1 transition-all">
                     <span className="text-gray-500 font-mono text-xs select-none">:</span>
                     <input
                       type="text"

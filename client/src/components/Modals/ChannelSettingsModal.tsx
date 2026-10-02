@@ -323,16 +323,16 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen bg-[#18191c] overflow-hidden text-gray-200 select-none ${
+      className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen bg-background-dark overflow-hidden text-gray-200 select-none ${
         reducedMotion ? '' : 'animate-in fade-in duration-150'
       }`}
     >
       {/* MOBILE MENU VIEW */}
       {mobileView === 'menu' && (
-        <div className="flex md:hidden flex-col w-full h-full bg-[#18191c] overflow-hidden">
+        <div className="flex md:hidden flex-col w-full h-full bg-background-dark overflow-hidden">
           <div
             style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
-            className="px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex items-center justify-between flex-shrink-0"
+            className="px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex items-center justify-between flex-shrink-0"
           >
             <div className="flex items-center gap-3">
               <button
@@ -354,7 +354,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 setActiveTab('overview');
                 setMobileView('content');
               }}
-              className="p-3.5 bg-[#1e1f22] rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer active:bg-white/5 transition-colors shadow-sm"
+              className="p-3.5 bg-background-darker rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer active:bg-white/5 transition-colors shadow-sm"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-background-darker flex items-center justify-center text-gray-300 flex-shrink-0 border border-white/10">
@@ -383,7 +383,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
                 Navegação
               </span>
-              <div className="bg-[#1e1f22] rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
+              <div className="bg-background-darker rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
                 <button
                   type="button"
                   onClick={() => {
@@ -425,7 +425,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
                 Ações
               </span>
-              <div className="bg-[#1e1f22] rounded-2xl border border-white/10 overflow-hidden">
+              <div className="bg-background-darker rounded-2xl border border-white/10 overflow-hidden">
                 <button
                   type="button"
                   onClick={handleDelete}
@@ -450,8 +450,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         </div>
       )}
 
-      {/* DESKTOP SIDEBAR TABS (Discord-like Layout with Left Breathing Room) */}
-      <div className="hidden md:flex flex-1 max-w-[280px] lg:max-w-[320px] xl:max-w-[360px] 2xl:max-w-[400px] min-w-[220px] justify-end bg-[#111214] border-r border-white/10 shrink-0 overflow-y-auto no-scrollbar">
+      {/* DESKTOP SIDEBAR TABS */}
+      <div className="hidden md:flex flex-1 max-w-[280px] lg:max-w-[320px] xl:max-w-[360px] 2xl:max-w-[400px] min-w-[220px] justify-end bg-background-darkest border-r border-white/10 shrink-0 overflow-y-auto no-scrollbar">
         <div className="w-56 lg:w-60 flex flex-col p-4 py-6 xl:py-8 shrink-0 justify-between">
           <div className="flex flex-col items-stretch flex-1 flex-shrink-0">
             <div className="px-3 py-2 mb-2">
@@ -463,7 +463,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 ) : (
                   <Volume2 className="w-4 h-4 text-online flex-shrink-0" />
                 )}
-                <h2 className="text-xs font-bold uppercase tracking-wider text-gray-300 font-mono truncate">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-gray-300 truncate">
                   {channel.name}
                 </h2>
               </div>
@@ -483,7 +483,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'overview'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Visão Geral</span>
@@ -495,12 +495,12 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'permissions'
                     ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Permissões</span>
                 {customOverwritesCount > 0 && (
-                  <span className="text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-brand-400 font-bold">
+                  <span className="text-xs bg-background-dark px-1.5 py-0.5 rounded text-brand-400 font-bold">
                     {customOverwritesCount}
                   </span>
                 )}
@@ -526,12 +526,12 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
       <div
         className={`${
           mobileView === 'content' ? 'flex' : 'hidden md:flex'
-        } flex-1 flex-col overflow-hidden bg-[#18191c] relative min-w-0 min-h-0`}
+        } flex-1 flex-col overflow-hidden bg-background-dark relative min-w-0 min-h-0`}
       >
         {/* Mobile Drilldown Top Bar */}
         <div
           style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
-          className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-[#111214] flex-shrink-0"
+          className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex-shrink-0"
         >
           <div className="flex items-center gap-2">
             <button
@@ -557,7 +557,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         </div>
 
         {/* Desktop Top Header */}
-        <div className="hidden md:flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-[#1e1f22]/40">
+        <div className="hidden md:flex items-center justify-between px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
           <div>
             <h1 className="text-lg font-bold text-white flex items-center gap-2">
               {activeTab === 'overview'
@@ -596,7 +596,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         {/* Status Toast Notification */}
         {saveStatus && (
           <div
-            className={`mx-4 sm:mx-8 mt-4 p-3 rounded-xl text-xs flex items-center gap-2.5 animate-in fade-in flex-shrink-0 ${
+            className={`mx-4 sm:mx-8 lg:mx-12 xl:mx-16 2xl:mx-24 mt-4 p-3 rounded-xl text-xs flex items-center gap-2.5 animate-in fade-in flex-shrink-0 ${
               saveStatus.type === 'success'
                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                 : 'bg-red-500/15 text-red-300 border border-red-500/30'
@@ -612,11 +612,11 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         )}
 
         {/* TAB CONTENTS */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 no-scrollbar min-h-0 overscroll-contain touch-pan-y">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12 xl:p-16 2xl:p-24 space-y-6 no-scrollbar min-h-0 overscroll-contain touch-pan-y">
           {/* TAB 1: Visão Geral */}
           {activeTab === 'overview' && (
             <div className="max-w-2xl space-y-6">
-              <div className="bg-[#1e1f22] p-5 rounded-2xl border border-white/10 space-y-4 shadow-sm">
+              <div className="bg-background-darker p-5 rounded-2xl border border-white/10 space-y-4 shadow-sm">
                 <div>
                   <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
                     {isCategory ? 'Nome da Categoria' : 'Nome do Canal'}
@@ -637,7 +637,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder={isCategory ? 'COMUNIDADE' : 'novo-canal'}
-                      className="w-full bg-[#111214] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
+                      className="w-full bg-background-darkest border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -673,7 +673,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                       value={topic}
                       onChange={(e) => setTopic(e.target.value)}
                       placeholder="Descreva o propósito deste canal..."
-                      className="w-full bg-[#111214] border border-white/10 rounded-xl p-3.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none transition-colors"
+                      className="w-full bg-background-darkest border border-white/10 rounded-xl p-3.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none transition-colors"
                     />
                   </div>
                 )}
@@ -686,7 +686,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             <div className="flex flex-col md:flex-row gap-6 min-h-0 h-full">
               {/* Left Column: Roles list selector */}
               <div className="w-full md:w-64 flex flex-col gap-2 shrink-0 md:pr-6 md:border-r border-white/10 border-b md:border-b-0 pb-4 md:pb-0">
-                <span className="text-xs font-bold uppercase text-gray-400 font-mono pb-2 mb-1 border-b border-white/10 px-1 block">
+                <span className="text-xs font-bold uppercase text-gray-400 pb-2 mb-1 border-b border-white/10 px-1 block">
                   Cargos do Servidor
                 </span>
 
@@ -776,7 +776,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                               return (
                                 <div
                                   key={perm.key}
-                                  className="p-3.5 rounded-xl bg-[#111214] border border-white/5 flex items-center justify-between gap-4 transition-all hover:border-white/10"
+                                  className="p-3.5 rounded-xl bg-background-darkest border border-white/5 flex items-center justify-between gap-4 transition-all hover:border-white/10"
                                 >
                                   <div className="space-y-0.5 min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
@@ -791,7 +791,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                   </div>
 
                                   {/* 3-State Toggle: ❌ Negar | ⚪ Herdar | ✅ Permitir */}
-                                  <div className="flex items-center bg-[#1e1f22] p-1 rounded-xl border border-white/10 shrink-0">
+                                  <div className="flex items-center bg-background-darker p-1 rounded-xl border border-white/10 shrink-0">
                                     {/* Deny Button ❌ */}
                                     <button
                                       type="button"
@@ -863,7 +863,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         </div>
 
         {/* Mobile Floating Save Button */}
-        <div className="flex md:hidden p-4 bg-[#111214] border-t border-white/10 items-center justify-between flex-shrink-0">
+        <div className="flex md:hidden p-4 bg-background-darkest border-t border-white/10 items-center justify-between flex-shrink-0">
           <button
             type="button"
             onClick={onClose}
