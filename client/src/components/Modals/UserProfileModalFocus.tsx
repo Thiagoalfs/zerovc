@@ -335,33 +335,43 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 
           {/* Details Sections Container */}
           <div className="bg-background-darker/90 rounded-2xl p-4 sm:p-5 border border-white/5 space-y-4">
-            {/* Atividade Category - Only rendered if an activity is active */}
+            {/* Atividade Category - Sleek Minimal Layout without box */}
             {activity && (
-              <div>
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
+              <div className="space-y-1.5 animate-in fade-in">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
                   Atividade
                 </span>
-                <div className="p-3.5 bg-background-darkest/90 rounded-xl border border-brand-500/25 flex flex-col gap-1.5 shadow-md animate-in fade-in">
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-400 uppercase tracking-wider">
-                    {activity.kind === 'game' ? <Gamepad2 className="w-4 h-4 text-green-400" /> :
-                     activity.kind === 'music' ? <Music className="w-4 h-4 text-emerald-400" /> :
-                     activity.kind === 'call' ? <Volume2 className="w-4 h-4 text-brand-400 animate-pulse" /> :
-                     activity.type === 'watching' ? <Tv className="w-4 h-4 text-purple-400" /> :
-                     activity.type === 'streaming' ? <Radio className="w-4 h-4 text-red-400" /> :
-                     activity.type === 'competing' ? <Trophy className="w-4 h-4 text-amber-400" /> :
-                     <Sparkles className="w-4 h-4 text-brand-400" />}
-                    <span>{activity.header}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-gray-100 flex items-center gap-1.5">
+                <div className="flex items-center gap-3 py-1">
+                  {activity.icon_url ? (
+                    <img
+                      src={activity.icon_url}
+                      alt=""
+                      className="w-11 h-11 rounded-xl object-cover bg-white/5 border border-white/10 shrink-0 shadow-sm"
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                      {activity.kind === 'game' ? <Gamepad2 className="w-6 h-6 text-emerald-400" /> :
+                       activity.kind === 'music' ? <Music className="w-6 h-6 text-emerald-400" /> :
+                       activity.kind === 'call' ? <Volume2 className="w-6 h-6 text-brand-400 animate-pulse" /> :
+                       activity.type === 'watching' ? <Tv className="w-6 h-6 text-purple-400" /> :
+                       activity.type === 'streaming' ? <Radio className="w-6 h-6 text-red-400" /> :
+                       activity.type === 'competing' ? <Trophy className="w-6 h-6 text-amber-400" /> :
+                       <Sparkles className="w-6 h-6 text-brand-400" />}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider leading-tight">
+                      {activity.header}
+                    </div>
+                    <div className="text-sm font-bold text-white truncate flex items-center gap-1.5 mt-0.5">
                       {activity.emoji && <span>{activity.emoji}</span>}
                       <span>{activity.name}</span>
-                    </span>
+                    </div>
                     {activity.details && (
-                      <span className="text-xs text-gray-300 font-medium">{activity.details}</span>
+                      <div className="text-xs text-gray-300 font-medium truncate">{activity.details}</div>
                     )}
                     {activity.state && (
-                      <span className="text-xs text-gray-400">{activity.state}</span>
+                      <div className="text-xs text-gray-400 truncate">{activity.state}</div>
                     )}
                   </div>
                 </div>

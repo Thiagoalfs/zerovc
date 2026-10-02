@@ -672,6 +672,7 @@ interface DetectedActivity {
   name: string;
   details?: string;
   start_time: number;
+  icon_url?: string;
 }
 
 const KNOWN_GAMES_AND_APPS: Array<{
@@ -806,6 +807,44 @@ function stopActiveActivityCloseWatcher() {
   }
 }
 
+const gameIconCache = new Map<string, string>();
+
+async function getProcessIcon(processNames: string[]): Promise<string | undefined> {
+  const primaryName = processNames[0];
+  if (gameIconCache.has(primaryName)) {
+    return gameIconCache.get(primaryName);
+  }
+
+  try {
+    if (process.platform === 'win32') {
+      const cleanName = primaryName.replace(/\.exe$/i, '');
+      const { exec } = require('child_process');
+      const exePath: string = await new Promise((resolve) => {
+        exec(
+          `powershell -NoProfile -Command "(Get-Process -Name '${cleanName}' -ErrorAction SilentlyContinue).Path | Select-Object -First 1"`,
+          { windowsHide: true, timeout: 2500 },
+          (err: any, stdout: string) => {
+            if (err || !stdout) return resolve('');
+            resolve(stdout.trim());
+          }
+        );
+      });
+
+      if (exePath && typeof app.getFileIcon === 'function') {
+        const icon = await app.getFileIcon(exePath, { size: 'normal' });
+        if (icon && !icon.isEmpty()) {
+          const dataUrl = icon.toDataURL();
+          gameIconCache.set(primaryName, dataUrl);
+          return dataUrl;
+        }
+      }
+    }
+  } catch (e) {
+    console.debug('[Activity] Non-critical icon extraction error:', e);
+  }
+  return undefined;
+}
+
 function scanProcessesForActivity() {
   if (!mainWindow || mainWindow.isDestroyed() || isScanning) return;
   isScanning = true;
@@ -838,15 +877,19 @@ function scanProcessesForActivity() {
     if (foundMatch) {
       activeActivityProcesses = foundMatch.processes;
       if (!lastDetectedActivity || lastDetectedActivity.name !== foundMatch.name) {
-        lastDetectedActivity = {
-          name: foundMatch.name,
-          type: foundMatch.type,
-          start_time: Math.floor(Date.now() / 1000),
-        };
-        console.log('[Activity] Detected application open:', lastDetectedActivity.name);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('activity-detected', lastDetectedActivity);
-        }
+        const matchingItem = foundMatch;
+        getProcessIcon(matchingItem.processes).then((iconUrl) => {
+          lastDetectedActivity = {
+            name: matchingItem.name,
+            type: matchingItem.type,
+            start_time: Math.floor(Date.now() / 1000),
+            icon_url: iconUrl,
+          };
+          console.log('[Activity] Detected application open:', lastDetectedActivity.name, 'with icon:', Boolean(iconUrl));
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('activity-detected', lastDetectedActivity);
+          }
+        });
       }
       startActiveActivityCloseWatcher();
     } else {

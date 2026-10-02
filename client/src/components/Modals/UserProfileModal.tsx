@@ -265,33 +265,43 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
             )}
 
-            {/* Atividade Category - Only rendered if an activity is active */}
+            {/* Atividade Category - Sleek Minimal Layout without box */}
             {activity && (
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+              <div className="space-y-1.5 animate-in fade-in">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                   Atividade
                 </span>
-                <div className="p-2.5 bg-background-darkest/90 rounded-xl border border-brand-500/20 flex flex-col gap-1 shadow-sm animate-in fade-in">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-400 uppercase tracking-wider">
-                    {activity.kind === 'game' ? <Gamepad2 className="w-3.5 h-3.5 text-green-400" /> :
-                     activity.kind === 'music' ? <Music className="w-3.5 h-3.5 text-emerald-400" /> :
-                     activity.kind === 'call' ? <Volume2 className="w-3.5 h-3.5 text-brand-400 animate-pulse" /> :
-                     activity.type === 'watching' ? <Tv className="w-3.5 h-3.5 text-purple-400" /> :
-                     activity.type === 'streaming' ? <Radio className="w-3.5 h-3.5 text-red-400" /> :
-                     activity.type === 'competing' ? <Trophy className="w-3.5 h-3.5 text-amber-400" /> :
-                     <Sparkles className="w-3.5 h-3.5 text-brand-400" />}
-                    <span>{activity.header}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-gray-100 flex items-center gap-1">
+                <div className="flex items-center gap-3 py-1">
+                  {activity.icon_url ? (
+                    <img
+                      src={activity.icon_url}
+                      alt=""
+                      className="w-10 h-10 rounded-xl object-cover bg-white/5 border border-white/10 shrink-0 shadow-sm"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                      {activity.kind === 'game' ? <Gamepad2 className="w-5 h-5 text-emerald-400" /> :
+                       activity.kind === 'music' ? <Music className="w-5 h-5 text-emerald-400" /> :
+                       activity.kind === 'call' ? <Volume2 className="w-5 h-5 text-brand-400 animate-pulse" /> :
+                       activity.type === 'watching' ? <Tv className="w-5 h-5 text-purple-400" /> :
+                       activity.type === 'streaming' ? <Radio className="w-5 h-5 text-red-400" /> :
+                       activity.type === 'competing' ? <Trophy className="w-5 h-5 text-amber-400" /> :
+                       <Sparkles className="w-5 h-5 text-brand-400" />}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider leading-tight">
+                      {activity.header}
+                    </div>
+                    <div className="text-xs font-bold text-white truncate flex items-center gap-1 mt-0.5">
                       {activity.emoji && <span>{activity.emoji}</span>}
                       <span>{activity.name}</span>
-                    </span>
+                    </div>
                     {activity.details && (
-                      <span className="text-[11px] text-gray-300">{activity.details}</span>
+                      <div className="text-[11px] text-gray-300 truncate">{activity.details}</div>
                     )}
                     {activity.state && (
-                      <span className="text-[10px] text-gray-400">{activity.state}</span>
+                      <div className="text-[10px] text-gray-400 truncate">{activity.state}</div>
                     )}
                   </div>
                 </div>

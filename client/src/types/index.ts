@@ -28,6 +28,7 @@ export interface CustomActivity {
   state?: string;
   emoji?: string;
   start_time?: number;
+  icon_url?: string;
 }
 
 export interface ServerFolder {

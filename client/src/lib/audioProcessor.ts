@@ -51,6 +51,25 @@ class AudioProcessorManager {
     this.vadCallback = cb;
   }
 
+  /**
+   * Pre-warm Web Audio Engine in background upon first interaction
+   * to eliminate AudioContext initialization latency when joining voice.
+   */
+  public async prewarm(): Promise<void> {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!this.audioContext || this.audioContext.state === 'closed') {
+        this.audioContext = new AudioCtx({ sampleRate: 48000, latencyHint: 'interactive' });
+      }
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume().catch(() => {});
+      }
+    } catch (e) {
+      console.debug('[AudioProcessor] Prewarm notice:', e);
+    }
+  }
+
   public updateConfig(newConfig: Partial<AudioProcessorConfig>) {
     if (this.activeConfig) {
       this.activeConfig = { ...this.activeConfig, ...newConfig };

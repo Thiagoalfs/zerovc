@@ -8,6 +8,7 @@ export interface DisplayedActivity {
   details?: string;
   state?: string;
   emoji?: string;
+  icon_url?: string;
   guildName?: string;
   guildIcon?: string;
   participantCount?: number;
@@ -46,6 +47,7 @@ export function getUserActivity(
       details: customAct.details,
       state: customAct.state,
       emoji: customAct.emoji,
+      icon_url: customAct.icon_url,
     };
   }
 
@@ -59,6 +61,7 @@ export function getUserActivity(
       details: customAct.details,
       state: customAct.state,
       emoji: customAct.emoji,
+      icon_url: customAct.icon_url,
     };
   }
 
@@ -78,6 +81,7 @@ export function getUserActivity(
       details: customAct.details,
       state: customAct.state,
       emoji: customAct.emoji,
+      icon_url: customAct.icon_url,
     };
   }
 

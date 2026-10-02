@@ -8,6 +8,7 @@ import {
   DisconnectReason,
 } from 'livekit-client';
 import { processAudioBridge } from './processAudioBridge';
+import { audioProcessor } from './audioProcessor';
 
 export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
 
@@ -18,22 +19,31 @@ export interface GpuDetectionResult {
   preferredCodec: 'h264' | 'vp9' | 'vp8';
 }
 
-export async function detectGpuVendor(): Promise<GpuDetectionResult> {
-  // Check user hardware acceleration preference
-  const userHwSetting = typeof localStorage !== 'undefined'
-    ? localStorage.getItem('zerovc_hardware_acceleration')
-    : null;
-  const isHwEnabledByUser = userHwSetting === null || userHwSetting === 'true';
+let cachedGpuPromise: Promise<GpuDetectionResult> | null = null;
 
-  if (!isHwEnabledByUser) {
-    console.log('[LiveKit GPU] Hardware acceleration is explicitly DISABLED by user in settings. Forcing VP8 software codec.');
-    return {
-      vendor: 'unknown',
-      name: 'Software Fallback (GPU Acceleration Disabled)',
-      hardwareAcceleration: false,
-      preferredCodec: 'vp8',
-    };
-  }
+export function invalidateGpuCache() {
+  cachedGpuPromise = null;
+}
+
+export function detectGpuVendor(): Promise<GpuDetectionResult> {
+  if (cachedGpuPromise) return cachedGpuPromise;
+
+  cachedGpuPromise = (async () => {
+    // Check user hardware acceleration preference
+    const userHwSetting = typeof localStorage !== 'undefined'
+      ? localStorage.getItem('zerovc_hardware_acceleration')
+      : null;
+    const isHwEnabledByUser = userHwSetting === null || userHwSetting === 'true';
+
+    if (!isHwEnabledByUser) {
+      console.log('[LiveKit GPU] Hardware acceleration is explicitly DISABLED by user in settings. Forcing VP8 software codec.');
+      return {
+        vendor: 'unknown',
+        name: 'Software Fallback (GPU Acceleration Disabled)',
+        hardwareAcceleration: false,
+        preferredCodec: 'vp8',
+      };
+    }
 
   let detectedVendor: GpuVendor = 'unknown';
   let deviceName = 'Generic Graphics Device';
@@ -106,16 +116,56 @@ export async function detectGpuVendor(): Promise<GpuDetectionResult> {
 
   console.log(`[LiveKit GPU] Detected: ${detectedVendor.toUpperCase()} (${deviceName}) | Hardware Acceleration: ${hwAcceleration} | Codec: ${preferredCodec}`);
 
-  return {
-    vendor: detectedVendor,
-    name: deviceName,
-    hardwareAcceleration: hwAcceleration,
-    preferredCodec,
-  };
+    return {
+      vendor: detectedVendor,
+      name: deviceName,
+      hardwareAcceleration: hwAcceleration,
+      preferredCodec,
+    };
+  })();
+
+  return cachedGpuPromise;
 }
 
 class LiveKitManager {
   private room: Room | null = null;
+  private isWebRTCPrewarmed: boolean = false;
+
+  /**
+   * Pre-warm WebRTC STUN discovery and UDP candidate pool in the background
+   * so joining a voice channel avoids the cold-start STUN discovery delay.
+   */
+  public prewarmWebRTC(): void {
+    if (this.isWebRTCPrewarmed || typeof window === 'undefined') return;
+    const RTC = window.RTCPeerConnection || (window as any).webkitRTCPeerConnection;
+    if (!RTC) return;
+    this.isWebRTCPrewarmed = true;
+
+    try {
+      const pc = new RTC({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+        iceCandidatePoolSize: 2,
+      });
+
+      pc.createDataChannel('zerovc_prewarm');
+      pc.createOffer()
+        .then((offer: RTCSessionDescriptionInit) => pc.setLocalDescription(offer))
+        .catch(() => {});
+
+      // Cleanly dispose dummy connection after 4 seconds
+      setTimeout(() => {
+        try {
+          pc.close();
+        } catch {}
+      }, 4000);
+      console.log('[LiveKit] WebRTC ICE Candidate Pool pre-warmed in background.');
+    } catch (e) {
+      console.debug('[LiveKit] WebRTC prewarm notice:', e);
+    }
+  }
   private onParticipantsChanged?: (participants: Participant[]) => void;
   private onSpeakingChanged?: (speakingUserIds: string[]) => void;
   private onTrackUpdated?: () => void;
@@ -1146,3 +1196,27 @@ class LiveKitManager {
 }
 
 export const livekit = new LiveKitManager();
+
+/**
+ * Global Zero-Latency Voice Engine Pre-warming
+ * Pre-warms GPU detection, WebRTC ICE candidates, and Web Audio context
+ * so that when the user enters a voice call for the first time, all engines are already hot.
+ */
+export function prewarmVoiceEngine(): void {
+  if (typeof window === 'undefined') return;
+
+  // 1. Prewarm GPU Detection in background
+  void detectGpuVendor();
+
+  // 2. Prewarm WebRTC STUN & ICE candidate pool
+  livekit.prewarmWebRTC();
+
+  // 3. Prewarm Web Audio Engine on first interaction
+  const warmupAudio = () => {
+    void audioProcessor.prewarm();
+    window.removeEventListener('pointerdown', warmupAudio);
+    window.removeEventListener('keydown', warmupAudio);
+  };
+  window.addEventListener('pointerdown', warmupAudio, { once: true, passive: true });
+  window.addEventListener('keydown', warmupAudio, { once: true, passive: true });
+}
