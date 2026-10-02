@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Plus, MessageSquare, User as UserIcon, Phone, UserPlus, UserMinus, Ban, Copy, Check, CheckCheck, Server, X } from 'lucide-react';
+import { Users, Plus, MessageSquare, User as UserIcon, Phone, UserPlus, UserMinus, Ban, Copy, Check, CheckCheck, Server, X, LogOut } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -40,7 +40,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
 }) => {
   const { user: currentUser } = useAuthStore();
   const { rooms, activeRoom, selectRoom, fetchRooms, roomUnreadCounts, unreadRooms, openDMWithUser, markRoomAsRead, closeRoom } = useDMStore();
-  const { groups, activeGroup, selectGroup, fetchGroups, groupUnreadCounts, unreadGroups, markGroupAsRead } = useDMGroupStore();
+  const { groups, activeGroup, selectGroup, fetchGroups, groupUnreadCounts, unreadGroups, markGroupAsRead, leaveGroup } = useDMGroupStore();
   const { guilds } = useGuildStore();
   const { friends, fetchFriends, sendRequest, removeFriend } = useFriendStore();
   const { startCall } = useCallStore();
@@ -293,6 +293,24 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
           navigator.clipboard.writeText(group.id);
           setCopiedUserId(group.id);
           setTimeout(() => setCopiedUserId(null), 2000);
+        },
+      },
+      {
+        separator: true,
+        label: '',
+      },
+      {
+        id: 'leave-group',
+        label: 'Sair do Grupo',
+        icon: <LogOut className="w-4 h-4" />,
+        variant: 'danger',
+        onClick: async () => {
+          if (confirm(`Tem certeza que deseja sair do grupo "${groupDisplayName}"?`)) {
+            if (activeGroup?.id === group.id) {
+              onSelectFriends();
+            }
+            await leaveGroup(group.id);
+          }
         },
       },
     ];

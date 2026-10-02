@@ -347,6 +347,77 @@ func (h *DMGroupHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(members)
 }
 
+type TransferGroupOwnershipRequest struct {
+	NewOwnerID uuid.UUID `json:"new_owner_id"`
+}
+
+func (h *DMGroupHandler) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	groupIDStr := chi.URLParam(r, "id")
+	groupID, err := uuid.Parse(groupIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid group id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req TransferGroupOwnershipRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.NewOwnerID == uuid.Nil {
+		http.Error(w, `{"error":"new_owner_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify requester is current group owner
+	var currentOwnerID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT owner_id FROM dm_groups WHERE id = $1", groupID).Scan(&currentOwnerID)
+	if err != nil {
+		http.Error(w, `{"error":"group not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if currentOwnerID != userID {
+		http.Error(w, `{"error":"apenas o dono atual pode transferir a posse do grupo"}`, http.StatusForbidden)
+		return
+	}
+
+	// Verify new owner is a member of the group
+	var isMember bool
+	h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2)", groupID, req.NewOwnerID).Scan(&isMember)
+	if !isMember {
+		http.Error(w, `{"error":"o novo dono precisa ser membro do grupo"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Update owner_id
+	_, err = h.db.Pool.Exec(r.Context(), "UPDATE dm_groups SET owner_id = $1 WHERE id = $2", req.NewOwnerID, groupID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to transfer group ownership"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var g models.DMGroup
+	h.db.Pool.QueryRow(r.Context(), `
+		SELECT id, name, icon_url, owner_id, created_at
+		FROM dm_groups WHERE id = $1
+	`, groupID).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt)
+	g.Members = h.getGroupMembers(r.Context(), g.ID)
+
+	// Broadcast updated group to all members
+	for _, m := range g.Members {
+		h.hub.SendToUser(m.ID, models.WSEvent{
+			Type: "GROUP_UPDATE",
+			Data: g,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(g)
+}
+
 func (h *DMGroupHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -393,16 +464,18 @@ func (h *DMGroupHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var groupDeleted bool
+	var newOwnerID uuid.UUID
 	if remainingCount == 0 {
 		// Delete group
+		groupDeleted = true
 		if _, err := tx.Exec(r.Context(), "DELETE FROM dm_groups WHERE id = $1", groupID); err != nil {
 			http.Error(w, `{"error":"failed to delete group"}`, http.StatusInternalServerError)
 			return
 		}
 	} else if targetUserID == ownerID {
-		// Transfer ownership to oldest remaining member
-		var newOwnerID uuid.UUID
-		if err := tx.QueryRow(r.Context(), "SELECT user_id FROM dm_group_members WHERE group_id = $1 ORDER BY joined_at ASC LIMIT 1", groupID).Scan(&newOwnerID); err == nil && newOwnerID != uuid.Nil {
+		// Automatic random owner transfer
+		if err := tx.QueryRow(r.Context(), "SELECT user_id FROM dm_group_members WHERE group_id = $1 ORDER BY RANDOM() LIMIT 1", groupID).Scan(&newOwnerID); err == nil && newOwnerID != uuid.Nil {
 			if _, err := tx.Exec(r.Context(), "UPDATE dm_groups SET owner_id = $1 WHERE id = $2", newOwnerID, groupID); err != nil {
 				http.Error(w, `{"error":"failed to transfer group ownership"}`, http.StatusInternalServerError)
 				return
@@ -413,6 +486,26 @@ func (h *DMGroupHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(r.Context()); err != nil {
 		http.Error(w, `{"error":"failed to commit member removal"}`, http.StatusInternalServerError)
 		return
+	}
+
+	// Send GROUP_LEAVE event to target user who left / was removed
+	h.hub.SendToUser(targetUserID, models.WSEvent{
+		Type: "GROUP_LEAVE",
+		Data: map[string]any{"group_id": groupID},
+	})
+
+	// If group still exists, broadcast updated group to all remaining members
+	if !groupDeleted {
+		var g models.DMGroup
+		if err := h.db.Pool.QueryRow(r.Context(), "SELECT id, name, icon_url, owner_id, created_at FROM dm_groups WHERE id = $1", groupID).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt); err == nil {
+			g.Members = h.getGroupMembers(r.Context(), g.ID)
+			for _, m := range g.Members {
+				h.hub.SendToUser(m.ID, models.WSEvent{
+					Type: "GROUP_UPDATE",
+					Data: g,
+				})
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

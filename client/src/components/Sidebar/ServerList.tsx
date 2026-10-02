@@ -458,7 +458,7 @@ export const ServerList: React.FC<ServerListProps> = ({
             isCenterOver
               ? 'scale-[0.80] rounded-[18px] ring-2 ring-brand-400 bg-brand-500/40 shadow-inner'
               : isActive
-              ? 'rounded-[16px] bg-brand-500 text-white shadow-lg shadow-brand-500/30'
+              ? 'rounded-[16px] bg-brand-500 text-white'
               : inFolder
               ? 'rounded-[24px] hover:rounded-[16px] bg-background-darkest/90 hover:bg-brand-500 text-gray-200 hover:text-white'
               : 'rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white'
@@ -492,31 +492,33 @@ export const ServerList: React.FC<ServerListProps> = ({
     <>
       <div className="w-[72px] flex-shrink-0 bg-background-darkest flex flex-col items-center py-3 gap-2 select-none z-20 border-r border-black/20">
         {/* Home / Friends / Direct Messages */}
-        <button
-          onClick={onSelectHome}
-          className={`relative group w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 shadow-md ${
-            isHomeActive
-              ? 'rounded-[16px] bg-brand-500 text-white shadow-lg shadow-brand-500/30'
-              : 'bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white'
-          }`}
-          title="Amigos e Mensagens"
-        >
-          <MessageSquare className="w-6 h-6" />
-
+        <div className="relative group flex items-center justify-center">
           {/* Left active pill */}
           <div
-            className={`absolute left-0 w-1 bg-white rounded-r-full transition-all duration-200 ${
+            className={`absolute -left-3 w-1 bg-white rounded-r-full transition-all duration-200 ${
               isHomeActive ? 'h-10' : totalUnreadDMs > 0 ? 'h-2' : 'h-0 group-hover:h-5'
             }`}
           />
 
-        {/* Unread DM Notification Badge (when there are unreads in total) */}
-        {totalUnreadDMs > 0 && !isHomeActive && (
-          <div className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50">
-            {totalUnreadDMs > 99 ? '99+' : totalUnreadDMs}
-          </div>
-        )}
-      </button>
+          <button
+            onClick={onSelectHome}
+            className={`relative group w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 shadow-md ${
+              isHomeActive
+                ? 'rounded-[16px] bg-brand-500 text-white'
+                : 'bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white'
+            }`}
+            title="Amigos e Mensagens"
+          >
+            <MessageSquare className="w-6 h-6" />
+
+            {/* Unread DM Notification Badge (when there are unreads in total) */}
+            {totalUnreadDMs > 0 && !isHomeActive && (
+              <div className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50">
+                {totalUnreadDMs > 99 ? '99+' : totalUnreadDMs}
+              </div>
+            )}
+          </button>
+        </div>
 
       <div className="w-8 h-[2px] bg-white/10 rounded-full my-1" />
 
@@ -562,7 +564,7 @@ export const ServerList: React.FC<ServerListProps> = ({
                       }
                     }}
                     className={`relative group w-12 h-12 flex items-center justify-center font-semibold text-sm transition-all duration-150 origin-center rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white shadow-md cursor-pointer ${
-                      isRoomActive ? 'rounded-[16px] bg-brand-500 text-white shadow-lg shadow-brand-500/30' : ''
+                      isRoomActive ? 'rounded-[16px] bg-brand-500 text-white' : ''
                     }`}
                     title={`DM de ${recipient?.display_name || recipient?.username} (${unreadCount} mensagem${unreadCount > 1 ? 's' : ''} não lida${unreadCount > 1 ? 's' : ''})`}
                   >
@@ -616,7 +618,7 @@ export const ServerList: React.FC<ServerListProps> = ({
                       }
                     }}
                     className={`relative group w-12 h-12 flex items-center justify-center font-semibold text-sm transition-all duration-150 origin-center rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white shadow-md cursor-pointer ${
-                      isGroupActive ? 'rounded-[16px] bg-brand-500 text-white shadow-lg shadow-brand-500/30' : ''
+                      isGroupActive ? 'rounded-[16px] bg-brand-500 text-white' : ''
                     }`}
                     title={`Grupo: ${groupDisplayName} (${unreadCount} mensagem${unreadCount > 1 ? 's' : ''} não lida${unreadCount > 1 ? 's' : ''})`}
                   >
