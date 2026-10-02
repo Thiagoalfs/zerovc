@@ -515,6 +515,20 @@ func (h *CommandHandler) processCommand(
 			Embeds: []models.MessageEmbed{embed},
 		}, nil
 
+	case "ytdlp_progress":
+		progressVal, _ := req.Args["progress"].(float64)
+		statusText, _ := req.Args["text"].(string)
+		if statusText == "" {
+			statusText = "Iniciando download..."
+		}
+		content := fmt.Sprintf("⏳ **Baixando mídia com yt-dlp...** (%.0f%%)\n`%s`", progressVal, statusText)
+		if progressVal <= 0 {
+			content = fmt.Sprintf("⏳ **Baixando mídia com yt-dlp...**\n`%s`", statusText)
+		}
+		return CommandResult{
+			Content: content,
+		}, nil
+
 	case "ytdlp_publish":
 		title, _ := req.Args["title"].(string)
 		urlStr, _ := req.Args["url"].(string)

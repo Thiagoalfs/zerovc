@@ -391,6 +391,8 @@ declare global {
         data?: { base64: string; filename: string; mimeType: string; title: string; size: number };
         error?: string;
       }>;
+      onYtdlpProgress?: (callback: (progress: { percent: number; text?: string }) => void) => () => void;
+      ytdlpCleanup?: () => Promise<{ success: boolean }>;
     };
   }
 }

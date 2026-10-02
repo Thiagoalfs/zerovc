@@ -62,12 +62,20 @@ export interface ElectronAPI {
     data?: { base64: string; filename: string; mimeType: string; title: string; size: number };
     error?: string;
   }>;
+  onYtdlpProgress: (callback: (progress: { percent: number; text?: string }) => void) => () => void;
+  ytdlpCleanup: () => Promise<{ success: boolean }>;
 }
 
 const electronAPI: ElectronAPI = {
   isElectron: true,
   platform: process.platform,
   ytdlpDownload: (args) => ipcRenderer.invoke('ytdlp-download', args),
+  onYtdlpProgress: (callback) => {
+    const handler = (_: any, progress: { percent: number; text?: string }) => callback(progress);
+    ipcRenderer.on('ytdlp-progress', handler);
+    return () => ipcRenderer.removeListener('ytdlp-progress', handler);
+  },
+  ytdlpCleanup: () => ipcRenderer.invoke('ytdlp-cleanup'),
   startProcessAudioCapture: (options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => ipcRenderer.invoke('start-process-audio-capture', options),
   stopProcessAudioCapture: () => ipcRenderer.invoke('stop-process-audio-capture'),
   onProcessAudioChunk: (callback) => {

@@ -236,7 +236,7 @@ func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		UPDATE messages m
 		SET content = $1, is_edited = true, edited_at = $2, updated_at = $2
 		FROM channels c
-		WHERE m.id = $3 AND m.author_id = $4 AND c.id = m.channel_id
+		WHERE m.id = $3 AND (m.author_id = $4 OR m.invoker_id = $4) AND c.id = m.channel_id
 		RETURNING m.channel_id, c.guild_id, c.is_private
 	`
 	err = h.db.Pool.QueryRow(r.Context(), query, req.Content, now, messageID, userID).Scan(&channelID, &guildID, &isPrivate)
@@ -282,22 +282,24 @@ func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var authorID, guildID, channelID uuid.UUID
+	var invokerID *uuid.UUID
 	var ownerID uuid.UUID
 	var isPrivate bool
 	query := `
-		SELECT m.author_id, m.channel_id, c.guild_id, g.owner_id, c.is_private
+		SELECT m.author_id, m.invoker_id, m.channel_id, c.guild_id, g.owner_id, c.is_private
 		FROM messages m
 		INNER JOIN channels c ON c.id = m.channel_id
 		INNER JOIN guilds g ON g.id = c.guild_id
 		WHERE m.id = $1
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, messageID).Scan(&authorID, &channelID, &guildID, &ownerID, &isPrivate)
+	err = h.db.Pool.QueryRow(r.Context(), query, messageID).Scan(&authorID, &invokerID, &channelID, &guildID, &ownerID, &isPrivate)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
 	}
 
-	if authorID != userID && ownerID != userID {
+	isInvoker := invokerID != nil && *invokerID == userID
+	if authorID != userID && ownerID != userID && !isInvoker {
 		var perms int64
 		h.db.Pool.QueryRow(r.Context(), `
 			SELECT COALESCE(BIT_OR(r.permissions), 0)

@@ -1231,21 +1231,53 @@ ipcMain.handle('stop-process-audio-capture', async () => {
 
 let lastWorkingCookieBrowser: string | null = null;
 
+function cleanupZeroVCDocs() {
+  try {
+    const docsDir = path.join(app.getPath('documents'), 'zerovc');
+    if (fs.existsSync(docsDir)) {
+      const items = fs.readdirSync(docsDir);
+      for (const item of items) {
+        const fullPath = path.join(docsDir, item);
+        try {
+          if (fs.statSync(fullPath).isDirectory()) {
+            fs.rmSync(fullPath, { recursive: true, force: true });
+          } else {
+            fs.unlinkSync(fullPath);
+          }
+          console.log(`[yt-dlp] Cleaned up item in zerovc docs: ${fullPath}`);
+        } catch (e) {
+          console.warn(`[yt-dlp] Error removing item during cleanup: ${fullPath}`, e);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[yt-dlp] Error during zerovc docs cleanup:', err);
+  }
+}
+
+ipcMain.handle('ytdlp-cleanup', async () => {
+  cleanupZeroVCDocs();
+  return { success: true };
+});
+
 // yt-dlp Local Processing IPC
-ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | 'mp3'; link: string }) => {
+ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4' | 'mp3'; link: string }) => {
   try {
     if (!link || typeof link !== 'string') {
+      cleanupZeroVCDocs();
       return { success: false, error: 'Link não fornecido ou inválido.' };
     }
 
     const trimmed = link.trim();
     if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      cleanupZeroVCDocs();
       return { success: false, error: 'O link deve começar com http:// ou https://.' };
     }
 
     // Reject playlist URLs
     const lower = trimmed.toLowerCase();
     if (lower.includes('list=') || lower.includes('/playlist') || lower.includes('playlist?')) {
+      cleanupZeroVCDocs();
       return { success: false, error: 'Playlists não são permitidas. Envie apenas o link de um vídeo ou áudio individual.' };
     }
 
@@ -1304,6 +1336,7 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
       const args: string[] = [
         '--no-playlist',
         '--no-warnings',
+        '--newline',
         '--restrict-filenames',
         '--print', 'after_move:filepath',
         '--print', 'title',
@@ -1333,8 +1366,30 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
         let stdout = '';
         let stderr = '';
 
-        proc.stdout.on('data', (d) => { stdout += d.toString(); });
-        proc.stderr.on('data', (d) => { stderr += d.toString(); });
+        const handleProgressOutput = (chunk: Buffer | string) => {
+          const text = chunk.toString();
+          const lines = text.split(/[\r\n]+/);
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line) continue;
+            const match = line.match(/\[download\]\s+([0-9.]+)%/i) || line.match(/([0-9.]+)%/);
+            if (match) {
+              const percent = Math.min(100, Math.max(0, parseFloat(match[1])));
+              if (!isNaN(percent)) {
+                event.sender.send('ytdlp-progress', { percent, text: line });
+              }
+            }
+          }
+        };
+
+        proc.stdout.on('data', (d) => {
+          stdout += d.toString();
+          handleProgressOutput(d);
+        });
+        proc.stderr.on('data', (d) => {
+          stderr += d.toString();
+          handleProgressOutput(d);
+        });
 
         proc.on('close', (code) => {
           resolve({ ok: code === 0, stdout, stderr });
@@ -1373,9 +1428,10 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
 
     if (!result.ok) {
       console.error(`[yt-dlp] Execution failed across browser attempts:`, result.stderr);
+      cleanupZeroVCDocs();
       let userError = 'Erro ao processar mídia com yt-dlp.';
-      if (result.stderr.includes('is larger than max-filesize')) {
-        userError = 'O arquivo é muito grande (máximo 50MB para áudio / 100MB para vídeo).';
+      if (result.stderr.toLowerCase().includes('max-filesize') || result.stderr.toLowerCase().includes('larger than max-filesize')) {
+        userError = 'O arquivo excede o limite máximo de 100MB e não pôde ser enviado.';
       } else if (result.stderr.includes('Private video') || result.stderr.includes('Video unavailable')) {
         userError = 'Vídeo privado ou indisponível.';
       } else if (result.stderr.includes('ENOENT') || result.stderr.includes('not found')) {
@@ -1388,6 +1444,7 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
 
     const lines = result.stdout.trim().split('\n').map((l) => l.trim()).filter(Boolean);
     if (lines.length < 1) {
+      cleanupZeroVCDocs();
       return { success: false, error: 'Nenhum arquivo retornado pelo yt-dlp.' };
     }
 
@@ -1417,6 +1474,7 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
     }
 
     if (!downloadedPath || !fs.existsSync(downloadedPath)) {
+      cleanupZeroVCDocs();
       return { success: false, error: 'Arquivo baixado não foi encontrado no disco.' };
     }
 
@@ -1424,14 +1482,21 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
     const resolvedPath = path.resolve(downloadedPath);
     const resolvedDocsDir = path.resolve(docsDir);
     if (!resolvedPath.startsWith(resolvedDocsDir)) {
-      try { fs.unlinkSync(resolvedPath); } catch {}
+      cleanupZeroVCDocs();
       return { success: false, error: 'Violação de segurança de caminho de arquivo.' };
     }
 
     const stats = fs.statSync(resolvedPath);
     if (stats.size === 0) {
-      try { fs.unlinkSync(resolvedPath); } catch {}
+      cleanupZeroVCDocs();
       return { success: false, error: 'O arquivo baixado está vazio.' };
+    }
+
+    // Strict 100MB limit check
+    const MAX_ALLOWED_BYTES = 100 * 1024 * 1024; // 100MB
+    if (stats.size > MAX_ALLOWED_BYTES) {
+      cleanupZeroVCDocs();
+      return { success: false, error: 'O arquivo excede o limite máximo de 100MB e não pôde ser enviado.' };
     }
 
     // Security Check: Validate file header magic bytes
@@ -1452,20 +1517,15 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
     }
 
     if (!isValid) {
-      try { fs.unlinkSync(resolvedPath); } catch {}
+      cleanupZeroVCDocs();
       return { success: false, error: 'Falha na validação de segurança do formato do arquivo.' };
     }
 
     const base64Data = buffer.toString('base64');
     const filename = path.basename(resolvedPath);
 
-    // Immediately delete the local file as requested
-    try {
-      fs.unlinkSync(resolvedPath);
-      console.log(`[yt-dlp] Local file successfully wiped: ${resolvedPath}`);
-    } catch (wipeErr) {
-      console.warn(`[yt-dlp] Warning deleting local file:`, wipeErr);
-    }
+    // Immediately wipe all local files in zerovc docs
+    cleanupZeroVCDocs();
 
     return {
       success: true,
@@ -1479,6 +1539,7 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
     };
   } catch (err: any) {
     console.error('[yt-dlp] Unexpected error:', err);
+    cleanupZeroVCDocs();
     return { success: false, error: err?.message || 'Erro inesperado no processamento do yt-dlp.' };
   }
 });

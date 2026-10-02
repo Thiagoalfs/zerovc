@@ -811,7 +811,7 @@ export const api = {
       }
       return res.json() as Promise<{ url: string; filename: string; size: number }>;
     },
-    attachment: async (file: File) => {
+    attachment: async (file: File, options?: { botId?: string }) => {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
@@ -820,7 +820,11 @@ export const api = {
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
-      const res = await fetch(`${getApiBaseUrl()}/api/upload/attachment`, {
+      if (options?.botId) {
+        headers['X-Bot-ID'] = options.botId;
+      }
+      const qs = options?.botId ? `?bot_id=${encodeURIComponent(options.botId)}` : '';
+      const res = await fetch(`${getApiBaseUrl()}/api/upload/attachment${qs}`, {
         method: 'POST',
         credentials: 'include',
         headers,
