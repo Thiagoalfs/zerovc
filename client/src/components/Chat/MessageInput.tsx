@@ -80,6 +80,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   // Active Discord-Style Slash Command Pill Mode State
   const [activeSlash, setActiveSlash] = useState<ActiveSlashState | null>(null);
   const optionInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const commandContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Slash Commands Initial (/) Suggestions
   const [selectedSlashIndex, setSelectedSlashIndex] = useState<number>(0);
@@ -439,10 +440,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const sub = cmd.subcommands?.find((s) => s.name === item.subcommand);
     const options = sub?.options || cmd.options || [];
 
+    // ONLY auto-focus/pull initial option if there is an explicitly REQUIRED option
     let initialOption: string | null = null;
-    if (options.length > 0) {
-      const firstReq = options.find((o) => o.required);
-      initialOption = firstReq ? firstReq.name : options[0].name;
+    const firstReq = options.find((o) => o.required);
+    if (firstReq) {
+      initialOption = firstReq.name;
     }
 
     setActiveSlash({
@@ -478,11 +480,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const optName = currentActiveOption.name;
     const newArgs = { ...activeSlash.args, [optName]: choiceVal };
 
-    const remaining = activeSlashOptions.filter((o) => o.name !== optName && !newArgs[o.name]);
+    // Find next REQUIRED option without value, or if none, close active pill focus
+    const remainingReq = activeSlashOptions.filter((o) => o.name !== optName && o.required && !newArgs[o.name]);
     setActiveSlash({
       ...activeSlash,
       args: newArgs,
-      activeOptionName: remaining.length > 0 ? remaining[0].name : null,
+      activeOptionName: remainingReq.length > 0 ? remainingReq[0].name : null,
     });
     setSlashChoiceIndex(0);
   };
@@ -493,16 +496,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const optName = currentActiveOption.name;
     const newArgs = { ...activeSlash.args, [optName]: `@${userItem.username}` };
 
-    const remaining = activeSlashOptions.filter((o) => o.name !== optName && !newArgs[o.name]);
+    const remainingReq = activeSlashOptions.filter((o) => o.name !== optName && o.required && !newArgs[o.name]);
     setActiveSlash({
       ...activeSlash,
       args: newArgs,
-      activeOptionName: remaining.length > 0 ? remaining[0].name : null,
+      activeOptionName: remainingReq.length > 0 ? remainingReq[0].name : null,
     });
     setSlashUserIndex(0);
   };
 
-  // Select option to focus from OPTIONS popup or pill click
+  // Select option to focus from OPTIONS popup or +option button
   const selectOptionToFocus = (optName: string) => {
     if (!activeSlash) return;
     setActiveSlash({
@@ -526,6 +529,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         });
         setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: opt.name } : null));
         return;
+      }
+    }
+
+    // Special LoL rule: If riot_id is provided, region is required
+    if (activeSlash.command.name === 'league' && activeSlash.args['riot_id']?.trim()) {
+      if (!activeSlash.args['region']?.trim()) {
+        // Automatically default to BR if not specified or prompt
+        activeSlash.args['region'] = 'BR';
       }
     }
 
@@ -642,9 +653,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         if (nextOpt) {
           setActiveSlash((prev) => (prev ? { ...prev, args: newArgs, activeOptionName: nextOpt.name } : null));
         } else {
-          const cmdStr = `/${activeSlash?.command.name}${activeSlash?.subcommand ? ' ' + activeSlash.subcommand.name : ''}`;
-          setActiveSlash(null);
-          setContent(cmdStr);
+          setActiveSlash((prev) => (prev ? { ...prev, args: newArgs, activeOptionName: null } : null));
         }
       }
       return;
@@ -653,10 +662,17 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     // 4. Tab to advance between options
     if (e.key === 'Tab') {
       e.preventDefault();
+      // Special LoL rule: if editing riot_id, jump directly to region
+      if (opt.name === 'riot_id' && activeSlash?.command.name === 'league') {
+        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: 'region' } : null));
+        return;
+      }
       const otherOpts = activeSlashOptions.filter((o) => o.name !== opt.name);
       if (otherOpts.length > 0) {
         const next = otherOpts.find((o) => !activeSlash?.args[o.name]) || otherOpts[0];
         setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: next.name } : null));
+      } else {
+        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: null } : null));
       }
       return;
     }
@@ -664,6 +680,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     // 5. Enter to advance or execute
     if (e.key === 'Enter') {
       e.preventDefault();
+      // Special LoL rule: if finished typing riot_id and region is empty, open region choice!
+      if (opt.name === 'riot_id' && activeSlash?.command.name === 'league' && !activeSlash?.args['region']) {
+        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: 'region' } : null));
+        return;
+      }
+
       const missingReq = activeSlashOptions.find(
         (o) => o.required && !activeSlash?.args[o.name]?.trim() && o.name !== opt.name
       );
@@ -1052,11 +1074,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     e.target.value = '';
   };
 
-  // Remaining options for active slash that have not been filled or selected yet
+  // Remaining options for active slash that have not been filled and are not currently active
   const remainingSlashOptions = useMemo(() => {
     if (!activeSlash) return [];
     return activeSlashOptions.filter(
-      (opt) => opt.name !== activeSlash.activeOptionName && !activeSlash.args[opt.name]
+      (opt) => opt.name !== activeSlash.activeOptionName && (!activeSlash.args[opt.name] || activeSlash.args[opt.name] === '')
     );
   }, [activeSlash, activeSlashOptions]);
 
@@ -1187,7 +1209,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               <span>OPTIONS</span>
             </span>
             <span className="text-[9px] font-normal text-gray-500">
-              {activeSlashOptions.some((o) => o.required) ? 'Preencha os campos obrigatórios' : 'Pressione Enter para enviar sem argumentos'}
+              {activeSlashOptions.some((o) => o.required) ? 'Preencha os campos obrigatórios' : 'Pressione Enter para enviar sem argumentos ou selecione uma opção acima'}
             </span>
           </div>
           <div className="space-y-0.5">
@@ -1507,9 +1529,44 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
           {/* Center: Slash Command Discord Pill Mode OR Standard Textarea */}
           {activeSlash ? (
-            <div className="flex-1 flex flex-wrap items-center gap-1.5 min-h-[30px] py-0.5">
+            <div
+              ref={commandContainerRef}
+              className="flex-1 flex flex-wrap items-center gap-1.5 min-h-[30px] py-0.5"
+            >
+              {/* Invisible input when no specific pill is focused to capture Enter/Escape/Backspace */}
+              {activeSlash.activeOptionName === null && (
+                <input
+                  type="text"
+                  className="w-0 h-0 opacity-0 pointer-events-none absolute"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSendActiveSlash();
+                    } else if (e.key === 'Tab') {
+                      e.preventDefault();
+                      if (activeSlashOptions.length > 0) {
+                        selectOptionToFocus(activeSlashOptions[0].name);
+                      }
+                    } else if (e.key === 'Backspace') {
+                      e.preventDefault();
+                      const cmdStr = `/${activeSlash.command.name}${activeSlash.subcommand ? ' ' + activeSlash.subcommand.name : ''}`;
+                      setActiveSlash(null);
+                      setContent(cmdStr);
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setActiveSlash(null);
+                      setContent('');
+                    }
+                  }}
+                />
+              )}
+
               {/* Bot Avatar + Command Name Prefix (Matching Screenshots 1 & 2) */}
-              <div className="flex items-center gap-1.5 flex-shrink-0 select-none bg-brand-500/10 border border-brand-500/25 px-2 py-1 rounded-lg">
+              <div
+                onClick={() => selectOptionToFocus('')}
+                className="flex items-center gap-1.5 flex-shrink-0 select-none bg-brand-500/10 border border-brand-500/25 px-2 py-1 rounded-lg cursor-pointer hover:bg-brand-500/15 transition-colors"
+              >
                 <div className="w-4 h-4 rounded-full overflow-hidden bg-brand-500 flex items-center justify-center flex-shrink-0">
                   <img
                     src="/assets/gork.jpg"
@@ -1530,11 +1587,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 </div>
               </div>
 
-              {/* Argument Pills (Matching Screenshot 2 [ riot_id | safiroko#zero ]) */}
+              {/* Argument Pills: ONLY render pills for options that are REQUIRED, currently ACTIVE, or have a VALUE SET */}
               {activeSlashOptions.map((opt) => {
-                const isSet = activeSlash.args[opt.name] !== undefined;
+                const isSet = activeSlash.args[opt.name] !== undefined && activeSlash.args[opt.name] !== '';
                 const isActive = activeSlash.activeOptionName === opt.name;
-                if (!isSet && !isActive) return null;
+                const isRequired = !!opt.required;
+
+                if (!isSet && !isActive && !isRequired) return null;
 
                 return (
                   <div
@@ -1570,7 +1629,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 );
               })}
 
-              {/* Remaining Available Options Buttons / "+N options" (Matching Screenshot 1) */}
+              {/* Remaining Available Options Buttons / "+option" (Matching Screenshot 1) */}
               {remainingSlashOptions.length > 0 && (
                 <div className="flex items-center gap-1">
                   {remainingSlashOptions.map((opt) => (

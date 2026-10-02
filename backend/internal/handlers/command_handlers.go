@@ -396,6 +396,17 @@ func (h *CommandHandler) processCommand(
 					var foundID uuid.UUID
 					if err := h.db.Pool.QueryRow(ctx, "SELECT id FROM users WHERE LOWER(username) = LOWER($1) OR LOWER(display_name) = LOWER($1)", uClean).Scan(&foundID); err == nil {
 						lookupUserID = foundID
+					} else {
+						return CommandResult{
+							Embeds: []models.MessageEmbed{
+								{
+									Title:       "❌ Usuário não encontrado",
+									Description: fmt.Sprintf("Não foi possível localizar o usuário **@%s**.", uClean),
+									Color:       "#f43f5e",
+									Timestamp:   &now,
+								},
+							},
+						}, nil
 					}
 				}
 			}
