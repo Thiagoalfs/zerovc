@@ -203,6 +203,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const canDelete = isAuthor || isOwner;
 
   const currentUserRoles = contextType === 'channel' ? (activeGuild?.members?.find((m) => m.id === user?.id)?.roles || []) : [];
+  const authorMember = contextType === 'channel' && activeGuild ? activeGuild.members?.find((m) => m.id === message.author_id) : null;
+  const authorRoleColor = authorMember?.roles?.find((r) => r.color)?.color;
 
   const isMentioned =
     user &&
@@ -781,7 +783,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         )}
 
         {/* Main Message Row */}
-        <div className="flex gap-3 md:gap-4 relative">
+        <div className="flex gap-2.5 md:gap-3.5 relative items-start">
           {/* Quick Action Floating Bar on Hover */}
           {!isEditing && !isSending && !isFailed && (
             <div className="absolute -top-3 right-4 hidden md:group-hover:flex items-center gap-1 bg-background-darkest border border-white/10 rounded-lg p-1 shadow-lg z-10 animate-in fade-in zoom-in-95">
@@ -859,137 +861,269 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             </div>
           )}
 
-          {/* Left Avatar OR Hover Timestamp */}
-          {isCompact ? (
-            <div className="w-9 md:w-10 flex-shrink-0 text-right select-none text-[10px] text-gray-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity leading-[1.375rem] pr-1">
-              {shortTime}
+          {isDensityCompact ? (
+            /* IRC COMPACT MODE: No Avatar, Monospace Timestamp + Inline Username & Message Content on Same Line */
+            <div className="flex items-baseline gap-2 min-w-0 w-full">
+              {/* Short Monospace Timestamp */}
+              <span className="text-[11px] text-gray-500 font-mono select-none w-10 md:w-11 shrink-0 text-right leading-none">
+                {shortTime}
+              </span>
+
+              {/* Inline Content Block */}
+              <div className="flex-1 min-w-0">
+                {isEditing ? (
+                  <div className="space-y-1.5">
+                    <textarea
+                      ref={editInputRef}
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      rows={2}
+                      className="w-full bg-background-darkest text-gray-100 text-sm rounded-lg p-2.5 border border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none font-normal"
+                    />
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-400">
+                        Esc para{' '}
+                        <button onClick={handleCancelEdit} className="text-brand-500 hover:underline cursor-pointer">
+                          cancelar
+                        </button>{' '}
+                        • Enter para{' '}
+                        <button
+                          onClick={handleSaveEdit}
+                          className="text-brand-500 hover:underline font-semibold cursor-pointer"
+                        >
+                          salvar
+                        </button>
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[0.875rem] leading-[1.375rem] font-normal break-words select-text">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        message.author && onOpenUserProfile?.(message.author, { x: e.clientX, y: e.clientY });
+                      }}
+                      onContextMenu={(e) => {
+                        e.stopPropagation();
+                        handleUserContextMenu(e, message.author);
+                      }}
+                      className="font-semibold text-gray-100 hover:underline mr-1.5 cursor-pointer inline-flex items-center gap-1 hover:text-brand-400 align-baseline select-none"
+                      style={authorRoleColor ? { color: authorRoleColor } : undefined}
+                      title="Ver perfil"
+                    >
+                      {message.author?.display_name || message.author?.username || 'Usuário'}:
+                    </button>
+
+                    <span className={`${
+                      isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
+                    }`}>
+                      <FormattedMessage
+                        content={message.content}
+                        onPreviewImage={onPreviewImage}
+                        onImageLoad={onImageLoad}
+                        onOpenUserProfile={onOpenUserProfile}
+                        onOpenUserContextMenu={handleUserContextMenu}
+                      />
+                    </span>
+
+                    {message.is_edited && (
+                      <span className="text-[10px] text-gray-500 font-normal ml-1 select-none">(editado)</span>
+                    )}
+                    {message.is_pinned && (
+                      <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-semibold inline-flex items-center gap-1 ml-1 select-none">
+                        <Pin className="w-2.5 h-2.5" /> Fixada
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Failed sending banner */}
+                {isFailed && (
+                  <div className="mt-1 flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="flex-1 truncate">{message.error || 'Falha ao enviar mensagem.'}</span>
+                    <button
+                      type="button"
+                      onClick={handleRetrySend}
+                      className="flex items-center gap-1 text-red-300 hover:text-white font-semibold underline cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Tentar novamente</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveFailed}
+                      className="p-0.5 hover:text-white text-red-400 cursor-pointer"
+                      title="Excluir rascunho com falha"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Reactions Bar */}
+                {!isSending && !isFailed && message.reactions && message.reactions.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {message.reactions.map((reaction: any) => {
+                      const hasReacted = user && reaction.user_ids.includes(user.id);
+                      return (
+                        <button
+                          key={reaction.emoji}
+                          onClick={() => handleActionToggleReaction(message.id, reaction.emoji)}
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs border transition-colors cursor-pointer ${
+                            hasReacted
+                              ? 'bg-brand-500/20 border-brand-500/40 text-brand-300'
+                              : 'bg-background-darkest/60 border-white/5 text-gray-400 hover:bg-background-darkest hover:text-gray-200'
+                          }`}
+                        >
+                          <span>{reaction.emoji}</span>
+                          <span className="font-semibold text-[11px]">{reaction.count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
-            <UserAvatar
-              user={message.author}
-              size="lg"
-              onClick={(e) => {
-                e.stopPropagation();
-                message.author && onOpenUserProfile?.(message.author, { x: e.clientX, y: e.clientY });
-              }}
-              title="Ver perfil"
-            />
-          )}
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            {!isCompact && (
-              <div className="flex items-baseline gap-2 mb-0.5 select-none">
-                <span
+            /* COZY MODE: Large UserAvatar, Username on Top Row, Message Below */
+            <>
+              {/* Left Avatar OR Hover Timestamp */}
+              {isCompact ? (
+                <div className="w-9 md:w-10 flex-shrink-0 text-right select-none text-[10px] text-gray-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity leading-[1.375rem] pr-1">
+                  {shortTime}
+                </div>
+              ) : (
+                <UserAvatar
+                  user={message.author}
+                  size="lg"
                   onClick={(e) => {
                     e.stopPropagation();
                     message.author && onOpenUserProfile?.(message.author, { x: e.clientX, y: e.clientY });
                   }}
-                  className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
                   title="Ver perfil"
-                >
-                  {message.author?.display_name || message.author?.username || 'Usuário'}
-                </span>
-                <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>
-                {message.is_edited && (
-                  <span className="text-[10px] text-gray-500 font-normal">(editado)</span>
-                )}
-                {message.is_pinned && (
-                  <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1">
-                    <Pin className="w-2.5 h-2.5" /> Fixada
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Inline Editing Mode */}
-            {isEditing ? (
-              <div className="mt-1 space-y-1.5">
-                <textarea
-                  ref={editInputRef}
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  rows={2}
-                  className="w-full bg-background-darkest text-gray-100 text-sm rounded-lg p-2.5 border border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none font-normal"
                 />
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-gray-400">
-                    Esc para{' '}
-                    <button onClick={handleCancelEdit} className="text-brand-500 hover:underline cursor-pointer">
-                      cancelar
-                    </button>{' '}
-                    • Enter para{' '}
-                    <button
-                      onClick={handleSaveEdit}
-                      className="text-brand-500 hover:underline font-semibold cursor-pointer"
-                    >
-                      salvar
-                    </button>
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
-                isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
-              }`}>
-                <FormattedMessage
-                  content={message.content}
-                  onPreviewImage={onPreviewImage}
-                  onImageLoad={onImageLoad}
-                  onOpenUserProfile={onOpenUserProfile}
-                  onOpenUserContextMenu={handleUserContextMenu}
-                />
-              </div>
-            )}
+              )}
 
-            {/* Failed sending banner with Retry and Delete */}
-            {isFailed && (
-              <div className="mt-1.5 flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20">
-                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="flex-1 truncate">{message.error || 'Falha ao enviar mensagem.'}</span>
-                <button
-                  type="button"
-                  onClick={handleRetrySend}
-                  className="flex items-center gap-1 text-red-300 hover:text-white font-semibold underline cursor-pointer"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Tentar novamente</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRemoveFailed}
-                  className="p-0.5 hover:text-white text-red-400 cursor-pointer"
-                  title="Excluir rascunho com falha"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Reactions Bar */}
-            {!isSending && !isFailed && message.reactions && message.reactions.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {message.reactions.map((reaction: any) => {
-                  const hasReacted = user && reaction.user_ids.includes(user.id);
-                  return (
-                    <button
-                      key={reaction.emoji}
-                      onClick={() => handleActionToggleReaction(message.id, reaction.emoji)}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs border transition-colors cursor-pointer ${
-                        hasReacted
-                          ? 'bg-brand-500/20 border-brand-500/40 text-brand-300'
-                          : 'bg-background-darkest/60 border-white/5 text-gray-400 hover:bg-background-darkest hover:text-gray-200'
-                      }`}
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                {!isCompact && (
+                  <div className="flex items-baseline gap-2 mb-0.5 select-none">
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        message.author && onOpenUserProfile?.(message.author, { x: e.clientX, y: e.clientY });
+                      }}
+                      className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
+                      style={authorRoleColor ? { color: authorRoleColor } : undefined}
+                      title="Ver perfil"
                     >
-                      <span>{reaction.emoji}</span>
-                      <span className="font-semibold text-[11px]">{reaction.count}</span>
+                      {message.author?.display_name || message.author?.username || 'Usuário'}
+                    </span>
+                    <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>
+                    {message.is_edited && (
+                      <span className="text-[10px] text-gray-500 font-normal">(editado)</span>
+                    )}
+                    {message.is_pinned && (
+                      <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1">
+                        <Pin className="w-2.5 h-2.5" /> Fixada
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Inline Editing Mode */}
+                {isEditing ? (
+                  <div className="mt-1 space-y-1.5">
+                    <textarea
+                      ref={editInputRef}
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      rows={2}
+                      className="w-full bg-background-darkest text-gray-100 text-sm rounded-lg p-2.5 border border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none font-normal"
+                    />
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-400">
+                        Esc para{' '}
+                        <button onClick={handleCancelEdit} className="text-brand-500 hover:underline cursor-pointer">
+                          cancelar
+                        </button>{' '}
+                        • Enter para{' '}
+                        <button
+                          onClick={handleSaveEdit}
+                          className="text-brand-500 hover:underline font-semibold cursor-pointer"
+                        >
+                          salvar
+                        </button>
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
+                    isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
+                  }`}>
+                    <FormattedMessage
+                      content={message.content}
+                      onPreviewImage={onPreviewImage}
+                      onImageLoad={onImageLoad}
+                      onOpenUserProfile={onOpenUserProfile}
+                      onOpenUserContextMenu={handleUserContextMenu}
+                    />
+                  </div>
+                )}
+
+                {/* Failed sending banner with Retry and Delete */}
+                {isFailed && (
+                  <div className="mt-1.5 flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="flex-1 truncate">{message.error || 'Falha ao enviar mensagem.'}</span>
+                    <button
+                      type="button"
+                      onClick={handleRetrySend}
+                      className="flex items-center gap-1 text-red-300 hover:text-white font-semibold underline cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Tentar novamente</span>
                     </button>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={handleRemoveFailed}
+                      className="p-0.5 hover:text-white text-red-400 cursor-pointer"
+                      title="Excluir rascunho com falha"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Reactions Bar */}
+                {!isSending && !isFailed && message.reactions && message.reactions.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {message.reactions.map((reaction: any) => {
+                      const hasReacted = user && reaction.user_ids.includes(user.id);
+                      return (
+                        <button
+                          key={reaction.emoji}
+                          onClick={() => handleActionToggleReaction(message.id, reaction.emoji)}
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs border transition-colors cursor-pointer ${
+                            hasReacted
+                              ? 'bg-brand-500/20 border-brand-500/40 text-brand-300'
+                              : 'bg-background-darkest/60 border-white/5 text-gray-400 hover:bg-background-darkest hover:text-gray-200'
+                          }`}
+                        >
+                          <span>{reaction.emoji}</span>
+                          <span className="font-semibold text-[11px]">{reaction.count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div>
 
