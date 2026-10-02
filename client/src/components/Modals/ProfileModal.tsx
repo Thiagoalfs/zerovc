@@ -2461,7 +2461,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Cor de Destaque
                   </h4>
-                  <div className="flex flex-wrap gap-2.5 items-center">
+                  <div className="flex flex-wrap gap-3 items-center">
                     {[
                       { id: 'indigo', name: 'Índigo', color: '#5865F2' },
                       { id: 'purple', name: 'Roxo Elétrico', color: '#8b5cf6' },
@@ -2469,26 +2469,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       { id: 'rose', name: 'Rosa Fúcsia', color: '#ec4899' },
                       { id: 'cyan', name: 'Ciano Aqua', color: '#06b6d4' },
                       { id: 'amber', name: 'Âmbar Solar', color: '#f59e0b' },
-                    ].map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setAccentColor(item.id as AccentColor)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                          accentColor === item.id
-                            ? 'border-white text-white shadow-md bg-white/10'
-                            : 'border-white/10 text-gray-400 hover:text-white bg-background-darker'
-                        }`}
-                      >
-                        <span
-                          className="w-3.5 h-3.5 rounded-full shadow-sm flex items-center justify-center"
+                    ].map((item) => {
+                      const isSelected = accentColor === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setAccentColor(item.id as AccentColor)}
+                          title={item.name}
+                          aria-label={item.name}
+                          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all cursor-pointer flex items-center justify-center relative shadow-md hover:scale-105 active:scale-95 ${
+                            isSelected
+                              ? 'ring-2 ring-white ring-offset-2 ring-offset-background-darkest scale-105'
+                              : 'opacity-85 hover:opacity-100 border border-white/10 hover:border-white/30'
+                          }`}
                           style={{ backgroundColor: item.color }}
                         >
-                          {accentColor === item.id && <Check className="w-2.5 h-2.5 text-white" />}
-                        </span>
-                        <span>{item.name}</span>
-                      </button>
-                    ))}
+                          {isSelected && <Check className="w-5 h-5 text-white drop-shadow-sm stroke-[3]" />}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
