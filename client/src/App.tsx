@@ -747,7 +747,7 @@ export const App: React.FC = () => {
             let iconUrl = detectedActivity.icon_url;
             const lowerName = detectedActivity.name.toLowerCase();
             if (lowerName === 'minecraft') {
-              iconUrl = '/icons/games/minecraft.png';
+              iconUrl = 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/minecraft.png';
               resolvedActivity = { ...detectedActivity, icon_url: iconUrl };
             } else if (!iconUrl) {
               try {

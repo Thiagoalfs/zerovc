@@ -74,7 +74,7 @@ type steamSearchItem struct {
 }
 
 var curatedGameIcons = map[string]string{
-	"minecraft":          "/icons/games/minecraft.png",
+	"minecraft":          "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/minecraft.png",
 	"league of legends":  "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png",
 	"valorant":           "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png",
 	"teamfight tactics":  "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/teamfight-tactics.png",

@@ -852,22 +852,9 @@ async function getProcessIcon(gameName: string, processNames: string[]): Promise
 
     const lowerGameName = (gameName || '').toLowerCase();
 
-    // Priority: Minecraft official 3D grass block icon
+    // Priority: Minecraft official 3D grass block icon from CDN
     if (lowerGameName === 'minecraft') {
-      const mcCandidates = [
-        path.join(__dirname, '..', 'public', 'icons', 'games', 'minecraft.png'),
-        path.join(__dirname, '..', 'dist', 'icons', 'games', 'minecraft.png'),
-        path.join(__dirname, 'icons', 'games', 'minecraft.png'),
-        path.join(process.resourcesPath, 'icons', 'games', 'minecraft.png'),
-      ];
-      for (const mcCand of mcCandidates) {
-        const icon = await loadFileAsIconDataUrl(mcCand);
-        if (icon) {
-          gameIconCache.set(cacheKey, icon);
-          return icon;
-        }
-      }
-      return '/icons/games/minecraft.png';
+      return 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/minecraft.png';
     }
 
     if (process.platform === 'win32') {
