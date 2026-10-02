@@ -450,71 +450,75 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         </div>
       )}
 
-      {/* DESKTOP SIDEBAR TABS */}
-      <div className="hidden md:flex w-60 lg:w-64 bg-[#111214] border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar">
-        <div className="px-3 py-2 mb-2">
-          <div className="flex items-center gap-2">
-            {isCategory ? (
-              <Folder className="w-4 h-4 text-brand-400 flex-shrink-0" />
-            ) : isText ? (
-              <Hash className="w-4 h-4 text-gray-400 flex-shrink-0" />
-            ) : (
-              <Volume2 className="w-4 h-4 text-online flex-shrink-0" />
-            )}
-            <h2 className="text-xs font-bold uppercase tracking-wider text-gray-300 font-mono truncate">
-              {channel.name}
-            </h2>
-          </div>
-          <div className="text-[11px] text-gray-500 mt-0.5">
-            {isCategory ? 'Configurações da Categoria' : 'Configurações do Canal'}
-          </div>
-        </div>
+      {/* DESKTOP SIDEBAR TABS (Discord-like Layout with Left Breathing Room) */}
+      <div className="hidden md:flex flex-1 max-w-[280px] lg:max-w-[320px] xl:max-w-[360px] 2xl:max-w-[400px] min-w-[220px] justify-end bg-[#111214] border-r border-white/10 shrink-0 overflow-y-auto no-scrollbar">
+        <div className="w-56 lg:w-60 flex flex-col p-4 py-6 xl:py-8 shrink-0 justify-between">
+          <div className="flex flex-col items-stretch flex-1 flex-shrink-0">
+            <div className="px-3 py-2 mb-2">
+              <div className="flex items-center gap-2">
+                {isCategory ? (
+                  <Folder className="w-4 h-4 text-brand-400 flex-shrink-0" />
+                ) : isText ? (
+                  <Hash className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                ) : (
+                  <Volume2 className="w-4 h-4 text-online flex-shrink-0" />
+                )}
+                <h2 className="text-xs font-bold uppercase tracking-wider text-gray-300 font-mono truncate">
+                  {channel.name}
+                </h2>
+              </div>
+              <div className="text-[11px] text-gray-500 mt-0.5">
+                {isCategory ? 'Configurações da Categoria' : 'Configurações do Canal'}
+              </div>
+            </div>
 
-        <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
-          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
-            Configurações
-          </span>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('overview')}
-            className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-              activeTab === 'overview'
-                ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-            }`}
-          >
-            <span>Visão Geral</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('permissions')}
-            className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-              activeTab === 'permissions'
-                ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-            }`}
-          >
-            <span>Permissões</span>
-            {customOverwritesCount > 0 && (
-              <span className="text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-brand-400 font-bold">
-                {customOverwritesCount}
+            <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
+                Configurações
               </span>
-            )}
-          </button>
-        </nav>
 
-        <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5 mr-2" />
-            <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('overview')}
+                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'overview'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <span>Visão Geral</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('permissions')}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'permissions'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
+                }`}
+              >
+                <span>Permissões</span>
+                {customOverwritesCount > 0 && (
+                  <span className="text-xs bg-[#18191c] px-1.5 py-0.5 rounded text-brand-400 font-bold">
+                    {customOverwritesCount}
+                  </span>
+                )}
+              </button>
+            </nav>
+          </div>
+
+          <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-2" />
+              <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
