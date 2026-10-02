@@ -194,7 +194,7 @@ func (h *CommandHandler) processCommand(
 					targetUserID = parsedUUID
 				} else {
 					var foundID uuid.UUID
-					err := h.db.Pool.QueryRow(ctx, "SELECT id FROM users WHERE LOWER(username) = LOWER($1)", uClean).Scan(&foundID)
+					err := h.db.Pool.QueryRow(ctx, "SELECT id FROM users WHERE LOWER(username) = LOWER($1) OR LOWER(display_name) = LOWER($1)", uClean).Scan(&foundID)
 					if err == nil {
 						targetUserID = foundID
 					}
@@ -394,7 +394,7 @@ func (h *CommandHandler) processCommand(
 					lookupUserID = parsedUUID
 				} else {
 					var foundID uuid.UUID
-					if err := h.db.Pool.QueryRow(ctx, "SELECT id FROM users WHERE LOWER(username) = LOWER($1)", uClean).Scan(&foundID); err == nil {
+					if err := h.db.Pool.QueryRow(ctx, "SELECT id FROM users WHERE LOWER(username) = LOWER($1) OR LOWER(display_name) = LOWER($1)", uClean).Scan(&foundID); err == nil {
 						lookupUserID = foundID
 					}
 				}
