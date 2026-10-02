@@ -254,7 +254,58 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           />
         )}
 
-        {/* 1. Voice Connection Status Bar (Shown ONLY when connected/connecting - STRICTLY AT THE TOP) */}
+        {/* 1. Game Activity Preview Bar (Top Tier - Expands upwards when game is detected) */}
+        {isGameActive && user?.custom_activity && (
+          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-background-darker/70 border border-white/5 animate-in fade-in slide-in-from-bottom-2 duration-200 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
+              {user.custom_activity.icon_url ? (
+                <img
+                  src={formatAssetUrl(user.custom_activity.icon_url)}
+                  alt={user.custom_activity.name}
+                  className="w-8 h-8 rounded-lg object-cover bg-background-darkest flex-shrink-0 border border-white/10 shadow-sm"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <Gamepad2 className="w-4 h-4" />
+                </div>
+              )}
+              <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+                <span className="text-xs font-bold text-white truncate leading-tight">
+                  {user.custom_activity.name}
+                </span>
+                <span className="text-[10px] text-gray-400 truncate leading-tight mt-0.5">
+                  {user.custom_activity.details || user.custom_activity.state || 'Jogando agora'}
+                </span>
+              </div>
+            </div>
+
+            {/* Screen Share / Stream Button if connected to a voice call */}
+            {isInVoice && (
+              <button
+                type="button"
+                onClick={handleStreamGameClick}
+                className={`p-1.5 rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-sm active:scale-95 flex-shrink-0 ${
+                  isScreensharing
+                    ? 'bg-brand-500 text-white shadow-brand-500/20 hover:bg-brand-600'
+                    : 'bg-white/5 hover:bg-brand-500 hover:text-white text-gray-300 border border-white/5'
+                }`}
+                title={isScreensharing ? 'Opções de transmissão' : `Transmitir ${user.custom_activity.name} com som`}
+              >
+                <Monitor className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Divider between Game Activity and Voice Connection if both are active */}
+        {isGameActive && isInVoice && (
+          <div className="h-[1px] bg-white/5 -mx-1" />
+        )}
+
+        {/* 2. Voice Connection Status Bar (Middle Tier - Shown ONLY when connected/connecting) */}
         {isInVoice && (
           <>
             <div className="flex items-center justify-between min-w-0 gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-150">
@@ -330,60 +381,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               </button>
             </div>
           </>
-        )}
-
-        {/* Divider between Voice and Game Activity if both are active */}
-        {isInVoice && isGameActive && (
-          <div className="h-[1px] bg-white/5 -mx-1" />
-        )}
-
-        {/* 2. Game Activity Preview Bar (Expands upwards when game is detected) */}
-        {isGameActive && user?.custom_activity && (
-          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-background-darker/70 border border-white/5 animate-in fade-in slide-in-from-bottom-2 duration-200 min-w-0">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
-              {user.custom_activity.icon_url ? (
-                <img
-                  src={formatAssetUrl(user.custom_activity.icon_url)}
-                  alt={user.custom_activity.name}
-                  className="w-8 h-8 rounded-lg object-cover bg-background-darkest flex-shrink-0 border border-white/10 shadow-sm"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <Gamepad2 className="w-4 h-4" />
-                </div>
-              )}
-              <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                <span className="text-xs font-bold text-white truncate leading-tight">
-                  {user.custom_activity.name}
-                </span>
-                <span className="text-[10px] text-gray-400 truncate leading-tight mt-0.5">
-                  {user.custom_activity.details || user.custom_activity.state || 'Jogando agora'}
-                </span>
-              </div>
-            </div>
-
-            {/* Screen Share / Stream Button if connected to a voice call */}
-            {isInVoice && (
-              <button
-                type="button"
-                onClick={handleStreamGameClick}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 flex-shrink-0 ${
-                  isScreensharing
-                    ? 'bg-brand-500 text-white shadow-brand-500/20 hover:bg-brand-600'
-                    : 'bg-white/5 hover:bg-brand-500 hover:text-white text-gray-300 border border-white/5'
-                }`}
-                title={isScreensharing ? 'Opções de transmissão' : `Transmitir ${user.custom_activity.name} com som`}
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                <span className="text-[11px] font-semibold">
-                  {isScreensharing ? 'Ao Vivo' : 'Transmitir'}
-                </span>
-              </button>
-            )}
-          </div>
         )}
 
         {/* Divider above User Row if Voice or Game is active */}
