@@ -49,8 +49,12 @@ import {
   Gauge,
   Headphones,
   Smartphone,
+  Bot,
+  Hash,
+  Send,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { UserAvatar } from '../Common/UserAvatar';
 import {
   useSettingsStore,
   ThemeMode,
@@ -2121,6 +2125,255 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             {/* TAB: APARÊNCIA & TEMA */}
             {activeTab === 'appearance' && (
               <div className="space-y-6 animate-in fade-in">
+                {/* Live Interactive Appearance Preview */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Palette className="w-3.5 h-3.5 text-brand-400" />
+                      Prévia de Aparência
+                    </h4>
+                    <span className="text-[11px] text-gray-500">
+                      Atualização em tempo real
+                    </span>
+                  </div>
+
+                  {/* Simulated App / Chat Box */}
+                  {(() => {
+                    const ACCENT_COLOR_PREVIEWS: Record<AccentColor, { hex: string; bgSoft: string; border: string; text: string; label: string }> = {
+                      indigo: { hex: '#5865F2', bgSoft: 'rgba(88, 101, 242, 0.15)', border: 'rgba(88, 101, 242, 0.35)', text: '#818cf8', label: 'Índigo' },
+                      purple: { hex: '#8b5cf6', bgSoft: 'rgba(139, 92, 246, 0.15)', border: 'rgba(139, 92, 246, 0.35)', text: '#c084fc', label: 'Roxo Elétrico' },
+                      emerald: { hex: '#10b981', bgSoft: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.35)', text: '#34d399', label: 'Esmeralda' },
+                      rose: { hex: '#ec4899', bgSoft: 'rgba(236, 72, 153, 0.15)', border: 'rgba(236, 72, 153, 0.35)', text: '#f472b6', label: 'Rosa Fúcsia' },
+                      cyan: { hex: '#06b6d4', bgSoft: 'rgba(6, 182, 212, 0.15)', border: 'rgba(6, 182, 212, 0.35)', text: '#22d3ee', label: 'Ciano Aqua' },
+                      amber: { hex: '#f59e0b', bgSoft: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.35)', text: '#fbbf24', label: 'Âmbar Solar' },
+                    };
+                    const activeAccent = ACCENT_COLOR_PREVIEWS[accentColor] || ACCENT_COLOR_PREVIEWS.indigo;
+                    const isCompact = chatDensity === 'compact';
+                    const isLight = theme === 'light';
+                    const isOled = theme === 'oled';
+
+                    return (
+                      <div
+                        className={`rounded-2xl border transition-all duration-200 overflow-hidden shadow-2xl relative ${
+                          isLight
+                            ? 'bg-[#ffffff] border-black/10 text-gray-800'
+                            : isOled
+                            ? 'bg-[#000000] border-white/15 text-gray-100'
+                            : 'bg-[#313338] border-white/10 text-gray-100'
+                        }`}
+                      >
+                        {/* Simulated Channel Top Bar */}
+                        <div
+                          className={`px-4 py-2.5 flex items-center justify-between border-b text-xs select-none ${
+                            isLight
+                              ? 'bg-[#f2f3f5] border-black/10 text-gray-700'
+                              : isOled
+                              ? 'bg-[#0a0a0a] border-white/10 text-gray-300'
+                              : 'bg-[#2b2d31] border-white/10 text-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Hash className="w-4 h-4 text-gray-400" />
+                            <span className="font-bold text-sm">geral</span>
+                            <span className="hidden sm:inline text-xs text-gray-400 border-l border-gray-500/30 pl-2">
+                              Canal de texto principal
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <span
+                              className="px-2 py-0.5 rounded-full font-semibold border"
+                              style={{
+                                backgroundColor: activeAccent.bgSoft,
+                                borderColor: activeAccent.border,
+                                color: activeAccent.text,
+                              }}
+                            >
+                              {activeAccent.label}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full font-medium border ${
+                                isLight ? 'bg-black/5 border-black/10 text-gray-600' : 'bg-white/5 border-white/10 text-gray-400'
+                              }`}
+                            >
+                              {isCompact ? 'Compacto (IRC)' : 'Confortável'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Simulated Messages Area */}
+                        <div className="p-3 sm:p-4 space-y-3">
+                          {/* Message 1: ZeroVC Bot */}
+                          {isCompact ? (
+                            /* IRC Compact Message 1 */
+                            <div className="flex items-baseline gap-2 text-xs leading-relaxed">
+                              <span className="font-mono text-[11px] text-gray-500 select-none w-10 shrink-0 text-right">
+                                11:42
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <span
+                                  className="font-semibold mr-1.5 cursor-pointer hover:underline inline-flex items-center gap-1"
+                                  style={{ color: activeAccent.text }}
+                                >
+                                  ZeroVC Bot:
+                                </span>
+                                <span className={isLight ? 'text-gray-800' : 'text-gray-200'}>
+                                  Bem-vindo ao servidor! Experimente personalizar suas cores e temas no perfil{' '}
+                                </span>
+                                <span
+                                  className="px-1.5 py-0.2 rounded font-semibold text-[11px] inline-flex items-center gap-0.5"
+                                  style={{
+                                    backgroundColor: activeAccent.bgSoft,
+                                    color: activeAccent.text,
+                                    border: `1px solid ${activeAccent.border}`,
+                                  }}
+                                >
+                                  @{user?.display_name || user?.username || 'Você'}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            /* Cozy Message 1 */
+                            <div className="flex gap-3 items-start">
+                              <div
+                                className="w-9 h-9 rounded-full flex items-center justify-center text-white shadow-sm flex-shrink-0"
+                                style={{ backgroundColor: activeAccent.hex }}
+                              >
+                                <Bot className="w-5 h-5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-baseline gap-2 mb-0.5">
+                                  <span
+                                    className="font-bold text-xs hover:underline cursor-pointer"
+                                    style={{ color: activeAccent.text }}
+                                  >
+                                    ZeroVC Bot
+                                  </span>
+                                  <span
+                                    className="px-1 py-0.2 text-[9px] font-extrabold uppercase rounded text-white"
+                                    style={{ backgroundColor: activeAccent.hex }}
+                                  >
+                                    BOT
+                                  </span>
+                                  <span className="text-[10px] text-gray-400">Hoje às 11:42</span>
+                                </div>
+                                <div className={`text-xs leading-relaxed ${isLight ? 'text-gray-700' : 'text-gray-300'}`}>
+                                  Bem-vindo ao servidor! Experimente personalizar suas cores e temas no perfil{' '}
+                                  <span
+                                    className="px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5"
+                                    style={{
+                                      backgroundColor: activeAccent.bgSoft,
+                                      color: activeAccent.text,
+                                      border: `1px solid ${activeAccent.border}`,
+                                    }}
+                                  >
+                                    @{user?.display_name || user?.username || 'Você'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Message 2: Current User */}
+                          {isCompact ? (
+                            /* IRC Compact Message 2 */
+                            <div>
+                              <div className="flex items-baseline gap-2 text-xs leading-relaxed">
+                                <span className="font-mono text-[11px] text-gray-500 select-none w-10 shrink-0 text-right">
+                                  11:43
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <span className={`font-semibold mr-1.5 cursor-pointer hover:underline ${isLight ? 'text-gray-900' : 'text-gray-100'}`}>
+                                    {user?.display_name || user?.username || 'Você'}:
+                                  </span>
+                                  <span className={isLight ? 'text-gray-800' : 'text-gray-200'}>
+                                    Ficou sensacional! O visual responde instantaneamente em tempo real. 🚀
+                                  </span>
+                                </div>
+                              </div>
+                              {/* Reaction pill */}
+                              <div className="ml-12 mt-1">
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] border cursor-pointer select-none font-semibold transition-transform active:scale-95"
+                                  style={{
+                                    backgroundColor: activeAccent.bgSoft,
+                                    borderColor: activeAccent.border,
+                                    color: activeAccent.text,
+                                  }}
+                                >
+                                  <span>🚀</span>
+                                  <span>3</span>
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            /* Cozy Message 2 */
+                            <div className="flex gap-3 items-start">
+                              <UserAvatar user={user} size="md" className="flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-baseline gap-2 mb-0.5">
+                                  <span className={`font-bold text-xs hover:underline cursor-pointer ${isLight ? 'text-gray-900' : 'text-gray-100'}`}>
+                                    {user?.display_name || user?.username || 'Você'}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400">Hoje às 11:43</span>
+                                </div>
+                                <div className={`text-xs leading-relaxed ${isLight ? 'text-gray-700' : 'text-gray-300'}`}>
+                                  Ficou sensacional! O visual responde instantaneamente em tempo real. 🚀
+                                </div>
+                                <div className="flex items-center gap-1 mt-1.5">
+                                  <span
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs border cursor-pointer select-none font-semibold transition-transform active:scale-95"
+                                    style={{
+                                      backgroundColor: activeAccent.bgSoft,
+                                      borderColor: activeAccent.border,
+                                      color: activeAccent.text,
+                                    }}
+                                  >
+                                    <span>🚀</span>
+                                    <span>3</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Simulated Bottom Message Input Bar */}
+                        <div
+                          className={`p-2.5 sm:p-3 border-t flex items-center gap-2 select-none ${
+                            isLight
+                              ? 'bg-[#f2f3f5] border-black/10'
+                              : isOled
+                              ? 'bg-[#0a0a0a] border-white/10'
+                              : 'bg-[#2b2d31] border-white/10'
+                          }`}
+                        >
+                          <div
+                            className={`flex-1 flex items-center justify-between px-3 py-1.5 rounded-xl border text-xs ${
+                              isLight
+                                ? 'bg-white border-black/10 text-gray-400'
+                                : isOled
+                                ? 'bg-[#141414] border-white/10 text-gray-500'
+                                : 'bg-[#383a40] border-white/5 text-gray-400'
+                            }`}
+                          >
+                            <span>Conversar em #geral...</span>
+                            <div className="flex items-center gap-2">
+                              <Smile className="w-4 h-4 text-gray-400" />
+                              <div
+                                className="w-6 h-6 rounded-lg flex items-center justify-center text-white cursor-pointer shadow-sm transition-transform active:scale-90"
+                                style={{ backgroundColor: activeAccent.hex }}
+                              >
+                                <Send className="w-3 h-3" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
                 {/* Theme Selector */}
                 <div>
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
