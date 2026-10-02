@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 
 export interface DropdownOption<T = string> {
@@ -19,6 +19,7 @@ interface DropdownSelectProps<T = string> {
   menuClassName?: string;
   prefixIcon?: React.ReactNode;
   align?: 'left' | 'right';
+  placement?: 'auto' | 'top' | 'bottom';
 }
 
 export function DropdownSelect<T extends string | number>({
@@ -32,11 +33,35 @@ export function DropdownSelect<T extends string | number>({
   menuClassName = '',
   prefixIcon,
   align = 'left',
+  placement = 'auto',
 }: DropdownSelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(placement === 'top');
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find((opt) => opt.value === value);
+
+  // Measure space dynamically to prevent cropping by modal/viewport boundaries
+  useLayoutEffect(() => {
+    if (isOpen && containerRef.current) {
+      if (placement === 'top') {
+        setOpenUpward(true);
+      } else if (placement === 'bottom') {
+        setOpenUpward(false);
+      } else {
+        const rect = containerRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+
+        // If less than 240px below and more room above, open upwards
+        if (spaceBelow < 240 && spaceAbove > spaceBelow) {
+          setOpenUpward(true);
+        } else {
+          setOpenUpward(false);
+        }
+      }
+    }
+  }, [isOpen, placement]);
 
   // Close on Escape or click outside
   useEffect(() => {
@@ -80,7 +105,7 @@ export function DropdownSelect<T extends string | number>({
       {isOpen && (
         <>
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-[80]"
             onClick={(e) => {
               e.stopPropagation();
               setIsOpen(false);
@@ -89,7 +114,9 @@ export function DropdownSelect<T extends string | number>({
           <div
             className={`absolute ${
               align === 'right' ? 'right-0' : 'left-0'
-            } top-full mt-1.5 w-full min-w-[200px] max-h-60 overflow-y-auto z-50 bg-background-darker border border-white/10 p-1.5 rounded-xl shadow-2xl space-y-0.5 animate-in fade-in zoom-in-95 no-scrollbar ${menuClassName}`}
+            } ${
+              openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+            } w-full min-w-[200px] max-h-60 overflow-y-auto z-[90] bg-background-darker border border-white/10 p-1.5 rounded-xl shadow-2xl space-y-0.5 animate-in fade-in zoom-in-95 no-scrollbar ${menuClassName}`}
           >
             {options.map((opt) => {
               const isSelected = opt.value === value;
