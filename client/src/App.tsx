@@ -743,13 +743,17 @@ export const App: React.FC = () => {
 
           let resolvedActivity = detectedActivity;
           if (detectedActivity && detectedActivity.name) {
-            // Priority 1: Query RAWG for official game cover if not already provided
+            // Priority 1: Check curated icons (e.g. Minecraft 3D grass block), then Steam/Game Search API for square game icon
             let iconUrl = detectedActivity.icon_url;
-            if (!iconUrl) {
+            const lowerName = detectedActivity.name.toLowerCase();
+            if (lowerName === 'minecraft') {
+              iconUrl = '/icons/games/minecraft.png';
+              resolvedActivity = { ...detectedActivity, icon_url: iconUrl };
+            } else if (!iconUrl) {
               try {
-                const rawgMatches = await api.games.search(detectedActivity.name);
-                if (rawgMatches && rawgMatches.length > 0) {
-                  iconUrl = rawgMatches[0].background_image || rawgMatches[0].icon_url;
+                const gameMatches = await api.games.search(detectedActivity.name);
+                if (gameMatches && gameMatches.length > 0) {
+                  iconUrl = gameMatches[0].icon_url || gameMatches[0].background_image;
                   resolvedActivity = { ...detectedActivity, icon_url: iconUrl };
                 }
               } catch {}

@@ -95,18 +95,19 @@ export const TitleBar: React.FC = () => {
     };
   }, [isElectron, checkServerVersion]);
 
-  if (isCapacitor) {
-    return null;
-  }
-
   const isMobile =
     typeof window !== 'undefined' &&
     (/Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent) ||
       window.innerWidth < 768);
 
-  const downloadHref = isMobile ? '/downloads/ZeroVC.apk' : '/downloads/ZeroVC-Setup.exe';
-  const downloadFileName = isMobile ? 'ZeroVC.apk' : 'ZeroVC-Setup.exe';
-  const downloadTitle = isMobile ? 'Baixar ZeroVC para Celular (.apk)' : 'Baixar ZeroVC para Computador (.exe)';
+  // Completely hide TitleBar on mobile devices, mobile browsers and Capacitor app
+  if (isCapacitor || isMobile) {
+    return null;
+  }
+
+  const downloadHref = '/downloads/ZeroVC-Setup.exe';
+  const downloadFileName = 'ZeroVC-Setup.exe';
+  const downloadTitle = 'Baixar ZeroVC para Computador (.exe)';
 
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault();

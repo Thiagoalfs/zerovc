@@ -346,7 +346,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                     <img
                       src={activity.icon_url}
                       alt=""
-                      className="w-11 h-11 rounded-xl object-cover bg-white/5 border border-white/10 shrink-0 shadow-sm"
+                      className="w-11 h-11 rounded-xl object-contain p-0.5 bg-white/5 border border-white/10 shrink-0 shadow-sm"
                     />
                   ) : (
                     <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
