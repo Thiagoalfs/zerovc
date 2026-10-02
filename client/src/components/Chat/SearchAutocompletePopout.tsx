@@ -122,6 +122,15 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
   });
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const popoutRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll selected item into view
+  useEffect(() => {
+    if (selectedIndex >= 0 && listRef.current) {
+      const el = listRef.current.children[selectedIndex] as HTMLElement;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedIndex]);
 
   // Calculate dynamic position below search input
   useEffect(() => {
@@ -374,7 +383,7 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
         </div>
 
         {/* Suggestion List Scroll Area */}
-        <div className="p-2 overflow-y-auto no-scrollbar space-y-1 max-h-[320px]">
+        <div ref={listRef} className="p-2 overflow-y-auto no-scrollbar space-y-1 max-h-[320px]">
           {/* 1. Author / Mentions Suggestions */}
           {(activeMode.type === 'author' || activeMode.type === 'mention') && (
             <>
