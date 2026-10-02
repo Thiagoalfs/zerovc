@@ -682,8 +682,9 @@ const KNOWN_GAMES_AND_APPS: Array<{
 }> = [
   // Popular Games
   { processes: ['minecraft.exe', 'bedrock_server.exe', 'minecraft.windows.exe'], name: 'Minecraft', type: 'playing' },
-  { processes: ['leagueclient.exe', 'leagueclientux.exe'], name: 'League of Legends', type: 'playing' },
+  { processes: ['leagueclient.exe', 'leagueclientux.exe', 'league of legends.exe'], name: 'League of Legends', type: 'playing' },
   { processes: ['valorant.exe', 'valorant-win64-shipping.exe'], name: 'VALORANT', type: 'playing' },
+  { processes: ['tftclient.exe', 'tftclient-win64-shipping.exe'], name: 'Teamfight Tactics', type: 'playing' },
   { processes: ['cs2.exe', 'csgo.exe'], name: 'Counter-Strike 2', type: 'playing' },
   { processes: ['gta5.exe', 'fivem.exe', 'fivem_b2699_gtaprocess.exe'], name: 'Grand Theft Auto V', type: 'playing' },
   { processes: ['robloxplayerbeta.exe', 'roblox.exe'], name: 'Roblox', type: 'playing' },
@@ -715,6 +716,8 @@ const KNOWN_GAMES_AND_APPS: Array<{
   { processes: ['blender.exe'], name: 'Blender', type: 'playing' },
   { processes: ['photoshop.exe'], name: 'Adobe Photoshop', type: 'playing' },
   { processes: ['obs64.exe', 'obs32.exe'], name: 'OBS Studio', type: 'streaming' },
+  { processes: ['code.exe'], name: 'Visual Studio Code', type: 'playing' },
+  { processes: ['discord.exe', 'discordcanary.exe', 'discordptb.exe'], name: 'Discord', type: 'playing' },
 ];
 
 let lastDetectedActivity: DetectedActivity | null = null;
@@ -809,33 +812,161 @@ function stopActiveActivityCloseWatcher() {
 
 const gameIconCache = new Map<string, string>();
 
-async function getProcessIcon(processNames: string[]): Promise<string | undefined> {
-  const primaryName = processNames[0];
-  if (gameIconCache.has(primaryName)) {
-    return gameIconCache.get(primaryName);
+async function getProcessIcon(gameName: string, processNames: string[]): Promise<string | undefined> {
+  const cacheKey = gameName || processNames[0];
+  if (gameIconCache.has(cacheKey)) {
+    return gameIconCache.get(cacheKey);
   }
 
   try {
-    if (process.platform === 'win32') {
-      const cleanName = primaryName.replace(/\.exe$/i, '');
-      const { exec } = require('child_process');
-      const exePath: string = await new Promise((resolve) => {
-        exec(
-          `powershell -NoProfile -Command "(Get-Process -Name '${cleanName}' -ErrorAction SilentlyContinue).Path | Select-Object -First 1"`,
-          { windowsHide: true, timeout: 2500 },
-          (err: any, stdout: string) => {
-            if (err || !stdout) return resolve('');
-            resolve(stdout.trim());
-          }
-        );
-      });
+    const fs = require('fs');
+    const path = require('path');
 
-      if (exePath && typeof app.getFileIcon === 'function') {
-        const icon = await app.getFileIcon(exePath, { size: 'normal' });
-        if (icon && !icon.isEmpty()) {
-          const dataUrl = icon.toDataURL();
-          gameIconCache.set(primaryName, dataUrl);
-          return dataUrl;
+    const loadFileAsIconDataUrl = async (filePath: string): Promise<string | undefined> => {
+      try {
+        if (!filePath || !fs.existsSync(filePath)) return undefined;
+        const ext = path.extname(filePath).toLowerCase();
+
+        if (ext === '.ico' || ext === '.png' || ext === '.jpg' || ext === '.jpeg') {
+          const img = nativeImage.createFromPath(filePath);
+          if (img && !img.isEmpty()) {
+            return img.toDataURL();
+          }
+          if (ext === '.ico') {
+            const buf = fs.readFileSync(filePath);
+            return `data:image/x-icon;base64,${buf.toString('base64')}`;
+          }
+        }
+
+        if (typeof app.getFileIcon === 'function') {
+          const icon = await app.getFileIcon(filePath, { size: 'normal' });
+          if (icon && !icon.isEmpty()) {
+            return icon.toDataURL();
+          }
+        }
+      } catch (e) {
+        console.debug('[Activity] Error reading icon from file:', filePath, e);
+      }
+      return undefined;
+    };
+
+    if (process.platform === 'win32') {
+      const lowerGameName = (gameName || '').toLowerCase();
+
+      // 1. Direct Known Launcher Metadata (Riot Games, etc.)
+      const riotMetadataMap: Record<string, string> = {
+        'league of legends': 'C:/ProgramData/Riot Games/Metadata/league_of_legends.live/league_of_legends.live.ico',
+        'valorant': 'C:/ProgramData/Riot Games/Metadata/valorant.live/valorant.live.ico',
+        'teamfight tactics': 'C:/ProgramData/Riot Games/Metadata/teamfighttactics.live/teamfighttactics.live.ico',
+        'riot client': 'C:/Riot Games/Riot Client/Resources/icon.ico',
+      };
+
+      if (riotMetadataMap[lowerGameName]) {
+        const directIcon = await loadFileAsIconDataUrl(riotMetadataMap[lowerGameName]);
+        if (directIcon) {
+          gameIconCache.set(cacheKey, directIcon);
+          return directIcon;
+        }
+      }
+
+      // Check Riot installs json
+      try {
+        const riotInstallsPath = 'C:/ProgramData/Riot Games/RiotClientInstalls.json';
+        if (fs.existsSync(riotInstallsPath)) {
+          const data = JSON.parse(fs.readFileSync(riotInstallsPath, 'utf8'));
+          const assoc = data.associated_client || {};
+          for (const dir of Object.keys(assoc)) {
+            const cleanDir = dir.toLowerCase().replace(/[\/\\]+/g, '');
+            const cleanName = lowerGameName.replace(/\s+/g, '');
+            if (cleanDir.includes(cleanName) || (lowerGameName.includes('league') && cleanDir.includes('league'))) {
+              for (const proc of processNames) {
+                const exeCand = path.join(dir, proc);
+                const icon = await loadFileAsIconDataUrl(exeCand);
+                if (icon) {
+                  gameIconCache.set(cacheKey, icon);
+                  return icon;
+                }
+              }
+            }
+          }
+        }
+      } catch {}
+
+      // 2. Windows Start Menu & Desktop Shortcuts (.lnk)
+      const shortcutDirs = [
+        path.join(process.env.ProgramData || 'C:/ProgramData', 'Microsoft/Windows/Start Menu/Programs'),
+        path.join(process.env.APPDATA || '', 'Microsoft/Windows/Start Menu/Programs'),
+        path.join(process.env.PUBLIC || 'C:/Users/Public', 'Desktop'),
+        path.join(process.env.USERPROFILE || '', 'Desktop'),
+      ];
+
+      for (const dir of shortcutDirs) {
+        if (!fs.existsSync(dir)) continue;
+        try {
+          const items = fs.readdirSync(dir, { recursive: true });
+          for (const item of items) {
+            const itemStr = typeof item === 'string' ? item : (item as any)?.name;
+            if (itemStr && itemStr.toLowerCase().endsWith('.lnk')) {
+              const baseName = path.basename(itemStr, '.lnk').toLowerCase();
+              if (baseName === lowerGameName || baseName.includes(lowerGameName) || lowerGameName.includes(baseName)) {
+                const lnkPath = path.join(dir, itemStr);
+                const icon = await loadFileAsIconDataUrl(lnkPath);
+                if (icon) {
+                  gameIconCache.set(cacheKey, icon);
+                  return icon;
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // 3. Common Game Installation Paths
+      const searchRoots = [
+        'C:/Riot Games',
+        'D:/Riot Games',
+        'E:/Riot Games',
+        'C:/Program Files/Riot Games',
+        'C:/Program Files (x86)/Steam/steamapps/common',
+        'D:/SteamLibrary/steamapps/common',
+        'E:/SteamLibrary/steamapps/common',
+        'C:/Program Files',
+        'C:/Program Files (x86)',
+      ];
+
+      for (const root of searchRoots) {
+        if (!fs.existsSync(root)) continue;
+        for (const proc of processNames) {
+          const directCand = path.join(root, gameName, proc);
+          const icon = await loadFileAsIconDataUrl(directCand);
+          if (icon) {
+            gameIconCache.set(cacheKey, icon);
+            return icon;
+          }
+        }
+      }
+
+      // 4. Query running process path via PowerShell for standard processes (Spotify, OBS, VS Code, etc.)
+      for (const procName of processNames) {
+        const cleanName = procName.replace(/\.exe$/i, '');
+        const { exec } = require('child_process');
+        const exePath: string = await new Promise((resolve) => {
+          exec(
+            `powershell -NoProfile -Command "(Get-Process -Name '${cleanName}' -ErrorAction SilentlyContinue).Path | Select-Object -First 1"`,
+            { windowsHide: true, timeout: 2000 },
+            (err: any, stdout: string) => {
+              if (err || !stdout) return resolve('');
+              resolve(stdout.trim());
+            }
+          );
+        });
+
+        if (exePath) {
+          const icon = await loadFileAsIconDataUrl(exePath);
+          if (icon) {
+            gameIconCache.set(cacheKey, icon);
+            return icon;
+          }
         }
       }
     }
@@ -878,7 +1009,7 @@ function scanProcessesForActivity() {
       activeActivityProcesses = foundMatch.processes;
       if (!lastDetectedActivity || lastDetectedActivity.name !== foundMatch.name) {
         const matchingItem = foundMatch;
-        getProcessIcon(matchingItem.processes).then((iconUrl) => {
+        getProcessIcon(matchingItem.name, matchingItem.processes).then((iconUrl) => {
           lastDetectedActivity = {
             name: matchingItem.name,
             type: matchingItem.type,

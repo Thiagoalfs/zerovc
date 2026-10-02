@@ -991,18 +991,58 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         let smoothed = 0;
+        let dynamicNoiseFloor = 8;
+        let lastVoiceTime = 0;
+        let isSpeaking = false;
 
         const tick = () => {
           if (!isMounted) return;
           analyser.getByteFrequencyData(dataArray);
           let sum = 0;
+          let vocalSum = 0;
+          const startBin = Math.max(1, Math.floor(analyser.frequencyBinCount * (300 / 24000)));
+          const endBin = Math.min(analyser.frequencyBinCount - 1, Math.floor(analyser.frequencyBinCount * (3400 / 24000)));
+          const vocalBinCount = endBin - startBin + 1;
+
           for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
+            const val = dataArray[i];
+            sum += val;
+            if (i >= startBin && i <= endBin) {
+              vocalSum += val;
+            }
           }
           const avg = sum / dataArray.length;
+          const vocalAvg = vocalBinCount > 0 ? vocalSum / vocalBinCount : avg;
+
+          // Adapt noise floor
+          if (avg < dynamicNoiseFloor * 1.5) {
+            dynamicNoiseFloor = dynamicNoiseFloor * 0.95 + avg * 0.05;
+          } else {
+            dynamicNoiseFloor = dynamicNoiseFloor * 0.998 + avg * 0.002;
+          }
+
           const raw = Math.min(100, Math.round((avg / 110) * 100 * 1.6));
           smoothed = smoothed * 0.7 + raw * 0.3;
-          setMicLevel(Math.round(smoothed));
+          const currentLevel = Math.round(smoothed);
+          setMicLevel(currentLevel);
+
+          const now = performance.now();
+          const isVocalDetected = (vocalAvg > dynamicNoiseFloor * 1.35 + 8 && currentLevel > 10) || currentLevel > 24;
+
+          if (isVocalDetected) {
+            lastVoiceTime = now;
+            isSpeaking = true;
+          } else if (now - lastVoiceTime > 300) {
+            isSpeaking = false;
+          }
+
+          setVadLiveState({
+            isSpeaking,
+            volume: currentLevel,
+            speechProbability: isSpeaking ? 1.0 : 0.0,
+            gateOpen: isSpeaking,
+          });
+
           localAnim = requestAnimationFrame(tick);
         };
         tick();
@@ -2430,40 +2470,63 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {/* Dual-Color Discord Bar & Interactive Slider */}
                   <div className="space-y-1.5 pt-1">
                     <div className="relative w-full h-3 rounded-full overflow-hidden bg-[#202225] border border-white/10">
-                      {/* Background track: Dimmed Amber on left (below threshold), Dimmed Green on right (above threshold) */}
-                      <div className="absolute inset-0 flex">
-                        <div
-                          className="h-full bg-amber-500/20 transition-all duration-75"
-                          style={{ width: `${vadSensitivity * 100}%` }}
-                        />
-                        <div className="h-full bg-emerald-500/20 flex-1" />
-                      </div>
-
-                      {/* Live Mic Level Active Overlay (Discord style color fill) */}
-                      {micLevel > 0 && (
-                        <>
-                          {/* Below threshold fill (Vibrant Amber/Yellow #faa61a) */}
+                      {/* Background track */}
+                      {vadAutoSensitivity ? (
+                        /* Automatic Sensitivity: All gray neutral track */
+                        <div className="absolute inset-0 bg-[#2b2d31]/60" />
+                      ) : (
+                        /* Manual Sensitivity: Dimmed Amber on left (below threshold), Dimmed Green on right (above threshold) */
+                        <div className="absolute inset-0 flex">
                           <div
-                            className="absolute top-0 bottom-0 left-0 bg-[#faa61a] transition-all duration-75 shadow-[0_0_8px_rgba(250,166,26,0.6)]"
+                            className="h-full bg-amber-500/20 transition-all duration-75"
+                            style={{ width: `${vadSensitivity * 100}%` }}
+                          />
+                          <div className="h-full bg-emerald-500/20 flex-1" />
+                        </div>
+                      )}
+
+                      {/* Live Mic Level Active Overlay */}
+                      {micLevel > 0 && (
+                        vadAutoSensitivity ? (
+                          /* In Auto Sensitivity Mode:
+                             Colores vibrant green (#23a55a) when voice is actively detected within threshold;
+                             stays subtle muted gray when quiet or non-voice background sound */
+                          <div
+                            className={`absolute top-0 bottom-0 left-0 transition-all duration-75 ${
+                              vadLiveState.isSpeaking || vadLiveState.gateOpen
+                                ? 'bg-[#23a55a] shadow-[0_0_10px_rgba(35,165,90,0.6)]'
+                                : 'bg-white/15'
+                            }`}
                             style={{
-                              width: `${Math.min(micLevel, vadSensitivity * 100)}%`,
+                              width: `${micLevel}%`,
                             }}
                           />
-                          {/* Above threshold fill (Vibrant Green #3ba55c) */}
-                          {micLevel > vadSensitivity * 100 && (
+                        ) : (
+                          /* In Manual Mode: Dual-color threshold fill */
+                          <>
+                            {/* Below threshold fill (Vibrant Amber/Yellow #faa61a) */}
                             <div
-                              className="absolute top-0 bottom-0 bg-[#3ba55c] transition-all duration-75 shadow-[0_0_8px_rgba(59,165,92,0.7)]"
+                              className="absolute top-0 bottom-0 left-0 bg-[#faa61a] transition-all duration-75 shadow-[0_0_8px_rgba(250,166,26,0.6)]"
                               style={{
-                                left: `${vadSensitivity * 100}%`,
-                                width: `${Math.min(micLevel - vadSensitivity * 100, 100 - vadSensitivity * 100)}%`,
+                                width: `${Math.min(micLevel, vadSensitivity * 100)}%`,
                               }}
                             />
-                          )}
-                        </>
+                            {/* Above threshold fill (Vibrant Green #3ba55c) */}
+                            {micLevel > vadSensitivity * 100 && (
+                              <div
+                                className="absolute top-0 bottom-0 bg-[#3ba55c] transition-all duration-75 shadow-[0_0_8px_rgba(59,165,92,0.7)]"
+                                style={{
+                                  left: `${vadSensitivity * 100}%`,
+                                  width: `${Math.min(micLevel - vadSensitivity * 100, 100 - vadSensitivity * 100)}%`,
+                                }}
+                              />
+                            )}
+                          </>
+                        )
                       )}
                     </div>
 
-                    {/* Range input and visual thumb */}
+                    {/* Range input and visual thumb (only rendered when manual sensitivity is active) */}
                     <div className="relative h-4 -mt-3.5">
                       <input
                         type="range"
@@ -2478,17 +2541,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           audioProcessor.updateConfig({ vadSensitivity: val });
                         }}
                         className={`absolute inset-0 w-full opacity-0 z-10 ${
-                          vadAutoSensitivity ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
+                          vadAutoSensitivity ? 'cursor-not-allowed pointer-events-none' : 'cursor-grab active:cursor-grabbing'
                         }`}
                       />
 
-                      {/* Custom Thumb */}
-                      <div
-                        className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full shadow-lg border border-black/20 pointer-events-none transition-all duration-75 ${
-                          vadAutoSensitivity ? 'opacity-40 scale-75' : 'hover:scale-110'
-                        }`}
-                        style={{ left: `${vadSensitivity * 100}%` }}
-                      />
+                      {/* Custom Thumb (Hidden when automatic sensitivity is active) */}
+                      {!vadAutoSensitivity && (
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full shadow-lg border border-black/20 pointer-events-none transition-all duration-75 hover:scale-110"
+                          style={{ left: `${vadSensitivity * 100}%` }}
+                        />
+                      )}
                     </div>
 
                     {/* Scale labels */}
