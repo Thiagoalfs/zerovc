@@ -68,7 +68,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     .toUpperCase();
 
   return (
-    <div className="max-w-3xl space-y-8 animate-fade-in">
+    <div className="max-w-3xl space-y-8 animate-fade-in py-6">
       {/* Quick Stats Grid */}
       <div>
         <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">

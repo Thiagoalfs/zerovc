@@ -56,9 +56,9 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   isRoleAdmin,
 }) => {
   return (
-    <div className="flex flex-col md:flex-row gap-6 min-h-0 h-auto md:h-[calc(100vh-210px)] animate-fade-in">
+    <div className="flex flex-col md:flex-row gap-6 min-h-0 h-auto md:h-[calc(100vh-140px)] animate-fade-in py-4 md:py-6">
       {/* Roles Sidebar / Hierarchy List */}
-      <div className="w-full md:w-72 flex flex-col p-1 md:pr-6 md:border-r border-white/10 shrink-0 max-h-56 md:max-h-none border-b md:border-b-0 pb-4 md:pb-0">
+      <div className="w-full md:w-72 flex flex-col md:pr-6 md:border-r border-white/10 shrink-0 max-h-56 md:max-h-none border-b md:border-b-0 pb-4 md:pb-0">
         <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 px-1">
           <span className="text-xs font-bold uppercase text-gray-400">
             Cargos ({roles.length})
