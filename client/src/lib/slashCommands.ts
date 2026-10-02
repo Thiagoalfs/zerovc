@@ -202,8 +202,25 @@ export function parseSlashCommand(input: string): ParsedCommand | null {
 
   if (cmdName === 'league') {
     if (subOrArg === 'link') {
-      const riotId = tokens[2] || '';
-      const region = (tokens[3] || 'BR').toUpperCase();
+      const rest = tokens.slice(2);
+      if (rest.length === 0) {
+        return { command: 'league', subcommand: 'link', args: {}, raw: trimmed };
+      }
+
+      let region = 'BR';
+      let riotId = '';
+      const lastToken = rest[rest.length - 1].toUpperCase();
+      const validRegions = ['BR', 'NA', 'EUW', 'EUNE', 'KR', 'LAN', 'LAS', 'OCE', 'TR', 'RU', 'JP'];
+
+      if (validRegions.includes(lastToken) && rest.length > 1) {
+        region = lastToken;
+        riotId = rest.slice(0, -1).join(' ');
+      } else {
+        riotId = rest.join(' ');
+      }
+
+      riotId = riotId.replace(/^riot_id:\s*/i, '').replace(/^region:\s*/i, '').trim();
+
       return {
         command: 'league',
         subcommand: 'link',
@@ -214,27 +231,34 @@ export function parseSlashCommand(input: string): ParsedCommand | null {
 
     // Default or 'profile'
     const subcommand = 'profile';
+    const rest = tokens.slice(subOrArg === 'profile' ? 2 : 1);
+
+    if (rest.length === 0) {
+      return { command: 'league', subcommand: 'profile', args: {}, raw: trimmed };
+    }
+
     let userArg: string | undefined;
     let riotId: string | undefined;
-    let region: string | undefined;
+    let region = 'BR';
 
-    const remaining = tokens.slice(subOrArg === 'profile' ? 2 : 1);
-    if (remaining.length > 0) {
-      if (remaining[0].startsWith('@') || remaining[0].startsWith('<@')) {
-        userArg = remaining[0];
-      } else if (remaining[0].includes('#')) {
-        riotId = remaining[0];
-        if (remaining[1]) region = remaining[1].toUpperCase();
+    if (rest[0].startsWith('@') || rest[0].startsWith('<@')) {
+      userArg = rest[0];
+    } else {
+      const lastToken = rest[rest.length - 1].toUpperCase();
+      const validRegions = ['BR', 'NA', 'EUW', 'EUNE', 'KR', 'LAN', 'LAS', 'OCE', 'TR', 'RU', 'JP'];
+      if (validRegions.includes(lastToken) && rest.length > 1) {
+        region = lastToken;
+        riotId = rest.slice(0, -1).join(' ');
       } else {
-        riotId = remaining[0];
-        if (remaining[1]) region = remaining[1].toUpperCase();
+        riotId = rest.join(' ');
       }
+      riotId = riotId.replace(/^riot_id:\s*/i, '').replace(/^user:\s*/i, '').replace(/^region:\s*/i, '').trim();
     }
 
     return {
       command: 'league',
       subcommand,
-      args: { user: userArg, riot_id: riotId, region: region || 'BR' },
+      args: { user: userArg, riot_id: riotId, region },
       raw: trimmed,
     };
   }

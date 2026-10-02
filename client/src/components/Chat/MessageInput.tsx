@@ -96,8 +96,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   // Compute filtered slash commands suggestions
   const slashSuggestions = useMemo(() => {
     if (!content.startsWith('/')) return [];
+    if (mentionQuery !== null || emojiQuery !== null || channelQuery !== null) return [];
+
     const trimmed = content.trim();
     const parts = trimmed.slice(1).split(/\s+/);
+
+    // If already typed command and subcommand followed by space or arguments, don't show command list
+    if (parts.length > 2 || (parts.length === 2 && content.includes(' ') && !content.endsWith(parts[1]))) {
+      return [];
+    }
+    if (parts.length === 1 && content.includes(' ') && (parts[0] === 'yt-dlp' || parts[0] === 'ytdlp')) {
+      return [];
+    }
+
     const searchWord = parts[0]?.toLowerCase() || '';
     const subSearch = parts[1]?.toLowerCase() || '';
 
@@ -152,7 +163,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     return list.slice(0, 8);
-  }, [content, contextType]);
+  }, [content, contextType, mentionQuery, emojiQuery, channelQuery]);
 
   const allAvailableEmojis = useMemo(() => {
     const list: any[] = [];
@@ -484,40 +495,31 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // 0. Slash Commands Navigation
-    if (slashSuggestions.length > 0) {
+    // 0. Mention Suggestions Navigation (Top Priority when typing @...)
+    if (mentionSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedSlashIndex((prev) => (prev + 1) % slashSuggestions.length);
+        setSelectedMentionIndex((prev) => (prev + 1) % mentionSuggestions.length);
         return;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedSlashIndex((prev) => (prev - 1 + slashSuggestions.length) % slashSuggestions.length);
+        setSelectedMentionIndex((prev) => (prev - 1 + mentionSuggestions.length) % mentionSuggestions.length);
         return;
       }
-      if (e.key === 'Tab') {
+      if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
-        insertSlashCommand(slashSuggestions[selectedSlashIndex]);
+        insertMention(mentionSuggestions[selectedMentionIndex]);
         return;
-      }
-      if (e.key === 'Enter') {
-        const trimmed = content.trim();
-        const activeSuggestion = slashSuggestions[selectedSlashIndex];
-        if (trimmed === `/${activeSuggestion.command}` || trimmed === activeSuggestion.name) {
-          e.preventDefault();
-          insertSlashCommand(activeSuggestion);
-          return;
-        }
       }
       if (e.key === 'Escape') {
         e.preventDefault();
-        setContent('');
+        setMentionQuery(null);
         return;
       }
     }
 
-    // 1. Channel Suggestions Navigation
+    // 1. Channel Suggestions Navigation (when typing #...)
     if (channelSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -541,7 +543,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
-    // 1. Emoji Suggestions Navigation
+    // 2. Emoji Suggestions Navigation (when typing :...)
     if (emojiSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -565,26 +567,26 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
-    // 2. Mention Suggestions Navigation
-    if (mentionSuggestions.length > 0) {
+    // 3. Slash Commands Navigation (when typing /...)
+    if (slashSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedMentionIndex((prev) => (prev + 1) % mentionSuggestions.length);
+        setSelectedSlashIndex((prev) => (prev + 1) % slashSuggestions.length);
         return;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedMentionIndex((prev) => (prev - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+        setSelectedSlashIndex((prev) => (prev - 1 + slashSuggestions.length) % slashSuggestions.length);
         return;
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
-        insertMention(mentionSuggestions[selectedMentionIndex]);
+        insertSlashCommand(slashSuggestions[selectedSlashIndex]);
         return;
       }
       if (e.key === 'Escape') {
         e.preventDefault();
-        setMentionQuery(null);
+        setContent('');
         return;
       }
     }
