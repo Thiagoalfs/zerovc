@@ -741,11 +741,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                           style={{ backgroundColor: selectedRole.color || '#99AAB5' }}
                         />
                         <span className="font-bold text-base text-white">{selectedRole.name}</span>
-                        {selectedRole.name === '@everyone' && (
-                          <span className="text-[10px] bg-white/10 text-gray-300 px-2 py-0.5 rounded-full font-medium">
-                            Cargo Padrão
-                          </span>
-                        )}
                       </div>
 
                       {overwrites[selectedRole.id] && (
