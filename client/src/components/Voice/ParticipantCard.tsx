@@ -442,7 +442,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         </div>
 
         {/* Top Right Unified Action Controls Bar (Hover) */}
-        <div className={`absolute top-3 right-3 flex items-center gap-1.5 z-30 transition-opacity bg-black/75 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 shadow-lg ${showVolumeSlider ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+        {((isScreenSharing && isWatching) || hasCameraVideoTrack || !isLocal) && (
+          <div className={`absolute top-3 right-3 flex items-center gap-1.5 z-30 transition-opacity bg-black/75 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 shadow-lg ${showVolumeSlider ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           {/* Watch / Stop Live Controls */}
           {isScreenSharing && isWatching && (
             <>
@@ -540,6 +541,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* Bottom-left Name Pill */}
         {!(isScreenSharing && !isWatching) && (
