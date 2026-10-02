@@ -1,4 +1,4 @@
-import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession, VoiceSession } from '../types';
+import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession, VoiceSession, GameSearchResult } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
 
@@ -810,6 +810,12 @@ export const api = {
       } catch {
         return null;
       }
+    },
+  },
+  games: {
+    search: (query: string) => {
+      const q = new URLSearchParams({ q: query });
+      return request<GameSearchResult[]>(`/games/search?${q.toString()}`);
     },
   },
 };

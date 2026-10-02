@@ -737,13 +737,25 @@ export const App: React.FC = () => {
       }
 
       if (window.electronAPI.onActivityDetected) {
-        const removeListener = window.electronAPI.onActivityDetected((detectedActivity: any) => {
+        const removeListener = window.electronAPI.onActivityDetected(async (detectedActivity: any) => {
           const currentUser = useAuthStore.getState().user;
           if (!currentUser || currentUser.auto_detect_activity === false) return;
 
           let resolvedActivity = detectedActivity;
           if (detectedActivity && detectedActivity.name) {
-            useRegisteredGamesStore.getState().addOrUpdateGame(detectedActivity.name, true, undefined, detectedActivity.icon_url);
+            // Priority 1: Query RAWG for official game cover if not already provided
+            let iconUrl = detectedActivity.icon_url;
+            if (!iconUrl) {
+              try {
+                const rawgMatches = await api.games.search(detectedActivity.name);
+                if (rawgMatches && rawgMatches.length > 0) {
+                  iconUrl = rawgMatches[0].background_image || rawgMatches[0].icon_url;
+                  resolvedActivity = { ...detectedActivity, icon_url: iconUrl };
+                }
+              } catch {}
+            }
+
+            useRegisteredGamesStore.getState().addOrUpdateGame(detectedActivity.name, true, undefined, iconUrl);
             const isEnabled = useRegisteredGamesStore.getState().isGameEnabled(detectedActivity.name);
             if (!isEnabled) {
               resolvedActivity = null;

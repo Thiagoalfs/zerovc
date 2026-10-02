@@ -159,6 +159,9 @@ func main() {
 	uploadDir := getEnv("UPLOAD_DIR", "./assets")
 	uploadHandler := handlers.NewUploadHandler(uploadDir)
 
+	rawgAPIKey := getEnv("RAWG_API_KEY", "")
+	gameHandler := handlers.NewGameHandler(rawgAPIKey)
+
 	// 5. Router & Middleware
 	r := chi.NewRouter()
 
@@ -294,6 +297,9 @@ func main() {
 		r.Get("/api/users/me/favorite-gifs", userHandler.GetFavoriteGIFs)
 		r.Post("/api/users/me/favorite-gifs", userHandler.AddFavoriteGIF)
 		r.Delete("/api/users/me/favorite-gifs", userHandler.RemoveFavoriteGIF)
+
+		// Games Database Search (RAWG)
+		r.With(searchLimiter.Middleware).Get("/api/games/search", gameHandler.SearchGames)
 
 		// Guilds (Protected)
 		r.Get("/api/guilds", guildHandler.List)

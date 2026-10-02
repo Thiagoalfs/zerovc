@@ -82,6 +82,7 @@ services:
       RESEND_API_KEY: "${RESEND_API_KEY}"
       RESEND_FROM_EMAIL: "${RESEND_FROM_EMAIL}"
       APP_URL: "${APP_URL}"
+      RAWG_API_KEY: "${RAWG_API_KEY}"
     volumes:
       - assets_data:/app/assets
       - ../backend/web:/app/web
