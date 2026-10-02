@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, UserPlus, Check } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
@@ -86,7 +87,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -210,6 +211,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -73,6 +73,10 @@ export const useDMStore = create<DMState>((set, get) => ({
   },
 
   selectRoom: async (room: DMRoom) => {
+    try {
+      localStorage.setItem('zerovc_last_dm_target', `/@me/${room.id}`);
+    } catch {}
+
     const cachedMessages = get().messagesByRoom[room.id];
 
     set((state) => {
@@ -192,6 +196,13 @@ export const useDMStore = create<DMState>((set, get) => ({
   },
 
   closeRoom: async (roomId: string) => {
+    try {
+      const saved = localStorage.getItem('zerovc_last_dm_target');
+      if (saved === `/@me/${roomId}`) {
+        localStorage.removeItem('zerovc_last_dm_target');
+      }
+    } catch {}
+
     set((state) => {
       const newRooms = state.rooms.filter((r) => r.id !== roomId);
       const isActive = state.activeRoom?.id === roomId;

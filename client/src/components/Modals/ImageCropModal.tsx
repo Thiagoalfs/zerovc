@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   ZoomIn,
@@ -241,10 +242,14 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
         return 'Enquadrar Ícone do Servidor';
       case 'guildBanner':
         return 'Enquadrar Banner do Servidor';
+      case 'groupIcon':
+        return 'Enquadrar Ícone do Grupo';
+      default:
+        return 'Enquadrar Imagem';
     }
   })();
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 select-none overflow-y-auto animate-in fade-in duration-150"
       onClick={(e) => {
@@ -413,6 +418,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

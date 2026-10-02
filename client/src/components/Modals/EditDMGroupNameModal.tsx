@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Edit3 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { DMGroup } from '../../types';
@@ -53,7 +54,7 @@ export const EditDMGroupNameModal: React.FC<EditDMGroupNameModalProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -116,6 +117,7 @@ export const EditDMGroupNameModal: React.FC<EditDMGroupNameModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

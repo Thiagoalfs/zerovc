@@ -79,6 +79,10 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   },
 
   selectGroup: async (group: DMGroup) => {
+    try {
+      localStorage.setItem('zerovc_last_dm_target', `/@me/group/${group.id}`);
+    } catch {}
+
     const cachedMessages = get().messagesByGroup[group.id];
 
     set((state) => {
@@ -232,6 +236,13 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
     set((state) => {
       if (isSelf) {
+        try {
+          const saved = localStorage.getItem('zerovc_last_dm_target');
+          if (saved === `/@me/group/${groupId}`) {
+            localStorage.removeItem('zerovc_last_dm_target');
+          }
+        } catch {}
+
         return {
           groups: state.groups.filter((g) => g.id !== groupId),
           activeGroup: state.activeGroup?.id === groupId ? null : state.activeGroup,
