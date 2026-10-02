@@ -65,3 +65,42 @@ func (ac actorGuildContext) canAssignRolePosition(rolePosition int) (bool, strin
 	}
 	return true, ""
 }
+
+// canModerateTarget checa se o autor pode moderar (kick, ban, mute) um targetUserID.
+// Regra:
+// 1. Não pode moderar a si mesmo.
+// 2. Se for dono do servidor (IsOwner), pode moderar qualquer membro.
+// 3. Ninguém pode moderar o dono do servidor.
+// 4. Exige PermAdministrator ou a permissão específica (requiredPerm).
+// 5. O executor deve ter cargo estritamente superior ao membro alvo (targetHighestPos > ac.MaxPos).
+func (ac actorGuildContext) canModerateTarget(ctx context.Context, db *database.DB, guildID, actorID, targetUserID uuid.UUID, requiredPerm int64) (bool, string) {
+	if actorID == targetUserID {
+		return false, "você não pode realizar ações de moderação contra si mesmo"
+	}
+	if ac.IsOwner {
+		return true, ""
+	}
+
+	var targetIsOwner bool
+	if err := db.Pool.QueryRow(ctx, "SELECT owner_id = $1 FROM guilds WHERE id = $2", targetUserID, guildID).Scan(&targetIsOwner); err == nil && targetIsOwner {
+		return false, "você não pode moderar o dono do servidor"
+	}
+
+	if !ac.HasAdmin && (ac.Perms&requiredPerm) == 0 {
+		return false, "você não tem permissão para realizar esta ação"
+	}
+
+	var targetHighestPos int = 999999
+	_ = db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(MIN(gr.position), 999999)
+		FROM guild_roles gr
+		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+		WHERE gmr.guild_id = $1 AND gmr.user_id = $2 AND gr.name != '@everyone'
+	`, guildID, targetUserID).Scan(&targetHighestPos)
+
+	if targetHighestPos <= ac.MaxPos {
+		return false, "você não pode moderar um membro com cargo igual ou superior ao seu na hierarquia"
+	}
+
+	return true, ""
+}

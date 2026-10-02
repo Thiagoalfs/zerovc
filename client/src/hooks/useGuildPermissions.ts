@@ -98,13 +98,13 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
       const targetMember = guild.members?.find((m) => m.id === targetUser.id) || targetUser;
       let targetHighestPos = 999999;
       (targetMember.roles || []).forEach((r: any) => {
-        if (!r) return;
+        if (!r || r.name === '@everyone') return;
         if (typeof r.position === 'number' && r.position < targetHighestPos) {
           targetHighestPos = r.position;
         }
       });
 
-      const isHierarchyAllowed = isCurrentOwner || isMe || currentUserHighestPos < targetHighestPos;
+      const isHierarchyAllowed = !isMe && !isTargetOwner && (isCurrentOwner || currentUserHighestPos < targetHighestPos);
 
       return {
         isMe,

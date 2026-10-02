@@ -540,75 +540,11 @@ func (h *GuildHandler) Join(w http.ResponseWriter, r *http.Request) {
 
 // Moderation Helper
 func (h *GuildHandler) checkModerationHierarchy(ctx context.Context, guildID, actorID, targetUserID uuid.UUID, requiredPerm int64) (bool, string) {
-	var ownerID uuid.UUID
-	err := h.db.Pool.QueryRow(ctx, "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID)
+	actorCtx, err := loadActorGuildContext(ctx, h.db, guildID, actorID)
 	if err != nil {
 		return false, "servidor não encontrado"
 	}
-
-	if actorID == targetUserID {
-		if requiredPerm == models.PermKickMembers || requiredPerm == models.PermBanMembers {
-			return false, "você não pode expulsar ou banir a si mesmo"
-		}
-	} else if targetUserID == ownerID {
-		return false, "você não pode moderar o dono do servidor"
-	}
-
-	if actorID == ownerID {
-		return true, ""
-	}
-
-	var actorMaxPos int = 999999
-	var actorPerms int64 = 0
-	actorRows, err := h.db.Pool.Query(ctx, `
-		SELECT gr.position, gr.permissions
-		FROM guild_roles gr
-		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
-		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
-	`, guildID, actorID)
-	if err == nil {
-		for actorRows.Next() {
-			var pos int
-			var p int64
-			if actorRows.Scan(&pos, &p) == nil {
-				actorPerms |= p
-				if pos < actorMaxPos {
-					actorMaxPos = pos
-				}
-			}
-		}
-		actorRows.Close()
-	}
-
-	hasPerm := (actorPerms&models.PermAdministrator) != 0 || (actorPerms&requiredPerm) != 0
-	if !hasPerm {
-		return false, "você não tem permissão para realizar esta ação"
-	}
-
-	var targetMaxPos int = 999999
-	targetRows, err := h.db.Pool.Query(ctx, `
-		SELECT gr.position
-		FROM guild_roles gr
-		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
-		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
-	`, guildID, targetUserID)
-	if err == nil {
-		for targetRows.Next() {
-			var pos int
-			if targetRows.Scan(&pos) == nil {
-				if pos < targetMaxPos {
-					targetMaxPos = pos
-				}
-			}
-		}
-		targetRows.Close()
-	}
-
-	if actorID != targetUserID && actorMaxPos >= targetMaxPos {
-		return false, "você não pode moderar um membro com cargo igual ou superior ao seu"
-	}
-
-	return true, ""
+	return actorCtx.canModerateTarget(ctx, h.db, guildID, actorID, targetUserID, requiredPerm)
 }
 
 type BanMemberRequest struct {

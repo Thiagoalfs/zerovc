@@ -11,6 +11,7 @@ import {
 import { Guild, Role, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
 import { DropdownSelect } from '../../Common/DropdownSelect';
+import { useGuildPermissions } from '../../../hooks/useGuildPermissions';
 
 interface MembersTabProps {
   activeGuild: Guild;
@@ -49,16 +50,9 @@ export const MembersTab: React.FC<MembersTabProps> = ({
   kickMember,
   isOwner,
 }) => {
+  const perms = useGuildPermissions(activeGuild);
   const currentMember = activeGuild?.members?.find((m) => m.id === user?.id);
-  const currentUserHighestPos = React.useMemo(() => {
-    let highest = 999999;
-    (currentMember?.roles || []).forEach((r) => {
-      if (typeof r.position === 'number' && r.position < highest) {
-        highest = r.position;
-      }
-    });
-    return highest;
-  }, [currentMember?.roles]);
+  const currentUserHighestPos = perms.currentUserHighestPos;
 
   return (
     <div className="max-w-4xl space-y-6 animate-fade-in">
@@ -181,94 +175,116 @@ export const MembersTab: React.FC<MembersTabProps> = ({
                 </div>
 
                 {/* Moderation Popover Menu */}
-                {isOwner && member.id !== user?.id && (
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setActiveMemberMenuId(isMenuOpen ? null : member.id)}
-                      className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
+                {(() => {
+                  const isMe = member.id === user?.id;
+                  const mod = perms.canModerateMember(member);
+                  const canModerateThisMember = !isMe && !isMemberOwner && (perms.isCurrentOwner || mod.isHierarchyAllowed);
+                  const hasAnyModerationPerm = perms.canManageRoles || perms.canMute || perms.canKick || perms.canBan;
 
-                    {isMenuOpen && (
-                      <div className="absolute right-0 top-10 z-30 w-56 p-2 bg-background-darkest border border-white/10 rounded-2xl shadow-2xl space-y-1 animate-fade-in">
-                        <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                          Cargos
+                  if (!canModerateThisMember || !hasAnyModerationPerm) return null;
+
+                  const manageableRoles = roles.filter((r) => {
+                    if (r.name === '@everyone') return false;
+                    if (perms.isCurrentOwner) return true;
+                    const rolePos = typeof r.position === 'number' ? r.position : 999;
+                    return rolePos > currentUserHighestPos;
+                  });
+
+                  return (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setActiveMemberMenuId(isMenuOpen ? null : member.id)}
+                        className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                        title="Moderar membro"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+
+                      {isMenuOpen && (
+                        <div className="absolute right-0 top-10 z-30 w-56 p-2 bg-background-darkest border border-white/10 rounded-2xl shadow-2xl space-y-1 animate-fade-in">
+                          {perms.canManageRoles && manageableRoles.length > 0 && (
+                            <>
+                              <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                                Cargos
+                              </div>
+                              <div className="max-h-36 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
+                                {manageableRoles.map((r) => {
+                                  const hasThisRole = memberRoles.some((mr) => mr.id === r.id);
+                                  return (
+                                    <button
+                                      key={r.id}
+                                      type="button"
+                                      onClick={() => handleToggleMemberRole(member.id, r.id, hasThisRole)}
+                                      className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-background-dark text-left transition-colors cursor-pointer"
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span
+                                          className="w-2 h-2 rounded-full"
+                                          style={{ backgroundColor: r.color || '#99AAB5' }}
+                                        />
+                                        <span className="truncate text-white">{r.name}</span>
+                                      </div>
+                                      {hasThisRole && <Check className="w-3.5 h-3.5 text-brand-400" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          )}
+
+                          {(perms.canMute || perms.canKick || perms.canBan) && (
+                            <div className="pt-2 mt-1 border-t border-white/10 space-y-0.5">
+                              {perms.canMute && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveMemberMenuId(null);
+                                    setMuteModalUser(member);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-amber-300 hover:bg-amber-500/15 transition-colors cursor-pointer"
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
+                                  <span>{isMuted ? 'Alterar Silenciamento' : 'Silenciar (Timeout)'}</span>
+                                </button>
+                              )}
+
+                              {perms.canKick && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveMemberMenuId(null);
+                                    if (confirm(`Expulsar @${member.username} do servidor?`)) {
+                                      kickMember(activeGuild.id, member.id);
+                                    }
+                                  }}
+                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/15 transition-colors cursor-pointer"
+                                >
+                                  <UserX className="w-3.5 h-3.5" />
+                                  <span>Expulsar Membro</span>
+                                </button>
+                              )}
+
+                              {perms.canBan && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveMemberMenuId(null);
+                                    setBanModalUser(member);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-500 hover:bg-red-500/20 font-semibold transition-colors cursor-pointer"
+                                >
+                                  <Ban className="w-3.5 h-3.5" />
+                                  <span>Banir Membro</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="max-h-36 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
-                          {roles
-                            .filter((r) => {
-                              if (r.name === '@everyone') return false;
-                              if (isOwner) return true;
-                              const rolePos = typeof r.position === 'number' ? r.position : 999;
-                              return rolePos > currentUserHighestPos;
-                            })
-                            .map((r) => {
-                            const hasThisRole = memberRoles.some((mr) => mr.id === r.id);
-                            return (
-                              <button
-                                key={r.id}
-                                type="button"
-                                onClick={() => handleToggleMemberRole(member.id, r.id, hasThisRole)}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-background-dark text-left transition-colors cursor-pointer"
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span
-                                    className="w-2 h-2 rounded-full"
-                                    style={{ backgroundColor: r.color || '#99AAB5' }}
-                                  />
-                                  <span className="truncate text-white">{r.name}</span>
-                                </div>
-                                {hasThisRole && <Check className="w-3.5 h-3.5 text-brand-400" />}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div className="pt-2 mt-1 border-t border-white/10 space-y-0.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveMemberMenuId(null);
-                              setMuteModalUser(member);
-                            }}
-                            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-amber-300 hover:bg-amber-500/15 transition-colors cursor-pointer"
-                          >
-                            <Clock className="w-3.5 h-3.5" />
-                            <span>{isMuted ? 'Alterar Silenciamento' : 'Silenciar (Timeout)'}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveMemberMenuId(null);
-                              if (confirm(`Expulsar @${member.username} do servidor?`)) {
-                                kickMember(activeGuild.id, member.id);
-                              }
-                            }}
-                            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/15 transition-colors cursor-pointer"
-                          >
-                            <UserX className="w-3.5 h-3.5" />
-                            <span>Expulsar Membro</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveMemberMenuId(null);
-                              setBanModalUser(member);
-                            }}
-                            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-500 hover:bg-red-500/20 font-semibold transition-colors cursor-pointer"
-                          >
-                            <Ban className="w-3.5 h-3.5" />
-                            <span>Banir Membro</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );
