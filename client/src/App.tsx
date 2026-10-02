@@ -564,7 +564,7 @@ export const App: React.FC = () => {
     // 1. Default to /@me or /@me/friends or /@me/:roomId or /@me/group/:groupId
     if (segments[0] === '@me') {
       setIsHomeActive(true);
-      if (segments.length > 1 && segments[1]) {
+      if (segments.length > 1 && segments[1] && segments[1] !== 'friends') {
         if (segments[1] === 'group' && segments[2]) {
           const groupId = segments[2];
           setHomeView('group');
@@ -583,6 +583,16 @@ export const App: React.FC = () => {
           }
         }
       } else {
+        if (!segments[1]) {
+          let savedTarget: string | null = null;
+          try {
+            savedTarget = localStorage.getItem('zerovc_last_dm_target');
+          } catch {}
+          if (savedTarget && savedTarget !== '/@me' && savedTarget.startsWith('/@me/')) {
+            navigateTo(savedTarget, true);
+            return;
+          }
+        }
         setHomeView('friends');
       }
       return;
@@ -1613,8 +1623,14 @@ export const App: React.FC = () => {
               isHomeActive={isHomeActive}
               onSelectHome={() => {
                 setIsHomeActive(true);
-                setHomeView('friends');
-                navigateTo('/@me');
+                let targetPath = '/@me';
+                try {
+                  const saved = localStorage.getItem('zerovc_last_dm_target');
+                  if (saved && (saved === '/@me' || saved.startsWith('/@me/'))) {
+                    targetPath = saved;
+                  }
+                } catch {}
+                navigateTo(targetPath);
                 setIsMobileDrawerOpen(false);
               }}
               onSelectDM={(room) => {

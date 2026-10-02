@@ -113,6 +113,9 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   };
 
   const handleSelectFriends = () => {
+    try {
+      localStorage.setItem('zerovc_last_dm_target', '/@me');
+    } catch {}
     onSelectFriends();
     if (onCloseMobileDrawer) onCloseMobileDrawer();
   };
@@ -443,8 +446,16 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                           : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                       }`}
                     >
-                      <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                        <Users className="w-3.5 h-3.5" />
+                      <div className="w-7 h-7 rounded-full overflow-hidden bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                        {group.icon_url ? (
+                          <img
+                            src={formatAssetUrl(group.icon_url)}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Users className="w-3.5 h-3.5" />
+                        )}
                       </div>
                       <div className="flex flex-col text-left truncate flex-1 min-w-0">
                         <span className={`text-[14.5px] font-medium truncate ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
