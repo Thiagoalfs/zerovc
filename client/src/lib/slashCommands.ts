@@ -185,13 +185,25 @@ export function parseSlashCommand(input: string): ParsedCommand | null {
   const subOrArg = tokens[1]?.toLowerCase() || '';
 
   if (cmdName === 'server') {
-    const subcommand = subOrArg === 'info' ? 'info' : 'icon';
+    const subcommand = subOrArg === 'icon' ? 'icon' : 'info';
     return { command: 'server', subcommand, args: {}, raw: trimmed };
   }
 
   if (cmdName === 'user') {
-    const subcommand = subOrArg === 'info' ? 'info' : 'icon';
-    const userArg = tokens[2] || (tokens[1] && tokens[1] !== 'icon' && tokens[1] !== 'info' ? tokens[1] : undefined);
+    let subcommand = 'info';
+    let userArg: string | undefined;
+
+    if (subOrArg === 'icon') {
+      subcommand = 'icon';
+      userArg = tokens[2];
+    } else if (subOrArg === 'info') {
+      subcommand = 'info';
+      userArg = tokens[2];
+    } else if (subOrArg !== '') {
+      subcommand = 'info';
+      userArg = tokens[1];
+    }
+
     return {
       command: 'user',
       subcommand,
