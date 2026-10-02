@@ -1988,47 +1988,58 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Mensagens Diretas (DMs)
                   </h4>
-                  <div className="space-y-3">
-                    <span className="text-xs text-gray-400 block">
-                      Quem pode enviar mensagens diretas para você:
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setDmPrivacy('everyone')}
-                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  <div className="space-y-2.5">
+                    <label
+                      onClick={() => setDmPrivacy('everyone')}
+                      className="flex items-center gap-3 cursor-pointer select-none group w-fit"
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
                           dmPrivacy === 'everyone'
-                            ? 'border-brand-500 bg-brand-500/10 text-white'
-                            : 'border-white/10 bg-background-darker text-gray-400 hover:text-gray-200'
+                            ? 'border-brand-500 bg-brand-500/10'
+                            : 'border-white/25 bg-transparent group-hover:border-white/45'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs">Todos os Membros</span>
-                          {dmPrivacy === 'everyone' && <Check className="w-4 h-4 text-brand-400" />}
-                        </div>
-                        <span className="text-[11px] text-gray-400">
-                          Qualquer pessoa em servidores compartilhados pode te chamar.
-                        </span>
-                      </button>
+                        <div
+                          className={`w-2 h-2 rounded-full bg-brand-500 transition-transform duration-150 ${
+                            dmPrivacy === 'everyone' ? 'scale-100' : 'scale-0'
+                          }`}
+                        />
+                      </div>
+                      <span
+                        className={`text-xs md:text-sm font-medium transition-colors ${
+                          dmPrivacy === 'everyone' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'
+                        }`}
+                      >
+                        Todos os Membros
+                      </span>
+                    </label>
 
-                      <button
-                        type="button"
-                        onClick={() => setDmPrivacy('friends_only')}
-                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    <label
+                      onClick={() => setDmPrivacy('friends_only')}
+                      className="flex items-center gap-3 cursor-pointer select-none group w-fit"
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
                           dmPrivacy === 'friends_only'
-                            ? 'border-brand-500 bg-brand-500/10 text-white'
-                            : 'border-white/10 bg-background-darker text-gray-400 hover:text-gray-200'
+                            ? 'border-brand-500 bg-brand-500/10'
+                            : 'border-white/25 bg-transparent group-hover:border-white/45'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs">Apenas Amigos</span>
-                          {dmPrivacy === 'friends_only' && <Check className="w-4 h-4 text-brand-400" />}
-                        </div>
-                        <span className="text-[11px] text-gray-400">
-                          Apenas usuários adicionados à sua lista de amigos podem te enviar DM.
-                        </span>
-                      </button>
-                    </div>
+                        <div
+                          className={`w-2 h-2 rounded-full bg-brand-500 transition-transform duration-150 ${
+                            dmPrivacy === 'friends_only' ? 'scale-100' : 'scale-0'
+                          }`}
+                        />
+                      </div>
+                      <span
+                        className={`text-xs md:text-sm font-medium transition-colors ${
+                          dmPrivacy === 'friends_only' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'
+                        }`}
+                      >
+                        Apenas Amigos
+                      </span>
+                    </label>
                   </div>
                 </div>
 
@@ -2481,47 +2492,63 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* Chat Density */}
+                {/* Chat Density / Estilo de Exibição */}
                 <div>
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Densidade de Exibição do Chat
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      type="button"
+                  <div className="space-y-2.5">
+                    <label
                       onClick={() => setChatDensity('cozy')}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                        chatDensity === 'cozy'
-                          ? 'border-brand-500 bg-brand-500/10 text-white'
-                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
-                      }`}
+                      className="flex items-center gap-3 cursor-pointer select-none group w-fit"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-xs">Confortável (Padrão)</span>
-                        {chatDensity === 'cozy' && <Check className="w-4 h-4 text-brand-400" />}
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                          chatDensity === 'cozy'
+                            ? 'border-brand-500 bg-brand-500/10'
+                            : 'border-white/25 bg-transparent group-hover:border-white/45'
+                        }`}
+                      >
+                        <div
+                          className={`w-2 h-2 rounded-full bg-brand-500 transition-transform duration-150 ${
+                            chatDensity === 'cozy' ? 'scale-100' : 'scale-0'
+                          }`}
+                        />
                       </div>
-                      <span className="text-[11px] text-gray-400">
-                        Visual moderno com fotos de perfil em destaque e espaçamento generoso.
+                      <span
+                        className={`text-xs md:text-sm font-medium transition-colors ${
+                          chatDensity === 'cozy' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'
+                        }`}
+                      >
+                        Confortável
                       </span>
-                    </button>
+                    </label>
 
-                    <button
-                      type="button"
+                    <label
                       onClick={() => setChatDensity('compact')}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                        chatDensity === 'compact'
-                          ? 'border-brand-500 bg-brand-500/10 text-white'
-                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
-                      }`}
+                      className="flex items-center gap-3 cursor-pointer select-none group w-fit"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-xs">Compacto (Estilo IRC)</span>
-                        {chatDensity === 'compact' && <Check className="w-4 h-4 text-brand-400" />}
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                          chatDensity === 'compact'
+                            ? 'border-brand-500 bg-brand-500/10'
+                            : 'border-white/25 bg-transparent group-hover:border-white/45'
+                        }`}
+                      >
+                        <div
+                          className={`w-2 h-2 rounded-full bg-brand-500 transition-transform duration-150 ${
+                            chatDensity === 'compact' ? 'scale-100' : 'scale-0'
+                          }`}
+                        />
                       </div>
-                      <span className="text-[11px] text-gray-400">
-                        Sem avatares grandes, otimizado para ler muitas mensagens por tela.
+                      <span
+                        className={`text-xs md:text-sm font-medium transition-colors ${
+                          chatDensity === 'compact' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'
+                        }`}
+                      >
+                        Compacto
                       </span>
-                    </button>
+                    </label>
                   </div>
                 </div>
 
