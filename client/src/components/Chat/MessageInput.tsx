@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock, Mic, Terminal, Bot, Sparkles } from 'lucide-react';
+import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock, Mic, Terminal, Bot, Sparkles, CornerDownLeft } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -9,7 +9,7 @@ import { VoiceRecorder } from './VoiceRecorder';
 import { useGuildStore } from '../../stores/guildStore';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
-import { SLASH_COMMANDS, parseSlashCommand, SlashOption } from '../../lib/slashCommands';
+import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand } from '../../lib/slashCommands';
 import { executeYtdlpCommand } from '../../lib/ytdlpRunner';
 
 interface MentionSuggestionItem {
@@ -28,7 +28,14 @@ interface SlashSuggestionItem {
   name: string;
   description: string;
   syntax: string;
-  options?: any[];
+  options?: SlashOption[];
+}
+
+interface ActiveSlashState {
+  command: SlashCommand;
+  subcommand?: SlashOption;
+  args: Record<string, string>;
+  activeOptionName: string | null;
 }
 
 interface MessageInputProps {
@@ -45,7 +52,6 @@ interface MessageInputProps {
   onTyping?: () => void;
 }
 
-const COMMON_EMOJIS = ['😀', '😂', '🔥', '👍', '❤️', '🎉', '😎', '🚀', '👀', '✨', '💀', '💯'];
 const MAX_CHARS = 2000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
 
@@ -70,8 +76,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
-  
-  // Slash Commands Autocomplete State
+
+  // Active Discord-Style Slash Command Pill Mode State
+  const [activeSlash, setActiveSlash] = useState<ActiveSlashState | null>(null);
+  const optionInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // Slash Commands Initial (/) Suggestions
   const [selectedSlashIndex, setSelectedSlashIndex] = useState<number>(0);
 
   // Channel (#) Autocomplete State
@@ -79,7 +89,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [channelCursorPos, setChannelCursorPos] = useState<number>(0);
   const [selectedChannelIndex, setSelectedChannelIndex] = useState<number>(0);
 
-  // Mentions (@) Autocomplete State
+  // Mentions (@) Autocomplete State in text mode
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionCursorPos, setMentionCursorPos] = useState<number>(0);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState<number>(0);
@@ -89,19 +99,91 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [emojiCursorPos, setEmojiCursorPos] = useState<number>(0);
   const [selectedEmojiIndex, setSelectedEmojiIndex] = useState<number>(0);
 
+  // Slash Command Option Choices / User Dropdowns State
+  const [slashChoiceIndex, setSlashChoiceIndex] = useState<number>(0);
+  const [slashUserIndex, setSlashUserIndex] = useState<number>(0);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingTime = useRef<number>(0);
 
-  // Compute filtered slash commands suggestions
+  // All available options for the active slash command
+  const activeSlashOptions = useMemo<SlashOption[]>(() => {
+    if (!activeSlash) return [];
+    return activeSlash.subcommand?.options || activeSlash.command.options || [];
+  }, [activeSlash]);
+
+  // Current active option definition
+  const currentActiveOption = useMemo<SlashOption | null>(() => {
+    if (!activeSlash || !activeSlash.activeOptionName) return null;
+    return activeSlashOptions.find((o) => o.name === activeSlash.activeOptionName) || null;
+  }, [activeSlash, activeSlashOptions]);
+
+  // Filtered choices when active option is type === 'choice'
+  const filteredSlashChoices = useMemo(() => {
+    if (!activeSlash || !currentActiveOption || currentActiveOption.type !== 'choice') return [];
+    const val = (activeSlash.args[currentActiveOption.name] || '').toLowerCase().trim();
+    const choices = currentActiveOption.choices || [];
+    if (!val) return choices;
+    return choices.filter(
+      (c) => c.name.toLowerCase().includes(val) || c.value.toLowerCase().includes(val)
+    );
+  }, [activeSlash, currentActiveOption]);
+
+  // Filtered user suggestions when active option is type === 'user'
+  const filteredSlashUsers = useMemo(() => {
+    if (!activeSlash || !currentActiveOption || currentActiveOption.type !== 'user') return [];
+    const q = (activeSlash.args[currentActiveOption.name] || '').replace(/^@/, '').toLowerCase().trim();
+    const list: MentionSuggestionItem[] = [];
+
+    if (customMentions && customMentions.length > 0) {
+      for (const m of customMentions) {
+        const u = (m.username || '').toLowerCase();
+        const n = (m.name || '').toLowerCase();
+        if (!q || u.includes(q) || n.includes(q)) {
+          list.push(m);
+        }
+      }
+      return list.slice(0, 8);
+    }
+
+    if (activeGuild?.members) {
+      for (const m of activeGuild.members) {
+        const u = m.username.toLowerCase();
+        const d = (m.display_name || '').toLowerCase();
+        if (!q || u.includes(q) || d.includes(q)) {
+          const topRole = m.roles && m.roles.length > 0 ? m.roles[0] : null;
+          list.push({
+            id: m.id,
+            name: m.display_name || m.username,
+            username: m.username,
+            avatar_url: m.avatar_url,
+            roleColor: topRole?.color,
+          });
+        }
+      }
+    }
+    return list.slice(0, 8);
+  }, [activeSlash, currentActiveOption, customMentions, activeGuild?.members]);
+
+  // Focus active option input on selection change
+  useEffect(() => {
+    if (activeSlash?.activeOptionName) {
+      const optName = activeSlash.activeOptionName;
+      setTimeout(() => {
+        optionInputRefs.current[optName]?.focus();
+      }, 30);
+    }
+  }, [activeSlash?.activeOptionName]);
+
+  // Compute filtered slash commands suggestions (when typing / in standard input)
   const slashSuggestions = useMemo(() => {
-    if (!content.startsWith('/')) return [];
+    if (activeSlash || !content.startsWith('/')) return [];
     if (mentionQuery !== null || emojiQuery !== null || channelQuery !== null) return [];
 
     const trimmed = content.trim();
     const parts = trimmed.slice(1).split(/\s+/);
 
-    // If already typed command and subcommand followed by space or arguments, don't show command list
     if (parts.length > 2 || (parts.length === 2 && content.includes(' ') && !content.endsWith(parts[1]))) {
       return [];
     }
@@ -120,8 +202,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       if (cmd.subcommands && cmd.subcommands.length > 0) {
         for (const sub of cmd.subcommands) {
           const fullCmdName = `${cmd.name} ${sub.name}`;
-          const isMatching = 
-            parts.length <= 1 
+          const isMatching =
+            parts.length <= 1
               ? (cmd.name.toLowerCase().startsWith(searchWord) || fullCmdName.toLowerCase().includes(searchWord))
               : (cmd.name.toLowerCase() === searchWord && (sub.name.toLowerCase().startsWith(subSearch) || subSearch === ''));
 
@@ -163,7 +245,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     return list.slice(0, 8);
-  }, [content, contextType, mentionQuery, emojiQuery, channelQuery]);
+  }, [activeSlash, content, contextType, mentionQuery, emojiQuery, channelQuery]);
 
   const allAvailableEmojis = useMemo(() => {
     const list: any[] = [];
@@ -200,13 +282,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     return list.slice(0, 8);
   }, [contextType, channelQuery, activeGuild?.channels]);
 
-  // Compute filtered mention suggestions
+  // Compute filtered mention suggestions in regular text mode
   const mentionSuggestions = useMemo(() => {
-    if (mentionQuery === null) return [];
+    if (activeSlash || mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
     const list: MentionSuggestionItem[] = [];
 
-    // If custom mentions provided (e.g. DM recipient or DM group members)
     if (customMentions && customMentions.length > 0) {
       for (const m of customMentions) {
         const uName = (m.username || '').toLowerCase();
@@ -220,7 +301,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     if (contextType !== 'channel') return [];
 
-    // Special global tags
     if ('everyone'.startsWith(q) || 'todos'.startsWith(q)) {
       list.push({ id: 'everyone', name: 'everyone', username: 'everyone', isSpecial: true });
     }
@@ -228,7 +308,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       list.push({ id: 'here', name: 'here', username: 'here', isSpecial: true });
     }
 
-    // Role mentions
     if (activeGuild?.roles) {
       for (const r of activeGuild.roles) {
         const rName = r.name.toLowerCase();
@@ -244,7 +323,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
-    // Member mentions
     if (activeGuild?.members) {
       for (const m of activeGuild.members) {
         const uName = m.username.toLowerCase();
@@ -263,7 +341,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     return list.slice(0, 8);
-  }, [mentionQuery, customMentions, contextType, activeGuild?.members, activeGuild?.roles]);
+  }, [activeSlash, mentionQuery, customMentions, contextType, activeGuild?.members, activeGuild?.roles]);
 
   // Compute filtered emoji suggestions
   const emojiSuggestions = useMemo(() => {
@@ -279,10 +357,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   }, [droppedFile]);
 
   useEffect(() => {
-    if (channel?.id && textareaRef.current) {
+    if (channel?.id && !activeSlash && textareaRef.current) {
       textareaRef.current.focus();
     }
-  }, [channel?.id]);
+  }, [channel?.id, activeSlash]);
 
   useEffect(() => {
     if (replyingTo && textareaRef.current) {
@@ -296,7 +374,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const textBefore = text.slice(0, channelCursorPos);
     const textAfter = text.slice(channelCursorPos);
 
-    // Replace the trailing #query with #channel-name
     const newTextBefore = textBefore.replace(/#([a-zA-Z0-9_\u00C0-\u00FF-]*)$/, `#${item.name} `);
     const newContent = newTextBefore + textAfter;
     setContent(newContent);
@@ -317,7 +394,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const textBefore = text.slice(0, mentionCursorPos);
     const textAfter = text.slice(mentionCursorPos);
 
-    // Replace the trailing @query with @username
     const newTextBefore = textBefore.replace(/@([a-zA-Z0-9_.-]*)$/, `@${item.username} `);
     const newContent = newTextBefore + textAfter;
     setContent(newContent);
@@ -338,7 +414,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const textBefore = text.slice(0, emojiCursorPos);
     const textAfter = text.slice(emojiCursorPos);
 
-    // If custom server emoji, insert :name:, otherwise unicode emoji character
     const replacement = item.isCustom
       ? `:${item.name}: `
       : `${item.unicode} `;
@@ -357,22 +432,268 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }, 10);
   };
 
-  const insertSlashCommand = (item: SlashSuggestionItem) => {
-    let newContent = item.name + ' ';
-    setContent(newContent);
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(newContent.length, newContent.length);
+  // Convert selected slash command into Discord Argument Pills mode
+  const startSlashCommand = (item: SlashSuggestionItem) => {
+    const cmd = SLASH_COMMANDS.find((c) => c.name === item.command);
+    if (!cmd) return;
+    const sub = cmd.subcommands?.find((s) => s.name === item.subcommand);
+    const options = sub?.options || cmd.options || [];
+
+    let initialOption: string | null = null;
+    if (options.length > 0) {
+      const firstReq = options.find((o) => o.required);
+      initialOption = firstReq ? firstReq.name : options[0].name;
+    }
+
+    setActiveSlash({
+      command: cmd,
+      subcommand: sub,
+      args: {},
+      activeOptionName: initialOption,
+    });
+
+    setContent('');
+    setSelectedSlashIndex(0);
+    setSlashChoiceIndex(0);
+    setSlashUserIndex(0);
+  };
+
+  // Handle value change inside an argument pill
+  const handleOptionValueChange = (optName: string, val: string) => {
+    if (!activeSlash) return;
+    setActiveSlash({
+      ...activeSlash,
+      args: {
+        ...activeSlash.args,
+        [optName]: val,
+      },
+    });
+    setSlashChoiceIndex(0);
+    setSlashUserIndex(0);
+  };
+
+  // Select a choice option (e.g. BR or mp4)
+  const handleSelectSlashChoice = (choiceVal: string) => {
+    if (!activeSlash || !currentActiveOption) return;
+    const optName = currentActiveOption.name;
+    const newArgs = { ...activeSlash.args, [optName]: choiceVal };
+
+    const remaining = activeSlashOptions.filter((o) => o.name !== optName && !newArgs[o.name]);
+    setActiveSlash({
+      ...activeSlash,
+      args: newArgs,
+      activeOptionName: remaining.length > 0 ? remaining[0].name : null,
+    });
+    setSlashChoiceIndex(0);
+  };
+
+  // Select a user mention option
+  const handleSelectSlashUser = (userItem: MentionSuggestionItem) => {
+    if (!activeSlash || !currentActiveOption) return;
+    const optName = currentActiveOption.name;
+    const newArgs = { ...activeSlash.args, [optName]: `@${userItem.username}` };
+
+    const remaining = activeSlashOptions.filter((o) => o.name !== optName && !newArgs[o.name]);
+    setActiveSlash({
+      ...activeSlash,
+      args: newArgs,
+      activeOptionName: remaining.length > 0 ? remaining[0].name : null,
+    });
+    setSlashUserIndex(0);
+  };
+
+  // Select option to focus from OPTIONS popup or pill click
+  const selectOptionToFocus = (optName: string) => {
+    if (!activeSlash) return;
+    setActiveSlash({
+      ...activeSlash,
+      activeOptionName: optName,
+    });
+    setSlashChoiceIndex(0);
+    setSlashUserIndex(0);
+  };
+
+  // Execute active slash command
+  const handleSendActiveSlash = async () => {
+    if (!activeSlash || isUploading) return;
+
+    // Check required options
+    for (const opt of activeSlashOptions) {
+      if (opt.required && !activeSlash.args[opt.name]?.trim()) {
+        setLimitAlert({
+          title: 'Opção Obrigatória Faltando',
+          message: `Por favor preencha o campo obrigatório "${opt.name}".\n${opt.description}`,
+        });
+        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: opt.name } : null));
+        return;
       }
-    }, 10);
+    }
+
+    const commandName = activeSlash.command.name;
+    const subcommandName = activeSlash.subcommand?.name;
+    const args: Record<string, any> = {};
+
+    for (const [k, v] of Object.entries(activeSlash.args)) {
+      if (v && v.trim()) {
+        args[k] = v.trim();
+      }
+    }
+
+    // Reset slash state immediately
+    setActiveSlash(null);
+    setContent('');
+
+    if (commandName === 'yt-dlp' || commandName === 'ytdlp') {
+      if (!args.link) {
+        setLimitAlert({
+          title: 'Comando Incompleto',
+          message: 'Informe o link do vídeo/música individual.\nExemplo: formato mp4 e URL válida.',
+        });
+        return;
+      }
+      await executeYtdlpCommand({
+        format: args.format === 'mp3' ? 'mp3' : 'mp4',
+        link: args.link,
+        contextType,
+        contextId: channel?.id || '',
+      });
+      return;
+    }
+
+    // Backend Slash Commands (/server, /user, /league)
+    try {
+      const payload = {
+        command: commandName,
+        subcommand: subcommandName,
+        args,
+      };
+      if (contextType === 'channel' && channel?.id) {
+        await api.commands.executeChannelCommand(channel.id, payload);
+      } else if (contextType === 'dm' && channel?.id) {
+        await api.commands.executeDMRoomCommand(channel.id, payload);
+      } else if (contextType === 'dm_group' && channel?.id) {
+        await api.commands.executeDMGroupCommand(channel.id, payload);
+      }
+    } catch (err: any) {
+      console.error('Failed to execute slash command:', err);
+      setLimitAlert({
+        title: 'Erro no Comando',
+        message: err?.message || 'Falha ao executar comando.',
+      });
+    }
+  };
+
+  // Keyboard navigation inside an argument pill input
+  const handleOptionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, opt: SlashOption) => {
+    // 1. Choices Navigation
+    if (opt.type === 'choice' && filteredSlashChoices.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashChoiceIndex((prev) => (prev + 1) % filteredSlashChoices.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashChoiceIndex((prev) => (prev - 1 + filteredSlashChoices.length) % filteredSlashChoices.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const selected = filteredSlashChoices[slashChoiceIndex];
+        if (selected) {
+          handleSelectSlashChoice(selected.value);
+        }
+        return;
+      }
+    }
+
+    // 2. User Mention Suggestions Navigation
+    if (opt.type === 'user' && filteredSlashUsers.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashUserIndex((prev) => (prev + 1) % filteredSlashUsers.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashUserIndex((prev) => (prev - 1 + filteredSlashUsers.length) % filteredSlashUsers.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const selected = filteredSlashUsers[slashUserIndex];
+        if (selected) {
+          handleSelectSlashUser(selected);
+        }
+        return;
+      }
+    }
+
+    // 3. Backspace on empty input removes this option pill
+    if (e.key === 'Backspace' && !activeSlash?.args[opt.name]) {
+      e.preventDefault();
+      const newArgs = { ...activeSlash?.args };
+      delete newArgs[opt.name];
+      const currentIdx = activeSlashOptions.findIndex((o) => o.name === opt.name);
+      if (currentIdx > 0) {
+        setActiveSlash((prev) => (prev ? { ...prev, args: newArgs, activeOptionName: activeSlashOptions[currentIdx - 1].name } : null));
+      } else {
+        const nextOpt = activeSlashOptions.find((o, idx) => idx > 0 && newArgs[o.name]);
+        if (nextOpt) {
+          setActiveSlash((prev) => (prev ? { ...prev, args: newArgs, activeOptionName: nextOpt.name } : null));
+        } else {
+          const cmdStr = `/${activeSlash?.command.name}${activeSlash?.subcommand ? ' ' + activeSlash.subcommand.name : ''}`;
+          setActiveSlash(null);
+          setContent(cmdStr);
+        }
+      }
+      return;
+    }
+
+    // 4. Tab to advance between options
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const otherOpts = activeSlashOptions.filter((o) => o.name !== opt.name);
+      if (otherOpts.length > 0) {
+        const next = otherOpts.find((o) => !activeSlash?.args[o.name]) || otherOpts[0];
+        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: next.name } : null));
+      }
+      return;
+    }
+
+    // 5. Enter to advance or execute
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const missingReq = activeSlashOptions.find(
+        (o) => o.required && !activeSlash?.args[o.name]?.trim() && o.name !== opt.name
+      );
+      if (missingReq) {
+        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: missingReq.name } : null));
+        return;
+      }
+      handleSendActiveSlash();
+      return;
+    }
+
+    // 6. Escape to cancel
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setActiveSlash(null);
+      setContent('');
+      return;
+    }
   };
 
   const handleSend = async () => {
     if (isUploading) return;
+    if (activeSlash) {
+      await handleSendActiveSlash();
+      return;
+    }
+
     let finalContent = replaceEmojiShortcodes(content.trim(), allAvailableEmojis);
 
-    // Check if it's a Slash Command
+    // Fallback: Check if user typed a Slash Command manually in text box
     if (finalContent.startsWith('/')) {
       const parsed = parseSlashCommand(finalContent);
       if (parsed) {
@@ -403,7 +724,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           return;
         }
 
-        // Backend Slash Commands (/server, /user, /league, etc.)
+        // Backend Slash Commands
         try {
           const payload = {
             command: parsed.command,
@@ -581,7 +902,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
-        insertSlashCommand(slashSuggestions[selectedSlashIndex]);
+        startSlashCommand(slashSuggestions[selectedSlashIndex]);
         return;
       }
       if (e.key === 'Escape') {
@@ -591,14 +912,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
-    // 3. ArrowUp Shortcut to edit user's last message when input is empty
+    // 4. ArrowUp Shortcut to edit user's last message when input is empty
     if (e.key === 'ArrowUp' && !content.trim() && !selectedFile && !replyingTo) {
       e.preventDefault();
       onEditLastMessage?.();
       return;
     }
 
-    // 4. Normal Enter to Send
+    // 5. Normal Enter to Send
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       await handleSend();
@@ -617,7 +938,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const cursor = e.target.selectionStart || val.length;
     const textBefore = val.slice(0, cursor);
 
-    // Detect # channel query at cursor (e.g. "#" or "#geral" at start or after whitespace)
+    // Detect # channel query at cursor
     const channelMatch = textBefore.match(/(?:^|\s)#([a-zA-Z0-9_\u00C0-\u00FF-]*)$/);
     if (channelMatch) {
       setChannelQuery(channelMatch[1]);
@@ -628,7 +949,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     } else {
       setChannelQuery(null);
 
-      // Detect @ mention query at cursor (e.g. "@" or "@usr" at start or after whitespace)
+      // Detect @ mention query at cursor
       const mentionMatch = textBefore.match(/(?:^|\s)@([a-zA-Z0-9_.-]*)$/);
       if (mentionMatch) {
         setMentionQuery(mentionMatch[1]);
@@ -638,7 +959,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       } else {
         setMentionQuery(null);
 
-        // Detect : emoji query at cursor (e.g. ":th" or ":fire")
+        // Detect : emoji query at cursor
         const emojiMatch = textBefore.match(/(?:^|\s):([a-zA-Z0-9_+-]*)$/);
         if (emojiMatch) {
           setEmojiQuery(emojiMatch[1]);
@@ -665,6 +986,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleSelectEmoji = (emoji: string) => {
+    if (activeSlash && currentActiveOption) {
+      handleOptionValueChange(currentActiveOption.name, (activeSlash.args[currentActiveOption.name] || '') + emoji);
+      return;
+    }
     setContent((prev) => prev + emoji);
     if (textareaRef.current) {
       textareaRef.current.focus();
@@ -673,6 +998,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   const handleSelectGif = async (gifUrl: string) => {
     setShowEmojiPicker(false);
+    if (activeSlash) {
+      setActiveSlash(null);
+    }
     await onSendMessage(gifUrl, replyingTo?.id);
     onCancelReply?.();
   };
@@ -690,7 +1018,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setSelectedFile(file);
 
     if (file.type.startsWith('image/')) {
-      // Generate local thumbnail preview
       const reader = new FileReader();
       reader.onload = (readEvent) => {
         setSelectedImagePreview(readEvent.target?.result as string);
@@ -725,12 +1052,20 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     e.target.value = '';
   };
 
+  // Remaining options for active slash that have not been filled or selected yet
+  const remainingSlashOptions = useMemo(() => {
+    if (!activeSlash) return [];
+    return activeSlashOptions.filter(
+      (opt) => opt.name !== activeSlash.activeOptionName && !activeSlash.args[opt.name]
+    );
+  }, [activeSlash, activeSlashOptions]);
+
   return (
-    <div 
+    <div
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
       className="px-3 md:px-4 pt-0 bg-background-dark relative select-none"
     >
-      {/* Slash Commands (/) Autocomplete Suggestions Popup */}
+      {/* 1. Slash Commands (/) Initial Autocomplete Suggestions Popup */}
       {slashSuggestions.length > 0 && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-brand-500/25 shadow-2xl p-1.5 max-h-64 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
           <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
@@ -738,14 +1073,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               <Bot className="w-3.5 h-3.5" />
               <span>Comandos do Gork ({slashSuggestions.length})</span>
             </span>
-            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Tab para autocompletar</span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
           </div>
           <div className="space-y-0.5">
             {slashSuggestions.map((item, idx) => (
               <button
                 key={item.name}
                 type="button"
-                onClick={() => insertSlashCommand(item)}
+                onClick={() => startSlashCommand(item)}
                 onMouseEnter={() => setSelectedSlashIndex(idx)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
                   selectedSlashIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
@@ -773,7 +1108,130 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {/* Channel (#) Autocomplete Suggestions Popup */}
+      {/* 2. Active Slash Command Choices Dropdown (e.g. Regions, Format) */}
+      {activeSlash && currentActiveOption?.type === 'choice' && filteredSlashChoices.length > 0 && (
+        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-brand-500/30 shadow-2xl p-1.5 max-h-64 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
+          <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Opções para {currentActiveOption.name}</span>
+            </span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
+          </div>
+          <div className="space-y-0.5">
+            {filteredSlashChoices.map((choice, idx) => (
+              <button
+                key={choice.value}
+                type="button"
+                onClick={() => handleSelectSlashChoice(choice.value)}
+                onMouseEnter={() => setSlashChoiceIndex(idx)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                  slashChoiceIndex === idx ? 'bg-brand-500/25 text-white font-medium' : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <span className="text-xs">{choice.name}</span>
+                <span className="text-[10px] font-mono text-brand-300 bg-brand-500/15 px-1.5 py-0.5 rounded border border-brand-500/20">
+                  {choice.value}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 3. Active Slash Command User Mention Dropdown (e.g. /league profile user, /user info user) */}
+      {activeSlash && currentActiveOption?.type === 'user' && filteredSlashUsers.length > 0 && (
+        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-brand-500/30 shadow-2xl p-1.5 max-h-64 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
+          <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
+              <Bot className="w-3.5 h-3.5" />
+              <span>Selecionar Membro ({filteredSlashUsers.length})</span>
+            </span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
+          </div>
+          <div className="space-y-0.5">
+            {filteredSlashUsers.map((m, idx) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => handleSelectSlashUser(m)}
+                onMouseEnter={() => setSlashUserIndex(idx)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer ${
+                  slashUserIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden flex-shrink-0">
+                  {m.avatar_url ? (
+                    <img src={formatAssetUrl(m.avatar_url)} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    m.name[0]?.toUpperCase()
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span className="font-semibold text-xs truncate" style={{ color: m.roleColor || undefined }}>
+                    {m.name}
+                  </span>
+                  <span className="text-[10px] text-gray-500 truncate">@{m.username}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Active Slash Command Discord-style OPTIONS List (Matching Screenshot 1) */}
+      {activeSlash && (!currentActiveOption || (currentActiveOption.type !== 'choice' && currentActiveOption.type !== 'user')) && activeSlashOptions.length > 0 && (
+        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
+          <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-gray-300 font-semibold tracking-wide">
+              <span>OPTIONS</span>
+            </span>
+            <span className="text-[9px] font-normal text-gray-500">
+              {activeSlashOptions.some((o) => o.required) ? 'Preencha os campos obrigatórios' : 'Pressione Enter para enviar sem argumentos'}
+            </span>
+          </div>
+          <div className="space-y-0.5">
+            {activeSlashOptions.map((opt) => {
+              const isSelected = activeSlash.activeOptionName === opt.name;
+              const hasValue = !!activeSlash.args[opt.name];
+              return (
+                <button
+                  key={opt.name}
+                  type="button"
+                  onClick={() => selectOptionToFocus(opt.name)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                    isSelected ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-bold text-xs text-white bg-background-darker px-2 py-0.5 rounded border border-white/10 flex-shrink-0">
+                      {opt.name}
+                    </span>
+                    <span className="text-[11px] text-gray-400 truncate">
+                      {opt.description}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                    {hasValue ? (
+                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        {activeSlash.args[opt.name]}
+                      </span>
+                    ) : opt.required ? (
+                      <span className="text-[9px] text-rose-400 font-semibold uppercase px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">
+                        Obrigatório
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-gray-500 uppercase">Opcional</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Channel (#) Autocomplete Suggestions Popup */}
       {channelSuggestions.length > 0 && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
           <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
@@ -781,7 +1239,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               <Hash className="w-3.5 h-3.5 text-brand-400" />
               <span>Canais de Texto e Voz ({channelSuggestions.length})</span>
             </span>
-            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
           </div>
           <div className="space-y-0.5">
             {channelSuggestions.map((ch, idx) => {
@@ -818,7 +1276,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {/* Emoji Autocomplete Suggestions Popup */}
+      {/* 6. Emoji Autocomplete Suggestions Popup */}
       {emojiSuggestions.length > 0 && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
           <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
@@ -826,7 +1284,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               <Smile className="w-3.5 h-3.5 text-brand-400" />
               <span>Emojis correspondentes ({emojiSuggestions.length})</span>
             </span>
-            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
           </div>
           <div className="space-y-0.5">
             {emojiSuggestions.map((item, idx) => (
@@ -872,12 +1330,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {/* Mention Autocomplete Suggestions Popup */}
+      {/* 7. Mention (@) Autocomplete Suggestions Popup in text mode */}
       {mentionSuggestions.length > 0 && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
           <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
             <span>Membros ({mentionSuggestions.length})</span>
-            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter para selecionar</span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter para selecionar</span>
           </div>
           <div className="space-y-0.5">
             {mentionSuggestions.map((item, idx) => (
@@ -1021,39 +1479,133 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         />
       ) : (
         <div
-          className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 min-h-[48px] md:min-h-[52px] border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
+          className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 min-h-[48px] md:min-h-[52px] border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
             replyingTo ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl'
           }`}
         >
-          {/* Attachment Upload Button */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
-            title="Anexar Arquivo ou Imagem (até 20 MB)"
-          >
-            <PlusCircle className="w-5 h-5" />
-          </button>
+          {/* Left: Attachment Upload Button or Bot Avatar */}
+          {!activeSlash ? (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
+              title="Anexar Arquivo ou Imagem (até 20 MB)"
+            >
+              <PlusCircle className="w-5 h-5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveSlash(null)}
+              className="text-gray-400 hover:text-rose-400 p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer"
+              title="Cancelar Comando (Esc)"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
 
-          {/* Text Input */}
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder={
-              replyingTo
-                ? (replyingTo.author?.display_name || replyingTo.author?.username
-                    ? `Respondendo a @${replyingTo.author.display_name || replyingTo.author.username}...`
-                    : 'Respondendo à mensagem...')
-                : (placeholder || (channel?.name ? `Conversar em #${channel.name}` : 'Conversar...'))
-            }
-            rows={1}
-            disabled={isUploading}
-            className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1.5 min-h-[26px] max-h-40 leading-relaxed font-normal no-scrollbar"
-          />
+          {/* Center: Slash Command Discord Pill Mode OR Standard Textarea */}
+          {activeSlash ? (
+            <div className="flex-1 flex flex-wrap items-center gap-1.5 min-h-[30px] py-0.5">
+              {/* Bot Avatar + Command Name Prefix (Matching Screenshots 1 & 2) */}
+              <div className="flex items-center gap-1.5 flex-shrink-0 select-none bg-brand-500/10 border border-brand-500/25 px-2 py-1 rounded-lg">
+                <div className="w-4 h-4 rounded-full overflow-hidden bg-brand-500 flex items-center justify-center flex-shrink-0">
+                  <img
+                    src="/assets/gork.jpg"
+                    alt="Gork"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <Bot className="w-3 h-3 text-white" />
+                </div>
+                <div className="flex items-center text-xs font-bold leading-none">
+                  <span className="text-brand-400 mr-0.5">/</span>
+                  <span className="text-white">{activeSlash.command.name}</span>
+                  {activeSlash.subcommand && (
+                    <span className="text-gray-200 ml-1 font-semibold">{activeSlash.subcommand.name}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Argument Pills (Matching Screenshot 2 [ riot_id | safiroko#zero ]) */}
+              {activeSlashOptions.map((opt) => {
+                const isSet = activeSlash.args[opt.name] !== undefined;
+                const isActive = activeSlash.activeOptionName === opt.name;
+                if (!isSet && !isActive) return null;
+
+                return (
+                  <div
+                    key={opt.name}
+                    onClick={() => selectOptionToFocus(opt.name)}
+                    className={`flex items-center rounded-lg text-xs overflow-hidden border transition-all ${
+                      isActive
+                        ? 'border-brand-500 bg-[#2b2d31] shadow-sm shadow-brand-500/30 ring-1 ring-brand-500/40'
+                        : 'border-white/10 bg-[#1e1f22] hover:border-white/20'
+                    }`}
+                  >
+                    {/* Option Tag Badge */}
+                    <span className="bg-[#111214] text-gray-300 font-semibold px-2 py-1 select-none border-r border-white/5 flex items-center gap-1">
+                      <span>{opt.name}</span>
+                      {opt.required && <span className="text-rose-400 text-[10px]">*</span>}
+                    </span>
+
+                    {/* Editable Value Field */}
+                    <input
+                      ref={(el) => {
+                        optionInputRefs.current[opt.name] = el;
+                      }}
+                      type="text"
+                      value={activeSlash.args[opt.name] ?? ''}
+                      onChange={(e) => handleOptionValueChange(opt.name, e.target.value)}
+                      onFocus={() => selectOptionToFocus(opt.name)}
+                      onKeyDown={(e) => handleOptionKeyDown(e, opt)}
+                      placeholder={isActive ? opt.description : ''}
+                      className="bg-transparent text-white px-2 py-1 outline-none min-w-[70px] max-w-[220px] text-xs"
+                      autoFocus={isActive}
+                    />
+                  </div>
+                );
+              })}
+
+              {/* Remaining Available Options Buttons / "+N options" (Matching Screenshot 1) */}
+              {remainingSlashOptions.length > 0 && (
+                <div className="flex items-center gap-1">
+                  {remainingSlashOptions.map((opt) => (
+                    <button
+                      key={opt.name}
+                      type="button"
+                      onClick={() => selectOptionToFocus(opt.name)}
+                      className="text-[11px] text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+                      title={opt.description}
+                    >
+                      <span className="font-semibold text-brand-300">+{opt.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder={
+                replyingTo
+                  ? (replyingTo.author?.display_name || replyingTo.author?.username
+                      ? `Respondendo a @${replyingTo.author.display_name || replyingTo.author.username}...`
+                      : 'Respondendo à mensagem...')
+                  : (placeholder || (channel?.name ? `Conversar em #${channel.name}` : 'Conversar...'))
+              }
+              rows={1}
+              disabled={isUploading}
+              className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1.5 min-h-[26px] max-h-40 leading-relaxed font-normal no-scrollbar"
+            />
+          )}
 
           {/* Emoji Button */}
           <button
@@ -1068,7 +1620,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           </button>
 
           {/* Voice Record Button or Send Button */}
-          {!content.trim() && !selectedFile ? (
+          {!activeSlash && !content.trim() && !selectedFile ? (
             <button
               type="button"
               onClick={() => setIsRecordingVoice(true)}
@@ -1084,7 +1636,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               onClick={handleSend}
               disabled={isUploading}
               className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white p-2 rounded-xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0 cursor-pointer"
-              title="Enviar Mensagem"
+              title={activeSlash ? 'Executar Comando (Enter)' : 'Enviar Mensagem'}
             >
               {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
             </button>

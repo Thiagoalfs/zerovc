@@ -101,9 +101,9 @@ export const SLASH_COMMANDS: SlashCommand[] = [
           },
           {
             name: 'region',
-            description: 'Região da sua conta Riot',
+            description: 'Região da sua conta Riot (padrão: BR)',
             type: 'choice',
-            required: true,
+            required: false,
             choices: LEAGUE_REGIONS,
           },
         ],
