@@ -18,6 +18,7 @@ import {
   Smile,
   FileText,
   Edit3,
+  Pencil,
   ArrowLeft,
   Keyboard,
   Key,
@@ -1305,30 +1306,38 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* ======================================================== */}
         <div className="hidden md:flex w-64 bg-[#111214] border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar justify-between">
           <div className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
-            <div className="px-3 py-2 mb-2">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono truncate">
-                {user.display_name || user.username}
-              </h2>
-              <div className="text-[11px] text-gray-500 mt-0.5">Configurações de Usuário</div>
-            </div>
+            {/* Top User Profile Card Button (Navigates to Minha Conta / Perfil) */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('account')}
+              className={`w-full p-2.5 mb-3 rounded-xl flex items-center gap-3 text-left transition-all cursor-pointer group ${
+                activeTab === 'account' || activeTab === 'profile'
+                  ? 'bg-brand-500/15 border border-brand-500/30 shadow-sm'
+                  : 'bg-background-darker/60 hover:bg-background-darker border border-white/5 hover:border-white/10'
+              }`}
+            >
+              <div className="w-10 h-10 rounded-full bg-brand-500 overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow">
+                {user.avatar_url ? (
+                  <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase()}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-white truncate leading-tight">
+                  {user.display_name || user.username}
+                </div>
+                <div className="text-xs text-gray-400 group-hover:text-gray-200 flex items-center gap-1.5 mt-0.5 transition-colors">
+                  <span>Editar</span>
+                  <Pencil className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
+                </div>
+              </div>
+            </button>
 
             <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
                 Configurações de Usuário
               </span>
-
-              {/* Tab 1: Minha Conta */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('account')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                  activeTab === 'account' || activeTab === 'profile'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#18191c]/60'
-                }`}
-              >
-                <span>Minha Conta</span>
-              </button>
 
               {/* Tab: Privacidade e Segurança */}
               <button
@@ -2510,7 +2519,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <button
                         type="button"
                         onClick={() => setIsProcDropdownOpen(!isProcDropdownOpen)}
-                        className="w-56 bg-background-darkest hover:bg-[#202225] border border-white/10 hover:border-white/20 px-3.5 py-2 rounded-xl flex items-center justify-between text-xs font-medium text-gray-200 transition-all cursor-pointer shadow-sm group"
+                        className="w-56 bg-background-darker hover:bg-background-dark border border-white/10 hover:border-white/20 px-3.5 py-2 rounded-xl flex items-center justify-between text-xs font-medium text-gray-200 transition-all cursor-pointer shadow-sm group"
                       >
                         <span className="truncate pr-2 font-medium">
                           {audioProcessingMode === 'rnnoise_silero'
@@ -2533,7 +2542,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                             className="fixed inset-0 z-40"
                             onClick={() => setIsProcDropdownOpen(false)}
                           />
-                          <div className="absolute right-0 top-full mt-1.5 w-56 z-50 bg-background-darkest/98 backdrop-blur-md border border-white/10 p-1.5 rounded-xl shadow-2xl space-y-0.5 animate-in fade-in zoom-in-95">
+                          <div className="absolute right-0 top-full mt-1.5 w-56 z-50 bg-background-darker border border-white/10 p-1.5 rounded-xl shadow-2xl space-y-0.5 animate-in fade-in zoom-in-95">
                             {/* Option 1: RNNoise + Silero VAD */}
                             <button
                               type="button"
