@@ -140,7 +140,7 @@ export const RegisteredGamesView: React.FC = () => {
   };
 
   const handleSelectRawgGame = async (game: GameSearchResult) => {
-    const iconUrl = game.name.toLowerCase() === 'minecraft' ? '/icons/games/minecraft.png' : (game.icon_url || game.background_image || '');
+    const iconUrl = game.name.toLowerCase() === 'minecraft' ? 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/minecraft.png' : (game.icon_url || game.background_image || '');
     addOrUpdateGame(game.name, true, undefined, iconUrl);
     setCustomGameName('');
     setRawgResults([]);
@@ -173,7 +173,7 @@ export const RegisteredGamesView: React.FC = () => {
     // Check if the top rawg match matches the exact name
     const topMatch = rawgResults[0];
     const iconUrl = name.toLowerCase() === 'minecraft'
-      ? '/icons/games/minecraft.png'
+      ? 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/minecraft.png'
       : (topMatch && topMatch.name.toLowerCase() === name.toLowerCase()
         ? topMatch.icon_url || topMatch.background_image
         : undefined);
