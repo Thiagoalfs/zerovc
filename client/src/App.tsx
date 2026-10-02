@@ -612,9 +612,17 @@ export const App: React.FC = () => {
         }
 
         if (currentGuild && currentGuild.channels && currentGuild.channels.length > 0) {
-          const targetChannel = channelId
-            ? currentGuild.channels.find((c) => c.id === channelId) || currentGuild.channels[0]
-            : currentGuild.channels.find((c) => c.type === 'text') || currentGuild.channels[0];
+          let resolvedChannelId = channelId;
+          if (!resolvedChannelId && typeof window !== 'undefined') {
+            try {
+              resolvedChannelId = localStorage.getItem(`zerovc_last_channel_${guildId}`) || '';
+            } catch {}
+          }
+
+          const targetChannel =
+            (resolvedChannelId ? currentGuild.channels.find((c) => c.id === resolvedChannelId) : null) ||
+            currentGuild.channels.find((c) => c.type === 'text') ||
+            currentGuild.channels[0];
 
           if (!activeChannel || activeChannel.id !== targetChannel.id) {
             useGuildStore.getState().selectChannel(targetChannel);

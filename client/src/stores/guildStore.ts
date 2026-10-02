@@ -177,9 +177,16 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       }).catch(() => {});
 
       if (fullGuild.channels && fullGuild.channels.length > 0) {
-        const targetChannel = initialChannelId
-          ? fullGuild.channels.find((c: Channel) => c.id === initialChannelId) || fullGuild.channels[0]
-          : fullGuild.channels.find((c: Channel) => c.type === 'text') || fullGuild.channels[0];
+        let savedChannelId = initialChannelId;
+        if (!savedChannelId && typeof window !== 'undefined') {
+          try {
+            savedChannelId = localStorage.getItem(`zerovc_last_channel_${guildId}`) || undefined;
+          } catch {}
+        }
+        const targetChannel =
+          (savedChannelId ? fullGuild.channels.find((c: Channel) => c.id === savedChannelId) : null) ||
+          fullGuild.channels.find((c: Channel) => c.type === 'text') ||
+          fullGuild.channels[0];
         get().selectChannel(targetChannel);
       } else {
         set({ activeGuild: fullGuild, activeChannel: null, messages: [] });
@@ -190,6 +197,14 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   },
 
   selectChannel: async (channel: Channel) => {
+    const curGuild = get().activeGuild;
+    const guildId = channel.guild_id || curGuild?.id;
+    if (guildId && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`zerovc_last_channel_${guildId}`, channel.id);
+      } catch {}
+    }
+
     const cachedMessages = get().messagesByChannel[channel.id];
 
     // Ack channel read receipt
@@ -529,6 +544,15 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         .filter((c) => c.id !== channelId)
         .map((c) => (c.category_id === channelId ? { ...c, category_id: undefined } : c));
       const activeChannel = state.activeChannel?.id === channelId ? (channels[0] || null) : state.activeChannel;
+      if (typeof window !== 'undefined' && state.activeGuild.id) {
+        try {
+          if (activeChannel) {
+            localStorage.setItem(`zerovc_last_channel_${state.activeGuild.id}`, activeChannel.id);
+          } else {
+            localStorage.removeItem(`zerovc_last_channel_${state.activeGuild.id}`);
+          }
+        } catch {}
+      }
       return {
         activeGuild: { ...state.activeGuild, channels },
         activeChannel,
