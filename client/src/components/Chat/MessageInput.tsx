@@ -109,6 +109,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingTime = useRef<number>(0);
 
+  // List refs for auto-scrolling with keyboard navigation
+  const slashListRef = useRef<HTMLDivElement>(null);
+  const slashChoiceListRef = useRef<HTMLDivElement>(null);
+  const slashUserListRef = useRef<HTMLDivElement>(null);
+  const slashOptionsListRef = useRef<HTMLDivElement>(null);
+  const channelListRef = useRef<HTMLDivElement>(null);
+  const emojiListRef = useRef<HTMLDivElement>(null);
+  const mentionListRef = useRef<HTMLDivElement>(null);
+
   // All available options for the active slash command
   const activeSlashOptions = useMemo<SlashOption[]>(() => {
     if (!activeSlash) return [];
@@ -146,7 +155,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           list.push(m);
         }
       }
-      return list.slice(0, 8);
+      return list.slice(0, 30);
     }
 
     if (activeGuild?.members) {
@@ -165,7 +174,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         }
       }
     }
-    return list.slice(0, 8);
+    return list.slice(0, 30);
   }, [activeSlash, currentActiveOption, customMentions, activeGuild?.members]);
 
   // Focus active option input on selection change
@@ -177,6 +186,56 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }, 30);
     }
   }, [activeSlash?.activeOptionName]);
+
+  // Auto-scroll selected autocomplete items into view as user navigates with Arrow keys
+  useEffect(() => {
+    if (selectedSlashIndex >= 0 && slashListRef.current) {
+      const el = slashListRef.current.children[selectedSlashIndex] as HTMLElement;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedSlashIndex]);
+
+  useEffect(() => {
+    if (slashChoiceIndex >= 0 && slashChoiceListRef.current) {
+      const el = slashChoiceListRef.current.children[slashChoiceIndex] as HTMLElement;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [slashChoiceIndex]);
+
+  useEffect(() => {
+    if (slashUserIndex >= 0 && slashUserListRef.current) {
+      const el = slashUserListRef.current.children[slashUserIndex] as HTMLElement;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [slashUserIndex]);
+
+  useEffect(() => {
+    if (selectedOptionIndex >= 0 && slashOptionsListRef.current) {
+      const el = slashOptionsListRef.current.children[selectedOptionIndex] as HTMLElement;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedOptionIndex]);
+
+  useEffect(() => {
+    if (selectedChannelIndex >= 0 && channelListRef.current) {
+      const el = channelListRef.current.children[selectedChannelIndex] as HTMLElement;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedChannelIndex]);
+
+  useEffect(() => {
+    if (selectedEmojiIndex >= 0 && emojiListRef.current) {
+      const el = emojiListRef.current.children[selectedEmojiIndex] as HTMLElement;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedEmojiIndex]);
+
+  useEffect(() => {
+    if (selectedMentionIndex >= 0 && mentionListRef.current) {
+      const el = mentionListRef.current.children[selectedMentionIndex] as HTMLElement;
+      el?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedMentionIndex]);
 
   // Compute filtered slash commands suggestions (when typing / in standard input)
   const slashSuggestions = useMemo(() => {
@@ -246,7 +305,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
-    return list.slice(0, 8);
+    return list.slice(0, 50);
   }, [activeSlash, content, contextType, mentionQuery, emojiQuery, channelQuery]);
 
   const allAvailableEmojis = useMemo(() => {
@@ -281,7 +340,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const list = channels.filter(
       (c) => c.type !== 'category' && c.name.toLowerCase().includes(q)
     );
-    return list.slice(0, 8);
+    return list.slice(0, 30);
   }, [contextType, channelQuery, activeGuild?.channels]);
 
   // Compute filtered mention suggestions in regular text mode
@@ -298,7 +357,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           list.push(m);
         }
       }
-      return list.slice(0, 8);
+      return list.slice(0, 30);
     }
 
     if (contextType !== 'channel') return [];
@@ -342,13 +401,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
-    return list.slice(0, 8);
+    return list.slice(0, 30);
   }, [activeSlash, mentionQuery, customMentions, contextType, activeGuild?.members, activeGuild?.roles]);
 
   // Compute filtered emoji suggestions
   const emojiSuggestions = useMemo(() => {
     if (emojiQuery === null) return [];
-    return searchEmojiSuggestions(emojiQuery, allAvailableEmojis, activeGuild?.name || 'ZeroVC', 8);
+    return searchEmojiSuggestions(emojiQuery, allAvailableEmojis, activeGuild?.name || 'ZeroVC', 20);
   }, [emojiQuery, allAvailableEmojis, activeGuild?.name]);
 
   useEffect(() => {
@@ -1117,7 +1176,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             </span>
             <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
           </div>
-          <div className="space-y-0.5">
+          <div ref={slashListRef} className="space-y-0.5">
             {slashSuggestions.map((item, idx) => (
               <button
                 key={item.name}
@@ -1160,7 +1219,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             </span>
             <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
           </div>
-          <div className="space-y-0.5">
+          <div ref={slashChoiceListRef} className="space-y-0.5">
             {filteredSlashChoices.map((choice, idx) => (
               <button
                 key={choice.value}
@@ -1191,7 +1250,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             </span>
             <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
           </div>
-          <div className="space-y-0.5">
+          <div ref={slashUserListRef} className="space-y-0.5">
             {filteredSlashUsers.map((m, idx) => (
               <button
                 key={m.id}
@@ -1232,7 +1291,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               ↑↓ navegar • Enter / Tab selecionar • Enter enviar
             </span>
           </div>
-          <div className="space-y-0.5">
+          <div ref={slashOptionsListRef} className="space-y-0.5">
             {activeSlashOptions.map((opt, idx) => {
               const isSelected = activeSlash.activeOptionName === opt.name || selectedOptionIndex === idx;
               const hasValue = !!activeSlash.args[opt.name];
@@ -1284,7 +1343,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             </span>
             <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
           </div>
-          <div className="space-y-0.5">
+          <div ref={channelListRef} className="space-y-0.5">
             {channelSuggestions.map((ch, idx) => {
               const category = activeGuild?.channels?.find((c) => c.id === ch.category_id);
               const isVoice = ch.type === 'voice';
@@ -1329,7 +1388,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             </span>
             <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
           </div>
-          <div className="space-y-0.5">
+          <div ref={emojiListRef} className="space-y-0.5">
             {emojiSuggestions.map((item, idx) => (
               <button
                 key={item.id}
@@ -1380,7 +1439,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <span>Membros ({mentionSuggestions.length})</span>
             <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter para selecionar</span>
           </div>
-          <div className="space-y-0.5">
+          <div ref={mentionListRef} className="space-y-0.5">
             {mentionSuggestions.map((item, idx) => (
               <button
                 key={item.id}
