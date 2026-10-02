@@ -432,6 +432,29 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !actorCtx.IsOwner {
+		var targetIsOwner bool
+		if err := h.db.Pool.QueryRow(r.Context(), "SELECT owner_id = $1 FROM guilds WHERE id = $2", targetUserID, guildID).Scan(&targetIsOwner); err == nil && targetIsOwner {
+			http.Error(w, `{"error":"forbidden: não é possível alterar cargos do dono do servidor"}`, http.StatusForbidden)
+			return
+		}
+
+		if actorID != targetUserID {
+			var targetHighestPos int = 999999
+			_ = h.db.Pool.QueryRow(r.Context(), `
+				SELECT COALESCE(MIN(gr.position), 999999)
+				FROM guild_roles gr
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+				WHERE gmr.guild_id = $1 AND gmr.user_id = $2 AND gr.name != '@everyone'
+			`, guildID, targetUserID).Scan(&targetHighestPos)
+
+			if targetHighestPos <= actorCtx.MaxPos {
+				http.Error(w, `{"error":"forbidden: você não pode alterar cargos de um membro com hierarquia igual ou superior à sua"}`, http.StatusForbidden)
+				return
+			}
+		}
+	}
+
 	_, err = h.db.Pool.Exec(r.Context(), "INSERT INTO guild_member_roles (guild_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", guildID, targetUserID, roleID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to assign role"}`, http.StatusInternalServerError)
@@ -522,6 +545,29 @@ func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
 	if allowed, msg := actorCtx.canAssignRolePosition(rolePosition); !allowed {
 		http.Error(w, `{"error":"`+msg+`"}`, http.StatusForbidden)
 		return
+	}
+
+	if !actorCtx.IsOwner {
+		var targetIsOwner bool
+		if err := h.db.Pool.QueryRow(r.Context(), "SELECT owner_id = $1 FROM guilds WHERE id = $2", targetUserID, guildID).Scan(&targetIsOwner); err == nil && targetIsOwner {
+			http.Error(w, `{"error":"forbidden: não é possível alterar cargos do dono do servidor"}`, http.StatusForbidden)
+			return
+		}
+
+		if actorID != targetUserID {
+			var targetHighestPos int = 999999
+			_ = h.db.Pool.QueryRow(r.Context(), `
+				SELECT COALESCE(MIN(gr.position), 999999)
+				FROM guild_roles gr
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+				WHERE gmr.guild_id = $1 AND gmr.user_id = $2 AND gr.name != '@everyone'
+			`, guildID, targetUserID).Scan(&targetHighestPos)
+
+			if targetHighestPos <= actorCtx.MaxPos {
+				http.Error(w, `{"error":"forbidden: você não pode alterar cargos de um membro com hierarquia igual ou superior à sua"}`, http.StatusForbidden)
+				return
+			}
+		}
 	}
 
 	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2 AND role_id = $3", guildID, targetUserID, roleID)

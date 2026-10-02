@@ -515,9 +515,14 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     }
 
     // Change Roles Submenu
-    if (canManageRoles && guildRoles.length > 0 && (isCurrentOwner || isMe || isHierarchyAllowed)) {
+    if (canManageRoles && guildRoles.length > 0 && (isCurrentOwner || (!isTargetOwner && (isMe ? canManageRoles : isHierarchyAllowed)))) {
       const roleSubItems: ContextMenuItem[] = guildRoles
-        .filter((role) => role.name !== '@everyone')
+        .filter((role) => {
+          if (role.name === '@everyone') return false;
+          if (isCurrentOwner) return true;
+          const rolePos = typeof role.position === 'number' ? role.position : 999;
+          return rolePos > currentUserHighestPos;
+        })
         .map((role) => {
         const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
         return {

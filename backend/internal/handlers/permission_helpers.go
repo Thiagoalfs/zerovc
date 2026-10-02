@@ -61,7 +61,7 @@ func (ac actorGuildContext) canAssignRolePosition(rolePosition int) (bool, strin
 		return false, "você não tem permissão para gerenciar cargos"
 	}
 	if ac.MaxPos >= rolePosition {
-		return false, "você não pode atribuir um cargo igual ou superior ao seu"
+		return false, "você não pode gerenciar ou atribuir um cargo igual ou superior ao seu na hierarquia"
 	}
 	return true, ""
 }

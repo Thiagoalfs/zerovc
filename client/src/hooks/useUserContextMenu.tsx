@@ -156,11 +156,16 @@ export function useUserContextMenu() {
         const targetMember = activeGuild.members?.find((m) => m.id === targetUser.id) || targetUser;
         const mod = perms.canModerateMember(targetMember);
 
-        if (perms.isCurrentOwner || isMe || (!mod.isTargetOwner && mod.isHierarchyAllowed)) {
+        if (perms.isCurrentOwner || (!mod.isTargetOwner && (isMe ? perms.canManageRoles : mod.isHierarchyAllowed))) {
           // Change Roles Submenu
           if (perms.canManageRoles && activeGuild.roles && activeGuild.roles.length > 0) {
             const roleSubItems: ContextMenuItem[] = activeGuild.roles
-              .filter((role) => role.name !== '@everyone')
+              .filter((role) => {
+                if (role.name === '@everyone') return false;
+                if (perms.isCurrentOwner) return true;
+                const rolePos = typeof role.position === 'number' ? role.position : 999;
+                return rolePos > perms.currentUserHighestPos;
+              })
               .map((role) => {
                 const hasRole = (targetMember.roles || []).some((r: Role) => r.id === role.id);
                 return {
