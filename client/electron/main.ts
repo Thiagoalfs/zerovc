@@ -681,7 +681,7 @@ const KNOWN_GAMES_AND_APPS: Array<{
   type: DetectedActivity['type'];
 }> = [
   // Popular Games
-  { processes: ['minecraft.exe', 'bedrock_server.exe', 'minecraft.windows.exe', 'javaw.exe', 'java.exe', 'minecraftlauncher.exe'], name: 'Minecraft', type: 'playing' },
+  { processes: ['minecraft.exe', 'bedrock_server.exe', 'minecraft.windows.exe', 'javaw.exe'], name: 'Minecraft', type: 'playing' },
   { processes: ['leagueclient.exe', 'leagueclientux.exe', 'league of legends.exe'], name: 'League of Legends', type: 'playing' },
   { processes: ['valorant.exe', 'valorant-win64-shipping.exe'], name: 'VALORANT', type: 'playing' },
   { processes: ['tftclient.exe', 'tftclient-win64-shipping.exe'], name: 'Teamfight Tactics', type: 'playing' },
@@ -800,7 +800,7 @@ function startActiveActivityCloseWatcher() {
         setTimeout(scanProcessesForActivity, 300);
       }
     });
-  }, 2000);
+  }, 1200);
 }
 
 function stopActiveActivityCloseWatcher() {
@@ -1014,10 +1014,11 @@ function scanProcessesForActivity() {
     }
 
     if (foundMatch) {
-      activeActivityProcesses = foundMatch.processes;
+      const runningMatchingProcs = foundMatch.processes.filter((p) => procSet.has(p));
+      activeActivityProcesses = runningMatchingProcs.length > 0 ? runningMatchingProcs : foundMatch.processes;
       if (!lastDetectedActivity || lastDetectedActivity.name !== foundMatch.name) {
         const matchingItem = foundMatch;
-        getProcessIcon(matchingItem.name, matchingItem.processes).then((iconUrl) => {
+        getProcessIcon(matchingItem.name, activeActivityProcesses).then((iconUrl) => {
           lastDetectedActivity = {
             name: matchingItem.name,
             type: matchingItem.type,

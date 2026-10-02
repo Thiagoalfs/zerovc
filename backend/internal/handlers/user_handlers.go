@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -51,8 +52,20 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal(bodyBytes, &rawMap); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
 	var req UpdateProfileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
@@ -116,29 +129,29 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		          COALESCE(two_factor_secret, ''), email_verified,
 		          created_at, updated_at
 	`
-	hasCustomActivity := req.CustomActivity != nil
+	_, hasCustomActivity := rawMap["custom_activity"]
 	var customActivityBytes []byte
-	if hasCustomActivity && req.CustomActivity != nil {
-		customActivityBytes = *req.CustomActivity
-		if string(customActivityBytes) == "null" || len(customActivityBytes) == 0 {
-			customActivityBytes = nil
+	if hasCustomActivity {
+		rawVal := rawMap["custom_activity"]
+		if string(rawVal) != "null" && len(rawVal) > 0 {
+			customActivityBytes = rawVal
 		}
 	}
 
-	hasServerFolders := req.ServerFolders != nil
+	_, hasServerFolders := rawMap["server_folders"]
 	var serverFoldersBytes []byte
-	if hasServerFolders && req.ServerFolders != nil {
-		serverFoldersBytes = *req.ServerFolders
+	if hasServerFolders {
+		serverFoldersBytes = rawMap["server_folders"]
 	}
 
-	hasGuildPositions := req.GuildPositions != nil
+	_, hasGuildPositions := rawMap["guild_positions"]
 	var guildPositionsBytes []byte
-	if hasGuildPositions && req.GuildPositions != nil {
-		guildPositionsBytes = *req.GuildPositions
+	if hasGuildPositions {
+		guildPositionsBytes = rawMap["guild_positions"]
 	}
 
 	var user models.User
-	err := h.db.Pool.QueryRow(r.Context(), query,
+	err = h.db.Pool.QueryRow(r.Context(), query,
 		req.Username, req.PhoneNumber, req.DisplayName, req.AvatarURL, req.BannerURL, req.Bio, req.Status, req.CustomStatus,
 		hasCustomActivity, customActivityBytes, req.ShowActivityStatus, req.AutoDetectActivity,
 		hasServerFolders, serverFoldersBytes, hasGuildPositions, guildPositionsBytes,
