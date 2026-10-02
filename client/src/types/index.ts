@@ -31,6 +31,18 @@ export interface CustomActivity {
   icon_url?: string;
 }
 
+export interface GameSearchResult {
+  id: number;
+  name: string;
+  slug: string;
+  background_image?: string;
+  icon_url?: string;
+  genres?: string[];
+  platforms?: string[];
+  released?: string;
+  rating?: number;
+}
+
 export interface ServerFolder {
   id: string;
   name: string;

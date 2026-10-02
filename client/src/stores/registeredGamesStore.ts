@@ -11,17 +11,6 @@ export interface RegisteredGame {
   icon_url?: string;
 }
 
-const DEFAULT_GAMES: RegisteredGame[] = [
-  { id: 'game-osu', name: 'osu!', lastPlayed: Date.now() - 2 * 3600 * 1000, enabled: true, isVerified: true },
-  { id: 'game-lol', name: 'League of Legends', lastPlayed: Date.now() - 11 * 3600 * 1000, enabled: true, isVerified: true },
-  { id: 'game-wallpaper-engine', name: 'Wallpaper Engine', lastPlayed: Date.now() - 3 * 86400 * 1000, enabled: true, isVerified: false },
-  { id: 'game-roblox', name: 'ROBLOX', lastPlayed: Date.now() - 7 * 86400 * 1000, enabled: true, isVerified: true },
-  { id: 'game-overwatch', name: 'Overwatch', lastPlayed: Date.now() - 7 * 86400 * 1000, enabled: true, isVerified: true },
-  { id: 'game-nte', name: 'NTE: Neverness to Everness', lastPlayed: Date.now() - 7 * 86400 * 1000, enabled: true, isVerified: true },
-  { id: 'game-peak', name: 'PEAK', lastPlayed: Date.now() - 12 * 86400 * 1000, enabled: true, isVerified: true },
-  { id: 'game-valorant', name: 'VALORANT', lastPlayed: Date.now() - 14 * 86400 * 1000, enabled: true, isVerified: true },
-];
-
 interface RegisteredGamesState {
   games: RegisteredGame[];
   addOrUpdateGame: (name: string, isVerified?: boolean, executable?: string, icon_url?: string) => void;
@@ -35,7 +24,7 @@ interface RegisteredGamesState {
 export const useRegisteredGamesStore = create<RegisteredGamesState>()(
   persist(
     (set, get) => ({
-      games: DEFAULT_GAMES,
+      games: [],
 
       addOrUpdateGame: (name: string, isVerified = false, executable?: string, icon_url?: string) => {
         if (!name || !name.trim()) return;
