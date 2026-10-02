@@ -285,101 +285,39 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     });
   };
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleMessageContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
     const author = message.author;
     if (!author) return;
 
-    const isMe = author.id === user?.id;
-    const isChannel = contextType === 'channel';
-    const isTargetOwner = isChannel && activeGuild ? author.id === activeGuild.owner_id : false;
-    const isCurrentOwner = isChannel && activeGuild ? activeGuild.owner_id === user?.id : false;
-    const guildRoles = isChannel && activeGuild ? activeGuild.roles || [] : [];
-
-    // Calculate current user's permissions and position
-    const currentUserRoles = isChannel && activeGuild ? (activeGuild.members?.find((m) => m.id === user?.id)?.roles || []) : [];
-    let currentUserPerms = 0;
-    let currentUserHighestPos = 999999;
-    currentUserRoles.forEach((r) => {
-      currentUserPerms |= Number(r.permissions || 0);
-      if (r.position < currentUserHighestPos) {
-        currentUserHighestPos = r.position;
-      }
-    });
-
-    const hasAdmin = isCurrentOwner || (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
-    const canManageRoles = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_ROLES) !== 0;
-    const canKick = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.KICK_MEMBERS) !== 0;
-    const canBan = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.BAN_MEMBERS) !== 0;
-    const canMute = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_MEMBERS) !== 0;
-
-    // Calculate target member's highest position
-    const targetMember = isChannel && activeGuild ? activeGuild.members?.find((m) => m.id === author.id) : null;
-    let targetHighestPos = 999999;
-    (targetMember?.roles || []).forEach((r) => {
-      if (r.position < targetHighestPos) {
-        targetHighestPos = r.position;
-      }
-    });
-
-    const isHierarchyAllowed = isCurrentOwner || currentUserHighestPos < targetHighestPos;
-
     const items: ContextMenuItem[] = [
       {
-        label: 'Ver Perfil',
-        icon: <UserIcon className="w-4 h-4" />,
-        onClick: () => onOpenUserProfile?.(author, { x: e.clientX, y: e.clientY }),
+        label: 'Responder',
+        icon: <Reply className="w-4 h-4" />,
+        onClick: () => onReply?.(message),
+      },
+      {
+        label: message.is_pinned ? 'Desafixar Mensagem' : 'Fixar Mensagem',
+        icon: <Pin className="w-4 h-4" />,
+        onClick: () => handleActionTogglePin(message.id),
       },
     ];
 
-    if (!isMe) {
+    if (message.content) {
       items.push({
-        label: 'Enviar Mensagem',
-        icon: <MessageSquare className="w-4 h-4" />,
-        onClick: async () => {
-          if (onOpenDM) {
-            onOpenDM(author.id);
-          } else {
-            await openDMWithUser(author.id);
-          }
-        },
+        label: 'Copiar Texto',
+        icon: <Copy className="w-4 h-4" />,
+        onClick: () => copyToClipboard(message.content),
       });
 
-      items.push({ label: '', separator: true });
       items.push({
-        label: 'Volume de Usuário',
-        customRender: <UserVolumeSlider userId={author.id} />,
+        label: 'Ouvir Mensagem',
+        icon: <Volume2 className="w-4 h-4 text-brand-400" />,
+        onClick: () => speakText(message.content, author.display_name || author.username),
       });
     }
-
-    // Message Specific Actions
-    items.push({ label: '', separator: true });
-
-    items.push({
-      label: 'Responder',
-      icon: <Reply className="w-4 h-4" />,
-      onClick: () => onReply?.(message),
-    });
-
-    items.push({
-      label: message.is_pinned ? 'Desafixar Mensagem' : 'Fixar Mensagem',
-      icon: <Pin className="w-4 h-4" />,
-      onClick: () => handleActionTogglePin(message.id),
-    });
-
-    items.push({
-      label: 'Copiar Texto',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => copyToClipboard(message.content),
-    });
-
-    items.push({
-      label: 'Ouvir Mensagem (TTS)',
-      icon: <Volume2 className="w-4 h-4 text-brand-400" />,
-      onClick: () => speakText(message.content, author.display_name || author.username),
-    });
 
     if (isAuthor) {
       items.push({
@@ -398,130 +336,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       });
     }
 
-    // Server Member Moderation Actions (only in server channel context)
-    if (isChannel && activeGuild && targetMember && (isCurrentOwner || isMe || (!isTargetOwner && isHierarchyAllowed))) {
-      // Change Roles Submenu
-      if (canManageRoles && guildRoles.length > 0) {
-        const roleSubItems: ContextMenuItem[] = guildRoles
-          .filter((role) => role.name !== '@everyone')
-          .map((role) => {
-          const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
-          return {
-            label: role.name,
-            icon: hasRole ? (
-              <Check className="w-3.5 h-3.5 text-online" />
-            ) : (
-              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
-            ),
-            onClick: async () => {
-              if (hasRole) {
-                await removeRole(activeGuild.id, targetMember.id, role.id);
-              } else {
-                await assignRole(activeGuild.id, targetMember.id, role.id);
-              }
-            },
-          };
-        });
-
-        items.push({
-          label: 'Alterar Cargos',
-          icon: <Shield className="w-4 h-4 text-brand-400" />,
-          subItems: roleSubItems,
-        });
-      }
-
-      // Timeout / Mute Submenu
-      if (canMute) {
-        const isMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
-        const muteSubItems: ContextMenuItem[] = [
-          {
-            label: 'Por 60 segundos',
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 60),
-          },
-          {
-            label: 'Por 5 minutos',
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 300),
-          },
-          {
-            label: 'Por 1 hora',
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
-          },
-          {
-            label: 'Por 1 dia',
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
-          },
-          { label: '', separator: true },
-          {
-            label: 'Remover Silenciamento',
-            onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
-          },
-        ];
-
-        items.push({
-          label: isMuted ? 'Membro Silenciado' : 'Silenciar Membro',
-          icon: <VolumeX className="w-4 h-4 text-amber-400" />,
-          subItems: muteSubItems,
-        });
-      }
-
-      // Kick & Ban (only for other members)
-      if (!isMe && !isTargetOwner && isHierarchyAllowed) {
-        if (canKick) {
-          items.push({
-            label: `Expulsar ${targetMember.display_name || targetMember.username}`,
-            icon: <UserMinus className="w-4 h-4 text-amber-400" />,
-            variant: 'danger',
-            onClick: () => {
-              if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
-                kickMember(activeGuild.id, targetMember.id);
-              }
-            },
-          });
-        }
-
-        if (canBan) {
-          items.push({
-            label: `Banir ${targetMember.display_name || targetMember.username}`,
-            icon: <Ban className="w-4 h-4 text-dnd" />,
-            variant: 'danger',
-            onClick: () => {
-              if (confirm(`Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor?`)) {
-                banMember(activeGuild.id, targetMember.id);
-              }
-            },
-          });
-        }
-      }
-    }
-
-    if (!isMe) {
-      items.push({ label: '', separator: true });
-      items.push({
-        label: 'Bloquear Usuário',
-        icon: <UserX className="w-4 h-4 text-dnd" />,
-        variant: 'danger',
-        onClick: async () => {
-          if (confirm(`Deseja bloquear @${author.username}? Você não receberá mais mensagens diretas deste usuário.`)) {
-            await api.users.block(author.id);
-          }
-        },
-      });
-    }
-
-    // IDs at the very bottom
     items.push({ label: '', separator: true });
     items.push({
       label: 'Copiar ID da Mensagem',
       icon: <Copy className="w-4 h-4" />,
       onClick: () => copyToClipboard(message.id),
     });
-    items.push({
-      label: 'Copiar ID do Usuário',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => copyToClipboard(author.id),
-    });
 
-    openContextMenu(e, items, `@${author.username}`);
+    openContextMenu(e, items);
   };
 
   // Mobile Swipe to Reply & Long-Press state
@@ -540,7 +362,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     // Start long press timer (420ms)
     longPressTimerRef.current = setTimeout(() => {
       hapticMedium();
-      handleContextMenu({
+      handleMessageContextMenu({
         clientX: touch.clientX,
         clientY: touch.clientY,
         preventDefault: () => {},
@@ -724,7 +546,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     <>
       <div
         id={`msg-${message.id}`}
-        onContextMenu={isSending || isFailed ? undefined : handleContextMenu}
+        onContextMenu={isSending || isFailed ? undefined : handleMessageContextMenu}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -1003,6 +825,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     e.stopPropagation();
                     message.author && onOpenUserProfile?.(message.author, { x: e.clientX, y: e.clientY });
                   }}
+                  onContextMenu={(e) => {
+                    e.stopPropagation();
+                    if (message.author) handleUserContextMenu(e, message.author);
+                  }}
                   title="Ver perfil"
                 />
               )}
@@ -1015,6 +841,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         message.author && onOpenUserProfile?.(message.author, { x: e.clientX, y: e.clientY });
+                      }}
+                      onContextMenu={(e) => {
+                        e.stopPropagation();
+                        if (message.author) handleUserContextMenu(e, message.author);
                       }}
                       className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
                       style={authorRoleColor ? { color: authorRoleColor } : undefined}
