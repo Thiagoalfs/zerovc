@@ -681,7 +681,7 @@ const KNOWN_GAMES_AND_APPS: Array<{
   type: DetectedActivity['type'];
 }> = [
   // Popular Games
-  { processes: ['minecraft.exe', 'bedrock_server.exe', 'minecraft.windows.exe'], name: 'Minecraft', type: 'playing' },
+  { processes: ['minecraft.exe', 'bedrock_server.exe', 'minecraft.windows.exe', 'javaw.exe', 'java.exe', 'minecraftlauncher.exe'], name: 'Minecraft', type: 'playing' },
   { processes: ['leagueclient.exe', 'leagueclientux.exe', 'league of legends.exe'], name: 'League of Legends', type: 'playing' },
   { processes: ['valorant.exe', 'valorant-win64-shipping.exe'], name: 'VALORANT', type: 'playing' },
   { processes: ['tftclient.exe', 'tftclient-win64-shipping.exe'], name: 'Teamfight Tactics', type: 'playing' },
@@ -850,9 +850,27 @@ async function getProcessIcon(gameName: string, processNames: string[]): Promise
       return undefined;
     };
 
-    if (process.platform === 'win32') {
-      const lowerGameName = (gameName || '').toLowerCase();
+    const lowerGameName = (gameName || '').toLowerCase();
 
+    // Priority: Minecraft official 3D grass block icon
+    if (lowerGameName === 'minecraft') {
+      const mcCandidates = [
+        path.join(__dirname, '..', 'public', 'icons', 'games', 'minecraft.png'),
+        path.join(__dirname, '..', 'dist', 'icons', 'games', 'minecraft.png'),
+        path.join(__dirname, 'icons', 'games', 'minecraft.png'),
+        path.join(process.resourcesPath, 'icons', 'games', 'minecraft.png'),
+      ];
+      for (const mcCand of mcCandidates) {
+        const icon = await loadFileAsIconDataUrl(mcCand);
+        if (icon) {
+          gameIconCache.set(cacheKey, icon);
+          return icon;
+        }
+      }
+      return '/icons/games/minecraft.png';
+    }
+
+    if (process.platform === 'win32') {
       // 1. Direct Known Launcher Metadata (Riot Games, etc.)
       const riotMetadataMap: Record<string, string> = {
         'league of legends': 'C:/ProgramData/Riot Games/Metadata/league_of_legends.live/league_of_legends.live.ico',

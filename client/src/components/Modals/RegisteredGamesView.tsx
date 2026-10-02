@@ -140,13 +140,13 @@ export const RegisteredGamesView: React.FC = () => {
   };
 
   const handleSelectRawgGame = async (game: GameSearchResult) => {
-    const iconUrl = game.background_image || game.icon_url || '';
+    const iconUrl = game.name.toLowerCase() === 'minecraft' ? '/icons/games/minecraft.png' : (game.icon_url || game.background_image || '');
     addOrUpdateGame(game.name, true, undefined, iconUrl);
     setCustomGameName('');
     setRawgResults([]);
     setIsAddingGame(false);
 
-    // Set as active running game immediately with official cover art
+    // Set as active running game immediately with official icon
     const newActivity = {
       name: game.name,
       type: 'playing' as const,
@@ -172,9 +172,11 @@ export const RegisteredGamesView: React.FC = () => {
 
     // Check if the top rawg match matches the exact name
     const topMatch = rawgResults[0];
-    const iconUrl = topMatch && topMatch.name.toLowerCase() === name.toLowerCase()
-      ? topMatch.background_image || topMatch.icon_url
-      : undefined;
+    const iconUrl = name.toLowerCase() === 'minecraft'
+      ? '/icons/games/minecraft.png'
+      : (topMatch && topMatch.name.toLowerCase() === name.toLowerCase()
+        ? topMatch.icon_url || topMatch.background_image
+        : undefined);
 
     addOrUpdateGame(name, !!iconUrl, undefined, iconUrl);
     setCustomGameName('');
@@ -245,7 +247,7 @@ export const RegisteredGamesView: React.FC = () => {
                 <img
                   src={currentRunningGame.icon_url}
                   alt=""
-                  className="w-9 h-9 rounded-xl object-cover bg-white/5 border border-white/10 shrink-0 shadow-sm"
+                  className="w-9 h-9 rounded-xl object-contain p-0.5 bg-white/5 border border-white/10 shrink-0 shadow-sm"
                 />
               ) : (
                 <div className="w-9 h-9 rounded-xl bg-white/5 text-brand-400 flex items-center justify-center shrink-0">
@@ -390,11 +392,11 @@ export const RegisteredGamesView: React.FC = () => {
                       className="group/item flex items-center justify-between p-2 bg-background-darkest hover:bg-brand-500/15 border border-white/5 hover:border-brand-500/40 rounded-xl transition-all cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        {rawgGame.background_image || rawgGame.icon_url ? (
+                        {rawgGame.icon_url || rawgGame.background_image ? (
                           <img
-                            src={rawgGame.background_image || rawgGame.icon_url}
+                            src={rawgGame.icon_url || rawgGame.background_image}
                             alt=""
-                            className="w-11 h-11 rounded-lg object-cover bg-white/5 border border-white/10 shrink-0 shadow-sm"
+                            className="w-11 h-11 rounded-lg object-contain p-0.5 bg-white/5 border border-white/10 shrink-0 shadow-sm"
                           />
                         ) : (
                           <div className="w-11 h-11 rounded-lg bg-white/5 text-gray-400 flex items-center justify-center shrink-0">
@@ -490,7 +492,7 @@ export const RegisteredGamesView: React.FC = () => {
                   <img
                     src={game.icon_url}
                     alt=""
-                    className="w-8 h-8 rounded-xl object-cover bg-white/5 border border-white/10 shrink-0"
+                    className="w-8 h-8 rounded-xl object-contain p-0.5 bg-white/5 border border-white/10 shrink-0"
                   />
                 ) : (
                   <div className="w-8 h-8 rounded-xl bg-white/5 text-gray-400 flex items-center justify-center shrink-0">
