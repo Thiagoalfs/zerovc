@@ -1229,6 +1229,8 @@ ipcMain.handle('stop-process-audio-capture', async () => {
   return { success: true };
 });
 
+let lastWorkingCookieBrowser: string | null = null;
+
 // yt-dlp Local Processing IPC
 ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | 'mp3'; link: string }) => {
   try {
@@ -1269,48 +1271,108 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
 
     const outTemplate = path.join(docsDir, `dl_${Date.now()}_%(id)s.%(ext)s`);
 
-    const args: string[] = [
-      '--no-playlist',
-      '--no-warnings',
-      '--restrict-filenames',
-      '--print', 'after_move:filepath',
-      '--print', 'title',
-      '-o', outTemplate,
+    const BROWSER_CANDIDATES = [
+      'firefox',
+      'brave',
+      'chrome',
+      'edge',
+      'opera',
+      'vivaldi',
+      'chromium',
+      'safari',
     ];
 
-    if (format === 'mp3') {
-      args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0', '--max-filesize', '50M');
-    } else {
-      args.push(
-        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        '--merge-output-format', 'mp4',
-        '--max-filesize', '100M'
-      );
+    // Order of attempts: cached working browser first, then all candidate browsers, then without cookies
+    const attemptsToTry: Array<string | null> = [];
+    if (lastWorkingCookieBrowser && BROWSER_CANDIDATES.includes(lastWorkingCookieBrowser)) {
+      attemptsToTry.push(lastWorkingCookieBrowser);
+    }
+    for (const b of BROWSER_CANDIDATES) {
+      if (!attemptsToTry.includes(b)) {
+        attemptsToTry.push(b);
+      }
+    }
+    attemptsToTry.push(null); // Fallback attempt without browser cookies
+
+    let result: { ok: boolean; stdout: string; stderr: string; browserUsed?: string | null } = {
+      ok: false,
+      stdout: '',
+      stderr: '',
+    };
+
+    for (const browser of attemptsToTry) {
+      const args: string[] = [
+        '--no-playlist',
+        '--no-warnings',
+        '--restrict-filenames',
+        '--print', 'after_move:filepath',
+        '--print', 'title',
+        '-o', outTemplate,
+      ];
+
+      if (browser) {
+        args.push('--cookies-from-browser', browser);
+      }
+
+      if (format === 'mp3') {
+        args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0', '--max-filesize', '50M');
+      } else {
+        args.push(
+          '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+          '--merge-output-format', 'mp4',
+          '--max-filesize', '100M'
+        );
+      }
+
+      args.push(cleanUrl);
+
+      console.log(`[yt-dlp] Attempting download with browser cookies: ${browser || 'none'} for ${cleanUrl} (${format})`);
+
+      const execution = await new Promise<{ ok: boolean; stdout: string; stderr: string }>((resolve) => {
+        const proc = spawn('yt-dlp', args, { windowsHide: true });
+        let stdout = '';
+        let stderr = '';
+
+        proc.stdout.on('data', (d) => { stdout += d.toString(); });
+        proc.stderr.on('data', (d) => { stderr += d.toString(); });
+
+        proc.on('close', (code) => {
+          resolve({ ok: code === 0, stdout, stderr });
+        });
+
+        proc.on('error', (err) => {
+          resolve({ ok: false, stdout, stderr: err.message });
+        });
+      });
+
+      result = { ...execution, browserUsed: browser };
+
+      if (execution.ok) {
+        if (browser) {
+          lastWorkingCookieBrowser = browser;
+          console.log(`[yt-dlp] Download succeeded using cookies from: ${browser}`);
+        }
+        break;
+      }
+
+      // If failed due to cookie database error (locked, not found, DPAPI error), continue to next browser
+      const errLower = execution.stderr.toLowerCase();
+      const isCookieIssue =
+        errLower.includes('cookie') ||
+        errLower.includes('could not find') ||
+        errLower.includes('failed to decrypt') ||
+        errLower.includes('could not copy');
+
+      if (!isCookieIssue && browser) {
+        // If it's a fatal error unrelated to cookies (e.g. video unavailable / private / filesize), don't loop endlessly
+        if (errLower.includes('is larger than max-filesize') || errLower.includes('private video') || errLower.includes('video unavailable')) {
+          break;
+        }
+      }
     }
 
-    args.push(cleanUrl);
-
-    console.log(`[yt-dlp] Starting local download: ${cleanUrl} (${format})`);
-
-    const result = await new Promise<{ ok: boolean; stdout: string; stderr: string }>((resolve) => {
-      const proc = spawn('yt-dlp', args, { windowsHide: true });
-      let stdout = '';
-      let stderr = '';
-
-      proc.stdout.on('data', (d) => { stdout += d.toString(); });
-      proc.stderr.on('data', (d) => { stderr += d.toString(); });
-
-      proc.on('close', (code) => {
-        resolve({ ok: code === 0, stdout, stderr });
-      });
-
-      proc.on('error', (err) => {
-        resolve({ ok: false, stdout, stderr: err.message });
-      });
-    });
-
     if (!result.ok) {
-      console.error(`[yt-dlp] Execution failed:`, result.stderr);
+      console.error(`[yt-dlp] Execution failed across browser attempts:`, result.stderr);
       let userError = 'Erro ao processar mídia com yt-dlp.';
       if (result.stderr.includes('is larger than max-filesize')) {
         userError = 'O arquivo é muito grande (máximo 50MB para áudio / 100MB para vídeo).';
@@ -1318,6 +1380,8 @@ ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | '
         userError = 'Vídeo privado ou indisponível.';
       } else if (result.stderr.includes('ENOENT') || result.stderr.includes('not found')) {
         userError = 'yt-dlp não está instalado ou acessível no PATH do computador.';
+      } else if (result.stderr.includes('Sign in to confirm you’re not a bot') || result.stderr.includes('bot')) {
+        userError = 'O YouTube solicitou verificação de bot. Abra seu navegador (Firefox/Brave/Chrome) logado para sincronizar os cookies.';
       }
       return { success: false, error: userError };
     }
