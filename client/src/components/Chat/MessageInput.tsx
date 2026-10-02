@@ -79,6 +79,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   // Active Discord-Style Slash Command Pill Mode State
   const [activeSlash, setActiveSlash] = useState<ActiveSlashState | null>(null);
+  const [selectedOptionIndex, setSelectedOptionIndex] = useState<number>(-1);
   const optionInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const commandContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -454,6 +455,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       activeOptionName: initialOption,
     });
 
+    setSelectedOptionIndex(firstReq ? 0 : -1);
     setContent('');
     setSelectedSlashIndex(0);
     setSlashChoiceIndex(0);
@@ -487,6 +489,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       args: newArgs,
       activeOptionName: remainingReq.length > 0 ? remainingReq[0].name : null,
     });
+    setSelectedOptionIndex(-1);
     setSlashChoiceIndex(0);
   };
 
@@ -502,6 +505,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       args: newArgs,
       activeOptionName: remainingReq.length > 0 ? remainingReq[0].name : null,
     });
+    setSelectedOptionIndex(-1);
     setSlashUserIndex(0);
   };
 
@@ -512,6 +516,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       ...activeSlash,
       activeOptionName: optName,
     });
+    const idx = activeSlashOptions.findIndex((o) => o.name === optName);
+    setSelectedOptionIndex(idx >= 0 ? idx : -1);
     setSlashChoiceIndex(0);
     setSlashUserIndex(0);
   };
@@ -535,7 +541,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     // Special LoL rule: If riot_id is provided, region is required
     if (activeSlash.command.name === 'league' && activeSlash.args['riot_id']?.trim()) {
       if (!activeSlash.args['region']?.trim()) {
-        // Automatically default to BR if not specified or prompt
         activeSlash.args['region'] = 'BR';
       }
     }
@@ -552,6 +557,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     // Reset slash state immediately
     setActiveSlash(null);
+    setSelectedOptionIndex(-1);
     setContent('');
 
     if (commandName === 'yt-dlp' || commandName === 'ytdlp') {
@@ -648,12 +654,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       const currentIdx = activeSlashOptions.findIndex((o) => o.name === opt.name);
       if (currentIdx > 0) {
         setActiveSlash((prev) => (prev ? { ...prev, args: newArgs, activeOptionName: activeSlashOptions[currentIdx - 1].name } : null));
+        setSelectedOptionIndex(currentIdx - 1);
       } else {
         const nextOpt = activeSlashOptions.find((o, idx) => idx > 0 && newArgs[o.name]);
         if (nextOpt) {
           setActiveSlash((prev) => (prev ? { ...prev, args: newArgs, activeOptionName: nextOpt.name } : null));
+          const nIdx = activeSlashOptions.findIndex((o) => o.name === nextOpt.name);
+          setSelectedOptionIndex(nIdx >= 0 ? nIdx : -1);
         } else {
           setActiveSlash((prev) => (prev ? { ...prev, args: newArgs, activeOptionName: null } : null));
+          setSelectedOptionIndex(-1);
         }
       }
       return;
@@ -665,14 +675,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       // Special LoL rule: if editing riot_id, jump directly to region
       if (opt.name === 'riot_id' && activeSlash?.command.name === 'league') {
         setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: 'region' } : null));
+        const rIdx = activeSlashOptions.findIndex((o) => o.name === 'region');
+        setSelectedOptionIndex(rIdx >= 0 ? rIdx : -1);
         return;
       }
       const otherOpts = activeSlashOptions.filter((o) => o.name !== opt.name);
       if (otherOpts.length > 0) {
         const next = otherOpts.find((o) => !activeSlash?.args[o.name]) || otherOpts[0];
         setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: next.name } : null));
+        const nIdx = activeSlashOptions.findIndex((o) => o.name === next.name);
+        setSelectedOptionIndex(nIdx >= 0 ? nIdx : -1);
       } else {
         setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: null } : null));
+        setSelectedOptionIndex(-1);
       }
       return;
     }
@@ -683,6 +698,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       // Special LoL rule: if finished typing riot_id and region is empty, open region choice!
       if (opt.name === 'riot_id' && activeSlash?.command.name === 'league' && !activeSlash?.args['region']) {
         setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: 'region' } : null));
+        const rIdx = activeSlashOptions.findIndex((o) => o.name === 'region');
+        setSelectedOptionIndex(rIdx >= 0 ? rIdx : -1);
         return;
       }
 
@@ -691,6 +708,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       );
       if (missingReq) {
         setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: missingReq.name } : null));
+        const mIdx = activeSlashOptions.findIndex((o) => o.name === missingReq.name);
+        setSelectedOptionIndex(mIdx >= 0 ? mIdx : -1);
         return;
       }
       handleSendActiveSlash();
@@ -701,6 +720,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     if (e.key === 'Escape') {
       e.preventDefault();
       setActiveSlash(null);
+      setSelectedOptionIndex(-1);
       setContent('');
       return;
     }
@@ -1209,20 +1229,21 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               <span>OPTIONS</span>
             </span>
             <span className="text-[9px] font-normal text-gray-500">
-              {activeSlashOptions.some((o) => o.required) ? 'Preencha os campos obrigatórios' : 'Pressione Enter para enviar sem argumentos ou selecione uma opção acima'}
+              ↑↓ navegar • Enter / Tab selecionar • Enter enviar
             </span>
           </div>
           <div className="space-y-0.5">
-            {activeSlashOptions.map((opt) => {
-              const isSelected = activeSlash.activeOptionName === opt.name;
+            {activeSlashOptions.map((opt, idx) => {
+              const isSelected = activeSlash.activeOptionName === opt.name || selectedOptionIndex === idx;
               const hasValue = !!activeSlash.args[opt.name];
               return (
                 <button
                   key={opt.name}
                   type="button"
                   onClick={() => selectOptionToFocus(opt.name)}
+                  onMouseEnter={() => setSelectedOptionIndex(idx)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
-                    isSelected ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                    isSelected ? 'bg-brand-500/25 text-white ring-1 ring-brand-500/40' : 'text-gray-300 hover:bg-white/5'
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -1533,30 +1554,60 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               ref={commandContainerRef}
               className="flex-1 flex flex-wrap items-center gap-1.5 min-h-[30px] py-0.5"
             >
-              {/* Invisible input when no specific pill is focused to capture Enter/Escape/Backspace */}
+              {/* Invisible input when no specific pill is focused to capture Enter/Escape/Backspace/Arrows */}
               {activeSlash.activeOptionName === null && (
                 <input
                   type="text"
                   className="w-0 h-0 opacity-0 pointer-events-none absolute"
                   autoFocus
                   onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      if (activeSlashOptions.length > 0) {
+                        e.preventDefault();
+                        setSelectedOptionIndex((prev) => (prev + 1) % activeSlashOptions.length);
+                      }
+                      return;
+                    }
+                    if (e.key === 'ArrowUp') {
+                      if (activeSlashOptions.length > 0) {
+                        e.preventDefault();
+                        setSelectedOptionIndex((prev) => (prev <= 0 ? activeSlashOptions.length - 1 : prev - 1));
+                      }
+                      return;
+                    }
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      handleSendActiveSlash();
-                    } else if (e.key === 'Tab') {
-                      e.preventDefault();
-                      if (activeSlashOptions.length > 0) {
-                        selectOptionToFocus(activeSlashOptions[0].name);
+                      if (selectedOptionIndex >= 0 && selectedOptionIndex < activeSlashOptions.length) {
+                        selectOptionToFocus(activeSlashOptions[selectedOptionIndex].name);
+                      } else {
+                        handleSendActiveSlash();
                       }
-                    } else if (e.key === 'Backspace') {
+                      return;
+                    }
+                    if (e.key === 'Tab') {
+                      e.preventDefault();
+                      const targetIdx = selectedOptionIndex >= 0 ? selectedOptionIndex : 0;
+                      if (activeSlashOptions.length > 0) {
+                        selectOptionToFocus(activeSlashOptions[targetIdx].name);
+                      }
+                      return;
+                    }
+                    if (e.key === 'Backspace') {
                       e.preventDefault();
                       const cmdStr = `/${activeSlash.command.name}${activeSlash.subcommand ? ' ' + activeSlash.subcommand.name : ''}`;
                       setActiveSlash(null);
                       setContent(cmdStr);
-                    } else if (e.key === 'Escape') {
+                      return;
+                    }
+                    if (e.key === 'Escape') {
                       e.preventDefault();
-                      setActiveSlash(null);
-                      setContent('');
+                      if (selectedOptionIndex >= 0) {
+                        setSelectedOptionIndex(-1);
+                      } else {
+                        setActiveSlash(null);
+                        setContent('');
+                      }
+                      return;
                     }
                   }}
                 />
