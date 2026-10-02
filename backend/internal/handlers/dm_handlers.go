@@ -687,20 +687,46 @@ func (h *DMHandler) AcceptCall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch user details for token generation
-	var currentName, otherName string
-	h.db.Pool.QueryRow(r.Context(), "SELECT COALESCE(display_name, username) FROM users WHERE id = $1", userID).Scan(&currentName)
-	h.db.Pool.QueryRow(r.Context(), "SELECT COALESCE(display_name, username) FROM users WHERE id = $1", otherUserID).Scan(&otherName)
+	var currentU, otherU models.UserPublic
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, username, COALESCE(display_name, ''), COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(status, 'offline'), COALESCE(custom_status, '') FROM users WHERE id = $1", userID).Scan(
+		&currentU.ID, &currentU.Username, &currentU.DisplayName, &currentU.AvatarURL, &currentU.BannerURL, &currentU.Bio, &currentU.Status, &currentU.CustomStatus,
+	)
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, username, COALESCE(display_name, ''), COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(status, 'offline'), COALESCE(custom_status, '') FROM users WHERE id = $1", otherUserID).Scan(
+		&otherU.ID, &otherU.Username, &otherU.DisplayName, &otherU.AvatarURL, &otherU.BannerURL, &otherU.Bio, &otherU.Status, &otherU.CustomStatus,
+	)
+
+	currentMetaJSON, _ := json.Marshal(map[string]any{
+		"avatar_url":    currentU.AvatarURL,
+		"display_name":  currentU.DisplayName,
+		"username":      currentU.Username,
+		"custom_status": currentU.CustomStatus,
+	})
+	otherMetaJSON, _ := json.Marshal(map[string]any{
+		"avatar_url":    otherU.AvatarURL,
+		"display_name":  otherU.DisplayName,
+		"username":      otherU.Username,
+		"custom_status": otherU.CustomStatus,
+	})
 
 	livekitRoomName := "dm-" + roomID.String()
 
+	currentName := currentU.DisplayName
+	if currentName == "" {
+		currentName = currentU.Username
+	}
+	otherName := otherU.DisplayName
+	if otherName == "" {
+		otherName = otherU.Username
+	}
+
 	// Generate LiveKit tokens
-	tokenAcceptor, err := h.livekit.GenerateJoinToken(livekitRoomName, userID, currentName, "", true)
+	tokenAcceptor, err := h.livekit.GenerateJoinToken(livekitRoomName, userID, currentName, string(currentMetaJSON), true)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate voice token"}`, http.StatusInternalServerError)
 		return
 	}
 
-	tokenCaller, err := h.livekit.GenerateJoinToken(livekitRoomName, otherUserID, otherName, "", true)
+	tokenCaller, err := h.livekit.GenerateJoinToken(livekitRoomName, otherUserID, otherName, string(otherMetaJSON), true)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate voice token"}`, http.StatusInternalServerError)
 		return

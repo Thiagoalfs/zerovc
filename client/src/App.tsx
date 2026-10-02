@@ -1071,7 +1071,9 @@ export const App: React.FC = () => {
       };
 
       const handleMessagePin = (event: any) => {
-        if (event.data?.room_id) {
+        if (event.data?.group_id) {
+          useDMGroupStore.getState().handleGroupPinEvent(event.data);
+        } else if (event.data?.room_id) {
           useDMStore.getState().handlePinEvent(event.data);
         } else {
           useGuildStore.getState().handlePinEvent(event.data);

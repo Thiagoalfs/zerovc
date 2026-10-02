@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { isGif, cropImageToWebP } from '../../utils/image';
 
-export type CropType = 'avatar' | 'banner' | 'guildIcon' | 'guildBanner';
+export type CropType = 'avatar' | 'banner' | 'guildIcon' | 'guildBanner' | 'groupIcon';
 
 interface ImageCropModalProps {
   isOpen: boolean;

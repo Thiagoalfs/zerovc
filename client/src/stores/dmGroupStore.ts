@@ -13,6 +13,8 @@ interface DMGroupState {
   groupUnreadCounts: Record<string, number>;
   firstUnreadMessageIdByGroup: Record<string, string | null>;
   messagesByGroup: Record<string, DMGroupMessage[]>;
+  pinnedMessagesByGroup: Record<string, DMGroupMessage[]>;
+  isLoadingPinned: Record<string, boolean>;
   hasMoreByGroup: Record<string, boolean>;
   isLoadingGroups: boolean;
   isLoadingMessages: boolean;
@@ -24,6 +26,7 @@ interface DMGroupState {
   markGroupAsRead: (groupId: string) => void;
   clearUnreadDivider: (groupId: string) => void;
   loadMoreMessages: (groupId: string) => Promise<void>;
+  fetchPinnedMessages: (groupId: string) => Promise<void>;
   createGroup: (name?: string, memberIds?: string[]) => Promise<DMGroup>;
   updateGroup: (groupId: string, data: { name?: string; icon_url?: string }) => Promise<void>;
   addMembers: (groupId: string, memberIds: string[]) => Promise<void>;
@@ -33,10 +36,12 @@ interface DMGroupState {
   sendMessage: (content: string, attachments?: any[], replyToId?: string) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
+  togglePin: (messageId: string) => Promise<void>;
   removeMessageFromStore: (messageId: string, groupId?: string) => void;
   handleGroupMessageCreate: (message: DMGroupMessage) => void;
   handleGroupMessageUpdate: (message: DMGroupMessage) => void;
   handleGroupMessageDelete: (data: { message_id?: string; id?: string; group_id?: string }) => void;
+  handleGroupPinEvent: (data: { message_id: string; group_id: string; is_pinned: boolean }) => void;
   handleGroupUpdate: (group: DMGroup) => void;
   handleGroupLeave: (data: { group_id: string }) => void;
 }
@@ -49,6 +54,8 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   groupUnreadCounts: {},
   firstUnreadMessageIdByGroup: {},
   messagesByGroup: {},
+  pinnedMessagesByGroup: {},
+  isLoadingPinned: {},
   hasMoreByGroup: {},
   isLoadingGroups: false,
   isLoadingMessages: false,
@@ -487,6 +494,80 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     get().handleGroupMessageDelete({ message_id: messageId, group_id: groupId });
   },
 
+  fetchPinnedMessages: async (groupId: string) => {
+    set((state) => ({
+      isLoadingPinned: { ...state.isLoadingPinned, [groupId]: true },
+    }));
+    try {
+      const pins = await api.dmGroups.getPinnedMessages(groupId);
+      set((state) => ({
+        pinnedMessagesByGroup: {
+          ...state.pinnedMessagesByGroup,
+          [groupId]: pins,
+        },
+        isLoadingPinned: { ...state.isLoadingPinned, [groupId]: false },
+      }));
+    } catch (err) {
+      console.error('Failed to fetch pinned group messages:', err);
+      set((state) => ({
+        isLoadingPinned: { ...state.isLoadingPinned, [groupId]: false },
+      }));
+    }
+  },
+
+  togglePin: async (messageId: string) => {
+    const { activeGroup } = get();
+    if (!activeGroup) return;
+    await api.dmGroups.togglePin(activeGroup.id, messageId);
+  },
+
+  handleGroupPinEvent: ({ message_id, group_id, is_pinned }) => {
+    set((state) => {
+      const updateMsgList = (list: DMGroupMessage[]) =>
+        list.map((m) => (m.id === message_id ? { ...m, is_pinned } : m));
+
+      const nextMessagesByGroup = { ...state.messagesByGroup };
+      if (nextMessagesByGroup[group_id]) {
+        nextMessagesByGroup[group_id] = updateMsgList(nextMessagesByGroup[group_id]);
+      }
+
+      const currentPinned = state.pinnedMessagesByGroup[group_id] || [];
+      let nextPinned: DMGroupMessage[];
+
+      if (is_pinned) {
+        const found =
+          state.messagesByGroup[group_id]?.find((m) => m.id === message_id) ||
+          (state.activeGroup?.id === group_id ? state.messages.find((m) => m.id === message_id) : undefined);
+
+        if (found) {
+          const pinnedMsg = { ...found, is_pinned: true };
+          const alreadyInPinned = currentPinned.some((m) => m.id === message_id);
+          nextPinned = alreadyInPinned
+            ? currentPinned.map((m) => (m.id === message_id ? pinnedMsg : m))
+            : [pinnedMsg, ...currentPinned];
+        } else {
+          nextPinned = currentPinned;
+          setTimeout(() => {
+            get().fetchPinnedMessages(group_id);
+          }, 50);
+        }
+      } else {
+        nextPinned = currentPinned.filter((m) => m.id !== message_id);
+      }
+
+      const nextPinnedByGroup = {
+        ...state.pinnedMessagesByGroup,
+        [group_id]: nextPinned,
+      };
+
+      return {
+        messages: state.activeGroup?.id === group_id ? updateMsgList(state.messages) : state.messages,
+        messagesByGroup: nextMessagesByGroup,
+        pinnedMessagesByGroup: nextPinnedByGroup,
+      };
+    });
+  },
+
   handleGroupMessageUpdate: (message: DMGroupMessage) => {
     set((state) => {
       const updateMsgList = (list: DMGroupMessage[]) =>
@@ -497,9 +578,28 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         nextByGroup[message.group_id] = updateMsgList(nextByGroup[message.group_id]);
       }
 
+      const nextPinnedByGroup = { ...state.pinnedMessagesByGroup };
+      if (nextPinnedByGroup[message.group_id]) {
+        if (message.is_pinned) {
+          const exists = nextPinnedByGroup[message.group_id].some((m) => m.id === message.id);
+          if (exists) {
+            nextPinnedByGroup[message.group_id] = nextPinnedByGroup[message.group_id].map((m) =>
+              m.id === message.id ? { ...m, ...message, is_edited: true } : m
+            );
+          } else {
+            nextPinnedByGroup[message.group_id] = [message, ...nextPinnedByGroup[message.group_id]];
+          }
+        } else {
+          nextPinnedByGroup[message.group_id] = nextPinnedByGroup[message.group_id].filter(
+            (m) => m.id !== message.id
+          );
+        }
+      }
+
       return {
         messages: state.activeGroup?.id === message.group_id ? updateMsgList(state.messages) : state.messages,
         messagesByGroup: nextByGroup,
+        pinnedMessagesByGroup: nextPinnedByGroup,
       };
     });
   },
@@ -521,9 +621,15 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         }
       }
 
+      const nextPinnedByGroup = { ...state.pinnedMessagesByGroup };
+      if (groupId && nextPinnedByGroup[groupId]) {
+        nextPinnedByGroup[groupId] = removeMsg(nextPinnedByGroup[groupId]);
+      }
+
       return {
         messages: removeMsg(state.messages),
         messagesByGroup: nextByGroup,
+        pinnedMessagesByGroup: nextPinnedByGroup,
       };
     });
   },

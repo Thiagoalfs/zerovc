@@ -31,6 +31,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
+import { useFriendStore } from '../../stores/friendStore';
 import { User, Permissions } from '../../types';
 import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
@@ -137,15 +138,48 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     }
   })();
 
-  const dmRecipient = useDMStore.getState().activeRoom?.recipient;
-  const dmUser = dmRecipient?.id === participant.identity ? dmRecipient : null;
+  const activeDMRecipient = useDMStore.getState().activeRoom?.recipient;
+  const voiceDMRecipient = useVoiceStore.getState().dmRecipient;
+  const allDMRooms = useDMStore.getState().rooms;
+  const roomRecipient = allDMRooms?.find((r) => r.recipient?.id === participant.identity)?.recipient;
+  const dmUser =
+    (activeDMRecipient?.id === participant.identity ? activeDMRecipient : null) ||
+    (voiceDMRecipient?.id === participant.identity ? voiceDMRecipient : null) ||
+    roomRecipient ||
+    null;
+
   const guildMember = activeGuild?.members?.find((m) => m.id === participant.identity);
+  const activeGroup = useDMGroupStore.getState().activeGroup;
+  const groupMember = activeGroup?.members?.find((m) => m.id === participant.identity);
+  const allGroups = useDMGroupStore.getState().groups;
+  const anyGroupMember = !groupMember
+    ? allGroups?.flatMap((g) => g.members || []).find((m) => m.id === participant.identity)
+    : null;
+
+  const friends = useFriendStore.getState().friends;
+  const friendUser = friends?.find((f) => f.user?.id === participant.identity || f.id === participant.identity)?.user;
+
+  const resolvedUser: User | null =
+    (isLocal || participant.identity === user?.id ? user : null) ||
+    guildMember ||
+    dmUser ||
+    groupMember ||
+    anyGroupMember ||
+    friendUser ||
+    null;
+
+  const displayName =
+    resolvedUser?.display_name ||
+    resolvedUser?.username ||
+    meta?.display_name ||
+    meta?.username ||
+    (participant.name && participant.name !== participant.identity ? participant.name : null) ||
+    'Usuário';
 
   const avatarUrl =
-    (isLocal || participant.identity === user?.id ? user?.avatar_url : null) ||
-    guildMember?.avatar_url ||
-    dmUser?.avatar_url ||
-    meta?.avatar_url;
+    resolvedUser?.avatar_url ||
+    meta?.avatar_url ||
+    null;
 
   // Check audio mute status
   const audioPub = participant.getTrackPublication(Track.Source.Microphone);
@@ -269,8 +303,6 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     setIsFullscreen((prev) => !prev);
   };
 
-  const displayName = participant.name || participant.identity;
-
   useEffect(() => {
     let isMounted = true;
     if (avatarUrl) {
@@ -290,15 +322,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     e.stopPropagation();
     if (!user) return;
 
-    const activeGroup = useDMGroupStore.getState().activeGroup;
-    const groupMember = activeGroup?.members?.find((m) => m.id === participant.identity);
     const targetMember: User =
-      activeGuild?.members?.find((m) => m.id === participant.identity) ||
-      (groupMember ? { ...groupMember, status: 'online' } : null) ||
-      dmUser || {
+      resolvedUser || {
         id: participant.identity,
-        username: participant.name || 'Usuário',
-        display_name: meta?.display_name || participant.name,
+        username: meta?.username || (participant.name !== participant.identity ? participant.name : null) || 'Usuário',
+        display_name: displayName,
         avatar_url: avatarUrl || undefined,
         status: 'online',
       };

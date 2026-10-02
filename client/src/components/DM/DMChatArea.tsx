@@ -17,7 +17,7 @@ import { formatAssetUrl } from '../../lib/api';
 import { ActiveCallOverlay } from './ActiveCallOverlay';
 import { MessageItem } from '../Chat/MessageItem';
 import { MessageInput } from '../Chat/MessageInput';
-import { SearchAutocompletePopout } from '../Chat/SearchAutocompletePopout';
+import { ChatHeader } from '../Chat/ChatHeader';
 import { SearchResultsPanel } from '../Chat/SearchResultsPanel';
 import { socket } from '../../lib/socket';
 import { useGuildStore } from '../../stores/guildStore';
@@ -333,25 +333,16 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         </div>
       )}
 
-      {/* Header */}
-      <div className="h-12 border-b border-white/5 px-4 flex items-center justify-between bg-background-darker/50 flex-shrink-0 select-none">
-        <div className="flex items-center gap-2 min-w-0">
-          {onOpenMobileDrawer && (
-            <button
-              onClick={onOpenMobileDrawer}
-              className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 md:hidden"
-              title="Abrir Menu"
+      {/* ChatHeader */}
+      <ChatHeader
+        onOpenMobileDrawer={onOpenMobileDrawer}
+        icon={
+          recipient ? (
+            <div
+              onClick={(e) => onOpenUserProfile?.(recipient, { x: e.clientX, y: e.clientY })}
+              className="relative cursor-pointer group"
+              title="Ver perfil"
             >
-              <Menu className="w-5 h-5" />
-            </button>
-          )}
-
-          <div
-            onClick={(e) => onOpenUserProfile?.(recipient, { x: e.clientX, y: e.clientY })}
-            className="flex items-center gap-2.5 cursor-pointer group min-w-0"
-            title="Ver perfil"
-          >
-            <div className="relative flex-shrink-0">
               <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-xs overflow-hidden">
                 {recipient.avatar_url ? (
                   <img src={formatAssetUrl(recipient.avatar_url)} alt="" className="w-full h-full object-cover" />
@@ -371,102 +362,45 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
                 }`}
               />
             </div>
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="font-bold text-sm text-gray-100 group-hover:underline truncate">
-                {recipient.display_name || recipient.username}
-              </span>
-              <span className="text-xs text-gray-400 hidden sm:inline truncate font-mono">
-                @{recipient.username}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Header Actions */}
-        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
-          {/* Voice Call Button */}
-          {!isCallActiveInThisRoom && (
+          ) : undefined
+        }
+        title={
+          recipient ? (
+            <span
+              onClick={(e) => onOpenUserProfile?.(recipient, { x: e.clientX, y: e.clientY })}
+              className="font-bold text-sm text-gray-100 group-hover:underline cursor-pointer truncate"
+            >
+              {recipient.display_name || recipient.username}
+            </span>
+          ) : (
+            'Conversa'
+          )
+        }
+        subtitle={recipient ? `@${recipient.username}` : undefined}
+        actions={
+          !isCallActiveInThisRoom ? (
             <button
               onClick={handleStartCall}
               className="p-2 md:p-1.5 rounded-lg text-gray-400 hover:text-online hover:bg-white/5 transition-colors cursor-pointer"
               title="Iniciar Chamada de Voz"
             >
-              <Phone className="w-4 h-4" />
+              <Phone className="w-4 h-4 md:w-5 md:h-5" />
             </button>
-          )}
-
-          {/* Pinned Messages Filter Toggle */}
-          <button
-            onClick={() => setShowPinnedOnly(!showPinnedOnly)}
-            className={`p-2 md:p-1.5 rounded-lg transition-colors cursor-pointer ${
-              showPinnedOnly
-                ? 'text-amber-400 bg-amber-400/15'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-            }`}
-            title={showPinnedOnly ? 'Mostrar todas as mensagens' : 'Mensagens Fixadas'}
-          >
-            <Pin className="w-4 h-4" />
-          </button>
-
-          {/* Search Input Box (Last element on the right) */}
-          <div
-            ref={searchContainerRef}
-            className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64 relative"
-          >
-            <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  setAppliedSearchQuery(searchQuery.trim());
-                  setIsSearchAutocompleteOpen(false);
-                }
-              }}
-              onFocus={() => setIsSearchAutocompleteOpen(true)}
-              placeholder="Buscar..."
-              className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
-            />
-            {(searchQuery || appliedSearchQuery) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setAppliedSearchQuery('');
-                  setIsSearchAutocompleteOpen(false);
-                }}
-                className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
-                title="Limpar busca"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Floating Search Autocomplete Popout Modal */}
-          <SearchAutocompletePopout
-            isOpen={isSearchAutocompleteOpen}
-            onClose={() => setIsSearchAutocompleteOpen(false)}
-            query={searchQuery}
-            onSelectFilter={(newQ) => {
-              setSearchQuery(newQ);
-              searchInputRef.current?.focus();
-            }}
-            onSearchSubmit={(q) => {
-              setAppliedSearchQuery(q.trim());
-            }}
-            anchorRef={searchContainerRef}
-            members={recipient ? [recipient] : []}
-            contextType="dm"
-          />
-        </div>
-      </div>
+          ) : undefined
+        }
+        showPinnedOnly={showPinnedOnly}
+        onTogglePinned={() => setShowPinnedOnly(!showPinnedOnly)}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearchSubmit={(q) => setAppliedSearchQuery(q)}
+        onClearSearch={() => {
+          setSearchQuery('');
+          setAppliedSearchQuery('');
+        }}
+        hasAppliedSearch={Boolean(appliedSearchQuery)}
+        searchMembers={recipient ? [recipient] : []}
+        searchContextType="dm"
+      />
 
       {/* Active Call UI Overlay */}
       {isCallActiveInThisRoom && (

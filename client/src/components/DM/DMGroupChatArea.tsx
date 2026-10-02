@@ -15,14 +15,20 @@ import {
   VideoOff,
   Monitor,
   Volume2,
+  Plus,
+  Edit3,
+  Camera,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { api, formatAssetUrl } from '../../lib/api';
+import { AddDMGroupMembersModal } from '../Modals/AddDMGroupMembersModal';
+import { EditDMGroupNameModal } from '../Modals/EditDMGroupNameModal';
+import { ImageCropModal } from '../Modals/ImageCropModal';
+import { ChatHeader } from '../Chat/ChatHeader';
 import { MessageItem } from '../Chat/MessageItem';
 import { MessageInput } from '../Chat/MessageInput';
-import { SearchAutocompletePopout } from '../Chat/SearchAutocompletePopout';
 import { SearchResultsPanel } from '../Chat/SearchResultsPanel';
 import { ParticipantCard } from '../Voice/ParticipantCard';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
@@ -55,10 +61,15 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const {
     activeGroup,
     messages,
+    pinnedMessagesByGroup,
+    isLoadingPinned,
+    fetchPinnedMessages,
     sendMessage,
     editMessage,
     deleteMessage,
+    togglePin,
     leaveGroup,
+    updateGroup,
     removeMessageFromStore,
     isLoadingMessages,
     isLoadingMoreMessages,
@@ -73,6 +84,35 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     openContextMenu: openScreenShareMenu,
     closeContextMenu: closeScreenShareMenu,
   } = useContextMenu();
+
+  const [showPinnedOnly, setShowPinnedOnly] = useState(false);
+  const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
+  const [isEditNameOpen, setIsEditNameOpen] = useState(false);
+  const [isCropOpen, setIsCropOpen] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const groupIconInputRef = useRef<HTMLInputElement>(null);
+
+  const handleIconFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setCropFile(e.target.files[0]);
+      setIsCropOpen(true);
+    }
+    if (groupIconInputRef.current) {
+      groupIconInputRef.current.value = '';
+    }
+  };
+
+  const handleCropConfirm = async (croppedFile: File) => {
+    setIsCropOpen(false);
+    setCropFile(null);
+    if (!activeGroup) return;
+    try {
+      const res = await api.upload.groupIcon(croppedFile);
+      await updateGroup(activeGroup.id, { icon_url: res.url });
+    } catch (err: any) {
+      alert(err?.message || 'Falha ao atualizar foto do grupo');
+    }
+  };
 
   const {
     voiceType,
@@ -358,8 +398,16 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (showPinnedOnly && activeGroup) {
+      fetchPinnedMessages(activeGroup.id);
+    }
+  }, [showPinnedOnly, activeGroup?.id]);
+
   const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
-  const displayedMessages = messages;
+  const displayedMessages = showPinnedOnly && activeGroup
+    ? pinnedMessagesByGroup?.[activeGroup.id] || []
+    : messages;
 
   const searchResults = useMemo(() => {
     if (!appliedSearchQuery) return [];
@@ -499,19 +547,14 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       )}
 
       {/* Group Header */}
-      <div className="h-12 border-b border-white/5 px-4 flex items-center justify-between bg-background-darker/50 flex-shrink-0 select-none">
-        <div className="flex items-center gap-2 min-w-0">
-          {onOpenMobileDrawer && (
-            <button
-              onClick={onOpenMobileDrawer}
-              className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 md:hidden"
-              title="Abrir Menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          )}
-
-          <div className="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs flex-shrink-0 border border-brand-500/30">
+      <ChatHeader
+        onOpenMobileDrawer={onOpenMobileDrawer}
+        icon={
+          <div
+            onClick={() => groupIconInputRef.current?.click()}
+            className="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs flex-shrink-0 border border-brand-500/30 cursor-pointer relative group overflow-hidden"
+            title="Alterar foto do grupo"
+          >
             {activeGroup.icon_url ? (
               <img
                 src={formatAssetUrl(activeGroup.icon_url)}
@@ -521,19 +564,32 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             ) : (
               <Users className="w-4 h-4" />
             )}
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-full">
+              <Camera className="w-3.5 h-3.5 text-white" />
+            </div>
           </div>
-
-          <div className="flex items-baseline gap-2 min-w-0">
-            <span className="font-bold text-sm text-gray-100 truncate">{groupName}</span>
-            <span className="text-[11px] text-gray-500 hidden sm:inline flex-shrink-0">
-              {activeGroup.members?.length || 0} membros
+        }
+        title={
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              onClick={() => setIsEditNameOpen(true)}
+              className="font-bold text-sm text-gray-100 truncate cursor-pointer hover:underline"
+              title="Clique para mudar o nome do grupo"
+            >
+              {groupName}
             </span>
+            <button
+              type="button"
+              onClick={() => setIsEditNameOpen(true)}
+              className="p-1 text-gray-400 hover:text-white rounded hover:bg-white/5 transition-colors cursor-pointer"
+              title="Mudar nome do grupo"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+            </button>
           </div>
-        </div>
-
-        {/* Right Header Actions */}
-        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
-          {/* Voice Channel in Group Toggle */}
+        }
+        subtitle={`${activeGroup.members?.length || 0} membros`}
+        actions={
           <button
             onClick={handleToggleVoice}
             className={`p-2 md:p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
@@ -563,84 +619,43 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               </>
             )}
           </button>
+        }
+        showPinnedOnly={showPinnedOnly}
+        onTogglePinned={() => setShowPinnedOnly(!showPinnedOnly)}
+        showMembers={showMemberList}
+        onToggleMembers={() => {
+          const next = !showMemberList;
+          setShowMemberList(next);
+          try {
+            localStorage.setItem('zerovc_group_members_open', String(next));
+          } catch {}
+        }}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearchSubmit={(q) => setAppliedSearchQuery(q)}
+        onClearSearch={() => {
+          setSearchQuery('');
+          setAppliedSearchQuery('');
+        }}
+        hasAppliedSearch={Boolean(appliedSearchQuery)}
+        searchMembers={activeGroup.members || []}
+        searchContextType="dm_group"
+      />
 
-          {/* Member List Toggle */}
+      {/* Pinned Messages Active Notice Banner */}
+      {showPinnedOnly && (
+        <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
+          <span>
+            Exibindo apenas mensagens fixadas ({displayedMessages.length})
+          </span>
           <button
-            onClick={() => {
-              const next = !showMemberList;
-              setShowMemberList(next);
-              try {
-                localStorage.setItem('zerovc_group_members_open', String(next));
-              } catch {}
-            }}
-            className={`p-2 md:p-1.5 rounded-lg transition-colors cursor-pointer ${
-              showMemberList
-                ? 'text-brand-400 bg-white/10'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-            }`}
-            title="Lista de Membros"
+            onClick={() => setShowPinnedOnly(false)}
+            className="text-brand-400 hover:underline font-semibold cursor-pointer"
           >
-            <Users className="w-4 h-4" />
+            Limpar filtro
           </button>
-
-          {/* Search Input Box */}
-          <div
-            ref={searchContainerRef}
-            className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64 relative"
-          >
-            <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  setAppliedSearchQuery(searchQuery.trim());
-                  setIsSearchAutocompleteOpen(false);
-                }
-              }}
-              onFocus={() => setIsSearchAutocompleteOpen(true)}
-              placeholder="Buscar..."
-              className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
-            />
-            {(searchQuery || appliedSearchQuery) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setAppliedSearchQuery('');
-                  setIsSearchAutocompleteOpen(false);
-                }}
-                className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
-                title="Limpar busca"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          <SearchAutocompletePopout
-            isOpen={isSearchAutocompleteOpen}
-            onClose={() => setIsSearchAutocompleteOpen(false)}
-            query={searchQuery}
-            onSelectFilter={(newQ) => {
-              setSearchQuery(newQ);
-              searchInputRef.current?.focus();
-            }}
-            onSearchSubmit={(q) => {
-              setAppliedSearchQuery(q.trim());
-            }}
-            anchorRef={searchContainerRef}
-            members={activeGroup?.members || []}
-            contextType="dm_group"
-          />
         </div>
-      </div>
+      )}
 
       {/* Active Group Voice Call Stage */}
       {(isGroupVoiceActive || isGroupVoiceConnecting) && (
@@ -848,6 +863,9 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                     onDeleteMessage={async (id) => {
                       await deleteMessage(id);
                     }}
+                    onTogglePin={async (id) => {
+                      await togglePin(id);
+                    }}
                     onRetryMessage={async (msg) => {
                       removeMessageFromStore(msg.id, activeGroup.id);
                       await sendMessage(msg.content, undefined, msg.reply_to_id);
@@ -930,6 +948,16 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
                 Membros — {activeGroup.members?.length || 0}
               </span>
+              {(activeGroup.members?.length || 0) < 15 && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddMembersOpen(true)}
+                  className="p-1 hover:bg-white/10 rounded-md text-gray-400 hover:text-white cursor-pointer transition-colors"
+                  title="Adicionar membros ao grupo"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
               {(activeGroup.members || []).map((member) => (
@@ -1024,6 +1052,47 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       {/* Context Menus */}
       <ContextMenu menu={menu} onClose={closeContextMenu} />
       <ContextMenu menu={screenShareMenu} onClose={closeScreenShareMenu} />
+
+      {/* Hidden file input for Group Icon Upload */}
+      <input
+        ref={groupIconInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={handleIconFileChange}
+      />
+
+      {/* Image Crop Modal for Group Icon */}
+      {isCropOpen && cropFile && (
+        <ImageCropModal
+          isOpen={isCropOpen}
+          file={cropFile}
+          cropType="groupIcon"
+          onConfirm={handleCropConfirm}
+          onCancel={() => {
+            setIsCropOpen(false);
+            setCropFile(null);
+          }}
+        />
+      )}
+
+      {/* Add Members Modal */}
+      {isAddMembersOpen && (
+        <AddDMGroupMembersModal
+          isOpen={isAddMembersOpen}
+          onClose={() => setIsAddMembersOpen(false)}
+          group={activeGroup}
+        />
+      )}
+
+      {/* Edit Group Name Modal */}
+      {isEditNameOpen && (
+        <EditDMGroupNameModal
+          isOpen={isEditNameOpen}
+          onClose={() => setIsEditNameOpen(false)}
+          group={activeGroup}
+        />
+      )}
     </div>
   );
 };
