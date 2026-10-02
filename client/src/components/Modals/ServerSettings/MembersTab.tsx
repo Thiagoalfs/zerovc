@@ -49,6 +49,17 @@ export const MembersTab: React.FC<MembersTabProps> = ({
   kickMember,
   isOwner,
 }) => {
+  const currentMember = activeGuild?.members?.find((m) => m.id === user?.id);
+  const currentUserHighestPos = React.useMemo(() => {
+    let highest = 999999;
+    (currentMember?.roles || []).forEach((r) => {
+      if (typeof r.position === 'number' && r.position < highest) {
+        highest = r.position;
+      }
+    });
+    return highest;
+  }, [currentMember?.roles]);
+
   return (
     <div className="max-w-4xl space-y-6 animate-fade-in">
       {/* Search and Role Filter Bar */}
@@ -187,7 +198,12 @@ export const MembersTab: React.FC<MembersTabProps> = ({
                         </div>
                         <div className="max-h-36 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
                           {roles
-                            .filter((r) => r.name !== '@everyone')
+                            .filter((r) => {
+                              if (r.name === '@everyone') return false;
+                              if (isOwner) return true;
+                              const rolePos = typeof r.position === 'number' ? r.position : 999;
+                              return rolePos > currentUserHighestPos;
+                            })
                             .map((r) => {
                             const hasThisRole = memberRoles.some((mr) => mr.id === r.id);
                             return (

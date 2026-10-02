@@ -66,13 +66,18 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
   const availableRoles = useMemo(() => {
     if (!activeGuild?.roles || !Array.isArray(activeGuild.roles)) return [];
     return [...activeGuild.roles]
-      .filter((r) => r && typeof r === 'object' && r.name && r.name !== '@everyone')
+      .filter((r) => {
+        if (!r || typeof r !== 'object' || !r.name || r.name === '@everyone') return false;
+        if (perms.isCurrentOwner) return true;
+        const rolePos = typeof r.position === 'number' ? r.position : 999;
+        return rolePos > perms.currentUserHighestPos;
+      })
       .sort(
         (a, b) =>
           (typeof a.position === 'number' ? a.position : 999) -
           (typeof b.position === 'number' ? b.position : 999)
       );
-  }, [activeGuild?.roles]);
+  }, [activeGuild?.roles, perms.isCurrentOwner, perms.currentUserHighestPos]);
 
   const updateDropdownPos = () => {
     if (!buttonRef.current) return;
