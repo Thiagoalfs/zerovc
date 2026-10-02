@@ -110,14 +110,6 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
       return { cardWidth: 0, cardHeight: 0, rows: [] };
     }
 
-    const hasAnyVideo = participants.some(
-      (p) =>
-        p.isScreenShareEnabled ||
-        p.isCameraEnabled ||
-        !!p.getTrackPublication('screen_share' as any)?.track ||
-        !!p.getTrackPublication('camera' as any)?.track
-    );
-
     const W = dimensions.width;
     const H = dimensions.height;
     const gap = count > 1 ? (W < 640 ? 8 : 14) : 0;
@@ -150,8 +142,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
         w = h * targetAspect;
       }
 
-      // If single participant without video, cap size so it doesn't blow up full screen
-      if (count === 1 && !hasAnyVideo) {
+      // If single participant, cap size so it maintains a clean centered card and doesn't blow up full screen
+      if (count === 1) {
         const maxW = Math.min(500, availableW);
         const maxH = Math.min(300, availableH);
         if (w > maxW) {
