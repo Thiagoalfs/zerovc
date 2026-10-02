@@ -12,6 +12,7 @@ export interface UserAvatarProps {
   className?: string;
   statusBorderColor?: string;
   onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onContextMenu?: (e: React.MouseEvent<HTMLDivElement>) => void;
   title?: string;
 }
 
@@ -40,6 +41,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   className = '',
   statusBorderColor = 'border-background-darker',
   onClick,
+  onContextMenu,
   title,
 }) => {
   const cfg = SIZE_CONFIGS[size] || SIZE_CONFIGS.md;
@@ -50,6 +52,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   return (
     <div
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className={`relative flex-shrink-0 select-none ${onClick ? 'cursor-pointer' : ''} ${className}`}
       title={title}
     >
