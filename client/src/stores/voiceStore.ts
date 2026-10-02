@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Participant, DisconnectReason } from 'livekit-client';
 import { api } from '../lib/api';
 import { livekit } from '../lib/livekit';
+import { User, DMGroup } from '../types';
 import {
   playJoinVoiceSound,
   playLeaveVoiceSound,
@@ -15,9 +16,16 @@ import {
   playUndeafenSound,
 } from '../utils/audio';
 
+export type VoiceType = 'guild' | 'dm' | 'group';
+
 interface VoiceState {
+  voiceType: VoiceType | null;
   currentChannelId: string | null;
   currentGuildId: string | null;
+  dmRoomId: string | null;
+  dmRecipient: User | null;
+  dmGroupId: string | null;
+  dmGroup: DMGroup | null;
   isConnected: boolean;
   isConnecting: boolean;
   isMuted: boolean;
@@ -37,8 +45,12 @@ interface VoiceState {
   toggleWatchParticipant: (identity: string) => void;
   unwatchAll: () => void;
   setWatchedParticipant: (identity: string | null) => void;
+
   joinVoice: (channelId: string, guildId?: string) => Promise<void>;
+  joinDMCall: (roomId: string, recipient: User, token?: string, livekitUrl?: string) => Promise<void>;
+  joinGroupVoice: (groupId: string, group?: DMGroup) => Promise<void>;
   leaveVoice: () => Promise<void>;
+
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
   toggleCamera: () => Promise<void>;
@@ -103,143 +115,93 @@ const initialStreamVolumes = loadSavedStreamVolumes();
 const initialMuted = loadSavedMuteState();
 const initialDeafened = loadSavedDeafenState();
 
-export const useVoiceStore = create<VoiceState>((set, get) => ({
-  currentChannelId: null,
-  currentGuildId: null,
-  isConnected: false,
-  isConnecting: false,
-  isMuted: initialMuted || initialDeafened,
-  isDeafened: initialDeafened,
-  isScreensharing: false,
-  isCameraOn: false,
-  participants: [],
-  speakingUserIds: [],
-  userVolumes: initialUserVolumes,
-  streamVolumes: initialStreamVolumes,
-  participantVolumes: initialUserVolumes,
-  watchedParticipantId: null,
-  watchedParticipantIds: [],
+export const useVoiceStore = create<VoiceState>((set, get) => {
+  // Helper to attach LiveKit room connection listeners and sync state
+  const connectLiveKitRoom = async (
+    livekitUrl: string,
+    token: string,
+    shouldMute: boolean,
+    shouldDeafen: boolean
+  ) => {
+    let prevParticipantIds = new Set<string>();
+    let prevScreenShareIds = new Set<string>();
+    let isInitialSync = true;
 
-  watchParticipant: (identity: string, mode: 'exclusive' | 'additive' = 'exclusive') => {
-    const current = get().watchedParticipantIds;
-    if (mode === 'exclusive') {
-      current.forEach((id) => {
-        if (id !== identity) {
-          livekit.setStreamSubscribed(id, false);
+    await livekit.connect(livekitUrl, token, {
+      autoEnableMicrophone: !shouldMute,
+      onParticipantsChanged: (participants) => {
+        set({ participants });
+
+        if (!isInitialSync && get().isConnected) {
+          const currentIds = new Set(participants.map((p) => p.identity));
+          // Another user joined
+          for (const p of participants) {
+            if (!p.isLocal && !prevParticipantIds.has(p.identity)) {
+              playUserJoinCallSound();
+              break;
+            }
+          }
+          // Another user left
+          for (const prevId of prevParticipantIds) {
+            if (!currentIds.has(prevId)) {
+              playUserLeaveCallSound();
+              break;
+            }
+          }
         }
-      });
-      livekit.setStreamSubscribed(identity, true);
-      set({
-        watchedParticipantIds: [identity],
-        watchedParticipantId: identity,
-      });
-    } else {
-      if (!current.includes(identity)) {
-        livekit.setStreamSubscribed(identity, true);
-        const next = [...current, identity];
-        set({
-          watchedParticipantIds: next,
-          watchedParticipantId: identity,
+        prevParticipantIds = new Set(participants.map((p) => p.identity));
+
+        // Apply saved user & stream volumes to participants
+        const { userVolumes, streamVolumes } = get();
+        participants.forEach((p) => {
+          if (!p.isLocal) {
+            if (userVolumes[p.identity] !== undefined) {
+              livekit.setUserVolume(p.identity, userVolumes[p.identity]);
+            }
+            if (streamVolumes[p.identity] !== undefined) {
+              livekit.setStreamVolume(p.identity, streamVolumes[p.identity]);
+            }
+          }
         });
-      }
-    }
-  },
-
-  unwatchParticipant: (identity: string) => {
-    const current = get().watchedParticipantIds;
-    livekit.setStreamSubscribed(identity, false);
-    const next = current.filter((id) => id !== identity);
-    set({
-      watchedParticipantIds: next,
-      watchedParticipantId: next.length > 0 ? next[next.length - 1] : null,
-    });
-  },
-
-  toggleWatchParticipant: (identity: string) => {
-    const current = get().watchedParticipantIds;
-    if (current.includes(identity)) {
-      get().unwatchParticipant(identity);
-    } else {
-      get().watchParticipant(identity, 'additive');
-    }
-  },
-
-  unwatchAll: () => {
-    const current = get().watchedParticipantIds;
-    current.forEach((id) => {
-      livekit.setStreamSubscribed(id, false);
-    });
-    set({
-      watchedParticipantIds: [],
-      watchedParticipantId: null,
-    });
-  },
-
-  setWatchedParticipant: (identity: string | null) => {
-    if (!identity) {
-      get().unwatchAll();
-    } else {
-      get().watchParticipant(identity, 'exclusive');
-    }
-  },
-
-  joinVoice: async (channelId: string, guildId?: string) => {
-    // If already in this channel or currently connecting to it, do nothing
-    if (get().currentChannelId === channelId && (get().isConnected || get().isConnecting)) {
-      return;
-    }
-
-    const previousChannelId = get().currentChannelId;
-    if (previousChannelId && previousChannelId !== channelId) {
-      // Disconnect previous channel in background without blocking current join request
-      api.channels.leaveVoice(previousChannelId).catch(() => {});
-      livekit.disconnect().catch(() => {});
-    }
-
-    set({ isConnecting: true, currentChannelId: channelId, currentGuildId: guildId || null });
-
-    const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
-    const shouldDeafen = get().isDeafened;
-    const shouldMute = shouldDeafen || isPTT || get().isMuted;
-
-    try {
-      const res = await api.channels.joinVoice(channelId, {
-        is_muted: shouldMute,
-        is_deafened: shouldDeafen,
-      });
-
-      // Check if user changed mind or joined another channel while requesting
-      if (get().currentChannelId !== channelId) return;
-
-      let prevParticipantIds = new Set<string>();
-      let prevScreenShareIds = new Set<string>();
-      let isInitialSync = true;
-
-      await livekit.connect(res.livekit_url, res.token, {
-        autoEnableMicrophone: !shouldMute,
-        onParticipantsChanged: (participants) => {
+      },
+      onSpeakingChanged: (speakingUserIds) => {
+        const current = get().speakingUserIds;
+        if (
+          current.length === speakingUserIds.length &&
+          current.every((id, idx) => id === speakingUserIds[idx])
+        ) {
+          return;
+        }
+        set({ speakingUserIds });
+      },
+      onTrackUpdated: () => {
+        const room = livekit.getRoom();
+        if (room) {
+          const participants = [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
           set({ participants });
 
+          const currentScreenShares = new Set(
+            participants.filter((p) => p.isScreenShareEnabled).map((p) => p.identity)
+          );
+
           if (!isInitialSync && get().isConnected) {
-            const currentIds = new Set(participants.map((p) => p.identity));
-            // Another user joined
-            for (const p of participants) {
-              if (!p.isLocal && !prevParticipantIds.has(p.identity)) {
-                playUserJoinCallSound();
+            // Screen share started
+            for (const id of currentScreenShares) {
+              if (!prevScreenShareIds.has(id)) {
+                playStartStreamSound();
                 break;
               }
             }
-            // Another user left
-            for (const prevId of prevParticipantIds) {
-              if (!currentIds.has(prevId)) {
-                playUserLeaveCallSound();
+            // Screen share stopped
+            for (const prevId of prevScreenShareIds) {
+              if (!currentScreenShares.has(prevId)) {
+                playStopStreamSound();
                 break;
               }
             }
           }
-          prevParticipantIds = new Set(participants.map((p) => p.identity));
+          prevScreenShareIds = currentScreenShares;
 
-          // Apply saved user & stream volumes to participants
           const { userVolumes, streamVolumes } = get();
           participants.forEach((p) => {
             if (!p.isLocal) {
@@ -251,282 +213,499 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
               }
             }
           });
-        },
-        onSpeakingChanged: (speakingUserIds) => {
-          const current = get().speakingUserIds;
-          if (
-            current.length === speakingUserIds.length &&
-            current.every((id, idx) => id === speakingUserIds[idx])
-          ) {
-            return;
-          }
-          set({ speakingUserIds });
-        },
-        onTrackUpdated: () => {
-          const room = livekit.getRoom();
-          if (room) {
-            const participants = [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
-            set({ participants });
+        }
+      },
+      onScreenShareEnded: () => {
+        set({ isScreensharing: false });
+        playStopStreamSound();
+        const { currentChannelId, voiceType } = get();
+        if (voiceType === 'guild' && currentChannelId) {
+          api.channels.updateVoiceState(currentChannelId, { is_screensharing: false }).catch(() => {});
+        }
+      },
+      onDisconnected: (reason) => {
+        console.warn('[Voice] LiveKit room disconnected. Reason:', reason);
+        playLeaveVoiceSound();
+        const isDuplicate =
+          reason === DisconnectReason.DUPLICATE_IDENTITY ||
+          String(reason).toLowerCase().includes('duplicate');
 
-            const currentScreenShares = new Set(
-              participants.filter((p) => p.isScreenShareEnabled).map((p) => p.identity)
-            );
+        set({
+          voiceType: null,
+          currentChannelId: null,
+          currentGuildId: null,
+          dmRoomId: null,
+          dmRecipient: null,
+          dmGroupId: null,
+          dmGroup: null,
+          isConnected: false,
+          isConnecting: false,
+          isScreensharing: false,
+          isCameraOn: false,
+          participants: [],
+          speakingUserIds: [],
+          watchedParticipantId: null,
+          watchedParticipantIds: [],
+        });
 
-            if (!isInitialSync && get().isConnected) {
-              // Screen share started
-              for (const id of currentScreenShares) {
-                if (!prevScreenShareIds.has(id)) {
-                  playStartStreamSound();
-                  break;
-                }
-              }
-              // Screen share stopped
-              for (const prevId of prevScreenShareIds) {
-                if (!currentScreenShares.has(prevId)) {
-                  playStopStreamSound();
-                  break;
-                }
-              }
-            }
-            prevScreenShareIds = currentScreenShares;
+        if (isDuplicate) {
+          alert('Você entrou na chamada por outro dispositivo ou navegador.');
+        }
+      },
+    });
 
-            const { userVolumes, streamVolumes } = get();
-            participants.forEach((p) => {
-              if (!p.isLocal) {
-                if (userVolumes[p.identity] !== undefined) {
-                  livekit.setUserVolume(p.identity, userVolumes[p.identity]);
-                }
-                if (streamVolumes[p.identity] !== undefined) {
-                  livekit.setStreamVolume(p.identity, streamVolumes[p.identity]);
-                }
-              }
-            });
+    playJoinVoiceSound();
+
+    if (shouldDeafen) {
+      livekit.setDeafened(true).catch(() => {});
+      livekit.setMuted(true).catch(() => {});
+    } else if (shouldMute) {
+      livekit.setMuted(true).catch(() => {});
+    }
+
+    set({
+      isConnected: true,
+      isConnecting: false,
+      isMuted: shouldMute,
+      isDeafened: shouldDeafen,
+      isCameraOn: false,
+      isScreensharing: false,
+    });
+
+    setTimeout(() => {
+      isInitialSync = false;
+    }, 500);
+  };
+
+  const cleanupPreviousConnection = async () => {
+    const { voiceType, currentChannelId, dmRoomId, isScreensharing } = get();
+    if (isScreensharing) {
+      try {
+        await livekit.setScreenShareEnabled(false);
+      } catch {}
+    }
+    if (voiceType === 'guild' && currentChannelId) {
+      api.channels.leaveVoice(currentChannelId).catch(() => {});
+    } else if (voiceType === 'dm' && dmRoomId) {
+      api.dms.leaveCall(dmRoomId).catch(() => {});
+    }
+    await livekit.disconnect().catch(() => {});
+  };
+
+  return {
+    voiceType: null,
+    currentChannelId: null,
+    currentGuildId: null,
+    dmRoomId: null,
+    dmRecipient: null,
+    dmGroupId: null,
+    dmGroup: null,
+    isConnected: false,
+    isConnecting: false,
+    isMuted: initialMuted || initialDeafened,
+    isDeafened: initialDeafened,
+    isScreensharing: false,
+    isCameraOn: false,
+    participants: [],
+    speakingUserIds: [],
+    userVolumes: initialUserVolumes,
+    streamVolumes: initialStreamVolumes,
+    participantVolumes: initialUserVolumes,
+    watchedParticipantId: null,
+    watchedParticipantIds: [],
+
+    watchParticipant: (identity: string, mode: 'exclusive' | 'additive' = 'exclusive') => {
+      const current = get().watchedParticipantIds;
+      if (mode === 'exclusive') {
+        current.forEach((id) => {
+          if (id !== identity) {
+            livekit.setStreamSubscribed(id, false);
           }
-        },
-        onScreenShareEnded: () => {
-          set({ isScreensharing: false });
-          playStopStreamSound();
-          const { currentChannelId } = get();
-          if (currentChannelId) {
-            api.channels.updateVoiceState(currentChannelId, { is_screensharing: false }).catch(() => {});
-          }
-        },
-        onDisconnected: (reason) => {
-          console.warn('[Voice] LiveKit room disconnected. Reason:', reason);
-          playLeaveVoiceSound();
-          const isDuplicate = reason === DisconnectReason.DUPLICATE_IDENTITY || String(reason).toLowerCase().includes('duplicate');
-          
+        });
+        livekit.setStreamSubscribed(identity, true);
+        set({
+          watchedParticipantIds: [identity],
+          watchedParticipantId: identity,
+        });
+      } else {
+        if (!current.includes(identity)) {
+          livekit.setStreamSubscribed(identity, true);
+          const next = [...current, identity];
           set({
-            currentChannelId: null,
-            isConnected: false,
-            isConnecting: false,
-            isScreensharing: false,
-            isCameraOn: false,
-            participants: [],
-            speakingUserIds: [],
-            watchedParticipantId: null,
-            watchedParticipantIds: [],
+            watchedParticipantIds: next,
+            watchedParticipantId: identity,
           });
-
-          if (isDuplicate) {
-            alert('Você entrou na chamada por outro dispositivo ou navegador.');
-          }
-        },
-      });
-
-      playJoinVoiceSound();
-
-      if (shouldDeafen) {
-        livekit.setDeafened(true).catch(() => {});
-        livekit.setMuted(true).catch(() => {});
-      } else if (shouldMute) {
-        livekit.setMuted(true).catch(() => {});
+        }
       }
+    },
+
+    unwatchParticipant: (identity: string) => {
+      const current = get().watchedParticipantIds;
+      livekit.setStreamSubscribed(identity, false);
+      const next = current.filter((id) => id !== identity);
+      set({
+        watchedParticipantIds: next,
+        watchedParticipantId: next.length > 0 ? next[next.length - 1] : null,
+      });
+    },
+
+    toggleWatchParticipant: (identity: string) => {
+      const current = get().watchedParticipantIds;
+      if (current.includes(identity)) {
+        get().unwatchParticipant(identity);
+      } else {
+        get().watchParticipant(identity, 'additive');
+      }
+    },
+
+    unwatchAll: () => {
+      const current = get().watchedParticipantIds;
+      current.forEach((id) => {
+        livekit.setStreamSubscribed(id, false);
+      });
+      set({
+        watchedParticipantIds: [],
+        watchedParticipantId: null,
+      });
+    },
+
+    setWatchedParticipant: (identity: string | null) => {
+      if (!identity) {
+        get().unwatchAll();
+      } else {
+        get().watchParticipant(identity, 'exclusive');
+      }
+    },
+
+    joinVoice: async (channelId: string, guildId?: string) => {
+      // If already in this channel or currently connecting to it, do nothing
+      if (
+        get().voiceType === 'guild' &&
+        get().currentChannelId === channelId &&
+        (get().isConnected || get().isConnecting)
+      ) {
+        return;
+      }
+
+      await cleanupPreviousConnection();
 
       set({
-        isConnected: true,
-        isConnecting: false,
-        isMuted: shouldMute,
-        isDeafened: shouldDeafen,
-        isCameraOn: false,
+        voiceType: 'guild',
+        isConnecting: true,
+        currentChannelId: channelId,
+        currentGuildId: guildId || null,
+        dmRoomId: null,
+        dmRecipient: null,
+        dmGroupId: null,
+        dmGroup: null,
       });
 
-      setTimeout(() => {
-        isInitialSync = false;
-      }, 500);
+      const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
+      const shouldDeafen = get().isDeafened;
+      const shouldMute = shouldDeafen || isPTT || get().isMuted;
 
-      // Sync initial voice state with backend
-      if (shouldMute || shouldDeafen) {
-        api.channels.updateVoiceState(channelId, {
+      try {
+        const res = await api.channels.joinVoice(channelId, {
           is_muted: shouldMute,
           is_deafened: shouldDeafen,
-        }).catch(() => {});
-      }
-    } catch (err) {
-      console.error('[Voice] Failed to join voice:', err);
-      set({ isConnected: false, isConnecting: false, currentChannelId: null, currentGuildId: null });
-    }
-  },
-
-  leaveVoice: async () => {
-    const { currentChannelId } = get();
-    if (!currentChannelId) return;
-
-    try {
-      await api.channels.leaveVoice(currentChannelId);
-    } catch (err) {
-      console.warn('[Voice] Failed to notify leave API:', err);
-    }
-
-    try {
-      await get().stopScreenShare();
-    } catch {}
-    await livekit.disconnect();
-    set({
-      currentChannelId: null,
-      currentGuildId: null,
-      isConnected: false,
-      isConnecting: false,
-      isScreensharing: false,
-      isCameraOn: false,
-      participants: [],
-      speakingUserIds: [],
-      watchedParticipantId: null,
-      watchedParticipantIds: [],
-    });
-  },
-
-  toggleMute: async () => {
-    const { isMuted, isDeafened, currentChannelId } = get();
-    const nextMuted = !isMuted;
-    const nextDeafened = nextMuted ? isDeafened : false;
-
-    try {
-      localStorage.setItem('zerovc_user_muted', String(nextMuted));
-      localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
-    } catch {}
-
-    await livekit.setMuted(nextMuted);
-    if (!nextMuted && isDeafened) {
-      await livekit.setDeafened(false);
-    }
-
-    if (nextMuted) {
-      playMuteSound();
-    } else {
-      playUnmuteSound();
-    }
-
-    set({ isMuted: nextMuted, isDeafened: nextDeafened });
-
-    if (currentChannelId) {
-      try {
-        await api.channels.updateVoiceState(currentChannelId, {
-          is_muted: nextMuted,
-          is_deafened: nextDeafened,
         });
+
+        // Check if user changed mind or joined another channel while requesting
+        if (get().currentChannelId !== channelId || get().voiceType !== 'guild') return;
+
+        await connectLiveKitRoom(res.livekit_url, res.token, shouldMute, shouldDeafen);
+
+        // Sync initial voice state with backend
+        if (shouldMute || shouldDeafen) {
+          api.channels
+            .updateVoiceState(channelId, {
+              is_muted: shouldMute,
+              is_deafened: shouldDeafen,
+            })
+            .catch(() => {});
+        }
       } catch (err) {
-        console.warn('[Voice] Failed to sync mute state:', err);
+        console.error('[Voice] Failed to join guild voice:', err);
+        set({
+          voiceType: null,
+          isConnected: false,
+          isConnecting: false,
+          currentChannelId: null,
+          currentGuildId: null,
+        });
       }
-    }
-  },
+    },
 
-  toggleDeafen: async () => {
-    const { isDeafened, currentChannelId } = get();
-    const nextDeafened = !isDeafened;
-    const nextMuted = nextDeafened ? true : get().isMuted;
+    joinDMCall: async (roomId: string, recipient: User, token?: string, livekitUrl?: string) => {
+      if (
+        get().voiceType === 'dm' &&
+        get().dmRoomId === roomId &&
+        (get().isConnected || get().isConnecting)
+      ) {
+        return;
+      }
 
-    try {
-      localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
+      await cleanupPreviousConnection();
+
+      set({
+        voiceType: 'dm',
+        isConnecting: true,
+        dmRoomId: roomId,
+        dmRecipient: recipient,
+        currentChannelId: null,
+        currentGuildId: null,
+        dmGroupId: null,
+        dmGroup: null,
+      });
+
+      const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
+      const shouldDeafen = get().isDeafened;
+      const shouldMute = shouldDeafen || isPTT || get().isMuted;
+
+      try {
+        let finalToken = token;
+        let finalUrl = livekitUrl;
+
+        if (!finalToken || !finalUrl) {
+          const res = await api.dms.acceptCall(roomId);
+          finalToken = res.token;
+          finalUrl = res.livekit_url;
+        }
+
+        if (get().dmRoomId !== roomId || get().voiceType !== 'dm') return;
+
+        await connectLiveKitRoom(finalUrl, finalToken, shouldMute, shouldDeafen);
+      } catch (err) {
+        console.error('[Voice] Failed to join DM call:', err);
+        set({
+          voiceType: null,
+          isConnected: false,
+          isConnecting: false,
+          dmRoomId: null,
+          dmRecipient: null,
+        });
+        throw err;
+      }
+    },
+
+    joinGroupVoice: async (groupId: string, group?: DMGroup) => {
+      if (
+        get().voiceType === 'group' &&
+        get().dmGroupId === groupId &&
+        (get().isConnected || get().isConnecting)
+      ) {
+        return;
+      }
+
+      await cleanupPreviousConnection();
+
+      set({
+        voiceType: 'group',
+        isConnecting: true,
+        dmGroupId: groupId,
+        dmGroup: group || null,
+        currentChannelId: null,
+        currentGuildId: null,
+        dmRoomId: null,
+        dmRecipient: null,
+      });
+
+      const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
+      const shouldDeafen = get().isDeafened;
+      const shouldMute = shouldDeafen || isPTT || get().isMuted;
+
+      try {
+        const res = await api.dmGroups.getVoiceToken(groupId);
+
+        if (get().dmGroupId !== groupId || get().voiceType !== 'group') return;
+
+        await connectLiveKitRoom(res.livekit_url, res.token, shouldMute, shouldDeafen);
+      } catch (err) {
+        console.error('[Voice] Failed to join DM group voice:', err);
+        set({
+          voiceType: null,
+          isConnected: false,
+          isConnecting: false,
+          dmGroupId: null,
+          dmGroup: null,
+        });
+        throw err;
+      }
+    },
+
+    leaveVoice: async () => {
+      const { voiceType, currentChannelId, dmRoomId } = get();
+      if (!voiceType && !currentChannelId && !dmRoomId) return;
+
+      try {
+        if (voiceType === 'guild' && currentChannelId) {
+          await api.channels.leaveVoice(currentChannelId);
+        } else if (voiceType === 'dm' && dmRoomId) {
+          await api.dms.leaveCall(dmRoomId);
+        }
+      } catch (err) {
+        console.warn('[Voice] Failed to notify leave API:', err);
+      }
+
+      try {
+        await get().stopScreenShare();
+      } catch {}
+      await livekit.disconnect();
+
+      set({
+        voiceType: null,
+        currentChannelId: null,
+        currentGuildId: null,
+        dmRoomId: null,
+        dmRecipient: null,
+        dmGroupId: null,
+        dmGroup: null,
+        isConnected: false,
+        isConnecting: false,
+        isScreensharing: false,
+        isCameraOn: false,
+        participants: [],
+        speakingUserIds: [],
+        watchedParticipantId: null,
+        watchedParticipantIds: [],
+      });
+    },
+
+    toggleMute: async () => {
+      const { isMuted, isDeafened, currentChannelId, voiceType } = get();
+      const nextMuted = !isMuted;
+      const nextDeafened = nextMuted ? isDeafened : false;
+
+      try {
+        localStorage.setItem('zerovc_user_muted', String(nextMuted));
+        localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
+      } catch {}
+
+      await livekit.setMuted(nextMuted);
+      if (!nextMuted && isDeafened) {
+        await livekit.setDeafened(false);
+      }
+
+      if (nextMuted) {
+        playMuteSound();
+      } else {
+        playUnmuteSound();
+      }
+
+      set({ isMuted: nextMuted, isDeafened: nextDeafened });
+
+      if (voiceType === 'guild' && currentChannelId) {
+        try {
+          await api.channels.updateVoiceState(currentChannelId, {
+            is_muted: nextMuted,
+            is_deafened: nextDeafened,
+          });
+        } catch (err) {
+          console.warn('[Voice] Failed to sync mute state:', err);
+        }
+      }
+    },
+
+    toggleDeafen: async () => {
+      const { isDeafened, currentChannelId, voiceType } = get();
+      const nextDeafened = !isDeafened;
+      const nextMuted = nextDeafened ? true : get().isMuted;
+
+      try {
+        localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
+        if (nextDeafened) {
+          localStorage.setItem('zerovc_user_muted', 'true');
+        }
+      } catch {}
+
+      await livekit.setDeafened(nextDeafened);
+
       if (nextDeafened) {
-        localStorage.setItem('zerovc_user_muted', 'true');
+        playDeafenSound();
+      } else {
+        playUndeafenSound();
       }
-    } catch {}
 
-    await livekit.setDeafened(nextDeafened);
+      set({ isDeafened: nextDeafened, isMuted: nextMuted });
 
-    if (nextDeafened) {
-      playDeafenSound();
-    } else {
-      playUndeafenSound();
-    }
+      if (voiceType === 'guild' && currentChannelId) {
+        try {
+          await api.channels.updateVoiceState(currentChannelId, {
+            is_deafened: nextDeafened,
+            is_muted: nextMuted,
+          });
+        } catch (err) {
+          console.warn('[Voice] Failed to sync deafen state:', err);
+        }
+      }
+    },
 
-    set({ isDeafened: nextDeafened, isMuted: nextMuted });
-
-    if (currentChannelId) {
+    toggleCamera: async () => {
+      const { isCameraOn } = get();
+      const nextCamera = !isCameraOn;
       try {
-        await api.channels.updateVoiceState(currentChannelId, {
-          is_deafened: nextDeafened,
-          is_muted: nextMuted,
-        });
+        await livekit.setCameraEnabled(nextCamera);
+        set({ isCameraOn: nextCamera });
       } catch (err) {
-        console.warn('[Voice] Failed to sync deafen state:', err);
+        console.error('[Voice] Failed to toggle camera:', err);
+        set({ isCameraOn: false });
       }
-    }
-  },
+    },
 
-  toggleCamera: async () => {
-    const { isCameraOn } = get();
-    const nextCamera = !isCameraOn;
-    try {
-      await livekit.setCameraEnabled(nextCamera);
-      set({ isCameraOn: nextCamera });
-    } catch (err) {
-      console.error('[Voice] Failed to toggle camera:', err);
-      set({ isCameraOn: false });
-    }
-  },
+    setUserVolume: (userId: string, volume: number) => {
+      livekit.setUserVolume(userId, volume);
+      const updated = {
+        ...get().userVolumes,
+        [userId]: volume,
+      };
+      saveUserVolumesToStorage(updated);
+      set({ userVolumes: updated, participantVolumes: updated });
+    },
 
-  setUserVolume: (userId: string, volume: number) => {
-    livekit.setUserVolume(userId, volume);
-    const updated = {
-      ...get().userVolumes,
-      [userId]: volume,
-    };
-    saveUserVolumesToStorage(updated);
-    set({ userVolumes: updated, participantVolumes: updated });
-  },
+    setStreamVolume: (userId: string, volume: number) => {
+      livekit.setStreamVolume(userId, volume);
+      const updated = {
+        ...get().streamVolumes,
+        [userId]: volume,
+      };
+      saveStreamVolumesToStorage(updated);
+      set({ streamVolumes: updated });
+    },
 
-  setStreamVolume: (userId: string, volume: number) => {
-    livekit.setStreamVolume(userId, volume);
-    const updated = {
-      ...get().streamVolumes,
-      [userId]: volume,
-    };
-    saveStreamVolumesToStorage(updated);
-    set({ streamVolumes: updated });
-  },
+    setParticipantVolume: (userId: string, volume: number) => {
+      get().setUserVolume(userId, volume);
+    },
 
-  setParticipantVolume: (userId: string, volume: number) => {
-    get().setUserVolume(userId, volume);
-  },
+    startScreenShare: async (
+      sourceId?: string,
+      config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }
+    ) => {
+      const { currentChannelId, voiceType } = get();
+      try {
+        await livekit.setScreenShareEnabled(true, sourceId, config);
+        set({ isScreensharing: true });
 
-  startScreenShare: async (sourceId?: string, config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }) => {
-    const { currentChannelId } = get();
-    try {
-      await livekit.setScreenShareEnabled(true, sourceId, config);
-      set({ isScreensharing: true });
-
-      if (currentChannelId) {
-        api.channels.updateVoiceState(currentChannelId, { is_screensharing: true }).catch(() => {});
+        if (voiceType === 'guild' && currentChannelId) {
+          api.channels.updateVoiceState(currentChannelId, { is_screensharing: true }).catch(() => {});
+        }
+      } catch (err) {
+        console.error('[Voice] Failed to start screen share:', err);
+        set({ isScreensharing: false });
       }
-    } catch (err) {
-      console.error('[Voice] Failed to start screen share:', err);
-      set({ isScreensharing: false });
-    }
-  },
+    },
 
-  stopScreenShare: async () => {
-    const { currentChannelId } = get();
-    try {
-      await livekit.setScreenShareEnabled(false);
-      set({ isScreensharing: false });
+    stopScreenShare: async () => {
+      const { currentChannelId, voiceType } = get();
+      try {
+        await livekit.setScreenShareEnabled(false);
+        set({ isScreensharing: false });
 
-      if (currentChannelId) {
-        api.channels.updateVoiceState(currentChannelId, { is_screensharing: false }).catch(() => {});
+        if (voiceType === 'guild' && currentChannelId) {
+          api.channels.updateVoiceState(currentChannelId, { is_screensharing: false }).catch(() => {});
+        }
+      } catch (err) {
+        console.error('[Voice] Failed to stop screen share:', err);
       }
-    } catch (err) {
-      console.error('[Voice] Failed to stop screen share:', err);
-    }
-  },
-}));
+    },
+  };
+});

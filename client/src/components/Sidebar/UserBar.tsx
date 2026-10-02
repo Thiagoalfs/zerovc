@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, Video, VideoOff, Gamepad2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -22,7 +22,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   const voiceBarRef = useRef<HTMLDivElement>(null);
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const {
+    voiceType,
     currentChannelId,
+    dmRoomId,
+    dmRecipient,
+    dmGroupId,
+    dmGroup,
     isConnected,
     isConnecting,
     isMuted,
@@ -39,6 +44,32 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
   const { activeGuild, selectChannel } = useGuildStore();
   const activeVoiceChannel = activeGuild?.channels?.find((c) => c.id === currentChannelId);
+
+  const voiceTitle = useMemo(() => {
+    if (voiceType === 'guild') {
+      return activeVoiceChannel?.name || 'Canal de Voz';
+    }
+    if (voiceType === 'dm') {
+      return dmRecipient?.display_name || dmRecipient?.username || 'Chamada 1:1';
+    }
+    if (voiceType === 'group') {
+      return dmGroup?.name || 'Chamada em Grupo';
+    }
+    return 'Voz Conectada';
+  }, [voiceType, activeVoiceChannel, dmRecipient, dmGroup]);
+
+  const voiceSubtitle = useMemo(() => {
+    if (voiceType === 'guild') {
+      return activeGuild?.name || 'Servidor';
+    }
+    if (voiceType === 'dm') {
+      return 'Em chamada direta';
+    }
+    if (voiceType === 'group') {
+      return 'Grupo de DM';
+    }
+    return 'ZeroVC';
+  }, [voiceType, activeGuild]);
 
   const isInVoice = Boolean(isConnected || isConnecting);
   const isGameActive = Boolean(
@@ -325,12 +356,14 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   <span
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (activeVoiceChannel) selectChannel(activeVoiceChannel);
+                      if (voiceType === 'guild' && activeVoiceChannel) {
+                        selectChannel(activeVoiceChannel);
+                      }
                     }}
                     className="text-[11px] text-gray-400 hover:text-gray-200 truncate leading-tight block min-w-0 cursor-pointer"
-                    title="Ir para o canal de voz"
+                    title={voiceSubtitle ? `${voiceTitle} — ${voiceSubtitle}` : voiceTitle}
                   >
-                    {activeVoiceChannel?.name || 'Canal de Voz'}
+                    {voiceTitle}
                   </span>
                 </div>
               </div>

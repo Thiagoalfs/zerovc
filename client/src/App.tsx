@@ -1133,6 +1133,22 @@ export const App: React.FC = () => {
         }
       };
 
+      const handleGroupUpdate = (event: any) => {
+        if (event.data) {
+          useDMGroupStore.getState().handleGroupUpdate(event.data);
+        }
+      };
+
+      const handleGroupLeave = (event: any) => {
+        if (event.data?.group_id) {
+          const activeG = useDMGroupStore.getState().activeGroup;
+          if (activeG?.id === event.data.group_id) {
+            setHomeView('friends');
+          }
+          useDMGroupStore.getState().handleGroupLeave(event.data);
+        }
+      };
+
       const handleGuildMemberAdd = (event: any) => {
         if (event.data?.guild_id && event.data?.member) {
           useGuildStore.getState().handleGuildMemberAdd(event.data.guild_id, event.data.member);
@@ -1261,6 +1277,8 @@ export const App: React.FC = () => {
       socket.on('GROUP_MESSAGE_CREATE', handleGroupMessageCreate);
       socket.on('GROUP_MESSAGE_UPDATE', handleGroupMessageUpdate);
       socket.on('GROUP_MESSAGE_DELETE', handleGroupMessageDelete);
+      socket.on('GROUP_UPDATE', handleGroupUpdate);
+      socket.on('GROUP_LEAVE', handleGroupLeave);
       socket.on('CALL_INCOMING', handleCallIncoming);
       socket.on('CALL_ACCEPT', handleCallAccept);
       socket.on('CALL_REJECT', handleCallEnd);
@@ -1321,8 +1339,9 @@ export const App: React.FC = () => {
           // 3. Resync friends list
           useFriendStore.getState().fetchFriends().catch(() => {});
 
-          // 4. Resync DM rooms
+          // 4. Resync DM rooms & groups
           useDMStore.getState().fetchRooms().catch(() => {});
+          useDMGroupStore.getState().fetchGroups().catch(() => {});
         } catch (err) {
           console.error('[Socket Resync] Failed to resync on reconnection:', err);
         }
@@ -1345,6 +1364,8 @@ export const App: React.FC = () => {
         socket.off('GROUP_MESSAGE_CREATE', handleGroupMessageCreate);
         socket.off('GROUP_MESSAGE_UPDATE', handleGroupMessageUpdate);
         socket.off('GROUP_MESSAGE_DELETE', handleGroupMessageDelete);
+        socket.off('GROUP_UPDATE', handleGroupUpdate);
+        socket.off('GROUP_LEAVE', handleGroupLeave);
         socket.off('CALL_INCOMING', handleCallIncoming);
         socket.off('CALL_ACCEPT', handleCallAccept);
         socket.off('CALL_REJECT', handleCallEnd);
@@ -1749,6 +1770,12 @@ export const App: React.FC = () => {
                   setSelectedUserForProfile({ user: targetUser, position: pos })
                 }
                 onPreviewImage={(url) => setPreviewImageUrl(url)}
+                onOpenScreenShare={() => setIsScreenShareOpen(true)}
+                onOpenDM={(userId) => {
+                  setIsHomeActive(true);
+                  setHomeView('dm');
+                  setIsMobileDrawerOpen(false);
+                }}
               />
             ) : (
               <DMChatArea
