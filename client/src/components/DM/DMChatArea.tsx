@@ -562,6 +562,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
       {/* Universal Message Input */}
       <MessageInput
+        channel={{ id: activeRoom?.id, name: recipient?.display_name || recipient?.username }}
         placeholder={recipient ? `Conversar com @${recipient.display_name || recipient.username}` : 'Conversar...'}
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}

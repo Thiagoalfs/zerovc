@@ -894,6 +894,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           {/* Message Input */}
           <div className="p-3 md:p-4 pt-1 bg-background-dark">
             <MessageInput
+              channel={{ id: activeGroup?.id, name: groupName }}
               placeholder={`Conversar em ${groupName}...`}
               replyingTo={replyingTo}
               onCancelReply={() => setReplyingTo(null)}
