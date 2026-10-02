@@ -831,18 +831,20 @@ func (h *DMGroupHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var authorID, ownerID uuid.UUID
+	var invokerID *uuid.UUID
 	err = h.db.Pool.QueryRow(r.Context(), `
-		SELECT m.author_id, g.owner_id
+		SELECT m.author_id, m.invoker_id, g.owner_id
 		FROM dm_group_messages m
 		INNER JOIN dm_groups g ON g.id = m.group_id
 		WHERE m.id = $1 AND m.group_id = $2
-	`, messageID, groupID).Scan(&authorID, &ownerID)
+	`, messageID, groupID).Scan(&authorID, &invokerID, &ownerID)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
 	}
 
-	if userID != authorID && userID != ownerID {
+	isInvoker := invokerID != nil && *invokerID == userID
+	if userID != authorID && userID != ownerID && !isInvoker {
 		http.Error(w, `{"error":"forbidden: only message author or group owner can delete"}`, http.StatusForbidden)
 		return
 	}
@@ -906,13 +908,15 @@ func (h *DMGroupHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var authorID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id FROM dm_group_messages WHERE id = $1 AND group_id = $2", messageID, groupID).Scan(&authorID)
+	var invokerID *uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id, invoker_id FROM dm_group_messages WHERE id = $1 AND group_id = $2", messageID, groupID).Scan(&authorID, &invokerID)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
 	}
 
-	if userID != authorID {
+	isInvoker := invokerID != nil && *invokerID == userID
+	if userID != authorID && !isInvoker {
 		http.Error(w, `{"error":"forbidden: only author can edit message"}`, http.StatusForbidden)
 		return
 	}

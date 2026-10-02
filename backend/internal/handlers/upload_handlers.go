@@ -30,6 +30,8 @@ func NewUploadHandler(baseDir string) *UploadHandler {
 	}
 }
 
+var GorkBotID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
 var dangerousExtensions = map[string]bool{
 	".exe":   true,
 	".bat":   true,
@@ -62,59 +64,74 @@ var allowedImageExtensions = map[string]bool{
 }
 
 func (h *UploadHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
-	_, ok := auth.GetUserIDFromContext(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
 
-	h.handleUpload(w, r, "user", "avatar", true)
+	h.handleUpload(w, r, "user", "avatar", true, userID)
 }
 
 func (h *UploadHandler) UploadGuildIcon(w http.ResponseWriter, r *http.Request) {
-	_, ok := auth.GetUserIDFromContext(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
 
-	h.handleUpload(w, r, "guild", "icon", true)
+	h.handleUpload(w, r, "guild", "icon", true, userID)
 }
 
 func (h *UploadHandler) UploadGuildBanner(w http.ResponseWriter, r *http.Request) {
-	_, ok := auth.GetUserIDFromContext(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
 
-	h.handleUpload(w, r, "guild", "banner", true)
+	h.handleUpload(w, r, "guild", "banner", true, userID)
 }
 
 func (h *UploadHandler) UploadBanner(w http.ResponseWriter, r *http.Request) {
-	_, ok := auth.GetUserIDFromContext(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
 
-	h.handleUpload(w, r, "user", "banner", true)
+	h.handleUpload(w, r, "user", "banner", true, userID)
 }
 
 func (h *UploadHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
-	_, ok := auth.GetUserIDFromContext(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
 
-	h.handleUpload(w, r, "user", "att", false)
+	h.handleUpload(w, r, "user", "att", false, userID)
 }
 
-func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string, imageOnly bool) {
-	// Max 20 MB
-	if err := r.ParseMultipartForm(20 << 20); err != nil {
-		http.Error(w, `{"error":"O limite de arquivos é 20MB"}`, http.StatusBadRequest)
+func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string, imageOnly bool, userID uuid.UUID) {
+	maxSize := int64(20 << 20) // 20 MB padrão
+
+	botHeader := r.Header.Get("X-Bot-ID")
+	if botHeader == "" {
+		botHeader = r.URL.Query().Get("bot_id")
+	}
+
+	isGork := userID == GorkBotID || botHeader == "00000000-0000-0000-0000-000000000001" || botHeader == GorkBotID.String()
+	if isGork {
+		maxSize = 100 << 20 // Permite até 100MB para o bot Gork
+	}
+
+	if err := r.ParseMultipartForm(maxSize); err != nil {
+		if isGork {
+			http.Error(w, `{"error":"O limite de arquivos para o bot Gork é 100MB"}`, http.StatusBadRequest)
+		} else {
+			http.Error(w, `{"error":"O limite de arquivos é 20MB"}`, http.StatusBadRequest)
+		}
 		return
 	}
 

@@ -1083,13 +1083,15 @@ func (h *DMHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var authorID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id FROM dm_messages WHERE id = $1 AND dm_room_id = $2", messageID, roomID).Scan(&authorID)
+	var invokerID *uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id, invoker_id FROM dm_messages WHERE id = $1 AND dm_room_id = $2", messageID, roomID).Scan(&authorID, &invokerID)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
 	}
 
-	if authorID != userID {
+	isInvoker := invokerID != nil && *invokerID == userID
+	if authorID != userID && !isInvoker {
 		http.Error(w, `{"error":"forbidden: only author can delete message"}`, http.StatusForbidden)
 		return
 	}
@@ -1168,13 +1170,15 @@ func (h *DMHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var authorID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id FROM dm_messages WHERE id = $1 AND dm_room_id = $2", messageID, roomID).Scan(&authorID)
+	var invokerID *uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id, invoker_id FROM dm_messages WHERE id = $1 AND dm_room_id = $2", messageID, roomID).Scan(&authorID, &invokerID)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
 	}
 
-	if authorID != userID {
+	isInvoker := invokerID != nil && *invokerID == userID
+	if authorID != userID && !isInvoker {
 		http.Error(w, `{"error":"forbidden: only author can edit message"}`, http.StatusForbidden)
 		return
 	}
