@@ -245,13 +245,15 @@ func (h *DMHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
-		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url
+		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url,
+		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM dm_messages m
 		INNER JOIN users u ON u.id = m.author_id
 		LEFT JOIN dm_messages rm ON rm.id = m.reply_to_id
 		LEFT JOIN users ru ON ru.id = rm.author_id
+		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE m.dm_room_id = $1 AND ($3::timestamptz IS NULL OR m.created_at < $3)
 		ORDER BY m.created_at DESC
 		LIMIT $2
@@ -269,18 +271,46 @@ func (h *DMHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var msg models.DMMessage
 		var attachmentsJSON []byte
+		var embedsJSON []byte
 		var author models.UserPublic
 		var rID, ruID *uuid.UUID
 		var rContent, ruUsername, ruDisplayName, ruAvatar *string
+		var invID *uuid.UUID
+		var invUsername, invDisplayName, invAvatar *string
 
 		if err := rows.Scan(
-			&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &attachmentsJSON, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+			&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &attachmentsJSON, &embedsJSON, &msg.InvokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
+			&invID, &invUsername, &invDisplayName, &invAvatar,
 		); err == nil {
 			author.ID = msg.AuthorID
 			msg.Author = author
 			json.Unmarshal(attachmentsJSON, &msg.Attachments)
+			if len(embedsJSON) > 0 {
+				json.Unmarshal(embedsJSON, &msg.Embeds)
+			}
+			if msg.Embeds == nil {
+				msg.Embeds = make([]models.MessageEmbed, 0)
+			}
+			if invID != nil {
+				var dName, aUrl, uName string
+				if invDisplayName != nil {
+					dName = *invDisplayName
+				}
+				if invAvatar != nil {
+					aUrl = *invAvatar
+				}
+				if invUsername != nil {
+					uName = *invUsername
+				}
+				msg.Invoker = &models.UserPublic{
+					ID:          *invID,
+					Username:    uName,
+					DisplayName: dName,
+					AvatarURL:   aUrl,
+				}
+			}
 
 			if rID != nil && ruID != nil {
 				var dName, aUrl, uName, cnt string

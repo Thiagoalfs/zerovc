@@ -575,10 +575,12 @@ func (h *DMGroupHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
-		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
+		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
+		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM dm_group_messages m
 		INNER JOIN users u ON u.id = m.author_id
+		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE m.group_id = $1 AND ($3::timestamptz IS NULL OR m.created_at < $3)
 		ORDER BY m.created_at DESC
 		LIMIT $2
@@ -594,9 +596,14 @@ func (h *DMGroupHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var msg models.DMGroupMessage
 		var attachBytes []byte
+		var embedsBytes []byte
+		var invID *uuid.UUID
+		var invUsername, invDisplayName, invAvatar *string
+
 		if err := rows.Scan(
-			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &embedsBytes, &msg.InvokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
 			&msg.Author.Username, &msg.Author.DisplayName, &msg.Author.AvatarURL, &msg.Author.BannerURL, &msg.Author.Bio, &msg.Author.Status, &msg.Author.CustomStatus,
+			&invID, &invUsername, &invDisplayName, &invAvatar,
 		); err == nil {
 			msg.Author.ID = msg.AuthorID
 			if len(attachBytes) > 0 {
@@ -604,6 +611,30 @@ func (h *DMGroupHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 			}
 			if msg.Attachments == nil {
 				msg.Attachments = make([]models.Attachment, 0)
+			}
+			if len(embedsBytes) > 0 {
+				json.Unmarshal(embedsBytes, &msg.Embeds)
+			}
+			if msg.Embeds == nil {
+				msg.Embeds = make([]models.MessageEmbed, 0)
+			}
+			if invID != nil {
+				var dName, aUrl, uName string
+				if invDisplayName != nil {
+					dName = *invDisplayName
+				}
+				if invAvatar != nil {
+					aUrl = *invAvatar
+				}
+				if invUsername != nil {
+					uName = *invUsername
+				}
+				msg.Invoker = &models.UserPublic{
+					ID:          *invID,
+					Username:    uName,
+					DisplayName: dName,
+					AvatarURL:   aUrl,
+				}
 			}
 			messages = append(messages, msg)
 		}
@@ -956,10 +987,12 @@ func (h *DMGroupHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
-		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
+		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
+		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM dm_group_messages m
 		INNER JOIN users u ON u.id = m.author_id
+		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE m.group_id = $1 AND m.is_pinned = true
 		ORDER BY m.created_at DESC
 		LIMIT 100
@@ -974,17 +1007,40 @@ func (h *DMGroupHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	messages := make([]models.DMGroupMessage, 0)
 	for rows.Next() {
 		var msg models.DMGroupMessage
-		var attachBytes []byte
+		var attachBytes, embedsBytes []byte
+		var invokerID, invokerUserID *uuid.UUID
+		var invokerUsername, invokerDisplayName, invokerAvatarURL *string
+
 		if err := rows.Scan(
-			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &embedsBytes, &invokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
 			&msg.Author.Username, &msg.Author.DisplayName, &msg.Author.AvatarURL, &msg.Author.BannerURL, &msg.Author.Bio, &msg.Author.Status, &msg.Author.CustomStatus,
+			&invokerUserID, &invokerUsername, &invokerDisplayName, &invokerAvatarURL,
 		); err == nil {
 			msg.Author.ID = msg.AuthorID
+			msg.InvokerID = invokerID
+			if invokerUserID != nil && invokerUsername != nil {
+				var dName, aUrl string
+				if invokerDisplayName != nil {
+					dName = *invokerDisplayName
+				}
+				if invokerAvatarURL != nil {
+					aUrl = *invokerAvatarURL
+				}
+				msg.Invoker = &models.UserPublic{
+					ID:          *invokerUserID,
+					Username:    *invokerUsername,
+					DisplayName: dName,
+					AvatarURL:   aUrl,
+				}
+			}
 			if len(attachBytes) > 0 {
 				json.Unmarshal(attachBytes, &msg.Attachments)
 			}
 			if msg.Attachments == nil {
 				msg.Attachments = make([]models.Attachment, 0)
+			}
+			if len(embedsBytes) > 0 {
+				json.Unmarshal(embedsBytes, &msg.Embeds)
 			}
 			messages = append(messages, msg)
 		}

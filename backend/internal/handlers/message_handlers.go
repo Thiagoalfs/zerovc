@@ -407,13 +407,15 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
+		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
-		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url
+		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url,
+		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM messages m
 		INNER JOIN users u ON u.id = m.author_id
 		LEFT JOIN messages rm ON rm.id = m.reply_to_id
 		LEFT JOIN users ru ON ru.id = rm.author_id
+		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE m.channel_id = $1 AND ($3::timestamptz IS NULL OR m.created_at < $3)
 		ORDER BY m.created_at DESC
 		LIMIT $2
@@ -432,20 +434,48 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var m models.Message
 		var attachmentsJSON []byte
+		var embedsJSON []byte
 		var author models.UserPublic
 		var rID, ruID *uuid.UUID
 		var rContent, ruUsername, ruDisplayName, ruAvatar *string
+		var invID *uuid.UUID
+		var invUsername, invDisplayName, invAvatar *string
 
 		if err := rows.Scan(
-			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &m.InvokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
+			&invID, &invUsername, &invDisplayName, &invAvatar,
 		); err != nil {
 			continue
 		}
 		author.ID = m.AuthorID
 		m.Author = author
 		json.Unmarshal(attachmentsJSON, &m.Attachments)
+		if len(embedsJSON) > 0 {
+			json.Unmarshal(embedsJSON, &m.Embeds)
+		}
+		if m.Embeds == nil {
+			m.Embeds = make([]models.MessageEmbed, 0)
+		}
+		if invID != nil {
+			var dName, aUrl, uName string
+			if invDisplayName != nil {
+				dName = *invDisplayName
+			}
+			if invAvatar != nil {
+				aUrl = *invAvatar
+			}
+			if invUsername != nil {
+				uName = *invUsername
+			}
+			m.Invoker = &models.UserPublic{
+				ID:          *invID,
+				Username:    uName,
+				DisplayName: dName,
+				AvatarURL:   aUrl,
+			}
+		}
 
 		if rID != nil && ruID != nil {
 			var dName, aUrl string
@@ -779,13 +809,15 @@ func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
+		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
-		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url
+		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url,
+		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM messages m
 		INNER JOIN users u ON u.id = m.author_id
 		LEFT JOIN messages rm ON rm.id = m.reply_to_id
 		LEFT JOIN users ru ON ru.id = rm.author_id
+		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE m.channel_id = $1 AND m.is_pinned = true
 		ORDER BY m.created_at DESC
 		LIMIT 100
@@ -804,20 +836,48 @@ func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var m models.Message
 		var attachmentsJSON []byte
+		var embedsJSON []byte
 		var author models.UserPublic
 		var rID, ruID *uuid.UUID
 		var rContent, ruUsername, ruDisplayName, ruAvatar *string
+		var invID *uuid.UUID
+		var invUsername, invDisplayName, invAvatar *string
 
 		if err := rows.Scan(
-			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &m.InvokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
+			&invID, &invUsername, &invDisplayName, &invAvatar,
 		); err != nil {
 			continue
 		}
 		author.ID = m.AuthorID
 		m.Author = author
 		json.Unmarshal(attachmentsJSON, &m.Attachments)
+		if len(embedsJSON) > 0 {
+			json.Unmarshal(embedsJSON, &m.Embeds)
+		}
+		if m.Embeds == nil {
+			m.Embeds = make([]models.MessageEmbed, 0)
+		}
+		if invID != nil {
+			var dName, aUrl, uName string
+			if invDisplayName != nil {
+				dName = *invDisplayName
+			}
+			if invAvatar != nil {
+				aUrl = *invAvatar
+			}
+			if invUsername != nil {
+				uName = *invUsername
+			}
+			m.Invoker = &models.UserPublic{
+				ID:          *invID,
+				Username:    uName,
+				DisplayName: dName,
+				AvatarURL:   aUrl,
+			}
+		}
 
 		if rID != nil && ruID != nil {
 			var dName, aUrl string
@@ -946,11 +1006,13 @@ func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT 
-			m.id, m.channel_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
-			u.id, u.username, u.display_name, u.avatar_url, u.status
+			m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+			u.id, u.username, u.display_name, u.avatar_url, u.status,
+			iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM messages m
 		INNER JOIN channels c ON c.id = m.channel_id
 		INNER JOIN users u ON u.id = m.author_id
+		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE c.guild_id = $1
 		  AND (
 		    c.is_private = false
@@ -983,14 +1045,37 @@ func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var m models.Message
 		var author models.UserPublic
-		var attachmentsJSON []byte
+		var attachmentsJSON, embedsJSON []byte
+		var invokerID, invokerUserID *uuid.UUID
+		var invokerUsername, invokerDisplayName, invokerAvatarURL *string
+
 		err := rows.Scan(
-			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt,
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &invokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt,
 			&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
+			&invokerUserID, &invokerUsername, &invokerDisplayName, &invokerAvatarURL,
 		)
 		if err == nil {
 			m.Author = author
+			m.InvokerID = invokerID
+			if invokerUserID != nil && invokerUsername != nil {
+				var dName, aUrl string
+				if invokerDisplayName != nil {
+					dName = *invokerDisplayName
+				}
+				if invokerAvatarURL != nil {
+					aUrl = *invokerAvatarURL
+				}
+				m.Invoker = &models.UserPublic{
+					ID:          *invokerUserID,
+					Username:    *invokerUsername,
+					DisplayName: dName,
+					AvatarURL:   aUrl,
+				}
+			}
 			json.Unmarshal(attachmentsJSON, &m.Attachments)
+			if len(embedsJSON) > 0 {
+				json.Unmarshal(embedsJSON, &m.Embeds)
+			}
 			results = append(results, m)
 		}
 	}
