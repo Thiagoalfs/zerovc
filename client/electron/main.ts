@@ -1229,6 +1229,196 @@ ipcMain.handle('stop-process-audio-capture', async () => {
   return { success: true };
 });
 
+// yt-dlp Local Processing IPC
+ipcMain.handle('ytdlp-download', async (_, { format, link }: { format: 'mp4' | 'mp3'; link: string }) => {
+  try {
+    if (!link || typeof link !== 'string') {
+      return { success: false, error: 'Link não fornecido ou inválido.' };
+    }
+
+    const trimmed = link.trim();
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      return { success: false, error: 'O link deve começar com http:// ou https://.' };
+    }
+
+    // Reject playlist URLs
+    const lower = trimmed.toLowerCase();
+    if (lower.includes('list=') || lower.includes('/playlist') || lower.includes('playlist?')) {
+      return { success: false, error: 'Playlists não são permitidas. Envie apenas o link de um vídeo ou áudio individual.' };
+    }
+
+    // Clean URL query parameters
+    let cleanUrl = trimmed;
+    try {
+      const parsedUrl = new URL(trimmed);
+      parsedUrl.searchParams.delete('list');
+      parsedUrl.searchParams.delete('index');
+      parsedUrl.searchParams.delete('start_radio');
+      parsedUrl.searchParams.delete('pp');
+      parsedUrl.searchParams.delete('si');
+      parsedUrl.searchParams.delete('feature');
+      cleanUrl = parsedUrl.toString();
+    } catch {
+      cleanUrl = trimmed;
+    }
+
+    const docsDir = path.join(app.getPath('documents'), 'zerovc');
+    if (!fs.existsSync(docsDir)) {
+      fs.mkdirSync(docsDir, { recursive: true });
+    }
+
+    const outTemplate = path.join(docsDir, `dl_${Date.now()}_%(id)s.%(ext)s`);
+
+    const args: string[] = [
+      '--no-playlist',
+      '--no-warnings',
+      '--restrict-filenames',
+      '--print', 'after_move:filepath',
+      '--print', 'title',
+      '-o', outTemplate,
+    ];
+
+    if (format === 'mp3') {
+      args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0', '--max-filesize', '50M');
+    } else {
+      args.push(
+        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '--merge-output-format', 'mp4',
+        '--max-filesize', '100M'
+      );
+    }
+
+    args.push(cleanUrl);
+
+    console.log(`[yt-dlp] Starting local download: ${cleanUrl} (${format})`);
+
+    const result = await new Promise<{ ok: boolean; stdout: string; stderr: string }>((resolve) => {
+      const proc = spawn('yt-dlp', args, { windowsHide: true });
+      let stdout = '';
+      let stderr = '';
+
+      proc.stdout.on('data', (d) => { stdout += d.toString(); });
+      proc.stderr.on('data', (d) => { stderr += d.toString(); });
+
+      proc.on('close', (code) => {
+        resolve({ ok: code === 0, stdout, stderr });
+      });
+
+      proc.on('error', (err) => {
+        resolve({ ok: false, stdout, stderr: err.message });
+      });
+    });
+
+    if (!result.ok) {
+      console.error(`[yt-dlp] Execution failed:`, result.stderr);
+      let userError = 'Erro ao processar mídia com yt-dlp.';
+      if (result.stderr.includes('is larger than max-filesize')) {
+        userError = 'O arquivo é muito grande (máximo 50MB para áudio / 100MB para vídeo).';
+      } else if (result.stderr.includes('Private video') || result.stderr.includes('Video unavailable')) {
+        userError = 'Vídeo privado ou indisponível.';
+      } else if (result.stderr.includes('ENOENT') || result.stderr.includes('not found')) {
+        userError = 'yt-dlp não está instalado ou acessível no PATH do computador.';
+      }
+      return { success: false, error: userError };
+    }
+
+    const lines = result.stdout.trim().split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 1) {
+      return { success: false, error: 'Nenhum arquivo retornado pelo yt-dlp.' };
+    }
+
+    // The printed lines are: title and then after_move:filepath (or filepath)
+    let downloadedPath = '';
+    let title = 'Mídia';
+
+    for (const line of lines) {
+      if (fs.existsSync(line)) {
+        downloadedPath = line;
+      } else if (line.length > 0 && !downloadedPath) {
+        title = line;
+      }
+    }
+
+    if (!downloadedPath || !fs.existsSync(downloadedPath)) {
+      // Look in zerovc directory for recent files
+      const files = fs.readdirSync(docsDir);
+      const matching = files
+        .map((f) => path.join(docsDir, f))
+        .filter((f) => fs.statSync(f).isFile())
+        .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+
+      if (matching.length > 0) {
+        downloadedPath = matching[0];
+      }
+    }
+
+    if (!downloadedPath || !fs.existsSync(downloadedPath)) {
+      return { success: false, error: 'Arquivo baixado não foi encontrado no disco.' };
+    }
+
+    // Security Check: strictly ensure file is inside zerovc directory
+    const resolvedPath = path.resolve(downloadedPath);
+    const resolvedDocsDir = path.resolve(docsDir);
+    if (!resolvedPath.startsWith(resolvedDocsDir)) {
+      try { fs.unlinkSync(resolvedPath); } catch {}
+      return { success: false, error: 'Violação de segurança de caminho de arquivo.' };
+    }
+
+    const stats = fs.statSync(resolvedPath);
+    if (stats.size === 0) {
+      try { fs.unlinkSync(resolvedPath); } catch {}
+      return { success: false, error: 'O arquivo baixado está vazio.' };
+    }
+
+    // Security Check: Validate file header magic bytes
+    const buffer = fs.readFileSync(resolvedPath);
+    const mimeType = format === 'mp3' ? 'audio/mpeg' : 'video/mp4';
+
+    let isValid = false;
+    if (format === 'mp4') {
+      // MP4: Check for 'ftyp' box in first 64 bytes
+      const headerStr = buffer.subarray(0, 64).toString('latin1');
+      isValid = headerStr.includes('ftyp');
+    } else {
+      // MP3: Check for ID3 tag or MPEG sync word
+      const headerStr = buffer.subarray(0, 3).toString('latin1');
+      const b0 = buffer[0];
+      const b1 = buffer[1];
+      isValid = headerStr === 'ID3' || (b0 === 0xFF && (b1 & 0xE0) === 0xE0);
+    }
+
+    if (!isValid) {
+      try { fs.unlinkSync(resolvedPath); } catch {}
+      return { success: false, error: 'Falha na validação de segurança do formato do arquivo.' };
+    }
+
+    const base64Data = buffer.toString('base64');
+    const filename = path.basename(resolvedPath);
+
+    // Immediately delete the local file as requested
+    try {
+      fs.unlinkSync(resolvedPath);
+      console.log(`[yt-dlp] Local file successfully wiped: ${resolvedPath}`);
+    } catch (wipeErr) {
+      console.warn(`[yt-dlp] Warning deleting local file:`, wipeErr);
+    }
+
+    return {
+      success: true,
+      data: {
+        base64: base64Data,
+        filename,
+        mimeType,
+        title,
+        size: stats.size,
+      },
+    };
+  } catch (err: any) {
+    console.error('[yt-dlp] Unexpected error:', err);
+    return { success: false, error: err?.message || 'Erro inesperado no processamento do yt-dlp.' };
+  }
+});
+
 let activeAudioProcess: ChildProcess | null = null;
 let activeAudioBuffer = Buffer.alloc(0);
 const AUDIO_CHUNK_BYTES = 3840; // 480 frames * 2 channels * 4 bytes (Float32) = 10ms at 48kHz

@@ -854,4 +854,21 @@ export const api = {
       return request<GameSearchResult[]>(`/games/search?${q.toString()}`);
     },
   },
+  commands: {
+    executeChannelCommand: (channelId: string, data: { command: string; subcommand?: string; args?: Record<string, any>; attachments?: any[] }) =>
+      request<Message>(`/channels/${channelId}/bot/command`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    executeDMRoomCommand: (roomId: string, data: { command: string; subcommand?: string; args?: Record<string, any>; attachments?: any[] }) =>
+      request<DMMessage>(`/dm/rooms/${roomId}/bot/command`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    executeDMGroupCommand: (groupId: string, data: { command: string; subcommand?: string; args?: Record<string, any>; attachments?: any[] }) =>
+      request<DMGroupMessage>(`/dm/groups/${groupId}/bot/command`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
 };

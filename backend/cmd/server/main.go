@@ -27,6 +27,7 @@ import (
 	appMiddleware "github.com/zerovc/zerovc/backend/internal/middleware"
 	"github.com/zerovc/zerovc/backend/internal/models"
 	"github.com/zerovc/zerovc/backend/internal/ratelimit"
+	"github.com/zerovc/zerovc/backend/internal/services"
 	"github.com/zerovc/zerovc/backend/internal/voice"
 )
 
@@ -155,6 +156,8 @@ func main() {
 	dmHandler := handlers.NewDMHandler(db, hub, livekitService)
 	dmGroupHandler := handlers.NewDMGroupHandler(db, hub, livekitService)
 	linkPreviewHandler := handlers.NewLinkPreviewHandler()
+	riotService := services.NewRiotService()
+	commandHandler := handlers.NewCommandHandler(db, hub, riotService)
 
 	uploadDir := getEnv("UPLOAD_DIR", "./assets")
 	uploadHandler := handlers.NewUploadHandler(uploadDir)
@@ -403,7 +406,11 @@ func main() {
 		r.With(messageMutationLimiter.Middleware).Delete("/api/channels/{channelID}/messages/{messageID}", messageHandler.Delete)
 		r.With(reactionLimiter.Middleware).Post("/api/channels/{channelID}/messages/{messageID}/reactions", messageHandler.AddReaction)
 		r.With(reactionLimiter.Middleware).Delete("/api/channels/{channelID}/messages/{messageID}/reactions/{emoji}", messageHandler.RemoveReaction)
-		r.With(pinLimiter.Middleware).Post("/api/channels/{channelID}/messages/{messageID}/pin", messageHandler.TogglePin)
+		// Bot Commands (Protected)
+		r.With(messageLimiter.Middleware).Post("/api/channels/{id}/bot/command", commandHandler.ExecuteGuildCommand)
+		r.With(messageLimiter.Middleware).Post("/api/dms/{id}/bot/command", commandHandler.ExecuteDMRoomCommand)
+		r.With(messageLimiter.Middleware).Post("/api/dm/rooms/{id}/bot/command", commandHandler.ExecuteDMRoomCommand)
+		r.With(messageLimiter.Middleware).Post("/api/dm/groups/{id}/bot/command", commandHandler.ExecuteDMGroupCommand)
 
 		// Voice & WebRTC (Protected)
 		r.With(voiceJoinLimiter.Middleware).Post("/api/channels/{id}/join-voice", channelHandler.JoinVoice)

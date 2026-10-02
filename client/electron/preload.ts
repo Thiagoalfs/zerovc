@@ -57,11 +57,17 @@ export interface ElectronAPI {
   relaunchApp: () => void;
   onActivityDetected: (callback: (activity: any) => void) => () => void;
   getCurrentActivity: () => Promise<any>;
+  ytdlpDownload: (args: { format: 'mp4' | 'mp3'; link: string }) => Promise<{
+    success: boolean;
+    data?: { base64: string; filename: string; mimeType: string; title: string; size: number };
+    error?: string;
+  }>;
 }
 
 const electronAPI: ElectronAPI = {
   isElectron: true,
   platform: process.platform,
+  ytdlpDownload: (args) => ipcRenderer.invoke('ytdlp-download', args),
   startProcessAudioCapture: (options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => ipcRenderer.invoke('start-process-audio-capture', options),
   stopProcessAudioCapture: () => ipcRenderer.invoke('stop-process-audio-capture'),
   onProcessAudioChunk: (callback) => {
