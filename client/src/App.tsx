@@ -743,13 +743,8 @@ export const App: React.FC = () => {
 
           let resolvedActivity = detectedActivity;
           if (detectedActivity && detectedActivity.name) {
-            // Priority 1: Check curated icons (e.g. Minecraft 3D grass block), then Steam/Game Search API for square game icon
             let iconUrl = detectedActivity.icon_url;
-            const lowerName = detectedActivity.name.toLowerCase();
-            if (lowerName === 'minecraft') {
-              iconUrl = 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/minecraft.png';
-              resolvedActivity = { ...detectedActivity, icon_url: iconUrl };
-            } else if (!iconUrl) {
+            if (!iconUrl) {
               try {
                 const gameMatches = await api.games.search(detectedActivity.name);
                 if (gameMatches && gameMatches.length > 0) {

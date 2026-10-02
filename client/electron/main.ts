@@ -852,25 +852,28 @@ async function getProcessIcon(gameName: string, processNames: string[]): Promise
 
     const lowerGameName = (gameName || '').toLowerCase();
 
-    // Priority: Minecraft official 3D grass block icon from CDN
-    if (lowerGameName === 'minecraft') {
-      return 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/minecraft.png';
-    }
-
     if (process.platform === 'win32') {
-      // 1. Direct Known Launcher Metadata (Riot Games, etc.)
-      const riotMetadataMap: Record<string, string> = {
-        'league of legends': 'C:/ProgramData/Riot Games/Metadata/league_of_legends.live/league_of_legends.live.ico',
-        'valorant': 'C:/ProgramData/Riot Games/Metadata/valorant.live/valorant.live.ico',
-        'teamfight tactics': 'C:/ProgramData/Riot Games/Metadata/teamfighttactics.live/teamfighttactics.live.ico',
-        'riot client': 'C:/Riot Games/Riot Client/Resources/icon.ico',
-      };
+      // 1. Query running process executable path via PowerShell for the real native .exe icon
+      for (const procName of processNames) {
+        const cleanName = procName.replace(/\.exe$/i, '');
+        const { exec } = require('child_process');
+        const exePath: string = await new Promise((resolve) => {
+          exec(
+            `powershell -NoProfile -Command "(Get-Process -Name '${cleanName}' -ErrorAction SilentlyContinue).Path | Select-Object -First 1"`,
+            { windowsHide: true, timeout: 2000 },
+            (err: any, stdout: string) => {
+              if (err || !stdout) return resolve('');
+              resolve(stdout.trim());
+            }
+          );
+        });
 
-      if (riotMetadataMap[lowerGameName]) {
-        const directIcon = await loadFileAsIconDataUrl(riotMetadataMap[lowerGameName]);
-        if (directIcon) {
-          gameIconCache.set(cacheKey, directIcon);
-          return directIcon;
+        if (exePath) {
+          const icon = await loadFileAsIconDataUrl(exePath);
+          if (icon) {
+            gameIconCache.set(cacheKey, icon);
+            return icon;
+          }
         }
       }
 

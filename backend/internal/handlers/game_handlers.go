@@ -73,35 +73,15 @@ type steamSearchItem struct {
 	Logo  string          `json:"logo"`
 }
 
-var curatedGameIcons = map[string]string{
-	"minecraft":          "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/minecraft.png",
-	"league of legends":  "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/league-of-legends.png",
-	"valorant":           "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/valorant.png",
-	"teamfight tactics":  "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/teamfight-tactics.png",
-	"roblox":             "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/roblox.png",
-	"fortnite":           "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/fortnite.png",
-	"genshin impact":     "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/genshin-impact.png",
-	"honkai: star rail":  "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/honkai-star-rail.png",
-	"spotify":            "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/spotify.png",
-	"discord":            "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/discord.png",
-	"visual studio code": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/visual-studio-code.png",
-	"obs studio":         "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/obs-studio.png",
-	"blender":            "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/blender.png",
-	"adobe photoshop":    "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/photoshop.png",
-}
-
-func getCuratedOrSteamIcon(name string, steamMatches map[string]string) string {
-	lower := strings.ToLower(strings.TrimSpace(name))
-	if icon, ok := curatedGameIcons[lower]; ok {
+func findSteamIcon(name string, steamMatches map[string]string) string {
+	clean := strings.ToLower(strings.TrimSpace(name))
+	if icon, ok := steamMatches[clean]; ok && icon != "" {
 		return icon
 	}
-	for k, v := range curatedGameIcons {
-		if strings.Contains(lower, k) || strings.Contains(k, lower) {
+	for k, v := range steamMatches {
+		if strings.Contains(clean, k) || strings.Contains(k, clean) {
 			return v
 		}
-	}
-	if icon, ok := steamMatches[lower]; ok && icon != "" {
-		return icon
 	}
 	return ""
 }
@@ -134,7 +114,7 @@ func (h *GameHandler) SearchGames(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	// 2. Query Steam Search for official square game icons
+	// 2. Query Steam Search dynamically for real-time game icons
 	steamMatches := make(map[string]string)
 	steamResults := make([]GameSearchResult, 0)
 
@@ -150,7 +130,7 @@ func (h *GameHandler) SearchGames(w http.ResponseWriter, r *http.Request) {
 						if item.Name != "" && item.Icon != "" {
 							cleanName := strings.ToLower(strings.TrimSpace(item.Name))
 							steamMatches[cleanName] = item.Icon
-							if idx < 5 {
+							if idx < 10 {
 								steamResults = append(steamResults, GameSearchResult{
 									ID:              1000000 + idx,
 									Name:            item.Name,
@@ -166,16 +146,7 @@ func (h *GameHandler) SearchGames(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3. Check curated match directly
 	results := make([]GameSearchResult, 0)
-	if curatedIcon := getCuratedOrSteamIcon(query, steamMatches); curatedIcon != "" {
-		results = append(results, GameSearchResult{
-			ID:      999999,
-			Name:    strings.Title(query),
-			Slug:    normQuery,
-			IconURL: curatedIcon,
-		})
-	}
 
 	// 4. Call RAWG API if key is present
 	if h.apiKey != "" {
@@ -209,8 +180,8 @@ func (h *GameHandler) SearchGames(w http.ResponseWriter, r *http.Request) {
 								}
 							}
 
-							// Resolve icon: Curated -> Steam -> Fallback
-							resolvedIcon := getCuratedOrSteamIcon(item.Name, steamMatches)
+							// Resolve square icon dynamically from Steam match if available, fallback to RAWG background
+							resolvedIcon := findSteamIcon(item.Name, steamMatches)
 							if resolvedIcon == "" {
 								resolvedIcon = item.BackgroundImage
 							}
