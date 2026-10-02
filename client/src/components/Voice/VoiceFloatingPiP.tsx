@@ -426,7 +426,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
         <GripHorizontal className="w-5 h-3 text-white/60" />
       </div>
 
-      {/* PiP Stage: Video Stream OR Discord-Style Active Speaker */}
+      {/* PiP Stage: Video Stream OR Active Speaker */}
       {isWatchingStream ? (
         <div
           onClick={handleOpenVoiceRoom}

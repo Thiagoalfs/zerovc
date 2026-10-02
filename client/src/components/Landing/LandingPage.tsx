@@ -119,7 +119,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
 
         {/* Subtitle */}
         <p className="text-base sm:text-lg md:text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed mb-10">
-          Uma alternativa moderna, ultra-leve e aberta ao Discord. Chamadas de voz cristalinas via WebRTC,
+          Uma plataforma moderna, ultra-leve e aberta de comunicação em tempo real. Chamadas de voz cristalinas via WebRTC,
           compartilhamento de tela a 60 FPS, chat rico com Markdown e GIFs sem sobrecarregar sua máquina.
         </p>
 

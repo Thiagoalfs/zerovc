@@ -103,7 +103,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     }
   };
 
-  // Discord-style exact 16:9 adaptive grid calculator
+  // Exact 16:9 adaptive grid calculator
   const stageLayout = useMemo(() => {
     const count = participants.length;
     if (count === 0 || dimensions.width === 0 || dimensions.height === 0) {

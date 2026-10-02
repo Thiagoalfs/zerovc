@@ -86,7 +86,7 @@ export const SearchResultsPanel: React.FC<SearchResultsPanelProps> = ({
     return count;
   }, [parsedQuery]);
 
-  // Format date helper (Discord style)
+  // Format date helper
   const formatResultDate = (dateStr: string) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);

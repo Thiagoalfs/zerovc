@@ -1,5 +1,5 @@
-﻿/**
- * Dominant color extraction utility for Discord-like participant card backgrounds.
+/**
+ * Dominant color extraction utility for participant card backgrounds.
  */
 
 const colorCache = new Map<string, string>();
@@ -82,7 +82,7 @@ export async function getDominantColorFromImage(imageUrl: string, fallbackSeed?:
 }
 
 /**
- * Generates a consistent, dark Discord-style background color from any string seed.
+ * Generates a consistent, dark background color from any string seed.
  */
 export function generateColorFromName(name: string): string {
   let hash = 0;

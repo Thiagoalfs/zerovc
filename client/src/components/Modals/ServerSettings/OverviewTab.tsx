@@ -71,11 +71,11 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     <div className="max-w-3xl space-y-8 animate-fade-in">
       {/* Quick Stats Grid */}
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 font-mono">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
           Métricas do Servidor
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
+          <div className="p-4 rounded-xl bg-background-darker border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Total Membros</span>
               <Users className="w-4 h-4 text-brand-400" />
@@ -87,7 +87,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             </span>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
+          <div className="p-4 rounded-xl bg-background-darker border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Canais Texto</span>
               <Hash className="w-4 h-4 text-sky-400" />
@@ -96,7 +96,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <span className="text-[11px] text-gray-500 mt-1">salas de bate-papo</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
+          <div className="p-4 rounded-xl bg-background-darker border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Canais Voz</span>
               <Volume2 className="w-4 h-4 text-emerald-400" />
@@ -105,7 +105,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <span className="text-[11px] text-gray-500 mt-1">com áudio & vídeo</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-[#1e1f22] border border-white/10 flex flex-col">
+          <div className="p-4 rounded-xl bg-background-darker border border-white/10 flex flex-col">
             <div className="flex items-center justify-between text-gray-400 text-xs mb-1">
               <span>Criação</span>
               <Calendar className="w-4 h-4 text-purple-400" />
@@ -137,16 +137,16 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
       {/* Visual Identity (Icon & Banner) */}
       <div className="space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
           Identidade Visual
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#1e1f22] p-5 rounded-2xl border border-white/10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-background-darker p-5 rounded-2xl border border-white/10">
           {/* Icon */}
           <div className="flex flex-col gap-3">
             <label className="text-xs font-medium text-gray-300">Ícone do Servidor</label>
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-2xl bg-[#2b2d31] border-2 border-white/15 flex items-center justify-center overflow-hidden shrink-0 shadow-lg">
+              <div className="w-20 h-20 rounded-2xl bg-background-light border-2 border-white/15 flex items-center justify-center overflow-hidden shrink-0 shadow-lg">
                 {activeGuild.icon_url ? (
                   <img
                     src={formatAssetUrl(activeGuild.icon_url)}
@@ -192,7 +192,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           <div className="flex flex-col gap-3">
             <label className="text-xs font-medium text-gray-300">Banner do Servidor</label>
             <div className="flex flex-col gap-2">
-              <div className="w-full h-20 rounded-xl bg-[#2b2d31] border border-white/15 overflow-hidden relative group">
+              <div className="w-full h-20 rounded-xl bg-background-light border border-white/15 overflow-hidden relative group">
                 {activeGuild.banner_url ? (
                   <img
                     src={formatAssetUrl(activeGuild.banner_url)}
@@ -242,7 +242,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       {/* General Form */}
       <form onSubmit={handleSaveOverview} className="space-y-6">
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+          <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
             Nome do Servidor
           </label>
           <input
@@ -251,13 +251,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             onChange={(e) => setGuildName(e.target.value)}
             disabled={!isOwner}
             placeholder="Nome do servidor"
-            className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-60"
+            className="w-full px-4 py-2.5 bg-background-darkest border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-60"
           />
         </div>
 
         {/* System Welcome Channel Selector */}
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+          <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
             Canal de Mensagens do Sistema (Boas-Vindas)
           </label>
           <p className="text-xs text-gray-400">

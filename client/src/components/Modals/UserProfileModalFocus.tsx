@@ -188,7 +188,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
       {/* Centered Modal Window */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative bg-[#111214] border border-white/10 rounded-3xl w-full max-w-lg sm:max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92dvh] overflow-y-auto no-scrollbar select-text"
+        className="relative bg-background-darkest border border-white/10 rounded-3xl w-full max-w-lg sm:max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92dvh] overflow-y-auto no-scrollbar select-text"
       >
         {/* Top Banner with Close Button */}
         <div
@@ -218,13 +218,13 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
         </div>
 
         {/* Profile Header & Content */}
-        <div className="px-5 sm:px-6 pb-6 relative bg-[#111214]">
+        <div className="px-5 sm:px-6 pb-6 relative bg-background-darkest">
           {/* Large Interactive Avatar */}
           <div className="flex items-end justify-between -mt-16 sm:-mt-20 mb-4">
             <div className="relative inline-block group/bigavatar">
               <div
                 onClick={handleAvatarClick}
-                className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-brand-500 border-[6px] border-[#111214] flex items-center justify-center text-3xl sm:text-4xl font-bold text-white shadow-2xl overflow-hidden cursor-pointer relative transition-transform group-hover/bigavatar:scale-105 active:scale-95"
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-brand-500 border-[6px] border-background-darkest flex items-center justify-center text-3xl sm:text-4xl font-bold text-white shadow-2xl overflow-hidden cursor-pointer relative transition-transform group-hover/bigavatar:scale-105 active:scale-95"
                 title={user.avatar_url ? 'Clique para ampliar foto de perfil' : 'Foto de perfil'}
               >
                 {user.avatar_url ? (
@@ -239,7 +239,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                 )}
               </div>
               <div
-                className={`absolute bottom-1 right-1 w-6 h-6 rounded-full border-4 border-[#111214] shadow-md ${getStatusColor(
+                className={`absolute bottom-1 right-1 w-6 h-6 rounded-full border-4 border-background-darkest shadow-md ${getStatusColor(
                   user.status
                 )}`}
                 title={getStatusLabel(user.status)}

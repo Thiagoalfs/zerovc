@@ -60,7 +60,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
       {/* Roles Sidebar / Hierarchy List */}
       <div className="w-full md:w-72 flex flex-col p-1 md:pr-6 md:border-r border-white/10 shrink-0 max-h-56 md:max-h-none border-b md:border-b-0 pb-4 md:pb-0">
         <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 px-1">
-          <span className="text-xs font-bold uppercase text-gray-400 font-mono">
+          <span className="text-xs font-bold uppercase text-gray-400">
             Cargos ({roles.length})
           </span>
           {isOwner && (
@@ -106,11 +106,6 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     <span className="truncate font-medium">
                       {role.name}
                     </span>
-                    {isEveryone && (
-                      <span className="text-[10px] bg-white/10 text-gray-300 px-1.5 py-0.5 rounded font-mono">
-                        Padrão
-                      </span>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
@@ -151,7 +146,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                 value={newRoleName}
                 onChange={(e) => setNewRoleName(e.target.value)}
                 placeholder="Nome do novo cargo..."
-                className="flex-1 px-3 py-1.5 bg-[#111214] border border-white/10 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                className="flex-1 px-3 py-1.5 bg-background-darkest border border-white/10 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
               />
               <button
                 type="submit"
@@ -168,34 +163,19 @@ export const RolesTab: React.FC<RolesTabProps> = ({
       {/* Role Details Editor */}
       {selectedRole ? (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0 md:pl-2">
-          <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0 min-h-[48px]">
+            <div className="flex items-center gap-3 min-w-0">
               <span
-                className="w-5 h-5 rounded-full shadow"
+                className="w-5 h-5 rounded-full shadow shrink-0"
                 style={{ backgroundColor: selectedRole.color || '#99AAB5' }}
               />
-              <h2 className="text-base font-bold text-white">{selectedRole.name}</h2>
-              {selectedRole.name === '@everyone' && (
-                <span className="text-[10px] bg-white/10 text-gray-200 px-2 py-0.5 rounded-full font-medium">
-                  Cargo Base de Todos
-                </span>
-              )}
-              {selectedRole.hoist && (
-                <span className="text-[10px] bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-full font-medium">
-                  Separado
-                </span>
-              )}
-              {selectedRole.mentionable && (
-                <span className="text-[10px] bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full font-medium">
-                  Mencionável
-                </span>
-              )}
+              <h2 className="text-base font-bold text-white truncate">{selectedRole.name}</h2>
             </div>
 
             {canManageRoles && selectedRole.name !== '@everyone' && (
               <button
                 onClick={() => handleDeleteRole(selectedRole.id)}
-                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
+                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Excluir Cargo</span>
@@ -206,7 +186,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
           <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-2 custom-scrollbar touch-pan-y min-h-0">
             {/* Role Name */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
                 Nome do Cargo
               </label>
               <input
@@ -215,7 +195,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                 key={selectedRole.id + selectedRole.name}
                 onBlur={(e) => handleUpdateRoleName(e.target.value)}
                 disabled={!canManageRoles || selectedRole.name === '@everyone'}
-                className="w-full px-4 py-2 bg-[#111214] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
+                className="w-full px-4 py-2 bg-background-darkest border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
               />
               {selectedRole.name === '@everyone' && (
                 <p className="text-xs text-gray-500">
@@ -226,7 +206,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
 
             {/* Role Color */}
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
                 Cor do Cargo
               </label>
               <div className="flex flex-wrap items-center gap-2">
@@ -257,14 +237,14 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer disabled:opacity-50"
                     title="Cor personalizada"
                   />
-                  <span className="text-xs font-mono text-gray-400">{selectedRole.color || '#5865F2'}</span>
+                  <span className="text-xs text-gray-400">{selectedRole.color || '#5865F2'}</span>
                 </div>
               </div>
             </div>
 
             {/* Role Display Switches (Hoist & Mentionable) */}
             <div className="space-y-3 pt-3 border-t border-white/10">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
                 Exibição de Membros
               </label>
               <div className="space-y-3">
@@ -276,8 +256,8 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   }}
                   className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
                     selectedRole.hoist
-                      ? 'bg-[#111214]/80 border-white/15'
-                      : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
+                      ? 'bg-background-darkest/80 border-white/15'
+                      : 'bg-background-darkest/50 border-white/10 hover:border-white/15'
                   } ${canManageRoles && selectedRole.name !== '@everyone' ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
                 >
                   <div className="pr-4 select-none">
@@ -298,7 +278,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                       handleToggleRoleHoist();
                     }}
                     className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
-                      selectedRole.hoist ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
+                      selectedRole.hoist ? 'bg-online' : 'bg-gray-600'
                     } disabled:opacity-40 disabled:cursor-not-allowed`}
                   >
                     <div
@@ -317,8 +297,8 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   }}
                   className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
                     selectedRole.mentionable
-                      ? 'bg-[#111214]/80 border-white/15'
-                      : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
+                      ? 'bg-background-darkest/80 border-white/15'
+                      : 'bg-background-darkest/50 border-white/10 hover:border-white/15'
                   } ${canManageRoles ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
                 >
                   <div className="pr-4 select-none">
@@ -337,7 +317,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                       handleToggleRoleMentionable();
                     }}
                     className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
-                      selectedRole.mentionable ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
+                      selectedRole.mentionable ? 'bg-online' : 'bg-gray-600'
                     } disabled:opacity-40 disabled:cursor-not-allowed`}
                   >
                     <div
@@ -352,7 +332,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
 
             {/* Permission Groups */}
             <div className="space-y-5 pt-3 border-t border-white/10">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
                 Permissões do Cargo
               </label>
 
@@ -380,8 +360,8 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                             perm.isMaster
                               ? 'bg-amber-500/10 border-amber-500/30'
                               : isChecked
-                              ? 'bg-[#111214]/80 border-white/15'
-                              : 'bg-[#111214]/50 border-white/10 hover:border-white/15'
+                              ? 'bg-background-darkest/80 border-white/15'
+                              : 'bg-background-darkest/50 border-white/10 hover:border-white/15'
                           } ${canManageRoles ? 'cursor-pointer' : 'opacity-70'}`}
                         >
                           <div className="pr-4 select-none">

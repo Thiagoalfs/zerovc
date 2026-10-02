@@ -242,7 +242,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             : 'h-[48px] md:h-[52px] min-h-[48px] md:min-h-[52px] px-2 md:px-2.5 flex items-center justify-between'
         }`}
       >
-        {/* Discord-style Floating Voice Connection Popout */}
+        {/* Floating Voice Connection Popout */}
         {isInVoice && (
           <VoiceConnectionPopout
             isOpen={showVoicePopout}

@@ -24,7 +24,7 @@ ZeroVC foi concebido para eliminar o overhead de memória e CPU tradicional de p
 * **Backend em Go:** Consome apenas `~30MB` de RAM, com conexões WebSocket de baixa latência e broadcast de mensagens por servidor.
 * **LiveKit SFU (WebRTC):** Roteamento puro de pacotes UDP (Opus para voz e VP9/H.264 para compartilhamento de tela) sem transcodificação pesada no servidor.
 * **PostgreSQL 16 Tunado:** Configuração personalizada de buffers e conexões limitada a ~150-200MB de RAM.
-* **Electron Desktop Client:** Interface idêntica ao Discord com captura de janelas nativa (`desktopCapturer`), detecção de fala em tempo real e cancelamento de eco/ruído.
+* **Electron Desktop Client:** Interface moderna e responsiva com captura de janelas nativa (`desktopCapturer`), detecção de fala em tempo real e cancelamento de eco/ruído.
 
 ---
 

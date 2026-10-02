@@ -231,7 +231,7 @@ function createWindow(initialUrl?: string) {
     minHeight: 600,
     backgroundColor: '#0d1117',
     icon: getAppIcon(),
-    frame: false, // Frameless window for Discord-style custom titlebar
+    frame: false, // Frameless window for custom titlebar
     titleBarStyle: 'hidden',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -309,7 +309,7 @@ function createWindow(initialUrl?: string) {
   if (isDev) {
     mainWindow.loadURL(initialUrl || 'http://localhost:5173');
   } else {
-    // Discord Model: Load latest production build from server with offline fallback
+    // Production Model: Load latest production build from server with offline fallback
     const targetUrl = initialUrl || REMOTE_SERVER_URL;
     mainWindow.loadURL(targetUrl).catch((err) => {
       console.warn('[Electron] Remote server unavailable, loading local fallback:', err);
@@ -717,7 +717,6 @@ const KNOWN_GAMES_AND_APPS: Array<{
   { processes: ['photoshop.exe'], name: 'Adobe Photoshop', type: 'playing' },
   { processes: ['obs64.exe', 'obs32.exe'], name: 'OBS Studio', type: 'streaming' },
   { processes: ['code.exe'], name: 'Visual Studio Code', type: 'playing' },
-  { processes: ['discord.exe', 'discordcanary.exe', 'discordptb.exe'], name: 'Discord', type: 'playing' },
 ];
 
 let lastDetectedActivity: DetectedActivity | null = null;

@@ -564,7 +564,7 @@ class LiveKitManager {
       // 2) Prioriza o papel "eCommunications" do Windows (exposto pelo Chrome como o
       // deviceId especial 'communications'), quando ele já estiver configurado no sistema
       // operacional para apontar para um hardware físico diferente do "Dispositivo Padrão"
-      // ('default'). É o mesmo mecanismo que Discord/Teams usam para separar "áudio de
+      // ('default'). É o mecanismo padrão para separar "áudio de
       // chamada" de "áudio geral", e acompanha automaticamente se a pessoa trocar o
       // dispositivo de comunicação nas configurações do Windows. groupId identifica o
       // hardware físico por trás do deviceId "mágico" — comparamos por ele, não pelo
@@ -672,7 +672,7 @@ class LiveKitManager {
         }
       })();
 
-      // Discord-style optimized bitrate curves
+      // Optimized bitrate curves
       const maxBitrate = (() => {
         if (res === '480p') return frameRate === 15 ? 500_000 : frameRate === 30 ? 1_000_000 : 1_800_000;
         if (res === '1080p') return frameRate === 15 ? 2_500_000 : frameRate === 30 ? 3_500_000 : 6_000_000;

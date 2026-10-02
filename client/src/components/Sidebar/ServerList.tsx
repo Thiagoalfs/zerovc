@@ -510,7 +510,7 @@ export const ServerList: React.FC<ServerListProps> = ({
             }`}
           />
 
-        {/* Discord-style Unread DM Notification Badge (when there are unreads in total) */}
+        {/* Unread DM Notification Badge (when there are unreads in total) */}
         {totalUnreadDMs > 0 && !isHomeActive && (
           <div className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50">
             {totalUnreadDMs > 99 ? '99+' : totalUnreadDMs}
@@ -740,7 +740,7 @@ export const ServerList: React.FC<ServerListProps> = ({
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />
 
-      {/* Discord-style Hover Tooltip for Servers */}
+      {/* Hover Tooltip for Servers */}
       {hoveredGuild &&
         createPortal(
           (() => {

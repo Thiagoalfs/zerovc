@@ -396,7 +396,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             <Users className="w-5 h-5" />
           </button>
 
-          {/* Discord-style Search Input Box (Last element on the right) */}
+          {/* Search Input Box (Last element on the right) */}
           <div
             ref={searchContainerRef}
             className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64 relative"

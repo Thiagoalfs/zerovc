@@ -93,7 +93,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
     >
-      <div className="bg-[#18191c] w-full max-w-xl max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
+      <div className="bg-background-dark w-full max-w-xl max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -185,7 +185,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
                   <div
                     key={source.id}
                     onClick={() => setSelectedSourceId(source.id)}
-                    className={`group relative rounded-xl overflow-hidden border-2 cursor-pointer transition-all bg-[#1e1f22] ${
+                    className={`group relative rounded-xl overflow-hidden border-2 cursor-pointer transition-all bg-background-darker ${
                       isSelected
                         ? 'border-brand-500 ring-2 ring-brand-500/30'
                         : 'border-white/5 hover:border-white/20'
@@ -207,7 +207,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
                         </div>
                       )}
                     </div>
-                    <div className="p-2 flex items-center gap-2 bg-[#2b2d31]">
+                    <div className="p-2 flex items-center gap-2 bg-background-darkest">
                       {source.appIcon ? (
                         <img src={source.appIcon} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0" />
                       ) : (
@@ -224,7 +224,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
           {/* Controls Row: Resolution (Left) & FPS (Right) */}
           <div className="flex items-center justify-between gap-4 pt-1">
             {/* Resolution Buttons */}
-            <div className="flex items-center gap-1.5 bg-[#1e1f22] p-1 rounded-xl border border-white/5">
+            <div className="flex items-center gap-1.5 bg-background-darker p-1 rounded-xl border border-white/5">
               {(['480p', '720p', '1080p'] as const).map((r) => (
                 <button
                   key={r}
@@ -242,7 +242,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
             </div>
 
             {/* FPS Buttons */}
-            <div className="flex items-center gap-1.5 bg-[#1e1f22] p-1 rounded-xl border border-white/5">
+            <div className="flex items-center gap-1.5 bg-background-darker p-1 rounded-xl border border-white/5">
               {([15, 30, 60] as const).map((f) => (
                 <button
                   key={f}
@@ -266,8 +266,8 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
             onClick={() => setIncludeAudio((prev) => !prev)}
             className={`w-full flex items-center justify-between py-3 px-4 rounded-xl border transition-all ${
               includeAudio
-                ? 'bg-[#1e1f22] border-brand-500/50 text-white'
-                : 'bg-[#1e1f22] border-white/5 text-gray-400 hover:border-white/10'
+                ? 'bg-background-darker border-brand-500/50 text-white'
+                : 'bg-background-darker border-white/5 text-gray-400 hover:border-white/10'
             }`}
           >
             <div className="flex items-center gap-2.5">
@@ -294,7 +294,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-[#111214] border-t border-white/5 flex justify-end items-center gap-3">
+        <div className="px-6 py-4 bg-background-darkest border-t border-white/5 flex justify-end items-center gap-3">
           <button
             type="button"
             onClick={onClose}
