@@ -106,7 +106,27 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	`)
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions (user_id)")
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions (token_hash)")
-	db.Pool.Exec(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_sessions_token_hash_unique ON user_sessions (token_hash)")
+	// Ensure all dm_groups have a valid owner who is a member of that group
+	db.Pool.Exec(ctx, `
+		UPDATE dm_groups g
+		SET owner_id = (
+			SELECT gm.user_id
+			FROM dm_group_members gm
+			WHERE gm.group_id = g.id
+			ORDER BY gm.joined_at ASC
+			LIMIT 1
+		)
+		WHERE g.owner_id IS NULL
+		   OR NOT EXISTS (
+			   SELECT 1 FROM dm_group_members gm WHERE gm.group_id = g.id AND gm.user_id = g.owner_id
+		   )
+	`)
+
+	// Clean up any empty dm_groups with no members
+	db.Pool.Exec(ctx, `
+		DELETE FROM dm_groups
+		WHERE id NOT IN (SELECT DISTINCT group_id FROM dm_group_members)
+	`)
 
 	log.Println("Database schema migration executed successfully")
 	return nil

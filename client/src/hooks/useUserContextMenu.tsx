@@ -14,11 +14,13 @@ import {
   Headphones,
   PhoneOff,
   UserPlus,
+  Crown,
 } from 'lucide-react';
 import { User, Role } from '../types';
 import { useAuthStore } from '../stores/authStore';
 import { useGuildStore } from '../stores/guildStore';
 import { useDMStore } from '../stores/dmStore';
+import { useDMGroupStore } from '../stores/dmGroupStore';
 import { useFriendStore } from '../stores/friendStore';
 import { useContextMenu, ContextMenuItem } from '../components/ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from '../components/Voice/VolumeSliders';
@@ -33,7 +35,8 @@ export interface UserContextMenuOptions {
   isVoiceMuted?: boolean;
   isScreenSharing?: boolean;
   voiceChannelId?: string;
-  contextType?: 'guild' | 'dm' | 'friends' | 'voice';
+  contextType?: 'guild' | 'dm' | 'friends' | 'voice' | 'dm_group';
+  groupId?: string;
 }
 
 export function useUserContextMenu() {
@@ -47,6 +50,7 @@ export function useUserContextMenu() {
     banMember,
   } = useGuildStore();
   const { openDMWithUser } = useDMStore();
+  const { activeGroup, transferOwnership, removeMember: removeGroupMember } = useDMGroupStore();
   const { friends, sendRequest } = useFriendStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const perms = useGuildPermissions();
@@ -262,6 +266,58 @@ export function useUserContextMenu() {
         }
       }
 
+      // DM Group Moderation / Ownership Actions
+      const targetGroup = options.groupId
+        ? useDMGroupStore.getState().groups.find((g) => g.id === options.groupId) || activeGroup
+        : activeGroup;
+
+      const isGroupMember = Boolean(
+        targetGroup &&
+        (options.contextType === 'dm_group' || targetGroup.members?.some((m) => m.id === targetUser.id))
+      );
+
+      const isGroupOwner = Boolean(
+        targetGroup && currentUser?.id === targetGroup.owner_id
+      );
+
+      if (isGroupMember && targetGroup && !isMe) {
+        if (isGroupOwner) {
+          items.push({ label: '', separator: true });
+
+          items.push({
+            label: 'Transferir Posse do Grupo',
+            icon: <Crown className="w-4 h-4 text-amber-400" />,
+            onClick: async () => {
+              const targetName = targetUser.display_name || targetUser.username;
+              if (window.confirm(`Tem certeza que deseja transferir a posse do grupo para "${targetName}"?`)) {
+                try {
+                  await transferOwnership(targetGroup.id, targetUser.id);
+                  alert(`Posse do grupo transferida com sucesso para @${targetUser.username}!`);
+                } catch (err: any) {
+                  alert(err?.message || 'Erro ao transferir a posse do grupo');
+                }
+              }
+            },
+          });
+
+          items.push({
+            label: 'Remover do Grupo',
+            icon: <UserMinus className="w-4 h-4 text-dnd" />,
+            variant: 'danger',
+            onClick: async () => {
+              const targetName = targetUser.display_name || targetUser.username;
+              if (window.confirm(`Tem certeza que deseja remover ${targetName} do grupo?`)) {
+                try {
+                  await removeGroupMember(targetGroup.id, targetUser.id);
+                } catch (err: any) {
+                  alert(err?.message || 'Erro ao remover membro do grupo');
+                }
+              }
+            },
+          });
+        }
+      }
+
       if (!isMe) {
         items.push({ label: '', separator: true });
         items.push({
@@ -285,7 +341,7 @@ export function useUserContextMenu() {
 
       openContextMenu(e, items, `@${targetUser.username}`);
     },
-    [currentUser, activeGuild, openDMWithUser, perms, assignRole, removeRole, muteMember, kickMember, banMember, openContextMenu, friends, sendRequest]
+    [currentUser, activeGuild, activeGroup, transferOwnership, removeGroupMember, openDMWithUser, perms, assignRole, removeRole, muteMember, kickMember, banMember, openContextMenu, friends, sendRequest]
   );
 
   return {

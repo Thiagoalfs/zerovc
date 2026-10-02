@@ -624,6 +624,11 @@ export const api = {
       request<{ success: boolean }>(`/dm/groups/${id}/members/${userId}`, {
         method: 'DELETE',
       }),
+    transferOwnership: (id: string, newOwnerId: string) =>
+      request<DMGroup>(`/dm/groups/${id}/transfer-ownership`, {
+        method: 'POST',
+        body: JSON.stringify({ new_owner_id: newOwnerId }),
+      }),
     getMessages: (id: string, limit = 50, before?: string) => {
       const query = new URLSearchParams({ limit: String(limit) });
       if (before) query.append('before', before);

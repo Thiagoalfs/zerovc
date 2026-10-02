@@ -924,11 +924,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/35 to-transparent pointer-events-none" />
               )}
 
-              <span className="truncate max-w-[200px] md:max-w-[170px] text-[17px] md:text-base font-bold text-white group-hover:text-gray-100 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+              <span className="truncate max-w-[200px] md:max-w-[170px] text-[17px] md:text-base font-bold text-white group-hover:text-gray-100 relative z-10">
                 {activeGuild?.name || 'Servidor'}
               </span>
               <ChevronDown
-                className={`w-5 h-5 md:w-4 md:h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
+                className={`w-5 h-5 md:w-4 md:h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 relative z-10 ${
                   isDropdownOpen ? 'rotate-180 text-brand-400' : ''
                 }`}
               />

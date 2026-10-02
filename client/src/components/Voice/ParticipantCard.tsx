@@ -30,6 +30,7 @@ import { useVoiceStore } from '../../stores/voiceStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
+import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { User, Permissions } from '../../types';
 import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
@@ -289,8 +290,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     e.stopPropagation();
     if (!user) return;
 
+    const activeGroup = useDMGroupStore.getState().activeGroup;
+    const groupMember = activeGroup?.members?.find((m) => m.id === participant.identity);
     const targetMember: User =
       activeGuild?.members?.find((m) => m.id === participant.identity) ||
+      (groupMember ? { ...groupMember, status: 'online' } : null) ||
       dmUser || {
         id: participant.identity,
         username: participant.name || 'Usuário',
@@ -306,7 +310,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
       isVoiceMuted: isMuted,
       isScreenSharing,
       voiceChannelId: currentChannelId || undefined,
-      contextType: activeGuild ? 'guild' : 'voice',
+      contextType: activeGuild ? 'guild' : (activeGroup ? 'dm_group' : 'voice'),
+      groupId: activeGroup?.id,
     });
   };
 

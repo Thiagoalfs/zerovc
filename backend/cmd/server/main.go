@@ -384,6 +384,7 @@ func main() {
 		r.Patch("/api/dm/groups/{id}", dmGroupHandler.UpdateGroup)
 		r.Post("/api/dm/groups/{id}/members", dmGroupHandler.AddMembers)
 		r.Delete("/api/dm/groups/{id}/members/{userID}", dmGroupHandler.RemoveMember)
+		r.With(dmGroupLimiter.Middleware).Post("/api/dm/groups/{id}/transfer-ownership", dmGroupHandler.TransferOwnership)
 		r.Get("/api/dm/groups/{id}/messages", dmGroupHandler.ListMessages)
 		r.With(messageLimiter.Middleware).Post("/api/dm/groups/{id}/messages", dmGroupHandler.SendMessage)
 		r.With(messageMutationLimiter.Middleware).Patch("/api/dm/groups/{id}/messages/{messageID}", dmGroupHandler.UpdateMessage)

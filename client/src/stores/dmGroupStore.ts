@@ -28,6 +28,8 @@ interface DMGroupState {
   updateGroup: (groupId: string, data: { name?: string; icon_url?: string }) => Promise<void>;
   addMembers: (groupId: string, memberIds: string[]) => Promise<void>;
   removeMember: (groupId: string, userId: string) => Promise<void>;
+  leaveGroup: (groupId: string) => Promise<void>;
+  transferOwnership: (groupId: string, newOwnerId: string) => Promise<void>;
   sendMessage: (content: string, attachments?: any[], replyToId?: string) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
@@ -35,6 +37,8 @@ interface DMGroupState {
   handleGroupMessageCreate: (message: DMGroupMessage) => void;
   handleGroupMessageUpdate: (message: DMGroupMessage) => void;
   handleGroupMessageDelete: (data: { message_id?: string; id?: string; group_id?: string }) => void;
+  handleGroupUpdate: (group: DMGroup) => void;
+  handleGroupLeave: (data: { group_id: string }) => void;
 }
 
 export const useDMGroupStore = create<DMGroupState>((set, get) => ({
@@ -216,7 +220,16 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
   removeMember: async (groupId: string, userId: string) => {
     await api.dmGroups.removeMember(groupId, userId);
+    const currentUserId = useAuthStore.getState().user?.id;
+    const isSelf = userId === currentUserId;
+
     set((state) => {
+      if (isSelf) {
+        return {
+          groups: state.groups.filter((g) => g.id !== groupId),
+          activeGroup: state.activeGroup?.id === groupId ? null : state.activeGroup,
+        };
+      }
       const nextGroups = state.groups.map((g) => {
         if (g.id !== groupId) return g;
         return { ...g, members: (g.members || []).filter((m) => m.id !== userId) };
@@ -227,6 +240,21 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           : state.activeGroup;
       return { groups: nextGroups, activeGroup: nextActive };
     });
+  },
+
+  leaveGroup: async (groupId: string) => {
+    const currentUserId = useAuthStore.getState().user?.id;
+    if (currentUserId) {
+      await get().removeMember(groupId, currentUserId);
+    }
+  },
+
+  transferOwnership: async (groupId: string, newOwnerId: string) => {
+    const updated = await api.dmGroups.transferOwnership(groupId, newOwnerId);
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === groupId ? { ...g, ...updated, owner_id: newOwnerId } : g)),
+      activeGroup: state.activeGroup?.id === groupId ? { ...state.activeGroup, ...updated, owner_id: newOwnerId } : state.activeGroup,
+    }));
   },
 
   sendMessage: async (content: string, attachments?: any[], replyToId?: string) => {
@@ -498,5 +526,26 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         messagesByGroup: nextByGroup,
       };
     });
+  },
+
+  handleGroupUpdate: (group: DMGroup) => {
+    set((state) => {
+      const exists = state.groups.some((g) => g.id === group.id);
+      const nextGroups = exists
+        ? state.groups.map((g) => (g.id === group.id ? { ...g, ...group } : g))
+        : [group, ...state.groups];
+      return {
+        groups: nextGroups,
+        activeGroup: state.activeGroup?.id === group.id ? { ...state.activeGroup, ...group } : state.activeGroup,
+      };
+    });
+  },
+
+  handleGroupLeave: (data: { group_id: string }) => {
+    const groupId = data.group_id;
+    set((state) => ({
+      groups: state.groups.filter((g) => g.id !== groupId),
+      activeGroup: state.activeGroup?.id === groupId ? null : state.activeGroup,
+    }));
   },
 }));
