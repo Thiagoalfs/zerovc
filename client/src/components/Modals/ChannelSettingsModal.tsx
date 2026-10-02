@@ -612,10 +612,10 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         )}
 
         {/* TAB CONTENTS */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12 xl:p-16 2xl:p-24 space-y-6 no-scrollbar min-h-0 overscroll-contain touch-pan-y">
+        <div className="flex-1 overflow-y-auto py-0 px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 no-scrollbar min-h-0 overscroll-contain touch-pan-y">
           {/* TAB 1: Visão Geral */}
           {activeTab === 'overview' && (
-            <div className="max-w-2xl space-y-6">
+            <div className="max-w-2xl space-y-6 py-6">
               <div className="bg-background-darker p-5 rounded-2xl border border-white/10 space-y-4 shadow-sm">
                 <div>
                   <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
@@ -683,14 +683,14 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
           {/* TAB 2: Permissões de Cargos */}
           {activeTab === 'permissions' && (
-            <div className="flex flex-col md:flex-row gap-6 min-h-0 h-full">
+            <div className="flex flex-col md:flex-row gap-6 min-h-0 h-auto md:h-[calc(100vh-140px)] py-4 md:py-6">
               {/* Left Column: Roles list selector */}
               <div className="w-full md:w-64 flex flex-col gap-2 shrink-0 md:pr-6 md:border-r border-white/10 border-b md:border-b-0 pb-4 md:pb-0">
                 <span className="text-xs font-bold uppercase text-gray-400 pb-2 mb-1 border-b border-white/10 px-1 block">
                   Cargos do Servidor
                 </span>
 
-                <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto max-h-none md:max-h-[calc(100vh-280px)] gap-1.5 md:gap-1 no-scrollbar">
+                <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto max-h-none md:max-h-[calc(100vh-210px)] gap-1.5 md:gap-1 no-scrollbar">
                   {roles.map((role) => {
                     const isSelected = selectedRole?.id === role.id;
                     const hasCustomOw =

@@ -1097,7 +1097,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             </div>
 
             {/* TAB CONTENTS */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12 xl:p-16 2xl:p-24 no-scrollbar md:custom-scrollbar overscroll-contain touch-pan-y min-h-0">
+            <div className="flex-1 overflow-y-auto py-0 px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 no-scrollbar md:custom-scrollbar overscroll-contain touch-pan-y min-h-0">
               {activeTab === 'overview' && (
                 <OverviewTab
                   activeGuild={activeGuild}
