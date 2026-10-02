@@ -69,7 +69,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
   const initialPosition = useMemo(() => {
     if (isMobile) return { x: 0, y: 0 };
     const approxWidth = 220;
-    const approxHeight = Math.min(350, menu.items.length * 36 + (menu.title ? 40 : 0));
+    const approxHeight = Math.min(350, menu.items.length * 36);
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1920;
     const vh = typeof window !== 'undefined' ? window.innerHeight : 1080;
 
@@ -84,7 +84,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
     }
 
     return { x, y };
-  }, [menu.x, menu.y, menu.items.length, menu.title, isMobile]);
+  }, [menu.x, menu.y, menu.items.length, isMobile]);
 
   const [position, setPosition] = useState<{ x: number; y: number }>(initialPosition);
   const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
@@ -165,11 +165,6 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
             className="w-full pt-3 pb-2 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none flex-shrink-0 select-none"
           >
             <div className="w-12 h-1.5 bg-white/30 rounded-full hover:bg-white/40 transition-colors" />
-            {menu.title && (
-              <div className="mt-2.5 px-4 w-full text-center text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
-                {menu.title}
-              </div>
-            )}
           </div>
 
           {/* Scrollable Menu Items List */}
@@ -334,12 +329,6 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
           e.stopPropagation();
         }}
       >
-        {menu.title && (
-          <div className="px-2.5 py-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-1 truncate">
-            {menu.title}
-          </div>
-        )}
-
         <div className="space-y-0.5">
           {menu.items.map((item, index) => {
             if (item.separator) {
