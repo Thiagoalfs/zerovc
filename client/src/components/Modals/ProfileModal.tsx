@@ -2390,69 +2390,37 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                     Tema da Interface
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Dark Slate */}
-                    <button
-                      type="button"
-                      onClick={() => setTheme('dark')}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
-                        theme === 'dark'
-                          ? 'border-brand-500 bg-brand-500/10 shadow-lg'
-                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Moon className="w-4 h-4 text-brand-400" />
-                        <span className="text-xs font-bold text-white">Escuro Padrão</span>
-                      </div>
-                      <div className="h-8 rounded-lg bg-[#313338] border border-white/10 flex items-center px-2 gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-brand-500" />
-                        <div className="h-1.5 w-10 bg-white/20 rounded" />
-                      </div>
-                      <span className="text-[10px] text-gray-400 block mt-2">Visual clássico ZeroVC</span>
-                    </button>
-
-                    {/* OLED Pitch Black */}
-                    <button
-                      type="button"
-                      onClick={() => setTheme('oled')}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
-                        theme === 'oled'
-                          ? 'border-brand-500 bg-brand-500/10 shadow-lg'
-                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sparkles className="w-4 h-4 text-purple-400" />
-                        <span className="text-xs font-bold text-white">Preto OLED</span>
-                      </div>
-                      <div className="h-8 rounded-lg bg-black border border-white/20 flex items-center px-2 gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                        <div className="h-1.5 w-10 bg-white/30 rounded" />
-                      </div>
-                      <span className="text-[10px] text-gray-400 block mt-2">100% Preto para telas OLED</span>
-                    </button>
-
-                    {/* Light Mode */}
-                    <button
-                      type="button"
-                      onClick={() => setTheme('light')}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
-                        theme === 'light'
-                          ? 'border-brand-500 bg-brand-500/10 shadow-lg'
-                          : 'border-white/10 bg-background-darkest text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sun className="w-4 h-4 text-amber-400" />
-                        <span className="text-xs font-bold text-white">Claro Diurno</span>
-                      </div>
-                      <div className="h-8 rounded-lg bg-[#e3e5e8] border border-black/10 flex items-center px-2 gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-brand-500" />
-                        <div className="h-1.5 w-10 bg-black/20 rounded" />
-                      </div>
-                      <span className="text-[10px] text-gray-400 block mt-2">Interface clara de alto contraste</span>
-                    </button>
+                  <div className="flex flex-wrap gap-3 items-center">
+                    {[
+                      { id: 'dark', name: 'Escuro Padrão', color: '#313338', isLight: false },
+                      { id: 'oled', name: 'Preto OLED', color: '#000000', isLight: false },
+                      { id: 'light', name: 'Claro Diurno', color: '#ffffff', isLight: true },
+                    ].map((item) => {
+                      const isSelected = theme === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setTheme(item.id as ThemeMode)}
+                          title={item.name}
+                          aria-label={item.name}
+                          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all cursor-pointer flex items-center justify-center relative shadow-md hover:scale-105 active:scale-95 ${
+                            isSelected
+                              ? 'ring-2 ring-white ring-offset-2 ring-offset-background-darkest scale-105'
+                              : 'opacity-85 hover:opacity-100 border border-white/10 hover:border-white/30'
+                          }`}
+                          style={{ backgroundColor: item.color }}
+                        >
+                          {isSelected && (
+                            <Check
+                              className={`w-5 h-5 stroke-[3] drop-shadow-sm ${
+                                item.isLight ? 'text-gray-900' : 'text-white'
+                              }`}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
