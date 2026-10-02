@@ -25,6 +25,7 @@ import {
 import { Channel, Role, Permissions, ChannelPermissionOverwrite } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { DropdownSelect } from '../Common/DropdownSelect';
 
 interface ChannelSettingsModalProps {
   channel: Channel | null;
@@ -642,20 +643,19 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                     <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
                       Categoria Pai
                     </label>
-                    <select
+                    <DropdownSelect
                       value={categoryId || ''}
-                      onChange={(e) =>
-                        setCategoryId(e.target.value ? e.target.value : undefined)
-                      }
-                      className="w-full bg-[#111214] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
-                    >
-                      <option value="">Nenhuma (Canal na Raiz)</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          📁 {cat.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => setCategoryId(val ? String(val) : undefined)}
+                      options={[
+                        { value: '', label: 'Nenhuma (Canal na Raiz)' },
+                        ...categories.map((cat) => ({
+                          value: cat.id,
+                          label: cat.name,
+                          icon: <Folder className="w-4 h-4 text-gray-400" />,
+                        })),
+                      ]}
+                      placeholder="Nenhuma (Canal na Raiz)"
+                    />
                   </div>
                 )}
 
