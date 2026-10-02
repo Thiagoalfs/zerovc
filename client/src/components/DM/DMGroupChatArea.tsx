@@ -8,32 +8,48 @@ import {
   UploadCloud,
   Search,
   X,
+  Mic,
+  MicOff,
+  Headphones,
+  Video,
+  VideoOff,
+  Monitor,
+  Volume2,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useVoiceStore } from '../../stores/voiceStore';
 import { api, formatAssetUrl } from '../../lib/api';
-import { livekit } from '../../lib/livekit';
 import { MessageItem } from '../Chat/MessageItem';
 import { MessageInput } from '../Chat/MessageInput';
 import { SearchAutocompletePopout } from '../Chat/SearchAutocompletePopout';
 import { SearchResultsPanel } from '../Chat/SearchResultsPanel';
+import { ParticipantCard } from '../Voice/ParticipantCard';
+import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { socket } from '../../lib/socket';
 import { useGuildStore } from '../../stores/guildStore';
 import { TypingIndicator } from '../Chat/TypingIndicator';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
+import { useKeepAwake } from '../../hooks/useKeepAwake';
+import { hapticMedium, hapticWarning } from '../../lib/haptics';
 import { User, DMGroupMessage } from '../../types';
 
 interface DMGroupChatAreaProps {
   onOpenMobileDrawer?: () => void;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   onPreviewImage?: (url: string) => void;
+  onOpenScreenShare?: () => void;
+  onOpenDM?: (userId: string) => void;
 }
 
 export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   onOpenMobileDrawer,
   onOpenUserProfile,
   onPreviewImage,
+  onOpenScreenShare,
+  onOpenDM,
 }) => {
   const { user } = useAuthStore();
   const {
@@ -42,7 +58,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     sendMessage,
     editMessage,
     deleteMessage,
-    removeMember,
+    leaveGroup,
     removeMessageFromStore,
     isLoadingMessages,
     isLoadingMoreMessages,
@@ -51,6 +67,37 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     firstUnreadMessageIdByGroup,
     clearUnreadDivider,
   } = useDMGroupStore();
+  const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
+  const {
+    menu: screenShareMenu,
+    openContextMenu: openScreenShareMenu,
+    closeContextMenu: closeScreenShareMenu,
+  } = useContextMenu();
+
+  const {
+    voiceType,
+    dmGroupId,
+    isConnected: isVoiceConnected,
+    isConnecting: isVoiceConnecting,
+    isMuted,
+    isDeafened,
+    isCameraOn,
+    isScreensharing,
+    participants,
+    joinGroupVoice,
+    leaveVoice,
+    toggleMute,
+    toggleDeafen,
+    toggleCamera,
+    stopScreenShare,
+  } = useVoiceStore();
+
+  const isGroupVoiceActive =
+    voiceType === 'group' && dmGroupId === activeGroup?.id && isVoiceConnected;
+  const isGroupVoiceConnecting =
+    voiceType === 'group' && dmGroupId === activeGroup?.id && isVoiceConnecting;
+
+  useKeepAwake(isGroupVoiceActive);
 
   const [replyingTo, setReplyingTo] = useState<DMGroupMessage | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -60,6 +107,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     if (!activeGroup) return [];
     return Array.from(typingUsers.get(activeGroup.id) || []).filter((id) => id !== user?.id);
   }, [typingUsers, activeGroup, user?.id]);
+
   const [showMemberList, setShowMemberList] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('zerovc_group_members_open');
@@ -69,12 +117,12 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     } catch {}
     return typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
   });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
   const [isSearchAutocompleteOpen, setIsSearchAutocompleteOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
-  const [isInGroupVoice, setIsInGroupVoice] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const dragCounterRef = useRef<number>(0);
@@ -84,6 +132,105 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const prevScrollHeightRef = useRef<number | null>(null);
   const isInitialLoadRef = useRef<boolean>(true);
   const prevGroupIdRef = useRef<string | null>(null);
+
+  // Group Voice Grid Resize Observer
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [stageDimensions, setStageDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+
+    const updateDim = () => {
+      const rect = el.getBoundingClientRect();
+      setStageDimensions({ width: rect.width, height: rect.height });
+    };
+
+    updateDim();
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setStageDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
+      }
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isGroupVoiceActive]);
+
+  // Exact 16:9 adaptive grid layout for group voice
+  const stageLayout = useMemo(() => {
+    const count = participants.length;
+    if (count === 0 || stageDimensions.width === 0 || stageDimensions.height === 0) {
+      return { cardWidth: 0, cardHeight: 0, rows: [] };
+    }
+
+    const W = stageDimensions.width;
+    const H = stageDimensions.height;
+    const gap = count > 1 ? (W < 640 ? 8 : 12) : 0;
+    const paddingX = W < 640 ? 8 : 12;
+    const paddingY = W < 640 ? 8 : 12;
+
+    const availableW = Math.max(60, W - paddingX * 2);
+    const availableH = Math.max(60, H - paddingY * 2);
+    const targetAspect = 16 / 9;
+
+    let bestCols = 1;
+    let bestCardW = 0;
+    let bestCardH = 0;
+    let maxArea = 0;
+
+    const maxColsToTry = Math.min(count, 6);
+    for (let c = 1; c <= maxColsToTry; c++) {
+      const r = Math.ceil(count / c);
+      const slotW = (availableW - (c - 1) * gap) / c;
+      const slotH = (availableH - (r - 1) * gap) / r;
+
+      if (slotW <= 0 || slotH <= 0) continue;
+
+      let w = slotW;
+      let h = w / targetAspect;
+
+      if (h > slotH) {
+        h = slotH;
+        w = h * targetAspect;
+      }
+
+      if (count === 1) {
+        const maxW = Math.min(460, availableW);
+        const maxH = Math.min(260, availableH);
+        if (w > maxW) {
+          w = maxW;
+          h = w / targetAspect;
+        }
+        if (h > maxH) {
+          h = maxH;
+          w = h * targetAspect;
+        }
+      }
+
+      const area = w * h;
+      if (area > maxArea) {
+        maxArea = area;
+        bestCols = c;
+        bestCardW = Math.floor(w);
+        bestCardH = Math.floor(h);
+      }
+    }
+
+    const rows: (typeof participants)[] = [];
+    for (let i = 0; i < count; i += bestCols) {
+      rows.push(participants.slice(i, i + bestCols));
+    }
+
+    return {
+      cardWidth: bestCardW,
+      cardHeight: bestCardH,
+      rows,
+    };
+  }, [participants, stageDimensions]);
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -177,7 +324,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
     const lastMessage = messages[messages.length - 1];
     const isMyMessage = Boolean(lastMessage && user && lastMessage.author_id === user.id);
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
+    const isNearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 350;
 
     if (isMyMessage && activeGroup) {
       clearUnreadDivider(activeGroup.id);
@@ -194,23 +342,25 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     const container = scrollContainerRef.current;
     if (!container || !activeGroup) return;
 
-    if (container.scrollTop < 60 && !isLoadingMoreMessages && hasMoreByGroup[activeGroup.id] !== false) {
+    if (
+      container.scrollTop < 60 &&
+      !isLoadingMoreMessages &&
+      hasMoreByGroup[activeGroup.id] !== false
+    ) {
       prevScrollHeightRef.current = container.scrollHeight;
       loadMoreMessages(activeGroup.id);
     }
 
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
+    const isNearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 35;
     if (isNearBottom && firstUnreadId) {
       clearUnreadDivider(activeGroup.id);
     }
   };
 
   const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
-
-  // Main chat messages stay normal
   const displayedMessages = messages;
 
-  // Search results for right-side SearchResultsPanel
   const searchResults = useMemo(() => {
     if (!appliedSearchQuery) return [];
     return filterMessages(messages, parsedSearch);
@@ -238,18 +388,54 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
   };
 
-  const handleJoinVoice = async () => {
+  const handleToggleVoice = async () => {
     if (!activeGroup) return;
-    if (isInGroupVoice) {
-      await livekit.disconnect();
-      setIsInGroupVoice(false);
+    if (isGroupVoiceActive || isGroupVoiceConnecting) {
+      hapticWarning();
+      await leaveVoice();
     } else {
+      hapticMedium();
       try {
-        const res = await api.dmGroups.getVoiceToken(activeGroup.id);
-        await livekit.connect(res.livekit_url, res.token, {});
-        setIsInGroupVoice(true);
+        await joinGroupVoice(activeGroup.id, activeGroup);
       } catch (err: any) {
         alert(err.message || 'Falha ao conectar na chamada em grupo');
+      }
+    }
+  };
+
+  const handleScreenShareClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isScreensharing) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const items: ContextMenuItem[] = [
+        {
+          id: 'switch-screen',
+          label: 'Trocar tela',
+          icon: <Monitor className="w-4 h-4" />,
+          onClick: () => {
+            if (onOpenScreenShare) {
+              onOpenScreenShare();
+            }
+          },
+        },
+        {
+          id: 'stop-screen',
+          label: 'Parar compartilhamento',
+          variant: 'danger',
+          onClick: () => {
+            stopScreenShare();
+          },
+        },
+      ];
+      openScreenShareMenu(
+        { clientX: rect.left + rect.width / 2, clientY: rect.bottom + 10 },
+        items,
+        'Transmissão de Tela'
+      );
+    } else {
+      if (onOpenScreenShare) {
+        onOpenScreenShare();
       }
     }
   };
@@ -263,7 +449,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     return names.length > 0 ? names.join(', ') : 'Grupo';
   }, [activeGroup, user?.id]);
 
-  // Group members mention suggestions
   const groupMemberMentions = useMemo(() => {
     if (!activeGroup?.members) return [];
     return activeGroup.members.map((m) => ({
@@ -328,16 +513,18 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
           <div className="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs flex-shrink-0 border border-brand-500/30">
             {activeGroup.icon_url ? (
-              <img src={formatAssetUrl(activeGroup.icon_url)} alt="" className="w-full h-full rounded-full object-cover" />
+              <img
+                src={formatAssetUrl(activeGroup.icon_url)}
+                alt=""
+                className="w-full h-full rounded-full object-cover"
+              />
             ) : (
               <Users className="w-4 h-4" />
             )}
           </div>
 
           <div className="flex items-baseline gap-2 min-w-0">
-            <span className="font-bold text-sm text-gray-100 truncate">
-              {groupName}
-            </span>
+            <span className="font-bold text-sm text-gray-100 truncate">{groupName}</span>
             <span className="text-[11px] text-gray-500 hidden sm:inline flex-shrink-0">
               {activeGroup.members?.length || 0} membros
             </span>
@@ -348,15 +535,33 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
         <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
           {/* Voice Channel in Group Toggle */}
           <button
-            onClick={handleJoinVoice}
-            className={`p-2 md:p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isInGroupVoice
-                ? 'bg-dnd text-white hover:bg-dnd/80'
+            onClick={handleToggleVoice}
+            className={`p-2 md:p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
+              isGroupVoiceActive
+                ? 'bg-dnd text-white hover:bg-rose-700 shadow-sm'
+                : isGroupVoiceConnecting
+                ? 'bg-brand-500/50 text-white animate-pulse'
                 : 'text-gray-400 hover:text-online hover:bg-white/5'
             }`}
-            title={isInGroupVoice ? 'Sair da Chamada de Voz' : 'Entrar na Chamada de Voz'}
+            title={
+              isGroupVoiceActive
+                ? 'Desconectar da Voz'
+                : isGroupVoiceConnecting
+                ? 'Conectando à Voz...'
+                : 'Entrar na Chamada de Voz'
+            }
           >
-            {isInGroupVoice ? <PhoneOff className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+            {isGroupVoiceActive ? (
+              <>
+                <PhoneOff className="w-4 h-4" />
+                <span className="hidden sm:inline">Desconectar ({participants.length})</span>
+              </>
+            ) : (
+              <>
+                <Phone className="w-4 h-4" />
+                <span className="hidden sm:inline">Voz</span>
+              </>
+            )}
           </button>
 
           {/* Member List Toggle */}
@@ -369,14 +574,16 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               } catch {}
             }}
             className={`p-2 md:p-1.5 rounded-lg transition-colors cursor-pointer ${
-              showMemberList ? 'text-brand-400 bg-white/10' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              showMemberList
+                ? 'text-brand-400 bg-white/10'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
             }`}
             title="Lista de Membros"
           >
             <Users className="w-4 h-4" />
           </button>
 
-          {/* Search Input Box (Last element on the right) */}
+          {/* Search Input Box */}
           <div
             ref={searchContainerRef}
             className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64 relative"
@@ -417,7 +624,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             )}
           </div>
 
-          {/* Floating Search Autocomplete Popout Modal */}
           <SearchAutocompletePopout
             isOpen={isSearchAutocompleteOpen}
             onClose={() => setIsSearchAutocompleteOpen(false)}
@@ -435,6 +641,131 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           />
         </div>
       </div>
+
+      {/* Active Group Voice Call Stage */}
+      {(isGroupVoiceActive || isGroupVoiceConnecting) && (
+        <div className="w-full bg-background-darkest border-b border-white/10 p-3 md:p-4 flex flex-col items-center justify-between transition-all select-none animate-in fade-in shadow-xl">
+          <div className="w-full max-w-5xl mx-auto flex flex-col items-center gap-3">
+            {/* Dynamic Grid of Participant Cards */}
+            <div
+              ref={stageRef}
+              className="w-full min-h-[200px] max-h-[380px] h-[45vh] bg-background-darker/60 rounded-2xl border border-white/5 p-2 flex items-center justify-center overflow-hidden relative shadow-inner"
+            >
+              {isGroupVoiceConnecting ? (
+                <div className="flex flex-col items-center gap-2 text-gray-400">
+                  <div className="w-7 h-7 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs font-medium">Conectando à chamada do grupo...</span>
+                </div>
+              ) : participants.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 text-gray-400">
+                  <Volume2 className="w-8 h-8 text-gray-500 animate-pulse" />
+                  <span className="text-xs">Aguardando participantes...</span>
+                </div>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-2 overflow-hidden">
+                  {stageLayout.rows.map((row, rIdx) => (
+                    <div
+                      key={rIdx}
+                      className="flex items-center justify-center gap-2 flex-shrink-0"
+                      style={{
+                        height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
+                      }}
+                    >
+                      {row.map((p) => (
+                        <div
+                          key={p.sid || p.identity}
+                          className="flex items-center justify-center flex-shrink-0"
+                          style={{
+                            width: stageLayout.cardWidth > 0 ? `${stageLayout.cardWidth}px` : 'auto',
+                            height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
+                          }}
+                        >
+                          <ParticipantCard
+                            participant={p}
+                            onOpenUserProfile={onOpenUserProfile}
+                            onOpenDM={onOpenDM}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Voice Controls Bar */}
+            <div className="flex items-center justify-center gap-2.5 sm:gap-3.5 pt-1 select-none">
+              <button
+                onClick={() => {
+                  hapticMedium();
+                  toggleMute();
+                }}
+                className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
+                  isMuted
+                    ? 'bg-dnd text-white hover:bg-rose-700'
+                    : 'bg-background-light hover:bg-white/15 text-white'
+                }`}
+                title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
+              >
+                {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
+              </button>
+
+              <button
+                onClick={() => {
+                  hapticMedium();
+                  toggleDeafen();
+                }}
+                className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
+                  isDeafened
+                    ? 'bg-dnd text-white hover:bg-rose-700'
+                    : 'bg-background-light hover:bg-white/15 text-white'
+                }`}
+                title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
+              >
+                <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+
+              <button
+                onClick={() => {
+                  hapticMedium();
+                  toggleCamera();
+                }}
+                className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
+                  isCameraOn
+                    ? 'bg-online text-white hover:bg-emerald-600'
+                    : 'bg-background-light hover:bg-white/15 text-white'
+                }`}
+                title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
+              >
+                {isCameraOn ? <Video className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
+              </button>
+
+              <button
+                onClick={handleScreenShareClick}
+                className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
+                  isScreensharing
+                    ? 'bg-online text-white hover:bg-emerald-600'
+                    : 'bg-background-light hover:bg-white/15 text-white'
+                }`}
+                title={isScreensharing ? 'Opções de Compartilhamento' : 'Compartilhar Tela'}
+              >
+                <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+
+              <button
+                onClick={() => {
+                  hapticWarning();
+                  leaveVoice();
+                }}
+                className="bg-dnd hover:bg-rose-700 text-white p-2.5 sm:p-3 rounded-full transition-all shadow-lg cursor-pointer ml-1 active:scale-95"
+                title="Desconectar da Voz"
+              >
+                <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Area (Messages + SearchResultsPanel OR Member List) */}
       <div className="flex-1 flex overflow-hidden">
@@ -454,135 +785,128 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
             {/* Welcome header for Group at top */}
             {!appliedSearchQuery && hasMoreByGroup[activeGroup.id] === false && (
-              <div className="px-2 md:px-4 py-6 md:py-8 mb-4 border-b border-white/5 select-none">
-                <div className="w-14 h-14 md:w-16 md:h-16 rounded-3xl bg-brand-500/20 border border-brand-500/30 text-brand-400 flex items-center justify-center mb-3 shadow-lg">
-                  <Users className="w-8 h-8" />
+              <div className="flex flex-col items-center justify-center text-center py-8 px-4 border-b border-white/5 mb-4 select-none">
+                <div className="w-16 h-16 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-2xl mb-3 border border-brand-500/30 shadow-lg">
+                  {activeGroup.icon_url ? (
+                    <img
+                      src={formatAssetUrl(activeGroup.icon_url)}
+                      alt=""
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <Users className="w-8 h-8" />
+                  )}
                 </div>
-                <h2 className="text-xl md:text-2xl font-bold text-white mb-1">
-                  Bem-vindo a {groupName}!
+                <h2 className="text-xl font-bold text-white mb-1">
+                  Bem-vindo ao {groupName}!
                 </h2>
-                <p className="text-xs text-gray-500">
-                  Este é o início do grupo {groupName}.
+                <p className="text-xs text-gray-400 max-w-sm">
+                  Este é o início do grupo. Converse, compartilhe arquivos e divirta-se com seus amigos.
                 </p>
               </div>
             )}
 
-            {isLoadingMessages ? (
-              <div className="flex justify-center items-center gap-2 py-10 text-sm text-gray-500">
-                <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
-                <span>Carregando mensagens...</span>
-              </div>
-            ) : displayedMessages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 select-none">
-                {appliedSearchQuery ? (
-                  <>
-                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-400">
-                      <Search className="w-6 h-6" />
-                    </div>
-                    <span className="text-sm font-semibold text-gray-300">Nenhum resultado encontrado</span>
-                    <span className="text-xs text-gray-500">Tente buscar por outros termos.</span>
-                  </>
-                ) : (
-                  <span>Nenhuma mensagem ainda no grupo. Diga olá!</span>
-                )}
-              </div>
-            ) : (
-              displayedMessages.map((message, index) => {
-                const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === message.id);
-                const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
-                const isCompact = !isFirstUnread && (() => {
-                  if (!prevMessage) return false;
-                  if (prevMessage.author_id !== message.author_id) return false;
-                  if (message.reply_to) return false;
-                  const prevTime = new Date(prevMessage.created_at).getTime();
-                  const currTime = new Date(message.created_at).getTime();
-                  if (isNaN(prevTime) || isNaN(currTime)) return false;
-                  const diffMs = currTime - prevTime;
-                  return diffMs >= 0 && diffMs <= 5 * 60 * 1000;
-                })();
+            {/* Messages List */}
+            {displayedMessages.map((message, index) => {
+              const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
+              const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === message.id);
+              const isCompact = !isFirstUnread && (() => {
+                if (!prevMessage) return false;
+                if (prevMessage.author_id !== message.author_id) return false;
+                if (message.reply_to) return false;
+                const prevTime = new Date(prevMessage.created_at).getTime();
+                const currTime = new Date(message.created_at).getTime();
+                if (isNaN(prevTime) || isNaN(currTime)) return false;
+                const diffMs = currTime - prevTime;
+                return diffMs >= 0 && diffMs <= 5 * 60 * 1000;
+              })();
 
-                return (
-                  <React.Fragment key={message.id}>
-                    {isFirstUnread && (
-                      <div id="unread-divider" className="flex items-center gap-3 my-4 mx-2 select-none">
-                        <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
-                        <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          Mensagens não lidas
-                        </span>
-                        <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
-                      </div>
-                    )}
-                    <MessageItem
-                      message={message}
-                      isCompact={isCompact}
-                      isEditing={editingMessageId === message.id}
-                      onStartEdit={() => setEditingMessageId(message.id)}
-                      onStopEdit={() => setEditingMessageId(null)}
-                      onOpenUserProfile={onOpenUserProfile}
-                      onPreviewImage={onPreviewImage}
-                      onReply={(msg) => setReplyingTo(msg)}
-                      onEditMessage={async (id, newContent) => {
-                        await editMessage(id, newContent);
-                      }}
-                      onDeleteMessage={async (id) => {
-                        await deleteMessage(id);
-                      }}
-                      onRetryMessage={async (msg) => {
-                        removeMessageFromStore(msg.id, activeGroup.id);
-                        await sendMessage(msg.content, undefined, msg.reply_to_id);
-                      }}
-                      onRemoveFailedMessage={(id) => {
-                        removeMessageFromStore(id, activeGroup.id);
-                      }}
-                      contextType="dm_group"
-                    />
-                  </React.Fragment>
-                );
-              })
-            )}
+              return (
+                <React.Fragment key={message.id}>
+                  {isFirstUnread && (
+                    <div id="unread-divider" className="flex items-center gap-3 my-4 mx-2 select-none">
+                      <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+                      <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        Novas Mensagens
+                      </span>
+                      <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+                    </div>
+                  )}
+                  <MessageItem
+                    message={message}
+                    isCompact={isCompact}
+                    isEditing={editingMessageId === message.id}
+                    onStartEdit={() => setEditingMessageId(message.id)}
+                    onStopEdit={() => setEditingMessageId(null)}
+                    onOpenUserProfile={onOpenUserProfile}
+                    onPreviewImage={onPreviewImage}
+                    onReply={(msg) => setReplyingTo(msg as DMGroupMessage)}
+                    onEditMessage={async (id, newContent) => {
+                      await editMessage(id, newContent);
+                    }}
+                    onDeleteMessage={async (id) => {
+                      await deleteMessage(id);
+                    }}
+                    onRetryMessage={async (msg) => {
+                      removeMessageFromStore(msg.id, activeGroup.id);
+                      await sendMessage(msg.content, undefined, msg.reply_to_id);
+                    }}
+                    onRemoveFailedMessage={(id) => {
+                      removeMessageFromStore(id, activeGroup.id);
+                    }}
+                    contextType="dm_group"
+                  />
+                </React.Fragment>
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
 
           {/* Typing Indicator */}
-          <TypingIndicator
-            typingUserIds={typingUserIds}
-            members={activeGroup.members || []}
-          />
+          {typingUserIds.length > 0 && (
+            <div className="px-4 py-1 text-xs text-gray-400 flex items-center gap-1.5 select-none">
+              <TypingIndicator
+                typingUserIds={typingUserIds}
+                members={activeGroup.members || []}
+              />
+            </div>
+          )}
 
-          {/* Universal Message Input */}
-          <MessageInput
-            placeholder={`Conversar em ${groupName}`}
-            replyingTo={replyingTo}
-            onCancelReply={() => setReplyingTo(null)}
-            onSendMessage={async (content, replyToId) => {
-              if (activeGroup) {
-                clearUnreadDivider(activeGroup.id);
-              }
-              scrollToBottom(true);
-              await sendMessage(content, undefined, replyToId);
-              setReplyingTo(null);
-              setTimeout(() => scrollToBottom(true), 60);
-              setTimeout(() => scrollToBottom(true), 200);
-            }}
-            onTyping={() => {
-              if (activeGroup) {
-                socket.send('TYPING_START', {
-                  channel_id: activeGroup.id,
-                  user_ids: (activeGroup.members || []).map((m) => m.id).filter((id) => id !== user?.id),
-                });
-              }
-            }}
-            onEditLastMessage={handleEditLastMessage}
-            droppedFile={droppedFile}
-            onClearDroppedFile={() => setDroppedFile(null)}
-            contextType="dm_group"
-            customMentions={groupMemberMentions}
-          />
+          {/* Message Input */}
+          <div className="p-3 md:p-4 pt-1 bg-background-dark">
+            <MessageInput
+              placeholder={`Conversar em ${groupName}...`}
+              replyingTo={replyingTo}
+              onCancelReply={() => setReplyingTo(null)}
+              onSendMessage={async (content, replyToId) => {
+                if (activeGroup) {
+                  clearUnreadDivider(activeGroup.id);
+                }
+                scrollToBottom(true);
+                await sendMessage(content, undefined, replyToId);
+                setReplyingTo(null);
+                setTimeout(() => scrollToBottom(true), 60);
+                setTimeout(() => scrollToBottom(true), 200);
+              }}
+              onTyping={() => {
+                if (activeGroup) {
+                  socket.send('TYPING_START', {
+                    channel_id: activeGroup.id,
+                  });
+                }
+              }}
+              onEditLastMessage={handleEditLastMessage}
+              droppedFile={droppedFile}
+              onClearDroppedFile={() => setDroppedFile(null)}
+              contextType="dm_group"
+              customMentions={groupMemberMentions}
+            />
+          </div>
         </div>
 
-        {/* Right Sidebar: Search Results Panel (when search is active) OR Member Sidebar */}
-        {appliedSearchQuery ? (
+        {/* Right Search Results Panel */}
+        {appliedSearchQuery && (
           <SearchResultsPanel
             isOpen={Boolean(appliedSearchQuery)}
             onClose={() => {
@@ -593,61 +917,113 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             parsedQuery={parsedSearch}
             messages={searchResults}
             contextName={groupName}
-            contextCategory="Grupo"
+            contextCategory="Grupo de DM"
             contextType="dm_group"
             onJumpToMessage={handleJumpToMessage}
           />
-        ) : (
-          showMemberList && (
-            <div className="w-56 bg-background-darker border-l border-white/5 p-3 flex flex-col select-none overflow-y-auto no-scrollbar">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+        )}
+
+        {/* Group Member List Sidebar */}
+        {showMemberList && !appliedSearchQuery && (
+          <div className="w-60 bg-background-darker/60 border-l border-white/5 flex flex-col overflow-hidden select-none">
+            <div className="h-10 px-4 flex items-center justify-between border-b border-white/5">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
                 Membros — {activeGroup.members?.length || 0}
               </span>
-
-              <div className="space-y-1 flex-1">
-                {(activeGroup.members || []).map((m) => (
-                  <div
-                    key={m.id}
-                    onClick={(e) => onOpenUserProfile?.(m, { x: e.clientX, y: e.clientY })}
-                    className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors"
-                  >
-                    <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                      {m.avatar_url ? (
-                        <img src={formatAssetUrl(m.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        <span>{m.display_name?.[0]?.toUpperCase() || m.username?.[0]?.toUpperCase()}</span>
-                      )}
-                    </div>
-                    <div className="truncate">
-                      <span className="text-gray-200 font-medium block truncate">
-                        {m.display_name || m.username}
-                      </span>
-                      {m.id === activeGroup.owner_id && (
-                        <span className="text-[9px] text-brand-400 block">Dono</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Leave Group Button */}
-              <button
-                onClick={async () => {
-                  if (confirm('Tem certeza que deseja sair deste grupo?')) {
-                    if (user) {
-                      await removeMember(activeGroup.id, user.id);
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {(activeGroup.members || []).map((member) => (
+                <div
+                  key={member.id}
+                  onContextMenu={(e) =>
+                    handleUserContextMenu(e, member, {
+                      groupId: activeGroup.id,
+                      contextType: 'dm_group',
+                    })
+                  }
+                  onClick={(e) => {
+                    if (onOpenUserProfile) {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      onOpenUserProfile(member, { x: rect.right + 10, y: rect.top });
                     }
+                  }}
+                  className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 text-gray-300 hover:text-white cursor-pointer group transition-colors"
+                >
+                  <div className="relative flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center font-semibold text-xs text-white">
+                      {member.avatar_url ? (
+                        <img
+                          src={formatAssetUrl(member.avatar_url)}
+                          alt=""
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <span>
+                          {member.display_name?.[0]?.toUpperCase() ||
+                            member.username?.[0]?.toUpperCase() ||
+                            'U'}
+                        </span>
+                      )}
+                    </div>
+                    {/* Online status indicator */}
+                    <div
+                      className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background-darker ${
+                        member.status === 'online'
+                          ? 'bg-online'
+                          : member.status === 'idle'
+                          ? 'bg-idle'
+                          : member.status === 'dnd'
+                          ? 'bg-dnd'
+                          : 'bg-offline'
+                      }`}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium truncate">
+                        {member.display_name || member.username}
+                      </span>
+                      {activeGroup.owner_id === member.id && (
+                        <span className="text-[10px] text-amber-400 font-bold" title="Dono do Grupo">
+                          👑
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-gray-500 truncate block">
+                      @{member.username}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Leave Group Button in Sidebar Footer */}
+            <div className="p-2 border-t border-white/5">
+              <button
+                onClick={() => {
+                  if (activeGroup.owner_id === user?.id && (activeGroup.members?.length || 0) > 1) {
+                    alert(
+                      'Você é o dono deste grupo. Transfira a posse do grupo para outro membro antes de sair (clique com botão direito em um membro).'
+                    );
+                    return;
+                  }
+                  if (confirm('Tem certeza que deseja sair deste grupo?')) {
+                    leaveGroup(activeGroup.id);
                   }
                 }}
-                className="mt-4 flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold text-dnd hover:bg-dnd/10 transition-colors cursor-pointer border border-dnd/20"
+                className="w-full flex items-center justify-center gap-2 text-xs font-semibold text-dnd hover:text-white bg-dnd/10 hover:bg-dnd p-2 rounded-lg transition-colors cursor-pointer"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
                 <span>Sair do Grupo</span>
               </button>
             </div>
-          )
+          </div>
         )}
       </div>
+
+      {/* Context Menus */}
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
+      <ContextMenu menu={screenShareMenu} onClose={closeScreenShareMenu} />
     </div>
   );
 };

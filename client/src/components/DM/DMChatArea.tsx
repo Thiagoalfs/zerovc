@@ -11,6 +11,7 @@ import {
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
+import { useVoiceStore } from '../../stores/voiceStore';
 import { useFriendStore } from '../../stores/friendStore';
 import { formatAssetUrl } from '../../lib/api';
 import { ActiveCallOverlay } from './ActiveCallOverlay';
@@ -306,7 +307,10 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     );
   }
 
-  const isCallActiveInThisRoom = callState !== 'idle' && callState !== 'ended' && roomId === activeRoom.id;
+  const { voiceType, dmRoomId, isConnected: isVoiceConnected } = useVoiceStore();
+  const isCallActiveInThisRoom =
+    (callState !== 'idle' && callState !== 'ended' && roomId === activeRoom.id) ||
+    (voiceType === 'dm' && dmRoomId === activeRoom.id && isVoiceConnected);
 
   return (
     <div
@@ -466,7 +470,10 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
       {/* Active Call UI Overlay */}
       {isCallActiveInThisRoom && (
-        <ActiveCallOverlay onOpenScreenShare={onOpenScreenShare} />
+        <ActiveCallOverlay
+          onOpenScreenShare={onOpenScreenShare}
+          onOpenUserProfile={onOpenUserProfile}
+        />
       )}
 
       {/* Pinned Messages Active Notice Banner */}

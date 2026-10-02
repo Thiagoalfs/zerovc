@@ -1,16 +1,8 @@
 import { create } from 'zustand';
-import { Participant, DisconnectReason } from 'livekit-client';
+import { Participant } from 'livekit-client';
 import { api } from '../lib/api';
-import { livekit } from '../lib/livekit';
 import { User } from '../types';
-import {
-  playJoinVoiceSound,
-  playLeaveVoiceSound,
-  playUserJoinCallSound,
-  playUserLeaveCallSound,
-  playStartStreamSound,
-  playStopStreamSound,
-} from '../utils/audio';
+import { useVoiceStore } from './voiceStore';
 
 export type CallState = 'idle' | 'calling' | 'ringing' | 'connected' | 'ended';
 
@@ -44,32 +36,13 @@ interface CallStoreState {
   stopScreenShare: () => Promise<void>;
 }
 
-const loadSavedMuteState = (): boolean => {
-  try {
-    return localStorage.getItem('zerovc_user_muted') === 'true';
-  } catch {
-    return false;
-  }
-};
-
-const loadSavedDeafenState = (): boolean => {
-  try {
-    return localStorage.getItem('zerovc_user_deafened') === 'true';
-  } catch {
-    return false;
-  }
-};
-
-const initialMuted = loadSavedMuteState();
-const initialDeafened = loadSavedDeafenState();
-
 export const useCallStore = create<CallStoreState>((set, get) => ({
   callState: 'idle',
   roomId: null,
   targetUser: null,
   incomingCaller: null,
-  isMuted: initialMuted || initialDeafened,
-  isDeafened: initialDeafened,
+  isMuted: false,
+  isDeafened: false,
   isCameraOn: false,
   isScreensharing: false,
   participants: [],
@@ -108,7 +81,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   },
 
   acceptCall: async () => {
-    const { roomId } = get();
+    const { roomId, incomingCaller } = get();
     if (!roomId) return;
 
     try {
@@ -121,112 +94,19 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   },
 
   handleCallAccepted: async (token: string, livekitUrl: string, _roomName: string) => {
+    const { roomId, targetUser, incomingCaller } = get();
+    const recipient = targetUser || incomingCaller;
+    if (!roomId || !recipient) return;
+
     try {
-      const isPTT = localStorage.getItem('zerovc_input_mode') === 'ptt';
-      const shouldDeafen = get().isDeafened;
-      const shouldMute = shouldDeafen || isPTT || get().isMuted;
-
-      let prevParticipantIds = new Set<string>();
-      let prevScreenShareIds = new Set<string>();
-      let isInitialSync = true;
-
-      await livekit.connect(livekitUrl, token, {
-        autoEnableMicrophone: !shouldMute,
-        onParticipantsChanged: (participants) => {
-          set({ participants });
-
-          if (!isInitialSync && get().callState === 'connected') {
-            const currentIds = new Set(participants.map((p) => p.identity));
-            for (const p of participants) {
-              if (!p.isLocal && !prevParticipantIds.has(p.identity)) {
-                playUserJoinCallSound();
-                break;
-              }
-            }
-            for (const prevId of prevParticipantIds) {
-              if (!currentIds.has(prevId)) {
-                playUserLeaveCallSound();
-                break;
-              }
-            }
-          }
-          prevParticipantIds = new Set(participants.map((p) => p.identity));
-        },
-        onSpeakingChanged: (speakingUserIds) => {
-          set({ speakingUserIds });
-        },
-        onTrackUpdated: () => {
-          const room = livekit.getRoom();
-          if (room) {
-            const participants = [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
-            set({ participants });
-
-            const currentScreenShares = new Set(
-              participants.filter((p) => p.isScreenShareEnabled).map((p) => p.identity)
-            );
-
-            if (!isInitialSync && get().callState === 'connected') {
-              for (const id of currentScreenShares) {
-                if (!prevScreenShareIds.has(id)) {
-                  playStartStreamSound();
-                  break;
-                }
-              }
-              for (const prevId of prevScreenShareIds) {
-                if (!currentScreenShares.has(prevId)) {
-                  playStopStreamSound();
-                  break;
-                }
-              }
-            }
-            prevScreenShareIds = currentScreenShares;
-          }
-        },
-        onDisconnected: (reason) => {
-          console.warn('[DMCall] LiveKit disconnected. Reason:', reason);
-          playLeaveVoiceSound();
-          const isDuplicate = reason === DisconnectReason.DUPLICATE_IDENTITY || String(reason).toLowerCase().includes('duplicate');
-          
-          set({
-            callState: 'idle',
-            roomId: null,
-            targetUser: null,
-            incomingCaller: null,
-            participants: [],
-            speakingUserIds: [],
-            isScreensharing: false,
-            isCameraOn: false,
-          });
-
-          if (isDuplicate) {
-            alert('Você entrou na chamada por outro dispositivo ou navegador.');
-          }
-        },
-      });
-
-      playJoinVoiceSound();
-
-      setTimeout(() => {
-        isInitialSync = false;
-      }, 500);
-
-      if (shouldDeafen) {
-        await livekit.setDeafened(true);
-        await livekit.setMuted(true);
-      } else if (shouldMute) {
-        await livekit.setMuted(true);
-      }
-
+      await useVoiceStore.getState().joinDMCall(roomId, recipient, token, livekitUrl);
       set({
         callState: 'connected',
-        isMuted: shouldMute,
-        isDeafened: shouldDeafen,
-        isCameraOn: false,
-        isScreensharing: false,
+        incomingCaller: null,
       });
     } catch (err) {
       console.error('Failed to connect LiveKit in DM call:', err);
-      set({ callState: 'idle', roomId: null });
+      set({ callState: 'idle', roomId: null, incomingCaller: null });
     }
   },
 
@@ -252,10 +132,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       }
     }
 
-    try {
-      await get().stopScreenShare();
-    } catch {}
-    await livekit.disconnect();
+    await useVoiceStore.getState().leaveVoice();
     set({
       callState: 'idle',
       roomId: null,
@@ -269,10 +146,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   },
 
   handleCallEnded: async () => {
-    try {
-      await get().stopScreenShare();
-    } catch {}
-    await livekit.disconnect();
+    await useVoiceStore.getState().leaveVoice();
     set({
       callState: 'idle',
       roomId: null,
@@ -286,65 +160,22 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   },
 
   toggleMute: async () => {
-    const { isMuted, isDeafened } = get();
-    const nextMuted = !isMuted;
-    const nextDeafened = nextMuted ? isDeafened : false;
-
-    try {
-      localStorage.setItem('zerovc_user_muted', String(nextMuted));
-      localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
-    } catch {}
-
-    await livekit.setMuted(nextMuted);
-    if (!nextMuted && isDeafened) {
-      await livekit.setDeafened(false);
-    }
-
-    set({ isMuted: nextMuted, isDeafened: nextDeafened });
+    await useVoiceStore.getState().toggleMute();
   },
 
   toggleDeafen: async () => {
-    const { isDeafened } = get();
-    const nextDeafened = !isDeafened;
-    const nextMuted = nextDeafened ? true : get().isMuted;
-
-    try {
-      localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
-      if (nextDeafened) {
-        localStorage.setItem('zerovc_user_muted', 'true');
-      }
-    } catch {}
-
-    await livekit.setDeafened(nextDeafened);
-    set({ isDeafened: nextDeafened, isMuted: nextMuted });
+    await useVoiceStore.getState().toggleDeafen();
   },
 
   toggleCamera: async () => {
-    const nextCamera = !get().isCameraOn;
-    await livekit.setCameraEnabled(nextCamera);
-    set({ isCameraOn: nextCamera });
+    await useVoiceStore.getState().toggleCamera();
   },
 
   startScreenShare: async (sourceId?: string, config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }) => {
-    try {
-      await livekit.setScreenShareEnabled(true, sourceId, {
-        resolution: config?.resolution || '720p',
-        fps: config?.fps || 30,
-        includeAudio: config?.includeAudio ?? true,
-      });
-      set({ isScreensharing: true });
-    } catch (err) {
-      console.error('[Call] Screen share error:', err);
-      set({ isScreensharing: false });
-    }
+    await useVoiceStore.getState().startScreenShare(sourceId, config);
   },
 
   stopScreenShare: async () => {
-    try {
-      await livekit.setScreenShareEnabled(false);
-      set({ isScreensharing: false });
-    } catch (err) {
-      console.error('[Call] Stop screen share error:', err);
-    }
+    await useVoiceStore.getState().stopScreenShare();
   },
 }));
