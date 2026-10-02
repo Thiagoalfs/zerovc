@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, Video, VideoOff } from 'lucide-react';
+import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, Video, VideoOff, Gamepad2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -33,11 +33,21 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     toggleDeafen,
     toggleCamera,
     leaveVoice,
+    startScreenShare,
     stopScreenShare,
   } = useVoiceStore();
 
   const { activeGuild, selectChannel } = useGuildStore();
   const activeVoiceChannel = activeGuild?.channels?.find((c) => c.id === currentChannelId);
+
+  const isInVoice = Boolean(isConnected || isConnecting);
+  const isGameActive = Boolean(
+    user?.status !== 'offline' &&
+    user?.custom_activity &&
+    user?.show_activity_status !== false &&
+    user.custom_activity.type === 'playing' &&
+    user.custom_activity.name
+  );
 
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -99,6 +109,78 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     }
   };
 
+  const handleStreamGameClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isScreensharing) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const items: ContextMenuItem[] = [
+        {
+          id: 'switch-screen',
+          label: 'Trocar tela / janela',
+          icon: <Monitor className="w-4 h-4" />,
+          onClick: () => {
+            onOpenScreenShare();
+          },
+        },
+        {
+          id: 'stop-screen',
+          label: 'Parar transmissão',
+          variant: 'danger',
+          onClick: () => {
+            stopScreenShare();
+          },
+        },
+      ];
+      openContextMenu(
+        { clientX: rect.left, clientY: rect.top - 10 },
+        items,
+        'Transmissão'
+      );
+      return;
+    }
+
+    const gameName = user?.custom_activity?.name;
+    const isElectron = Boolean(typeof window !== 'undefined' && (window as any).electronAPI?.getScreenSources);
+
+    if (isElectron && gameName) {
+      try {
+        const sources = await (window as any).electronAPI.getScreenSources();
+        const windowSources = sources.filter((s: any) => s.id?.startsWith('window:'));
+        const cleanGame = gameName.toLowerCase().trim();
+
+        // 1. Direct or partial window title match
+        let matched = windowSources.find((s: any) => {
+          const sName = (s.name || '').toLowerCase().trim();
+          return sName.includes(cleanGame) || cleanGame.includes(sName);
+        });
+
+        // 2. Word-based match fallback
+        if (!matched) {
+          const gameWords = cleanGame.split(/\s+/).filter((w: string) => w.length > 2);
+          if (gameWords.length > 0) {
+            matched = windowSources.find((s: any) => {
+              const sName = (s.name || '').toLowerCase();
+              return gameWords.some((gw: string) => sName.includes(gw));
+            });
+          }
+        }
+
+        if (matched) {
+          console.log('[UserBar] Auto-streaming detected game window with audio:', matched.name, matched.id);
+          await startScreenShare(matched.id, { resolution: '720p', fps: 30, includeAudio: true });
+          return;
+        }
+      } catch (err) {
+        console.warn('[UserBar] Error auto-detecting game window source:', err);
+      }
+    }
+
+    // Fallback if not in Electron or matching window not found
+    onOpenScreenShare();
+  };
+
   return (
     <div
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
@@ -151,17 +233,17 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         onClose={() => setShowDiagnostic(false)}
       />
 
-      {/* Unified User & Voice Container */}
+      {/* Unified User, Voice & Game Container */}
       <div
         ref={voiceBarRef}
-        className={`w-full min-w-0 max-w-full bg-background-darkest border border-white/5 rounded-2xl shadow-inner overflow-visible relative transition-all ${
-          isConnected || isConnecting
+        className={`w-full min-w-0 max-w-full bg-background-darkest border border-white/5 rounded-2xl shadow-inner overflow-visible relative transition-all duration-200 ${
+          isInVoice || isGameActive
             ? 'p-2 md:p-2.5 flex flex-col gap-2'
             : 'h-[48px] md:h-[52px] min-h-[48px] md:min-h-[52px] px-2 md:px-2.5 flex items-center justify-between'
         }`}
       >
         {/* Discord-style Floating Voice Connection Popout */}
-        {(isConnected || isConnecting) && (
+        {isInVoice && (
           <VoiceConnectionPopout
             isOpen={showVoicePopout}
             onClose={() => setShowVoicePopout(false)}
@@ -172,92 +254,144 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           />
         )}
 
-        {/* 1. Voice Connection Status Bar (Shown ONLY when connected/connecting) */}
-        {(isConnected || isConnecting) && (
-          <div className="flex items-center justify-between min-w-0 gap-1.5">
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowVoicePopout(!showVoicePopout);
-              }}
-              className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden group"
-              title="Clique para ver o status da conexão (Ping / WebRTC)"
-            >
-              <div className="w-2.5 h-2.5 rounded-full bg-online animate-pulse flex-shrink-0" />
-              <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                <span className="text-xs font-bold text-online leading-tight truncate group-hover:underline">
-                  {isConnecting ? 'Conectando...' : 'Voz Conectada'}
-                </span>
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (activeVoiceChannel) selectChannel(activeVoiceChannel);
-                  }}
-                  className="text-[11px] text-gray-400 hover:text-gray-200 truncate leading-tight block min-w-0 cursor-pointer"
-                  title="Ir para o canal de voz"
+        {/* 1. Voice Connection Status Bar (Shown ONLY when connected/connecting - STRICTLY AT THE TOP) */}
+        {isInVoice && (
+          <>
+            <div className="flex items-center justify-between min-w-0 gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-150">
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowVoicePopout(!showVoicePopout);
+                }}
+                className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden group"
+                title="Clique para ver o status da conexão (Ping / WebRTC)"
+              >
+                <div className="w-2.5 h-2.5 rounded-full bg-online animate-pulse flex-shrink-0" />
+                <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+                  <span className="text-xs font-bold text-online leading-tight truncate group-hover:underline">
+                    {isConnecting ? 'Conectando...' : 'Voz Conectada'}
+                  </span>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (activeVoiceChannel) selectChannel(activeVoiceChannel);
+                    }}
+                    className="text-[11px] text-gray-400 hover:text-gray-200 truncate leading-tight block min-w-0 cursor-pointer"
+                    title="Ir para o canal de voz"
+                  >
+                    {activeVoiceChannel?.name || 'Canal de Voz'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={leaveVoice}
+                  className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
+                  title="Desconectar"
                 >
-                  {activeVoiceChannel?.name || 'Canal de Voz'}
+                  <PhoneOff className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Large Action Buttons (Camera & Screen Share) */}
+            <div className="grid grid-cols-2 gap-1.5 w-full animate-in fade-in slide-in-from-bottom-1 duration-150">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleCamera();
+                }}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 ${
+                  isCameraOn
+                    ? 'bg-online text-white shadow-md shadow-online/20 hover:bg-online/90'
+                    : 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/5'
+                }`}
+                title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
+              >
+                {isCameraOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+                <span>Câmera</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleScreenShareClick}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 ${
+                  isScreensharing
+                    ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 hover:bg-brand-600'
+                    : 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/5'
+                }`}
+                title={isScreensharing ? 'Opções de transmissão (Clique para trocar de tela)' : 'Compartilhar Tela'}
+              >
+                <Monitor className="w-4 h-4" />
+                <span>Tela</span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Divider between Voice and Game Activity if both are active */}
+        {isInVoice && isGameActive && (
+          <div className="h-[1px] bg-white/5 -mx-1" />
+        )}
+
+        {/* 2. Game Activity Preview Bar (Expands upwards when game is detected) */}
+        {isGameActive && user?.custom_activity && (
+          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-background-darker/70 border border-white/5 animate-in fade-in slide-in-from-bottom-2 duration-200 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
+              {user.custom_activity.icon_url ? (
+                <img
+                  src={formatAssetUrl(user.custom_activity.icon_url)}
+                  alt={user.custom_activity.name}
+                  className="w-8 h-8 rounded-lg object-cover bg-background-darkest flex-shrink-0 border border-white/10 shadow-sm"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <Gamepad2 className="w-4 h-4" />
+                </div>
+              )}
+              <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+                <span className="text-xs font-bold text-white truncate leading-tight">
+                  {user.custom_activity.name}
+                </span>
+                <span className="text-[10px] text-gray-400 truncate leading-tight mt-0.5">
+                  {user.custom_activity.details || user.custom_activity.state || 'Jogando agora'}
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-0.5 flex-shrink-0">
+            {/* Screen Share / Stream Button if connected to a voice call */}
+            {isInVoice && (
               <button
                 type="button"
-                onClick={leaveVoice}
-                className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
-                title="Desconectar"
+                onClick={handleStreamGameClick}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 flex-shrink-0 ${
+                  isScreensharing
+                    ? 'bg-brand-500 text-white shadow-brand-500/20 hover:bg-brand-600'
+                    : 'bg-white/5 hover:bg-brand-500 hover:text-white text-gray-300 border border-white/5'
+                }`}
+                title={isScreensharing ? 'Opções de transmissão' : `Transmitir ${user.custom_activity.name} com som`}
               >
-                <PhoneOff className="w-4 h-4" />
+                <Monitor className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold">
+                  {isScreensharing ? 'Ao Vivo' : 'Transmitir'}
+                </span>
               </button>
-            </div>
+            )}
           </div>
         )}
 
-        {/* 2. Large Action Buttons (Camera & Screen Share) - Discord Style (Shown ONLY when connected/connecting) */}
-        {(isConnected || isConnecting) && (
-          <div className="grid grid-cols-2 gap-1.5 w-full">
-            {/* Webcam / Camera Button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleCamera();
-              }}
-              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 ${
-                isCameraOn
-                  ? 'bg-online text-white shadow-md shadow-online/20 hover:bg-online/90'
-                  : 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/5'
-              }`}
-              title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
-            >
-              {isCameraOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-              <span>Câmera</span>
-            </button>
-
-            {/* Screen Share Button */}
-            <button
-              type="button"
-              onClick={handleScreenShareClick}
-              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 ${
-                isScreensharing
-                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 hover:bg-brand-600'
-                  : 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/5'
-              }`}
-              title={isScreensharing ? 'Opções de transmissão (Clique para trocar de tela)' : 'Compartilhar Tela'}
-            >
-              <Monitor className="w-4 h-4" />
-              <span>Tela</span>
-            </button>
-          </div>
-        )}
-
-        {/* Subtle Divider when connected */}
-        {(isConnected || isConnecting) && (
+        {/* Divider above User Row if Voice or Game is active */}
+        {(isInVoice || isGameActive) && (
           <div className="h-[1px] bg-white/5 -mx-1" />
         )}
 
-        {/* 3. User Info & Controls Row */}
+        {/* 3. User Info & Controls Row (Bottom tier) */}
         <div
           onClick={() => {
             if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -265,7 +399,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             }
           }}
           className={`w-full min-w-0 max-w-full flex items-center justify-between cursor-pointer md:cursor-default overflow-hidden gap-1.5 transition-all ${
-            isConnected || isConnecting ? 'pt-0.5' : 'h-full'
+            isInVoice || isGameActive ? 'pt-0.5' : 'h-full'
           }`}
         >
           <div
@@ -295,7 +429,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 </span>
               </div>
               <span className="text-[11px] md:text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">
-                {user?.status !== 'offline' && user?.custom_activity && user?.show_activity_status !== false ? (
+                {user?.status !== 'offline' && user?.custom_activity && user?.show_activity_status !== false && !isGameActive ? (
                   <span className="text-brand-300 font-medium flex items-center gap-1 truncate">
                     <span className="truncate">
                       {user.custom_activity.type === 'playing' ? 'Jogando ' :
