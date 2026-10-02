@@ -59,6 +59,7 @@ export const RegisteredGamesView: React.FC = () => {
     lastPlayed: Date.now(),
     enabled: true,
     isVerified: true,
+    icon_url: activeActivity.icon_url,
   } : null);
 
   const handleToggleGame = async (game: RegisteredGame) => {
@@ -157,9 +158,17 @@ export const RegisteredGamesView: React.FC = () => {
         {currentRunningGame ? (
           <div className="py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-white/5 text-brand-400 flex items-center justify-center shrink-0">
-                <Gamepad2 className="w-5 h-5" />
-              </div>
+              {currentRunningGame.icon_url ? (
+                <img
+                  src={currentRunningGame.icon_url}
+                  alt=""
+                  className="w-9 h-9 rounded-xl object-cover bg-white/5 border border-white/10 shrink-0 shadow-sm"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-white/5 text-brand-400 flex items-center justify-center shrink-0">
+                  <Gamepad2 className="w-5 h-5" />
+                </div>
+              )}
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-white truncate">{currentRunningGame.name}</span>
@@ -305,7 +314,19 @@ export const RegisteredGamesView: React.FC = () => {
               key={game.id}
               className="group py-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] px-2 rounded-xl transition-colors"
             >
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {game.icon_url ? (
+                  <img
+                    src={game.icon_url}
+                    alt=""
+                    className="w-8 h-8 rounded-xl object-cover bg-white/5 border border-white/10 shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-xl bg-white/5 text-gray-400 flex items-center justify-center shrink-0">
+                    <Gamepad2 className="w-4 h-4" />
+                  </div>
+                )}
+
                 {editingGameId === game.id ? (
                   <div className="flex items-center gap-2 flex-1 max-w-xs">
                     <input

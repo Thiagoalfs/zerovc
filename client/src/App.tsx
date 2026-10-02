@@ -743,7 +743,7 @@ export const App: React.FC = () => {
 
           let resolvedActivity = detectedActivity;
           if (detectedActivity && detectedActivity.name) {
-            useRegisteredGamesStore.getState().addOrUpdateGame(detectedActivity.name, true);
+            useRegisteredGamesStore.getState().addOrUpdateGame(detectedActivity.name, true, undefined, detectedActivity.icon_url);
             const isEnabled = useRegisteredGamesStore.getState().isGameEnabled(detectedActivity.name);
             if (!isEnabled) {
               resolvedActivity = null;
@@ -753,7 +753,7 @@ export const App: React.FC = () => {
           const currentAct = currentUser.custom_activity;
           if (
             (!currentAct && !resolvedActivity) ||
-            (currentAct && resolvedActivity && currentAct.name === resolvedActivity.name && currentAct.type === resolvedActivity.type)
+            (currentAct && resolvedActivity && currentAct.name === resolvedActivity.name && currentAct.type === resolvedActivity.type && currentAct.icon_url === resolvedActivity.icon_url)
           ) {
             return;
           }

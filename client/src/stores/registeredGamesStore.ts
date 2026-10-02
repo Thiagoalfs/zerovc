@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export interface RegisteredGame {
@@ -8,6 +8,7 @@ export interface RegisteredGame {
   lastPlayed: number; // timestamp in ms
   enabled: boolean; // whether activity is broadcasted
   isVerified?: boolean; // detected from known games list
+  icon_url?: string;
 }
 
 const DEFAULT_GAMES: RegisteredGame[] = [
@@ -23,7 +24,7 @@ const DEFAULT_GAMES: RegisteredGame[] = [
 
 interface RegisteredGamesState {
   games: RegisteredGame[];
-  addOrUpdateGame: (name: string, isVerified?: boolean, executable?: string) => void;
+  addOrUpdateGame: (name: string, isVerified?: boolean, executable?: string, icon_url?: string) => void;
   toggleGameEnabled: (id: string) => void;
   setGameEnabled: (name: string, enabled: boolean) => void;
   removeGame: (id: string) => void;
@@ -36,7 +37,7 @@ export const useRegisteredGamesStore = create<RegisteredGamesState>()(
     (set, get) => ({
       games: DEFAULT_GAMES,
 
-      addOrUpdateGame: (name: string, isVerified = false, executable?: string) => {
+      addOrUpdateGame: (name: string, isVerified = false, executable?: string, icon_url?: string) => {
         if (!name || !name.trim()) return;
         const trimmed = name.trim();
         const existing = get().games.find(
@@ -47,7 +48,12 @@ export const useRegisteredGamesStore = create<RegisteredGamesState>()(
           set((state) => ({
             games: state.games.map((g) =>
               g.id === existing.id
-                ? { ...g, lastPlayed: Date.now(), isVerified: isVerified || g.isVerified }
+                ? {
+                    ...g,
+                    lastPlayed: Date.now(),
+                    isVerified: isVerified || g.isVerified,
+                    icon_url: icon_url || g.icon_url,
+                  }
                 : g
             ),
           }));
@@ -59,6 +65,7 @@ export const useRegisteredGamesStore = create<RegisteredGamesState>()(
             lastPlayed: Date.now(),
             enabled: true,
             isVerified,
+            icon_url,
           };
           set((state) => ({
             games: [newGame, ...state.games],
