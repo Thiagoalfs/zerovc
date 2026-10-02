@@ -382,12 +382,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
     let targetHighestPos = 999999;
     (targetMember.roles || []).forEach((r) => {
-      if (r.position < targetHighestPos) {
+      if (r && r.name !== '@everyone' && typeof r.position === 'number' && r.position < targetHighestPos) {
         targetHighestPos = r.position;
       }
     });
 
-    const isHierarchyAllowed = isCurrentOwner || isMe || currentUserHighestPos < targetHighestPos;
+    const isHierarchyAllowed = !isMe && !isTargetOwner && (isCurrentOwner || currentUserHighestPos < targetHighestPos);
     const guildRoles = activeGuild.roles || [];
 
     const items: ContextMenuItem[] = [
@@ -414,7 +414,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     ];
 
     // Voice Call Moderation (Admin)
-    if (canMute || isCurrentOwner || hasAdmin) {
+    if (isHierarchyAllowed && (canMute || isCurrentOwner || hasAdmin)) {
       items.push({ label: '', separator: true });
 
       items.push({
@@ -437,17 +437,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         },
       });
 
-      if (!isMe) {
-        items.push({
-          label: 'Desconectar da Call',
-          icon: <PhoneOff className="w-4 h-4 text-dnd" />,
-          onClick: async () => {
-            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-              disconnect: true,
-            });
-          },
-        });
-      }
+      items.push({
+        label: 'Desconectar da Call',
+        icon: <PhoneOff className="w-4 h-4 text-dnd" />,
+        onClick: async () => {
+          await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+            disconnect: true,
+          });
+        },
+      });
     }
 
     // User & Stream Volume Sliders (0 - 200%, default 100%, saved locally)
@@ -550,7 +548,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     }
 
     // Mute/Timeout Submenu
-    if (canMute && (isCurrentOwner || isMe || isHierarchyAllowed)) {
+    if (canMute && isHierarchyAllowed) {
       const isServerMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
 
       const muteSubItems: ContextMenuItem[] = [
@@ -599,7 +597,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     }
 
     // Kick and Ban
-    if (!isMe && !isTargetOwner && isHierarchyAllowed) {
+    if (isHierarchyAllowed) {
       if (canKick) {
         items.push({
           label: `Expulsar ${targetMember.display_name || targetMember.username}`,

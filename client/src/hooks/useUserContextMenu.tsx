@@ -114,8 +114,14 @@ export function useUserContextMenu() {
         }
       }
 
+      const targetMember = isGuildContext && activeGuild
+        ? activeGuild.members?.find((m) => m.id === targetUser.id) || targetUser
+        : targetUser;
+      const mod = isGuildContext && activeGuild ? perms.canModerateMember(targetMember) : null;
+      const canModerateTarget = Boolean(perms.isCurrentOwner || (mod && !mod.isTargetOwner && mod.isHierarchyAllowed));
+
       // Voice Channel Moderation
-      if (options.voiceChannelId && (perms.canMuteVoice || perms.isCurrentOwner || perms.hasAdmin)) {
+      if (options.voiceChannelId && !isMe && canModerateTarget && (perms.canMuteVoice || perms.isCurrentOwner || perms.hasAdmin)) {
         items.push({ label: '', separator: true });
 
         items.push({
@@ -138,26 +144,21 @@ export function useUserContextMenu() {
           },
         });
 
-        if (!isMe) {
-          items.push({
-            label: 'Desconectar da Call',
-            icon: <PhoneOff className="w-4 h-4 text-dnd" />,
-            onClick: async () => {
-              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
-                disconnect: true,
-              });
-            },
-          });
-        }
+        items.push({
+          label: 'Desconectar da Call',
+          icon: <PhoneOff className="w-4 h-4 text-dnd" />,
+          onClick: async () => {
+            await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+              disconnect: true,
+            });
+          },
+        });
       }
 
       // Server Member Moderation Actions (Roles, Timeout, Kick, Ban)
-      if (isGuildContext && activeGuild) {
-        const targetMember = activeGuild.members?.find((m) => m.id === targetUser.id) || targetUser;
-        const mod = perms.canModerateMember(targetMember);
-
-        if (perms.isCurrentOwner || (!mod.isTargetOwner && (isMe ? perms.canManageRoles : mod.isHierarchyAllowed))) {
-          // Change Roles Submenu
+      if (isGuildContext && activeGuild && mod) {
+        // Change Roles Submenu
+        if (!mod.isTargetOwner && (perms.isCurrentOwner || (isMe ? perms.canManageRoles : mod.isHierarchyAllowed))) {
           if (perms.canManageRoles && activeGuild.roles && activeGuild.roles.length > 0) {
             const roleSubItems: ContextMenuItem[] = activeGuild.roles
               .filter((role) => {
@@ -193,7 +194,10 @@ export function useUserContextMenu() {
               });
             }
           }
+        }
 
+        // Moderation actions on other members (Timeout, Kick, Ban)
+        if (!isMe && canModerateTarget) {
           // Timeout / Mute Submenu
           if (perms.canMute) {
             const isMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
@@ -228,33 +232,32 @@ export function useUserContextMenu() {
             });
           }
 
-          // Kick & Ban (only for other members)
-          if (!isMe && !mod.isTargetOwner && mod.isHierarchyAllowed) {
-            if (perms.canKick) {
-              items.push({
-                label: `Expulsar ${targetMember.display_name || targetMember.username}`,
-                icon: <UserMinus className="w-4 h-4 text-amber-400" />,
-                variant: 'danger',
-                onClick: () => {
-                  if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
-                    kickMember(activeGuild.id, targetMember.id);
-                  }
-                },
-              });
-            }
+          // Kick
+          if (perms.canKick) {
+            items.push({
+              label: `Expulsar ${targetMember.display_name || targetMember.username}`,
+              icon: <UserMinus className="w-4 h-4 text-amber-400" />,
+              variant: 'danger',
+              onClick: () => {
+                if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
+                  kickMember(activeGuild.id, targetMember.id);
+                }
+              },
+            });
+          }
 
-            if (perms.canBan) {
-              items.push({
-                label: `Banir ${targetMember.display_name || targetMember.username}`,
-                icon: <Ban className="w-4 h-4 text-dnd" />,
-                variant: 'danger',
-                onClick: () => {
-                  if (confirm(`Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor?`)) {
-                    banMember(activeGuild.id, targetMember.id);
-                  }
-                },
-              });
-            }
+          // Ban
+          if (perms.canBan) {
+            items.push({
+              label: `Banir ${targetMember.display_name || targetMember.username}`,
+              icon: <Ban className="w-4 h-4 text-dnd" />,
+              variant: 'danger',
+              onClick: () => {
+                if (confirm(`Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor?`)) {
+                  banMember(activeGuild.id, targetMember.id);
+                }
+              },
+            });
           }
         }
       }

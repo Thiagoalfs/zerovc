@@ -760,20 +760,32 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 
 	isOwner := adminID == ownerID
 	if !isOwner && adminID != targetUserID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, adminID).Scan(&perms)
+		if targetUserID == ownerID {
+			http.Error(w, `{"error":"forbidden: não é possível moderar o dono do servidor"}`, http.StatusForbidden)
+			return
+		}
 
-		hasAdmin := (perms & models.PermAdministrator) != 0
-		hasMute := (perms & models.PermMuteVoice) != 0 || (perms & models.PermMuteMembers) != 0
+		actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, adminID)
+		if err != nil {
+			http.Error(w, `{"error":"actor not found in guild"}`, http.StatusForbidden)
+			return
+		}
+		hasVoicePerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermMuteVoice) != 0 || (actorCtx.Perms&models.PermMuteMembers) != 0 || (actorCtx.Perms&models.PermDeafenVoice) != 0
+		if !hasVoicePerm {
+			http.Error(w, `{"error":"forbidden: sem permissão para moderar voz"}`, http.StatusForbidden)
+			return
+		}
 
-		if !hasAdmin && !hasMute {
-			http.Error(w, `{"error":"forbidden: insufficient voice moderation permissions"}`, http.StatusForbidden)
+		var targetHighestPos int = 999999
+		_ = h.db.Pool.QueryRow(r.Context(), `
+			SELECT COALESCE(MIN(gr.position), 999999)
+			FROM guild_roles gr
+			INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+			WHERE gmr.guild_id = $1 AND gmr.user_id = $2 AND gr.name != '@everyone'
+		`, guildID, targetUserID).Scan(&targetHighestPos)
+
+		if targetHighestPos <= actorCtx.MaxPos {
+			http.Error(w, `{"error":"forbidden: você não pode moderar um membro com cargo igual ou superior ao seu na hierarquia"}`, http.StatusForbidden)
 			return
 		}
 	}
