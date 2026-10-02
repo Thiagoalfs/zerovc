@@ -40,6 +40,8 @@ import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { speakText } from '../../utils/audio';
 import { copyToClipboard } from '../../utils/clipboard';
 
+import { MessageEmbedCard } from './MessageEmbedCard';
+
 export interface UniversalMessage {
   id: string;
   author_id: string;
@@ -52,6 +54,9 @@ export interface UniversalMessage {
   is_pinned?: boolean;
   is_edited?: boolean;
   author?: User;
+  invoker_id?: string;
+  invoker?: User;
+  embeds?: any[];
   member?: any;
   status?: 'sending' | 'failed';
   error?: string;
@@ -735,7 +740,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       style={authorRoleColor ? { color: authorRoleColor } : undefined}
                       title="Ver perfil"
                     >
-                      {message.author?.display_name || message.author?.username || 'Usuário'}:
+                      {message.author?.display_name || message.author?.username || 'Usuário'}
+                      {(message.author?.is_bot || message.author_id === '00000000-0000-0000-0000-000000000001') && (
+                        <span className="bg-brand-500 text-white text-[9px] font-bold px-1 py-0.5 rounded leading-none uppercase tracking-wider select-none shadow-sm">
+                          BOT
+                        </span>
+                      )}
+                      :
                     </button>
 
                     <span className={`${
@@ -757,6 +768,20 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-semibold inline-flex items-center gap-1 ml-1 select-none">
                         <Pin className="w-2.5 h-2.5" /> Fixada
                       </span>
+                    )}
+
+                    {message.invoker && (
+                      <span className="text-[10px] text-gray-400 ml-2 select-none">
+                        (invocado por @{message.invoker.display_name || message.invoker.username})
+                      </span>
+                    )}
+
+                    {message.embeds && message.embeds.length > 0 && (
+                      <div className="mt-2 space-y-2 max-w-2xl">
+                        {message.embeds.map((embed: any, idx: number) => (
+                          <MessageEmbedCard key={idx} embed={embed} onPreviewImage={onPreviewImage} />
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
@@ -836,7 +861,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               {/* Content */}
               <div className="flex-1 min-w-0">
                 {!isCompact && (
-                  <div className="flex items-baseline gap-2 mb-0.5 select-none">
+                  <div className="flex items-baseline gap-2 mb-0.5 select-none flex-wrap">
                     <span
                       onClick={(e) => {
                         e.stopPropagation();
@@ -852,6 +877,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     >
                       {message.author?.display_name || message.author?.username || 'Usuário'}
                     </span>
+                    {(message.author?.is_bot || message.author_id === '00000000-0000-0000-0000-000000000001') && (
+                      <span className="bg-brand-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded leading-none uppercase tracking-wider select-none shadow-sm">
+                        BOT
+                      </span>
+                    )}
                     <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>
                     {message.is_edited && (
                       <span className="text-[10px] text-gray-500 font-normal">(editado)</span>
@@ -859,6 +889,20 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     {message.is_pinned && (
                       <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1">
                         <Pin className="w-2.5 h-2.5" /> Fixada
+                      </span>
+                    )}
+                    {message.invoker && (
+                      <span className="text-[11px] text-gray-400 flex items-center gap-1 ml-1">
+                        <span className="text-gray-500">• Invocado por</span>
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            message.invoker && onOpenUserProfile?.(message.invoker, { x: e.clientX, y: e.clientY });
+                          }}
+                          className="text-brand-400 hover:underline cursor-pointer font-medium"
+                        >
+                          @{message.invoker.display_name || message.invoker.username}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -892,17 +936,29 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
-                    isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
-                  }`}>
-                    <FormattedMessage
-                      content={message.content}
-                      onPreviewImage={onPreviewImage}
-                      onImageLoad={onImageLoad}
-                      onOpenUserProfile={onOpenUserProfile}
-                      onOpenUserContextMenu={handleUserContextMenu}
-                    />
-                  </div>
+                  <>
+                    {message.content && (
+                      <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
+                        isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
+                      }`}>
+                        <FormattedMessage
+                          content={message.content}
+                          onPreviewImage={onPreviewImage}
+                          onImageLoad={onImageLoad}
+                          onOpenUserProfile={onOpenUserProfile}
+                          onOpenUserContextMenu={handleUserContextMenu}
+                        />
+                      </div>
+                    )}
+
+                    {message.embeds && message.embeds.length > 0 && (
+                      <div className="mt-2 space-y-2 max-w-2xl">
+                        {message.embeds.map((embed: any, idx: number) => (
+                          <MessageEmbedCard key={idx} embed={embed} onPreviewImage={onPreviewImage} />
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Failed sending banner with Retry and Delete */}

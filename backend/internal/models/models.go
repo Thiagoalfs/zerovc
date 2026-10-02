@@ -8,18 +8,23 @@ import (
 )
 
 type User struct {
-	ID               uuid.UUID `json:"id"`
-	Username         string    `json:"username"`
-	DisplayName      string    `json:"display_name"`
-	Email            string    `json:"email,omitempty"`
-	PhoneNumber      string    `json:"phone_number,omitempty"`
-	PasswordHash     string    `json:"-"`
-	TwoFactorSecret  string    `json:"-"`
-	TwoFactorEnabled bool      `json:"two_factor_enabled"`
-	EmailVerified    bool      `json:"email_verified"`
-	AvatarURL        string    `json:"avatar_url"`
-	BannerURL        string    `json:"banner_url"`
-	Bio              string    `json:"bio"`
+	ID                 uuid.UUID       `json:"id"`
+	Username           string          `json:"username"`
+	DisplayName        string          `json:"display_name"`
+	Email              string          `json:"email,omitempty"`
+	PhoneNumber        string          `json:"phone_number,omitempty"`
+	PasswordHash       string          `json:"-"`
+	TwoFactorSecret    string          `json:"-"`
+	TwoFactorEnabled   bool            `json:"two_factor_enabled"`
+	EmailVerified      bool            `json:"email_verified"`
+	IsBot              bool            `json:"is_bot"`
+	RiotGameName       string          `json:"riot_game_name,omitempty"`
+	RiotTagLine        string          `json:"riot_tag_line,omitempty"`
+	RiotRegion         string          `json:"riot_region,omitempty"`
+	RiotPUUID          string          `json:"riot_puuid,omitempty"`
+	AvatarURL          string          `json:"avatar_url"`
+	BannerURL          string          `json:"banner_url"`
+	Bio                string          `json:"bio"`
 	Status             string          `json:"status"` // online, idle, dnd, offline
 	CustomStatus       string          `json:"custom_status"`
 	CustomActivity     json.RawMessage `json:"custom_activity"`
@@ -45,6 +50,10 @@ type UserPublic struct {
 	AutoDetectActivity bool            `json:"auto_detect_activity"`
 	TwoFactorEnabled   bool            `json:"two_factor_enabled"`
 	EmailVerified      bool            `json:"email_verified"`
+	IsBot              bool            `json:"is_bot"`
+	RiotGameName       string          `json:"riot_game_name,omitempty"`
+	RiotTagLine        string          `json:"riot_tag_line,omitempty"`
+	RiotRegion         string          `json:"riot_region,omitempty"`
 	CSRFToken          string          `json:"csrf_token,omitempty"`
 	Roles              []Role          `json:"roles,omitempty"`
 }
@@ -77,6 +86,10 @@ func (u *User) ToPublic() UserPublic {
 		AutoDetectActivity: u.AutoDetectActivity,
 		TwoFactorEnabled:   u.TwoFactorSecret != "",
 		EmailVerified:      u.EmailVerified,
+		IsBot:              u.IsBot,
+		RiotGameName:       u.RiotGameName,
+		RiotTagLine:        u.RiotTagLine,
+		RiotRegion:         u.RiotRegion,
 	}
 }
 
@@ -191,14 +204,51 @@ type MessageReplyInfo struct {
 	Content string     `json:"content"`
 }
 
+type EmbedField struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Inline bool   `json:"inline,omitempty"`
+}
+
+type EmbedAuthor struct {
+	Name    string `json:"name"`
+	IconURL string `json:"icon_url,omitempty"`
+	URL     string `json:"url,omitempty"`
+}
+
+type EmbedMedia struct {
+	URL string `json:"url"`
+}
+
+type EmbedFooter struct {
+	Text    string `json:"text"`
+	IconURL string `json:"icon_url,omitempty"`
+}
+
+type MessageEmbed struct {
+	Title       string        `json:"title,omitempty"`
+	Description string        `json:"description,omitempty"`
+	URL         string        `json:"url,omitempty"`
+	Color       string        `json:"color,omitempty"`
+	Author      *EmbedAuthor  `json:"author,omitempty"`
+	Thumbnail   *EmbedMedia   `json:"thumbnail,omitempty"`
+	Image       *EmbedMedia   `json:"image,omitempty"`
+	Fields      []EmbedField  `json:"fields,omitempty"`
+	Footer      *EmbedFooter  `json:"footer,omitempty"`
+	Timestamp   *time.Time    `json:"timestamp,omitempty"`
+}
+
 type Message struct {
 	ID          uuid.UUID         `json:"id"`
 	GuildID     *uuid.UUID        `json:"guild_id,omitempty"`
 	ChannelID   uuid.UUID         `json:"channel_id"`
 	AuthorID    uuid.UUID         `json:"author_id"`
 	Author      UserPublic        `json:"author"`
+	InvokerID   *uuid.UUID        `json:"invoker_id,omitempty"`
+	Invoker     *UserPublic       `json:"invoker,omitempty"`
 	Content     string            `json:"content"`
 	Attachments []Attachment      `json:"attachments"`
+	Embeds      []MessageEmbed    `json:"embeds,omitempty"`
 	ReplyToID   *uuid.UUID        `json:"reply_to_id,omitempty"`
 	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
 	Reactions   []MessageReaction `json:"reactions,omitempty"`
@@ -270,8 +320,11 @@ type DMMessage struct {
 	DMRoomID    uuid.UUID         `json:"dm_room_id"`
 	AuthorID    uuid.UUID         `json:"author_id"`
 	Author      UserPublic        `json:"author"`
+	InvokerID   *uuid.UUID        `json:"invoker_id,omitempty"`
+	Invoker     *UserPublic       `json:"invoker,omitempty"`
 	Content     string            `json:"content"`
 	Attachments []Attachment      `json:"attachments"`
+	Embeds      []MessageEmbed    `json:"embeds,omitempty"`
 	ReplyToID   *uuid.UUID        `json:"reply_to_id,omitempty"`
 	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
 	IsPinned    bool              `json:"is_pinned"`
@@ -298,8 +351,11 @@ type DMGroupMessage struct {
 	GroupID     uuid.UUID         `json:"group_id"`
 	AuthorID    uuid.UUID         `json:"author_id"`
 	Author      UserPublic        `json:"author"`
+	InvokerID   *uuid.UUID        `json:"invoker_id,omitempty"`
+	Invoker     *UserPublic       `json:"invoker,omitempty"`
 	Content     string            `json:"content"`
 	Attachments []Attachment      `json:"attachments"`
+	Embeds      []MessageEmbed    `json:"embeds,omitempty"`
 	ReplyToID   *uuid.UUID        `json:"reply_to_id,omitempty"`
 	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
 	IsPinned    bool              `json:"is_pinned"`

@@ -50,6 +50,11 @@ export interface ElectronAPI {
   relaunchApp?: () => void;
   onActivityDetected?: (callback: (activity: any) => void) => () => void;
   getCurrentActivity?: () => Promise<any>;
+  ytdlpDownload?: (args: { format: 'mp4' | 'mp3'; link: string }) => Promise<{
+    success: boolean;
+    data?: { base64: string; filename: string; mimeType: string; title: string; size: number };
+    error?: string;
+  }>;
 }
 
 declare global {

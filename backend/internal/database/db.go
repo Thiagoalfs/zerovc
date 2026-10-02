@@ -128,6 +128,33 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 		WHERE id NOT IN (SELECT DISTINCT group_id FROM dm_group_members)
 	`)
 
+	// Ensure bot, riot and embeds columns exist
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_game_name VARCHAR(64) DEFAULT ''")
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_tag_line VARCHAR(16) DEFAULT ''")
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_region VARCHAR(16) DEFAULT 'br1'")
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_puuid VARCHAR(128) DEFAULT ''")
+
+	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb")
+	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL")
+
+	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL")
+
+	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL")
+
+	// Ensure System Bot User 'Gork' exists
+	db.Pool.Exec(ctx, `
+		INSERT INTO users (id, username, display_name, email, password_hash, avatar_url, is_bot, status)
+		VALUES ('00000000-0000-0000-0000-000000000001', 'gork', 'gork', 'gork@zerovc.local', 'system_bot_password_hash', '/assets/gork.jpg', TRUE, 'online')
+		ON CONFLICT (id) DO UPDATE SET
+			username = 'gork',
+			display_name = 'gork',
+			avatar_url = '/assets/gork.jpg',
+			is_bot = TRUE
+	`)
+
 	log.Println("Database schema migration executed successfully")
 	return nil
 }

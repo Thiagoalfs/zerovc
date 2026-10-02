@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock, Mic } from 'lucide-react';
+import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock, Mic, Terminal, Bot, Sparkles } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -9,6 +9,8 @@ import { VoiceRecorder } from './VoiceRecorder';
 import { useGuildStore } from '../../stores/guildStore';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
+import { SLASH_COMMANDS, parseSlashCommand, SlashOption } from '../../lib/slashCommands';
+import { executeYtdlpCommand } from '../../lib/ytdlpRunner';
 
 interface MentionSuggestionItem {
   id: string;
@@ -18,6 +20,15 @@ interface MentionSuggestionItem {
   isSpecial?: boolean;
   isRole?: boolean;
   roleColor?: string;
+}
+
+interface SlashSuggestionItem {
+  command: string;
+  subcommand?: string;
+  name: string;
+  description: string;
+  syntax: string;
+  options?: any[];
 }
 
 interface MessageInputProps {
@@ -60,6 +71,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
   
+  // Slash Commands Autocomplete State
+  const [selectedSlashIndex, setSelectedSlashIndex] = useState<number>(0);
+
   // Channel (#) Autocomplete State
   const [channelQuery, setChannelQuery] = useState<string | null>(null);
   const [channelCursorPos, setChannelCursorPos] = useState<number>(0);
@@ -78,6 +92,67 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingTime = useRef<number>(0);
+
+  // Compute filtered slash commands suggestions
+  const slashSuggestions = useMemo(() => {
+    if (!content.startsWith('/')) return [];
+    const trimmed = content.trim();
+    const parts = trimmed.slice(1).split(/\s+/);
+    const searchWord = parts[0]?.toLowerCase() || '';
+    const subSearch = parts[1]?.toLowerCase() || '';
+
+    const list: SlashSuggestionItem[] = [];
+
+    for (const cmd of SLASH_COMMANDS) {
+      if (cmd.guildOnly && contextType !== 'channel') continue;
+
+      if (cmd.subcommands && cmd.subcommands.length > 0) {
+        for (const sub of cmd.subcommands) {
+          const fullCmdName = `${cmd.name} ${sub.name}`;
+          const isMatching = 
+            parts.length <= 1 
+              ? (cmd.name.toLowerCase().startsWith(searchWord) || fullCmdName.toLowerCase().includes(searchWord))
+              : (cmd.name.toLowerCase() === searchWord && (sub.name.toLowerCase().startsWith(subSearch) || subSearch === ''));
+
+          if (isMatching) {
+            let syntax = `/${cmd.name} ${sub.name}`;
+            if (sub.options) {
+              for (const opt of sub.options) {
+                syntax += opt.required ? ` [${opt.name}]` : ` (${opt.name})`;
+              }
+            }
+            list.push({
+              command: cmd.name,
+              subcommand: sub.name,
+              name: `/${cmd.name} ${sub.name}`,
+              description: sub.description,
+              syntax,
+              options: sub.options,
+            });
+          }
+        }
+      } else {
+        const isMatching = cmd.name.toLowerCase().startsWith(searchWord);
+        if (isMatching) {
+          let syntax = `/${cmd.name}`;
+          if (cmd.options) {
+            for (const opt of cmd.options) {
+              syntax += opt.required ? ` [${opt.name}]` : ` (${opt.name})`;
+            }
+          }
+          list.push({
+            command: cmd.name,
+            name: `/${cmd.name}`,
+            description: cmd.description,
+            syntax,
+            options: cmd.options,
+          });
+        }
+      }
+    }
+
+    return list.slice(0, 8);
+  }, [content, contextType]);
 
   const allAvailableEmojis = useMemo(() => {
     const list: any[] = [];
@@ -271,9 +346,76 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }, 10);
   };
 
+  const insertSlashCommand = (item: SlashSuggestionItem) => {
+    let newContent = item.name + ' ';
+    setContent(newContent);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(newContent.length, newContent.length);
+      }
+    }, 10);
+  };
+
   const handleSend = async () => {
     if (isUploading) return;
     let finalContent = replaceEmojiShortcodes(content.trim(), allAvailableEmojis);
+
+    // Check if it's a Slash Command
+    if (finalContent.startsWith('/')) {
+      const parsed = parseSlashCommand(finalContent);
+      if (parsed) {
+        setContent('');
+        setSelectedFile(null);
+        setSelectedImagePreview(null);
+        setShowEmojiPicker(false);
+        setChannelQuery(null);
+        setMentionQuery(null);
+        setEmojiQuery(null);
+        onCancelReply?.();
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+        if (parsed.command === 'yt-dlp' || parsed.command === 'ytdlp') {
+          if (!parsed.args.link) {
+            setLimitAlert({
+              title: 'Comando Incompleto',
+              message: 'Informe o formato e o link do vídeo/música individual.\nExemplo: `/yt-dlp mp4 https://www.youtube.com/watch?v=...`',
+            });
+            return;
+          }
+          await executeYtdlpCommand({
+            format: parsed.args.format === 'mp3' ? 'mp3' : 'mp4',
+            link: parsed.args.link,
+            contextType,
+            contextId: channel?.id || '',
+          });
+          return;
+        }
+
+        // Backend Slash Commands (/server, /user, /league, etc.)
+        try {
+          const payload = {
+            command: parsed.command,
+            subcommand: parsed.subcommand,
+            args: parsed.args,
+          };
+          if (contextType === 'channel' && channel?.id) {
+            await api.commands.executeChannelCommand(channel.id, payload);
+          } else if (contextType === 'dm' && channel?.id) {
+            await api.commands.executeDMRoomCommand(channel.id, payload);
+          } else if (contextType === 'dm_group' && channel?.id) {
+            await api.commands.executeDMGroupCommand(channel.id, payload);
+          }
+        } catch (err: any) {
+          console.error('Failed to execute slash command:', err);
+          setLimitAlert({
+            title: 'Erro no Comando',
+            message: err?.message || 'Falha ao executar comando.',
+          });
+        }
+        return;
+      }
+    }
 
     // Check 2,000 character limit on raw text
     if (finalContent.length > MAX_CHARS) {
@@ -342,7 +484,40 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // 0. Channel Suggestions Navigation
+    // 0. Slash Commands Navigation
+    if (slashSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedSlashIndex((prev) => (prev + 1) % slashSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSlashIndex((prev) => (prev - 1 + slashSuggestions.length) % slashSuggestions.length);
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        insertSlashCommand(slashSuggestions[selectedSlashIndex]);
+        return;
+      }
+      if (e.key === 'Enter') {
+        const trimmed = content.trim();
+        const activeSuggestion = slashSuggestions[selectedSlashIndex];
+        if (trimmed === `/${activeSuggestion.command}` || trimmed === activeSuggestion.name) {
+          e.preventDefault();
+          insertSlashCommand(activeSuggestion);
+          return;
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setContent('');
+        return;
+      }
+    }
+
+    // 1. Channel Suggestions Navigation
     if (channelSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -553,6 +728,49 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
       className="px-3 md:px-4 pt-0 bg-background-dark relative select-none"
     >
+      {/* Slash Commands (/) Autocomplete Suggestions Popup */}
+      {slashSuggestions.length > 0 && (
+        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-brand-500/25 shadow-2xl p-1.5 max-h-64 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
+          <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
+              <Bot className="w-3.5 h-3.5" />
+              <span>Comandos do Gork ({slashSuggestions.length})</span>
+            </span>
+            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Tab para autocompletar</span>
+          </div>
+          <div className="space-y-0.5">
+            {slashSuggestions.map((item, idx) => (
+              <button
+                key={item.name}
+                type="button"
+                onClick={() => insertSlashCommand(item)}
+                onMouseEnter={() => setSelectedSlashIndex(idx)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                  selectedSlashIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <div className="w-7 h-7 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400 flex-shrink-0 border border-brand-500/20">
+                  <Terminal className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-white">
+                      {item.name}
+                    </span>
+                    <span className="text-[10px] text-brand-300 font-mono bg-brand-500/15 px-1.5 py-0.5 rounded border border-brand-500/20">
+                      {item.syntax}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-gray-400 truncate mt-0.5">
+                    {item.description}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Channel (#) Autocomplete Suggestions Popup */}
       {channelSuggestions.length > 0 && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">

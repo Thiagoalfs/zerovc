@@ -65,6 +65,10 @@ export interface User {
   custom_activity?: CustomActivity | null;
   show_activity_status?: boolean;
   auto_detect_activity?: boolean;
+  is_bot?: boolean;
+  riot_game_name?: string;
+  riot_tag_line?: string;
+  riot_region?: string;
   server_folders?: ServerFolder[];
   guild_positions?: string[];
   roles?: Role[];
@@ -174,12 +178,49 @@ export interface MessageReplyInfo {
   content: string;
 }
 
+export interface EmbedField {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface EmbedAuthor {
+  name: string;
+  icon_url?: string;
+  url?: string;
+}
+
+export interface EmbedMedia {
+  url: string;
+}
+
+export interface EmbedFooter {
+  text: string;
+  icon_url?: string;
+}
+
+export interface MessageEmbed {
+  title?: string;
+  description?: string;
+  url?: string;
+  color?: string;
+  author?: EmbedAuthor;
+  thumbnail?: EmbedMedia;
+  image?: EmbedMedia;
+  fields?: EmbedField[];
+  footer?: EmbedFooter;
+  timestamp?: string;
+}
+
 export interface BaseMessage {
   id: string;
   author_id: string;
   author: User;
+  invoker_id?: string;
+  invoker?: User;
   content: string;
   attachments?: Attachment[];
+  embeds?: MessageEmbed[];
   reply_to_id?: string;
   reply_to?: MessageReplyInfo;
   reactions?: MessageReaction[];
@@ -345,6 +386,11 @@ declare global {
       relaunchApp?: () => void;
       onActivityDetected?: (callback: (activity: any) => void) => () => void;
       getCurrentActivity?: () => Promise<any>;
+      ytdlpDownload?: (args: { format: 'mp4' | 'mp3'; link: string }) => Promise<{
+        success: boolean;
+        data?: { base64: string; filename: string; mimeType: string; title: string; size: number };
+        error?: string;
+      }>;
     };
   }
 }

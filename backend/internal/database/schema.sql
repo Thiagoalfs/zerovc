@@ -433,8 +433,32 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions (token_hash);
+
+-- 29. Bots & Slash Command Embeds & Riot Integrations
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_game_name VARCHAR(64) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_tag_line VARCHAR(16) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_region VARCHAR(16) DEFAULT 'br1';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_puuid VARCHAR(128) DEFAULT '';
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
+-- Seed System Bot User 'Gork'
+INSERT INTO users (id, username, display_name, email, password_hash, avatar_url, is_bot, status)
+VALUES ('00000000-0000-0000-0000-000000000001', 'gork', 'gork', 'gork@zerovc.local', 'system_bot_password_hash', '/assets/gork.jpg', TRUE, 'online')
+ON CONFLICT (id) DO UPDATE SET
+    username = 'gork',
+    display_name = 'gork',
+    avatar_url = '/assets/gork.jpg',
+    is_bot = TRUE;
 
 
