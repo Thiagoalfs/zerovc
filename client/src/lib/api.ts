@@ -634,6 +634,8 @@ export const api = {
       if (before) query.append('before', before);
       return request<DMGroupMessage[]>(`/dm/groups/${id}/messages?${query.toString()}`);
     },
+    getPinnedMessages: (id: string) =>
+      request<DMGroupMessage[]>(`/dm/groups/${id}/pins`),
     sendMessage: (id: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
       request<DMGroupMessage>(`/dm/groups/${id}/messages`, {
         method: 'POST',
@@ -647,6 +649,10 @@ export const api = {
     deleteMessage: (id: string, messageId: string) =>
       request<{ success: boolean }>(`/dm/groups/${id}/messages/${messageId}`, {
         method: 'DELETE',
+      }),
+    togglePin: (id: string, messageId: string) =>
+      request<{ success: boolean; is_pinned: boolean }>(`/dm/groups/${id}/messages/${messageId}/pin`, {
+        method: 'POST',
       }),
     getVoiceToken: (id: string) =>
       request<{ token: string; livekit_url: string; room_name: string }>(`/dm/groups/${id}/voice-token`, {
@@ -722,6 +728,31 @@ export const api = {
       });
       if (!res.ok) {
         let msg = 'Falha ao enviar ícone do servidor';
+        try {
+          const err = await res.json();
+          if (err.error) msg = err.error;
+        } catch {}
+        throw new Error(msg);
+      }
+      return res.json() as Promise<{ url: string; filename: string; size: number }>;
+    },
+    groupIcon: async (file: File) => {
+      const optimizedFile = await convertToWebP(file);
+      const formData = new FormData();
+      formData.append('file', optimizedFile);
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const csrf = getCsrfToken();
+      if (csrf) headers['X-CSRF-Token'] = csrf;
+      const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-icon`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: formData,
+      });
+      if (!res.ok) {
+        let msg = 'Falha ao enviar ícone do grupo';
         try {
           const err = await res.json();
           if (err.error) msg = err.error;

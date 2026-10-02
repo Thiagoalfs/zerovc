@@ -274,6 +274,13 @@ func (h *DMGroupHandler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	`, groupID).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt)
 	g.Members = h.getGroupMembers(r.Context(), g.ID)
 
+	for _, m := range g.Members {
+		h.hub.SendToUser(m.ID, models.WSEvent{
+			Type: "GROUP_UPDATE",
+			Data: g,
+		})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(g)
 }
@@ -342,9 +349,22 @@ func (h *DMGroupHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	members := h.getGroupMembers(r.Context(), groupID)
+	var g models.DMGroup
+	h.db.Pool.QueryRow(r.Context(), `
+		SELECT id, name, icon_url, owner_id, created_at
+		FROM dm_groups WHERE id = $1
+	`, groupID).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.CreatedAt)
+	g.Members = h.getGroupMembers(r.Context(), groupID)
+
+	for _, m := range g.Members {
+		h.hub.SendToUser(m.ID, models.WSEvent{
+			Type: "GROUP_UPDATE",
+			Data: g,
+		})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(members)
+	json.NewEncoder(w).Encode(g.Members)
 }
 
 type TransferGroupOwnershipRequest struct {
@@ -691,11 +711,25 @@ func (h *DMGroupHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var userName string
-	h.db.Pool.QueryRow(r.Context(), "SELECT COALESCE(display_name, username) FROM users WHERE id = $1", userID).Scan(&userName)
+	var u models.UserPublic
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, username, COALESCE(display_name, ''), COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(status, 'offline'), COALESCE(custom_status, '') FROM users WHERE id = $1", userID).Scan(
+		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus,
+	)
+
+	metaJSON, _ := json.Marshal(map[string]any{
+		"avatar_url":    u.AvatarURL,
+		"display_name":  u.DisplayName,
+		"username":      u.Username,
+		"custom_status": u.CustomStatus,
+	})
+
+	userName := u.DisplayName
+	if userName == "" {
+		userName = u.Username
+	}
 
 	livekitRoomName := "dmgroup-" + groupID.String()
-	token, err := h.livekit.GenerateJoinToken(livekitRoomName, userID, userName, "", true)
+	token, err := h.livekit.GenerateJoinToken(livekitRoomName, userID, userName, string(metaJSON), true)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate voice token"}`, http.StatusInternalServerError)
 		return
@@ -898,5 +932,139 @@ func (h *DMGroupHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(msg)
+}
+
+func (h *DMGroupHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	groupIDStr := chi.URLParam(r, "id")
+	groupID, err := uuid.Parse(groupIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid group id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var isMember bool
+	h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2)", groupID, userID).Scan(&isMember)
+	if !isMember {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	query := `
+		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
+		FROM dm_group_messages m
+		INNER JOIN users u ON u.id = m.author_id
+		WHERE m.group_id = $1 AND m.is_pinned = true
+		ORDER BY m.created_at DESC
+		LIMIT 100
+	`
+	rows, err := h.db.Pool.Query(r.Context(), query, groupID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to query pinned messages"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	messages := make([]models.DMGroupMessage, 0)
+	for rows.Next() {
+		var msg models.DMGroupMessage
+		var attachBytes []byte
+		if err := rows.Scan(
+			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+			&msg.Author.Username, &msg.Author.DisplayName, &msg.Author.AvatarURL, &msg.Author.BannerURL, &msg.Author.Bio, &msg.Author.Status, &msg.Author.CustomStatus,
+		); err == nil {
+			msg.Author.ID = msg.AuthorID
+			if len(attachBytes) > 0 {
+				json.Unmarshal(attachBytes, &msg.Attachments)
+			}
+			if msg.Attachments == nil {
+				msg.Attachments = make([]models.Attachment, 0)
+			}
+			messages = append(messages, msg)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
+}
+
+func (h *DMGroupHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	groupIDStr := chi.URLParam(r, "id")
+	groupID, err := uuid.Parse(groupIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid group id"}`, http.StatusBadRequest)
+		return
+	}
+
+	messageIDStr := chi.URLParam(r, "messageID")
+	messageID, err := uuid.Parse(messageIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid message id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var isMember bool
+	h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2)", groupID, userID).Scan(&isMember)
+	if !isMember {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	var isPinned bool
+	err = h.db.Pool.QueryRow(r.Context(), `
+		UPDATE dm_group_messages
+		SET is_pinned = NOT is_pinned
+		WHERE id = $1 AND group_id = $2
+		RETURNING is_pinned
+	`, messageID, groupID).Scan(&isPinned)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	var msg models.DMGroupMessage
+	var rawAttach []byte
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT id, group_id, author_id, content, attachments, reply_to_id, is_pinned, is_edited, edited_at, created_at
+		FROM dm_group_messages
+		WHERE id = $1
+	`, messageID).Scan(
+		&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &rawAttach, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+	)
+	if err == nil {
+		if len(rawAttach) > 0 {
+			json.Unmarshal(rawAttach, &msg.Attachments)
+		}
+		if msg.Attachments == nil {
+			msg.Attachments = make([]models.Attachment, 0)
+		}
+
+		h.db.Pool.QueryRow(r.Context(), "SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1", msg.AuthorID).Scan(
+			&msg.Author.ID, &msg.Author.Username, &msg.Author.DisplayName, &msg.Author.AvatarURL, &msg.Author.BannerURL, &msg.Author.Bio, &msg.Author.Status, &msg.Author.CustomStatus,
+		)
+
+		members := h.getGroupMembers(r.Context(), groupID)
+		for _, m := range members {
+			h.hub.SendToUser(m.ID, models.WSEvent{
+				Type: "GROUP_MESSAGE_UPDATE",
+				Data: msg,
+			})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"success": true, "is_pinned": isPinned})
 }
 

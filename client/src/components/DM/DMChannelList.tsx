@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Users, Plus, MessageSquare, User as UserIcon, Phone, UserPlus, UserMinus, Ban, Copy, Check, CheckCheck, Server, X, LogOut } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Users, Plus, MessageSquare, User as UserIcon, Phone, UserPlus, UserMinus, Ban, Copy, Check, CheckCheck, Server, X, LogOut, Edit3, Camera } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -14,6 +14,9 @@ import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { api, formatAssetUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
+import { AddDMGroupMembersModal } from '../Modals/AddDMGroupMembersModal';
+import { EditDMGroupNameModal } from '../Modals/EditDMGroupNameModal';
+import { ImageCropModal } from '../Modals/ImageCropModal';
 
 interface DMChannelListProps {
   currentView: 'friends' | 'dm' | 'group';
@@ -40,13 +43,41 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
 }) => {
   const { user: currentUser } = useAuthStore();
   const { rooms, activeRoom, selectRoom, fetchRooms, roomUnreadCounts, unreadRooms, openDMWithUser, markRoomAsRead, closeRoom } = useDMStore();
-  const { groups, activeGroup, selectGroup, fetchGroups, groupUnreadCounts, unreadGroups, markGroupAsRead, leaveGroup } = useDMGroupStore();
+  const { groups, activeGroup, selectGroup, fetchGroups, groupUnreadCounts, unreadGroups, markGroupAsRead, leaveGroup, updateGroup } = useDMGroupStore();
   const { guilds } = useGuildStore();
   const { friends, fetchFriends, sendRequest, removeFriend } = useFriendStore();
   const { startCall } = useCallStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
   const channelListWidth = useSettingsStore((s) => s.channelListWidth);
+
+  const [selectedGroupForAddMembers, setSelectedGroupForAddMembers] = useState<DMGroup | null>(null);
+  const [selectedGroupForEditName, setSelectedGroupForEditName] = useState<DMGroup | null>(null);
+  const [selectedGroupForCrop, setSelectedGroupForCrop] = useState<DMGroup | null>(null);
+  const [groupCropFile, setGroupCropFile] = useState<File | null>(null);
+  const groupIconInputRef = useRef<HTMLInputElement>(null);
+
+  const handleGroupIconFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setGroupCropFile(e.target.files[0]);
+    }
+    if (groupIconInputRef.current) {
+      groupIconInputRef.current.value = '';
+    }
+  };
+
+  const handleGroupCropConfirm = async (croppedFile: File) => {
+    if (!selectedGroupForCrop) return;
+    const targetGroupId = selectedGroupForCrop.id;
+    setGroupCropFile(null);
+    setSelectedGroupForCrop(null);
+    try {
+      const res = await api.upload.groupIcon(croppedFile);
+      await updateGroup(targetGroupId, { icon_url: res.url });
+    } catch (err: any) {
+      alert(err?.message || 'Falha ao atualizar foto do grupo');
+    }
+  };
 
   useEffect(() => {
     fetchRooms();
@@ -281,6 +312,31 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
         disabled: unreadCount === 0,
         onClick: () => markGroupAsRead(group.id),
       },
+      ...((group.members?.length || 0) < 15
+        ? [
+            {
+              id: 'add-group-members',
+              label: 'Adicionar ao Grupo',
+              icon: <UserPlus className="w-4 h-4 text-brand-400" />,
+              onClick: () => setSelectedGroupForAddMembers(group),
+            },
+          ]
+        : []),
+      {
+        id: 'edit-group-name',
+        label: 'Mudar Nome do Grupo',
+        icon: <Edit3 className="w-4 h-4" />,
+        onClick: () => setSelectedGroupForEditName(group),
+      },
+      {
+        id: 'edit-group-icon',
+        label: 'Alterar Ícone',
+        icon: <Camera className="w-4 h-4" />,
+        onClick: () => {
+          setSelectedGroupForCrop(group);
+          groupIconInputRef.current?.click();
+        },
+      },
       {
         separator: true,
         label: '',
@@ -305,6 +361,10 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
         icon: <LogOut className="w-4 h-4" />,
         variant: 'danger',
         onClick: async () => {
+          if (group.owner_id === currentUser?.id && (group.members?.length || 0) > 1) {
+            alert('Você é o dono deste grupo. Transfira a posse do grupo para outro membro antes de sair.');
+            return;
+          }
           if (confirm(`Tem certeza que deseja sair do grupo "${groupDisplayName}"?`)) {
             if (activeGroup?.id === group.id) {
               onSelectFriends();
@@ -487,6 +547,47 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
       </div>
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />
+
+      {/* Hidden file input for Group Icon Upload from Context Menu */}
+      <input
+        ref={groupIconInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={handleGroupIconFileChange}
+      />
+
+      {/* Group Icon Crop Modal */}
+      {groupCropFile && selectedGroupForCrop && (
+        <ImageCropModal
+          isOpen={Boolean(groupCropFile && selectedGroupForCrop)}
+          file={groupCropFile}
+          cropType="groupIcon"
+          onConfirm={handleGroupCropConfirm}
+          onCancel={() => {
+            setGroupCropFile(null);
+            setSelectedGroupForCrop(null);
+          }}
+        />
+      )}
+
+      {/* Add Members to Group Modal */}
+      {selectedGroupForAddMembers && (
+        <AddDMGroupMembersModal
+          isOpen={Boolean(selectedGroupForAddMembers)}
+          onClose={() => setSelectedGroupForAddMembers(null)}
+          group={selectedGroupForAddMembers}
+        />
+      )}
+
+      {/* Edit Group Name Modal */}
+      {selectedGroupForEditName && (
+        <EditDMGroupNameModal
+          isOpen={Boolean(selectedGroupForEditName)}
+          onClose={() => setSelectedGroupForEditName(null)}
+          group={selectedGroupForEditName}
+        />
+      )}
     </>
   );
 };
