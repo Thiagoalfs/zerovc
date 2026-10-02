@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Guild, Role, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
+import { DropdownSelect } from '../../Common/DropdownSelect';
 
 interface MembersTabProps {
   activeGuild: Guild;
@@ -63,18 +64,20 @@ export const MembersTab: React.FC<MembersTabProps> = ({
           />
         </div>
 
-        <select
+        <DropdownSelect
+          className="w-full sm:w-60 flex-shrink-0"
           value={selectedRoleFilter}
-          onChange={(e) => setSelectedRoleFilter(e.target.value)}
-          className="px-4 py-2 bg-[#1e1f22] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-brand-500"
-        >
-          <option value="all">Todos os Cargos ({members.length})</option>
-          {roles.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+          onChange={(val) => setSelectedRoleFilter(String(val))}
+          options={[
+            { value: 'all', label: `Todos os Cargos (${members.length})` },
+            ...roles.map((r) => ({
+              value: r.id,
+              label: r.name,
+              icon: <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: r.color || '#99aab5' }} />,
+            })),
+          ]}
+          placeholder={`Todos os Cargos (${members.length})`}
+        />
       </div>
 
       <div className="text-xs text-gray-400">

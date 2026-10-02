@@ -55,6 +55,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { UserAvatar } from '../Common/UserAvatar';
+import { DropdownSelect } from '../Common/DropdownSelect';
 import {
   useSettingsStore,
   ThemeMode,
@@ -2609,36 +2610,38 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
                         Dispositivo de Entrada (Microfone)
                       </label>
-                      <select
+                      <DropdownSelect
                         value={selectedInput}
-                        onChange={(e) => handleDeviceChange('input', e.target.value)}
-                        className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
-                      >
-                        {audioInputs.map((d) => (
-                          <option key={d.deviceId} value={d.deviceId}>
-                            {d.label || `Microfone (${d.deviceId.slice(0, 6)})`}
-                          </option>
-                        ))}
-                        {audioInputs.length === 0 && <option value="">Microfone Padrão do Sistema</option>}
-                      </select>
+                        onChange={(val) => handleDeviceChange('input', val)}
+                        options={
+                          audioInputs.length > 0
+                            ? audioInputs.map((d) => ({
+                                value: d.deviceId,
+                                label: d.label || `Microfone (${d.deviceId.slice(0, 6)})`,
+                              }))
+                            : [{ value: '', label: 'Microfone Padrão do Sistema' }]
+                        }
+                        placeholder="Microfone Padrão do Sistema"
+                      />
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
                         Dispositivo de Saída (Fone / Alto-falante)
                       </label>
-                      <select
+                      <DropdownSelect
                         value={selectedOutput}
-                        onChange={(e) => handleDeviceChange('output', e.target.value)}
-                        className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
-                      >
-                        {audioOutputs.map((d) => (
-                          <option key={d.deviceId} value={d.deviceId}>
-                            {d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`}
-                          </option>
-                        ))}
-                        {audioOutputs.length === 0 && <option value="">Saída Padrão do Sistema</option>}
-                      </select>
+                        onChange={(val) => handleDeviceChange('output', val)}
+                        options={
+                          audioOutputs.length > 0
+                            ? audioOutputs.map((d) => ({
+                                value: d.deviceId,
+                                label: d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`,
+                              }))
+                            : [{ value: '', label: 'Saída Padrão do Sistema' }]
+                        }
+                        placeholder="Saída Padrão do Sistema"
+                      />
                     </div>
                   </div>
                 ) : (
@@ -2826,97 +2829,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Compact Modern Dropdown Button & Popover */}
-                    <div className="relative flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setIsProcDropdownOpen(!isProcDropdownOpen)}
-                        className="w-56 bg-background-darker hover:bg-background-dark border border-white/10 hover:border-white/20 px-3.5 py-2 rounded-xl flex items-center justify-between text-xs font-medium text-gray-200 transition-all cursor-pointer shadow-sm group"
-                      >
-                        <span className="truncate pr-2 font-medium">
-                          {audioProcessingMode === 'rnnoise_silero'
-                            ? 'RNNoise + Silero VAD'
-                            : audioProcessingMode === 'none'
-                            ? 'Nenhum'
-                            : 'Padrão'}
-                        </span>
-                        <ChevronDown
-                          className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 flex-shrink-0 ${
-                            isProcDropdownOpen ? 'rotate-180' : ''
-                          }`}
-                        />
-                      </button>
-
-                      {/* Dropdown Menu Options */}
-                      {isProcDropdownOpen && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-40"
-                            onClick={() => setIsProcDropdownOpen(false)}
-                          />
-                          <div className="absolute right-0 top-full mt-1.5 w-56 z-50 bg-background-darker border border-white/10 p-1.5 rounded-xl shadow-2xl space-y-0.5 animate-in fade-in zoom-in-95">
-                            {/* Option 1: RNNoise + Silero VAD */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAudioProcessingMode('rnnoise_silero');
-                                setIsProcDropdownOpen(false);
-                                audioProcessor.updateConfig({ mode: 'rnnoise_silero' });
-                              }}
-                              className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left text-xs transition-colors cursor-pointer ${
-                                audioProcessingMode === 'rnnoise_silero'
-                                  ? 'bg-brand-500/20 text-brand-400 font-semibold'
-                                  : 'hover:bg-white/5 text-gray-300 font-medium'
-                              }`}
-                            >
-                              <span>RNNoise + Silero VAD</span>
-                              {audioProcessingMode === 'rnnoise_silero' && (
-                                <Check className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
-                              )}
-                            </button>
-
-                            {/* Option 2: Padrão */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAudioProcessingMode('webrtc');
-                                setIsProcDropdownOpen(false);
-                                audioProcessor.updateConfig({ mode: 'webrtc' });
-                              }}
-                              className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left text-xs transition-colors cursor-pointer ${
-                                audioProcessingMode === 'webrtc' || audioProcessingMode === 'rnnoise'
-                                  ? 'bg-brand-500/20 text-brand-400 font-semibold'
-                                  : 'hover:bg-white/5 text-gray-300 font-medium'
-                              }`}
-                            >
-                              <span>Padrão</span>
-                              {(audioProcessingMode === 'webrtc' || audioProcessingMode === 'rnnoise') && (
-                                <Check className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
-                              )}
-                            </button>
-
-                            {/* Option 3: Nenhum */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAudioProcessingMode('none');
-                                setIsProcDropdownOpen(false);
-                                audioProcessor.updateConfig({ mode: 'none' });
-                              }}
-                              className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left text-xs transition-colors cursor-pointer ${
-                                audioProcessingMode === 'none'
-                                  ? 'bg-brand-500/20 text-brand-400 font-semibold'
-                                  : 'hover:bg-white/5 text-gray-300 font-medium'
-                              }`}
-                            >
-                              <span>Nenhum</span>
-                              {audioProcessingMode === 'none' && (
-                                <Check className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
-                              )}
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    <DropdownSelect
+                      className="w-56 flex-shrink-0"
+                      align="right"
+                      value={audioProcessingMode}
+                      onChange={(val: any) => {
+                        setAudioProcessingMode(val);
+                        audioProcessor.updateConfig({ mode: val });
+                      }}
+                      options={[
+                        { value: 'rnnoise_silero', label: 'RNNoise + Silero VAD' },
+                        { value: 'webrtc', label: 'Padrão' },
+                        { value: 'none', label: 'Nenhum' },
+                      ]}
+                    />
                   </div>
 
                   {/* Sub-Settings Options (Echo Cancellation, Auto Gain, Push-to-Talk) */}
@@ -3010,18 +2936,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
                         Dispositivo de Câmera / Webcam
                       </label>
-                      <select
+                      <DropdownSelect
                         value={selectedVideoDevice}
-                        onChange={(e) => handleDeviceChange('video', e.target.value)}
-                        className="w-full bg-background-darker border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-brand-500 cursor-pointer"
-                      >
-                        {videoDevices.map((d) => (
-                          <option key={d.deviceId} value={d.deviceId}>
-                            {d.label || `Câmera (${d.deviceId.slice(0, 6)})`}
-                          </option>
-                        ))}
-                        {videoDevices.length === 0 && <option value="">Nenhuma câmera detectada</option>}
-                      </select>
+                        onChange={(val) => handleDeviceChange('video', val)}
+                        options={
+                          videoDevices.length > 0
+                            ? videoDevices.map((d) => ({
+                                value: d.deviceId,
+                                label: d.label || `Câmera (${d.deviceId.slice(0, 6)})`,
+                              }))
+                            : [{ value: '', label: 'Nenhuma câmera detectada' }]
+                        }
+                        placeholder="Nenhuma câmera detectada"
+                      />
                     </div>
 
                     {/* Video preview container */}

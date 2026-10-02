@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Guild, Channel, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
+import { DropdownSelect } from '../../Common/DropdownSelect';
 
 interface OverviewTabProps {
   activeGuild: Guild;
@@ -262,19 +263,20 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           <p className="text-xs text-gray-400">
             O canal onde o servidor pode receber novos membros e avisos importantes.
           </p>
-          <select
+          <DropdownSelect
             value={systemChannelId}
-            onChange={(e) => setSystemChannelId(e.target.value)}
+            onChange={(val) => setSystemChannelId(String(val))}
             disabled={!isOwner}
-            className="w-full px-4 py-2.5 bg-[#111214] border border-white/10 rounded-xl text-white focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-60"
-          >
-            <option value="">Nenhum (Desativado)</option>
-            {textChannels.map((ch) => (
-              <option key={ch.id} value={ch.id}>
-                # {ch.name}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: '', label: 'Nenhum (Desativado)' },
+              ...textChannels.map((ch) => ({
+                value: ch.id,
+                label: ch.name,
+                icon: <Hash className="w-4 h-4 text-gray-400" />,
+              })),
+            ]}
+            placeholder="Nenhum (Desativado)"
+          />
         </div>
 
         {isOwner && (

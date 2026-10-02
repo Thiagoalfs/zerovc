@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollText,
   Shield,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { api, formatAssetUrl } from '../../lib/api';
 import { AuditLog, User } from '../../types';
+import { DropdownSelect } from '../Common/DropdownSelect';
 
 interface ServerAuditLogViewProps {
   guildId: string;
@@ -130,20 +131,17 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({ guildId 
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="relative flex items-center">
-            <Filter className="w-3.5 h-3.5 absolute left-3 text-gray-400 pointer-events-none" />
-            <select
-              value={selectedFilter}
-              onChange={(e) => setSelectedFilter(e.target.value)}
-              className="bg-background-darker border border-white/10 text-xs text-gray-200 pl-8 pr-8 py-1.5 rounded-lg appearance-none cursor-pointer hover:border-white/20 focus:outline-none focus:border-brand-500 transition-colors"
-            >
-              {ACTION_FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <DropdownSelect
+            className="w-48 sm:w-56"
+            prefixIcon={<Filter className="w-3.5 h-3.5" />}
+            value={selectedFilter}
+            onChange={(val) => setSelectedFilter(String(val))}
+            options={ACTION_FILTERS.map((f) => ({
+              value: f.value,
+              label: f.label,
+            }))}
+            placeholder="Filtrar ações..."
+          />
 
           <button
             onClick={() => fetchLogs(selectedFilter)}

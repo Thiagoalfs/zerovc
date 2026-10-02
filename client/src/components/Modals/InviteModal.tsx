@@ -4,6 +4,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { api, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
 import { GuildInvite } from '../../types';
+import { DropdownSelect } from '../Common/DropdownSelect';
 
 interface InviteModalProps {
   isOpen: boolean;
@@ -281,20 +282,15 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                         <Clock className="w-3 h-3 text-gray-400" />
                         Expira em
                       </label>
-                      <div className="relative">
-                        <select
-                          value={maxAge}
-                          onChange={(e) => setMaxAge(Number(e.target.value))}
-                          className="w-full bg-background-dark border border-white/10 text-gray-200 text-xs rounded-lg p-2 pr-8 appearance-none focus:outline-none focus:border-brand-500 transition-colors cursor-pointer"
-                        >
-                          {EXPIRATION_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value} className="bg-background-darkest text-white">
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      </div>
+                      <DropdownSelect
+                        value={maxAge}
+                        onChange={(val) => setMaxAge(Number(val))}
+                        options={EXPIRATION_OPTIONS.map((opt) => ({
+                          value: opt.value,
+                          label: opt.label,
+                        }))}
+                        placeholder="Selecione o tempo..."
+                      />
                     </div>
 
                     {/* Limite de usos */}
@@ -303,20 +299,15 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                         <Hash className="w-3 h-3 text-gray-400" />
                         Limite de usos
                       </label>
-                      <div className="relative">
-                        <select
-                          value={maxUses}
-                          onChange={(e) => setMaxUses(Number(e.target.value))}
-                          className="w-full bg-background-dark border border-white/10 text-gray-200 text-xs rounded-lg p-2 pr-8 appearance-none focus:outline-none focus:border-brand-500 transition-colors cursor-pointer"
-                        >
-                          {USES_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value} className="bg-background-darkest text-white">
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      </div>
+                      <DropdownSelect
+                        value={maxUses}
+                        onChange={(val) => setMaxUses(Number(val))}
+                        options={USES_OPTIONS.map((opt) => ({
+                          value: opt.value,
+                          label: opt.label,
+                        }))}
+                        placeholder="Selecione os usos..."
+                      />
                     </div>
                   </div>
 
