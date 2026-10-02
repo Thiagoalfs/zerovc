@@ -97,7 +97,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-gray-100 lowercase tracking-wide">
+            <h2 className="text-base font-bold text-gray-100">
               Selecione janela ou tela
             </h2>
           </div>
@@ -261,36 +261,26 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
           </div>
 
           {/* Audio Toggle Row */}
-          <button
-            type="button"
+          <div
             onClick={() => setIncludeAudio((prev) => !prev)}
-            className={`w-full flex items-center justify-between py-3 px-4 rounded-xl border transition-all ${
-              includeAudio
-                ? 'bg-background-darker border-brand-500/50 text-white'
-                : 'bg-background-darker border-white/5 text-gray-400 hover:border-white/10'
-            }`}
+            className="w-full flex items-center justify-center gap-3 py-1 cursor-pointer select-none group"
           >
-            <div className="flex items-center gap-2.5">
-              <Volume2 className={`w-4 h-4 ${includeAudio ? 'text-brand-400' : 'text-gray-500'}`} />
-              <div className="flex flex-col text-left">
-                <span className="text-sm font-medium lowercase tracking-wide">
-                  Compartilhar áudio
-                </span>
-                <span className="text-[11px] text-gray-400 font-normal">
-                  Transmite o som do computador (jogos, vídeos e mídia) durante a transmissão
-                </span>
-              </div>
+            <div className="flex items-center gap-2">
+              <Volume2 className={`w-4 h-4 transition-colors ${includeAudio ? 'text-brand-400' : 'text-gray-400 group-hover:text-gray-300'}`} />
+              <span className={`text-sm font-medium transition-colors ${includeAudio ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'}`}>
+                Compartilhar áudio
+              </span>
             </div>
 
             {/* Toggle Switch */}
             <div
-              className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors duration-200 ease-in-out ${
-                includeAudio ? 'bg-brand-500 justify-end' : 'bg-white/15 justify-start'
+              className={`w-10 h-5 rounded-full flex items-center px-0.5 transition-colors duration-200 ease-in-out ${
+                includeAudio ? 'bg-brand-500 justify-end' : 'bg-white/20 justify-start'
               }`}
             >
-              <div className="w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200" />
+              <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-200" />
             </div>
-          </button>
+          </div>
         </div>
 
         {/* Footer */}
