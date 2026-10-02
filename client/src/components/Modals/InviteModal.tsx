@@ -149,7 +149,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
       onClick={onClose}
     >
       <div
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col"
+        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-visible shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col relative z-50"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -173,7 +173,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
         </div>
 
         {/* Content */}
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto no-scrollbar flex-1">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-visible flex-1">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-8 text-sm text-gray-400 gap-2">
               <RefreshCw className="w-5 h-5 animate-spin text-brand-500" />
@@ -260,7 +260,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
 
               {/* Toggle Settings Panel / Settings Form */}
               {showSettings ? (
-                <div className="bg-background-darkest/60 border border-white/10 rounded-xl p-4 space-y-4 animate-in fade-in zoom-in-95 duration-100">
+                <div className="bg-background-darkest/60 border border-white/10 rounded-xl p-4 space-y-4 animate-in fade-in zoom-in-95 duration-100 overflow-visible">
                   <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
                     <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                       <Settings2 className="w-4 h-4 text-brand-500" />
