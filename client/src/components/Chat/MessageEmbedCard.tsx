@@ -13,6 +13,12 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
 }) => {
   const borderColor = embed.color || '#6366f1';
 
+  const isSafeUrl = (u?: string): boolean => {
+    if (!u) return false;
+    const trimmed = u.trim().toLowerCase();
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  };
+
   // Helper to parse markdown links [Text](url) and bold **text** in values
   const renderFormattedText = (text: string) => {
     if (!text) return null;
@@ -27,10 +33,14 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
       // Link [label](url)
       const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (linkMatch) {
+        const targetUrl = linkMatch[2].trim();
+        if (!isSafeUrl(targetUrl)) {
+          return <span key={index}>{linkMatch[1]}</span>;
+        }
         return (
           <a
             key={index}
-            href={linkMatch[2]}
+            href={targetUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="text-brand-400 hover:text-brand-300 underline font-medium"
@@ -72,14 +82,14 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
       {/* Author */}
       {embed.author && (
         <div className="flex items-center gap-2">
-          {embed.author.icon_url && (
+          {embed.author.icon_url && isSafeUrl(embed.author.icon_url) && (
             <img
               src={formatAssetUrl(embed.author.icon_url)}
               alt=""
               className="w-5 h-5 rounded-full object-cover flex-shrink-0"
             />
           )}
-          {embed.author.url ? (
+          {embed.author.url && isSafeUrl(embed.author.url) ? (
             <a
               href={embed.author.url}
               target="_blank"
@@ -101,7 +111,7 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
           {/* Title */}
           {embed.title && (
             <h4 className="font-bold text-white text-sm sm:text-base leading-snug">
-              {embed.url ? (
+              {embed.url && isSafeUrl(embed.url) ? (
                 <a
                   href={embed.url}
                   target="_blank"

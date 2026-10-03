@@ -103,8 +103,20 @@ func (c *Client) ReadPump() {
 						c.Hub.BroadcastToGuild(*typingData.GuildID, event)
 					}
 				} else if len(typingData.UserIDs) > 0 {
-					c.Hub.BroadcastToUsers(typingData.UserIDs, event)
-				} else if typingData.RecipientID != nil && *typingData.RecipientID != uuid.Nil {
+					// Restrict to max 15 participants in a group DM, filter self/nil
+					validTargets := make([]uuid.UUID, 0, 15)
+					for _, uid := range typingData.UserIDs {
+						if uid != uuid.Nil && uid != c.UserID {
+							validTargets = append(validTargets, uid)
+							if len(validTargets) >= 15 {
+								break
+							}
+						}
+					}
+					if len(validTargets) > 0 {
+						c.Hub.BroadcastToUsers(validTargets, event)
+					}
+				} else if typingData.RecipientID != nil && *typingData.RecipientID != uuid.Nil && *typingData.RecipientID != c.UserID {
 					c.Hub.BroadcastToUsers([]uuid.UUID{*typingData.RecipientID}, event)
 				} else {
 					c.Hub.mu.RLock()
