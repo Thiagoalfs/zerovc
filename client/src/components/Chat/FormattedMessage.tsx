@@ -288,12 +288,22 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   // Remove extracted media URLs and smart GIF URLs from text to display so raw link is not shown alongside the embed
   let textToDisplay = content;
   if (mediaEmbeds.length > 0 || smartGifEmbeds.length > 0) {
-    const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const stripUrlSafely = (source: string, targetUrl: string) => {
+      if (!source.includes(targetUrl)) return source;
+      const mdPattern = `](${targetUrl})`;
+      if (source.includes(mdPattern)) {
+        // Preserve markdown links [label](targetUrl)
+        const placeholder = `__MD_LINK_${Math.random().toString(36).substring(2, 9)}__`;
+        return source.split(mdPattern).join(placeholder).split(targetUrl).join('').split(placeholder).join(mdPattern);
+      }
+      return source.split(targetUrl).join('');
+    };
+
     for (const media of mediaEmbeds) {
-      textToDisplay = textToDisplay.replace(new RegExp(`(?<!\\]\\()${escape(media.url)}`, 'g'), '');
+      textToDisplay = stripUrlSafely(textToDisplay, media.url);
     }
     for (const gifUrl of smartGifEmbeds) {
-      textToDisplay = textToDisplay.replace(new RegExp(`(?<!\\]\\()${escape(gifUrl)}`, 'g'), '');
+      textToDisplay = stripUrlSafely(textToDisplay, gifUrl);
     }
     textToDisplay = textToDisplay.trim();
   }

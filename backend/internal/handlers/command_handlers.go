@@ -564,6 +564,11 @@ func (h *CommandHandler) processCommand(
 
 		msgText, _ := req.Args["message"].(string)
 		if strings.TrimSpace(msgText) == "" {
+			if m, ok := req.Args["mensagem"].(string); ok {
+				msgText = m
+			}
+		}
+		if strings.TrimSpace(msgText) == "" {
 			if rawArgs, ok := req.Args["raw_args"].([]any); ok && len(rawArgs) > 0 {
 				var strParts []string
 				for _, p := range rawArgs {
