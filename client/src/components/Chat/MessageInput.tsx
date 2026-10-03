@@ -149,6 +149,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [slashUserIndex, setSlashUserIndex] = useState<number>(0);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mainSlashInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingTime = useRef<number>(0);
 
@@ -220,15 +221,21 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     return list.slice(0, 30);
   }, [activeSlash, currentActiveOption, customMentions, activeGuild?.members]);
 
-  // Focus active option input on selection change
+  // Focus active option input or main slash input on selection change
   useEffect(() => {
-    if (activeSlash?.activeOptionName) {
-      const optName = activeSlash.activeOptionName;
-      setTimeout(() => {
-        optionInputRefs.current[optName]?.focus();
-      }, 30);
+    if (activeSlash) {
+      if (activeSlash.activeOptionName) {
+        const optName = activeSlash.activeOptionName;
+        setTimeout(() => {
+          optionInputRefs.current[optName]?.focus();
+        }, 30);
+      } else {
+        setTimeout(() => {
+          mainSlashInputRef.current?.focus();
+        }, 30);
+      }
     }
-  }, [activeSlash?.activeOptionName]);
+  }, [activeSlash?.activeOptionName, activeSlash]);
 
   // Auto-scroll selected autocomplete items into view as user navigates with Arrow keys
   useEffect(() => {
@@ -858,27 +865,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return;
     }
 
-    // 5. Enter to advance or execute
+    // 5. Enter exits parameter editing and returns focus to normal input field
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Special LoL rule: if finished typing riot_id and region is empty, open region choice!
-      if (opt.name === 'riot_id' && activeSlash?.command.name === 'league' && !activeSlash?.args['region']) {
-        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: 'region' } : null));
-        const rIdx = activeSlashOptions.findIndex((o) => o.name === 'region');
-        setSelectedOptionIndex(rIdx >= 0 ? rIdx : -1);
-        return;
-      }
-
-      const missingReq = activeSlashOptions.find(
-        (o) => o.required && !activeSlash?.args[o.name]?.trim() && o.name !== opt.name
-      );
-      if (missingReq) {
-        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: missingReq.name } : null));
-        const mIdx = activeSlashOptions.findIndex((o) => o.name === missingReq.name);
-        setSelectedOptionIndex(mIdx >= 0 ? mIdx : -1);
-        return;
-      }
-      handleSendActiveSlash();
+      setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: null } : null));
+      setSelectedOptionIndex(-1);
       return;
     }
 
@@ -1433,7 +1424,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                       const badge = getSlashParamsBadge(item.options);
                       if (!badge) return null;
                       return (
-                        <span className="text-[10px] text-brand-300 font-medium bg-brand-500/15 px-2 py-0.5 rounded-md border border-brand-500/20 whitespace-nowrap">
+                        <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap">
                           {badge}
                         </span>
                       );
@@ -1449,8 +1440,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {/* 2. Active Slash Command Extended Autocomplete: Camada 1 (Feedback de Erros) + Camada 2 (Tooltip do Comando & Opções) OR Standalone Command Error */}
-      {(activeSlash || (commandError && slashSuggestions.length === 0)) && (
+      {/* 2. Active Slash Command Extended Autocomplete: Camada 1 (Feedback de Erros) + Camada 2 (Opções / Parâmetros) OR Standalone Command Error */}
+      {(commandError || (activeSlash && (
+        (currentActiveOption?.type === 'choice' && filteredSlashChoices.length > 0) ||
+        (currentActiveOption?.type === 'user' && filteredSlashUsers.length > 0) ||
+        (activeSlash.activeOptionName !== null)
+      ))) && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2">
           {/* Camada 1: Feedback de Erros */}
           {commandError && (
@@ -1479,27 +1474,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             </div>
           )}
 
-          {/* Camada 2: Tooltip do Comando & Opções / Parâmetros */}
+          {/* Camada 2: Opções / Parâmetros */}
           {activeSlash && (
             <div className="p-2 max-h-64 overflow-y-auto no-scrollbar">
-              {/* Tooltip Header: Command Name + Subcommand + Description + Syntax */}
-              <div className="px-2.5 py-1.5 mb-1.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md bg-brand-500/20 text-brand-400 flex items-center justify-center border border-brand-500/30">
-                    <Terminal className="w-3 h-3" />
-                  </div>
-                  <span className="text-xs font-bold text-white">
-                    /{activeSlash.command.name}
-                    {activeSlash.subcommand ? ` ${activeSlash.subcommand.name}` : ''}
-                  </span>
-                  <span className="text-[10px] text-gray-400">
-                    {activeSlash.subcommand?.description || activeSlash.command.description}
-                  </span>
-                </div>
-                <span className="text-[10px] font-mono text-brand-300 bg-brand-500/15 px-2 py-0.5 rounded-md border border-brand-500/25">
-                  {activeSlashSyntax}
-                </span>
-              </div>
 
               {/* Sub-view: Choice Selector */}
               {currentActiveOption?.type === 'choice' && filteredSlashChoices.length > 0 ? (
@@ -1970,6 +1947,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               {/* Invisible input when no specific pill is focused to capture Enter/Escape/Backspace/Arrows */}
               {activeSlash.activeOptionName === null && (
                 <input
+                  ref={mainSlashInputRef}
                   type="text"
                   className="w-0 h-0 opacity-0 pointer-events-none absolute"
                   autoFocus
