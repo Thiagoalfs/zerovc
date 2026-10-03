@@ -10,7 +10,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
-import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand } from '../../lib/slashCommands';
+import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand, validateSlashOption } from '../../lib/slashCommands';
 import { executeYtdlpCommand } from '../../lib/ytdlpRunner';
 
 interface MentionSuggestionItem {
@@ -574,17 +574,34 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   // Handle value change inside an argument pill
   const handleOptionValueChange = (optName: string, val: string) => {
-    if (commandError) setCommandError(null);
     if (!activeSlash) return;
+    const newArgs = {
+      ...activeSlash.args,
+      [optName]: val,
+    };
     setActiveSlash({
       ...activeSlash,
-      args: {
-        ...activeSlash.args,
-        [optName]: val,
-      },
+      args: newArgs,
     });
     setSlashChoiceIndex(0);
     setSlashUserIndex(0);
+
+    // Live real-time validation on typing/pasting
+    const trimmed = val.trim();
+    if (trimmed.length > 0) {
+      const validation = validateSlashOption(activeSlash.command.name, optName, trimmed);
+      if (!validation.isValid) {
+        setCommandError({
+          title: validation.errorTitle || 'Valor Inválido',
+          message: validation.errorMessage || 'Parâmetro com formato ou valor inválido.',
+          field: optName,
+        });
+        return;
+      }
+    }
+    if (commandError?.field === optName) {
+      setCommandError(null);
+    }
   };
 
   // Select a choice option (e.g. BR or mp4)
@@ -624,7 +641,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   // Select option to focus from OPTIONS popup or +option button
   const selectOptionToFocus = (optName: string) => {
-    if (commandError) setCommandError(null);
+    if (commandError && !optName) setCommandError(null);
     if (!activeSlash) return;
     setActiveSlash({
       ...activeSlash,
@@ -640,9 +657,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleSendActiveSlash = async () => {
     if (!activeSlash || isUploading) return;
 
-    // Check required options
+    // Check required options and validate all parameters
     for (const opt of activeSlashOptions) {
-      if (opt.required && !activeSlash.args[opt.name]?.trim()) {
+      const val = (activeSlash.args[opt.name] || '').trim();
+      if (opt.required && !val) {
         triggerErrorShake();
         setCommandError({
           title: 'Opção Obrigatória Faltando',
@@ -651,6 +669,20 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         });
         selectOptionToFocus(opt.name);
         return;
+      }
+
+      if (val) {
+        const validation = validateSlashOption(activeSlash.command.name, opt.name, val);
+        if (!validation.isValid) {
+          triggerErrorShake();
+          setCommandError({
+            title: validation.errorTitle || 'Valor Inválido',
+            message: validation.errorMessage || `O valor informado para "${opt.name}" é inválido.`,
+            field: opt.name,
+          });
+          selectOptionToFocus(opt.name);
+          return;
+        }
       }
     }
 
@@ -673,42 +705,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     if (commandName === 'yt-dlp' || commandName === 'ytdlp') {
       const link = args.link?.trim() || '';
-      if (!link) {
+      const linkValidation = validateSlashOption('yt-dlp', 'link', link);
+      if (!linkValidation.isValid) {
         triggerErrorShake();
         setCommandError({
-          title: 'Opção Obrigatória Faltando',
-          message: 'Informe o link do vídeo ou música individual para baixar.\nExemplo: link do YouTube ou SoundCloud.',
-          field: 'link',
-        });
-        selectOptionToFocus('link');
-        return;
-      }
-
-      const lowerLink = link.toLowerCase();
-      const isPlaylistOrRadio =
-        lowerLink.includes('list=') ||
-        lowerLink.includes('/playlist') ||
-        lowerLink.includes('playlist?') ||
-        lowerLink.includes('start_radio=') ||
-        (lowerLink.includes('soundcloud.com') && lowerLink.includes('/sets/')) ||
-        (lowerLink.includes('spotify.com') && (lowerLink.includes('/playlist/') || lowerLink.includes('/album/')));
-
-      if (isPlaylistOrRadio) {
-        triggerErrorShake();
-        setCommandError({
-          title: 'Playlist / Rádio Não Suportada',
-          message: 'Playlists e mixes de rádio não são suportados. Por favor, envie o link de um vídeo ou áudio individual.',
-          field: 'link',
-        });
-        selectOptionToFocus('link');
-        return;
-      }
-
-      if (!lowerLink.startsWith('http://') && !lowerLink.startsWith('https://')) {
-        triggerErrorShake();
-        setCommandError({
-          title: 'Link Inválido',
-          message: 'O link deve começar com http:// ou https://.',
+          title: linkValidation.errorTitle || 'Link Inválido',
+          message: linkValidation.errorMessage || 'Link inválido para download.',
           field: 'link',
         });
         selectOptionToFocus('link');
@@ -925,30 +927,21 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           return;
         }
 
-        const lowerLink = link.toLowerCase();
-        const isPlaylistOrRadio =
-          lowerLink.includes('list=') ||
-          lowerLink.includes('/playlist') ||
-          lowerLink.includes('playlist?') ||
-          lowerLink.includes('start_radio=') ||
-          (lowerLink.includes('soundcloud.com') && lowerLink.includes('/sets/')) ||
-          (lowerLink.includes('spotify.com') && (lowerLink.includes('/playlist/') || lowerLink.includes('/album/')));
-
-        if (isPlaylistOrRadio) {
+        const linkValidation = validateSlashOption('yt-dlp', 'link', link);
+        if (!linkValidation.isValid) {
           triggerErrorShake();
+          const cmdDef = SLASH_COMMANDS.find((c) => c.name === 'yt-dlp');
+          if (cmdDef) {
+            setActiveSlash({
+              command: cmdDef,
+              subcommand: undefined,
+              args: parsed.args,
+              activeOptionName: 'link',
+            });
+          }
           setCommandError({
-            title: 'Playlist / Rádio Não Suportada',
-            message: 'Playlists e mixes de rádio não são suportados. Por favor, envie o link de um vídeo ou áudio individual.',
-            field: 'link',
-          });
-          return;
-        }
-
-        if (!lowerLink.startsWith('http://') && !lowerLink.startsWith('https://')) {
-          triggerErrorShake();
-          setCommandError({
-            title: 'Link Inválido',
-            message: 'O link deve começar com http:// ou https://.',
+            title: linkValidation.errorTitle || 'Link Inválido',
+            message: linkValidation.errorMessage || 'Link inválido para download.',
             field: 'link',
           });
           return;
@@ -1565,15 +1558,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                   <div ref={slashOptionsListRef} className="space-y-0.5 mt-1">
                     {activeSlashOptions.map((opt, idx) => {
                       const isSelected = activeSlash.activeOptionName === opt.name || selectedOptionIndex === idx;
-                      const hasValue = !!activeSlash.args[opt.name];
-                      const isFieldErrored = commandError?.field === opt.name;
+                      const rawVal = activeSlash.args[opt.name] ?? '';
+                      const hasValue = rawVal.trim().length > 0;
+                      const validation = hasValue
+                        ? validateSlashOption(activeSlash.command.name, opt.name, rawVal)
+                        : { isValid: false };
+                      const isFieldErrored = commandError?.field === opt.name || (hasValue && !validation.isValid);
+
                       return (
                         <button
                           key={opt.name}
                           type="button"
                           onClick={() => {
                             selectOptionToFocus(opt.name);
-                            setCommandError(null);
                           }}
                           onMouseEnter={() => setSelectedOptionIndex(idx)}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
@@ -1598,9 +1595,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                             {hasValue ? (
-                              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                {activeSlash.args[opt.name]}
-                              </span>
+                              validation.isValid ? (
+                                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 max-w-[160px] truncate">
+                                  {rawVal}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-medium text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/40 max-w-[160px] truncate flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
+                                  <span>{validation.errorTitle || 'Inválido'}</span>
+                                </span>
+                              )
                             ) : opt.required ? (
                               <span className="text-[9px] text-rose-400 font-semibold uppercase px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">
                                 Obrigatório
@@ -2037,20 +2041,35 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
                 if (!isSet && !isActive && !isRequired) return null;
 
+                const rawVal = activeSlash.args[opt.name] ?? '';
+                const hasValue = rawVal.trim().length > 0;
+                const validation = hasValue
+                  ? validateSlashOption(activeSlash.command.name, opt.name, rawVal)
+                  : { isValid: true };
+                const hasError = hasValue && !validation.isValid;
+
                 return (
                   <div
                     key={opt.name}
                     onClick={() => selectOptionToFocus(opt.name)}
                     className={`flex items-center rounded-lg text-xs overflow-hidden border transition-all ${
-                      isActive
+                      hasError
+                        ? 'border-rose-500 bg-rose-500/10 shadow-sm shadow-rose-500/20 ring-1 ring-rose-500/40'
+                        : isActive
                         ? 'border-brand-500 bg-[#2b2d31] shadow-sm shadow-brand-500/30 ring-1 ring-brand-500/40'
                         : 'border-white/10 bg-[#1e1f22] hover:border-white/20'
                     }`}
                   >
                     {/* Option Tag Badge */}
-                    <span className="bg-[#111214] text-gray-300 font-semibold px-2 py-1 select-none border-r border-white/5 flex items-center gap-1">
+                    <span className={`font-semibold px-2 py-1 select-none border-r flex items-center gap-1 ${
+                      hasError
+                        ? 'bg-rose-950/70 text-rose-300 border-rose-500/30'
+                        : 'bg-[#111214] text-gray-300 border-white/5'
+                    }`}>
                       <span>{opt.name}</span>
-                      {opt.required && <span className="text-rose-400 text-[10px]">*</span>}
+                      {opt.required && (
+                        <span className={hasError ? 'text-rose-300 text-[10px]' : 'text-rose-400 text-[10px]'}>*</span>
+                      )}
                     </span>
 
                     {/* Editable Value Field */}

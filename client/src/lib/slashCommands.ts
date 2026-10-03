@@ -329,3 +329,87 @@ export function parseSlashCommand(input: string): ParsedCommand | null {
   };
 }
 
+export interface SlashValidationResult {
+  isValid: boolean;
+  errorTitle?: string;
+  errorMessage?: string;
+}
+
+export function isPlaylistOrRadioUrl(url: string): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase().trim();
+
+  if (
+    lower.includes('list=') ||
+    lower.includes('/playlist') ||
+    lower.includes('playlist?') ||
+    lower.includes('start_radio=') ||
+    lower.includes('&radio=') ||
+    lower.includes('?radio=') ||
+    (lower.includes('soundcloud.com') && lower.includes('/sets/')) ||
+    (lower.includes('spotify.com') && (lower.includes('/playlist/') || lower.includes('/album/')))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function validateSlashOption(
+  commandName: string,
+  optionName: string,
+  value: string
+): SlashValidationResult {
+  const trimmed = (value || '').trim();
+  if (!trimmed) {
+    return { isValid: false };
+  }
+
+  const lowerCmd = commandName.toLowerCase();
+
+  if (lowerCmd === 'yt-dlp' || lowerCmd === 'ytdlp') {
+    if (optionName === 'link') {
+      const lower = trimmed.toLowerCase();
+
+      if (isPlaylistOrRadioUrl(trimmed)) {
+        return {
+          isValid: false,
+          errorTitle: 'Playlist / Rádio Não Suportada',
+          errorMessage: 'Playlists e mixes de rádio (start_radio) não são permitidos. Por favor, insira o link de um vídeo ou áudio individual.',
+        };
+      }
+
+      if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+        return {
+          isValid: false,
+          errorTitle: 'Link Inválido',
+          errorMessage: 'O link deve começar com http:// ou https://.',
+        };
+      }
+
+      try {
+        new URL(trimmed);
+      } catch {
+        return {
+          isValid: false,
+          errorTitle: 'Link Inválido',
+          errorMessage: 'Formato de URL inválido. Verifique o link digitado.',
+        };
+      }
+    }
+
+    if (optionName === 'format') {
+      const lower = trimmed.toLowerCase();
+      if (lower !== 'mp4' && lower !== 'mp3') {
+        return {
+          isValid: false,
+          errorTitle: 'Formato Inválido',
+          errorMessage: 'O formato deve ser "mp4" (Vídeo) ou "mp3" (Áudio).',
+        };
+      }
+    }
+  }
+
+  return { isValid: true };
+}
+
