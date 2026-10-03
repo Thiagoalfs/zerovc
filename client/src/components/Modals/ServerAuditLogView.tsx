@@ -1,20 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   ScrollText,
-  Shield,
-  UserMinus,
-  Ban,
-  VolumeX,
-  PlusCircle,
-  Edit3,
-  Trash2,
-  UserCheck,
-  MessageSquare,
   Clock,
   Filter,
   RefreshCw,
   Hash,
-  AlertCircle
+  Volume2,
+  AlertCircle,
 } from 'lucide-react';
 import { api, formatAssetUrl } from '../../lib/api';
 import { AuditLog, User } from '../../types';
@@ -44,6 +36,10 @@ export const ACTION_FILTERS = [
   { label: 'Canais Editados', value: 'CHANNEL_UPDATE' },
   { label: 'Canais Deletados', value: 'CHANNEL_DELETE' },
   { label: 'Mensagens Deletadas (Moderação)', value: 'MESSAGE_DELETE_MODERATION' },
+  { label: 'Emojis Criados', value: 'EMOJI_CREATE' },
+  { label: 'Emojis Editados', value: 'EMOJI_UPDATE' },
+  { label: 'Emojis Deletados', value: 'EMOJI_DELETE' },
+  { label: 'Posse Transferida', value: 'GUILD_OWNERSHIP_TRANSFER' },
 ];
 
 export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
@@ -52,7 +48,6 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
   setSelectedFilter: propSetSelectedFilter,
   refreshTrigger = 0,
   onLoadingChange,
-  onOpenUserProfile,
 }) => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [internalFilter, setInternalFilter] = useState('ALL');
@@ -89,39 +84,6 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
     fetchLogs(activeFilter);
   }, [guildId, activeFilter, refreshTrigger]);
 
-  const getActionBadge = (action: string) => {
-    switch (action) {
-      case 'MEMBER_BAN':
-        return { label: 'Baniu Membro', icon: <Ban className="w-3.5 h-3.5" />, color: 'bg-dnd/20 text-red-400 border-red-500/30' };
-      case 'MEMBER_UNBAN':
-        return { label: 'Desbaniu Membro', icon: <UserCheck className="w-3.5 h-3.5" />, color: 'bg-online/20 text-emerald-400 border-emerald-500/30' };
-      case 'MEMBER_KICK':
-        return { label: 'Expulsou Membro', icon: <UserMinus className="w-3.5 h-3.5" />, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' };
-      case 'MEMBER_MUTE':
-        return { label: 'Silenciou Membro', icon: <VolumeX className="w-3.5 h-3.5" />, color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' };
-      case 'ROLE_CREATE':
-        return { label: 'Criou Cargo', icon: <PlusCircle className="w-3.5 h-3.5" />, color: 'bg-brand-500/20 text-brand-400 border-brand-500/30' };
-      case 'ROLE_UPDATE':
-        return { label: 'Editou Cargo', icon: <Edit3 className="w-3.5 h-3.5" />, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' };
-      case 'ROLE_DELETE':
-        return { label: 'Excluiu Cargo', icon: <Trash2 className="w-3.5 h-3.5" />, color: 'bg-red-500/20 text-red-400 border-red-500/30' };
-      case 'ROLE_ASSIGN':
-        return { label: 'Atribuiu Cargo', icon: <Shield className="w-3.5 h-3.5" />, color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' };
-      case 'ROLE_REMOVE':
-        return { label: 'Removeu Cargo', icon: <Shield className="w-3.5 h-3.5" />, color: 'bg-gray-500/20 text-gray-300 border-gray-500/30' };
-      case 'CHANNEL_CREATE':
-        return { label: 'Criou Canal', icon: <Hash className="w-3.5 h-3.5" />, color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
-      case 'CHANNEL_UPDATE':
-        return { label: 'Editou Canal', icon: <Edit3 className="w-3.5 h-3.5" />, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' };
-      case 'CHANNEL_DELETE':
-        return { label: 'Excluiu Canal', icon: <Trash2 className="w-3.5 h-3.5" />, color: 'bg-red-500/20 text-red-400 border-red-500/30' };
-      case 'MESSAGE_DELETE_MODERATION':
-        return { label: 'Deletou Mensagem de Terceiro', icon: <MessageSquare className="w-3.5 h-3.5" />, color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' };
-      default:
-        return { label: action, icon: <ScrollText className="w-3.5 h-3.5" />, color: 'bg-gray-700/50 text-gray-300 border-gray-600' };
-    }
-  };
-
   const formatDate = (isoString: string) => {
     try {
       const date = new Date(isoString);
@@ -135,6 +97,218 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
       });
     } catch {
       return isoString;
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds} segundos`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)} minutos`;
+    if (seconds < 86400) return `${Math.round(seconds / 3600)} horas`;
+    return `${Math.round(seconds / 86400)} dias`;
+  };
+
+  const renderNarrative = (log: AuditLog) => {
+    const actorName = log.actor?.display_name || log.actor?.username || 'Usuário Desconhecido';
+    const targetUser = log.target_user;
+    const targetName = targetUser?.display_name || targetUser?.username || 'membro';
+    const details = log.details || {};
+
+    switch (log.action_type) {
+      case 'MESSAGE_DELETE_MODERATION': {
+        const channelName = details.channel_name || 'canal';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> apagou uma mensagem de{' '}
+            <strong className="text-white font-semibold">{targetName}</strong> no canal{' '}
+            <span className="inline-flex items-center gap-0.5 font-semibold text-brand-400">
+              <Hash className="w-3.5 h-3.5 inline" />
+              {channelName}
+            </span>
+          </span>
+        );
+      }
+      case 'MEMBER_BAN': {
+        const reason = details.reason ? ` (Motivo: ${details.reason})` : '';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> baniu{' '}
+            <strong className="text-red-400 font-semibold">{targetName}</strong> do servidor
+            {reason && <span className="text-xs text-gray-400 italic">{reason}</span>}
+          </span>
+        );
+      }
+      case 'MEMBER_UNBAN': {
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> removeu o banimento de{' '}
+            <strong className="text-emerald-400 font-semibold">{targetName}</strong>
+          </span>
+        );
+      }
+      case 'MEMBER_KICK': {
+        const reason = details.reason ? ` (Motivo: ${details.reason})` : '';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> expulsou{' '}
+            <strong className="text-amber-400 font-semibold">{targetName}</strong> do servidor
+            {reason && <span className="text-xs text-gray-400 italic">{reason}</span>}
+          </span>
+        );
+      }
+      case 'MEMBER_MUTE': {
+        const duration = details.duration_seconds
+          ? formatDuration(Number(details.duration_seconds))
+          : '';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> silenciou{' '}
+            <strong className="text-orange-400 font-semibold">{targetName}</strong>
+            {duration ? ` por ${duration}` : ''}
+          </span>
+        );
+      }
+      case 'ROLE_CREATE': {
+        const roleName = details.role_name || details.name || 'cargo';
+        const roleColor = details.role_color || details.color;
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed inline-flex items-center flex-wrap gap-1.5">
+            <strong className="text-white font-semibold">{actorName}</strong> criou o cargo{' '}
+            <span className="inline-flex items-center gap-1.5 font-semibold text-white">
+              {roleColor && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: roleColor }} />}
+              {roleName}
+            </span>
+          </span>
+        );
+      }
+      case 'ROLE_UPDATE': {
+        const roleName = details.role_name || details.name || 'cargo';
+        const roleColor = details.role_color || details.color;
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed inline-flex items-center flex-wrap gap-1.5">
+            <strong className="text-white font-semibold">{actorName}</strong> alterou as configurações do cargo{' '}
+            <span className="inline-flex items-center gap-1.5 font-semibold text-white">
+              {roleColor && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: roleColor }} />}
+              {roleName}
+            </span>
+          </span>
+        );
+      }
+      case 'ROLE_DELETE': {
+        const roleName = details.role_name || details.name || 'cargo';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> excluiu o cargo{' '}
+            <strong className="text-white font-semibold">{roleName}</strong>
+          </span>
+        );
+      }
+      case 'ROLE_ASSIGN': {
+        const roleName = details.role_name || details.name || 'cargo';
+        const roleColor = details.role_color || details.color;
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed inline-flex items-center flex-wrap gap-1.5">
+            <strong className="text-white font-semibold">{actorName}</strong> atribuiu o cargo{' '}
+            <span className="inline-flex items-center gap-1.5 font-semibold text-white">
+              {roleColor && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: roleColor }} />}
+              {roleName}
+            </span>{' '}
+            para <strong className="text-white font-semibold">{targetName}</strong>
+          </span>
+        );
+      }
+      case 'ROLE_REMOVE': {
+        const roleName = details.role_name || details.name || 'cargo';
+        const roleColor = details.role_color || details.color;
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed inline-flex items-center flex-wrap gap-1.5">
+            <strong className="text-white font-semibold">{actorName}</strong> removeu o cargo{' '}
+            <span className="inline-flex items-center gap-1.5 font-semibold text-white">
+              {roleColor && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: roleColor }} />}
+              {roleName}
+            </span>{' '}
+            de <strong className="text-white font-semibold">{targetName}</strong>
+          </span>
+        );
+      }
+      case 'CHANNEL_CREATE': {
+        const channelName = details.name || 'canal';
+        const isVoice = details.type === 'voice';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed inline-flex items-center flex-wrap gap-1.5">
+            <strong className="text-white font-semibold">{actorName}</strong> criou o canal{' '}
+            <span className="inline-flex items-center gap-1 font-semibold text-brand-400">
+              {isVoice ? <Volume2 className="w-3.5 h-3.5" /> : <Hash className="w-3.5 h-3.5" />}
+              {channelName}
+            </span>
+          </span>
+        );
+      }
+      case 'CHANNEL_UPDATE': {
+        const channelName = details.name || 'canal';
+        const isVoice = details.type === 'voice';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed inline-flex items-center flex-wrap gap-1.5">
+            <strong className="text-white font-semibold">{actorName}</strong> editou o canal{' '}
+            <span className="inline-flex items-center gap-1 font-semibold text-brand-400">
+              {isVoice ? <Volume2 className="w-3.5 h-3.5" /> : <Hash className="w-3.5 h-3.5" />}
+              {channelName}
+            </span>
+          </span>
+        );
+      }
+      case 'CHANNEL_DELETE': {
+        const channelName = details.name || 'canal';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> excluiu o canal{' '}
+            <strong className="text-white font-semibold">#{channelName}</strong>
+          </span>
+        );
+      }
+      case 'EMOJI_CREATE': {
+        const emojiName = details.name || 'emoji';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> adicionou o emoji{' '}
+            <code className="text-brand-400 font-semibold bg-white/5 px-1.5 py-0.5 rounded">:{emojiName}:</code>
+          </span>
+        );
+      }
+      case 'EMOJI_UPDATE': {
+        const emojiName = details.name || 'emoji';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> renomeou o emoji{' '}
+            <code className="text-brand-400 font-semibold bg-white/5 px-1.5 py-0.5 rounded">:{emojiName}:</code>
+          </span>
+        );
+      }
+      case 'EMOJI_DELETE': {
+        const emojiName = details.name || 'emoji';
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> removeu o emoji{' '}
+            <code className="text-brand-400 font-semibold bg-white/5 px-1.5 py-0.5 rounded">:{emojiName}:</code>
+          </span>
+        );
+      }
+      case 'GUILD_OWNERSHIP_TRANSFER': {
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> transferiu a posse do servidor para{' '}
+            <strong className="text-amber-400 font-semibold">{targetName}</strong>
+          </span>
+        );
+      }
+      default: {
+        return (
+          <span className="text-sm text-gray-200 leading-relaxed">
+            <strong className="text-white font-semibold">{actorName}</strong> realizou a ação{' '}
+            <strong className="text-brand-400 font-semibold">{log.action_type}</strong>
+            {targetName !== 'membro' ? ` em ${targetName}` : ''}
+          </span>
+        );
+      }
     }
   };
 
@@ -164,7 +338,7 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
       </div>
 
       {/* Logs List Container */}
-      <div className="flex-1 overflow-y-auto space-y-2.5 no-scrollbar">
+      <div className="flex-1 overflow-y-auto space-y-2 no-scrollbar">
         {isLoading && logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <RefreshCw className="w-8 h-8 animate-spin text-brand-500 mb-2" />
@@ -183,68 +357,37 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
           </div>
         ) : (
           logs.map((log) => {
-            const badge = getActionBadge(log.action_type);
             const actor = log.actor;
-            const targetUser = log.target_user;
 
             return (
               <div
                 key={log.id}
-                className="bg-background-darker/60 hover:bg-background-darker p-3.5 rounded-xl border border-white/5 hover:border-white/10 transition-all flex flex-col gap-2 shadow-sm"
+                className="bg-background-darker/50 hover:bg-background-darker/80 p-3 sm:p-3.5 rounded-xl border border-white/5 hover:border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
               >
-                <div className="flex items-center justify-between gap-3">
-                  {/* Actor Info */}
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                      {actor?.avatar_url ? (
-                        <img src={formatAssetUrl(actor.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        <span>{actor?.display_name?.[0]?.toUpperCase() || actor?.username?.[0]?.toUpperCase() || '?'}</span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 truncate text-xs">
-                      <span className="font-bold text-white hover:underline cursor-pointer truncate">
-                        {actor?.display_name || actor?.username || 'Usuário Desconhecido'}
-                      </span>
-                      <span className="text-[11px] text-gray-400">@{actor?.username}</span>
-                    </div>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {/* Actor Avatar */}
+                  <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden shadow-sm">
+                    {actor?.avatar_url ? (
+                      <img
+                        src={formatAssetUrl(actor.avatar_url)}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{actor?.display_name?.[0]?.toUpperCase() || actor?.username?.[0]?.toUpperCase() || '?'}</span>
+                    )}
                   </div>
 
-                  {/* Action Badge & Timestamp */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${badge.color}`}>
-                      {badge.icon}
-                      <span>{badge.label}</span>
-                    </div>
-                    <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {formatDate(log.created_at)}
-                    </span>
+                  {/* Narrative Sentence */}
+                  <div className="min-w-0 flex-1">
+                    {renderNarrative(log)}
                   </div>
                 </div>
 
-                {/* Target & Details Content */}
-                <div className="pl-9.5 text-xs text-gray-300 space-y-1">
-                  {targetUser && (
-                    <div className="flex items-center gap-1 text-gray-400">
-                      <span>Alvo:</span>
-                      <span className="font-semibold text-gray-200">
-                        {targetUser.display_name || targetUser.username} (@{targetUser.username})
-                      </span>
-                    </div>
-                  )}
-
-                  {log.details && Object.keys(log.details).length > 0 && (
-                    <div className="bg-black/25 p-2 rounded-lg text-[11px] font-mono text-gray-400 space-y-0.5 border border-white/5">
-                      {Object.entries(log.details).map(([k, v]) => (
-                        <div key={k} className="flex gap-1.5 truncate">
-                          <span className="text-gray-500">{k}:</span>
-                          <span className="text-gray-300 font-semibold">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                {/* Timestamp */}
+                <div className="flex items-center gap-1.5 text-[11px] text-gray-500 flex-shrink-0 sm:self-center pl-11 sm:pl-0 whitespace-nowrap">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>{formatDate(log.created_at)}</span>
                 </div>
               </div>
             );
