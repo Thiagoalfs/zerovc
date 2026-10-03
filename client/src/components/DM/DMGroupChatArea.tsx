@@ -40,11 +40,11 @@ import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
-import { User, DMGroupMessage } from '../../types';
+import { User, DMGroupMessage, UserProfilePosition } from '../../types';
 
 interface DMGroupChatAreaProps {
   onOpenMobileDrawer?: () => void;
-  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
+  onOpenUserProfile?: (user: User, position?: UserProfilePosition) => void;
   onPreviewImage?: (url: string) => void;
   onOpenScreenShare?: () => void;
   onOpenDM?: (userId: string) => void;
@@ -944,7 +944,10 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
         {/* Group Member List Sidebar */}
         {showMemberList && !appliedSearchQuery && (
-          <div className="w-60 bg-background-darker/60 border-l border-white/5 flex flex-col overflow-hidden select-none">
+          <div
+            data-memberlist-sidebar="true"
+            className="w-60 bg-background-darker/60 border-l border-white/5 flex flex-col overflow-hidden select-none"
+          >
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/5">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
                 Membros — {activeGroup.members?.length || 0}
@@ -964,16 +967,53 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               {(activeGroup.members || []).map((member) => (
                 <div
                   key={member.id}
-                  onContextMenu={(e) =>
+                  onContextMenu={(e) => {
+                    const target = e.currentTarget;
+                    const rect = target.getBoundingClientRect();
+                    const sidebar = target.closest('[data-memberlist-sidebar="true"]');
+                    const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null;
+                    const sidebarLeft = sidebarRect ? sidebarRect.left : rect.left;
                     handleUserContextMenu(e, member, {
                       groupId: activeGroup.id,
                       contextType: 'dm_group',
-                    })
-                  }
+                      onOpenUserProfile: (u) => {
+                        onOpenUserProfile?.(u, {
+                          x: sidebarLeft,
+                          y: rect.top,
+                          anchorRect: {
+                            left: sidebarLeft,
+                            top: rect.top,
+                            right: sidebarRect ? sidebarRect.right : rect.right,
+                            bottom: rect.bottom,
+                            width: rect.width,
+                            height: rect.height,
+                          },
+                          source: 'memberList',
+                        });
+                      },
+                      onOpenDM,
+                    });
+                  }}
                   onClick={(e) => {
                     if (onOpenUserProfile) {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      onOpenUserProfile(member, { x: rect.right + 10, y: rect.top });
+                      const target = e.currentTarget;
+                      const rect = target.getBoundingClientRect();
+                      const sidebar = target.closest('[data-memberlist-sidebar="true"]');
+                      const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null;
+                      const sidebarLeft = sidebarRect ? sidebarRect.left : rect.left;
+                      onOpenUserProfile(member, {
+                        x: sidebarLeft,
+                        y: rect.top,
+                        anchorRect: {
+                          left: sidebarLeft,
+                          top: rect.top,
+                          right: sidebarRect ? sidebarRect.right : rect.right,
+                          bottom: rect.bottom,
+                          width: rect.width,
+                          height: rect.height,
+                        },
+                        source: 'memberList',
+                      });
                     }
                   }}
                   className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 text-gray-300 hover:text-white cursor-pointer group transition-colors"

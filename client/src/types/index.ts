@@ -79,6 +79,20 @@ export interface User {
   created_at?: string;
 }
 
+export interface UserProfilePosition {
+  x: number;
+  y: number;
+  anchorRect?: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+  };
+  source?: 'memberList' | 'chat' | 'voice' | 'dm' | 'friends' | string;
+}
+
 export interface UserSession {
   id: string;
   user_id: string;

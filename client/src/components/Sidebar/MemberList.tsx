@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
-import { User } from '../../types';
+import { User, UserProfilePosition } from '../../types';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu } from '../ContextMenu';
@@ -24,7 +24,7 @@ import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 interface MemberListProps {
   isOpen: boolean;
   onClose?: () => void;
-  onSelectUser?: (user: User, position?: { x: number; y: number }) => void;
+  onSelectUser?: (user: User, position?: UserProfilePosition) => void;
   onOpenDM?: (userId: string) => void;
   onOpenSearch?: () => void;
   onOpenPins?: () => void;
@@ -133,15 +133,51 @@ export const MemberList: React.FC<MemberListProps> = ({
         key={member.id}
         onClick={(e) => {
           e.stopPropagation();
-          onSelectUser?.(member, { x: e.clientX, y: e.clientY });
+          const target = e.currentTarget;
+          const rect = target.getBoundingClientRect();
+          const sidebar = target.closest('[data-memberlist-sidebar="true"]');
+          const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null;
+          const sidebarLeft = sidebarRect ? sidebarRect.left : rect.left;
+          onSelectUser?.(member, {
+            x: sidebarLeft,
+            y: rect.top,
+            anchorRect: {
+              left: sidebarLeft,
+              top: rect.top,
+              right: sidebarRect ? sidebarRect.right : rect.right,
+              bottom: rect.bottom,
+              width: rect.width,
+              height: rect.height,
+            },
+            source: 'memberList',
+          });
         }}
-        onContextMenu={(e) =>
+        onContextMenu={(e) => {
+          const target = e.currentTarget;
+          const rect = target.getBoundingClientRect();
+          const sidebar = target.closest('[data-memberlist-sidebar="true"]');
+          const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null;
+          const sidebarLeft = sidebarRect ? sidebarRect.left : rect.left;
           handleUserContextMenu(e, member, {
-            onOpenUserProfile: onSelectUser,
+            onOpenUserProfile: (u) => {
+              onSelectUser?.(u, {
+                x: sidebarLeft,
+                y: rect.top,
+                anchorRect: {
+                  left: sidebarLeft,
+                  top: rect.top,
+                  right: sidebarRect ? sidebarRect.right : rect.right,
+                  bottom: rect.bottom,
+                  width: rect.width,
+                  height: rect.height,
+                },
+                source: 'memberList',
+              });
+            },
             onOpenDM,
             contextType: 'guild',
-          })
-        }
+          });
+        }}
         className={`flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-all active:scale-[0.98] ${
           isOffline ? 'opacity-55 hover:opacity-100' : ''
         }`}
@@ -242,6 +278,7 @@ export const MemberList: React.FC<MemberListProps> = ({
 
       {/* Member Sidebar / Drawer */}
       <div
+        data-memberlist-sidebar="true"
         style={{
           width: typeof window !== 'undefined' && window.innerWidth < 768 ? '100vw' : `${memberListWidth}px`,
           transform: isDragging && dragOffset !== null && dragOffset !== undefined
