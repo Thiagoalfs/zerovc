@@ -37,9 +37,8 @@ export const PERMISSION_GROUPS: { category: string; icon: React.ReactNode; permi
     permissions: [
       {
         flag: Permissions.ADMINISTRATOR,
-        name: 'Administrador (Permissão Mestre)',
+        name: 'Administrador',
         description: 'Membros com esta permissão têm acesso total irrestrito e ignoram todos os bloqueios de canais.',
-        isMaster: true,
       },
       {
         flag: Permissions.VIEW_CHANNEL,

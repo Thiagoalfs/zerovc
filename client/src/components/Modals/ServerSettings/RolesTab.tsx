@@ -357,13 +357,8 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                           }`}
                         >
                           <div className="pr-4 select-none">
-                            <div className="text-sm font-semibold text-white flex items-center gap-2">
-                              <span>{perm.name}</span>
-                              {perm.isMaster && (
-                                <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-medium">
-                                  Mestre
-                                </span>
-                              )}
+                            <div className="text-sm font-semibold text-white">
+                              {perm.name}
                             </div>
                             <div className="text-xs text-gray-400 mt-1 leading-relaxed">{perm.description}</div>
                           </div>
