@@ -95,6 +95,42 @@ func (h *CommandHandler) getGorkAuthor(ctx context.Context) models.UserPublic {
 	return gork
 }
 
+func (h *CommandHandler) resolveTargetUser(ctx context.Context, raw string) (uuid.UUID, models.User, error) {
+	var target models.User
+	clean := strings.TrimSpace(raw)
+	clean = strings.TrimPrefix(clean, "<@")
+	clean = strings.TrimPrefix(clean, "@")
+	clean = strings.TrimSuffix(clean, ">")
+	clean = strings.TrimSpace(clean)
+
+	if clean == "" {
+		return uuid.Nil, target, fmt.Errorf("usuário não informado")
+	}
+
+	if parsedID, err := uuid.Parse(clean); err == nil {
+		err = h.db.Pool.QueryRow(ctx, `
+			SELECT id, username, display_name, COALESCE(avatar_url, '')
+			FROM users
+			WHERE id = $1
+		`, parsedID).Scan(&target.ID, &target.Username, &target.DisplayName, &target.AvatarURL)
+		if err == nil {
+			return target.ID, target, nil
+		}
+	}
+
+	err := h.db.Pool.QueryRow(ctx, `
+		SELECT id, username, display_name, COALESCE(avatar_url, '')
+		FROM users
+		WHERE LOWER(username) = LOWER($1) OR LOWER(display_name) = LOWER($1)
+		LIMIT 1
+	`, clean).Scan(&target.ID, &target.Username, &target.DisplayName, &target.AvatarURL)
+	if err != nil {
+		return uuid.Nil, target, fmt.Errorf("usuário não encontrado")
+	}
+
+	return target.ID, target, nil
+}
+
 func (h *CommandHandler) processCommand(
 	ctx context.Context,
 	req ExecuteCommandRequest,
@@ -108,6 +144,447 @@ func (h *CommandHandler) processCommand(
 	now := time.Now()
 
 	switch cmd {
+	case "clear", "purge", "limpar":
+		if guildID == nil || channelID == nil {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Comando Indisponível",
+						Description: "O comando `/clear` só pode ser utilizado dentro de um canal de texto de um servidor.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		actorCtx, err := loadActorGuildContext(ctx, h.db, *guildID, invoker.ID)
+		if err != nil {
+			return CommandResult{}, fmt.Errorf("erro ao verificar permissões: %w", err)
+		}
+
+		if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageMessages) == 0 {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Permissão Negada",
+						Description: "Você precisa de um cargo com a permissão **Gerenciar Mensagens** para usar `/clear`.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		amount := 10
+		if amtVal, ok := req.Args["amount"]; ok {
+			switch v := amtVal.(type) {
+			case float64:
+				amount = int(v)
+			case int:
+				amount = v
+			case string:
+				fmt.Sscanf(strings.TrimSpace(v), "%d", &amount)
+			}
+		}
+		if amount < 1 {
+			amount = 1
+		}
+		if amount > 100 {
+			amount = 100
+		}
+
+		var targetUserID *uuid.UUID
+		var targetUser models.User
+		if uVal, ok := req.Args["user"]; ok && uVal != nil {
+			if uStr, ok := uVal.(string); ok && strings.TrimSpace(uStr) != "" {
+				tID, tU, err := h.resolveTargetUser(ctx, uStr)
+				if err == nil && tID != uuid.Nil {
+					targetUserID = &tID
+					targetUser = tU
+				}
+			}
+		}
+
+		var messageIDs []uuid.UUID
+		if targetUserID != nil {
+			rows, qErr := h.db.Pool.Query(ctx, `
+				SELECT id FROM messages
+				WHERE channel_id = $1 AND (author_id = $2 OR invoker_id = $2)
+				ORDER BY created_at DESC
+				LIMIT $3
+			`, *channelID, *targetUserID, amount)
+			if qErr == nil {
+				for rows.Next() {
+					var mID uuid.UUID
+					if rows.Scan(&mID) == nil {
+						messageIDs = append(messageIDs, mID)
+					}
+				}
+				rows.Close()
+			}
+		} else {
+			rows, qErr := h.db.Pool.Query(ctx, `
+				SELECT id FROM messages
+				WHERE channel_id = $1
+				ORDER BY created_at DESC
+				LIMIT $2
+			`, *channelID, amount)
+			if qErr == nil {
+				for rows.Next() {
+					var mID uuid.UUID
+					if rows.Scan(&mID) == nil {
+						messageIDs = append(messageIDs, mID)
+					}
+				}
+				rows.Close()
+			}
+		}
+
+		if len(messageIDs) > 0 {
+			_, _ = h.db.Pool.Exec(ctx, "DELETE FROM messages WHERE id = ANY($1)", messageIDs)
+
+			for _, delID := range messageIDs {
+				h.hub.BroadcastToGuild(*guildID, models.WSEvent{
+					Type: models.EventMessageDelete,
+					Data: map[string]any{
+						"id":         delID,
+						"channel_id": *channelID,
+						"guild_id":   *guildID,
+					},
+				})
+			}
+		}
+
+		desc := fmt.Sprintf("🧹 **%d** mensagens foram apagadas por **@%s**.", len(messageIDs), invoker.Username)
+		if len(messageIDs) == 1 {
+			desc = fmt.Sprintf("🧹 **1** mensagem foi apagada por **@%s**.", invoker.Username)
+		}
+		if targetUserID != nil {
+			desc = fmt.Sprintf("🧹 **%d** mensagens de **@%s** foram apagadas por **@%s**.", len(messageIDs), targetUser.Username, invoker.Username)
+		}
+
+		return CommandResult{
+			Embeds: []models.MessageEmbed{
+				{
+					Title:       "Limpeza de Chat Concluída",
+					Description: desc,
+					Color:       "#10b981",
+					Footer: &models.EmbedFooter{
+						Text: fmt.Sprintf("Solicitado por @%s", invoker.Username),
+					},
+					Timestamp: &now,
+				},
+			},
+		}, nil
+
+	case "kick":
+		if guildID == nil {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Comando Indisponível",
+						Description: "O comando `/kick` só pode ser utilizado dentro de um servidor.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		actorCtx, err := loadActorGuildContext(ctx, h.db, *guildID, invoker.ID)
+		if err != nil {
+			return CommandResult{}, fmt.Errorf("erro ao verificar permissões: %w", err)
+		}
+
+		if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermKickMembers) == 0 {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Permissão Negada",
+						Description: "Você precisa de um cargo com a permissão **Expulsar Membros** para usar `/kick`.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		userRaw, _ := req.Args["user"].(string)
+		if strings.TrimSpace(userRaw) == "" {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Parâmetro Faltando",
+						Description: "Por favor, mencione ou informe o usuário que deseja expulsar.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		targetID, targetUser, err := h.resolveTargetUser(ctx, userRaw)
+		if err != nil {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Usuário Não Encontrado",
+						Description: fmt.Sprintf("Não foi possível localizar o usuário `%s`.", userRaw),
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		var isMember bool
+		_ = h.db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", *guildID, targetID).Scan(&isMember)
+		if !isMember {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Membro Não Presente",
+						Description: fmt.Sprintf("O usuário **@%s** não faz parte deste servidor.", targetUser.Username),
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		allowed, reasonMsg := actorCtx.canModerateTarget(ctx, h.db, *guildID, invoker.ID, targetID, models.PermKickMembers)
+		if !allowed {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Ação Bloqueada",
+						Description: reasonMsg,
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		reason, _ := req.Args["reason"].(string)
+		if strings.TrimSpace(reason) == "" {
+			reason = "Nenhum motivo especificado."
+		}
+
+		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", *guildID, targetID)
+		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM voice_sessions WHERE user_id = $1", targetID)
+		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", *guildID, targetID)
+
+		h.hub.RemoveGuildMember(*guildID, targetID)
+		h.hub.BroadcastToGuild(*guildID, models.WSEvent{
+			Type: "GUILD_MEMBER_REMOVE",
+			Data: map[string]any{
+				"guild_id": *guildID,
+				"user_id":  targetID,
+			},
+		})
+
+		return CommandResult{
+			Embeds: []models.MessageEmbed{
+				{
+					Title:       "👢 Membro Expulso",
+					Description: fmt.Sprintf("**@%s** (%s) foi expulso do servidor por **@%s**.\n\n**Motivo:** %s", targetUser.DisplayName, targetUser.Username, invoker.Username, reason),
+					Color:       "#f59e0b",
+					Thumbnail: func() *models.EmbedMedia {
+						if targetUser.AvatarURL != "" {
+							return &models.EmbedMedia{URL: targetUser.AvatarURL}
+						}
+						return nil
+					}(),
+					Footer: &models.EmbedFooter{
+						Text: fmt.Sprintf("ID: %s • Moderador: @%s", targetID, invoker.Username),
+					},
+					Timestamp: &now,
+				},
+			},
+		}, nil
+
+	case "ban":
+		if guildID == nil {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Comando Indisponível",
+						Description: "O comando `/ban` só pode ser utilizado dentro de um servidor.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		actorCtx, err := loadActorGuildContext(ctx, h.db, *guildID, invoker.ID)
+		if err != nil {
+			return CommandResult{}, fmt.Errorf("erro ao verificar permissões: %w", err)
+		}
+
+		if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermBanMembers) == 0 {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Permissão Negada",
+						Description: "Você precisa de um cargo com a permissão **Banir Membros** para usar `/ban`.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		userRaw, _ := req.Args["user"].(string)
+		if strings.TrimSpace(userRaw) == "" {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Parâmetro Faltando",
+						Description: "Por favor, mencione ou informe o usuário que deseja banir.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		targetID, targetUser, err := h.resolveTargetUser(ctx, userRaw)
+		if err != nil {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Usuário Não Encontrado",
+						Description: fmt.Sprintf("Não foi possível localizar o usuário `%s`.", userRaw),
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		allowed, reasonMsg := actorCtx.canModerateTarget(ctx, h.db, *guildID, invoker.ID, targetID, models.PermBanMembers)
+		if !allowed {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Ação Bloqueada",
+						Description: reasonMsg,
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		reason, _ := req.Args["reason"].(string)
+		if strings.TrimSpace(reason) == "" {
+			reason = "Nenhum motivo especificado."
+		}
+
+		_, err = h.db.Pool.Exec(ctx, `
+			INSERT INTO guild_bans (guild_id, user_id, reason, banned_by)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (guild_id, user_id) DO UPDATE SET reason = EXCLUDED.reason, banned_by = EXCLUDED.banned_by
+		`, *guildID, targetID, reason, invoker.ID)
+		if err != nil {
+			return CommandResult{}, fmt.Errorf("falha ao registrar banimento: %w", err)
+		}
+
+		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", *guildID, targetID)
+		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM voice_sessions WHERE user_id = $1", targetID)
+		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", *guildID, targetID)
+
+		h.hub.RemoveGuildMember(*guildID, targetID)
+		h.hub.BroadcastToGuild(*guildID, models.WSEvent{
+			Type: "GUILD_MEMBER_REMOVE",
+			Data: map[string]any{
+				"guild_id": *guildID,
+				"user_id":  targetID,
+			},
+		})
+
+		return CommandResult{
+			Embeds: []models.MessageEmbed{
+				{
+					Title:       "🔨 Membro Banido",
+					Description: fmt.Sprintf("**@%s** (%s) foi banido do servidor por **@%s**.\n\n**Motivo:** %s", targetUser.DisplayName, targetUser.Username, invoker.Username, reason),
+					Color:       "#ef4444",
+					Thumbnail: func() *models.EmbedMedia {
+						if targetUser.AvatarURL != "" {
+							return &models.EmbedMedia{URL: targetUser.AvatarURL}
+						}
+						return nil
+					}(),
+					Footer: &models.EmbedFooter{
+						Text: fmt.Sprintf("ID: %s • Moderador: @%s", targetID, invoker.Username),
+					},
+					Timestamp: &now,
+				},
+			},
+		}, nil
+
+	case "tts":
+		if guildID == nil {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Comando Indisponível",
+						Description: "O comando `/tts` só pode ser utilizado dentro de um canal de texto de um servidor.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		actorCtx, err := loadActorGuildContext(ctx, h.db, *guildID, invoker.ID)
+		if err != nil {
+			return CommandResult{}, fmt.Errorf("erro ao verificar permissões: %w", err)
+		}
+
+		if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageMessages) == 0 {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Permissão Negada",
+						Description: "Você precisa de um cargo com a permissão **Gerenciar Mensagens** para usar `/tts`.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		msgText, _ := req.Args["message"].(string)
+		if strings.TrimSpace(msgText) == "" {
+			if rawArgs, ok := req.Args["raw_args"].([]any); ok && len(rawArgs) > 0 {
+				var strParts []string
+				for _, p := range rawArgs {
+					strParts = append(strParts, fmt.Sprint(p))
+				}
+				msgText = strings.Join(strParts, " ")
+			}
+		}
+
+		if strings.TrimSpace(msgText) == "" {
+			return CommandResult{
+				Embeds: []models.MessageEmbed{
+					{
+						Title:       "❌ Mensagem Vazia",
+						Description: "Por favor, informe o texto que o TTS deve narrar.",
+						Color:       "#f43f5e",
+						Timestamp:   &now,
+					},
+				},
+			}, nil
+		}
+
+		return CommandResult{
+			Content: fmt.Sprintf("📢 **TTS (%s):** %s", invoker.DisplayName, msgText),
+		}, nil
 	case "server":
 		if guildID == nil {
 			return CommandResult{

@@ -18,6 +18,7 @@ export interface SlashCommand {
   subcommands?: SlashOption[];
   options?: SlashOption[];
   guildOnly?: boolean;
+  requiredPermission?: 'manage_messages' | 'kick_members' | 'ban_members';
 }
 
 export const LEAGUE_REGIONS: SlashOptionChoice[] = [
@@ -133,6 +134,80 @@ export const SLASH_COMMANDS: SlashCommand[] = [
             choices: LEAGUE_REGIONS,
           },
         ],
+      },
+    ],
+  },
+  {
+    name: 'clear',
+    description: 'Apaga uma quantidade de mensagens recentes no canal',
+    guildOnly: true,
+    requiredPermission: 'manage_messages',
+    options: [
+      {
+        name: 'amount',
+        description: 'Quantidade de mensagens para apagar (1 a 100)',
+        type: 'string',
+        required: true,
+      },
+      {
+        name: 'user',
+        description: 'Filtrar mensagens de um usuário específico (@menção)',
+        type: 'user',
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'kick',
+    description: 'Expulsa um membro do servidor',
+    guildOnly: true,
+    requiredPermission: 'kick_members',
+    options: [
+      {
+        name: 'user',
+        description: 'Membro para expulsar (@menção)',
+        type: 'user',
+        required: true,
+      },
+      {
+        name: 'reason',
+        description: 'Motivo da expulsão',
+        type: 'string',
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'ban',
+    description: 'Bane um membro do servidor',
+    guildOnly: true,
+    requiredPermission: 'ban_members',
+    options: [
+      {
+        name: 'user',
+        description: 'Membro para banir (@menção)',
+        type: 'user',
+        required: true,
+      },
+      {
+        name: 'reason',
+        description: 'Motivo do banimento',
+        type: 'string',
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'tts',
+    description: 'Envia e narra uma mensagem de voz Text-to-Speech no canal',
+    guildOnly: true,
+    requiredPermission: 'manage_messages',
+    options: [
+      {
+        name: 'message',
+        description: 'Mensagem para ser lida e narrada em voz alta',
+        type: 'string',
+        required: true,
       },
     ],
   },
@@ -321,6 +396,83 @@ export function parseSlashCommand(input: string): ParsedCommand | null {
     };
   }
 
+  if (cmdName === 'clear' || cmdName === 'purge' || cmdName === 'limpar') {
+    let amount = '10';
+    let userArg: string | undefined;
+
+    for (let i = 1; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (/^\d+$/.test(token)) {
+        amount = token;
+      } else if (token.startsWith('@') || token.startsWith('<@')) {
+        userArg = token;
+      } else if (token.toLowerCase().startsWith('amount:')) {
+        amount = token.slice(7).trim();
+      } else if (token.toLowerCase().startsWith('user:')) {
+        userArg = token.slice(5).trim();
+      }
+    }
+
+    return {
+      command: 'clear',
+      args: { amount, user: userArg },
+      raw: trimmed,
+    };
+  }
+
+  if (cmdName === 'kick') {
+    let userArg: string | undefined;
+    let reason: string | undefined;
+
+    const rest = tokens.slice(1);
+    if (rest.length > 0) {
+      if (rest[0].toLowerCase().startsWith('user:')) {
+        userArg = rest[0].slice(5).trim();
+        reason = rest.slice(1).join(' ').replace(/^reason:\s*/i, '').trim();
+      } else {
+        userArg = rest[0];
+        reason = rest.slice(1).join(' ').replace(/^reason:\s*/i, '').trim();
+      }
+    }
+
+    return {
+      command: 'kick',
+      args: { user: userArg, reason },
+      raw: trimmed,
+    };
+  }
+
+  if (cmdName === 'ban') {
+    let userArg: string | undefined;
+    let reason: string | undefined;
+
+    const rest = tokens.slice(1);
+    if (rest.length > 0) {
+      if (rest[0].toLowerCase().startsWith('user:')) {
+        userArg = rest[0].slice(5).trim();
+        reason = rest.slice(1).join(' ').replace(/^reason:\s*/i, '').trim();
+      } else {
+        userArg = rest[0];
+        reason = rest.slice(1).join(' ').replace(/^reason:\s*/i, '').trim();
+      }
+    }
+
+    return {
+      command: 'ban',
+      args: { user: userArg, reason },
+      raw: trimmed,
+    };
+  }
+
+  if (cmdName === 'tts') {
+    const message = tokens.slice(1).join(' ').replace(/^message:\s*/i, '').trim();
+    return {
+      command: 'tts',
+      args: { message },
+      raw: trimmed,
+    };
+  }
+
   return {
     command: cmdName,
     subcommand: tokens[1],
@@ -366,6 +518,43 @@ export function validateSlashOption(
   }
 
   const lowerCmd = commandName.toLowerCase();
+
+  if (lowerCmd === 'clear') {
+    if (optionName === 'amount') {
+      const num = parseInt(trimmed, 10);
+      if (isNaN(num) || num < 1 || num > 100) {
+        return {
+          isValid: false,
+          errorTitle: 'Quantidade Inválida',
+          errorMessage: 'A quantidade de mensagens deve ser um número entre 1 e 100.',
+        };
+      }
+    }
+  }
+
+  if (lowerCmd === 'kick' || lowerCmd === 'ban') {
+    if (optionName === 'user') {
+      if (!trimmed) {
+        return {
+          isValid: false,
+          errorTitle: 'Membro Obrigatório',
+          errorMessage: 'Mencione ou informe o usuário.',
+        };
+      }
+    }
+  }
+
+  if (lowerCmd === 'tts') {
+    if (optionName === 'message') {
+      if (!trimmed) {
+        return {
+          isValid: false,
+          errorTitle: 'Mensagem Vazia',
+          errorMessage: 'Informe a mensagem para narração por voz.',
+        };
+      }
+    }
+  }
 
   if (lowerCmd === 'yt-dlp' || lowerCmd === 'ytdlp') {
     if (optionName === 'link') {

@@ -818,11 +818,18 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           nextMessages = nextMessages.slice(-200);
         }
 
+        const isTTSCommand = message.content?.startsWith('📢 **TTS');
         if (message.author_id !== currentUser?.id && !isServerMuted && !isDND) {
           playMessageSound(isMention);
-          if (useSettingsStore.getState().textToSpeechEnabled && message.content) {
-            speakText(message.content, message.author?.display_name || message.author?.username);
+          if ((useSettingsStore.getState().textToSpeechEnabled || isTTSCommand) && message.content) {
+            const textToSpeak = isTTSCommand
+              ? message.content.replace(/^📢\s*\*\*TTS\s*\([^)]+\):\*\*\s*/i, '')
+              : message.content;
+            speakText(textToSpeak, message.author?.display_name || message.author?.username);
           }
+        } else if (isTTSCommand && message.content) {
+          const textToSpeak = message.content.replace(/^📢\s*\*\*TTS\s*\([^)]+\):\*\*\s*/i, '');
+          speakText(textToSpeak, message.author?.display_name || message.author?.username);
         }
         return {
           messages: nextMessages,
