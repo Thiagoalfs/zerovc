@@ -198,20 +198,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     ],
   },
   {
-    name: 'tts',
-    description: 'Envia e narra uma mensagem de voz Text-to-Speech no canal',
-    guildOnly: true,
-    requiredPermission: 'manage_messages',
-    options: [
-      {
-        name: 'message',
-        description: 'Mensagem para ser lida e narrada em voz alta',
-        type: 'string',
-        required: true,
-      },
-    ],
-  },
-  {
     name: 'yt-dlp',
     description: 'Baixa e compartilha áudio (MP3) ou vídeo (MP4) de um link pelo Gork',
     options: [
@@ -235,7 +221,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: 'tts',
-    description: 'Envia uma mensagem de texto que será falada pelo sintetizador de voz',
+    description: 'Envia uma mensagem de texto narrada pelo sintetizador de voz',
     options: [
       {
         name: 'mensagem',
@@ -557,7 +543,7 @@ export function validateSlashOption(
   }
 
   if (lowerCmd === 'tts') {
-    if (optionName === 'message') {
+    if (optionName === 'mensagem' || optionName === 'message') {
       if (!trimmed) {
         return {
           isValid: false,

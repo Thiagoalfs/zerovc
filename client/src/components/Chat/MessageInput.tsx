@@ -795,15 +795,25 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         });
         return;
       }
-      const messageText = (args.mensagem || '').trim();
+      const messageText = (args.mensagem || args.message || '').trim();
       if (!messageText) {
-        setLimitAlert({
+        triggerErrorShake();
+        setCommandError({
           title: 'Opção Obrigatória Faltando',
           message: 'Por favor preencha a mensagem para falar com TTS.',
+          field: 'mensagem',
         });
+        selectOptionToFocus('mensagem');
         return;
       }
+
+      setActiveSlash(null);
+      setSelectedOptionIndex(-1);
+      setContent('');
+      setCommandError(null);
       onCancelReply?.();
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
       await onSendMessage(messageText, replyingTo?.id, true);
       return;
     }
@@ -1086,14 +1096,28 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           });
           return;
         }
-        const messageText = (parsed.args.mensagem || finalContent.replace(/^\/tts\s*/i, '')).trim();
+        const messageText = (parsed.args.mensagem || parsed.args.message || finalContent.replace(/^\/tts\s*/i, '')).trim();
         if (!messageText) {
-          setLimitAlert({
+          triggerErrorShake();
+          setCommandError({
             title: 'Mensagem Vazia',
             message: 'Informe a mensagem que deseja enviar com TTS.\nExemplo: `/tts Olá a todos`',
+            field: 'mensagem',
           });
           return;
         }
+
+        setContent('');
+        setSelectedFile(null);
+        setSelectedImagePreview(null);
+        setShowEmojiPicker(false);
+        setChannelQuery(null);
+        setMentionQuery(null);
+        setEmojiQuery(null);
+        onCancelReply?.();
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+        setCommandError(null);
+
         await onSendMessage(messageText, replyingTo?.id, true);
         return;
       }
