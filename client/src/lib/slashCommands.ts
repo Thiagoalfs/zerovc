@@ -279,11 +279,39 @@ export function parseSlashCommand(input: string): ParsedCommand | null {
     let format = 'mp4';
     let link = '';
 
-    if (tokens[1]?.toLowerCase() === 'mp3' || tokens[1]?.toLowerCase() === 'mp4') {
-      format = tokens[1].toLowerCase();
-      link = tokens.slice(2).join(' ').trim();
+    for (let i = 1; i < tokens.length; i++) {
+      const token = tokens[i];
+      const lower = token.toLowerCase();
+      if (lower === 'mp3' || lower === 'format:mp3' || lower.startsWith('format:mp3')) {
+        format = 'mp3';
+      } else if (lower === 'mp4' || lower === 'format:mp4' || lower.startsWith('format:mp4')) {
+        format = 'mp4';
+      } else if (lower.startsWith('link:')) {
+        const extracted = token.slice(5).trim();
+        if (extracted) {
+          link = extracted;
+        }
+      } else if (
+        lower.startsWith('http://') ||
+        lower.startsWith('https://') ||
+        lower.includes('youtube.com') ||
+        lower.includes('youtu.be') ||
+        lower.includes('tiktok.com') ||
+        lower.includes('instagram.com') ||
+        lower.includes('twitter.com') ||
+        lower.includes('x.com')
+      ) {
+        link = token.trim();
+      }
+    }
+
+    if (!link) {
+      const nonFormatTokens = tokens
+        .slice(1)
+        .filter((t) => !t.toLowerCase().startsWith('format:') && t.toLowerCase() !== 'mp3' && t.toLowerCase() !== 'mp4');
+      link = nonFormatTokens.join(' ').replace(/^link:\s*/i, '').trim();
     } else {
-      link = tokens.slice(1).join(' ').trim();
+      link = link.replace(/^link:\s*/i, '').trim();
     }
 
     return {

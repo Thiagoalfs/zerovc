@@ -49,8 +49,28 @@ const isMediaUrl = (url: string) => {
   const clean = url.split('?')[0].toLowerCase();
   const isVoiceMsg = clean.includes('voice-message') || clean.includes('voice_message') || clean.includes('/audio/');
 
+  const isAud =
+    isVoiceMsg ||
+    clean.endsWith('.mp3') ||
+    clean.endsWith('.wav') ||
+    clean.endsWith('.m4a') ||
+    clean.endsWith('.aac') ||
+    clean.endsWith('.flac') ||
+    clean.endsWith('.ogg');
+
+  const isVid =
+    !isAud &&
+    !isVoiceMsg &&
+    (clean.endsWith('.mp4') ||
+      clean.endsWith('.webm') ||
+      clean.endsWith('.mov') ||
+      clean.endsWith('.mkv') ||
+      clean.endsWith('.m4v'));
+
   const isImg =
     !isVoiceMsg &&
+    !isAud &&
+    !isVid &&
     (clean.endsWith('.png') ||
       clean.endsWith('.jpg') ||
       clean.endsWith('.jpeg') ||
@@ -67,23 +87,6 @@ const isMediaUrl = (url: string) => {
       url.includes('i.giphy.com') ||
       url.includes('static.klipy.co') ||
       url.startsWith('data:image/'));
-
-  const isAud =
-    isVoiceMsg ||
-    clean.endsWith('.mp3') ||
-    clean.endsWith('.wav') ||
-    clean.endsWith('.m4a') ||
-    clean.endsWith('.aac') ||
-    clean.endsWith('.flac') ||
-    clean.endsWith('.ogg');
-
-  const isVid =
-    !isVoiceMsg &&
-    !isAud &&
-    (clean.endsWith('.mp4') ||
-      clean.endsWith('.webm') ||
-      clean.endsWith('.mov') ||
-      clean.endsWith('.mkv'));
 
   return { isMedia: isImg || isVid || isAud, isImage: isImg, isVideo: isVid, isAudio: isAud };
 };
