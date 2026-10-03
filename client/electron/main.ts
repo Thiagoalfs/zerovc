@@ -1351,7 +1351,7 @@ ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4'
         args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0', '--max-filesize', '50M');
       } else {
         args.push(
-          '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+          '-f', 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b',
           '--merge-output-format', 'mp4',
           '--max-filesize', '100M'
         );
