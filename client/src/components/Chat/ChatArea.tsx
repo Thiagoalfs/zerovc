@@ -10,11 +10,11 @@ import { SearchResultsPanel } from './SearchResultsPanel';
 import { TypingIndicator } from './TypingIndicator';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
-import { User, Message } from '../../types';
+import { User, Message, UserProfilePosition } from '../../types';
 
 interface ChatAreaProps {
   onOpenMobileDrawer?: () => void;
-  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
+  onOpenUserProfile?: (user: User, position?: UserProfilePosition) => void;
   onOpenDM?: (userId: string) => void;
   onPreviewImage?: (url: string) => void;
   isMemberListOpen?: boolean;

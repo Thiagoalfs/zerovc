@@ -17,7 +17,7 @@ import {
   Loader2,
   AlertTriangle,
 } from 'lucide-react';
-import { User } from '../../types';
+import { User, UserProfilePosition } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
@@ -25,10 +25,7 @@ import { formatAssetUrl } from '../../lib/api';
 import { getUserActivity } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
 
-export interface UserProfilePosition {
-  x: number;
-  y: number;
-}
+export type { UserProfilePosition };
 
 export interface UserProfileModalProps {
   user: User | null;
@@ -73,15 +70,31 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
 
     const cardWidth = 300;
-    const cardHeight = 380;
+    const cardHeight = 440;
     const margin = 16;
+    const gap = 12;
 
-    let left = position.x + 16;
-    let top = position.y - 40;
+    let left: number;
+    let top: number;
 
-    // If overflowing on the right side (e.g. clicked in MemberList), position it to the left
-    if (left + cardWidth > window.innerWidth - margin) {
-      left = position.x - cardWidth - 16;
+    const isFromMemberList =
+      position.source === 'memberList' ||
+      (position.anchorRect && position.anchorRect.left > window.innerWidth / 2) ||
+      (!position.anchorRect && position.x > window.innerWidth / 2);
+
+    if (isFromMemberList) {
+      // Anchored strictly to the left edge of the MemberList sidebar, floating over the chat view
+      const anchorLeft = position.anchorRect?.left ?? position.x;
+      left = anchorLeft - cardWidth - gap;
+      top = position.anchorRect?.top ?? (position.y - 20);
+    } else {
+      left = position.x + 16;
+      top = position.y - 40;
+
+      // If overflowing on the right side, position it to the left
+      if (left + cardWidth > window.innerWidth - margin) {
+        left = position.x - cardWidth - 16;
+      }
     }
 
     // Clamp inside viewport

@@ -6,7 +6,7 @@ import { useVoiceStore } from './stores/voiceStore';
 import { useDMStore } from './stores/dmStore';
 import { useCallStore } from './stores/callStore';
 import { socket } from './lib/socket';
-import { Message, VoiceSession, Channel, DMRoom } from './types';
+import { Message, VoiceSession, Channel, DMRoom, UserProfilePosition } from './types';
 import { api } from './lib/api';
 import { sendNativeNotification, requestNotificationPermission } from './lib/notifications';
 import { ServerList } from './components/Sidebar/ServerList';
@@ -96,7 +96,7 @@ export const App: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<{
     user: User;
-    position?: { x: number; y: number };
+    position?: UserProfilePosition;
   } | null>(null);
   const [focusedUserProfile, setFocusedUserProfile] = useState<User | null>(null);
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
