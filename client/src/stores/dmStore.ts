@@ -184,6 +184,9 @@ export const useDMStore = create<DMState>((set, get) => ({
   },
 
   openDMWithUser: async (recipientId: string) => {
+    if (recipientId === '00000000-0000-0000-0000-000000000001') {
+      throw new Error('Não é possível iniciar conversa privada com bots.');
+    }
     const room = await api.dms.createOrGet(recipientId);
     set((state) => {
       const exists = state.rooms.some((r) => r.id === room.id);

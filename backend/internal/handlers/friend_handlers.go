@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -110,12 +111,18 @@ func (h *FriendHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Find target user by username
 	var target models.UserPublic
-	userQuery := `SELECT id, username, avatar_url, status, custom_status FROM users WHERE LOWER(username) = LOWER($1)`
+	var isBot bool
+	userQuery := `SELECT id, username, avatar_url, status, custom_status, COALESCE(is_bot, false) FROM users WHERE LOWER(username) = LOWER($1)`
 	err := h.db.Pool.QueryRow(r.Context(), userQuery, req.Username).Scan(
-		&target.ID, &target.Username, &target.AvatarURL, &target.Status, &target.CustomStatus,
+		&target.ID, &target.Username, &target.AvatarURL, &target.Status, &target.CustomStatus, &isBot,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"user not found with this username"}`, http.StatusNotFound)
+		return
+	}
+
+	if isBot || target.ID == uuid.MustParse("00000000-0000-0000-0000-000000000001") || strings.EqualFold(target.Username, "gork") {
+		http.Error(w, `{"error":"Não é possível adicionar bots como amigo."}`, http.StatusBadRequest)
 		return
 	}
 

@@ -61,7 +61,26 @@ export function useUserContextMenu() {
       e.stopPropagation();
 
       const isMe = targetUser.id === currentUser?.id;
+      const isBot = Boolean(targetUser.is_bot || targetUser.id === '00000000-0000-0000-0000-000000000001' || targetUser.username?.toLowerCase() === 'gork');
       const isGuildContext = options.contextType === 'guild' || (!options.contextType && Boolean(activeGuild));
+
+      if (isBot) {
+        const botItems: ContextMenuItem[] = [
+          {
+            label: 'Ver Perfil',
+            icon: <UserIcon className="w-4 h-4" />,
+            onClick: () => options.onOpenUserProfile?.(targetUser, { x: e.clientX, y: e.clientY }),
+          },
+          { label: '', separator: true },
+          {
+            label: 'Copiar ID do Usuário',
+            icon: <Copy className="w-4 h-4" />,
+            onClick: () => copyToClipboard(targetUser.id),
+          },
+        ];
+        openContextMenu(e, botItems, targetUser.display_name || `@${targetUser.username}`);
+        return;
+      }
 
       const friendship = friends.find(
         (f) => f.friend?.id === targetUser.id || f.user?.id === targetUser.id
