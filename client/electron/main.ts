@@ -1587,6 +1587,11 @@ ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4'
 
     let isValid = false;
     if (format === 'mp4') {
+      const extLower = path.extname(resolvedPath).toLowerCase();
+      if (extLower === '.m4a' || extLower === '.mp3' || extLower === '.aac' || extLower === '.opus' || extLower === '.ogg') {
+        cleanupZeroVCDocs();
+        return { success: false, error: 'O download do vídeo não pôde mesclar vídeo e áudio. Verifique se o FFmpeg está instalado.' };
+      }
       // MP4: Check for 'ftyp' box in first 64 bytes
       const headerStr = buffer.subarray(0, 64).toString('latin1');
       isValid = headerStr.includes('ftyp');
