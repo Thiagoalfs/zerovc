@@ -665,7 +665,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     if (commandName === 'yt-dlp' || commandName === 'ytdlp') {
-      if (!args.link) {
+      const link = args.link?.trim() || '';
+      if (!link) {
         triggerErrorShake();
         setCommandError({
           title: 'Opção Obrigatória Faltando',
@@ -675,25 +676,64 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         selectOptionToFocus('link');
         return;
       }
-      try {
-        await executeYtdlpCommand({
-          format: args.format === 'mp3' ? 'mp3' : 'mp4',
-          link: args.link,
-          contextType,
-          contextId: channel?.id || '',
+
+      const lowerLink = link.toLowerCase();
+      const isPlaylistOrRadio =
+        lowerLink.includes('list=') ||
+        lowerLink.includes('/playlist') ||
+        lowerLink.includes('playlist?') ||
+        lowerLink.includes('start_radio=') ||
+        (lowerLink.includes('soundcloud.com') && lowerLink.includes('/sets/')) ||
+        (lowerLink.includes('spotify.com') && (lowerLink.includes('/playlist/') || lowerLink.includes('/album/')));
+
+      if (isPlaylistOrRadio) {
+        triggerErrorShake();
+        setCommandError({
+          title: 'Playlist / Rádio Não Suportada',
+          message: 'Playlists e mixes de rádio não são suportados. Por favor, envie o link de um vídeo ou áudio individual.',
+          field: 'link',
         });
-        setActiveSlash(null);
-        setSelectedOptionIndex(-1);
-        setContent('');
-        setCommandError(null);
-      } catch (err: any) {
+        selectOptionToFocus('link');
+        return;
+      }
+
+      if (!lowerLink.startsWith('http://') && !lowerLink.startsWith('https://')) {
+        triggerErrorShake();
+        setCommandError({
+          title: 'Link Inválido',
+          message: 'O link deve começar com http:// ou https://.',
+          field: 'link',
+        });
+        selectOptionToFocus('link');
+        return;
+      }
+
+      // Validated successfully: Clear the command input immediately
+      setActiveSlash(null);
+      setSelectedOptionIndex(-1);
+      setContent('');
+      setCommandError(null);
+
+      executeYtdlpCommand({
+        format: args.format === 'mp3' ? 'mp3' : 'mp4',
+        link,
+        contextType,
+        contextId: channel?.id || '',
+        onError: (errMessage) => {
+          triggerErrorShake();
+          setCommandError({
+            title: 'Erro no Download (yt-dlp)',
+            message: errMessage,
+          });
+        },
+      }).catch((err: any) => {
         console.error('Failed to execute yt-dlp command:', err);
         triggerErrorShake();
         setCommandError({
-          title: 'Erro no Download',
+          title: 'Erro no Download (yt-dlp)',
           message: err?.message || 'Falha ao executar o comando.',
         });
-      }
+      });
       return;
     }
 
@@ -704,6 +744,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         subcommand: subcommandName,
         args,
       };
+      setActiveSlash(null);
+      setSelectedOptionIndex(-1);
+      setContent('');
+      setCommandError(null);
+
       if (contextType === 'channel' && channel?.id) {
         await api.commands.executeChannelCommand(channel.id, payload);
       } else if (contextType === 'dm' && channel?.id) {
@@ -711,10 +756,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       } else if (contextType === 'dm_group' && channel?.id) {
         await api.commands.executeDMGroupCommand(channel.id, payload);
       }
-      setActiveSlash(null);
-      setSelectedOptionIndex(-1);
-      setContent('');
-      setCommandError(null);
     } catch (err: any) {
       console.error('Failed to execute slash command:', err);
       triggerErrorShake();
@@ -873,7 +914,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
 
       if (parsed.command === 'yt-dlp' || parsed.command === 'ytdlp') {
-        if (!parsed.args.link) {
+        const link = parsed.args.link?.trim() || '';
+        if (!link) {
           triggerErrorShake();
           const cmdDef = SLASH_COMMANDS.find((c) => c.name === 'yt-dlp');
           if (cmdDef) {
@@ -891,30 +933,67 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           });
           return;
         }
-        try {
-          await executeYtdlpCommand({
-            format: parsed.args.format === 'mp3' ? 'mp3' : 'mp4',
-            link: parsed.args.link,
-            contextType,
-            contextId: channel?.id || '',
-          });
-          setContent('');
-          setSelectedFile(null);
-          setSelectedImagePreview(null);
-          setShowEmojiPicker(false);
-          setChannelQuery(null);
-          setMentionQuery(null);
-          setEmojiQuery(null);
-          onCancelReply?.();
-          if (textareaRef.current) textareaRef.current.style.height = 'auto';
-          setCommandError(null);
-        } catch (err: any) {
+
+        const lowerLink = link.toLowerCase();
+        const isPlaylistOrRadio =
+          lowerLink.includes('list=') ||
+          lowerLink.includes('/playlist') ||
+          lowerLink.includes('playlist?') ||
+          lowerLink.includes('start_radio=') ||
+          (lowerLink.includes('soundcloud.com') && lowerLink.includes('/sets/')) ||
+          (lowerLink.includes('spotify.com') && (lowerLink.includes('/playlist/') || lowerLink.includes('/album/')));
+
+        if (isPlaylistOrRadio) {
           triggerErrorShake();
           setCommandError({
-            title: 'Erro no Download',
+            title: 'Playlist / Rádio Não Suportada',
+            message: 'Playlists e mixes de rádio não são suportados. Por favor, envie o link de um vídeo ou áudio individual.',
+            field: 'link',
+          });
+          return;
+        }
+
+        if (!lowerLink.startsWith('http://') && !lowerLink.startsWith('https://')) {
+          triggerErrorShake();
+          setCommandError({
+            title: 'Link Inválido',
+            message: 'O link deve começar com http:// ou https://.',
+            field: 'link',
+          });
+          return;
+        }
+
+        setContent('');
+        setSelectedFile(null);
+        setSelectedImagePreview(null);
+        setShowEmojiPicker(false);
+        setChannelQuery(null);
+        setMentionQuery(null);
+        setEmojiQuery(null);
+        onCancelReply?.();
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+        setCommandError(null);
+
+        executeYtdlpCommand({
+          format: parsed.args.format === 'mp3' ? 'mp3' : 'mp4',
+          link,
+          contextType,
+          contextId: channel?.id || '',
+          onError: (errMessage) => {
+            triggerErrorShake();
+            setCommandError({
+              title: 'Erro no Download (yt-dlp)',
+              message: errMessage,
+            });
+          },
+        }).catch((err: any) => {
+          console.error('Failed to execute yt-dlp command:', err);
+          triggerErrorShake();
+          setCommandError({
+            title: 'Erro no Download (yt-dlp)',
             message: err?.message || 'Falha ao executar o comando.',
           });
-        }
+        });
         return;
       }
 
