@@ -81,6 +81,7 @@ const isMediaUrl = (url: string) => {
       clean.endsWith('.avif') ||
       url.includes('/assets/user/') ||
       url.includes('/assets/guild/') ||
+      url.includes('/assets/bot_temp/') ||
       url.includes('media.tenor.com') ||
       url.includes('c.tenor.com') ||
       url.includes('media.giphy.com') ||
@@ -259,7 +260,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     .replace(/`[^`\n]+`/g, '')
     .replace(/<:[a-zA-Z0-9_+-]+:[^>]+>/g, '');
 
-  const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|data:image\/[^\s]+)/g;
+  const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|\/assets\/bot_temp\/[^\s]+|data:image\/[^\s]+)/g;
   const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
   const smartGifEmbeds: string[] = [];
   const linkEmbedUrls: string[] = [];

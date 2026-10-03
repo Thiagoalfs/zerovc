@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,16 +21,35 @@ import (
 var GorkUserID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
 type CommandHandler struct {
-	db   *database.DB
-	hub  *gateway.Hub
-	riot *services.RiotService
+	db        *database.DB
+	hub       *gateway.Hub
+	riot      *services.RiotService
+	uploadDir string
 }
 
-func NewCommandHandler(db *database.DB, hub *gateway.Hub, riot *services.RiotService) *CommandHandler {
+func NewCommandHandler(db *database.DB, hub *gateway.Hub, riot *services.RiotService, uploadDir string) *CommandHandler {
 	return &CommandHandler{
-		db:   db,
-		hub:  hub,
-		riot: riot,
+		db:        db,
+		hub:       hub,
+		riot:      riot,
+		uploadDir: uploadDir,
+	}
+}
+
+func (h *CommandHandler) trackBotTempFiles(ctx context.Context, msgID uuid.UUID, channelID *uuid.UUID, dmRoomID *uuid.UUID, dmGroupID *uuid.UUID, attachments []models.Attachment) {
+	for _, att := range attachments {
+		if att.URL == "" {
+			continue
+		}
+		relPath := att.URL
+		if idx := strings.Index(relPath, "assets/"); idx != -1 {
+			relPath = strings.TrimPrefix(relPath[idx:], "assets/")
+		}
+		diskPath := filepath.Join(h.uploadDir, filepath.Clean(relPath))
+		_, _ = h.db.Pool.Exec(ctx, `
+			INSERT INTO bot_temp_files (file_url, file_path, message_id, channel_id, dm_room_id, dm_group_id, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP + INTERVAL '1 day')
+		`, att.URL, diskPath, msgID, channelID, dmRoomID, dmGroupID)
 	}
 }
 
@@ -662,6 +682,10 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 	msg.Embeds = result.Embeds
 	msg.Attachments = result.Attachments
 
+	if len(result.Attachments) > 0 {
+		h.trackBotTempFiles(ctx, msg.ID, &channelID, nil, nil, result.Attachments)
+	}
+
 	// Broadcast WS event
 	wsEvent := models.WSEvent{
 		Type: models.EventMessageCreate,
@@ -741,6 +765,10 @@ func (h *CommandHandler) ExecuteDMRoomCommand(w http.ResponseWriter, r *http.Req
 	msg.Embeds = result.Embeds
 	msg.Attachments = result.Attachments
 
+	if len(result.Attachments) > 0 {
+		h.trackBotTempFiles(ctx, msg.ID, nil, &roomID, nil, result.Attachments)
+	}
+
 	wsEvent := models.WSEvent{
 		Type: models.EventDMMessageCreate,
 		Data: msg,
@@ -814,6 +842,10 @@ func (h *CommandHandler) ExecuteDMGroupCommand(w http.ResponseWriter, r *http.Re
 	msg.Invoker = &invokerPublic
 	msg.Embeds = result.Embeds
 	msg.Attachments = result.Attachments
+
+	if len(result.Attachments) > 0 {
+		h.trackBotTempFiles(ctx, msg.ID, nil, nil, &groupID, result.Attachments)
+	}
 
 	// Get all group members for broadcast
 	rows, err := h.db.Pool.Query(ctx, "SELECT user_id FROM dm_group_members WHERE group_id = $1", groupID)

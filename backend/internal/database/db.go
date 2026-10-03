@@ -144,16 +144,21 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb")
 	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL")
 
-	// Ensure System Bot User 'Gork' exists
+	// Ensure bot_temp_files table exists
 	db.Pool.Exec(ctx, `
-		INSERT INTO users (id, username, display_name, email, password_hash, avatar_url, is_bot, status)
-		VALUES ('00000000-0000-0000-0000-000000000001', 'gork', 'gork', 'gork@zerovc.local', 'system_bot_password_hash', '/assets/gork.jpg', TRUE, 'online')
-		ON CONFLICT (id) DO UPDATE SET
-			username = 'gork',
-			display_name = 'gork',
-			avatar_url = '/assets/gork.jpg',
-			is_bot = TRUE
+		CREATE TABLE IF NOT EXISTS bot_temp_files (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			file_url TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			message_id UUID,
+			channel_id UUID,
+			dm_room_id UUID,
+			dm_group_id UUID,
+			expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '1 day'),
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		)
 	`)
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_bot_temp_files_expires_at ON bot_temp_files (expires_at)")
 
 	log.Println("Database schema migration executed successfully")
 	return nil

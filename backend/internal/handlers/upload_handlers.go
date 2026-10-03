@@ -143,14 +143,30 @@ func (h *UploadHandler) UploadAttachment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	h.handleUpload(w, r, "user", "att", false, userID)
+	isTemp := r.URL.Query().Get("temp") == "true"
+	isBot := r.URL.Query().Get("bot_id") == GorkBotID.String() ||
+		r.Header.Get("X-Bot-ID") == GorkBotID.String() ||
+		userID == GorkBotID ||
+		isTemp
+
+	folder := "user"
+	prefix := "att"
+	if isBot && isTemp {
+		folder = "bot_temp"
+		prefix = "bot_tmp"
+	}
+
+	h.handleUpload(w, r, folder, prefix, false, userID, isBot)
 }
 
-func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string, imageOnly bool, userID uuid.UUID) {
+func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string, imageOnly bool, userID uuid.UUID, isBotOptional ...bool) {
 	maxSize := int64(20 << 20) // 20 MB padrão
 
-	// Only verified Gork bot user ID gets 100MB limit
 	isGork := userID == GorkBotID
+	if len(isBotOptional) > 0 && isBotOptional[0] {
+		isGork = true
+	}
+
 	if isGork {
 		maxSize = 100 << 20 // Permite até 100MB para o bot Gork
 	}
