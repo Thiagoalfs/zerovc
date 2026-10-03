@@ -56,9 +56,9 @@ export const MembersTab: React.FC<MembersTabProps> = ({
 
   return (
     <div className="max-w-4xl space-y-6 animate-fade-in py-6">
-      {/* Search and Role Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 relative">
+      {/* Search Bar (Full Width) */}
+      <div className="space-y-3">
+        <div className="w-full relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -69,20 +69,25 @@ export const MembersTab: React.FC<MembersTabProps> = ({
           />
         </div>
 
-        <DropdownSelect
-          className="w-full sm:w-60 flex-shrink-0"
-          value={selectedRoleFilter}
-          onChange={(val) => setSelectedRoleFilter(String(val))}
-          options={[
-            { value: 'all', label: `Todos os Cargos (${members.length})` },
-            ...roles.map((r) => ({
-              value: r.id,
-              label: r.name,
-              icon: <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: r.color || '#99aab5' }} />,
-            })),
-          ]}
-          placeholder={`Todos os Cargos (${members.length})`}
-        />
+        {/* Mobile-only role selector */}
+        {roles.length > 0 && (
+          <div className="md:hidden">
+            <DropdownSelect
+              className="w-full"
+              value={selectedRoleFilter}
+              onChange={(val) => setSelectedRoleFilter(String(val))}
+              options={[
+                { value: 'all', label: `Todos os Cargos (${members.length})` },
+                ...roles.map((r) => ({
+                  value: r.id,
+                  label: r.name,
+                  icon: <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: r.color || '#99aab5' }} />,
+                })),
+              ]}
+              placeholder={`Todos os Cargos (${members.length})`}
+            />
+          </div>
+        )}
       </div>
 
       <div className="text-xs text-gray-400">

@@ -48,35 +48,37 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
 }) => {
   return (
     <div className="max-w-4xl space-y-6 animate-fade-in py-6">
-      <div className="flex items-center justify-between p-5 rounded-2xl bg-background-darker border border-white/10">
-        <div>
-          <h3 className="text-sm font-bold text-white">Slots de Emojis do Servidor</h3>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {emojisList.length} de 50 slots utilizados • Clique no nome para renomear
-          </p>
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={emojiInputRef}
+        onChange={handleSelectEmojiFile}
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        className="hidden"
+      />
+
+      {/* Emoji count status bar */}
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-gray-400">
+          Mostrando {emojisList.length} de 50 emojis
         </div>
-        <div>
-          <input
-            type="file"
-            ref={emojiInputRef}
-            onChange={handleSelectEmojiFile}
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            className="hidden"
-          />
+
+        {/* Mobile-only Upload Button */}
+        <div className="md:hidden">
           <button
             type="button"
             onClick={() => emojiInputRef.current?.click()}
             disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
-            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer"
+            className="px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
           >
             {isUploadingEmoji ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" />
+                <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white/20 border-t-white" />
                 <span>Carregando...</span>
               </>
             ) : (
               <>
-                <Upload className="w-4 h-4" />
+                <Upload className="w-3.5 h-3.5" />
                 <span>Carregar Emoji</span>
               </>
             )}

@@ -13,6 +13,8 @@ import {
   ArrowLeft,
   Filter,
   RefreshCw,
+  Plus,
+  Upload,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -1097,6 +1099,56 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               </div>
 
               <div className="flex items-center gap-3">
+                {activeTab === 'members' && (
+                  <DropdownSelect
+                    className="w-48 sm:w-60"
+                    value={selectedRoleFilter}
+                    onChange={(val) => setSelectedRoleFilter(String(val))}
+                    options={[
+                      { value: 'all', label: `Todos os Cargos (${members.length})` },
+                      ...roles.map((r) => ({
+                        value: r.id,
+                        label: r.name,
+                        icon: <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: r.color || '#99aab5' }} />,
+                      })),
+                    ]}
+                    placeholder={`Todos os Cargos (${members.length})`}
+                  />
+                )}
+
+                {activeTab === 'invites' && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateNewInvite}
+                    disabled={isCreatingInvite}
+                    className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}</span>
+                  </button>
+                )}
+
+                {activeTab === 'emojis' && (
+                  <button
+                    type="button"
+                    onClick={() => emojiInputRef.current?.click()}
+                    disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
+                    className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    {isUploadingEmoji ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" />
+                        <span>Carregando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        <span>Carregar Emoji</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
                 {activeTab === 'audit_log' && (
                   <div className="flex items-center gap-2">
                     <DropdownSelect

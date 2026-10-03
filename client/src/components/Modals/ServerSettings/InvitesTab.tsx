@@ -31,18 +31,13 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
 }) => {
   return (
     <div className="max-w-4xl space-y-6 animate-fade-in py-6">
-      <div className="flex items-center justify-between p-5 rounded-2xl bg-background-darker border border-white/10">
-        <div>
-          <h3 className="text-sm font-bold text-white">Gerenciamento de Links de Convite</h3>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Veja todos os links de convite ativos gerados para este servidor.
-          </p>
-        </div>
+      {/* Mobile-only create invite button */}
+      <div className="md:hidden flex justify-end">
         <button
           type="button"
           onClick={handleGenerateNewInvite}
           disabled={isCreatingInvite}
-          className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+          className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>{isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}</span>
