@@ -431,7 +431,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ message_id: messageId }),
       }),
-    sendMessage: (channelId: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
+    sendMessage: (channelId: string, data: { content: string; attachments?: any[]; reply_to_id?: string; is_tts?: boolean }) =>
       request<Message>(`/channels/${channelId}/messages`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -557,7 +557,7 @@ export const api = {
     },
     getPinnedMessages: (roomId: string) =>
       request<DMMessage[]>(`/dms/${roomId}/pins`),
-    sendMessage: (roomId: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
+    sendMessage: (roomId: string, data: { content: string; attachments?: any[]; reply_to_id?: string; is_tts?: boolean }) =>
       request<DMMessage>(`/dms/${roomId}/messages`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -636,7 +636,7 @@ export const api = {
     },
     getPinnedMessages: (id: string) =>
       request<DMGroupMessage[]>(`/dm/groups/${id}/pins`),
-    sendMessage: (id: string, data: { content: string; attachments?: any[]; reply_to_id?: string }) =>
+    sendMessage: (id: string, data: { content: string; attachments?: any[]; reply_to_id?: string; is_tts?: boolean }) =>
       request<DMGroupMessage>(`/dm/groups/${id}/messages`, {
         method: 'POST',
         body: JSON.stringify(data),

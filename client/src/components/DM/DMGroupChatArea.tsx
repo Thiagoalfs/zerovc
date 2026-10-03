@@ -40,6 +40,7 @@ import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
+import { setActiveChat, getActiveChat } from '../../utils/activeChat';
 import { User, DMGroupMessage, UserProfilePosition } from '../../types';
 
 interface DMGroupChatAreaProps {
@@ -138,6 +139,18 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     voiceType === 'group' && dmGroupId === activeGroup?.id && isVoiceConnecting;
 
   useKeepAwake(isGroupVoiceActive);
+
+  // Track active chat focus for selective TTS playback
+  useEffect(() => {
+    if (activeGroup?.id) {
+      setActiveChat('group', activeGroup.id);
+    }
+    return () => {
+      if (getActiveChat().id === activeGroup?.id) {
+        setActiveChat('none', null);
+      }
+    };
+  }, [activeGroup?.id]);
 
   const [replyingTo, setReplyingTo] = useState<DMGroupMessage | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -898,12 +911,12 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               placeholder={`Conversar em ${groupName}...`}
               replyingTo={replyingTo}
               onCancelReply={() => setReplyingTo(null)}
-              onSendMessage={async (content, replyToId) => {
+              onSendMessage={async (content, replyToId, isTTS) => {
                 if (activeGroup) {
                   clearUnreadDivider(activeGroup.id);
                 }
                 scrollToBottom(true);
-                await sendMessage(content, undefined, replyToId);
+                await sendMessage(content, undefined, replyToId, isTTS);
                 setReplyingTo(null);
                 setTimeout(() => scrollToBottom(true), 60);
                 setTimeout(() => scrollToBottom(true), 200);

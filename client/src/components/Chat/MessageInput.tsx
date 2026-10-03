@@ -45,7 +45,7 @@ interface MessageInputProps {
   placeholder?: string;
   replyingTo?: { id: string; author?: { username?: string; display_name?: string }; content: string } | null;
   onCancelReply?: () => void;
-  onSendMessage: (content: string, replyToId?: string) => Promise<void>;
+  onSendMessage: (content: string, replyToId?: string, isTTS?: boolean) => Promise<void>;
   onEditLastMessage?: () => void;
   droppedFile?: File | null;
   onClearDroppedFile?: () => void;
@@ -88,7 +88,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onTyping,
 }) => {
   const { activeGuild, guilds } = useGuildStore();
-  const { canManageMessages, canKick, canBan } = useGuildPermissions(activeGuild);
+  const perms = useGuildPermissions(activeGuild);
+  const { canManageMessages, canKick, canBan } = perms;
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -786,6 +787,27 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return;
     }
 
+    if (commandName === 'tts') {
+      if (contextType === 'channel' && !perms.canManageMessages) {
+        setLimitAlert({
+          title: 'Permissão Necessária',
+          message: 'Você precisa da permissão "Gerenciar Mensagens" no seu cargo para usar o comando /tts.',
+        });
+        return;
+      }
+      const messageText = (args.mensagem || '').trim();
+      if (!messageText) {
+        setLimitAlert({
+          title: 'Opção Obrigatória Faltando',
+          message: 'Por favor preencha a mensagem para falar com TTS.',
+        });
+        return;
+      }
+      onCancelReply?.();
+      await onSendMessage(messageText, replyingTo?.id, true);
+      return;
+    }
+
     // Backend Slash Commands (/server, /user, /league)
     try {
       const payload = {
@@ -1053,6 +1075,26 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             message: err?.message || 'Falha ao executar o comando.',
           });
         });
+        return;
+      }
+
+      if (parsed.command === 'tts') {
+        if (contextType === 'channel' && !canManageMessages) {
+          setLimitAlert({
+            title: 'Permissão Necessária',
+            message: 'Você precisa da permissão "Gerenciar Mensagens" no seu cargo para usar o comando /tts.',
+          });
+          return;
+        }
+        const messageText = (parsed.args.mensagem || finalContent.replace(/^\/tts\s*/i, '')).trim();
+        if (!messageText) {
+          setLimitAlert({
+            title: 'Mensagem Vazia',
+            message: 'Informe a mensagem que deseja enviar com TTS.\nExemplo: `/tts Olá a todos`',
+          });
+          return;
+        }
+        await onSendMessage(messageText, replyingTo?.id, true);
         return;
       }
 

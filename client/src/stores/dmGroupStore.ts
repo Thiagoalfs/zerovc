@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { useAuthStore } from './authStore';
 import { useSettingsStore } from './settingsStore';
 import { playMessageSound, speakText } from '../utils/audio';
+import { isChatActiveNow } from '../utils/activeChat';
 import { DMGroup, DMGroupMessage, User } from '../types';
 
 interface DMGroupState {
@@ -33,7 +34,7 @@ interface DMGroupState {
   removeMember: (groupId: string, userId: string) => Promise<void>;
   leaveGroup: (groupId: string) => Promise<void>;
   transferOwnership: (groupId: string, newOwnerId: string) => Promise<void>;
-  sendMessage: (content: string, attachments?: any[], replyToId?: string) => Promise<void>;
+  sendMessage: (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   togglePin: (messageId: string) => Promise<void>;
@@ -275,7 +276,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     }));
   },
 
-  sendMessage: async (content: string, attachments?: any[], replyToId?: string) => {
+  sendMessage: async (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean) => {
     const { activeGroup, messages } = get();
     if (!activeGroup) return;
     const currentUser = useAuthStore.getState().user;
@@ -306,6 +307,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       reply_to: replyInfo,
       reactions: [],
       is_pinned: false,
+      is_tts: Boolean(isTTS),
       status: 'sending',
       created_at: new Date().toISOString(),
     };
@@ -331,6 +333,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         content,
         attachments,
         reply_to_id: replyToId,
+        is_tts: Boolean(isTTS),
       });
       const readyMsg: DMGroupMessage = { ...confirmedMsg, status: 'sent', tempId };
 
@@ -450,9 +453,15 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           nextMsgs = nextMsgs.slice(-200);
         }
 
+        const isViewingThisGroup = isChatActiveNow('group', message.group_id);
+
         if (message.author_id !== currentUser?.id) {
           playMessageSound(false);
-          if (useSettingsStore.getState().textToSpeechEnabled && message.content) {
+        }
+
+        const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled) && message.content;
+        if (shouldPlayTTS && isViewingThisGroup) {
+          if (message.is_tts || message.author_id !== currentUser?.id) {
             speakText(message.content, message.author?.display_name || message.author?.username);
           }
         }

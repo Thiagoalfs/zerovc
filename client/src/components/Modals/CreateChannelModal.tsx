@@ -16,7 +16,6 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
   onClose,
 }) => {
   const [name, setName] = useState('');
-  const [topic, setTopic] = useState('');
   const [type, setType] = useState<'text' | 'voice'>(initialType);
   const [isPrivate, setIsPrivate] = useState(false);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
@@ -28,7 +27,6 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
     if (isOpen) {
       setType(initialType);
       setName('');
-      setTopic('');
       setIsPrivate(false);
       setSelectedRoleIds([]);
       setError('');
@@ -63,7 +61,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
         activeGuild.id,
         formattedName,
         type,
-        type === 'text' ? (topic.trim() || undefined) : undefined,
+        undefined,
         initialCategoryId,
         isPrivate,
         !isPrivate ? undefined : selectedRoleIds
@@ -85,7 +83,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
     >
       <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-4 sm:p-6 pb-2 relative flex-shrink-0">
+        <div className="p-4 sm:p-6 pb-0 relative flex-shrink-0">
           <button
             type="button"
             onClick={onClose}
@@ -98,7 +96,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 no-scrollbar">
+        <form onSubmit={handleSubmit} className="px-4 sm:px-6 pt-3 pb-4 sm:pb-6 space-y-4 overflow-y-auto flex-1 no-scrollbar">
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-md">{error}</div>}
 
           {/* Type Selector */}
@@ -106,36 +104,54 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
             <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
               Tipo do Canal
             </label>
-            <div className="space-y-2">
+            <div className="space-y-1">
               {/* Text Option */}
               <div
                 onClick={() => setType('text')}
-                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                  type === 'text'
-                    ? 'bg-background-light border-brand-500 text-white'
-                    : 'bg-background-darkest border-white/5 text-gray-400 hover:bg-background-light/40'
-                }`}
+                className="flex items-center gap-3 py-2 px-1 cursor-pointer transition-colors group select-none"
               >
-                <Hash className="w-5 h-5 text-gray-400" />
-                <div className="flex flex-col">
-                  <span className="font-semibold text-sm">Canal de Texto</span>
-                  <span className="text-xs text-gray-400">Poste mensagens, imagens e memes</span>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
+                  type === 'text'
+                    ? 'border-brand-500'
+                    : 'border-gray-500 group-hover:border-gray-400'
+                }`}>
+                  <div className={`w-2.5 h-2.5 rounded-full bg-brand-500 transition-transform ${
+                    type === 'text' ? 'scale-100' : 'scale-0'
+                  }`} />
+                </div>
+                <Hash className={`w-5 h-5 flex-shrink-0 transition-colors ${type === 'text' ? 'text-white' : 'text-gray-400'}`} />
+                <div className="flex flex-col min-w-0">
+                  <span className={`font-semibold text-sm transition-colors ${type === 'text' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
+                    Canal de Texto
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    Poste mensagens, imagens e memes
+                  </span>
                 </div>
               </div>
 
               {/* Voice Option */}
               <div
                 onClick={() => setType('voice')}
-                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                  type === 'voice'
-                    ? 'bg-background-light border-brand-500 text-white'
-                    : 'bg-background-darkest border-white/5 text-gray-400 hover:bg-background-light/40'
-                }`}
+                className="flex items-center gap-3 py-2 px-1 cursor-pointer transition-colors group select-none"
               >
-                <Volume2 className="w-5 h-5 text-gray-400" />
-                <div className="flex flex-col">
-                  <span className="font-semibold text-sm">Canal de Voz</span>
-                  <span className="text-xs text-gray-400">Converse por voz e compartilhe tela</span>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
+                  type === 'voice'
+                    ? 'border-brand-500'
+                    : 'border-gray-500 group-hover:border-gray-400'
+                }`}>
+                  <div className={`w-2.5 h-2.5 rounded-full bg-brand-500 transition-transform ${
+                    type === 'voice' ? 'scale-100' : 'scale-0'
+                  }`} />
+                </div>
+                <Volume2 className={`w-5 h-5 flex-shrink-0 transition-colors ${type === 'voice' ? 'text-white' : 'text-gray-400'}`} />
+                <div className="flex flex-col min-w-0">
+                  <span className={`font-semibold text-sm transition-colors ${type === 'voice' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
+                    Canal de Voz
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    Converse por voz e compartilhe tela
+                  </span>
                 </div>
               </div>
             </div>
@@ -162,24 +178,8 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
             </div>
           </div>
 
-          {/* Topic for Text channels */}
-          {type === 'text' && (
-            <div>
-              <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
-                Tópico (Opcional)
-              </label>
-              <input
-                type="text"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="Sobre o que é este canal?"
-                className="w-full bg-background-darkest text-white px-3 py-2.5 rounded-lg border border-white/5 focus:outline-none focus:border-brand-500 text-sm"
-              />
-            </div>
-          )}
-
           {/* Private Channel Toggle */}
-          <div className="pt-2 border-t border-white/5 space-y-3">
+          <div className="space-y-3 pt-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Lock className="w-4 h-4 text-brand-400" />
@@ -248,7 +248,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
           </div>
 
           {/* Footer actions */}
-          <div className="flex justify-between items-center pt-4 border-t border-white/5">
+          <div className="flex justify-between items-center pt-2">
             <button
               type="button"
               onClick={onClose}

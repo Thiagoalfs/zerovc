@@ -10,6 +10,7 @@ import { SearchResultsPanel } from './SearchResultsPanel';
 import { TypingIndicator } from './TypingIndicator';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
+import { setActiveChat, getActiveChat } from '../../utils/activeChat';
 import { User, Message, UserProfilePosition } from '../../types';
 
 interface ChatAreaProps {
@@ -147,15 +148,27 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  const handleSendMessage = async (content: string, replyToId?: string) => {
+  const handleSendMessage = async (content: string, replyToId?: string, isTTS?: boolean) => {
     if (activeChannel) {
       clearUnreadDivider(activeChannel.id);
     }
     scrollToBottom(true);
-    await sendMessage(content, replyToId);
+    await sendMessage(content, replyToId, isTTS);
     setTimeout(() => scrollToBottom(true), 60);
     setTimeout(() => scrollToBottom(true), 200);
   };
+
+  // Track active chat focus for selective TTS playback
+  useEffect(() => {
+    if (activeChannel?.id) {
+      setActiveChat('channel', activeChannel.id);
+    }
+    return () => {
+      if (getActiveChat().id === activeChannel?.id) {
+        setActiveChat('none', null);
+      }
+    };
+  }, [activeChannel?.id]);
 
   // Reset initial load flag on channel change
   useEffect(() => {

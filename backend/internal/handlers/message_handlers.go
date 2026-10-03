@@ -69,6 +69,7 @@ type SendMessageRequest struct {
 	Content     string              `json:"content"`
 	Attachments []models.Attachment `json:"attachments"`
 	ReplyToID   *uuid.UUID          `json:"reply_to_id,omitempty"`
+	IsTTS       bool                `json:"is_tts,omitempty"`
 }
 
 type UpdateMessageRequest struct {
@@ -142,6 +143,20 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Check TTS permission if requested (requires PermManageMessages, Admin, or Owner)
+	if req.IsTTS {
+		actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+		if err != nil {
+			http.Error(w, `{"error":"failed to check permissions"}`, http.StatusInternalServerError)
+			return
+		}
+		canSendTTS := actorCtx.IsOwner || actorCtx.HasAdmin || (actorCtx.Perms&models.PermManageMessages) != 0
+		if !canSendTTS {
+			http.Error(w, `{"error":"forbidden: você precisa da permissão \"Gerenciar Mensagens\" para enviar mensagens de TTS neste servidor"}`, http.StatusForbidden)
+			return
+		}
+	}
+
 	// 2. Fetch author details
 	var author models.UserPublic
 	err = h.db.Pool.QueryRow(r.Context(), "SELECT id, username, display_name, avatar_url, banner_url, bio, status, custom_status FROM users WHERE id = $1", userID).Scan(
@@ -156,12 +171,12 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 	attachmentsJSON, _ := json.Marshal(req.Attachments)
 	var msg models.Message
 	query := `
-		INSERT INTO messages (channel_id, author_id, content, attachments, reply_to_id)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, channel_id, author_id, content, reply_to_id, is_pinned, is_edited, edited_at, created_at, updated_at
+		INSERT INTO messages (channel_id, author_id, content, attachments, reply_to_id, is_tts)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, channel_id, author_id, content, reply_to_id, is_pinned, is_edited, is_tts, edited_at, created_at, updated_at
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, channelID, userID, req.Content, attachmentsJSON, req.ReplyToID).Scan(
-		&msg.ID, &msg.ChannelID, &msg.AuthorID, &msg.Content, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt, &msg.UpdatedAt,
+	err = h.db.Pool.QueryRow(r.Context(), query, channelID, userID, req.Content, attachmentsJSON, req.ReplyToID, req.IsTTS).Scan(
+		&msg.ID, &msg.ChannelID, &msg.AuthorID, &msg.Content, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt, &msg.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to save message"}`, http.StatusInternalServerError)
@@ -409,7 +424,7 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
+		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at, m.updated_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url,
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
@@ -444,7 +459,7 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		var invUsername, invDisplayName, invAvatar *string
 
 		if err := rows.Scan(
-			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &m.InvokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &m.InvokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.IsTTS, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
 			&invID, &invUsername, &invDisplayName, &invAvatar,
@@ -811,7 +826,7 @@ func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at, m.updated_at,
+		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at, m.updated_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url,
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
@@ -846,7 +861,7 @@ func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 		var invUsername, invDisplayName, invAvatar *string
 
 		if err := rows.Scan(
-			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &m.InvokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &m.InvokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.IsTTS, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
 			&invID, &invUsername, &invDisplayName, &invAvatar,
@@ -1008,7 +1023,7 @@ func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT 
-			m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+			m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at,
 			u.id, u.username, u.display_name, u.avatar_url, u.status,
 			iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM messages m
@@ -1052,7 +1067,7 @@ func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
 		var invokerUsername, invokerDisplayName, invokerAvatarURL *string
 
 		err := rows.Scan(
-			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &invokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt,
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &invokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.IsTTS, &m.EditedAt, &m.CreatedAt,
 			&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
 			&invokerUserID, &invokerUsername, &invokerDisplayName, &invokerAvatarURL,
 		)

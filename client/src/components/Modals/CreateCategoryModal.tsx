@@ -69,7 +69,7 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
     >
       <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-4 sm:p-6 pb-2 relative flex-shrink-0">
+        <div className="p-4 sm:p-6 pb-0 relative flex-shrink-0">
           <button
             type="button"
             onClick={onClose}
@@ -85,7 +85,7 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto no-scrollbar flex-1">
+        <form onSubmit={handleSubmit} className="px-4 sm:px-6 pt-3 pb-4 sm:pb-6 space-y-4 overflow-y-auto no-scrollbar flex-1">
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-md">{error}</div>}
 
           {/* Name Field */}
@@ -113,7 +113,7 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
           </div>
 
           {/* Footer actions */}
-          <div className="flex justify-between items-center pt-4 border-t border-white/5">
+          <div className="flex justify-between items-center pt-2">
             <button
               type="button"
               onClick={onClose}

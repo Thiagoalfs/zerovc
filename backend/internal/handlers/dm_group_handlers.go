@@ -575,7 +575,7 @@ func (h *DMGroupHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM dm_group_messages m
@@ -601,7 +601,7 @@ func (h *DMGroupHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		var invUsername, invDisplayName, invAvatar *string
 
 		if err := rows.Scan(
-			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &embedsBytes, &msg.InvokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &embedsBytes, &msg.InvokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt,
 			&msg.Author.Username, &msg.Author.DisplayName, &msg.Author.AvatarURL, &msg.Author.BannerURL, &msg.Author.Bio, &msg.Author.Status, &msg.Author.CustomStatus,
 			&invID, &invUsername, &invDisplayName, &invAvatar,
 		); err == nil {
@@ -674,6 +674,7 @@ func (h *DMGroupHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		Content     string              `json:"content"`
 		Attachments []models.Attachment `json:"attachments"`
 		ReplyToID   *uuid.UUID          `json:"reply_to_id,omitempty"`
+		IsTTS       bool                `json:"is_tts,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Content == "" && len(req.Attachments) == 0) {
 		http.Error(w, `{"error":"content required"}`, http.StatusBadRequest)
@@ -689,13 +690,13 @@ func (h *DMGroupHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	var msg models.DMGroupMessage
 	insertQuery := `
-		INSERT INTO dm_group_messages (group_id, author_id, content, attachments, reply_to_id)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, group_id, author_id, content, attachments, reply_to_id, is_pinned, is_edited, edited_at, created_at
+		INSERT INTO dm_group_messages (group_id, author_id, content, attachments, reply_to_id, is_tts)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, group_id, author_id, content, attachments, reply_to_id, is_pinned, is_edited, is_tts, edited_at, created_at
 	`
 	var rawAttach []byte
-	err = h.db.Pool.QueryRow(r.Context(), insertQuery, groupID, userID, req.Content, attachBytes, req.ReplyToID).Scan(
-		&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &rawAttach, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+	err = h.db.Pool.QueryRow(r.Context(), insertQuery, groupID, userID, req.Content, attachBytes, req.ReplyToID, req.IsTTS).Scan(
+		&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &rawAttach, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to insert message"}`, http.StatusInternalServerError)
@@ -991,7 +992,7 @@ func (h *DMGroupHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM dm_group_messages m
@@ -1016,7 +1017,7 @@ func (h *DMGroupHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 		var invokerUsername, invokerDisplayName, invokerAvatarURL *string
 
 		if err := rows.Scan(
-			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &embedsBytes, &invokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &embedsBytes, &invokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt,
 			&msg.Author.Username, &msg.Author.DisplayName, &msg.Author.AvatarURL, &msg.Author.BannerURL, &msg.Author.Bio, &msg.Author.Status, &msg.Author.CustomStatus,
 			&invokerUserID, &invokerUsername, &invokerDisplayName, &invokerAvatarURL,
 		); err == nil {

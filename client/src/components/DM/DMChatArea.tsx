@@ -24,6 +24,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { TypingIndicator } from '../Chat/TypingIndicator';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
+import { setActiveChat, getActiveChat } from '../../utils/activeChat';
 import { User, DMMessage } from '../../types';
 
 interface DMChatAreaProps {
@@ -81,6 +82,18 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     if (!activeRoom) return [];
     return Array.from(typingUsers.get(activeRoom.id) || []).filter((id) => id !== user?.id);
   }, [typingUsers, activeRoom, user?.id]);
+
+  // Track active chat focus for selective TTS playback
+  useEffect(() => {
+    if (activeRoom?.id) {
+      setActiveChat('dm', activeRoom.id);
+    }
+    return () => {
+      if (getActiveChat().id === activeRoom?.id) {
+        setActiveChat('none', null);
+      }
+    };
+  }, [activeRoom?.id]);
 
   useEffect(() => {
     if (showPinnedOnly && activeRoom) {
@@ -566,12 +579,12 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         placeholder={recipient ? `Conversar com @${recipient.display_name || recipient.username}` : 'Conversar...'}
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
-        onSendMessage={async (content, replyToId) => {
+        onSendMessage={async (content, replyToId, isTTS) => {
           if (activeRoom) {
             clearUnreadDivider(activeRoom.id);
           }
           scrollToBottom(true);
-          await sendMessage(content, undefined, replyToId);
+          await sendMessage(content, undefined, replyToId, isTTS);
           setReplyingTo(null);
           setTimeout(() => scrollToBottom(true), 60);
           setTimeout(() => scrollToBottom(true), 200);

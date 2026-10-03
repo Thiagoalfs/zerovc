@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Eye,
   Type,
@@ -8,6 +8,13 @@ import {
   Contrast,
 } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
+
+const FONT_SIZE_STEPS = [
+  { value: 12, label: '12px (Compacto)' },
+  { value: 14, label: '14px (Padrão)' },
+  { value: 18, label: '18px (Grande)' },
+  { value: 22, label: '22px (Extra Grande)' },
+];
 
 export const AccessibilitySettingsView: React.FC = () => {
   const {
@@ -20,6 +27,21 @@ export const AccessibilitySettingsView: React.FC = () => {
     setHighContrast,
     setTextToSpeechEnabled,
   } = useSettingsStore();
+
+  const currentStepIndex = useMemo(() => {
+    const exactIndex = FONT_SIZE_STEPS.findIndex((s) => s.value === chatFontSize);
+    if (exactIndex !== -1) return exactIndex;
+    let closestIdx = 1;
+    let minDiff = Infinity;
+    FONT_SIZE_STEPS.forEach((step, idx) => {
+      const diff = Math.abs(step.value - chatFontSize);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = idx;
+      }
+    });
+    return closestIdx;
+  }, [chatFontSize]);
 
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -64,18 +86,32 @@ export const AccessibilitySettingsView: React.FC = () => {
           <div className="space-y-2">
             <input
               type="range"
-              min="12"
-              max="22"
-              step="1"
-              value={chatFontSize}
-              onChange={(e) => setChatFontSize(Number(e.target.value))}
+              min={0}
+              max={FONT_SIZE_STEPS.length - 1}
+              step={1}
+              value={currentStepIndex}
+              onChange={(e) => {
+                const idx = Number(e.target.value);
+                setChatFontSize(FONT_SIZE_STEPS[idx].value);
+              }}
               className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-brand-500"
             />
-            <div className="flex justify-between text-[10px] text-gray-500 font-medium px-1">
-              <span>12px (Compacto)</span>
-              <span>14px (Padrão)</span>
-              <span>18px (Grande)</span>
-              <span>22px (Extra Grande)</span>
+            <div className="flex justify-between text-[10px] font-medium px-1 select-none">
+              {FONT_SIZE_STEPS.map((step, idx) => {
+                const isActive = idx === currentStepIndex;
+                return (
+                  <button
+                    key={step.value}
+                    type="button"
+                    onClick={() => setChatFontSize(step.value)}
+                    className={`transition-colors cursor-pointer ${
+                      isActive ? 'text-brand-400 font-bold' : 'text-gray-500 hover:text-gray-300'
+                    } ${idx === FONT_SIZE_STEPS.length - 1 ? 'text-right' : idx > 0 ? 'text-center' : 'text-left'}`}
+                  >
+                    {step.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

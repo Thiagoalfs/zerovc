@@ -737,24 +737,25 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         e.stopPropagation();
                         handleUserContextMenu(e, message.author);
                       }}
-                      className="font-semibold text-gray-100 hover:underline mr-1.5 cursor-pointer inline-flex items-center gap-1 hover:text-brand-400 align-baseline select-none"
+                      className="font-semibold text-gray-100 hover:underline mr-1.5 cursor-pointer inline items-baseline gap-1 hover:text-brand-400 select-none"
                       style={authorRoleColor ? { color: authorRoleColor } : undefined}
                       title="Ver perfil"
                     >
-                      {message.author?.display_name || message.author?.username || 'Usuário'}
+                      <span>{message.author?.display_name || message.author?.username || 'Usuário'}</span>
                       {(message.author?.is_bot || message.author_id === '00000000-0000-0000-0000-000000000001') && (
-                        <span className="bg-brand-500 text-white text-[9px] font-bold px-1 py-0.5 rounded leading-none uppercase tracking-wider select-none shadow-sm">
+                        <span className="bg-brand-500 text-white text-[9px] font-bold px-1 py-0.5 rounded leading-none uppercase tracking-wider select-none shadow-sm ml-1 inline-block align-middle">
                           BOT
                         </span>
                       )}
-                      :
+                      <span>:</span>
                     </button>
 
-                    <span className={`${
+                    <span className={`inline ${
                       isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
                     }`}>
                       <FormattedMessage
                         content={message.content}
+                        inline
                         onPreviewImage={onPreviewImage}
                         onImageLoad={onImageLoad}
                         onOpenUserProfile={onOpenUserProfile}

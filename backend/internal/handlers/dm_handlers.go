@@ -37,6 +37,7 @@ type SendDMMessageRequest struct {
 	Content     string              `json:"content"`
 	Attachments []models.Attachment `json:"attachments"`
 	ReplyToID   *uuid.UUID          `json:"reply_to_id,omitempty"`
+	IsTTS       bool                `json:"is_tts,omitempty"`
 }
 
 func (h *DMHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
@@ -252,7 +253,7 @@ func (h *DMHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url,
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
@@ -286,7 +287,7 @@ func (h *DMHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		var invUsername, invDisplayName, invAvatar *string
 
 		if err := rows.Scan(
-			&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &attachmentsJSON, &embedsJSON, &msg.InvokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+			&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &attachmentsJSON, &embedsJSON, &msg.InvokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
 			&invID, &invUsername, &invDisplayName, &invAvatar,
@@ -458,12 +459,12 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	attachmentsJSON, _ := json.Marshal(req.Attachments)
 	var msg models.DMMessage
 	query := `
-		INSERT INTO dm_messages (dm_room_id, author_id, content, attachments, reply_to_id)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, dm_room_id, author_id, content, reply_to_id, is_pinned, is_edited, edited_at, created_at
+		INSERT INTO dm_messages (dm_room_id, author_id, content, attachments, reply_to_id, is_tts)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, dm_room_id, author_id, content, reply_to_id, is_pinned, is_edited, is_tts, edited_at, created_at
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, roomID, userID, req.Content, attachmentsJSON, req.ReplyToID).Scan(
-		&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt,
+	err = h.db.Pool.QueryRow(r.Context(), query, roomID, userID, req.Content, attachmentsJSON, req.ReplyToID, req.IsTTS).Scan(
+		&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to save dm message"}`, http.StatusInternalServerError)
@@ -896,7 +897,7 @@ func (h *DMHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.edited_at, m.created_at,
+		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url
 		FROM dm_messages m
@@ -925,7 +926,7 @@ func (h *DMHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 		var rContent, ruUsername, ruDisplayName, ruAvatar *string
 
 		if err := rows.Scan(
-			&m.ID, &m.DMRoomID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.EditedAt, &m.CreatedAt,
+			&m.ID, &m.DMRoomID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.IsTTS, &m.EditedAt, &m.CreatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
 		); err != nil {

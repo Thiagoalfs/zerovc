@@ -240,6 +240,7 @@ export interface BaseMessage {
   reactions?: MessageReaction[];
   is_pinned?: boolean;
   is_edited?: boolean;
+  is_tts?: boolean;
   edited_at?: string;
   created_at: string;
   status?: 'sending' | 'sent' | 'failed';

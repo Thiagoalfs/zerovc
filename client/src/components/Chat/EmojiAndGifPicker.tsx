@@ -10,6 +10,7 @@ import {
   Check,
   Loader2,
   Server,
+  ArrowLeft,
 } from 'lucide-react';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -37,6 +38,12 @@ const CURATED_GIFS: Array<{ url: string; preview: string; title: string; categor
     url: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif',
     preview: 'https://media.giphy.com/media/ICOgUNjpvO0PC/200w.gif',
     title: 'Cat Hello',
+    category: 'Olá',
+  },
+  {
+    url: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif',
+    preview: 'https://media.giphy.com/media/ICOgUNjpvO0PC/200w.gif',
+    title: 'Gato Curioso',
     category: 'Gatos',
   },
   {
@@ -79,11 +86,93 @@ const CURATED_GIFS: Array<{ url: string; preview: string; title: string; categor
     url: 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif',
     preview: 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/200w.gif',
     title: 'Dancing Dog',
-    category: 'Humor',
+    category: 'Dança',
+  },
+  {
+    url: 'https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif',
+    preview: 'https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/200w.gif',
+    title: 'Anime Wow',
+    category: 'Anime',
+  },
+  {
+    url: 'https://media.giphy.com/media/d2lcHJTG5Tscg/giphy.gif',
+    preview: 'https://media.giphy.com/media/d2lcHJTG5Tscg/200w.gif',
+    title: 'Crying Sad',
+    category: 'Triste',
   },
 ];
 
-const GIF_CATEGORIES = ['Todos', 'Favoritos', 'Em Alta', 'Humor', 'Jogos', 'Amor', 'Reação', 'Festa'];
+interface GifCategoryDef {
+  id: string;
+  name: string;
+  preview: string;
+  icon?: 'star' | 'trending';
+}
+
+const GIF_CATEGORY_CARDS: GifCategoryDef[] = [
+  {
+    id: 'Favoritos',
+    name: 'Favoritos',
+    preview: '',
+    icon: 'star',
+  },
+  {
+    id: 'Em Alta',
+    name: 'Em Alta',
+    preview: 'https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/200w.gif',
+    icon: 'trending',
+  },
+  {
+    id: 'Olá',
+    name: 'Olá',
+    preview: 'https://media.giphy.com/media/ICOgUNjpvO0PC/200w.gif',
+  },
+  {
+    id: 'Humor',
+    name: 'Humor',
+    preview: 'https://media.giphy.com/media/11ISwbgCxEzMyY/200w.gif',
+  },
+  {
+    id: 'Amor',
+    name: 'Amor',
+    preview: 'https://media.giphy.com/media/xT9IgG50Fb7Mi0prBC/200w.gif',
+  },
+  {
+    id: 'Festa',
+    name: 'Festa',
+    preview: 'https://media.giphy.com/media/l41lI4bYmcsPJX9Go/200w.gif',
+  },
+  {
+    id: 'Gatos',
+    name: 'Gatos',
+    preview: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif',
+  },
+  {
+    id: 'Jogos',
+    name: 'Jogos',
+    preview: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/200w.gif',
+  },
+  {
+    id: 'Reação',
+    name: 'Reação',
+    preview: 'https://media.giphy.com/media/26ufdipQqU2lhNA4g/200w.gif',
+  },
+  {
+    id: 'Dança',
+    name: 'Dança',
+    preview: 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/200w.gif',
+  },
+  {
+    id: 'Anime',
+    name: 'Anime',
+    preview: 'https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/200w.gif',
+  },
+  {
+    id: 'Triste',
+    name: 'Triste',
+    preview: 'https://media.giphy.com/media/d2lcHJTG5Tscg/200w.gif',
+  },
+];
 
 const MIN_PICKER_WIDTH = 384; // Standard w-96
 const MAX_PICKER_WIDTH = 768; // 2x standard size
@@ -136,14 +225,14 @@ const GifPickerItem: React.FC<{
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="relative rounded-2xl overflow-hidden group bg-background-dark border border-white/5 aspect-video cursor-pointer"
+      className="relative rounded-2xl overflow-hidden group bg-background-dark border border-white/5 cursor-pointer w-full"
       onClick={() => onSelect(gif.url)}
     >
       <img
         src={activeSrc}
         alt={gif.title}
         loading="lazy"
-        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+        className="w-full h-auto block object-cover group-hover:scale-105 transition-transform duration-200"
       />
 
       {!autoplayGifs && !isHovered && (
@@ -182,11 +271,19 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   const { activeGuild, guilds } = useGuildStore();
   const autoplayGifs = useSettingsStore((s) => s.autoplayGifs);
   const [activeTab, setActiveTab] = useState<'emoji' | 'gif'>('emoji');
-  const [activeCategory, setActiveCategory] = useState<string>('Todos');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [emojiSearch, setEmojiSearch] = useState('');
   const [gifSearch, setGifSearch] = useState('');
   const [klipyGifs, setKlipyGifs] = useState<Array<{ url: string; preview: string; title: string }>>([]);
   const [isLoadingGifs, setIsLoadingGifs] = useState(false);
+
+  // Reset category and search when closed
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedCategory(null);
+      setGifSearch('');
+    }
+  }, [isOpen]);
 
   // Horizontal Resize State (Desktop only)
   const [pickerWidth, setPickerWidth] = useState<number>(() => {
@@ -248,7 +345,11 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   // Klipy API fetch
   useEffect(() => {
     if (activeTab !== 'gif') return;
-    if (activeCategory === 'Favoritos') return;
+    if (selectedCategory === 'Favoritos') return;
+    if (!selectedCategory && !gifSearch.trim()) {
+      setKlipyGifs([]);
+      return;
+    }
 
     const apiKey = (import.meta as any).env?.VITE_KLIPY_API_KEY || localStorage.getItem('klipy_api_key') || '';
     if (!apiKey) {
@@ -256,7 +357,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
       return;
     }
 
-    const query = gifSearch.trim() || (activeCategory !== 'Todos' && activeCategory !== 'Em Alta' ? activeCategory : '');
+    const query = gifSearch.trim() || (selectedCategory && selectedCategory !== 'Em Alta' ? selectedCategory : '');
     const endpoint = query
       ? `https://api.klipy.com/v1/gifs/search?api_key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}&limit=24`
       : `https://api.klipy.com/v1/gifs/trending?api_key=${encodeURIComponent(apiKey)}&limit=24`;
@@ -284,7 +385,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [activeTab, activeCategory, gifSearch]);
+  }, [activeTab, selectedCategory, gifSearch]);
 
   const allServerEmojis = useMemo(() => {
     const list: any[] = [];
@@ -338,12 +439,17 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   }, [filteredStandardEmojis, emojiSearch]);
 
   const displayedGifs = useMemo(() => {
-    if (activeCategory === 'Favoritos') {
-      return favoriteGifs.map((f) => ({
+    if (selectedCategory === 'Favoritos') {
+      let list = favoriteGifs.map((f) => ({
         url: f.gif_url,
         preview: f.preview_url || f.gif_url,
         title: f.title || 'GIF Favorito',
       }));
+      if (gifSearch.trim()) {
+        const q = gifSearch.toLowerCase();
+        list = list.filter((g) => g.title.toLowerCase().includes(q));
+      }
+      return list;
     }
 
     if (klipyGifs.length > 0) {
@@ -351,15 +457,37 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
     }
 
     let list = CURATED_GIFS;
-    if (activeCategory !== 'Todos' && activeCategory !== 'Em Alta') {
-      list = list.filter((g) => g.category.toLowerCase() === activeCategory.toLowerCase());
+    if (selectedCategory && selectedCategory !== 'Em Alta') {
+      list = list.filter((g) => g.category.toLowerCase() === selectedCategory.toLowerCase());
     }
     if (gifSearch.trim()) {
       const q = gifSearch.toLowerCase();
       list = list.filter((g) => g.title.toLowerCase().includes(q) || g.category.toLowerCase().includes(q));
     }
     return list;
-  }, [activeCategory, favoriteGifs, klipyGifs, gifSearch]);
+  }, [selectedCategory, favoriteGifs, klipyGifs, gifSearch]);
+
+  const categoryCols = pickerWidth >= 540 ? 'grid-cols-3' : 'grid-cols-2';
+
+  const gifColumns = useMemo(() => {
+    let colCount = 2;
+    if (pickerWidth >= 660) {
+      colCount = 4;
+    } else if (pickerWidth >= 480) {
+      colCount = 3;
+    }
+
+    const cols: Array<Array<{ gif: typeof displayedGifs[0]; originalIndex: number }>> = Array.from(
+      { length: colCount },
+      () => []
+    );
+
+    displayedGifs.forEach((gif, index) => {
+      cols[index % colCount].push({ gif, originalIndex: index });
+    });
+
+    return cols;
+  }, [displayedGifs, pickerWidth]);
 
   if (!isOpen) return null;
 
@@ -536,7 +664,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                   type="text"
                   value={gifSearch}
                   onChange={(e) => setGifSearch(e.target.value)}
-                  placeholder="Pesquisar GIFs no Klipy..."
+                  placeholder={selectedCategory === 'Favoritos' ? 'Busque nos favoritos...' : 'Pesquisar GIFs no Klipy...'}
                   className="w-full bg-background-darker text-white text-xs pl-9 pr-8 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-brand-500 placeholder-gray-500"
                 />
                 {gifSearch && (
@@ -551,66 +679,205 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
               </div>
             </div>
 
-            {/* Category Filter Pills */}
-            <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto no-scrollbar flex-shrink-0">
-              {GIF_CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
-                    activeCategory === cat
-                      ? 'bg-brand-500 text-white shadow-sm'
-                      : 'bg-background-darker/60 text-gray-400 hover:text-gray-200 border border-white/5'
-                  }`}
-                >
-                  {cat === 'Favoritos' && <Star className={`w-3 h-3 ${activeCategory === cat ? 'fill-current' : ''}`} />}
-                  {cat === 'Em Alta' && <TrendingUp className="w-3 h-3" />}
-                  <span>{cat}</span>
-                  {cat === 'Favoritos' && favoriteGifs.length > 0 && (
-                    <span className="text-[9px] bg-white/20 px-1 rounded-full">
-                      {favoriteGifs.length}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+            {/* Initial Category Cards Grid (when not searching and no category selected) */}
+            {!gifSearch.trim() && !selectedCategory ? (
+              <div className="flex-1 p-3 pt-0 overflow-y-auto no-scrollbar">
+                <div className={`grid ${categoryCols} gap-2.5`}>
+                  {GIF_CATEGORY_CARDS.map((cat) => {
+                    if (cat.id === 'Favoritos') {
+                      const hasFavs = favoriteGifs.length > 0;
+                      const favPreview = hasFavs ? (favoriteGifs[0].preview_url || favoriteGifs[0].gif_url) : null;
+                      return (
+                        <div
+                          key={cat.id}
+                          onClick={() => setSelectedCategory(cat.id)}
+                          className="relative h-20 sm:h-22 rounded-2xl overflow-hidden cursor-pointer border border-brand-400/40 hover:border-brand-300 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-md group flex items-center justify-center bg-brand-500"
+                        >
+                          {favPreview && (
+                            <img
+                              src={favPreview}
+                              alt="Favoritos"
+                              loading="lazy"
+                              className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            />
+                          )}
+                          <div
+                            className={`absolute inset-0 transition-all ${
+                              favPreview
+                                ? 'bg-gradient-to-t from-brand-600/90 via-brand-500/85 to-brand-500/75 group-hover:opacity-90'
+                                : 'bg-gradient-to-br from-brand-500 to-brand-700 group-hover:brightness-110'
+                            }`}
+                          />
+                          <div className="relative z-10 flex items-center justify-center gap-1.5 px-2 text-white">
+                            <Star className="w-4 h-4 fill-current drop-shadow" />
+                            <span className="font-bold text-xs sm:text-sm drop-shadow tracking-wide">Favoritos</span>
+                            {hasFavs && (
+                              <span className="text-[10px] bg-black/35 backdrop-blur-sm px-1.5 py-0.5 rounded-full font-medium border border-white/10">
+                                {favoriteGifs.length}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
 
-            {/* GIFs Grid */}
-            <div className="flex-1 p-3 pt-0 overflow-y-auto no-scrollbar">
-              {isLoadingGifs ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
-                  <span className="text-xs">Carregando GIFs do Klipy...</span>
+                    return (
+                      <div
+                        key={cat.id}
+                        onClick={() => setSelectedCategory(cat.id)}
+                        className="relative h-20 sm:h-22 rounded-2xl overflow-hidden cursor-pointer border border-white/5 hover:border-white/20 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-md group flex items-center justify-center bg-background-dark"
+                      >
+                        {cat.preview && (
+                          <img
+                            src={cat.preview}
+                            alt={cat.name}
+                            loading="lazy"
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-black/55 group-hover:bg-black/40 transition-colors" />
+                        <div className="relative z-10 flex items-center justify-center gap-1.5 px-2 text-white">
+                          {cat.icon === 'trending' && <TrendingUp className="w-4 h-4 drop-shadow" />}
+                          <span className="font-bold text-xs sm:text-sm drop-shadow tracking-wide">{cat.name}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : activeCategory === 'Favoritos' && displayedGifs.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-4 text-gray-400 space-y-2">
-                  <Star className="w-8 h-8 text-amber-400/40 stroke-1" />
-                  <span className="text-xs font-semibold text-gray-300">Nenhum GIF favorito ainda</span>
-                  <p className="text-[11px] text-gray-500 leading-relaxed max-w-xs">
-                    Passe o mouse sobre qualquer GIF enviado no chat e clique na <strong>estrelinha ⭐</strong> no canto superior direito para salvá-lo aqui.
-                  </p>
+              </div>
+            ) : (
+              /* Selected Category or Search Results */
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Header: Back Button or Search Info */}
+                <div className="px-3 pb-2 flex items-center justify-between flex-shrink-0">
+                  {selectedCategory === 'Favoritos' ? (
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategory(null);
+                            setGifSearch('');
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-background-darker hover:bg-white/10 border border-white/10 transition-colors cursor-pointer"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" />
+                          <span>Voltar</span>
+                        </button>
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                          <Star className="w-3.5 h-3.5 text-amber-400 fill-current" />
+                          <span>Favoritos</span>
+                          {favoriteGifs.length > 0 && (
+                            <span className="text-[10px] text-gray-400 font-normal">
+                              ({displayedGifs.length}{gifSearch.trim() && displayedGifs.length !== favoriteGifs.length ? ` de ${favoriteGifs.length}` : ''})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {gifSearch.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setGifSearch('')}
+                          className="text-xs text-brand-400 hover:text-brand-300 font-medium cursor-pointer"
+                        >
+                          Limpar busca
+                        </button>
+                      )}
+                    </div>
+                  ) : gifSearch.trim() ? (
+                    <div className="flex items-center justify-between w-full text-xs text-gray-400">
+                      <span>Resultados para "{gifSearch}"</span>
+                      <button
+                        type="button"
+                        onClick={() => setGifSearch('')}
+                        className="text-xs text-brand-400 hover:text-brand-300 font-medium cursor-pointer"
+                      >
+                        Limpar busca
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory(null);
+                          setGifSearch('');
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-background-darker hover:bg-white/10 border border-white/10 transition-colors cursor-pointer"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Voltar</span>
+                      </button>
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                        {selectedCategory === 'Em Alta' && <TrendingUp className="w-3.5 h-3.5 text-brand-400" />}
+                        <span>{selectedCategory}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ) : displayedGifs.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-4 text-gray-400">
-                  <span className="text-xs">Nenhum GIF encontrado para "{gifSearch}".</span>
+
+                {/* GIFs Masonry Grid */}
+                <div className="flex-1 p-3 pt-0 overflow-y-auto no-scrollbar">
+                  {isLoadingGifs ? (
+                    <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
+                      <span className="text-xs">Carregando GIFs do Klipy...</span>
+                    </div>
+                  ) : selectedCategory === 'Favoritos' && displayedGifs.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4 text-gray-400 space-y-2">
+                      <Star className="w-8 h-8 text-amber-400/40 stroke-1" />
+                      {gifSearch.trim() ? (
+                        <>
+                          <span className="text-xs font-semibold text-gray-300">
+                            Nenhum GIF favorito encontrado para "{gifSearch}"
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setGifSearch('')}
+                            className="text-xs text-brand-400 hover:text-brand-300 cursor-pointer pt-1"
+                          >
+                            Limpar busca
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-xs font-semibold text-gray-300">Nenhum GIF favorito ainda</span>
+                          <p className="text-[11px] text-gray-500 leading-relaxed max-w-xs">
+                            Passe o mouse sobre qualquer GIF enviado no chat e clique na <strong>estrelinha ⭐</strong> no canto superior direito para salvá-lo aqui.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  ) : displayedGifs.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4 text-gray-400">
+                      <span className="text-xs">
+                        {gifSearch.trim()
+                          ? `Nenhum GIF encontrado para "${gifSearch}".`
+                          : 'Nenhum GIF encontrado nesta categoria.'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 items-start w-full">
+                      {gifColumns.map((col, colIdx) => (
+                        <div key={colIdx} className="flex-1 min-w-0 flex flex-col gap-2">
+                          {col.map(({ gif, originalIndex }) => (
+                            <GifPickerItem
+                              key={`${gif.url}-${originalIndex}`}
+                              gif={gif}
+                              autoplayGifs={autoplayGifs}
+                              onSelect={(url) => {
+                                onSelectGif(url);
+                                onClose();
+                              }}
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className={`grid gap-2 ${pickerWidth >= 560 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                  {displayedGifs.map((gif, idx) => (
-                    <GifPickerItem
-                      key={`${gif.url}-${idx}`}
-                      gif={gif}
-                      autoplayGifs={autoplayGifs}
-                      onSelect={(url) => {
-                        onSelectGif(url);
-                        onClose();
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Klipy Footer Info */}
             <div className="p-2 bg-background-darker/70 border-t border-white/5 flex items-center justify-center text-[10px] text-gray-400 px-3">
