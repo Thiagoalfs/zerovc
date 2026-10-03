@@ -358,11 +358,11 @@ function createWindow(initialUrl?: string) {
 function setupAutoUpdater() {
   if (!autoUpdater) return;
 
-  autoUpdater.autoDownload = false; // Let user click the Update button in TitleBar
+  autoUpdater.autoDownload = true; // Automatically download update in background like Discord
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('checking-for-update', () => {
-    console.log('[AutoUpdater] Checking for updates on GitHub...');
+    console.log('[AutoUpdater] Checking for updates on server...');
   });
 
   autoUpdater.on('update-available', (info: any) => {
