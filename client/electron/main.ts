@@ -1338,6 +1338,7 @@ ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4'
         '--no-warnings',
         '--newline',
         '--restrict-filenames',
+        '--extractor-args', 'youtube:player_client=android,web',
         '--print', 'after_move:filepath',
         '--print', 'title',
         '-o', outTemplate,
