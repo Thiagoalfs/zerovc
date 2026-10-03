@@ -128,8 +128,8 @@ export async function executeYtdlpCommand(params: YtdlpExecuteParams): Promise<v
     const blob = new Blob([byteArray], { type: mimeType });
     const file = new File([blob], filename, { type: mimeType });
 
-    // Upload attachment to backend with Gork Bot ID permission for large files
-    const uploadRes = await api.upload.attachment(file, { botId: '00000000-0000-0000-0000-000000000001' });
+    // Upload attachment to backend with Gork Bot ID permission for large files and temporary 24h retention
+    const uploadRes = await api.upload.attachment(file, { botId: '00000000-0000-0000-0000-000000000001', temp: true });
 
     const payload = {
       command: 'ytdlp_publish',

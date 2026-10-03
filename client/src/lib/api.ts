@@ -811,7 +811,7 @@ export const api = {
       }
       return res.json() as Promise<{ url: string; filename: string; size: number }>;
     },
-    attachment: async (file: File, options?: { botId?: string }) => {
+    attachment: async (file: File, options?: { botId?: string; temp?: boolean }) => {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
@@ -823,7 +823,10 @@ export const api = {
       if (options?.botId) {
         headers['X-Bot-ID'] = options.botId;
       }
-      const qs = options?.botId ? `?bot_id=${encodeURIComponent(options.botId)}` : '';
+      const params = new URLSearchParams();
+      if (options?.botId) params.append('bot_id', options.botId);
+      if (options?.temp) params.append('temp', 'true');
+      const qs = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`${getApiBaseUrl()}/api/upload/attachment${qs}`, {
         method: 'POST',
         credentials: 'include',

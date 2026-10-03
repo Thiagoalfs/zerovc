@@ -452,13 +452,20 @@ ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES user
 ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL;
 
--- Seed System Bot User 'Gork'
-INSERT INTO users (id, username, display_name, email, password_hash, avatar_url, is_bot, status)
-VALUES ('00000000-0000-0000-0000-000000000001', 'gork', 'gork', 'gork@zerovc.local', 'system_bot_password_hash', '/assets/gork.jpg', TRUE, 'online')
-ON CONFLICT (id) DO UPDATE SET
-    username = 'gork',
-    display_name = 'gork',
-    avatar_url = '/assets/gork.jpg',
-    is_bot = TRUE;
+-- 30. Bot Temporary Files (Auto-cleaned after 24h)
+CREATE TABLE IF NOT EXISTS bot_temp_files (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_url TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    message_id UUID,
+    channel_id UUID,
+    dm_room_id UUID,
+    dm_group_id UUID,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '1 day'),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_bot_temp_files_expires_at ON bot_temp_files (expires_at);
+
 
 

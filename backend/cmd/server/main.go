@@ -156,11 +156,15 @@ func main() {
 	dmHandler := handlers.NewDMHandler(db, hub, livekitService)
 	dmGroupHandler := handlers.NewDMGroupHandler(db, hub, livekitService)
 	linkPreviewHandler := handlers.NewLinkPreviewHandler()
-	riotService := services.NewRiotService()
-	commandHandler := handlers.NewCommandHandler(db, hub, riotService)
-
 	uploadDir := getEnv("UPLOAD_DIR", "./assets")
 	uploadHandler := handlers.NewUploadHandler(uploadDir)
+
+	riotService := services.NewRiotService()
+	commandHandler := handlers.NewCommandHandler(db, hub, riotService, uploadDir)
+
+	// Temp Cleaner: auto-deletes bot temporary files after 24 hours & purges existing bot files
+	tempCleaner := services.NewTempCleaner(db, uploadDir, hub)
+	go tempCleaner.Start(context.Background())
 
 	rawgAPIKey := getEnv("RAWG_API_KEY", "")
 	gameHandler := handlers.NewGameHandler(rawgAPIKey)
@@ -448,11 +452,13 @@ func main() {
 		})
 	})
 
-	// 6. Internal CDN for user and guild uploaded media
+	// 6. Internal CDN for user, guild and temporary bot uploaded media
 	userAssetsDir := filepath.Join(uploadDir, "user")
 	guildAssetsDir := filepath.Join(uploadDir, "guild")
+	botTempAssetsDir := filepath.Join(uploadDir, "bot_temp")
 	os.MkdirAll(userAssetsDir, 0755)
 	os.MkdirAll(guildAssetsDir, 0755)
+	os.MkdirAll(botTempAssetsDir, 0755)
 
 	r.Get("/assets/user/*", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
@@ -472,6 +478,12 @@ func main() {
 		// guild/* só recebe icon_/banner_ (imageOnly=true) hoje — sem rota de anexo genérico aqui.
 		// Mesmo assim aplicamos nosniff acima como defesa em profundidade.
 		http.StripPrefix("/assets/guild/", http.FileServer(http.Dir(guildAssetsDir))).ServeHTTP(w, r)
+	})
+	r.Get("/assets/bot_temp/*", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Disposition", "inline")
+		http.StripPrefix("/assets/bot_temp/", http.FileServer(http.Dir(botTempAssetsDir))).ServeHTTP(w, r)
 	})
 
 	// 7. Downloads Route
