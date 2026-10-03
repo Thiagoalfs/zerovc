@@ -8,6 +8,7 @@ import { EmojiAndGifPicker } from './EmojiAndGifPicker';
 import { VoiceRecorder } from './VoiceRecorder';
 import { useGuildStore } from '../../stores/guildStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
 import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand, validateSlashOption } from '../../lib/slashCommands';
@@ -87,6 +88,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onTyping,
 }) => {
   const { activeGuild, guilds } = useGuildStore();
+  const { canManageMessages, canKick, canBan } = useGuildPermissions(activeGuild);
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -309,6 +311,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     for (const cmd of SLASH_COMMANDS) {
       if (cmd.guildOnly && contextType !== 'channel') continue;
+      if (cmd.requiredPermission === 'manage_messages' && !canManageMessages) continue;
+      if (cmd.requiredPermission === 'kick_members' && !canKick) continue;
+      if (cmd.requiredPermission === 'ban_members' && !canBan) continue;
 
       if (cmd.subcommands && cmd.subcommands.length > 0) {
         for (const sub of cmd.subcommands) {
@@ -356,7 +361,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     return list.slice(0, 50);
-  }, [activeSlash, content, contextType, mentionQuery, emojiQuery, channelQuery]);
+  }, [activeSlash, content, contextType, mentionQuery, emojiQuery, channelQuery, canManageMessages, canKick, canBan]);
 
   const allAvailableEmojis = useMemo(() => {
     const list: any[] = [];
@@ -657,6 +662,41 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleSendActiveSlash = async () => {
     if (!activeSlash || isUploading) return;
 
+    // Check guild-only & permissions
+    if (activeSlash.command.guildOnly && contextType !== 'channel') {
+      triggerErrorShake();
+      setCommandError({
+        title: 'Comando Indisponível',
+        message: 'Este comando só pode ser utilizado dentro de canais de servidor.',
+      });
+      return;
+    }
+
+    if (activeSlash.command.requiredPermission === 'manage_messages' && !canManageMessages) {
+      triggerErrorShake();
+      setCommandError({
+        title: 'Permissão Negada',
+        message: 'Você precisa de um cargo com a permissão "Gerenciar Mensagens" para usar este comando.',
+      });
+      return;
+    }
+    if (activeSlash.command.requiredPermission === 'kick_members' && !canKick) {
+      triggerErrorShake();
+      setCommandError({
+        title: 'Permissão Negada',
+        message: 'Você precisa de um cargo com a permissão "Expulsar Membros" para usar este comando.',
+      });
+      return;
+    }
+    if (activeSlash.command.requiredPermission === 'ban_members' && !canBan) {
+      triggerErrorShake();
+      setCommandError({
+        title: 'Permissão Negada',
+        message: 'Você precisa de um cargo com a permissão "Banir Membros" para usar este comando.',
+      });
+      return;
+    }
+
     // Check required options and validate all parameters
     for (const opt of activeSlashOptions) {
       const val = (activeSlash.args[opt.name] || '').trim();
@@ -902,6 +942,41 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         setCommandError({
           title: 'Comando Não Reconhecido',
           message: 'O comando digitado não foi encontrado ou possui sintaxe inválida. Selecione um comando válido abaixo:',
+        });
+        return;
+      }
+
+      const cmdDef = SLASH_COMMANDS.find((c) => c.name === parsed.command);
+      if (cmdDef?.guildOnly && contextType !== 'channel') {
+        triggerErrorShake();
+        setCommandError({
+          title: 'Comando Indisponível',
+          message: 'Este comando só pode ser utilizado dentro de canais de servidor.',
+        });
+        return;
+      }
+
+      if (cmdDef?.requiredPermission === 'manage_messages' && !canManageMessages) {
+        triggerErrorShake();
+        setCommandError({
+          title: 'Permissão Negada',
+          message: 'Você precisa de um cargo com a permissão "Gerenciar Mensagens" para usar este comando.',
+        });
+        return;
+      }
+      if (cmdDef?.requiredPermission === 'kick_members' && !canKick) {
+        triggerErrorShake();
+        setCommandError({
+          title: 'Permissão Negada',
+          message: 'Você precisa de um cargo com a permissão "Expulsar Membros" para usar este comando.',
+        });
+        return;
+      }
+      if (cmdDef?.requiredPermission === 'ban_members' && !canBan) {
+        triggerErrorShake();
+        setCommandError({
+          title: 'Permissão Negada',
+          message: 'Você precisa de um cargo com a permissão "Banir Membros" para usar este comando.',
         });
         return;
       }
@@ -1632,7 +1707,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 </span>
               </div>
               <div className="space-y-0.5 mt-1 max-h-48 overflow-y-auto no-scrollbar">
-                {SLASH_COMMANDS.map((cmd) => (
+                {SLASH_COMMANDS.filter((cmd) => {
+                  if (cmd.guildOnly && contextType !== 'channel') return false;
+                  if (cmd.requiredPermission === 'manage_messages' && !canManageMessages) return false;
+                  if (cmd.requiredPermission === 'kick_members' && !canKick) return false;
+                  if (cmd.requiredPermission === 'ban_members' && !canBan) return false;
+                  return true;
+                }).map((cmd) => (
                   <button
                     key={cmd.name}
                     type="button"
