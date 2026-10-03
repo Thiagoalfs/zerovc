@@ -41,6 +41,10 @@ func (h *CommandHandler) trackBotTempFiles(ctx context.Context, msgID uuid.UUID,
 		if att.URL == "" {
 			continue
 		}
+		// ONLY track temporary bot downloads (i.e. inside bot_temp)
+		if !strings.Contains(att.URL, "bot_temp") {
+			continue
+		}
 		relPath := att.URL
 		if idx := strings.Index(relPath, "assets/"); idx != -1 {
 			relPath = strings.TrimPrefix(relPath[idx:], "assets/")
