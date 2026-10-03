@@ -247,18 +247,16 @@ export const RolesTab: React.FC<RolesTabProps> = ({
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
                 Exibição de Membros
               </label>
-              <div className="space-y-3">
+              <div className="divide-y divide-white/5">
                 <div
                   onClick={() => {
                     if (canManageRoles && selectedRole.name !== '@everyone') {
                       handleToggleRoleHoist();
                     }
                   }}
-                  className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                    selectedRole.hoist
-                      ? 'bg-background-darkest/80 border-white/15'
-                      : 'bg-background-darkest/50 border-white/10 hover:border-white/15'
-                  } ${canManageRoles && selectedRole.name !== '@everyone' ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
+                  className={`flex items-center justify-between py-3.5 transition-all ${
+                    canManageRoles && selectedRole.name !== '@everyone' ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
+                  }`}
                 >
                   <div className="pr-4 select-none">
                     <div className="text-sm font-semibold text-white">
@@ -295,11 +293,9 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                       handleToggleRoleMentionable();
                     }
                   }}
-                  className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                    selectedRole.mentionable
-                      ? 'bg-background-darkest/80 border-white/15'
-                      : 'bg-background-darkest/50 border-white/10 hover:border-white/15'
-                  } ${canManageRoles ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
+                  className={`flex items-center justify-between py-3.5 transition-all ${
+                    canManageRoles ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
+                  }`}
                 >
                   <div className="pr-4 select-none">
                     <div className="text-sm font-semibold text-white">
@@ -343,7 +339,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     <span>{group.category}</span>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="divide-y divide-white/5">
                     {group.permissions.map((perm) => {
                       const currentPerms = Number(selectedRole.permissions || 0);
                       const isChecked = isRoleAdmin || (currentPerms & perm.flag) !== 0;
@@ -356,13 +352,9 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                               handleTogglePermission(perm.flag);
                             }
                           }}
-                          className={`flex items-start justify-between p-4 rounded-xl border transition-all ${
-                            perm.isMaster
-                              ? 'bg-amber-500/10 border-amber-500/30'
-                              : isChecked
-                              ? 'bg-background-darkest/80 border-white/15'
-                              : 'bg-background-darkest/50 border-white/10 hover:border-white/15'
-                          } ${canManageRoles ? 'cursor-pointer' : 'opacity-70'}`}
+                          className={`flex items-start justify-between py-3.5 transition-all ${
+                            canManageRoles ? 'cursor-pointer' : 'opacity-70'
+                          }`}
                         >
                           <div className="pr-4 select-none">
                             <div className="text-sm font-semibold text-white flex items-center gap-2">

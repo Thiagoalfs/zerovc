@@ -764,14 +764,14 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                             {group.category}
                           </h4>
 
-                          <div className="space-y-2">
+                          <div className="divide-y divide-white/5">
                             {group.perms.map((perm) => {
                               const state = getPermissionState(selectedRole.id, perm.flag);
 
                               return (
                                 <div
                                   key={perm.key}
-                                  className="p-3.5 rounded-xl bg-background-darkest border border-white/5 flex items-center justify-between gap-4 transition-all hover:border-white/10"
+                                  className="py-3.5 flex items-center justify-between gap-4 transition-all"
                                 >
                                   <div className="space-y-0.5 min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
