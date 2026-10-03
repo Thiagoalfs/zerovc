@@ -77,7 +77,7 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
   return (
     <div
       style={{ borderLeftColor: borderColor }}
-      className="max-w-xl bg-background-dark/80 backdrop-blur-sm border border-white/5 border-l-4 rounded-xl p-3.5 sm:p-4 my-1.5 shadow-md flex flex-col gap-2.5 text-xs text-gray-200 select-text"
+      className="inline-flex flex-col w-fit max-w-[95%] sm:max-w-[480px] min-w-[240px] bg-background-dark/90 backdrop-blur-sm border border-white/5 border-l-4 rounded-xl p-3.5 sm:p-4 my-1.5 shadow-md gap-2.5 text-xs text-gray-200 select-text"
     >
       {/* Author */}
       {embed.author && (
@@ -110,7 +110,7 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
         <div className="flex-1 min-w-0 space-y-2">
           {/* Title */}
           {embed.title && (
-            <h4 className="font-bold text-white text-sm sm:text-base leading-snug">
+            <h4 className="font-bold text-white text-sm sm:text-base leading-snug break-words">
               {embed.url && isSafeUrl(embed.url) ? (
                 <a
                   href={embed.url}
@@ -160,7 +160,7 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
         {embed.thumbnail && embed.thumbnail.url && (
           <div
             onClick={() => onPreviewImage && onPreviewImage(formatAssetUrl(embed.thumbnail!.url))}
-            className="flex-shrink-0 cursor-pointer overflow-hidden rounded-lg border border-white/10 shadow-lg group/thumb max-w-[84px] max-h-[120px] bg-black/40"
+            className="flex-shrink-0 cursor-pointer overflow-hidden rounded-lg border border-white/10 shadow-lg group/thumb max-w-[80px] max-h-[80px] w-20 h-20 bg-black/40"
           >
             <img
               src={formatAssetUrl(embed.thumbnail.url)}
@@ -171,16 +171,16 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
         )}
       </div>
 
-      {/* Large Image (if any) */}
+      {/* Large Image (if any) with natural aspect ratio */}
       {embed.image && embed.image.url && (
         <div
           onClick={() => onPreviewImage && onPreviewImage(formatAssetUrl(embed.image!.url))}
-          className="mt-1 cursor-pointer overflow-hidden rounded-xl border border-white/10 shadow-lg max-w-full max-h-80 bg-black/40"
+          className="mt-1 cursor-pointer overflow-hidden rounded-xl border border-white/10 shadow-lg w-fit max-w-full bg-black/30 group/img flex items-center justify-center"
         >
           <img
             src={formatAssetUrl(embed.image.url)}
             alt=""
-            className="w-full h-full object-cover max-h-80"
+            className="max-h-[320px] sm:max-h-[360px] max-w-full w-auto h-auto object-contain block rounded-xl transition-transform group-hover/img:scale-[1.01]"
           />
         </div>
       )}
