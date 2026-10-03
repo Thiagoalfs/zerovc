@@ -254,6 +254,7 @@ type Message struct {
 	Reactions   []MessageReaction `json:"reactions,omitempty"`
 	IsPinned    bool              `json:"is_pinned"`
 	IsEdited    bool              `json:"is_edited"`
+	IsTTS       bool              `json:"is_tts"`
 	EditedAt    *time.Time        `json:"edited_at,omitempty"`
 	CreatedAt   time.Time         `json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`
@@ -329,6 +330,7 @@ type DMMessage struct {
 	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
 	IsPinned    bool              `json:"is_pinned"`
 	IsEdited    bool              `json:"is_edited"`
+	IsTTS       bool              `json:"is_tts"`
 	EditedAt    *time.Time        `json:"edited_at,omitempty"`
 	Reactions   []MessageReaction `json:"reactions,omitempty"`
 	CreatedAt   time.Time         `json:"created_at"`
@@ -360,6 +362,7 @@ type DMGroupMessage struct {
 	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
 	IsPinned    bool              `json:"is_pinned"`
 	IsEdited    bool              `json:"is_edited"`
+	IsTTS       bool              `json:"is_tts"`
 	EditedAt    *time.Time        `json:"edited_at,omitempty"`
 	Reactions   []MessageReaction `json:"reactions,omitempty"`
 	CreatedAt   time.Time         `json:"created_at"`

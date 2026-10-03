@@ -137,12 +137,15 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 
 	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb")
 	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL")
+	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_tts BOOLEAN DEFAULT FALSE")
 
 	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb")
 	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS is_tts BOOLEAN DEFAULT FALSE")
 
 	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb")
 	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS is_tts BOOLEAN DEFAULT FALSE")
 
 	// Ensure bot_temp_files table exists
 	db.Pool.Exec(ctx, `

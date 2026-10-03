@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Channel, Guild, Message, Role, VoiceSession, User, ChannelPermissionOverwrite, GuildEmoji } from '../types';
 import { api } from '../lib/api';
 import { playMessageSound, speakText } from '../utils/audio';
+import { isChatActiveNow } from '../utils/activeChat';
 import { useAuthStore } from './authStore';
 import { useSettingsStore } from './settingsStore';
 
@@ -48,7 +49,7 @@ interface GuildState {
   deleteChannel: (channelId: string) => Promise<void>;
   reorderChannels: (guildId: string, payload: string[] | Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }>) => Promise<void>;
 
-  sendMessage: (content: string, replyToId?: string) => Promise<void>;
+  sendMessage: (content: string, replyToId?: string, isTTS?: boolean) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   toggleReaction: (messageId: string, emoji: string) => Promise<void>;
@@ -601,7 +602,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }
   },
 
-  sendMessage: async (content: string, replyToId?: string) => {
+  sendMessage: async (content: string, replyToId?: string, isTTS?: boolean) => {
     const { activeChannel, messages } = get();
     if (!activeChannel) return;
     const currentUser = useAuthStore.getState().user;
@@ -632,6 +633,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       attachments: [],
       reactions: [],
       is_pinned: false,
+      is_tts: Boolean(isTTS),
       status: 'sending',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -656,7 +658,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
     try {
       // 2. Send to backend API
-      const confirmedMsg = await api.channels.sendMessage(activeChannel.id, { content, reply_to_id: replyToId });
+      const confirmedMsg = await api.channels.sendMessage(activeChannel.id, { content, reply_to_id: replyToId, is_tts: Boolean(isTTS) });
       const readyMsg: Message = { ...confirmedMsg, status: 'sent', tempId };
 
       set((state) => {
@@ -818,18 +820,22 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           nextMessages = nextMessages.slice(-200);
         }
 
+        const isViewingChannel = isChatActiveNow('channel', message.channel_id);
         const isTTSCommand = message.content?.startsWith('📢 **TTS');
+
         if (message.author_id !== currentUser?.id && !isServerMuted && !isDND) {
           playMessageSound(isMention);
-          if ((useSettingsStore.getState().textToSpeechEnabled || isTTSCommand) && message.content) {
+        }
+
+        // Play TTS ONLY if the user is actively viewing this specific channel right now
+        const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled || isTTSCommand) && message.content;
+        if (shouldPlayTTS && isViewingChannel && !isServerMuted && !isDND) {
+          if (message.is_tts || isTTSCommand || message.author_id !== currentUser?.id) {
             const textToSpeak = isTTSCommand
               ? message.content.replace(/^📢\s*\*\*TTS\s*\([^)]+\):\*\*\s*/i, '')
               : message.content;
             speakText(textToSpeak, message.author?.display_name || message.author?.username);
           }
-        } else if (isTTSCommand && message.content) {
-          const textToSpeak = message.content.replace(/^📢\s*\*\*TTS\s*\([^)]+\):\*\*\s*/i, '');
-          speakText(textToSpeak, message.author?.display_name || message.author?.username);
         }
         return {
           messages: nextMessages,

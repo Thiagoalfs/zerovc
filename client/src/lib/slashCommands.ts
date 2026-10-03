@@ -233,6 +233,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       },
     ],
   },
+  {
+    name: 'tts',
+    description: 'Envia uma mensagem de texto que será falada pelo sintetizador de voz',
+    options: [
+      {
+        name: 'mensagem',
+        description: 'Texto que será enviado e reproduzido em voz alta',
+        type: 'string',
+        required: true,
+      },
+    ],
+  },
 ];
 
 export interface ParsedCommand {
@@ -465,10 +477,10 @@ export function parseSlashCommand(input: string): ParsedCommand | null {
   }
 
   if (cmdName === 'tts') {
-    const message = tokens.slice(1).join(' ').replace(/^message:\s*/i, '').trim();
+    const messageText = (trimmed.slice(4).replace(/^\s*(mensagem|message):\s*/i, '') || tokens.slice(1).join(' ')).trim();
     return {
       command: 'tts',
-      args: { message },
+      args: { mensagem: messageText, message: messageText },
       raw: trimmed,
     };
   }

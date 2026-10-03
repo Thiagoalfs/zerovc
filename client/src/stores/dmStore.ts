@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { DMRoom, DMMessage } from '../types';
 import { api } from '../lib/api';
 import { playMessageSound, speakText } from '../utils/audio';
+import { isChatActiveNow } from '../utils/activeChat';
 import { useAuthStore } from './authStore';
 import { useSettingsStore } from './settingsStore';
 
@@ -28,7 +29,7 @@ interface DMState {
   fetchPinnedMessages: (roomId: string) => Promise<void>;
   openDMWithUser: (recipientId: string) => Promise<DMRoom>;
   closeRoom: (roomId: string) => Promise<void>;
-  sendMessage: (content: string, attachments?: any[], replyToId?: string) => Promise<void>;
+  sendMessage: (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   removeMessageFromStore: (messageId: string, roomId?: string) => void;
@@ -229,7 +230,7 @@ export const useDMStore = create<DMState>((set, get) => ({
     }
   },
 
-  sendMessage: async (content: string, attachments?: any[], replyToId?: string) => {
+  sendMessage: async (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean) => {
     const { activeRoom, messages } = get();
     if (!activeRoom) return;
     const currentUser = useAuthStore.getState().user;
@@ -260,6 +261,7 @@ export const useDMStore = create<DMState>((set, get) => ({
       reply_to: replyInfo,
       reactions: [],
       is_pinned: false,
+      is_tts: Boolean(isTTS),
       status: 'sending',
       created_at: new Date().toISOString(),
     };
@@ -282,7 +284,7 @@ export const useDMStore = create<DMState>((set, get) => ({
     });
 
     try {
-      const confirmedMsg = await api.dms.sendMessage(activeRoom.id, { content, attachments, reply_to_id: replyToId });
+      const confirmedMsg = await api.dms.sendMessage(activeRoom.id, { content, attachments, reply_to_id: replyToId, is_tts: Boolean(isTTS) });
       const readyMsg: DMMessage = { ...confirmedMsg, status: 'sent', tempId };
 
       set((state) => {
@@ -419,9 +421,15 @@ export const useDMStore = create<DMState>((set, get) => ({
           nextMessages = nextMessages.slice(-200);
         }
 
+        const isViewingThisDM = isChatActiveNow('dm', message.dm_room_id);
+
         if (message.author_id !== currentUser?.id) {
           playMessageSound(false);
-          if (useSettingsStore.getState().textToSpeechEnabled && message.content) {
+        }
+
+        const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled) && message.content;
+        if (shouldPlayTTS && isViewingThisDM) {
+          if (message.is_tts || message.author_id !== currentUser?.id) {
             speakText(message.content, message.author?.display_name || message.author?.username);
           }
         }

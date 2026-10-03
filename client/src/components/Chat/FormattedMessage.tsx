@@ -19,6 +19,7 @@ interface FormattedMessageProps {
   content: string;
   className?: string;
   textClassName?: string;
+  inline?: boolean;
   onPreviewImage?: (url: string) => void;
   onImageLoad?: () => void;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
@@ -117,6 +118,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   content,
   className = '',
   textClassName = '',
+  inline = false,
   onPreviewImage,
   onImageLoad,
   onOpenUserProfile,
@@ -362,6 +364,109 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   const hasLinkEmbeds = linkEmbedUrls.length > 0;
 
   if (!hasText && !hasEmbeds && !hasSmartGifs && !hasLinkEmbeds) return null;
+
+  if (inline) {
+    return (
+      <>
+        {hasText && (
+          <span className={`chat-message-content ${className} ${textClassName} ${isJumboji ? 'text-3xl sm:text-4xl leading-normal' : ''}`}>
+            {parts}
+          </span>
+        )}
+
+        {/* Rich Embeds / Direct Image / GIF / Video Previews */}
+        {hasEmbeds && (
+          <div className={`${hasText ? 'mt-2' : ''} space-y-2 flex flex-col items-start select-none`}>
+            {mediaEmbeds.map((media, idx) => {
+              const resolvedSrc = formatAssetUrl(media.url);
+              const isGif =
+                resolvedSrc.includes('.gif') ||
+                resolvedSrc.includes('.webp') ||
+                resolvedSrc.includes('klipy') ||
+                resolvedSrc.includes('giphy') ||
+                resolvedSrc.includes('tenor');
+
+              if (media.isVideo) {
+                return (
+                  <div
+                    key={idx}
+                    className="rounded-2xl overflow-hidden border border-white/10 max-w-sm sm:max-w-md md:max-w-lg bg-black/50 shadow-md"
+                  >
+                    <video
+                      src={resolvedSrc}
+                      controls
+                      preload="metadata"
+                      className="max-h-[350px] max-w-full w-auto h-auto rounded-2xl block"
+                    />
+                  </div>
+                );
+              }
+
+              if (media.isAudio) {
+                return (
+                  <VoiceNotePlayer
+                    key={idx}
+                    src={resolvedSrc}
+                    className="mt-2 mb-1"
+                  />
+                );
+              }
+
+              // Image / GIF Preview
+              return (
+                <GifEmbed
+                  key={idx}
+                  src={resolvedSrc}
+                  isGif={isGif}
+                  onPreviewImage={onPreviewImage}
+                  onImageLoad={onImageLoad}
+                  className="mt-2 mb-1"
+                />
+              );
+            })}
+          </div>
+        )}
+
+        {/* Smart GIF Embeds (Tenor, Klipy, GIPHY pages without file extensions) */}
+        {hasSmartGifs && (
+          <div className={`${hasText || hasEmbeds ? 'mt-2' : ''} space-y-2 flex flex-col items-start select-none`}>
+            {smartGifEmbeds.map((gifUrl, idx) => (
+              <SmartGifEmbed
+                key={`smart-gif-${idx}`}
+                url={gifUrl}
+                onPreviewImage={onPreviewImage}
+                onImageLoad={onImageLoad}
+                className="mt-1 mb-1"
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Rich Link Previews / OpenGraph Cards (YouTube, Twitter, GitHub, etc.) */}
+        {hasLinkEmbeds && (
+          <div className={`${hasText || hasEmbeds || hasSmartGifs ? 'mt-2' : ''} space-y-2 flex flex-col items-start`}>
+            {linkEmbedUrls.slice(0, 3).map((linkUrl, idx) => (
+              <LinkEmbed
+                key={idx}
+                url={linkUrl}
+                onPreviewImage={onPreviewImage}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Permission Denied Modal for Channels */}
+        {permissionAlert && (
+          <LimitAlertModal
+            isOpen={true}
+            title="Acesso Negado"
+            message={permissionAlert}
+            onClose={() => setPermissionAlert(null)}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <div className={`leading-[1.375rem] break-words chat-message-content ${className}`}>

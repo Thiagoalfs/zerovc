@@ -2191,26 +2191,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                               Canal de texto principal
                             </span>
                           </div>
-
-                          <div className="flex items-center gap-1.5 text-[10px]">
-                            <span
-                              className="px-2 py-0.5 rounded-full font-semibold border"
-                              style={{
-                                backgroundColor: activeAccent.bgSoft,
-                                borderColor: activeAccent.border,
-                                color: activeAccent.text,
-                              }}
-                            >
-                              {activeAccent.label}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full font-medium border ${
-                                isLight ? 'bg-black/5 border-black/10 text-gray-600' : 'bg-white/5 border-white/10 text-gray-400'
-                              }`}
-                            >
-                              {isCompact ? 'Compacto (IRC)' : 'Confortável'}
-                            </span>
-                          </div>
                         </div>
 
                         {/* Simulated Messages Area */}

@@ -116,24 +116,28 @@ export const SearchResultsPanel: React.FC<SearchResultsPanelProps> = ({
   const renderHighlightedContent = (content: string) => {
     if (!content) return null;
     const term = parsedQuery.freeText.trim();
-    if (!term) return <span>{content}</span>;
+    if (!term || term.length > 250) return <span>{content}</span>;
 
-    const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    const parts = content.split(regex);
+    try {
+      const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      const parts = content.split(regex);
 
-    return (
-      <span>
-        {parts.map((part, i) =>
-          regex.test(part) ? (
-            <mark key={i} className="bg-brand-500/30 text-brand-200 px-0.5 rounded font-medium">
-              {part}
-            </mark>
-          ) : (
-            <span key={i}>{part}</span>
-          )
-        )}
-      </span>
-    );
+      return (
+        <span>
+          {parts.map((part, i) =>
+            regex.test(part) ? (
+              <mark key={i} className="bg-brand-500/30 text-brand-200 px-0.5 rounded font-medium">
+                {part}
+              </mark>
+            ) : (
+              <span key={i}>{part}</span>
+            )
+          )}
+        </span>
+      );
+    } catch {
+      return <span>{content}</span>;
+    }
   };
 
   // Generate pagination page numbers

@@ -10,6 +10,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { DMRoom, User } from '../../types';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
+import { setActiveChat } from '../../utils/activeChat';
 
 interface FriendsViewProps {
   onOpenMobileDrawer?: () => void;
@@ -32,6 +33,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
 
   useEffect(() => {
+    setActiveChat('friends', null);
     fetchFriends();
   }, []);
 
