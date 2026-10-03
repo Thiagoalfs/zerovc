@@ -1340,11 +1340,18 @@ ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4'
       return { success: false, error: 'O link deve começar com http:// ou https://.' };
     }
 
-    // Reject playlist URLs
+    // Reject playlist and radio mix URLs
     const lower = trimmed.toLowerCase();
-    if (lower.includes('list=') || lower.includes('/playlist') || lower.includes('playlist?')) {
+    if (
+      lower.includes('list=') ||
+      lower.includes('/playlist') ||
+      lower.includes('playlist?') ||
+      lower.includes('start_radio=') ||
+      (lower.includes('soundcloud.com') && lower.includes('/sets/')) ||
+      (lower.includes('spotify.com') && (lower.includes('/playlist/') || lower.includes('/album/')))
+    ) {
       cleanupZeroVCDocs();
-      return { success: false, error: 'Playlists não são permitidas. Envie apenas o link de um vídeo ou áudio individual.' };
+      return { success: false, error: 'Playlists e rádios não são suportadas. Por favor, envie o link de um vídeo ou áudio individual.' };
     }
 
     // Clean URL query parameters

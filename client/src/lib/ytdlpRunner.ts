@@ -5,14 +5,15 @@ export interface YtdlpExecuteParams {
   link: string;
   contextType: 'channel' | 'dm' | 'dm_group';
   contextId: string;
+  onError?: (error: string) => void;
 }
 
 export async function executeYtdlpCommand(params: YtdlpExecuteParams): Promise<void> {
-  const { format, link, contextType, contextId } = params;
+  const { format, link, contextType, contextId, onError } = params;
 
   if (!window.electronAPI?.ytdlpDownload) {
-    const errorMsg = '⚠️ O comando `/yt-dlp` requer a versão Desktop (Electron) do ZeroVC com `yt-dlp` instalado no computador.';
-    await dispatchYtdlpError(contextType, contextId, errorMsg);
+    const errorMsg = 'O comando /yt-dlp requer o aplicativo Desktop (Electron) com yt-dlp instalado no computador.';
+    onError?.(errorMsg);
     return;
   }
 
@@ -112,7 +113,7 @@ export async function executeYtdlpCommand(params: YtdlpExecuteParams): Promise<v
       await deleteProgressMessage();
       await cleanupDocuments();
       const errorMsg = res.error || 'Falha ao processar download com yt-dlp.';
-      await dispatchYtdlpError(contextType, contextId, errorMsg);
+      onError?.(errorMsg);
       return;
     }
 
@@ -167,25 +168,6 @@ export async function executeYtdlpCommand(params: YtdlpExecuteParams): Promise<v
     await deleteProgressMessage();
     await cleanupDocuments();
     console.error('Failed to run ytdlp command:', err);
-    await dispatchYtdlpError(contextType, contextId, err?.message || 'Erro inesperado ao processar mídia.');
-  }
-}
-
-async function dispatchYtdlpError(contextType: 'channel' | 'dm' | 'dm_group', contextId: string, error: string) {
-  const payload = {
-    command: 'ytdlp_error',
-    args: { error },
-  };
-
-  try {
-    if (contextType === 'channel') {
-      await api.commands.executeChannelCommand(contextId, payload);
-    } else if (contextType === 'dm') {
-      await api.commands.executeDMRoomCommand(contextId, payload);
-    } else {
-      await api.commands.executeDMGroupCommand(contextId, payload);
-    }
-  } catch (e) {
-    console.error('Failed to dispatch ytdlp error message:', e);
+    onError?.(err?.message || 'Erro inesperado ao processar mídia com yt-dlp.');
   }
 }

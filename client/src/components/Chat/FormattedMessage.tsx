@@ -254,12 +254,11 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     navigateToTargetChannel(channel, targetGuild);
   };
 
-  // Extract all media links for embeds below the text (ignoring code blocks / inline code / emoji tags / markdown links)
+  // Extract all media links for embeds below the text (ignoring code blocks / inline code / emoji tags)
   const contentWithoutCode = content
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`[^`\n]+`/g, '')
-    .replace(/<:[a-zA-Z0-9_+-]+:[^>]+>/g, '')
-    .replace(/\[([^\]\n]+)\]\(([^\s<)]+)\)/g, '');
+    .replace(/<:[a-zA-Z0-9_+-]+:[^>]+>/g, '');
 
   const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|\/assets\/bot_temp\/[^\s]+|data:image\/[^\s]+)/g;
   const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
