@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock, Mic, Terminal, Bot, Sparkles, CornerDownLeft } from 'lucide-react';
+import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock, Mic, Terminal, Bot, Sparkles, CornerDownLeft, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -7,6 +7,7 @@ import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { EmojiAndGifPicker } from './EmojiAndGifPicker';
 import { VoiceRecorder } from './VoiceRecorder';
 import { useGuildStore } from '../../stores/guildStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
 import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand } from '../../lib/slashCommands';
@@ -55,6 +56,23 @@ interface MessageInputProps {
 const MAX_CHARS = 2000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
 
+function getSlashParamsBadge(options?: SlashOption[]): string | null {
+  if (!options || options.length === 0) return null;
+  const requiredCount = options.filter((o) => o.required).length;
+  const optionalCount = options.filter((o) => !o.required).length;
+
+  const parts: string[] = [];
+  if (requiredCount > 0) {
+    parts.push(`+${requiredCount} ${requiredCount === 1 ? 'Obrigatório' : 'Obrigatórios'}`);
+  }
+  if (optionalCount > 0) {
+    parts.push(`+${optionalCount} ${optionalCount === 1 ? 'Opcional' : 'Opcionais'}`);
+  }
+
+  if (parts.length === 0) return null;
+  return parts.join(' / ');
+}
+
 export const MessageInput: React.FC<MessageInputProps> = ({
   channel,
   placeholder,
@@ -76,6 +94,31 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
+
+  // Command Error Feedback Banner & Screen Shake State
+  const [commandError, setCommandError] = useState<{
+    title: string;
+    message: string;
+    field?: string;
+  } | null>(null);
+
+  const triggerErrorShake = useCallback(() => {
+    const isReduced =
+      useSettingsStore.getState().reducedMotion ||
+      (typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+    if (isReduced) return;
+
+    const target = document.getElementById('root') || document.body;
+    if (target) {
+      target.classList.remove('animate-screen-shake');
+      void target.offsetWidth;
+      target.classList.add('animate-screen-shake');
+      setTimeout(() => {
+        target.classList.remove('animate-screen-shake');
+      }, 400);
+    }
+  }, []);
 
   // Active Discord-Style Slash Command Pill Mode State
   const [activeSlash, setActiveSlash] = useState<ActiveSlashState | null>(null);
@@ -507,6 +550,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       initialOption = firstReq.name;
     }
 
+    setCommandError(null);
     setActiveSlash({
       command: cmd,
       subcommand: sub,
@@ -523,6 +567,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   // Handle value change inside an argument pill
   const handleOptionValueChange = (optName: string, val: string) => {
+    if (commandError) setCommandError(null);
     if (!activeSlash) return;
     setActiveSlash({
       ...activeSlash,
@@ -537,6 +582,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   // Select a choice option (e.g. BR or mp4)
   const handleSelectSlashChoice = (choiceVal: string) => {
+    if (commandError) setCommandError(null);
     if (!activeSlash || !currentActiveOption) return;
     const optName = currentActiveOption.name;
     const newArgs = { ...activeSlash.args, [optName]: choiceVal };
@@ -554,6 +600,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   // Select a user mention option
   const handleSelectSlashUser = (userItem: MentionSuggestionItem) => {
+    if (commandError) setCommandError(null);
     if (!activeSlash || !currentActiveOption) return;
     const optName = currentActiveOption.name;
     const newArgs = { ...activeSlash.args, [optName]: `@${userItem.username}` };
@@ -570,6 +617,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   // Select option to focus from OPTIONS popup or +option button
   const selectOptionToFocus = (optName: string) => {
+    if (commandError) setCommandError(null);
     if (!activeSlash) return;
     setActiveSlash({
       ...activeSlash,
@@ -588,11 +636,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     // Check required options
     for (const opt of activeSlashOptions) {
       if (opt.required && !activeSlash.args[opt.name]?.trim()) {
-        setLimitAlert({
+        triggerErrorShake();
+        setCommandError({
           title: 'Opção Obrigatória Faltando',
-          message: `Por favor preencha o campo obrigatório "${opt.name}".\n${opt.description}`,
+          message: `Por favor preencha o campo obrigatório "${opt.name}": ${opt.description}`,
+          field: opt.name,
         });
-        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: opt.name } : null));
+        selectOptionToFocus(opt.name);
         return;
       }
     }
@@ -614,25 +664,36 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
-    // Reset slash state immediately
-    setActiveSlash(null);
-    setSelectedOptionIndex(-1);
-    setContent('');
-
     if (commandName === 'yt-dlp' || commandName === 'ytdlp') {
       if (!args.link) {
-        setLimitAlert({
-          title: 'Comando Incompleto',
-          message: 'Informe o link do vídeo/música individual.\nExemplo: formato mp4 e URL válida.',
+        triggerErrorShake();
+        setCommandError({
+          title: 'Opção Obrigatória Faltando',
+          message: 'Informe o link do vídeo ou música individual para baixar.\nExemplo: link do YouTube ou SoundCloud.',
+          field: 'link',
         });
+        selectOptionToFocus('link');
         return;
       }
-      await executeYtdlpCommand({
-        format: args.format === 'mp3' ? 'mp3' : 'mp4',
-        link: args.link,
-        contextType,
-        contextId: channel?.id || '',
-      });
+      try {
+        await executeYtdlpCommand({
+          format: args.format === 'mp3' ? 'mp3' : 'mp4',
+          link: args.link,
+          contextType,
+          contextId: channel?.id || '',
+        });
+        setActiveSlash(null);
+        setSelectedOptionIndex(-1);
+        setContent('');
+        setCommandError(null);
+      } catch (err: any) {
+        console.error('Failed to execute yt-dlp command:', err);
+        triggerErrorShake();
+        setCommandError({
+          title: 'Erro no Download',
+          message: err?.message || 'Falha ao executar o comando.',
+        });
+      }
       return;
     }
 
@@ -650,11 +711,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       } else if (contextType === 'dm_group' && channel?.id) {
         await api.commands.executeDMGroupCommand(channel.id, payload);
       }
+      setActiveSlash(null);
+      setSelectedOptionIndex(-1);
+      setContent('');
+      setCommandError(null);
     } catch (err: any) {
       console.error('Failed to execute slash command:', err);
-      setLimitAlert({
-        title: 'Erro no Comando',
-        message: err?.message || 'Falha ao executar comando.',
+      triggerErrorShake();
+      setCommandError({
+        title: 'Erro ao Executar Comando',
+        message: err?.message || 'Falha ao executar comando no servidor.',
       });
     }
   };
@@ -797,7 +863,75 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     // Fallback: Check if user typed a Slash Command manually in text box
     if (finalContent.startsWith('/')) {
       const parsed = parseSlashCommand(finalContent);
-      if (parsed) {
+      if (!parsed) {
+        triggerErrorShake();
+        setCommandError({
+          title: 'Comando Não Reconhecido',
+          message: 'O comando digitado não foi encontrado ou possui sintaxe inválida. Selecione um comando válido abaixo:',
+        });
+        return;
+      }
+
+      if (parsed.command === 'yt-dlp' || parsed.command === 'ytdlp') {
+        if (!parsed.args.link) {
+          triggerErrorShake();
+          const cmdDef = SLASH_COMMANDS.find((c) => c.name === 'yt-dlp');
+          if (cmdDef) {
+            setActiveSlash({
+              command: cmdDef,
+              subcommand: undefined,
+              args: parsed.args,
+              activeOptionName: 'link',
+            });
+          }
+          setCommandError({
+            title: 'Opção Obrigatória Faltando',
+            message: 'Informe o formato e o link do vídeo/música individual.\nExemplo: `/yt-dlp mp4 https://www.youtube.com/watch?v=...`',
+            field: 'link',
+          });
+          return;
+        }
+        try {
+          await executeYtdlpCommand({
+            format: parsed.args.format === 'mp3' ? 'mp3' : 'mp4',
+            link: parsed.args.link,
+            contextType,
+            contextId: channel?.id || '',
+          });
+          setContent('');
+          setSelectedFile(null);
+          setSelectedImagePreview(null);
+          setShowEmojiPicker(false);
+          setChannelQuery(null);
+          setMentionQuery(null);
+          setEmojiQuery(null);
+          onCancelReply?.();
+          if (textareaRef.current) textareaRef.current.style.height = 'auto';
+          setCommandError(null);
+        } catch (err: any) {
+          triggerErrorShake();
+          setCommandError({
+            title: 'Erro no Download',
+            message: err?.message || 'Falha ao executar o comando.',
+          });
+        }
+        return;
+      }
+
+      // Backend Slash Commands
+      try {
+        const payload = {
+          command: parsed.command,
+          subcommand: parsed.subcommand,
+          args: parsed.args,
+        };
+        if (contextType === 'channel' && channel?.id) {
+          await api.commands.executeChannelCommand(channel.id, payload);
+        } else if (contextType === 'dm' && channel?.id) {
+          await api.commands.executeDMRoomCommand(channel.id, payload);
+        } else if (contextType === 'dm_group' && channel?.id) {
+          await api.commands.executeDMGroupCommand(channel.id, payload);
+        }
         setContent('');
         setSelectedFile(null);
         setSelectedImagePreview(null);
@@ -807,47 +941,26 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         setEmojiQuery(null);
         onCancelReply?.();
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
-
-        if (parsed.command === 'yt-dlp' || parsed.command === 'ytdlp') {
-          if (!parsed.args.link) {
-            setLimitAlert({
-              title: 'Comando Incompleto',
-              message: 'Informe o formato e o link do vídeo/música individual.\nExemplo: `/yt-dlp mp4 https://www.youtube.com/watch?v=...`',
-            });
-            return;
-          }
-          await executeYtdlpCommand({
-            format: parsed.args.format === 'mp3' ? 'mp3' : 'mp4',
-            link: parsed.args.link,
-            contextType,
-            contextId: channel?.id || '',
-          });
-          return;
-        }
-
-        // Backend Slash Commands
-        try {
-          const payload = {
-            command: parsed.command,
-            subcommand: parsed.subcommand,
+        setCommandError(null);
+      } catch (err: any) {
+        console.error('Failed to execute slash command:', err);
+        triggerErrorShake();
+        const cmdDef = SLASH_COMMANDS.find((c) => c.name === parsed.command);
+        if (cmdDef) {
+          const subDef = cmdDef.subcommands?.find((s) => s.name === parsed.subcommand);
+          setActiveSlash({
+            command: cmdDef,
+            subcommand: subDef,
             args: parsed.args,
-          };
-          if (contextType === 'channel' && channel?.id) {
-            await api.commands.executeChannelCommand(channel.id, payload);
-          } else if (contextType === 'dm' && channel?.id) {
-            await api.commands.executeDMRoomCommand(channel.id, payload);
-          } else if (contextType === 'dm_group' && channel?.id) {
-            await api.commands.executeDMGroupCommand(channel.id, payload);
-          }
-        } catch (err: any) {
-          console.error('Failed to execute slash command:', err);
-          setLimitAlert({
-            title: 'Erro no Comando',
-            message: err?.message || 'Falha ao executar comando.',
+            activeOptionName: null,
           });
         }
-        return;
+        setCommandError({
+          title: 'Erro ao Executar Comando',
+          message: err?.message || 'Falha ao executar comando no servidor.',
+        });
       }
+      return;
     }
 
     // Check 2,000 character limit on raw text
@@ -1031,6 +1144,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (commandError) setCommandError(null);
     const val = e.target.value;
     setContent(val);
     e.target.style.height = 'auto';
@@ -1161,14 +1275,55 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     );
   }, [activeSlash, activeSlashOptions]);
 
+  // Full syntax string formatted for active command
+  const activeSlashSyntax = useMemo(() => {
+    if (!activeSlash) return '';
+    let s = `/${activeSlash.command.name}`;
+    if (activeSlash.subcommand) {
+      s += ` ${activeSlash.subcommand.name}`;
+      if (activeSlash.subcommand.options) {
+        for (const opt of activeSlash.subcommand.options) {
+          s += opt.required ? ` [${opt.name}]` : ` (${opt.name})`;
+        }
+      }
+    } else if (activeSlash.command.options) {
+      for (const opt of activeSlash.command.options) {
+        s += opt.required ? ` [${opt.name}]` : ` (${opt.name})`;
+      }
+    }
+    return s;
+  }, [activeSlash]);
+
   return (
     <div
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
       className="px-3 md:px-4 pt-0 bg-background-dark relative select-none"
     >
       {/* 1. Slash Commands (/) Initial Autocomplete Suggestions Popup */}
-      {slashSuggestions.length > 0 && (
+      {slashSuggestions.length > 0 && !activeSlash && (
         <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-brand-500/25 shadow-2xl p-1.5 max-h-64 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
+          {commandError && (
+            <div className="mb-1.5 bg-rose-500/15 border border-rose-500/30 rounded-xl p-2.5 flex items-start gap-2 text-rose-200 animate-in fade-in duration-150">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-rose-300 uppercase tracking-wide">
+                    {commandError.title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCommandError(null)}
+                    className="text-rose-400 hover:text-rose-200 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-xs text-rose-200/90 mt-0.5 leading-relaxed whitespace-pre-line">
+                  {commandError.message}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
               <Bot className="w-3.5 h-3.5" />
@@ -1195,9 +1350,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     <span className="font-bold text-xs text-white">
                       {item.name}
                     </span>
-                    <span className="text-[10px] text-brand-300 font-mono bg-brand-500/15 px-1.5 py-0.5 rounded border border-brand-500/20">
-                      {item.syntax}
-                    </span>
+                    {(() => {
+                      const badge = getSlashParamsBadge(item.options);
+                      if (!badge) return null;
+                      return (
+                        <span className="text-[10px] text-brand-300 font-medium bg-brand-500/15 px-2 py-0.5 rounded-md border border-brand-500/20 whitespace-nowrap">
+                          {badge}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <span className="text-[11px] text-gray-400 truncate mt-0.5">
                     {item.description}
@@ -1209,127 +1370,241 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {/* 2. Active Slash Command Choices Dropdown (e.g. Regions, Format) */}
-      {activeSlash && currentActiveOption?.type === 'choice' && filteredSlashChoices.length > 0 && (
-        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-brand-500/30 shadow-2xl p-1.5 max-h-64 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
-          <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Opções para {currentActiveOption.name}</span>
-            </span>
-            <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
-          </div>
-          <div ref={slashChoiceListRef} className="space-y-0.5">
-            {filteredSlashChoices.map((choice, idx) => (
-              <button
-                key={choice.value}
-                type="button"
-                onClick={() => handleSelectSlashChoice(choice.value)}
-                onMouseEnter={() => setSlashChoiceIndex(idx)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
-                  slashChoiceIndex === idx ? 'bg-brand-500/25 text-white font-medium' : 'text-gray-300 hover:bg-white/5'
-                }`}
-              >
-                <span className="text-xs">{choice.name}</span>
-                <span className="text-[10px] font-mono text-brand-300 bg-brand-500/15 px-1.5 py-0.5 rounded border border-brand-500/20">
-                  {choice.value}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 3. Active Slash Command User Mention Dropdown (e.g. /league profile user, /user info user) */}
-      {activeSlash && currentActiveOption?.type === 'user' && filteredSlashUsers.length > 0 && (
-        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-brand-500/30 shadow-2xl p-1.5 max-h-64 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
-          <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
-              <Bot className="w-3.5 h-3.5" />
-              <span>Selecionar Membro ({filteredSlashUsers.length})</span>
-            </span>
-            <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
-          </div>
-          <div ref={slashUserListRef} className="space-y-0.5">
-            {filteredSlashUsers.map((m, idx) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => handleSelectSlashUser(m)}
-                onMouseEnter={() => setSlashUserIndex(idx)}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer ${
-                  slashUserIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
-                }`}
-              >
-                <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden flex-shrink-0">
-                  {m.avatar_url ? (
-                    <img src={formatAssetUrl(m.avatar_url)} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    m.name[0]?.toUpperCase()
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <span className="font-semibold text-xs truncate" style={{ color: m.roleColor || undefined }}>
-                    {m.name}
+      {/* 2. Active Slash Command Extended Autocomplete: Camada 1 (Feedback de Erros) + Camada 2 (Tooltip do Comando & Opções) OR Standalone Command Error */}
+      {(activeSlash || (commandError && slashSuggestions.length === 0)) && (
+        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+          {/* Camada 1: Feedback de Erros */}
+          {commandError && (
+            <div className="bg-rose-500/15 border-b border-rose-500/30 p-3 flex items-start gap-2.5 text-rose-200 animate-in fade-in duration-150">
+              <div className="p-1 rounded-lg bg-rose-500/20 text-rose-400 shrink-0 mt-0.5 border border-rose-500/30">
+                <AlertCircle className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-rose-300 uppercase tracking-wide">
+                    {commandError.title}
                   </span>
-                  <span className="text-[10px] text-gray-500 truncate">@{m.username}</span>
+                  <button
+                    type="button"
+                    onClick={() => setCommandError(null)}
+                    className="text-rose-400/70 hover:text-rose-200 p-0.5 rounded transition-colors cursor-pointer"
+                    title="Fechar aviso"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+                <p className="text-xs text-rose-200/90 mt-0.5 leading-relaxed whitespace-pre-line">
+                  {commandError.message}
+                </p>
+              </div>
+            </div>
+          )}
 
-      {/* 4. Active Slash Command Discord-style OPTIONS List (Matching Screenshot 1) */}
-      {activeSlash && (!currentActiveOption || (currentActiveOption.type !== 'choice' && currentActiveOption.type !== 'user')) && activeSlashOptions.length > 0 && (
-        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-60 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
-          <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-gray-300 font-semibold tracking-wide">
-              <span>OPTIONS</span>
-            </span>
-            <span className="text-[9px] font-normal text-gray-500">
-              ↑↓ navegar • Enter / Tab selecionar • Enter enviar
-            </span>
-          </div>
-          <div ref={slashOptionsListRef} className="space-y-0.5">
-            {activeSlashOptions.map((opt, idx) => {
-              const isSelected = activeSlash.activeOptionName === opt.name || selectedOptionIndex === idx;
-              const hasValue = !!activeSlash.args[opt.name];
-              return (
-                <button
-                  key={opt.name}
-                  type="button"
-                  onClick={() => selectOptionToFocus(opt.name)}
-                  onMouseEnter={() => setSelectedOptionIndex(idx)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
-                    isSelected ? 'bg-brand-500/25 text-white ring-1 ring-brand-500/40' : 'text-gray-300 hover:bg-white/5'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-bold text-xs text-white bg-background-darker px-2 py-0.5 rounded border border-white/10 flex-shrink-0">
-                      {opt.name}
+          {/* Camada 2: Tooltip do Comando & Opções / Parâmetros */}
+          {activeSlash && (
+            <div className="p-2 max-h-64 overflow-y-auto no-scrollbar">
+              {/* Tooltip Header: Command Name + Subcommand + Description + Syntax */}
+              <div className="px-2.5 py-1.5 mb-1.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-md bg-brand-500/20 text-brand-400 flex items-center justify-center border border-brand-500/30">
+                    <Terminal className="w-3 h-3" />
+                  </div>
+                  <span className="text-xs font-bold text-white">
+                    /{activeSlash.command.name}
+                    {activeSlash.subcommand ? ` ${activeSlash.subcommand.name}` : ''}
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    {activeSlash.subcommand?.description || activeSlash.command.description}
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-brand-300 bg-brand-500/15 px-2 py-0.5 rounded-md border border-brand-500/25">
+                  {activeSlashSyntax}
+                </span>
+              </div>
+
+              {/* Sub-view: Choice Selector */}
+              {currentActiveOption?.type === 'choice' && filteredSlashChoices.length > 0 ? (
+                <div>
+                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Opções para {currentActiveOption.name}</span>
                     </span>
-                    <span className="text-[11px] text-gray-400 truncate">
-                      {opt.description}
+                    <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
+                  </div>
+                  <div ref={slashChoiceListRef} className="space-y-0.5 mt-1">
+                    {filteredSlashChoices.map((choice, idx) => (
+                      <button
+                        key={choice.value}
+                        type="button"
+                        onClick={() => {
+                          handleSelectSlashChoice(choice.value);
+                          setCommandError(null);
+                        }}
+                        onMouseEnter={() => setSlashChoiceIndex(idx)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                          slashChoiceIndex === idx ? 'bg-brand-500/25 text-white font-medium' : 'text-gray-300 hover:bg-white/5'
+                        }`}
+                      >
+                        <span className="text-xs">{choice.name}</span>
+                        <span className="text-[10px] font-mono text-brand-300 bg-brand-500/15 px-1.5 py-0.5 rounded border border-brand-500/20">
+                          {choice.value}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : currentActiveOption?.type === 'user' && filteredSlashUsers.length > 0 ? (
+                /* Sub-view: User Selector */
+                <div>
+                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
+                      <Bot className="w-3.5 h-3.5" />
+                      <span>Selecionar Membro ({filteredSlashUsers.length})</span>
+                    </span>
+                    <span className="text-[9px] font-normal text-gray-500">↑↓ navegar • Enter / Tab selecionar</span>
+                  </div>
+                  <div ref={slashUserListRef} className="space-y-0.5 mt-1">
+                    {filteredSlashUsers.map((m, idx) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          handleSelectSlashUser(m);
+                          setCommandError(null);
+                        }}
+                        onMouseEnter={() => setSlashUserIndex(idx)}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer ${
+                          slashUserIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden flex-shrink-0">
+                          {m.avatar_url ? (
+                            <img src={formatAssetUrl(m.avatar_url)} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            m.name[0]?.toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span className="font-semibold text-xs truncate" style={{ color: m.roleColor || undefined }}>
+                            {m.name}
+                          </span>
+                          <span className="text-[10px] text-gray-500 truncate">@{m.username}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* Sub-view: Options List */
+                <div>
+                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-gray-300 font-semibold tracking-wide">
+                      <span>PARÂMETROS / OPÇÕES</span>
+                    </span>
+                    <span className="text-[9px] font-normal text-gray-500">
+                      ↑↓ navegar • Tab/Enter focar • Enter enviar
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                    {hasValue ? (
-                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                        {activeSlash.args[opt.name]}
-                      </span>
-                    ) : opt.required ? (
-                      <span className="text-[9px] text-rose-400 font-semibold uppercase px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">
-                        Obrigatório
-                      </span>
-                    ) : (
-                      <span className="text-[9px] text-gray-500 uppercase">Opcional</span>
-                    )}
+                  <div ref={slashOptionsListRef} className="space-y-0.5 mt-1">
+                    {activeSlashOptions.map((opt, idx) => {
+                      const isSelected = activeSlash.activeOptionName === opt.name || selectedOptionIndex === idx;
+                      const hasValue = !!activeSlash.args[opt.name];
+                      const isFieldErrored = commandError?.field === opt.name;
+                      return (
+                        <button
+                          key={opt.name}
+                          type="button"
+                          onClick={() => {
+                            selectOptionToFocus(opt.name);
+                            setCommandError(null);
+                          }}
+                          onMouseEnter={() => setSelectedOptionIndex(idx)}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                            isFieldErrored
+                              ? 'bg-rose-500/20 text-white ring-1 ring-rose-500/50'
+                              : isSelected
+                              ? 'bg-brand-500/25 text-white ring-1 ring-brand-500/40'
+                              : 'text-gray-300 hover:bg-white/5'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`font-bold text-xs px-2 py-0.5 rounded border flex-shrink-0 ${
+                              isFieldErrored
+                                ? 'bg-rose-500/30 text-rose-200 border-rose-500/40'
+                                : 'bg-background-darker text-white border-white/10'
+                            }`}>
+                              {opt.name}
+                            </span>
+                            <span className="text-[11px] text-gray-400 truncate">
+                              {opt.description}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                            {hasValue ? (
+                              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                {activeSlash.args[opt.name]}
+                              </span>
+                            ) : opt.required ? (
+                              <span className="text-[9px] text-rose-400 font-semibold uppercase px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">
+                                Obrigatório
+                              </span>
+                            ) : (
+                              <span className="text-[9px] text-gray-500 uppercase">Opcional</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* If there is a command error without an activeSlash (e.g. invalid raw command typed) */}
+          {!activeSlash && commandError && (
+            <div className="p-2 border-t border-white/5">
+              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>Comandos Disponíveis</span>
+                </span>
+              </div>
+              <div className="space-y-0.5 mt-1 max-h-48 overflow-y-auto no-scrollbar">
+                {SLASH_COMMANDS.map((cmd) => (
+                  <button
+                    key={cmd.name}
+                    type="button"
+                    onClick={() => {
+                      startSlashCommand({
+                        command: cmd.name,
+                        name: cmd.name,
+                        description: cmd.description,
+                        syntax: `/${cmd.name}`,
+                      });
+                      setCommandError(null);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer text-gray-300 hover:bg-white/5 hover:text-white"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-white">/{cmd.name}</span>
+                      <span className="text-[11px] text-gray-400">{cmd.description}</span>
+                    </div>
+                    {(() => {
+                      const badge = getSlashParamsBadge(cmd.options);
+                      if (!badge) return null;
+                      return (
+                        <span className="text-[10px] text-brand-300 font-medium bg-brand-500/15 px-2 py-0.5 rounded-md border border-brand-500/20 whitespace-nowrap">
+                          {badge}
+                        </span>
+                      );
+                    })()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

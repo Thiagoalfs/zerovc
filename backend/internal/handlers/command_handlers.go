@@ -554,12 +554,14 @@ func (h *CommandHandler) processCommand(
 		urlStr, _ := req.Args["url"].(string)
 		formatType, _ := req.Args["format"].(string)
 
-		if formatType == "" {
-			formatType = "Vídeo"
+		if strings.TrimSpace(title) == "" {
+			title = "Download"
 		}
 
-		desc := fmt.Sprintf("🎵 **Mídia pronta:** [%s](%s)", title, urlStr)
-		if strings.ToLower(formatType) == "mp4" {
+		var desc string
+		if strings.ToLower(formatType) == "mp3" {
+			desc = fmt.Sprintf("🎵 **Audio pronto:** [%s](%s)", title, urlStr)
+		} else {
 			desc = fmt.Sprintf("🎬 **Vídeo pronto:** [%s](%s)", title, urlStr)
 		}
 

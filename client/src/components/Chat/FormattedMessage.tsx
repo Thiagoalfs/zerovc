@@ -254,11 +254,12 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     navigateToTargetChannel(channel, targetGuild);
   };
 
-  // Extract all media links for embeds below the text (ignoring code blocks / inline code / emoji tags)
+  // Extract all media links for embeds below the text (ignoring code blocks / inline code / emoji tags / markdown links)
   const contentWithoutCode = content
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`[^`\n]+`/g, '')
-    .replace(/<:[a-zA-Z0-9_+-]+:[^>]+>/g, '');
+    .replace(/<:[a-zA-Z0-9_+-]+:[^>]+>/g, '')
+    .replace(/\[([^\]\n]+)\]\(([^\s<)]+)\)/g, '');
 
   const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|\/assets\/bot_temp\/[^\s]+|data:image\/[^\s]+)/g;
   const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
@@ -286,11 +287,12 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   // Remove extracted media URLs and smart GIF URLs from text to display so raw link is not shown alongside the embed
   let textToDisplay = content;
   if (mediaEmbeds.length > 0 || smartGifEmbeds.length > 0) {
+    const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     for (const media of mediaEmbeds) {
-      textToDisplay = textToDisplay.split(media.url).join('');
+      textToDisplay = textToDisplay.replace(new RegExp(`(?<!\\]\\()${escape(media.url)}`, 'g'), '');
     }
     for (const gifUrl of smartGifEmbeds) {
-      textToDisplay = textToDisplay.split(gifUrl).join('');
+      textToDisplay = textToDisplay.replace(new RegExp(`(?<!\\]\\()${escape(gifUrl)}`, 'g'), '');
     }
     textToDisplay = textToDisplay.trim();
   }
@@ -487,7 +489,7 @@ function renderInlineFormatting(
   }
 
   const tokenRegex =
-    /(\|\|[\s\S]+?\|\||`[^`\n]+`|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|<:[a-zA-Z0-9_+-]+:[^>]+>|:([a-zA-Z0-9_+-]+):|https?:\/\/[^\s<]+[^<.,:;"')\]\s]|@[a-zA-Z0-9_.-]+|@everyone|@here|#[a-zA-Z0-9_\u00C0-\u00FF-]+)/g;
+    /(\|\|[\s\S]+?\|\||`[^`\n]+`|\[[^\]\n]+\]\([^\s<)]+\)|\*\*[^*]+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*|_[^_\n]+?_|<:[a-zA-Z0-9_+-]+:[^>]+>|:([a-zA-Z0-9_+-]+):|https?:\/\/[^\s<]+[^<.,:;"')\]\s]|@[a-zA-Z0-9_.-]+|@everyone|@here|#[a-zA-Z0-9_\u00C0-\u00FF-]+)/g;
 
   const elements: React.ReactNode[] = [];
   let lastIdx = 0;
@@ -639,6 +641,41 @@ function renderInlineFormatting(
           )}
         </em>
       );
+    } else if (token.startsWith('[') && token.includes('](') && token.endsWith(')')) {
+      const matchLink = token.match(/^\[([^\]\n]+)\]\((https?:\/\/[^\s<)]+|\/assets\/[^\s<)]+|[^\s<)]+)\)$/);
+      if (matchLink) {
+        const linkText = matchLink[1];
+        const linkUrl = matchLink[2];
+        const formattedUrl = formatAssetUrl(linkUrl);
+        elements.push(
+          <a
+            key={k}
+            href={formattedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            download
+            onClick={(e) => e.stopPropagation()}
+            className="text-brand-400 hover:text-brand-300 font-semibold underline decoration-brand-500/50 hover:decoration-brand-400 inline-flex items-center gap-0.5 break-all cursor-pointer transition-colors"
+          >
+            {renderInlineFormatting(
+              linkText,
+              `${k}-lt`,
+              isJumboji,
+              guildEmojis,
+              guildMembers,
+              guildRoles,
+              currentUser,
+              onOpenUserProfile,
+              onOpenUserContextMenu,
+              activeGuildChannels,
+              allGuilds,
+              onChannelClick
+            )}
+          </a>
+        );
+      } else {
+        elements.push(token);
+      }
     } else if (token.startsWith('http://') || token.startsWith('https://')) {
       elements.push(
         <a
