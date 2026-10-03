@@ -89,6 +89,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
   if (!isOpen || !user) return null;
 
   const isMe = currentUser?.id === user.id;
+  const isBot = Boolean(user.is_bot || user.id === '00000000-0000-0000-0000-000000000001' || user.username?.toLowerCase() === 'gork');
 
   const getStatusColor = (s?: string) => {
     switch (s) {
@@ -247,61 +248,63 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
             </div>
 
             {/* Action Buttons Top Right */}
-            <div className="flex items-center gap-2 mb-1">
-              {isMe ? (
-                <button
-                  type="button"
-                  onClick={handleOpenEdit}
-                  className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg shadow-brand-500/20 cursor-pointer"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  <span>Editar Perfil</span>
-                </button>
-              ) : isFriend ? (
-                <button
-                  type="button"
-                  onClick={handleStartChat}
-                  className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg shadow-brand-500/20 cursor-pointer"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Enviar Mensagem</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-1.5 sm:gap-2">
+            {!isBot && (
+              <div className="flex items-center gap-2 mb-1">
+                {isMe ? (
                   <button
                     type="button"
-                    onClick={handleAddFriend}
-                    disabled={isSendingRequest || isPending || requestSent}
-                    className={`active:scale-95 text-white font-semibold px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
-                      isPending || requestSent
-                        ? 'bg-emerald-600/80 hover:bg-emerald-600 shadow-emerald-600/20'
-                        : 'bg-online hover:bg-online/90 shadow-online/20'
-                    }`}
+                    onClick={handleOpenEdit}
+                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg shadow-brand-500/20 cursor-pointer"
                   >
-                    {isPending || requestSent ? (
-                      <>
-                        <Check className="w-4 h-4" />
-                        <span>Pedido Enviado</span>
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="w-4 h-4" />
-                        <span>{isSendingRequest ? 'Enviando...' : 'Adicionar amigo'}</span>
-                      </>
-                    )}
+                    <Edit3 className="w-4 h-4" />
+                    <span>Editar Perfil</span>
                   </button>
-
+                ) : isFriend ? (
                   <button
                     type="button"
                     onClick={handleStartChat}
-                    className="bg-background-darker hover:bg-white/10 active:scale-95 text-gray-300 hover:text-white p-2 sm:p-2.5 rounded-xl transition-all border border-white/10 cursor-pointer shadow-md flex items-center justify-center"
-                    title="Enviar Mensagem"
+                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg shadow-brand-500/20 cursor-pointer"
                   >
                     <MessageSquare className="w-4 h-4" />
+                    <span>Enviar Mensagem</span>
                   </button>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddFriend}
+                      disabled={isSendingRequest || isPending || requestSent}
+                      className={`active:scale-95 text-white font-semibold px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
+                        isPending || requestSent
+                          ? 'bg-emerald-600/80 hover:bg-emerald-600 shadow-emerald-600/20'
+                          : 'bg-online hover:bg-online/90 shadow-online/20'
+                      }`}
+                    >
+                      {isPending || requestSent ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Pedido Enviado</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="w-4 h-4" />
+                          <span>{isSendingRequest ? 'Enviando...' : 'Adicionar amigo'}</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleStartChat}
+                      className="bg-background-darker hover:bg-white/10 active:scale-95 text-gray-300 hover:text-white p-2 sm:p-2.5 rounded-xl transition-all border border-white/10 cursor-pointer shadow-md flex items-center justify-center"
+                      title="Enviar Mensagem"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Names & Quick Copy */}

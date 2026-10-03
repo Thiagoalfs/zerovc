@@ -120,6 +120,13 @@ func (h *DMHandler) CreateOrGetRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var isBot bool
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COALESCE(is_bot, false) FROM users WHERE id = $1`, req.RecipientID).Scan(&isBot)
+	if isBot || req.RecipientID == uuid.MustParse("00000000-0000-0000-0000-000000000001") {
+		http.Error(w, `{"error":"Não é possível iniciar conversa privada com bots."}`, http.StatusBadRequest)
+		return
+	}
+
 	// Check if there is a block between users
 	var isBlocked bool
 	blockCheckQuery := `SELECT EXISTS(SELECT 1 FROM user_blocks WHERE (user_id = $1 AND blocked_user_id = $2) OR (user_id = $2 AND blocked_user_id = $1))`
@@ -425,6 +432,13 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	recipientID := user1ID
 	if recipientID == userID {
 		recipientID = user2ID
+	}
+
+	var isRecipientBot bool
+	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COALESCE(is_bot, false) FROM users WHERE id = $1`, recipientID).Scan(&isRecipientBot)
+	if isRecipientBot || recipientID == uuid.MustParse("00000000-0000-0000-0000-000000000001") {
+		http.Error(w, `{"error":"Não é possível enviar mensagens privadas para bots."}`, http.StatusBadRequest)
+		return
 	}
 
 	// Check if there is a block between users

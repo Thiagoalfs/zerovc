@@ -115,6 +115,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   if (!isOpen || !user) return null;
 
   const isMe = currentUser?.id === user.id;
+  const isBot = Boolean(user.is_bot || user.id === '00000000-0000-0000-0000-000000000001' || user.username?.toLowerCase() === 'gork');
 
   const getStatusColor = (s?: string) => {
     switch (s) {
@@ -331,56 +332,58 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           </div>
 
           {/* Action Button */}
-          <div className="mt-3 space-y-1.5">
-            {isMe ? (
-              <button
-                type="button"
-                onClick={handleOpenEdit}
-                className="w-full bg-background-light hover:bg-white/15 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 border border-white/10 cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Editar Meu Perfil</span>
-              </button>
-            ) : (
-              <>
-                <form onSubmit={handleQuickSendMessage} className="space-y-1">
-                  <div className="relative flex items-center">
-                    <input
-                      ref={inputRef}
-                      autoFocus
-                      type="text"
-                      value={quickMessage}
-                      onChange={(e) => {
-                        setQuickMessage(e.target.value);
-                        if (sendError) setSendError(null);
-                      }}
-                      placeholder={`Conversar com @${user.display_name || user.username}`}
-                      disabled={isSendingMessage}
-                      className="w-full bg-background-darker border border-white/10 focus:border-brand-500 rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-gray-500 outline-none transition-all shadow-inner"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!quickMessage.trim() || isSendingMessage}
-                      className="absolute right-1.5 p-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 transition-colors cursor-pointer"
-                      title="Enviar mensagem"
-                    >
-                      {isSendingMessage ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400" />
-                      ) : (
-                        <Send className="w-3.5 h-3.5 text-brand-400" />
-                      )}
-                    </button>
-                  </div>
-                  {sendError && (
-                    <div className="flex items-center gap-1.5 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 rounded-xl">
-                      <AlertTriangle className="w-3 h-3 shrink-0" />
-                      <span>{sendError}</span>
+          {!isBot && (
+            <div className="mt-3 space-y-1.5">
+              {isMe ? (
+                <button
+                  type="button"
+                  onClick={handleOpenEdit}
+                  className="w-full bg-background-light hover:bg-white/15 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 border border-white/10 cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Editar Meu Perfil</span>
+                </button>
+              ) : (
+                <>
+                  <form onSubmit={handleQuickSendMessage} className="space-y-1">
+                    <div className="relative flex items-center">
+                      <input
+                        ref={inputRef}
+                        autoFocus
+                        type="text"
+                        value={quickMessage}
+                        onChange={(e) => {
+                          setQuickMessage(e.target.value);
+                          if (sendError) setSendError(null);
+                        }}
+                        placeholder={`Conversar com @${user.display_name || user.username}`}
+                        disabled={isSendingMessage}
+                        className="w-full bg-background-darker border border-white/10 focus:border-brand-500 rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-gray-500 outline-none transition-all shadow-inner"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!quickMessage.trim() || isSendingMessage}
+                        className="absolute right-1.5 p-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 transition-colors cursor-pointer"
+                        title="Enviar mensagem"
+                      >
+                        {isSendingMessage ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400" />
+                        ) : (
+                          <Send className="w-3.5 h-3.5 text-brand-400" />
+                        )}
+                      </button>
                     </div>
-                  )}
-                </form>
-              </>
-            )}
-          </div>
+                    {sendError && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 rounded-xl">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        <span>{sendError}</span>
+                      </div>
+                    )}
+                  </form>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>

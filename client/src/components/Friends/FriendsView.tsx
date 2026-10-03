@@ -64,6 +64,34 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
 
   const handleUserContextMenu = (e: React.MouseEvent, targetUser?: User) => {
     if (!targetUser) return;
+    const isBot = Boolean(targetUser.is_bot || targetUser.id === '00000000-0000-0000-0000-000000000001' || targetUser.username?.toLowerCase() === 'gork');
+    if (isBot) {
+      const botItems: ContextMenuItem[] = [
+        {
+          id: 'view-profile',
+          label: 'Ver Perfil',
+          icon: <UserIcon className="w-4 h-4" />,
+          onClick: () => {
+            onOpenUserProfile?.(targetUser, { x: e.clientX, y: e.clientY });
+          },
+        },
+        {
+          separator: true,
+          label: '',
+        },
+        {
+          id: 'copy-user-id',
+          label: 'Copiar ID do Usuário',
+          icon: <Copy className="w-4 h-4" />,
+          onClick: () => {
+            copyToClipboard(targetUser.id);
+          },
+        },
+      ];
+      openContextMenu(e, botItems, targetUser.display_name || `@${targetUser.username}`);
+      return;
+    }
+
     const isMe = targetUser.id === currentUser?.id;
     const friendship = friends.find(
       (f) => (f.friend?.id === targetUser.id || f.user?.id === targetUser.id)
