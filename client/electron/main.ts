@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, execSync, ChildProcess } from 'child_process';
 
 app.name = 'ZeroVC';
 process.title = 'ZeroVC';
@@ -1260,6 +1260,72 @@ ipcMain.handle('ytdlp-cleanup', async () => {
   return { success: true };
 });
 
+function findFFmpegLocation(): string | null {
+  try {
+    const whereCmd = process.platform === 'win32' ? 'where ffmpeg' : 'which ffmpeg';
+    const output = execSync(whereCmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    if (output) {
+      const firstLine = output.split(/[\r\n]+/)[0];
+      if (fs.existsSync(firstLine)) {
+        return path.dirname(firstLine);
+      }
+    }
+  } catch {}
+
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
+    const wingetDir = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
+    if (fs.existsSync(wingetDir)) {
+      try {
+        const entries = fs.readdirSync(wingetDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && entry.name.toLowerCase().includes('ffmpeg')) {
+            const pkgPath = path.join(wingetDir, entry.name);
+            const candidatePaths = [
+              path.join(pkgPath, 'bin', 'ffmpeg.exe'),
+              path.join(pkgPath, 'ffmpeg.exe'),
+            ];
+            for (const c of candidatePaths) {
+              if (fs.existsSync(c)) {
+                return path.dirname(c);
+              }
+            }
+            const subEntries = fs.readdirSync(pkgPath, { withFileTypes: true });
+            for (const sub of subEntries) {
+              if (sub.isDirectory()) {
+                const subBin = path.join(pkgPath, sub.name, 'bin', 'ffmpeg.exe');
+                if (fs.existsSync(subBin)) {
+                  return path.dirname(subBin);
+                }
+                const subExe = path.join(pkgPath, sub.name, 'ffmpeg.exe');
+                if (fs.existsSync(subExe)) {
+                  return path.dirname(subExe);
+                }
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    const commonLocations = [
+      path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'ffmpeg', 'bin'),
+      path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'ffmpeg', 'bin'),
+      path.join(app.getPath('home'), 'scoop', 'shims'),
+      path.join(app.getPath('home'), 'scoop', 'apps', 'ffmpeg', 'current', 'bin'),
+      'C:\\ffmpeg\\bin',
+      'C:\\ffmpeg',
+    ];
+    for (const loc of commonLocations) {
+      if (fs.existsSync(path.join(loc, 'ffmpeg.exe'))) {
+        return loc;
+      }
+    }
+  }
+
+  return null;
+}
+
 // yt-dlp Local Processing IPC
 ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4' | 'mp3'; link: string }) => {
   try {
@@ -1303,6 +1369,14 @@ ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4'
 
     const outTemplate = path.join(docsDir, `dl_${Date.now()}_%(id)s.%(ext)s`);
 
+    const ffmpegLocation = findFFmpegLocation();
+    if (ffmpegLocation) {
+      console.log(`[yt-dlp] Using detected ffmpeg location: ${ffmpegLocation}`);
+      if (!process.env.PATH?.includes(ffmpegLocation)) {
+        process.env.PATH = `${ffmpegLocation}${path.delimiter}${process.env.PATH || ''}`;
+      }
+    }
+
     const BROWSER_CANDIDATES = [
       'firefox',
       'brave',
@@ -1343,6 +1417,10 @@ ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4'
         '--print', 'title',
         '-o', outTemplate,
       ];
+
+      if (ffmpegLocation) {
+        args.push('--ffmpeg-location', ffmpegLocation);
+      }
 
       if (browser) {
         args.push('--cookies-from-browser', browser);
@@ -1470,7 +1548,10 @@ ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4'
         .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
 
       if (matching.length > 0) {
-        downloadedPath = matching[0];
+        const preferredMatch = format === 'mp4'
+          ? matching.find((f) => f.toLowerCase().endsWith('.mp4'))
+          : matching.find((f) => f.toLowerCase().endsWith('.mp3'));
+        downloadedPath = preferredMatch || matching[0];
       }
     }
 
