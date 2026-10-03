@@ -20,12 +20,16 @@ import { api, formatAssetUrl } from '../../lib/api';
 import { AuditLog, User } from '../../types';
 import { DropdownSelect } from '../Common/DropdownSelect';
 
-interface ServerAuditLogViewProps {
+export interface ServerAuditLogViewProps {
   guildId: string;
+  selectedFilter?: string;
+  setSelectedFilter?: (val: string) => void;
+  refreshTrigger?: number;
+  onLoadingChange?: (loading: boolean) => void;
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
 }
 
-const ACTION_FILTERS = [
+export const ACTION_FILTERS = [
   { label: 'Todas as Ações', value: 'ALL' },
   { label: 'Membros Expulsos', value: 'MEMBER_KICK' },
   { label: 'Membros Banidos', value: 'MEMBER_BAN' },
@@ -42,14 +46,31 @@ const ACTION_FILTERS = [
   { label: 'Mensagens Deletadas (Moderação)', value: 'MESSAGE_DELETE_MODERATION' },
 ];
 
-export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({ guildId }) => {
+export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
+  guildId,
+  selectedFilter: propFilter,
+  setSelectedFilter: propSetSelectedFilter,
+  refreshTrigger = 0,
+  onLoadingChange,
+  onOpenUserProfile,
+}) => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [selectedFilter, setSelectedFilter] = useState('ALL');
+  const [internalFilter, setInternalFilter] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchLogs = async (filter = selectedFilter) => {
+  const activeFilter = propFilter !== undefined ? propFilter : internalFilter;
+  const handleFilterChange = (val: string) => {
+    if (propSetSelectedFilter) {
+      propSetSelectedFilter(val);
+    } else {
+      setInternalFilter(val);
+    }
+  };
+
+  const fetchLogs = async (filter = activeFilter) => {
     setIsLoading(true);
+    onLoadingChange?.(true);
     setError(null);
     try {
       const data = await api.guilds.getAuditLogs(guildId, {
@@ -60,12 +81,13 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({ guildId 
       setError(err?.message || 'Falha ao carregar registros de auditoria');
     } finally {
       setIsLoading(false);
+      onLoadingChange?.(false);
     }
   };
 
   useEffect(() => {
-    fetchLogs(selectedFilter);
-  }, [guildId, selectedFilter]);
+    fetchLogs(activeFilter);
+  }, [guildId, activeFilter, refreshTrigger]);
 
   const getActionBadge = (action: string) => {
     switch (action) {
@@ -117,45 +139,32 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({ guildId 
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Header & Filter Controls */}
-      <div className="p-4 border-b border-white/5 flex items-center justify-between gap-4 flex-shrink-0 bg-background-darker/40">
-        <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <ScrollText className="w-5 h-5 text-brand-400" />
-            Registro de Auditoria
-          </h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Histórico das ações administrativas e de moderação realizadas no servidor.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <DropdownSelect
-            className="w-48 sm:w-56"
-            prefixIcon={<Filter className="w-3.5 h-3.5" />}
-            value={selectedFilter}
-            onChange={(val) => setSelectedFilter(String(val))}
-            options={ACTION_FILTERS.map((f) => ({
-              value: f.value,
-              label: f.label,
-            }))}
-            placeholder="Filtrar ações..."
-          />
-
-          <button
-            onClick={() => fetchLogs(selectedFilter)}
-            disabled={isLoading}
-            className="p-1.5 bg-background-darker border border-white/10 hover:border-white/20 rounded-lg text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
-            title="Recarregar"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-brand-400' : ''}`} />
-          </button>
-        </div>
+    <div className="flex flex-col h-full overflow-hidden py-4 sm:py-6">
+      {/* Mobile filter controls */}
+      <div className="md:hidden pb-3 flex items-center gap-2">
+        <DropdownSelect
+          className="flex-1"
+          prefixIcon={<Filter className="w-3.5 h-3.5" />}
+          value={activeFilter}
+          onChange={(val) => handleFilterChange(String(val))}
+          options={ACTION_FILTERS.map((f) => ({
+            value: f.value,
+            label: f.label,
+          }))}
+          placeholder="Filtrar ações..."
+        />
+        <button
+          onClick={() => fetchLogs(activeFilter)}
+          disabled={isLoading}
+          className="p-2 bg-background-darkest border border-white/10 hover:border-white/20 rounded-xl text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+          title="Recarregar"
+        >
+          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-brand-400' : ''}`} />
+        </button>
       </div>
 
       {/* Logs List Container */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2.5 no-scrollbar">
+      <div className="flex-1 overflow-y-auto space-y-2.5 no-scrollbar">
         {isLoading && logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <RefreshCw className="w-8 h-8 animate-spin text-brand-500 mb-2" />

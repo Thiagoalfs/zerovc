@@ -11,6 +11,8 @@ import {
   Link as LinkIcon,
   ChevronRight,
   ArrowLeft,
+  Filter,
+  RefreshCw,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -20,7 +22,8 @@ import { api, formatAssetUrl, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
 import { convertToWebP } from '../../utils/image';
 import { ImageCropModal } from './ImageCropModal';
-import { ServerAuditLogView } from './ServerAuditLogView';
+import { ServerAuditLogView, ACTION_FILTERS } from './ServerAuditLogView';
+import { DropdownSelect } from '../Common/DropdownSelect';
 import { pushBackHandler } from '../../lib/mobileBackHandler';
 
 import { OverviewTab } from './ServerSettings/OverviewTab';
@@ -114,6 +117,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const [muteModalUser, setMuteModalUser] = useState<User | null>(null);
   const [banModalUser, setBanModalUser] = useState<User | null>(null);
   const [banReason, setBanReason] = useState('');
+
+  // Audit Log State
+  const [auditFilter, setAuditFilter] = useState('ALL');
+  const [auditRefreshTrigger, setAuditRefreshTrigger] = useState(0);
+  const [isAuditLoading, setIsAuditLoading] = useState(false);
 
   // Crop Modal State
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -1087,13 +1095,42 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   {activeTab === 'audit_log' && 'Histórico completo de alterações e ações de moderação'}
                 </p>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                title="Fechar Configurações (ESC)"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              <div className="flex items-center gap-3">
+                {activeTab === 'audit_log' && (
+                  <div className="flex items-center gap-2">
+                    <DropdownSelect
+                      className="w-48 sm:w-56"
+                      prefixIcon={<Filter className="w-3.5 h-3.5" />}
+                      value={auditFilter}
+                      onChange={(val) => setAuditFilter(String(val))}
+                      options={ACTION_FILTERS.map((f) => ({
+                        value: f.value,
+                        label: f.label,
+                      }))}
+                      placeholder="Filtrar ações..."
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setAuditRefreshTrigger((prev) => prev + 1)}
+                      disabled={isAuditLoading}
+                      className="p-2 bg-background-darkest border border-white/10 hover:border-white/20 rounded-xl text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                      title="Recarregar"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isAuditLoading ? 'animate-spin text-brand-400' : ''}`} />
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Fechar Configurações (ESC)"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* TAB CONTENTS */}
@@ -1205,7 +1242,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
               {activeTab === 'audit_log' && (
                 <div className="animate-fade-in">
-                  <ServerAuditLogView guildId={activeGuild.id} />
+                  <ServerAuditLogView
+                    guildId={activeGuild.id}
+                    selectedFilter={auditFilter}
+                    setSelectedFilter={setAuditFilter}
+                    refreshTrigger={auditRefreshTrigger}
+                    onLoadingChange={setIsAuditLoading}
+                  />
                 </div>
               )}
             </div>
