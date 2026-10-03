@@ -584,6 +584,9 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate all active sessions on password reset
+	_, _ = h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1", userID)
+
 	// Mark token as used
 	h.db.Pool.Exec(r.Context(), "UPDATE password_resets SET used_at = CURRENT_TIMESTAMP WHERE id = $1", resetID)
 
@@ -1513,6 +1516,15 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, `{"error":"failed to update password"}`, http.StatusInternalServerError)
 		return
+	}
+
+	// Revoke other active sessions for this user
+	currentToken := extractTokenFromRequest(r)
+	currentTokenHash := hashToken(currentToken)
+	if currentTokenHash != "" {
+		_, _ = h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1 AND token_hash != $2", userID, currentTokenHash)
+	} else {
+		_, _ = h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1", userID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

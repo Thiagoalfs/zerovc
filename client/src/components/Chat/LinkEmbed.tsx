@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ExternalLink, Globe, Play } from 'lucide-react';
 import { LinkMetadata } from '../../types';
 import { api } from '../../lib/api';
@@ -91,6 +91,14 @@ export const LinkEmbed: React.FC<LinkEmbedProps> = ({ url, onPreviewImage, class
   // Border color accent based on themeColor or default brand color
   const borderColor = metadata.theme_color || '#6366f1';
 
+  const isSafeUrl = (u?: string): boolean => {
+    if (!u) return false;
+    const trimmed = u.trim().toLowerCase();
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  };
+
+  const safeUrl = isSafeUrl(url) ? url : '#';
+
   return (
     <div
       className={`my-1.5 max-w-lg w-full rounded-xl bg-background-darkest/90 border border-white/10 hover:border-white/20 transition-all overflow-hidden flex flex-col shadow-lg select-text ${className}`}
@@ -100,7 +108,7 @@ export const LinkEmbed: React.FC<LinkEmbedProps> = ({ url, onPreviewImage, class
         {/* Site Name & Favicon */}
         <div className="flex items-center justify-between gap-2 text-xs text-gray-400">
           <div className="flex items-center gap-1.5 overflow-hidden">
-            {metadata.favicon ? (
+            {metadata.favicon && isSafeUrl(metadata.favicon) ? (
               <img
                 src={metadata.favicon}
                 alt=""
@@ -113,33 +121,41 @@ export const LinkEmbed: React.FC<LinkEmbedProps> = ({ url, onPreviewImage, class
               <Globe className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
             )}
             <span className="font-semibold text-gray-300 truncate">
-              {metadata.site_name || new URL(url).hostname}
+              {metadata.site_name || (isSafeUrl(url) ? new URL(url).hostname : '')}
             </span>
           </div>
 
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="text-gray-400 hover:text-white transition-colors flex-shrink-0 p-0.5 rounded hover:bg-white/5"
-            title="Abrir link original"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          {isSafeUrl(url) && (
+            <a
+              href={safeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-gray-400 hover:text-white transition-colors flex-shrink-0 p-0.5 rounded hover:bg-white/5"
+              title="Abrir link original"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
         </div>
 
         {/* Title */}
         {metadata.title && (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="text-sm font-bold text-brand-400 hover:text-brand-300 hover:underline leading-snug line-clamp-2 break-words"
-          >
-            {metadata.title}
-          </a>
+          isSafeUrl(url) ? (
+            <a
+              href={safeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-sm font-bold text-brand-400 hover:text-brand-300 hover:underline leading-snug line-clamp-2 break-words"
+            >
+              {metadata.title}
+            </a>
+          ) : (
+            <span className="text-sm font-bold text-brand-400 leading-snug line-clamp-2 break-words">
+              {metadata.title}
+            </span>
+          )
         )}
 
         {/* Description */}

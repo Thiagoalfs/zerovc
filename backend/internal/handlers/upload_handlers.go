@@ -37,22 +37,55 @@ var dangerousExtensions = map[string]bool{
 	".bat":   true,
 	".cmd":   true,
 	".sh":    true,
+	".bash":  true,
 	".ps1":   true,
+	".psm1":  true,
 	".vbs":   true,
+	".vbe":   true,
+	".js":    true,
+	".jse":   true,
+	".wsf":   true,
+	".wsh":   true,
+	".msc":   true,
 	".msi":   true,
+	".msp":   true,
 	".scr":   true,
 	".jar":   true,
 	".pif":   true,
 	".com":   true,
 	".hta":   true,
 	".cpl":   true,
-	".wsf":   true,
-	".msc":   true,
 	".html":  true,
 	".htm":   true,
 	".svg":   true,
 	".xhtml": true,
 	".shtml": true,
+	".php":   true,
+	".php3":  true,
+	".php4":  true,
+	".php5":  true,
+	".phtml": true,
+	".asp":   true,
+	".aspx":  true,
+	".cer":   true,
+	".asa":   true,
+	".jsp":   true,
+	".jspx":  true,
+	".cgi":   true,
+	".pl":    true,
+	".py":    true,
+	".dll":   true,
+	".so":    true,
+	".dylib": true,
+	".iso":   true,
+	".img":   true,
+	".dmg":   true,
+	".lnk":   true,
+	".inf":   true,
+	".reg":   true,
+	".app":   true,
+	".deb":   true,
+	".rpm":   true,
 }
 
 var allowedImageExtensions = map[string]bool{
@@ -116,12 +149,8 @@ func (h *UploadHandler) UploadAttachment(w http.ResponseWriter, r *http.Request)
 func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string, imageOnly bool, userID uuid.UUID) {
 	maxSize := int64(20 << 20) // 20 MB padrão
 
-	botHeader := r.Header.Get("X-Bot-ID")
-	if botHeader == "" {
-		botHeader = r.URL.Query().Get("bot_id")
-	}
-
-	isGork := userID == GorkBotID || botHeader == "00000000-0000-0000-0000-000000000001" || botHeader == GorkBotID.String()
+	// Only verified Gork bot user ID gets 100MB limit
+	isGork := userID == GorkBotID
 	if isGork {
 		maxSize = 100 << 20 // Permite até 100MB para o bot Gork
 	}
@@ -159,6 +188,23 @@ func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, fol
 			http.Error(w, `{"error":"Tipo de arquivo não permitido por motivos de segurança."}`, http.StatusBadRequest)
 			return
 		}
+	}
+
+	// Sniff first 512 bytes for HTML/SVG disguises
+	sniffBuf := make([]byte, 512)
+	n, _ := file.Read(sniffBuf)
+	if n > 0 {
+		detectedType := http.DetectContentType(sniffBuf[:n])
+		if strings.Contains(detectedType, "text/html") || strings.Contains(detectedType, "image/svg+xml") {
+			if !imageOnly {
+				http.Error(w, `{"error":"Tipo de conteúdo de arquivo não permitido."}`, http.StatusBadRequest)
+				return
+			}
+		}
+	}
+	// Reset file read pointer after sniffing
+	if seeker, ok := file.(io.Seeker); ok {
+		_, _ = seeker.Seek(0, io.SeekStart)
 	}
 
 	filename := fmt.Sprintf("%s_%s%s", prefix, uuid.New().String(), ext)

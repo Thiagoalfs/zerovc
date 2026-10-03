@@ -185,6 +185,18 @@ func (h *Hub) IsGuildMember(guildID uuid.UUID, userID uuid.UUID) bool {
 	return false
 }
 
+func (h *Hub) ShareAnyGuild(user1, user2 uuid.UUID) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	for _, members := range h.guildMembers {
+		if members[user1] && members[user2] {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *Hub) BroadcastToGuild(guildID uuid.UUID, event models.WSEvent) {
 	h.Broadcast <- BroadcastMessage{
 		GuildID: &guildID,

@@ -1,8 +1,8 @@
 version: 1.0.2
 files:
   - url: ZeroVC-Setup.exe
-    sha512: 5knnJBvxrMXfKfxgF8Z76XDkJshtw+LiQpxSd0MwOQnPbf6/PuuvrKPRMvwpAjawvPfhWiK6DmcBAg8winh7YA==
-    size: 77404678
+    sha512: m7ymWod1DRIpxZR9tpqECJdePgj374/2O+nJDkAcp7Yiu97Fg9gkmU6Af7qqUzOYxVG99z3o5gJyoUAbMPITWw==
+    size: 77404720
 path: ZeroVC-Setup.exe
-sha512: 5knnJBvxrMXfKfxgF8Z76XDkJshtw+LiQpxSd0MwOQnPbf6/PuuvrKPRMvwpAjawvPfhWiK6DmcBAg8winh7YA==
-releaseDate: '2026-10-03T01:32:23.836Z'
+sha512: m7ymWod1DRIpxZR9tpqECJdePgj374/2O+nJDkAcp7Yiu97Fg9gkmU6Af7qqUzOYxVG99z3o5gJyoUAbMPITWw==
+releaseDate: '2026-10-03T01:52:45.477Z'
