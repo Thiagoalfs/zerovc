@@ -330,16 +330,16 @@ export const useDMStore = create<DMState>((set, get) => ({
 
       set((state) => {
         const replaceTemp = (list: DMMessage[]) => {
-          const hasConfirmed = list.some((m) => m.id === confirmedMsg.id);
+          const confirmedIdx = list.findIndex((m) => m.id === confirmedMsg.id);
           const tempIdx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
 
-          if (hasConfirmed) {
-            if (tempIdx !== -1) {
-              const copy = [...list];
+          if (confirmedIdx !== -1) {
+            const copy = [...list];
+            copy[confirmedIdx] = { ...copy[confirmedIdx], ...readyMsg, status: 'sent' };
+            if (tempIdx !== -1 && tempIdx !== confirmedIdx) {
               copy.splice(tempIdx, 1);
-              return copy;
             }
-            return list;
+            return copy;
           }
 
           if (tempIdx !== -1) {
@@ -435,7 +435,11 @@ export const useDMStore = create<DMState>((set, get) => ({
       if (existingExactIdx !== -1) {
         updatedRoomMsgs[existingExactIdx] = { ...updatedRoomMsgs[existingExactIdx], ...message, status: 'sent' };
       } else if (tempMatchIdx !== -1) {
-        updatedRoomMsgs[tempMatchIdx] = { ...message, status: 'sent' };
+        updatedRoomMsgs[tempMatchIdx] = {
+          ...message,
+          status: 'sent',
+          tempId: updatedRoomMsgs[tempMatchIdx].tempId || updatedRoomMsgs[tempMatchIdx].id,
+        };
       } else {
         updatedRoomMsgs.push({ ...message, status: 'sent' });
       }

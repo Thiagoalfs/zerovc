@@ -752,16 +752,16 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
       set((state) => {
         const replaceTemp = (list: Message[]) => {
-          const hasConfirmed = list.some((m) => m.id === confirmedMsg.id);
+          const confirmedIdx = list.findIndex((m) => m.id === confirmedMsg.id);
           const tempIdx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
 
-          if (hasConfirmed) {
-            if (tempIdx !== -1) {
-              const copy = [...list];
+          if (confirmedIdx !== -1) {
+            const copy = [...list];
+            copy[confirmedIdx] = { ...copy[confirmedIdx], ...readyMsg, status: 'sent' };
+            if (tempIdx !== -1 && tempIdx !== confirmedIdx) {
               copy.splice(tempIdx, 1);
-              return copy;
             }
-            return list;
+            return copy;
           }
 
           if (tempIdx !== -1) {
@@ -879,7 +879,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       if (existingExactIdx !== -1) {
         updatedChannelMsgs[existingExactIdx] = { ...updatedChannelMsgs[existingExactIdx], ...message, status: 'sent' };
       } else if (tempMatchIdx !== -1) {
-        updatedChannelMsgs[tempMatchIdx] = { ...message, status: 'sent' };
+        updatedChannelMsgs[tempMatchIdx] = {
+          ...message,
+          status: 'sent',
+          tempId: updatedChannelMsgs[tempMatchIdx].tempId || updatedChannelMsgs[tempMatchIdx].id,
+        };
       } else {
         updatedChannelMsgs.push({ ...message, status: 'sent' });
       }

@@ -382,16 +382,16 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       set((state) => {
         if (state.activeGroup?.id !== activeGroup.id) return state;
         const replaceTemp = (list: DMGroupMessage[]) => {
-          const hasConfirmed = list.some((m) => m.id === confirmedMsg.id);
+          const confirmedIdx = list.findIndex((m) => m.id === confirmedMsg.id);
           const tempIdx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
 
-          if (hasConfirmed) {
-            if (tempIdx !== -1) {
-              const copy = [...list];
+          if (confirmedIdx !== -1) {
+            const copy = [...list];
+            copy[confirmedIdx] = { ...copy[confirmedIdx], ...readyMsg, status: 'sent' };
+            if (tempIdx !== -1 && tempIdx !== confirmedIdx) {
               copy.splice(tempIdx, 1);
-              return copy;
             }
-            return list;
+            return copy;
           }
 
           if (tempIdx !== -1) {
@@ -470,7 +470,11 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       if (existingExactIdx !== -1) {
         updatedGroupMsgs[existingExactIdx] = { ...updatedGroupMsgs[existingExactIdx], ...message, status: 'sent' };
       } else if (tempMatchIdx !== -1) {
-        updatedGroupMsgs[tempMatchIdx] = { ...message, status: 'sent' };
+        updatedGroupMsgs[tempMatchIdx] = {
+          ...message,
+          status: 'sent',
+          tempId: updatedGroupMsgs[tempMatchIdx].tempId || updatedGroupMsgs[tempMatchIdx].id,
+        };
       } else {
         updatedGroupMsgs.push({ ...message, status: 'sent' });
       }
