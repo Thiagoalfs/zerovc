@@ -102,6 +102,11 @@ export const PERMISSION_GROUPS: { category: string; icon: React.ReactNode; permi
         name: 'Gerenciar Mensagens',
         description: 'Permite apagar ou fixar mensagens de outros usuários.',
       },
+      {
+        flag: Permissions.SEND_TTS,
+        name: 'Permitir TTS',
+        description: 'Permite aos membros utilizarem o comando /tts para que suas mensagens sejam reproduzidas em áudio falado.',
+      },
     ],
   },
   {

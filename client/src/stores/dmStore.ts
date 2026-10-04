@@ -209,9 +209,11 @@ export const useDMStore = create<DMState>((set, get) => ({
       }
     } catch {}
 
+    const wasActive = get().activeRoom?.id === roomId;
+
     set((state) => {
       const newRooms = state.rooms.filter((r) => r.id !== roomId);
-      const isActive = state.activeRoom?.id === roomId;
+      const isCurActive = state.activeRoom?.id === roomId;
       const unread = new Set(state.unreadRooms);
       unread.delete(roomId);
       const counts = { ...state.roomUnreadCounts };
@@ -219,11 +221,15 @@ export const useDMStore = create<DMState>((set, get) => ({
 
       return {
         rooms: newRooms,
-        activeRoom: isActive ? null : state.activeRoom,
+        activeRoom: isCurActive ? null : state.activeRoom,
         unreadRooms: unread,
         roomUnreadCounts: counts,
       };
     });
+
+    if (wasActive && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zerovc:nav-home', { detail: { target: 'friends' } }));
+    }
 
     try {
       await api.dms.closeRoom(roomId);

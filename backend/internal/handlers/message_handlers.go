@@ -143,16 +143,15 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Check TTS permission if requested (requires PermManageMessages, Admin, or Owner)
+	// Check TTS permission if requested (requires PermSendTTS, Admin, or Owner with channel overwrite check)
 	if req.IsTTS {
-		actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+		canSend, err := canUserSendTTS(r.Context(), h.db, guildID, channelID, userID)
 		if err != nil {
 			http.Error(w, `{"error":"failed to check permissions"}`, http.StatusInternalServerError)
 			return
 		}
-		canSendTTS := actorCtx.IsOwner || actorCtx.HasAdmin || (actorCtx.Perms&models.PermManageMessages) != 0
-		if !canSendTTS {
-			http.Error(w, `{"error":"forbidden: você precisa da permissão \"Gerenciar Mensagens\" para enviar mensagens de TTS neste servidor"}`, http.StatusForbidden)
+		if !canSend {
+			http.Error(w, `{"error":"forbidden: você precisa da permissão \"Permitir TTS\" no seu cargo ou neste canal para enviar mensagens de TTS"}`, http.StatusForbidden)
 			return
 		}
 	}

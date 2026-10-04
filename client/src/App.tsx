@@ -78,11 +78,54 @@ export const App: React.FC = () => {
     leaveVoice,
   } = useVoiceStore();
   const { addMessage: addDMMessage } = useDMStore();
+  const activeRoom = useDMStore((s) => s.activeRoom);
+  const activeGroup = useDMGroupStore((s) => s.activeGroup);
   const channelListWidth = useSettingsStore((s) => s.channelListWidth);
 
   const [isHomeActive, setIsHomeActive] = useState(true);
   const [homeView, setHomeView] = useState<'friends' | 'dm' | 'group'>('friends');
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+
+  // Auto-sync view to 'friends' if active DM or group is closed/deleted
+  useEffect(() => {
+    if (isHomeActive) {
+      if (homeView === 'dm' && !activeRoom) {
+        setHomeView('friends');
+        navigateTo('/@me', true);
+      } else if (homeView === 'group' && !activeGroup) {
+        setHomeView('friends');
+        navigateTo('/@me', true);
+      }
+    }
+  }, [isHomeActive, homeView, activeRoom, activeGroup]);
+
+  // Global custom navigation events for instant transitions
+  useEffect(() => {
+    const handleNavHome = () => {
+      setIsHomeActive(true);
+      setHomeView('friends');
+      navigateTo('/@me', true);
+    };
+
+    const handleNavChannel = (e: any) => {
+      const { guildId, channelId } = e.detail || {};
+      if (guildId) {
+        setIsHomeActive(false);
+        if (channelId) {
+          navigateTo(`/${guildId}/${channelId}`, true);
+        } else {
+          navigateTo(`/${guildId}`, true);
+        }
+      }
+    };
+
+    window.addEventListener('zerovc:nav-home', handleNavHome);
+    window.addEventListener('zerovc:nav-channel', handleNavChannel);
+    return () => {
+      window.removeEventListener('zerovc:nav-home', handleNavHome);
+      window.removeEventListener('zerovc:nav-channel', handleNavChannel);
+    };
+  }, []);
 
   // Modals
   const [isCreateServerOpen, setIsCreateServerOpen] = useState(false);
@@ -1226,8 +1269,18 @@ export const App: React.FC = () => {
       };
 
       const handleRoleDelete = (event: any) => {
-        if (event.data?.role_id && event.data?.guild_id) {
-          useGuildStore.getState().handleRoleDeleteEvent(event.data.guild_id, event.data.role_id);
+        const roleId = event.data?.role_id || event.data?.id;
+        const guildId = event.data?.guild_id;
+        if (roleId && guildId) {
+          useGuildStore.getState().handleRoleDeleteEvent(guildId, roleId);
+        }
+      };
+
+      const handleChannelDelete = (event: any) => {
+        const channelId = event.data?.id || event.data?.channel_id;
+        const guildId = event.data?.guild_id;
+        if (channelId && guildId) {
+          useGuildStore.getState().handleChannelDeleteEvent(guildId, channelId);
         }
       };
 
@@ -1308,6 +1361,7 @@ export const App: React.FC = () => {
       socket.on('GUILD_MEMBER_UPDATE', handleGuildMemberUpdate);
       socket.on('PRESENCE_UPDATE', handlePresenceUpdate);
       socket.on('CHANNEL_ACK', handleChannelAck);
+      socket.on('CHANNEL_DELETE', handleChannelDelete);
       socket.on('ROLE_CREATE', handleRoleCreate);
       socket.on('ROLE_UPDATE', handleRoleUpdate);
       socket.on('ROLE_DELETE', handleRoleDelete);
@@ -1395,6 +1449,7 @@ export const App: React.FC = () => {
         socket.off('GUILD_MEMBER_UPDATE', handleGuildMemberUpdate);
         socket.off('PRESENCE_UPDATE', handlePresenceUpdate);
         socket.off('CHANNEL_ACK', handleChannelAck);
+        socket.off('CHANNEL_DELETE', handleChannelDelete);
         socket.off('ROLE_CREATE', handleRoleCreate);
         socket.off('ROLE_UPDATE', handleRoleUpdate);
         socket.off('ROLE_DELETE', handleRoleDelete);
@@ -1781,7 +1836,7 @@ export const App: React.FC = () => {
                   }
                 }}
               />
-            ) : homeView === 'group' ? (
+            ) : homeView === 'group' && activeGroup ? (
               <DMGroupChatArea
                 onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
                 onOpenUserProfile={(targetUser, pos) =>
@@ -1794,8 +1849,12 @@ export const App: React.FC = () => {
                   setHomeView('dm');
                   setIsMobileDrawerOpen(false);
                 }}
+                onSelectFriends={() => {
+                  setHomeView('friends');
+                  navigateTo('/@me', true);
+                }}
               />
-            ) : (
+            ) : homeView === 'dm' && activeRoom ? (
               <DMChatArea
                 onOpenScreenShare={() => setIsScreenShareOpen(true)}
                 onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
@@ -1803,6 +1862,24 @@ export const App: React.FC = () => {
                   setSelectedUserForProfile({ user: targetUser, position: pos })
                 }
                 onPreviewImage={(url) => setPreviewImageUrl(url)}
+              />
+            ) : (
+              <FriendsView
+                onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+                onOpenUserProfile={(targetUser, pos) =>
+                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                }
+                onOpenDM={(userId, room) => {
+                  setIsHomeActive(true);
+                  setHomeView('dm');
+                  setIsMobileDrawerOpen(false);
+                  const targetRoom = room || useDMStore.getState().activeRoom;
+                  if (targetRoom) {
+                    navigateTo(`/@me/${targetRoom.id}`);
+                  } else {
+                    navigateTo('/@me');
+                  }
+                }}
               />
             )
           ) : activeChannel?.type === 'voice' ? (

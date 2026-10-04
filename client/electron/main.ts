@@ -1309,6 +1309,7 @@ function findFFmpegLocation(): string | null {
     }
 
     const commonLocations = [
+      path.join(process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local'), 'ZeroVC', 'bin'),
       path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'ffmpeg', 'bin'),
       path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'ffmpeg', 'bin'),
       path.join(app.getPath('home'), 'scoop', 'shims'),
@@ -1447,8 +1448,16 @@ ipcMain.handle('ytdlp-download', async (event, { format, link }: { format: 'mp4'
 
       console.log(`[yt-dlp] Attempting download with browser cookies: ${browser || 'none'} for ${cleanUrl} (${format})`);
 
+      const zeroVCBin = path.join(process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local'), 'ZeroVC', 'bin');
+      if (fs.existsSync(zeroVCBin) && !process.env.PATH?.includes(zeroVCBin)) {
+        process.env.PATH = `${zeroVCBin}${path.delimiter}${process.env.PATH || ''}`;
+      }
+      const ytdlpExecutable = fs.existsSync(path.join(zeroVCBin, 'yt-dlp.exe'))
+        ? path.join(zeroVCBin, 'yt-dlp.exe')
+        : 'yt-dlp';
+
       const execution = await new Promise<{ ok: boolean; stdout: string; stderr: string }>((resolve) => {
-        const proc = spawn('yt-dlp', args, { windowsHide: true });
+        const proc = spawn(ytdlpExecutable, args, { windowsHide: true });
         let stdout = '';
         let stderr = '';
 

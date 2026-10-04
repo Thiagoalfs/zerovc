@@ -7,6 +7,8 @@ import { useAuthStore } from './authStore';
 import { useSettingsStore } from './settingsStore';
 import { useUploadStore } from './uploadStore';
 import { optimizeImageForUpload } from '../lib/imageOptimizer';
+import { findFirstAccessibleChannel } from '../utils/userActivity';
+import { useVoiceStore } from './voiceStore';
 
 interface GuildState {
   guilds: Guild[];
@@ -49,6 +51,7 @@ interface GuildState {
   createChannel: (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string, categoryId?: string, isPrivate?: boolean, roleIds?: string[]) => Promise<Channel>;
   updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean; is_private?: boolean; role_ids?: string[]; permission_overwrites?: ChannelPermissionOverwrite[] }) => Promise<void>;
   deleteChannel: (channelId: string) => Promise<void>;
+  handleChannelDeleteEvent: (guildId: string, channelId: string) => void;
   reorderChannels: (guildId: string, payload: string[] | Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }>) => Promise<void>;
 
   sendMessage: (content: string, replyToId?: string, isTTS?: boolean, file?: File) => Promise<void>;
@@ -539,28 +542,79 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   },
 
   deleteChannel: async (channelId: string) => {
+    const curGuildId = get().activeGuild?.id;
     await api.channels.delete(channelId);
+    if (curGuildId) {
+      get().handleChannelDeleteEvent(curGuildId, channelId);
+    }
+  },
+
+  handleChannelDeleteEvent: (guildId: string, channelId: string) => {
+    const strGuildId = String(guildId);
+    const strChannelId = String(channelId);
+    const currentUser = useAuthStore.getState().user;
+
+    // 1. If currently connected to voice in this channel, leave voice immediately
+    if (useVoiceStore.getState().currentChannelId === strChannelId) {
+      useVoiceStore.getState().leaveVoice().catch(() => {});
+    }
+
+    // 2. Update channels in activeGuild and guilds
     set((state) => {
-      if (!state.activeGuild) return state;
-      // If deleted channel was a category, reset category_id of children
-      const channels = (state.activeGuild.channels || [])
-        .filter((c) => c.id !== channelId)
-        .map((c) => (c.category_id === channelId ? { ...c, category_id: undefined } : c));
-      const activeChannel = state.activeChannel?.id === channelId ? (channels[0] || null) : state.activeChannel;
-      if (typeof window !== 'undefined' && state.activeGuild.id) {
-        try {
-          if (activeChannel) {
-            localStorage.setItem(`zerovc_last_channel_${state.activeGuild.id}`, activeChannel.id);
-          } else {
-            localStorage.removeItem(`zerovc_last_channel_${state.activeGuild.id}`);
-          }
-        } catch {}
+      const nextGuilds = state.guilds.map((g) => {
+        if (String(g.id) === strGuildId) {
+          const channels = (g.channels || [])
+            .filter((c) => String(c.id) !== strChannelId)
+            .map((c) => (String(c.category_id) === strChannelId ? { ...c, category_id: undefined } : c));
+          return { ...g, channels };
+        }
+        return g;
+      });
+
+      let nextActive = state.activeGuild;
+      if (state.activeGuild && String(state.activeGuild.id) === strGuildId) {
+        const channels = (state.activeGuild.channels || [])
+          .filter((c) => String(c.id) !== strChannelId)
+          .map((c) => (String(c.category_id) === strChannelId ? { ...c, category_id: undefined } : c));
+        nextActive = { ...state.activeGuild, channels };
       }
-      return {
-        activeGuild: { ...state.activeGuild, channels },
-        activeChannel,
-      };
+
+      return { guilds: nextGuilds, activeGuild: nextActive };
     });
+
+    // 3. If deleted channel was the active channel, switch to first accessible channel!
+    const state = get();
+    if (state.activeGuild && String(state.activeGuild.id) === strGuildId) {
+      if (state.activeChannel && String(state.activeChannel.id) === strChannelId) {
+        const remainingChannels = state.activeGuild.channels || [];
+        const nextChannel = findFirstAccessibleChannel(remainingChannels, state.activeGuild, currentUser);
+        if (nextChannel) {
+          get().selectChannel(nextChannel);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(`zerovc_last_channel_${state.activeGuild.id}`, nextChannel.id);
+            } catch {}
+            window.dispatchEvent(
+              new CustomEvent('zerovc:nav-channel', {
+                detail: { guildId: state.activeGuild.id, channelId: nextChannel.id },
+              })
+            );
+          }
+        } else {
+          set({ activeChannel: null, messages: [] });
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.removeItem(`zerovc_last_channel_${state.activeGuild.id}`);
+            } catch {}
+            window.dispatchEvent(
+              new CustomEvent('zerovc:nav-channel', {
+                detail: { guildId: state.activeGuild.id, channelId: '' },
+              })
+            );
+          }
+        }
+      }
+    }
   },
 
   reorderChannels: async (guildId: string, payload: string[] | Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }>) => {
@@ -1370,9 +1424,18 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   createRole: async (guildId: string, name: string, color: string, permissions = 0, hoist = false, mentionable = false) => {
     const role = await api.roles.create(guildId, { name, color, permissions, hoist, mentionable });
     set((state) => {
-      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
-      const roles = [...(state.activeGuild.roles || []), role];
-      return { activeGuild: { ...state.activeGuild, roles } };
+      const updateGuildRoles = (guild: Guild) => {
+        const currentRoles = (guild.roles || []).filter((r) => String(r.id) !== String(role.id));
+        return [...currentRoles, role];
+      };
+
+      const nextGuilds = state.guilds.map((g) => (String(g.id) === String(guildId) ? { ...g, roles: updateGuildRoles(g) } : g));
+      let nextActive = state.activeGuild;
+      if (state.activeGuild && String(state.activeGuild.id) === String(guildId)) {
+        nextActive = { ...state.activeGuild, roles: updateGuildRoles(state.activeGuild) };
+      }
+
+      return { guilds: nextGuilds, activeGuild: nextActive };
     });
     return role;
   },
@@ -1380,17 +1443,25 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   updateRole: async (guildId: string, roleId: string, data) => {
     // Optimistic local update
     set((state) => {
-      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
-      const roles = (state.activeGuild.roles || []).map((r) => (r.id === roleId ? { ...r, ...data } : r));
+      if (!state.activeGuild || String(state.activeGuild.id) !== String(guildId)) return state;
+      const roles = (state.activeGuild.roles || []).map((r) => (String(r.id) === String(roleId) ? { ...r, ...data } : r));
       return { activeGuild: { ...state.activeGuild, roles } };
     });
 
     try {
       const updated = await api.roles.update(guildId, roleId, data);
       set((state) => {
-        if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
-        const roles = (state.activeGuild.roles || []).map((r) => (r.id === roleId ? { ...r, ...updated } : r));
-        return { activeGuild: { ...state.activeGuild, roles } };
+        const updateGuildRoles = (guild: Guild) => {
+          return (guild.roles || []).map((r) => (String(r.id) === String(roleId) ? { ...r, ...updated } : r));
+        };
+
+        const nextGuilds = state.guilds.map((g) => (String(g.id) === String(guildId) ? { ...g, roles: updateGuildRoles(g) } : g));
+        let nextActive = state.activeGuild;
+        if (state.activeGuild && String(state.activeGuild.id) === String(guildId)) {
+          nextActive = { ...state.activeGuild, roles: updateGuildRoles(state.activeGuild) };
+        }
+
+        return { guilds: nextGuilds, activeGuild: nextActive };
       });
     } catch (err) {
       console.error('Failed to update role via API:', err);
@@ -1404,30 +1475,49 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
   handleRoleCreateEvent: (role: Role) => {
     set((state) => {
-      if (!state.activeGuild || state.activeGuild.id !== role.guild_id) return state;
-      const exists = (state.activeGuild.roles || []).some((r) => r.id === role.id);
-      if (exists) return state;
-      const roles = [...(state.activeGuild.roles || []), role];
-      return { activeGuild: { ...state.activeGuild, roles } };
+      const roleGuildId = String(role.guild_id);
+      const updateGuildRoles = (guild: Guild) => {
+        const currentRoles = (guild.roles || []).filter((r) => String(r.id) !== String(role.id));
+        return [...currentRoles, role];
+      };
+
+      const nextGuilds = state.guilds.map((g) => (String(g.id) === roleGuildId ? { ...g, roles: updateGuildRoles(g) } : g));
+      let nextActive = state.activeGuild;
+      if (state.activeGuild && String(state.activeGuild.id) === roleGuildId) {
+        nextActive = { ...state.activeGuild, roles: updateGuildRoles(state.activeGuild) };
+      }
+
+      return { guilds: nextGuilds, activeGuild: nextActive };
     });
   },
 
   handleRoleUpdateEvent: (role: Role) => {
     set((state) => {
-      if (!state.activeGuild || state.activeGuild.id !== role.guild_id) return state;
-      const roles = (state.activeGuild.roles || []).map((r) => (r.id === role.id ? { ...r, ...role } : r));
-      return { activeGuild: { ...state.activeGuild, roles } };
+      const roleGuildId = String(role.guild_id);
+      const updateGuildRoles = (guild: Guild) => {
+        return (guild.roles || []).map((r) => (String(r.id) === String(role.id) ? { ...r, ...role } : r));
+      };
+
+      const nextGuilds = state.guilds.map((g) => (String(g.id) === roleGuildId ? { ...g, roles: updateGuildRoles(g) } : g));
+      let nextActive = state.activeGuild;
+      if (state.activeGuild && String(state.activeGuild.id) === roleGuildId) {
+        nextActive = { ...state.activeGuild, roles: updateGuildRoles(state.activeGuild) };
+      }
+
+      return { guilds: nextGuilds, activeGuild: nextActive };
     });
   },
 
   handleRoleDeleteEvent: (guildId: string, roleId: string) => {
     set((state) => {
+      const strRoleId = String(roleId);
+      const strGuildId = String(guildId);
       const nextGuilds = state.guilds.map((g) => {
-        if (g.id === guildId) {
-          const roles = (g.roles || []).filter((r) => r.id !== roleId);
+        if (String(g.id) === strGuildId) {
+          const roles = (g.roles || []).filter((r) => String(r.id) !== strRoleId);
           const members = (g.members || []).map((m) => ({
             ...m,
-            roles: (m.roles || []).filter((r) => r.id !== roleId),
+            roles: (m.roles || []).filter((r) => String(r.id) !== strRoleId),
           }));
           return { ...g, roles, members };
         }
@@ -1435,11 +1525,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       });
 
       let nextActive = state.activeGuild;
-      if (state.activeGuild && state.activeGuild.id === guildId) {
-        const roles = (state.activeGuild.roles || []).filter((r) => r.id !== roleId);
+      if (state.activeGuild && String(state.activeGuild.id) === strGuildId) {
+        const roles = (state.activeGuild.roles || []).filter((r) => String(r.id) !== strRoleId);
         const members = (state.activeGuild.members || []).map((m) => ({
           ...m,
-          roles: (m.roles || []).filter((r) => r.id !== roleId),
+          roles: (m.roles || []).filter((r) => String(r.id) !== strRoleId),
         }));
         nextActive = { ...state.activeGuild, roles, members };
       }
@@ -1516,12 +1606,14 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   deleteRole: async (guildId: string, roleId: string) => {
     await api.roles.delete(guildId, roleId);
     set((state) => {
+      const strRoleId = String(roleId);
+      const strGuildId = String(guildId);
       const nextGuilds = state.guilds.map((g) => {
-        if (g.id === guildId) {
-          const roles = (g.roles || []).filter((r) => r.id !== roleId);
+        if (String(g.id) === strGuildId) {
+          const roles = (g.roles || []).filter((r) => String(r.id) !== strRoleId);
           const members = (g.members || []).map((m) => ({
             ...m,
-            roles: (m.roles || []).filter((r) => r.id !== roleId),
+            roles: (m.roles || []).filter((r) => String(r.id) !== strRoleId),
           }));
           return { ...g, roles, members };
         }
@@ -1529,11 +1621,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       });
 
       let nextActive = state.activeGuild;
-      if (state.activeGuild && state.activeGuild.id === guildId) {
-        const roles = (state.activeGuild.roles || []).filter((r) => r.id !== roleId);
+      if (state.activeGuild && String(state.activeGuild.id) === strGuildId) {
+        const roles = (state.activeGuild.roles || []).filter((r) => String(r.id) !== strRoleId);
         const members = (state.activeGuild.members || []).map((m) => ({
           ...m,
-          roles: (m.roles || []).filter((r) => r.id !== roleId),
+          roles: (m.roles || []).filter((r) => String(r.id) !== strRoleId),
         }));
         nextActive = { ...state.activeGuild, roles, members };
       }

@@ -104,3 +104,65 @@ func (ac actorGuildContext) canModerateTarget(ctx context.Context, db *database.
 
 	return true, ""
 }
+
+// canUserSendTTS checa se o usuário tem permissão para enviar TTS em um canal específico,
+// combinando permissões de cargos no servidor, bypass de Admin/Owner e sobrescritas de canal.
+func canUserSendTTS(ctx context.Context, db *database.DB, guildID, channelID, userID uuid.UUID) (bool, error) {
+	actorCtx, err := loadActorGuildContext(ctx, db, guildID, userID)
+	if err != nil {
+		return false, err
+	}
+	if actorCtx.IsOwner || actorCtx.HasAdmin {
+		return true, nil
+	}
+
+	// 1. Permissão base vinda dos cargos do membro
+	hasPerm := (actorCtx.Perms & models.PermSendTTS) != 0
+
+	// 2. Sobrescritas de permissão no canal
+	rows, err := db.Pool.Query(ctx, `
+		SELECT cpo.role_id, cpo.allow, cpo.deny, gr.name,
+		       EXISTS(SELECT 1 FROM guild_member_roles gmr WHERE gmr.guild_id = $1 AND gmr.user_id = $2 AND gmr.role_id = cpo.role_id) as is_member_role
+		FROM channel_permission_overwrites cpo
+		INNER JOIN guild_roles gr ON gr.id = cpo.role_id
+		WHERE cpo.channel_id = $3
+	`, guildID, userID, channelID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	var roleAllow, roleDeny bool
+	for rows.Next() {
+		var roleID uuid.UUID
+		var allow, deny int64
+		var roleName string
+		var isMemberRole bool
+		if err := rows.Scan(&roleID, &allow, &deny, &roleName, &isMemberRole); err == nil {
+			if roleName == "@everyone" {
+				if (deny & models.PermSendTTS) != 0 {
+					hasPerm = false
+				}
+				if (allow & models.PermSendTTS) != 0 {
+					hasPerm = true
+				}
+			} else if isMemberRole {
+				if (deny & models.PermSendTTS) != 0 {
+					roleDeny = true
+				}
+				if (allow & models.PermSendTTS) != 0 {
+					roleAllow = true
+				}
+			}
+		}
+	}
+
+	if roleDeny {
+		hasPerm = false
+	}
+	if roleAllow {
+		hasPerm = true
+	}
+
+	return hasPerm, nil
+}

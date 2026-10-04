@@ -104,7 +104,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "ZeroVC",
       "uninstallDisplayName": "ZeroVC",
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "include": "electron/installer.nsh"
     }
   }
 }

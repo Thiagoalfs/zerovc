@@ -7,9 +7,11 @@ import { LimitAlertModal } from '../Modals/LimitAlertModal';
 import { EmojiAndGifPicker } from './EmojiAndGifPicker';
 import { VoiceRecorder } from './VoiceRecorder';
 import { useGuildStore } from '../../stores/guildStore';
+import { useAuthStore } from '../../stores/authStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
+import { canUserSendTTS } from '../../utils/userActivity';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
 import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand, validateSlashOption } from '../../lib/slashCommands';
 import { executeYtdlpCommand } from '../../lib/ytdlpRunner';
@@ -87,9 +89,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   customMentions,
   onTyping,
 }) => {
+  const { user } = useAuthStore();
   const { activeGuild, guilds } = useGuildStore();
   const perms = useGuildPermissions(activeGuild);
   const { canManageMessages, canKick, canBan } = perms;
+
+  const canSendTTS = useMemo(() => {
+    if (contextType !== 'channel') return true;
+    return canUserSendTTS(channel as any, activeGuild, user);
+  }, [contextType, channel, activeGuild, user]);
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [pickerInitialTab, setPickerInitialTab] = useState<'emoji' | 'gif'>('emoji');
@@ -342,6 +350,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       if (cmd.requiredPermission === 'manage_messages' && !canManageMessages) continue;
       if (cmd.requiredPermission === 'kick_members' && !canKick) continue;
       if (cmd.requiredPermission === 'ban_members' && !canBan) continue;
+      if (cmd.requiredPermission === 'send_tts' && !canSendTTS) continue;
 
       if (cmd.subcommands && cmd.subcommands.length > 0) {
         for (const sub of cmd.subcommands) {
@@ -389,7 +398,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     return list.slice(0, 50);
-  }, [activeSlash, content, contextType, mentionQuery, emojiQuery, channelQuery, canManageMessages, canKick, canBan]);
+  }, [activeSlash, content, contextType, mentionQuery, emojiQuery, channelQuery, canManageMessages, canKick, canBan, canSendTTS]);
 
   const allAvailableEmojis = useMemo(() => {
     const list: any[] = [];
@@ -729,6 +738,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       });
       return;
     }
+    if (activeSlash.command.requiredPermission === 'send_tts' && !canSendTTS) {
+      triggerErrorShake();
+      setCommandError({
+        title: 'Permissão Negada',
+        message: 'Você precisa da permissão "Permitir TTS" no seu cargo ou neste canal para usar este comando.',
+      });
+      return;
+    }
 
     // Check required options and validate all parameters
     for (const opt of activeSlashOptions) {
@@ -779,82 +796,82 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     recordCommandCooldown(commandName);
     isSendingRef.current = true;
 
-    if (commandName === 'yt-dlp' || commandName === 'ytdlp') {
-      const link = args.link?.trim() || '';
-      const linkValidation = validateSlashOption('yt-dlp', 'link', link);
-      if (!linkValidation.isValid) {
-        triggerErrorShake();
-        setCommandError({
-          title: linkValidation.errorTitle || 'Link Inválido',
-          message: linkValidation.errorMessage || 'Link inválido para download.',
-          field: 'link',
-        });
-        selectOptionToFocus('link');
-        return;
-      }
+    try {
+      if (commandName === 'yt-dlp' || commandName === 'ytdlp') {
+        const link = args.link?.trim() || '';
+        const linkValidation = validateSlashOption('yt-dlp', 'link', link);
+        if (!linkValidation.isValid) {
+          triggerErrorShake();
+          setCommandError({
+            title: linkValidation.errorTitle || 'Link Inválido',
+            message: linkValidation.errorMessage || 'Link inválido para download.',
+            field: 'link',
+          });
+          selectOptionToFocus('link');
+          return;
+        }
 
-      // Validated successfully: Clear the command input immediately
-      setActiveSlash(null);
-      setSelectedOptionIndex(-1);
-      setContent('');
-      setCommandError(null);
+        // Validated successfully: Clear the command input immediately
+        setActiveSlash(null);
+        setSelectedOptionIndex(-1);
+        setContent('');
+        setCommandError(null);
 
-      executeYtdlpCommand({
-        format: args.format === 'mp3' ? 'mp3' : 'mp4',
-        link,
-        contextType,
-        contextId: channel?.id || '',
-        onError: (errMessage) => {
+        executeYtdlpCommand({
+          format: args.format === 'mp3' ? 'mp3' : 'mp4',
+          link,
+          contextType,
+          contextId: channel?.id || '',
+          onError: (errMessage) => {
+            triggerErrorShake();
+            setCommandError({
+              title: 'Erro no Download (yt-dlp)',
+              message: errMessage,
+            });
+          },
+        }).catch((err: any) => {
+          console.error('Failed to execute yt-dlp command:', err);
           triggerErrorShake();
           setCommandError({
             title: 'Erro no Download (yt-dlp)',
-            message: errMessage,
+            message: err?.message || 'Falha ao executar o comando.',
           });
-        },
-      }).catch((err: any) => {
-        console.error('Failed to execute yt-dlp command:', err);
-        triggerErrorShake();
-        setCommandError({
-          title: 'Erro no Download (yt-dlp)',
-          message: err?.message || 'Falha ao executar o comando.',
-        });
-      });
-      return;
-    }
-
-    if (commandName === 'tts') {
-      if (contextType === 'channel' && !perms.canManageMessages) {
-        setLimitAlert({
-          title: 'Permissão Necessária',
-          message: 'Você precisa da permissão "Gerenciar Mensagens" no seu cargo para usar o comando /tts.',
         });
         return;
       }
-      const messageText = (args.mensagem || args.message || '').trim();
-      if (!messageText) {
-        triggerErrorShake();
-        setCommandError({
-          title: 'Opção Obrigatória Faltando',
-          message: 'Por favor preencha a mensagem para falar com TTS.',
-          field: 'mensagem',
-        });
-        selectOptionToFocus('mensagem');
+
+      if (commandName === 'tts') {
+        if (contextType === 'channel' && !canSendTTS) {
+          setLimitAlert({
+            title: 'Permissão Necessária',
+            message: 'Você precisa da permissão "Permitir TTS" no seu cargo ou canal para usar o comando /tts.',
+          });
+          return;
+        }
+        const messageText = (args.mensagem || args.message || '').trim();
+        if (!messageText) {
+          triggerErrorShake();
+          setCommandError({
+            title: 'Opção Obrigatória Faltando',
+            message: 'Por favor preencha a mensagem para falar com TTS.',
+            field: 'mensagem',
+          });
+          selectOptionToFocus('mensagem');
+          return;
+        }
+
+        setActiveSlash(null);
+        setSelectedOptionIndex(-1);
+        setContent('');
+        setCommandError(null);
+        onCancelReply?.();
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+        await onSendMessage(messageText, replyingTo?.id, true);
         return;
       }
 
-      setActiveSlash(null);
-      setSelectedOptionIndex(-1);
-      setContent('');
-      setCommandError(null);
-      onCancelReply?.();
-      if (textareaRef.current) textareaRef.current.style.height = 'auto';
-
-      await onSendMessage(messageText, replyingTo?.id, true);
-      return;
-    }
-
-    // Backend Slash Commands (/server, /user, /league)
-    try {
+      // Backend Slash Commands (/server, /user, /league)
       const payload = {
         command: commandName,
         subcommand: subcommandName,
@@ -1054,159 +1071,172 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         });
         return;
       }
+      if (cmdDef?.requiredPermission === 'send_tts' && !canSendTTS) {
+        triggerErrorShake();
+        setCommandError({
+          title: 'Permissão Negada',
+          message: 'Você precisa da permissão "Permitir TTS" no seu cargo ou neste canal para usar este comando.',
+        });
+        return;
+      }
 
       recordCommandCooldown(parsed.command);
+      isSendingRef.current = true;
 
-      if (parsed.command === 'yt-dlp' || parsed.command === 'ytdlp') {
-        const link = parsed.args.link?.trim() || '';
-        if (!link) {
-          triggerErrorShake();
-          const cmdDef = SLASH_COMMANDS.find((c) => c.name === 'yt-dlp');
-          if (cmdDef) {
-            setActiveSlash({
-              command: cmdDef,
-              subcommand: undefined,
-              args: parsed.args,
-              activeOptionName: 'link',
+      try {
+        if (parsed.command === 'yt-dlp' || parsed.command === 'ytdlp') {
+          const link = parsed.args.link?.trim() || '';
+          if (!link) {
+            triggerErrorShake();
+            const cmdDef = SLASH_COMMANDS.find((c) => c.name === 'yt-dlp');
+            if (cmdDef) {
+              setActiveSlash({
+                command: cmdDef,
+                subcommand: undefined,
+                args: parsed.args,
+                activeOptionName: 'link',
+              });
+            }
+            setCommandError({
+              title: 'Opção Obrigatória Faltando',
+              message: 'Informe o formato e o link do vídeo/música individual.\nExemplo: `/yt-dlp mp4 https://www.youtube.com/watch?v=...`',
+              field: 'link',
             });
+            return;
           }
-          setCommandError({
-            title: 'Opção Obrigatória Faltando',
-            message: 'Informe o formato e o link do vídeo/música individual.\nExemplo: `/yt-dlp mp4 https://www.youtube.com/watch?v=...`',
-            field: 'link',
-          });
-          return;
-        }
 
-        const linkValidation = validateSlashOption('yt-dlp', 'link', link);
-        if (!linkValidation.isValid) {
-          triggerErrorShake();
-          const cmdDef = SLASH_COMMANDS.find((c) => c.name === 'yt-dlp');
-          if (cmdDef) {
-            setActiveSlash({
-              command: cmdDef,
-              subcommand: undefined,
-              args: parsed.args,
-              activeOptionName: 'link',
+          const linkValidation = validateSlashOption('yt-dlp', 'link', link);
+          if (!linkValidation.isValid) {
+            triggerErrorShake();
+            const cmdDef = SLASH_COMMANDS.find((c) => c.name === 'yt-dlp');
+            if (cmdDef) {
+              setActiveSlash({
+                command: cmdDef,
+                subcommand: undefined,
+                args: parsed.args,
+                activeOptionName: 'link',
+              });
+            }
+            setCommandError({
+              title: linkValidation.errorTitle || 'Link Inválido',
+              message: linkValidation.errorMessage || 'Link inválido para download.',
+              field: 'link',
             });
+            return;
           }
-          setCommandError({
-            title: linkValidation.errorTitle || 'Link Inválido',
-            message: linkValidation.errorMessage || 'Link inválido para download.',
-            field: 'link',
-          });
-          return;
-        }
 
-        setContent('');
-        setSelectedFile(null);
-        setSelectedImagePreview(null);
-        setShowEmojiPicker(false);
-        setChannelQuery(null);
-        setMentionQuery(null);
-        setEmojiQuery(null);
-        onCancelReply?.();
-        if (textareaRef.current) textareaRef.current.style.height = 'auto';
-        setCommandError(null);
+          setContent('');
+          setSelectedFile(null);
+          setSelectedImagePreview(null);
+          setShowEmojiPicker(false);
+          setChannelQuery(null);
+          setMentionQuery(null);
+          setEmojiQuery(null);
+          onCancelReply?.();
+          if (textareaRef.current) textareaRef.current.style.height = 'auto';
+          setCommandError(null);
 
-        executeYtdlpCommand({
-          format: parsed.args.format === 'mp3' ? 'mp3' : 'mp4',
-          link,
-          contextType,
-          contextId: channel?.id || '',
-          onError: (errMessage) => {
+          executeYtdlpCommand({
+            format: parsed.args.format === 'mp3' ? 'mp3' : 'mp4',
+            link,
+            contextType,
+            contextId: channel?.id || '',
+            onError: (errMessage) => {
+              triggerErrorShake();
+              setCommandError({
+                title: 'Erro no Download (yt-dlp)',
+                message: errMessage,
+              });
+            },
+          }).catch((err: any) => {
+            console.error('Failed to execute yt-dlp command:', err);
             triggerErrorShake();
             setCommandError({
               title: 'Erro no Download (yt-dlp)',
-              message: errMessage,
+              message: err?.message || 'Falha ao executar o comando.',
             });
-          },
-        }).catch((err: any) => {
-          console.error('Failed to execute yt-dlp command:', err);
-          triggerErrorShake();
-          setCommandError({
-            title: 'Erro no Download (yt-dlp)',
-            message: err?.message || 'Falha ao executar o comando.',
-          });
-        });
-        return;
-      }
-
-      if (parsed.command === 'tts') {
-        if (contextType === 'channel' && !canManageMessages) {
-          setLimitAlert({
-            title: 'Permissão Necessária',
-            message: 'Você precisa da permissão "Gerenciar Mensagens" no seu cargo para usar o comando /tts.',
-          });
-          return;
-        }
-        const messageText = (parsed.args.mensagem || parsed.args.message || finalContent.replace(/^\/tts\s*/i, '')).trim();
-        if (!messageText) {
-          triggerErrorShake();
-          setCommandError({
-            title: 'Mensagem Vazia',
-            message: 'Informe a mensagem que deseja enviar com TTS.\nExemplo: `/tts Olá a todos`',
-            field: 'mensagem',
           });
           return;
         }
 
-        setContent('');
-        setSelectedFile(null);
-        setSelectedImagePreview(null);
-        setShowEmojiPicker(false);
-        setChannelQuery(null);
-        setMentionQuery(null);
-        setEmojiQuery(null);
-        onCancelReply?.();
-        if (textareaRef.current) textareaRef.current.style.height = 'auto';
-        setCommandError(null);
+        if (parsed.command === 'tts') {
+          if (contextType === 'channel' && !canSendTTS) {
+            setLimitAlert({
+              title: 'Permissão Necessária',
+              message: 'Você precisa da permissão "Permitir TTS" no seu cargo ou canal para usar o comando /tts.',
+            });
+            return;
+          }
+          const messageText = (parsed.args.mensagem || parsed.args.message || finalContent.replace(/^\/tts\s*/i, '')).trim();
+          if (!messageText) {
+            triggerErrorShake();
+            setCommandError({
+              title: 'Mensagem Vazia',
+              message: 'Informe a mensagem que deseja enviar com TTS.\nExemplo: `/tts Olá a todos`',
+              field: 'mensagem',
+            });
+            return;
+          }
 
-        await onSendMessage(messageText, replyingTo?.id, true);
-        return;
-      }
+          setContent('');
+          setSelectedFile(null);
+          setSelectedImagePreview(null);
+          setShowEmojiPicker(false);
+          setChannelQuery(null);
+          setMentionQuery(null);
+          setEmojiQuery(null);
+          onCancelReply?.();
+          if (textareaRef.current) textareaRef.current.style.height = 'auto';
+          setCommandError(null);
 
-      // Backend Slash Commands
-      try {
-        const payload = {
-          command: parsed.command,
-          subcommand: parsed.subcommand,
-          args: parsed.args,
-        };
-        if (contextType === 'channel' && channel?.id) {
-          await api.commands.executeChannelCommand(channel.id, payload);
-        } else if (contextType === 'dm' && channel?.id) {
-          await api.commands.executeDMRoomCommand(channel.id, payload);
-        } else if (contextType === 'dm_group' && channel?.id) {
-          await api.commands.executeDMGroupCommand(channel.id, payload);
+          await onSendMessage(messageText, replyingTo?.id, true);
+          return;
         }
-        setContent('');
-        setSelectedFile(null);
-        setSelectedImagePreview(null);
-        setShowEmojiPicker(false);
-        setChannelQuery(null);
-        setMentionQuery(null);
-        setEmojiQuery(null);
-        onCancelReply?.();
-        if (textareaRef.current) textareaRef.current.style.height = 'auto';
-        setCommandError(null);
-      } catch (err: any) {
-        console.error('Failed to execute slash command:', err);
-        triggerErrorShake();
-        const cmdDef = SLASH_COMMANDS.find((c) => c.name === parsed.command);
-        if (cmdDef) {
-          const subDef = cmdDef.subcommands?.find((s) => s.name === parsed.subcommand);
-          setActiveSlash({
-            command: cmdDef,
-            subcommand: subDef,
+
+        // Backend Slash Commands
+        try {
+          const payload = {
+            command: parsed.command,
+            subcommand: parsed.subcommand,
             args: parsed.args,
-            activeOptionName: null,
+          };
+          if (contextType === 'channel' && channel?.id) {
+            await api.commands.executeChannelCommand(channel.id, payload);
+          } else if (contextType === 'dm' && channel?.id) {
+            await api.commands.executeDMRoomCommand(channel.id, payload);
+          } else if (contextType === 'dm_group' && channel?.id) {
+            await api.commands.executeDMGroupCommand(channel.id, payload);
+          }
+          setContent('');
+          setSelectedFile(null);
+          setSelectedImagePreview(null);
+          setShowEmojiPicker(false);
+          setChannelQuery(null);
+          setMentionQuery(null);
+          setEmojiQuery(null);
+          onCancelReply?.();
+          if (textareaRef.current) textareaRef.current.style.height = 'auto';
+          setCommandError(null);
+        } catch (err: any) {
+          console.error('Failed to execute slash command:', err);
+          triggerErrorShake();
+          const cmdDef = SLASH_COMMANDS.find((c) => c.name === parsed.command);
+          if (cmdDef) {
+            const subDef = cmdDef.subcommands?.find((s) => s.name === parsed.subcommand);
+            setActiveSlash({
+              command: cmdDef,
+              subcommand: subDef,
+              args: parsed.args,
+              activeOptionName: null,
+            });
+          }
+          setCommandError({
+            title: 'Erro ao Executar Comando',
+            message: err?.message || 'Falha ao executar comando no servidor.',
           });
         }
-        setCommandError({
-          title: 'Erro ao Executar Comando',
-          message: err?.message || 'Falha ao executar comando no servidor.',
-        });
+      } finally {
+        isSendingRef.current = false;
       }
       return;
     }
@@ -1812,6 +1842,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                   if (cmd.requiredPermission === 'manage_messages' && !canManageMessages) return false;
                   if (cmd.requiredPermission === 'kick_members' && !canKick) return false;
                   if (cmd.requiredPermission === 'ban_members' && !canBan) return false;
+                  if (cmd.requiredPermission === 'send_tts' && !canSendTTS) return false;
                   return true;
                 }).map((cmd) => (
                   <button

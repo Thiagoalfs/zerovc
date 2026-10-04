@@ -531,7 +531,7 @@ func (h *CommandHandler) processCommand(
 		}, nil
 
 	case "tts":
-		if guildID == nil {
+		if guildID == nil || channelID == nil {
 			return CommandResult{
 				Embeds: []models.MessageEmbed{
 					{
@@ -544,17 +544,17 @@ func (h *CommandHandler) processCommand(
 			}, nil
 		}
 
-		actorCtx, err := loadActorGuildContext(ctx, h.db, *guildID, invoker.ID)
+		canSend, err := canUserSendTTS(ctx, h.db, *guildID, *channelID, invoker.ID)
 		if err != nil {
 			return CommandResult{}, fmt.Errorf("erro ao verificar permissões: %w", err)
 		}
 
-		if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageMessages) == 0 {
+		if !canSend {
 			return CommandResult{
 				Embeds: []models.MessageEmbed{
 					{
 						Title:       "❌ Permissão Negada",
-						Description: "Você precisa de um cargo com a permissão **Gerenciar Mensagens** para usar `/tts`.",
+						Description: "Você precisa da permissão **Permitir TTS** no seu cargo ou neste canal para usar `/tts`.",
 						Color:       "#f43f5e",
 						Timestamp:   &now,
 					},

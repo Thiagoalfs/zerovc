@@ -16,6 +16,7 @@ export interface GuildPermissionsResult {
   canBan: boolean;
   canMute: boolean;
   canManageMessages: boolean;
+  canSendTTS: boolean;
   canMuteVoice: boolean;
   canDeafenVoice: boolean;
   canModerateMember: (targetUser: User | { id: string; roles?: Role[] }) => {
@@ -46,6 +47,7 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
         canBan: false,
         canMute: false,
         canManageMessages: false,
+        canSendTTS: false,
         canMuteVoice: false,
         canDeafenVoice: false,
         canModerateMember: () => ({
@@ -61,7 +63,8 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
     const currentMember = guild.members?.find((m) => m.id === user.id);
     const currentUserRoles = currentMember?.roles || [];
 
-    let currentUserPerms = 0;
+    const everyoneRole = guild.roles?.find((r) => r.name === '@everyone');
+    let currentUserPerms = Number(everyoneRole?.permissions || 0);
     let currentUserHighestPos = 999999;
 
     (currentUserRoles || []).forEach((r: any) => {
@@ -80,6 +83,7 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
     const canBan = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.BAN_MEMBERS) !== 0;
     const canMute = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_MEMBERS) !== 0;
     const canManageMessages = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_MESSAGES) !== 0;
+    const canSendTTS = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.SEND_TTS) !== 0;
     const canMuteVoice = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_VOICE) !== 0;
     const canDeafenVoice = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.DEAFEN_VOICE) !== 0;
 
@@ -127,6 +131,7 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
       canBan,
       canMute,
       canManageMessages,
+      canSendTTS,
       canMuteVoice,
       canDeafenVoice,
       canModerateMember,

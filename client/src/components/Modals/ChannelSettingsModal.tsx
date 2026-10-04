@@ -171,6 +171,13 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 flag: Permissions.MANAGE_MESSAGES,
                 icon: <Shield className="w-4 h-4 text-red-400" />,
               },
+              {
+                key: 'SEND_TTS',
+                name: 'Permitir TTS',
+                desc: 'Permite aos membros utilizarem o comando /tts para que suas mensagens sejam reproduzidas em voz alta neste canal.',
+                flag: Permissions.SEND_TTS,
+                icon: <Volume2 className="w-4 h-4 text-pink-400" />,
+              },
             ],
           },
         ]
