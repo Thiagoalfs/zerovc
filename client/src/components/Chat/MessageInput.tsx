@@ -124,6 +124,32 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   }, []);
 
+  // Rate limit / cooldown per command (3 seconds) to prevent command spam
+  const COMMAND_COOLDOWN_MS = 3000;
+  const commandCooldowns = useRef<Map<string, number>>(new Map());
+  const isSendingRef = useRef(false);
+
+  const checkCommandCooldown = useCallback((commandName: string): boolean => {
+    const normalizedCmd = commandName.toLowerCase();
+    const now = Date.now();
+    const expiresAt = commandCooldowns.current.get(normalizedCmd) || 0;
+    if (now < expiresAt) {
+      const remainingSec = Math.max(0.1, (expiresAt - now) / 1000).toFixed(1);
+      triggerErrorShake();
+      setCommandError({
+        title: 'Tempo de Espera Ativo',
+        message: `Aguarde ${remainingSec}s para usar o comando /${normalizedCmd} novamente.`,
+      });
+      return false;
+    }
+    return true;
+  }, [triggerErrorShake]);
+
+  const recordCommandCooldown = useCallback((commandName: string) => {
+    const normalizedCmd = commandName.toLowerCase();
+    commandCooldowns.current.set(normalizedCmd, Date.now() + COMMAND_COOLDOWN_MS);
+  }, []);
+
   // Active Discord-Style Slash Command Pill Mode State
   const [activeSlash, setActiveSlash] = useState<ActiveSlashState | null>(null);
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number>(-1);
@@ -662,7 +688,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   // Execute active slash command
   const handleSendActiveSlash = async () => {
-    if (!activeSlash || isUploading) return;
+    if (!activeSlash || isUploading || isSendingRef.current) return;
+
+    // Rate limit check: 3 seconds cooldown per specific command
+    if (!checkCommandCooldown(activeSlash.command.name)) {
+      return;
+    }
 
     // Check guild-only & permissions
     if (activeSlash.command.guildOnly && contextType !== 'channel') {
@@ -744,6 +775,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         args[k] = v.trim();
       }
     }
+
+    recordCommandCooldown(commandName);
+    isSendingRef.current = true;
 
     if (commandName === 'yt-dlp' || commandName === 'ytdlp') {
       const link = args.link?.trim() || '';
@@ -845,6 +879,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         title: 'Erro ao Executar Comando',
         message: err?.message || 'Falha ao executar comando no servidor.',
       });
+    } finally {
+      isSendingRef.current = false;
     }
   };
 
@@ -959,7 +995,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleSend = async () => {
-    if (isUploading) return;
+    if (isUploading || isSendingRef.current) return;
     if (activeSlash) {
       await handleSendActiveSlash();
       return;
@@ -976,6 +1012,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           title: 'Comando Não Reconhecido',
           message: 'O comando digitado não foi encontrado ou possui sintaxe inválida. Selecione um comando válido abaixo:',
         });
+        return;
+      }
+
+      // Rate limit check: 3 seconds cooldown per specific command
+      if (!checkCommandCooldown(parsed.command)) {
         return;
       }
 
@@ -1013,6 +1054,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         });
         return;
       }
+
+      recordCommandCooldown(parsed.command);
 
       if (parsed.command === 'yt-dlp' || parsed.command === 'ytdlp') {
         const link = parsed.args.link?.trim() || '';
@@ -1196,6 +1239,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       textareaRef.current.style.height = 'auto';
     }
 
+    isSendingRef.current = true;
     try {
       await onSendMessage(finalContent, replyId, false, fileToUpload || undefined);
     } catch (err: any) {
@@ -1204,6 +1248,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         title: 'Erro ao Enviar Mensagem',
         message: err.message || 'Não foi possível enviar a mensagem. Verifique sua conexão.',
       });
+    } finally {
+      isSendingRef.current = false;
     }
   };
 

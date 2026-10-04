@@ -279,11 +279,28 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   const [klipyGifs, setKlipyGifs] = useState<Array<{ url: string; preview: string; title: string }>>([]);
   const [isLoadingGifs, setIsLoadingGifs] = useState(false);
 
+  const emojiInputRef = useRef<HTMLInputElement>(null);
+  const gifInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab);
     }
   }, [isOpen, initialTab]);
+
+  // Autofocus search input when open, tab changes, or category changes
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        if (activeTab === 'gif') {
+          gifInputRef.current?.focus();
+        } else if (activeTab === 'emoji') {
+          emojiInputRef.current?.focus();
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, activeTab, selectedCategory]);
 
   // Reset category and search when closed
   useEffect(() => {
@@ -572,6 +589,8 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
               <div className="relative">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
+                  ref={emojiInputRef}
+                  autoFocus
                   type="text"
                   value={emojiSearch}
                   onChange={(e) => setEmojiSearch(e.target.value)}
@@ -665,10 +684,25 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
         {activeTab === 'gif' && (
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* GIF Search Bar */}
-            <div className="p-3 pb-2">
-              <div className="relative">
+            <div className="p-3 pb-2 flex items-center gap-2">
+              {selectedCategory === 'Favoritos' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(null);
+                    setGifSearch('');
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-background-darker hover:bg-white/10 border border-white/10 transition-colors cursor-pointer shrink-0"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Voltar</span>
+                </button>
+              )}
+              <div className="relative flex-1">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
+                  ref={gifInputRef}
+                  autoFocus
                   type="text"
                   value={gifSearch}
                   onChange={(e) => setGifSearch(e.target.value)}
@@ -757,9 +791,33 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
               /* Selected Category or Search Results */
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header: Back Button or Search Info */}
-                <div className="px-3 pb-2 flex items-center justify-between flex-shrink-0">
-                  {selectedCategory === 'Favoritos' ? (
-                    <div className="flex items-center justify-between w-full">
+                {(selectedCategory !== 'Favoritos' || gifSearch.trim()) && (
+                  <div className="px-3 pb-2 flex items-center justify-between flex-shrink-0">
+                    {selectedCategory === 'Favoritos' ? (
+                      gifSearch.trim() ? (
+                        <div className="flex items-center justify-between w-full text-xs text-gray-400">
+                          <span>Resultados nos favoritos para "{gifSearch}"</span>
+                          <button
+                            type="button"
+                            onClick={() => setGifSearch('')}
+                            className="text-xs text-brand-400 hover:text-brand-300 font-medium cursor-pointer"
+                          >
+                            Limpar busca
+                          </button>
+                        </div>
+                      ) : null
+                    ) : gifSearch.trim() ? (
+                      <div className="flex items-center justify-between w-full text-xs text-gray-400">
+                        <span>Resultados para "{gifSearch}"</span>
+                        <button
+                          type="button"
+                          onClick={() => setGifSearch('')}
+                          className="text-xs text-brand-400 hover:text-brand-300 font-medium cursor-pointer"
+                        >
+                          Limpar busca
+                        </button>
+                      </div>
+                    ) : (
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -773,56 +831,13 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                           <span>Voltar</span>
                         </button>
                         <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                          <Star className="w-3.5 h-3.5 text-amber-400 fill-current" />
-                          <span>Favoritos</span>
-                          {favoriteGifs.length > 0 && (
-                            <span className="text-[10px] text-gray-400 font-normal">
-                              ({displayedGifs.length}{gifSearch.trim() && displayedGifs.length !== favoriteGifs.length ? ` de ${favoriteGifs.length}` : ''})
-                            </span>
-                          )}
+                          {selectedCategory === 'Em Alta' && <TrendingUp className="w-3.5 h-3.5 text-brand-400" />}
+                          <span>{selectedCategory}</span>
                         </div>
                       </div>
-                      {gifSearch.trim() && (
-                        <button
-                          type="button"
-                          onClick={() => setGifSearch('')}
-                          className="text-xs text-brand-400 hover:text-brand-300 font-medium cursor-pointer"
-                        >
-                          Limpar busca
-                        </button>
-                      )}
-                    </div>
-                  ) : gifSearch.trim() ? (
-                    <div className="flex items-center justify-between w-full text-xs text-gray-400">
-                      <span>Resultados para "{gifSearch}"</span>
-                      <button
-                        type="button"
-                        onClick={() => setGifSearch('')}
-                        className="text-xs text-brand-400 hover:text-brand-300 font-medium cursor-pointer"
-                      >
-                        Limpar busca
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCategory(null);
-                          setGifSearch('');
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-background-darker hover:bg-white/10 border border-white/10 transition-colors cursor-pointer"
-                      >
-                        <ArrowLeft className="w-3.5 h-3.5" />
-                        <span>Voltar</span>
-                      </button>
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                        {selectedCategory === 'Em Alta' && <TrendingUp className="w-3.5 h-3.5 text-brand-400" />}
-                        <span>{selectedCategory}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {/* GIFs Masonry Grid */}
                 <div className="flex-1 p-3 pt-0 overflow-y-auto no-scrollbar">

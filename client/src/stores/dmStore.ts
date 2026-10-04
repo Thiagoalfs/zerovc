@@ -324,16 +324,25 @@ export const useDMStore = create<DMState>((set, get) => ({
 
       set((state) => {
         const replaceTemp = (list: DMMessage[]) => {
-          const idx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
-          if (idx !== -1) {
+          const hasConfirmed = list.some((m) => m.id === confirmedMsg.id);
+          const tempIdx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
+
+          if (hasConfirmed) {
+            if (tempIdx !== -1) {
+              const copy = [...list];
+              copy.splice(tempIdx, 1);
+              return copy;
+            }
+            return list;
+          }
+
+          if (tempIdx !== -1) {
             const copy = [...list];
-            copy[idx] = readyMsg;
+            copy[tempIdx] = readyMsg;
             return copy;
           }
-          if (!list.some((m) => m.id === confirmedMsg.id)) {
-            return [...list, readyMsg];
-          }
-          return list;
+
+          return [...list, readyMsg];
         };
 
         const nextByRoom = { ...state.messagesByRoom };
@@ -451,14 +460,18 @@ export const useDMStore = create<DMState>((set, get) => ({
       if (state.activeRoom && state.activeRoom.id === message.dm_room_id) {
         const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
         const activeTempIdx = state.messages.findIndex(
-          (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+          (m) =>
+            m.status === 'sending' &&
+            m.author_id === message.author_id &&
+            (m.content === message.content ||
+              (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
         );
 
         let nextMessages = [...state.messages];
         if (activeExactIdx !== -1) {
           nextMessages[activeExactIdx] = { ...nextMessages[activeExactIdx], ...message, status: 'sent' };
         } else if (activeTempIdx !== -1) {
-          nextMessages[activeTempIdx] = { ...message, status: 'sent' };
+          nextMessages[activeTempIdx] = { ...message, status: 'sent', tempId: nextMessages[activeTempIdx].tempId || nextMessages[activeTempIdx].id };
         } else {
           nextMessages.push({ ...message, status: 'sent' });
         }
