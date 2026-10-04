@@ -32,6 +32,8 @@ const isSmartGifPageUrl = (url: string) => {
     lower.includes('media.tenor.com') ||
     lower.includes('c.tenor.com') ||
     lower.includes('static.klipy.co') ||
+    lower.includes('static.klipy.com') ||
+    lower.includes('static2.klipy.com') ||
     lower.includes('media.giphy.com') ||
     lower.includes('i.giphy.com');
   if (isDirectMediaHost) return false;
@@ -88,6 +90,8 @@ const isMediaUrl = (url: string) => {
       url.includes('media.giphy.com') ||
       url.includes('i.giphy.com') ||
       url.includes('static.klipy.co') ||
+      url.includes('static.klipy.com') ||
+      url.includes('static2.klipy.com') ||
       url.startsWith('data:image/'));
 
   return { isMedia: isImg || isVid || isAud, isImage: isImg, isVideo: isVid, isAudio: isAud };

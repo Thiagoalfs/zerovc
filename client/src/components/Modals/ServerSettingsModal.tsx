@@ -37,6 +37,7 @@ import { DeleteServerModal } from './ServerSettings/DeleteServerModal';
 import { TransferOwnershipModal } from './ServerSettings/TransferOwnershipModal';
 import { BanMemberModal } from './ServerSettings/BanMemberModal';
 import { MuteMemberModal } from './ServerSettings/MuteMemberModal';
+import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 
 interface ServerSettingsModalProps {
   isOpen: boolean;
@@ -255,20 +256,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
   if (!isOpen || !activeGuild) return null;
 
-  const isOwner = Boolean(
-    user?.id &&
-    activeGuild?.owner_id &&
-    String(user.id).toLowerCase() === String(activeGuild.owner_id).toLowerCase()
-  );
-  const currentMember = (activeGuild.members || []).find((m) => m.id === user?.id);
-  const currentUserRoles = currentMember?.roles || [];
-  let currentUserPerms = 0;
-  currentUserRoles.forEach((r) => {
-    currentUserPerms |= Number(r.permissions || 0);
-  });
-  const hasAdmin = (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
-  const canManageGuild = isOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_GUILD) !== 0;
-  const canManageRoles = isOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_ROLES) !== 0;
+  const perms = useGuildPermissions(activeGuild);
+  const isOwner = perms.isCurrentOwner;
+  const hasAdmin = perms.hasAdmin;
+  const canManageGuild = perms.canManageGuild;
+  const canManageRoles = perms.canManageRoles;
   const roles = activeGuild.roles || [];
   const members = activeGuild.members || [];
   const textChannels = (activeGuild.channels || []).filter((c) => c.type === 'text');
@@ -1185,6 +1177,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 <OverviewTab
                   activeGuild={activeGuild}
                   isOwner={isOwner}
+                  canManageGuild={canManageGuild}
+                  hasAdmin={hasAdmin}
                   members={members}
                   onlineMembersCount={onlineMembersCount}
                   textChannels={textChannels}
@@ -1260,6 +1254,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   handleRevokeInvite={handleRevokeInvite}
                   copiedCode={copiedCode}
                   isOwner={isOwner}
+                  hasAdmin={hasAdmin}
+                  canManageGuild={canManageGuild}
                 />
               )}
 

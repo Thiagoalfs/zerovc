@@ -155,41 +155,66 @@ func (h *LinkPreviewHandler) GetMetadata(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 7*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), nil)
-	if err != nil {
-		http.Error(w, `{"error":"failed to create request"}`, http.StatusInternalServerError)
-		return
+	const (
+		crawlerUA = "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discord.app)"
+		browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+	)
+
+	fetchPage := func(ua string) (int, string, error) {
+		req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), nil)
+		if err != nil {
+			return 0, "", err
+		}
+		req.Header.Set("User-Agent", ua)
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		req.Header.Set("Sec-Fetch-Site", "none")
+		req.Header.Set("Upgrade-Insecure-Requests", "1")
+
+		resp, err := h.client.Do(req)
+		if err != nil {
+			return 0, "", err
+		}
+		defer resp.Body.Close()
+
+		contentType := resp.Header.Get("Content-Type")
+		if !strings.Contains(contentType, "text/html") && !strings.Contains(contentType, "application/xhtml+xml") {
+			return resp.StatusCode, "", nil
+		}
+
+		limitReader := io.LimitReader(resp.Body, 512*1024)
+		bodyBytes, err := io.ReadAll(limitReader)
+		if err != nil {
+			return resp.StatusCode, "", err
+		}
+		return resp.StatusCode, string(bodyBytes), nil
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; ZeroBot/1.0; +https://zerovc.app)")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
-
-	resp, err := h.client.Do(req)
-	if err != nil {
+	statusCode, htmlContent, err := fetchPage(crawlerUA)
+	if err != nil && htmlContent == "" {
 		http.Error(w, fmt.Sprintf(`{"error":"failed to fetch url: %s"}`, err.Error()), http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
 
-	contentType := resp.Header.Get("Content-Type")
-	if !strings.Contains(contentType, "text/html") && !strings.Contains(contentType, "application/xhtml+xml") {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(LinkMetadata{URL: rawTargetURL})
-		return
+	isChallenge := strings.Contains(htmlContent, "Just a moment...") ||
+		strings.Contains(htmlContent, "Attention Required! | Cloudflare") ||
+		strings.Contains(htmlContent, "cf-browser-verification") ||
+		statusCode == http.StatusForbidden ||
+		statusCode == http.StatusServiceUnavailable
+
+	if isChallenge || htmlContent == "" {
+		if statusRetry, bodyRetry, errRetry := fetchPage(browserUA); errRetry == nil && bodyRetry != "" {
+			if !strings.Contains(bodyRetry, "Just a moment...") && (statusRetry == http.StatusOK || statusRetry == 0) {
+				htmlContent = bodyRetry
+			}
+		}
 	}
 
-	limitReader := io.LimitReader(resp.Body, 256*1024)
-	bodyBytes, err := io.ReadAll(limitReader)
-	if err != nil {
-		http.Error(w, `{"error":"failed to read html response"}`, http.StatusInternalServerError)
-		return
-	}
-
-	htmlContent := string(bodyBytes)
 	meta := LinkMetadata{
 		URL: rawTargetURL,
 	}
@@ -198,6 +223,11 @@ func (h *LinkPreviewHandler) GetMetadata(w http.ResponseWriter, r *http.Request)
 		meta.Title = cleanMetaValue(match[1], match[2])
 	} else if match := htmlTitleRegex.FindStringSubmatch(htmlContent); len(match) > 1 {
 		meta.Title = strings.TrimSpace(html.UnescapeString(match[1]))
+	}
+
+	// Clean out anti-bot challenge titles so they never leak as embed titles
+	if meta.Title == "Just a moment..." || strings.HasPrefix(meta.Title, "Just a moment") || strings.Contains(meta.Title, "Attention Required") {
+		meta.Title = ""
 	}
 
 	if match := ogDescRegex.FindStringSubmatch(htmlContent); len(match) > 0 {
@@ -211,10 +241,33 @@ func (h *LinkPreviewHandler) GetMetadata(w http.ResponseWriter, r *http.Request)
 		meta.SiteName = parsedURL.Hostname()
 	}
 
-	if match := ogImageRegex.FindStringSubmatch(htmlContent); len(match) > 0 {
+	// Scan all og:image candidates and prioritize direct .gif format if available
+	allImgMatches := ogImageRegex.FindAllStringSubmatch(htmlContent, -1)
+	for _, match := range allImgMatches {
 		rawImg := cleanMetaValue(match[1], match[2])
 		if rawImg != "" {
-			meta.ImageURL = resolveAbsoluteURL(parsedURL, rawImg)
+			resolved := resolveAbsoluteURL(parsedURL, rawImg)
+			if meta.ImageURL == "" {
+				meta.ImageURL = resolved
+			}
+			if strings.Contains(strings.ToLower(resolved), ".gif") {
+				meta.ImageURL = resolved
+				break
+			}
+		}
+	}
+
+	// Schema.org / JSON-LD fallback (used by Klipy, Pinterest, etc.)
+	if meta.ImageURL == "" || !strings.Contains(strings.ToLower(meta.ImageURL), ".gif") {
+		jsonLDRegex := regexp.MustCompile(`(?i)<script[^>]*?type=["']application/ld\+json["'][^>]*>([\s\S]*?)</script>`)
+		if matches := jsonLDRegex.FindAllStringSubmatch(htmlContent, -1); len(matches) > 0 {
+			contentUrlRegex := regexp.MustCompile(`"contentUrl"\s*:\s*"([^"]+)"`)
+			for _, m := range matches {
+				if cuMatch := contentUrlRegex.FindStringSubmatch(m[1]); len(cuMatch) > 1 {
+					meta.ImageURL = resolveAbsoluteURL(parsedURL, cuMatch[1])
+					break
+				}
+			}
 		}
 	}
 
@@ -250,15 +303,18 @@ func (h *LinkPreviewHandler) GetMetadata(w http.ResponseWriter, r *http.Request)
 		meta.Description = meta.Description[:500] + "..."
 	}
 
-	h.mu.Lock()
-	if len(h.cache) > 2000 {
-		h.cache = make(map[string]cachedMetadata)
+	// Only cache valid metadata, never cache failed anti-bot blocks
+	if meta.Title != "" || meta.ImageURL != "" || meta.VideoURL != "" {
+		h.mu.Lock()
+		if len(h.cache) > 2000 {
+			h.cache = make(map[string]cachedMetadata)
+		}
+		h.cache[rawTargetURL] = cachedMetadata{
+			meta:      meta,
+			expiresAt: time.Now().Add(2 * time.Hour),
+		}
+		h.mu.Unlock()
 	}
-	h.cache[rawTargetURL] = cachedMetadata{
-		meta:      meta,
-		expiresAt: time.Now().Add(2 * time.Hour),
-	}
-	h.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=3600")

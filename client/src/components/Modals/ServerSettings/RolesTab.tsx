@@ -350,10 +350,10 @@ export const RolesTab: React.FC<RolesTabProps> = ({
 
                           <button
                             type="button"
-                            disabled={!isOwner || (isRoleAdmin && perm.flag !== Permissions.ADMINISTRATOR)}
+                            disabled={!canManageRoles || (isRoleAdmin && perm.flag !== Permissions.ADMINISTRATOR)}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (isOwner && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
+                              if (canManageRoles && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
                                 handleTogglePermission(perm.flag);
                               }
                             }}

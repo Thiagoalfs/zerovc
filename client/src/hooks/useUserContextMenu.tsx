@@ -138,7 +138,7 @@ export function useUserContextMenu() {
       }
 
       const targetMember = isGuildContext && activeGuild
-        ? activeGuild.members?.find((m) => m.id === targetUser.id) || targetUser
+        ? activeGuild.members?.find((m) => String(m.id).toLowerCase() === String(targetUser.id).toLowerCase()) || targetUser
         : targetUser;
       const mod = isGuildContext && activeGuild ? perms.canModerateMember(targetMember) : null;
       const canModerateTarget = Boolean(perms.isCurrentOwner || (mod && !mod.isTargetOwner && mod.isHierarchyAllowed));
@@ -191,7 +191,7 @@ export function useUserContextMenu() {
                 return rolePos > perms.currentUserHighestPos;
               })
               .map((role) => {
-                const hasRole = (targetMember.roles || []).some((r: Role) => r.id === role.id);
+                const hasRole = (targetMember.roles || []).some((r: any) => String(r.id || r).toLowerCase() === String(role.id).toLowerCase());
                 return {
                   label: role.name,
                   icon: hasRole ? (
