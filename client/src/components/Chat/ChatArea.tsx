@@ -148,12 +148,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  const handleSendMessage = async (content: string, replyToId?: string, isTTS?: boolean) => {
+  const handleSendMessage = async (content: string, replyToId?: string, isTTS?: boolean, file?: File) => {
     if (activeChannel) {
       clearUnreadDivider(activeChannel.id);
     }
     scrollToBottom(true);
-    await sendMessage(content, replyToId, isTTS);
+    await sendMessage(content, replyToId, isTTS, file);
     setTimeout(() => scrollToBottom(true), 60);
     setTimeout(() => scrollToBottom(true), 200);
   };

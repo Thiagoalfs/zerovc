@@ -246,6 +246,11 @@ export interface BaseMessage {
   status?: 'sending' | 'sent' | 'failed';
   tempId?: string;
   error?: string;
+  uploadingFile?: {
+    name: string;
+    size: number;
+    progress?: number;
+  };
 }
 
 export interface Message extends BaseMessage {

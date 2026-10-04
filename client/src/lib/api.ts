@@ -811,37 +811,81 @@ export const api = {
       }
       return res.json() as Promise<{ url: string; filename: string; size: number }>;
     },
-    attachment: async (file: File, options?: { botId?: string; temp?: boolean }) => {
+    attachment: async (
+      file: File,
+      options?: {
+        botId?: string;
+        temp?: boolean;
+        signal?: AbortSignal;
+        onProgress?: (percent: number, loaded: number, total: number) => void;
+      }
+    ) => {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
-      const headers: Record<string, string> = {};
       const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
-      if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
-      if (csrf) headers['X-CSRF-Token'] = csrf;
-      if (options?.botId) {
-        headers['X-Bot-ID'] = options.botId;
-      }
       const params = new URLSearchParams();
       if (options?.botId) params.append('bot_id', options.botId);
       if (options?.temp) params.append('temp', 'true');
       const qs = params.toString() ? `?${params.toString()}` : '';
-      const res = await fetch(`${getApiBaseUrl()}/api/upload/attachment${qs}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers,
-        body: formData,
+      const uploadUrl = `${getApiBaseUrl()}/api/upload/attachment${qs}`;
+
+      return new Promise<{ url: string; filename: string; size: number }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadUrl, true);
+        xhr.withCredentials = true;
+
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        if (csrf) xhr.setRequestHeader('X-CSRF-Token', csrf);
+        if (options?.botId) xhr.setRequestHeader('X-Bot-ID', options.botId);
+
+        if (options?.signal) {
+          if (options.signal.aborted) {
+            return reject(new DOMException('Upload aborted', 'AbortError'));
+          }
+          options.signal.addEventListener('abort', () => {
+            xhr.abort();
+            reject(new DOMException('Upload aborted', 'AbortError'));
+          });
+        }
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && options?.onProgress) {
+            const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
+            options.onProgress(percent, event.loaded, event.total);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const res = JSON.parse(xhr.responseText);
+              options?.onProgress?.(100, file.size, file.size);
+              resolve(res);
+            } catch {
+              reject(new Error('Resposta inválida do servidor'));
+            }
+          } else {
+            let msg = 'Falha ao enviar arquivo';
+            try {
+              const err = JSON.parse(xhr.responseText);
+              if (err.error) msg = err.error;
+            } catch {}
+            reject(new Error(msg));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('Falha de rede ao enviar arquivo'));
+        };
+
+        xhr.onabort = () => {
+          reject(new DOMException('Upload cancelado', 'AbortError'));
+        };
+
+        xhr.send(formData);
       });
-      if (!res.ok) {
-        let msg = 'Falha ao enviar arquivo';
-        try {
-          const err = await res.json();
-          if (err.error) msg = err.error;
-        } catch {}
-        throw new Error(msg);
-      }
-      return res.json() as Promise<{ url: string; filename: string; size: number }>;
     },
   },
   linkPreview: {

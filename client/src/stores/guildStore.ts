@@ -5,6 +5,8 @@ import { playMessageSound, speakText } from '../utils/audio';
 import { isChatActiveNow } from '../utils/activeChat';
 import { useAuthStore } from './authStore';
 import { useSettingsStore } from './settingsStore';
+import { useUploadStore } from './uploadStore';
+import { optimizeImageForUpload } from '../lib/imageOptimizer';
 
 interface GuildState {
   guilds: Guild[];
@@ -49,7 +51,7 @@ interface GuildState {
   deleteChannel: (channelId: string) => Promise<void>;
   reorderChannels: (guildId: string, payload: string[] | Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }>) => Promise<void>;
 
-  sendMessage: (content: string, replyToId?: string, isTTS?: boolean) => Promise<void>;
+  sendMessage: (content: string, replyToId?: string, isTTS?: boolean, file?: File) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   toggleReaction: (messageId: string, emoji: string) => Promise<void>;
@@ -602,7 +604,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }
   },
 
-  sendMessage: async (content: string, replyToId?: string, isTTS?: boolean) => {
+  sendMessage: async (content: string, replyToId?: string, isTTS?: boolean, file?: File) => {
     const { activeChannel, messages } = get();
     if (!activeChannel) return;
     const currentUser = useAuthStore.getState().user;
@@ -621,6 +623,19 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }
 
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const abortController = file ? new AbortController() : null;
+
+    if (file && abortController) {
+      useUploadStore.getState().startUpload({
+        id: tempId,
+        fileName: file.name,
+        fileSize: file.size,
+        progress: 0,
+        abortController,
+        onCancel: () => get().removeMessageFromStore(tempId),
+      });
+    }
+
     const tempMessage: Message = {
       id: tempId,
       tempId,
@@ -635,6 +650,12 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       is_pinned: false,
       is_tts: Boolean(isTTS),
       status: 'sending',
+      uploadingFile: file
+        ? {
+            name: file.name,
+            size: file.size,
+          }
+        : undefined,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -657,8 +678,22 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     });
 
     try {
+      let finalContent = content;
+
+      if (file && abortController) {
+        const optimizedFile = await optimizeImageForUpload(file, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
+        const uploaded = await api.upload.attachment(optimizedFile, {
+          signal: abortController.signal,
+          onProgress: (percent) => {
+            useUploadStore.getState().updateProgress(tempId, percent);
+          },
+        });
+        useUploadStore.getState().removeUpload(tempId);
+        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
+      }
+
       // 2. Send to backend API
-      const confirmedMsg = await api.channels.sendMessage(activeChannel.id, { content, reply_to_id: replyToId, is_tts: Boolean(isTTS) });
+      const confirmedMsg = await api.channels.sendMessage(activeChannel.id, { content: finalContent, reply_to_id: replyToId, is_tts: Boolean(isTTS) });
       const readyMsg: Message = { ...confirmedMsg, status: 'sent', tempId };
 
       set((state) => {
@@ -686,6 +721,13 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         };
       });
     } catch (err: any) {
+      if (file) {
+        useUploadStore.getState().removeUpload(tempId);
+        if (abortController?.signal.aborted) {
+          get().removeMessageFromStore(tempId);
+          return;
+        }
+      }
       console.error('Failed to send channel message:', err);
       // 3. Mark as failed
       set((state) => {
@@ -763,7 +805,11 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       // If we already have this message or need to replace an optimistic pending message
       const existingExactIdx = channelMsgs.findIndex((m) => m.id === message.id);
       const tempMatchIdx = channelMsgs.findIndex(
-        (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+        (m) =>
+          m.status === 'sending' &&
+          m.author_id === message.author_id &&
+          (m.content === message.content ||
+            (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
       );
 
       let updatedChannelMsgs = [...channelMsgs];

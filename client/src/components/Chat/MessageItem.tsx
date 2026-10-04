@@ -41,6 +41,7 @@ import { speakText } from '../../utils/audio';
 import { copyToClipboard } from '../../utils/clipboard';
 
 import { MessageEmbedCard } from './MessageEmbedCard';
+import { UploadProgressCard } from './UploadProgressCard';
 
 export interface UniversalMessage {
   id: string;
@@ -64,6 +65,11 @@ export interface UniversalMessage {
   channel_id?: string;
   dm_room_id?: string;
   group_id?: string;
+  uploadingFile?: {
+    name: string;
+    size: number;
+    progress?: number;
+  };
 }
 
 interface MessageItemProps {
@@ -566,7 +572,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             ? 'bg-red-500/10 hover:bg-red-500/15 border-l-2 border-red-500 text-red-200'
             : isMentioned
             ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-2 border-amber-500'
-            : isSending
+            : isSending && !message.uploadingFile
             ? 'opacity-65 select-none'
             : 'hover:bg-background-dark/40'
         } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
@@ -778,6 +784,16 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       </span>
                     )}
 
+                    {message.uploadingFile && (
+                      <div className="mt-1.5">
+                        <UploadProgressCard
+                          messageId={message.id}
+                          fileName={message.uploadingFile.name}
+                          fileSize={message.uploadingFile.size}
+                        />
+                      </div>
+                    )}
+
                     {message.embeds && message.embeds.length > 0 && (
                       <div className="mt-2 space-y-2 max-w-2xl">
                         {message.embeds.map((embed: any, idx: number) => (
@@ -951,6 +967,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                           onOpenUserContextMenu={handleUserContextMenu}
                         />
                       </div>
+                    )}
+
+                    {message.uploadingFile && (
+                      <UploadProgressCard
+                        messageId={message.id}
+                        fileName={message.uploadingFile.name}
+                        fileSize={message.uploadingFile.size}
+                      />
                     )}
 
                     {message.embeds && message.embeds.length > 0 && (

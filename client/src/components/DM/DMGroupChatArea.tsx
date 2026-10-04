@@ -911,12 +911,12 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               placeholder={`Conversar em ${groupName}...`}
               replyingTo={replyingTo}
               onCancelReply={() => setReplyingTo(null)}
-              onSendMessage={async (content, replyToId, isTTS) => {
+              onSendMessage={async (content, replyToId, isTTS, file) => {
                 if (activeGroup) {
                   clearUnreadDivider(activeGroup.id);
                 }
                 scrollToBottom(true);
-                await sendMessage(content, undefined, replyToId, isTTS);
+                await sendMessage(content, undefined, replyToId, isTTS, file);
                 setReplyingTo(null);
                 setTimeout(() => scrollToBottom(true), 60);
                 setTimeout(() => scrollToBottom(true), 200);

@@ -579,12 +579,12 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
         placeholder={recipient ? `Conversar com @${recipient.display_name || recipient.username}` : 'Conversar...'}
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
-        onSendMessage={async (content, replyToId, isTTS) => {
+        onSendMessage={async (content, replyToId, isTTS, file) => {
           if (activeRoom) {
             clearUnreadDivider(activeRoom.id);
           }
           scrollToBottom(true);
-          await sendMessage(content, undefined, replyToId, isTTS);
+          await sendMessage(content, undefined, replyToId, isTTS, file);
           setReplyingTo(null);
           setTimeout(() => scrollToBottom(true), 60);
           setTimeout(() => scrollToBottom(true), 200);
