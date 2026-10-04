@@ -375,16 +375,25 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       set((state) => {
         if (state.activeGroup?.id !== activeGroup.id) return state;
         const replaceTemp = (list: DMGroupMessage[]) => {
-          const idx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
-          if (idx !== -1) {
+          const hasConfirmed = list.some((m) => m.id === confirmedMsg.id);
+          const tempIdx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
+
+          if (hasConfirmed) {
+            if (tempIdx !== -1) {
+              const copy = [...list];
+              copy.splice(tempIdx, 1);
+              return copy;
+            }
+            return list;
+          }
+
+          if (tempIdx !== -1) {
             const copy = [...list];
-            copy[idx] = readyMsg;
+            copy[tempIdx] = readyMsg;
             return copy;
           }
-          if (!list.some((m) => m.id === confirmedMsg.id)) {
-            return [...list, readyMsg];
-          }
-          return list;
+
+          return [...list, readyMsg];
         };
 
         const groupMsgs = state.messagesByGroup[activeGroup.id] || [];
@@ -485,13 +494,17 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       if (isCurrentActive) {
         const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
         const activeTempIdx = state.messages.findIndex(
-          (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+          (m) =>
+            m.status === 'sending' &&
+            m.author_id === message.author_id &&
+            (m.content === message.content ||
+              (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
         );
         let nextMsgs = [...state.messages];
         if (activeExactIdx !== -1) {
           nextMsgs[activeExactIdx] = { ...nextMsgs[activeExactIdx], ...message, status: 'sent' };
         } else if (activeTempIdx !== -1) {
-          nextMsgs[activeTempIdx] = { ...message, status: 'sent' };
+          nextMsgs[activeTempIdx] = { ...message, status: 'sent', tempId: nextMsgs[activeTempIdx].tempId || nextMsgs[activeTempIdx].id };
         } else {
           nextMsgs.push({ ...message, status: 'sent' });
         }

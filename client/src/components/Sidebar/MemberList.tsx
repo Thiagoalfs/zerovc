@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
-import { User, UserProfilePosition } from '../../types';
+import { User, Role, UserProfilePosition } from '../../types';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu } from '../ContextMenu';
@@ -57,10 +57,12 @@ export const MemberList: React.FC<MemberListProps> = ({
 
   // Helper to get roles with live metadata from activeGuild.roles
   const getMemberLiveRoles = (member: User) => {
-    return (member.roles || []).map((r) => {
-      const liveRole = guildRoles.find((gr) => gr.id === r.id);
-      return liveRole ? { ...r, ...liveRole } : r;
-    });
+    return (member.roles || [])
+      .map((r) => {
+        const liveRole = guildRoles.find((gr) => gr.id === r.id);
+        return liveRole ? { ...r, ...liveRole } : null;
+      })
+      .filter((r): r is Role => r !== null);
   };
 
   // Helper to find a member's highest hoisted role

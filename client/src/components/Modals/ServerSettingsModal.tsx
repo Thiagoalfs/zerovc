@@ -92,8 +92,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
   // Roles State
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
-  const [newRoleName, setNewRoleName] = useState('');
-  const [newRoleColor] = useState('#5865F2');
   const [isCreatingRole, setIsCreatingRole] = useState(false);
   const [isReorderingRoles, setIsReorderingRoles] = useState(false);
 
@@ -380,15 +378,15 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   // 2. Roles Actions
-  const handleCreateRole = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRoleName.trim() || !canManageRoles) return;
+  const handleCreateRole = async () => {
+    if (!canManageRoles) return;
 
     setIsCreatingRole(true);
     try {
-      const created = await createRole(activeGuild.id, newRoleName.trim(), newRoleColor, 0, false, false);
+      const everyoneRole = roles.find((r) => r.name === '@everyone');
+      const everyonePermissions = Number(everyoneRole?.permissions ?? 0);
+      const created = await createRole(activeGuild.id, 'Novo cargo', '#99AAB5', everyonePermissions, false, false);
       setSelectedRoleId(created.id);
-      setNewRoleName('');
     } catch (err) {
       console.error('Failed to create role:', err);
     } finally {
@@ -930,10 +928,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 </div>
 
                 <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
-                    Configurações do Servidor
-                  </span>
-
                   <button
                     type="button"
                     onClick={() => setActiveTab('overview')}
@@ -1222,8 +1216,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   selectedRoleId={selectedRoleId}
                   setSelectedRoleId={setSelectedRoleId}
                   selectedRole={selectedRole}
-                  newRoleName={newRoleName}
-                  setNewRoleName={setNewRoleName}
                   isCreatingRole={isCreatingRole}
                   isReorderingRoles={isReorderingRoles}
                   handleMoveRoleHierarchy={handleMoveRoleHierarchy}

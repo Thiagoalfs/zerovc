@@ -698,16 +698,25 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
       set((state) => {
         const replaceTemp = (list: Message[]) => {
-          const idx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
-          if (idx !== -1) {
+          const hasConfirmed = list.some((m) => m.id === confirmedMsg.id);
+          const tempIdx = list.findIndex((m) => m.id === tempId || m.tempId === tempId);
+
+          if (hasConfirmed) {
+            if (tempIdx !== -1) {
+              const copy = [...list];
+              copy.splice(tempIdx, 1);
+              return copy;
+            }
+            return list;
+          }
+
+          if (tempIdx !== -1) {
             const copy = [...list];
-            copy[idx] = readyMsg;
+            copy[tempIdx] = readyMsg;
             return copy;
           }
-          if (!list.some((m) => m.id === confirmedMsg.id)) {
-            return [...list, readyMsg];
-          }
-          return list;
+
+          return [...list, readyMsg];
         };
 
         const nextByChannel = { ...state.messagesByChannel };
@@ -850,14 +859,18 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       if (state.activeChannel && state.activeChannel.id === message.channel_id) {
         const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
         const activeTempIdx = state.messages.findIndex(
-          (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+          (m) =>
+            m.status === 'sending' &&
+            m.author_id === message.author_id &&
+            (m.content === message.content ||
+              (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
         );
 
         let nextMessages = [...state.messages];
         if (activeExactIdx !== -1) {
           nextMessages[activeExactIdx] = { ...nextMessages[activeExactIdx], ...message, status: 'sent' };
         } else if (activeTempIdx !== -1) {
-          nextMessages[activeTempIdx] = { ...message, status: 'sent' };
+          nextMessages[activeTempIdx] = { ...message, status: 'sent', tempId: nextMessages[activeTempIdx].tempId || nextMessages[activeTempIdx].id };
         } else {
           nextMessages.push({ ...message, status: 'sent' });
         }
@@ -1409,9 +1422,29 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
   handleRoleDeleteEvent: (guildId: string, roleId: string) => {
     set((state) => {
-      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
-      const roles = (state.activeGuild.roles || []).filter((r) => r.id !== roleId);
-      return { activeGuild: { ...state.activeGuild, roles } };
+      const nextGuilds = state.guilds.map((g) => {
+        if (g.id === guildId) {
+          const roles = (g.roles || []).filter((r) => r.id !== roleId);
+          const members = (g.members || []).map((m) => ({
+            ...m,
+            roles: (m.roles || []).filter((r) => r.id !== roleId),
+          }));
+          return { ...g, roles, members };
+        }
+        return g;
+      });
+
+      let nextActive = state.activeGuild;
+      if (state.activeGuild && state.activeGuild.id === guildId) {
+        const roles = (state.activeGuild.roles || []).filter((r) => r.id !== roleId);
+        const members = (state.activeGuild.members || []).map((m) => ({
+          ...m,
+          roles: (m.roles || []).filter((r) => r.id !== roleId),
+        }));
+        nextActive = { ...state.activeGuild, roles, members };
+      }
+
+      return { guilds: nextGuilds, activeGuild: nextActive };
     });
   },
 
@@ -1483,9 +1516,29 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   deleteRole: async (guildId: string, roleId: string) => {
     await api.roles.delete(guildId, roleId);
     set((state) => {
-      if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
-      const roles = (state.activeGuild.roles || []).filter((r) => r.id !== roleId);
-      return { activeGuild: { ...state.activeGuild, roles } };
+      const nextGuilds = state.guilds.map((g) => {
+        if (g.id === guildId) {
+          const roles = (g.roles || []).filter((r) => r.id !== roleId);
+          const members = (g.members || []).map((m) => ({
+            ...m,
+            roles: (m.roles || []).filter((r) => r.id !== roleId),
+          }));
+          return { ...g, roles, members };
+        }
+        return g;
+      });
+
+      let nextActive = state.activeGuild;
+      if (state.activeGuild && state.activeGuild.id === guildId) {
+        const roles = (state.activeGuild.roles || []).filter((r) => r.id !== roleId);
+        const members = (state.activeGuild.members || []).map((m) => ({
+          ...m,
+          roles: (m.roles || []).filter((r) => r.id !== roleId),
+        }));
+        nextActive = { ...state.activeGuild, roles, members };
+      }
+
+      return { guilds: nextGuilds, activeGuild: nextActive };
     });
   },
 

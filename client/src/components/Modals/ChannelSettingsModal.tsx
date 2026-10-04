@@ -452,7 +452,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
       {/* DESKTOP SIDEBAR TABS */}
       <div className="hidden md:flex flex-1 max-w-[280px] lg:max-w-[320px] xl:max-w-[360px] 2xl:max-w-[400px] min-w-[220px] justify-end bg-background-darkest border-r border-white/10 shrink-0 overflow-y-auto no-scrollbar">
-        <div className="w-56 lg:w-60 flex flex-col p-4 py-6 xl:py-8 shrink-0 justify-between">
+        <div className="w-56 lg:w-60 flex flex-col p-4 py-6 xl:py-8 shrink-0">
           <div className="flex flex-col items-stretch flex-1 flex-shrink-0">
             <div className="px-3 py-2 mb-2">
               <div className="flex items-center gap-2">
@@ -473,10 +473,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             </div>
 
             <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
-                Configurações
-              </span>
-
               <button
                 type="button"
                 onClick={() => setActiveTab('overview')}
@@ -505,19 +501,19 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                   </span>
                 )}
               </button>
-            </nav>
-          </div>
 
-          <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5 mr-2" />
-              <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
-            </button>
+              <div className="pt-2 mt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-2" />
+                  <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
+                </button>
+              </div>
+            </nav>
           </div>
         </div>
       </div>
@@ -616,68 +612,66 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           {/* TAB 1: Visão Geral */}
           {activeTab === 'overview' && (
             <div className="max-w-2xl space-y-6 py-6">
-              <div className="bg-background-darker p-5 rounded-2xl border border-white/10 space-y-4 shadow-sm">
+              <div>
+                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                  {isCategory ? 'Nome da Categoria' : 'Nome do Canal'}
+                </label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 text-gray-400">
+                    {isCategory ? (
+                      <Folder className="w-4 h-4" />
+                    ) : isText ? (
+                      '#'
+                    ) : (
+                      <Volume2 className="w-4 h-4" />
+                    )}
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={isCategory ? 'COMUNIDADE' : 'novo-canal'}
+                    className="w-full bg-background-darkest border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {!isCategory && categories.length > 0 && (
                 <div>
                   <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
-                    {isCategory ? 'Nome da Categoria' : 'Nome do Canal'}
+                    Categoria Pai
                   </label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-3.5 text-gray-400">
-                      {isCategory ? (
-                        <Folder className="w-4 h-4" />
-                      ) : isText ? (
-                        '#'
-                      ) : (
-                        <Volume2 className="w-4 h-4" />
-                      )}
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder={isCategory ? 'COMUNIDADE' : 'novo-canal'}
-                      className="w-full bg-background-darkest border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
-                    />
-                  </div>
+                  <DropdownSelect
+                    value={categoryId || ''}
+                    onChange={(val) => setCategoryId(val ? String(val) : undefined)}
+                    options={[
+                      { value: '', label: 'Nenhuma (Canal na Raiz)' },
+                      ...categories.map((cat) => ({
+                        value: cat.id,
+                        label: cat.name,
+                        icon: <Folder className="w-4 h-4 text-gray-400" />,
+                      })),
+                    ]}
+                    placeholder="Nenhuma (Canal na Raiz)"
+                  />
                 </div>
+              )}
 
-                {!isCategory && categories.length > 0 && (
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
-                      Categoria Pai
-                    </label>
-                    <DropdownSelect
-                      value={categoryId || ''}
-                      onChange={(val) => setCategoryId(val ? String(val) : undefined)}
-                      options={[
-                        { value: '', label: 'Nenhuma (Canal na Raiz)' },
-                        ...categories.map((cat) => ({
-                          value: cat.id,
-                          label: cat.name,
-                          icon: <Folder className="w-4 h-4 text-gray-400" />,
-                        })),
-                      ]}
-                      placeholder="Nenhuma (Canal na Raiz)"
-                    />
-                  </div>
-                )}
-
-                {!isCategory && (
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
-                      Tópico do Canal
-                    </label>
-                    <textarea
-                      rows={4}
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      placeholder="Descreva o propósito deste canal..."
-                      className="w-full bg-background-darkest border border-white/10 rounded-xl p-3.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none transition-colors"
-                    />
-                  </div>
-                )}
-              </div>
+              {!isCategory && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                    Tópico do Canal
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="Descreva o propósito deste canal..."
+                    className="w-full bg-background-darkest border border-white/10 rounded-xl p-3.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none transition-colors"
+                  />
+                </div>
+              )}
             </div>
           )}
 
