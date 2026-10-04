@@ -1063,29 +1063,36 @@ export const App: React.FC = () => {
         const currentVoiceChannelId = useVoiceStore.getState().currentChannelId;
         const isVoiceConnected = useVoiceStore.getState().isConnected;
 
-        // Sound triggers when another user joins, leaves or updates stream in the current active voice channel
+        // Sound triggers when another user joins, leaves, moves or updates stream in the current active voice channel
         if (
           isVoiceConnected &&
           currentVoiceChannelId &&
-          event.data.channel_id === currentVoiceChannelId &&
           event.data.user_id !== currentUserId
         ) {
-          if (event.data.action === 'join') {
-            playUserJoinCallSound();
-          } else if (event.data.action === 'leave') {
-            playUserLeaveCallSound();
-          } else if ((event.data.action === 'update' || event.data.action === 'state') && event.data.session) {
-            if (event.data.session.is_screensharing === true) {
-              playStartStreamSound();
-            } else if (event.data.session.is_screensharing === false) {
-              playStopStreamSound();
+          if (event.data.channel_id === currentVoiceChannelId) {
+            if (event.data.action === 'join') {
+              playUserJoinCallSound();
+            } else if (event.data.action === 'leave' || event.data.action === 'move') {
+              playUserLeaveCallSound();
+            } else if ((event.data.action === 'update' || event.data.action === 'state') && event.data.session) {
+              if (event.data.session.is_screensharing === true) {
+                playStartStreamSound();
+              } else if (event.data.session.is_screensharing === false) {
+                playStopStreamSound();
+              }
             }
+          } else if (event.data.target_channel_id === currentVoiceChannelId && event.data.action === 'move') {
+            playUserJoinCallSound();
           }
         }
 
         if (event.data.forced) {
           if (event.data.action === 'leave' && event.data.user_id === currentUserId) {
             useVoiceStore.getState().leaveVoice();
+          } else if (event.data.action === 'move' && event.data.user_id === currentUserId) {
+            if (event.data.target_channel_id) {
+              useVoiceStore.getState().joinVoice(event.data.target_channel_id, event.data.guild_id);
+            }
           } else if (event.data.action === 'update' && event.data.session?.user_id === currentUserId) {
             if (event.data.session.is_muted !== undefined) {
               livekit.setMuted(event.data.session.is_muted);

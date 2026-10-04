@@ -1327,7 +1327,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const nextGuildVoiceStates = { ...state.guildVoiceStates };
       Object.keys(nextGuildVoiceStates).forEach((gid) => {
         let sessions = nextGuildVoiceStates[gid] || [];
-        if (action === 'join' && enhancedSession) {
+        if ((action === 'join' || action === 'move') && enhancedSession) {
           const isThisGuildChannel =
             sessions.some((s) => s.channel_id === enhancedSession.channel_id) ||
             (state.activeGuild?.id === gid && state.activeGuild?.channels?.some((c) => c.id === enhancedSession.channel_id));
@@ -1357,7 +1357,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const channels = state.activeGuild.channels.map((channel) => {
         if (channel.type !== 'voice') return channel;
 
-        if (action === 'join' && enhancedSession) {
+        if ((action === 'join' || action === 'move') && enhancedSession) {
           if (channel.id === enhancedSession.channel_id) {
             const currentSessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
             return {

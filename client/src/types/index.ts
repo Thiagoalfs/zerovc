@@ -20,6 +20,7 @@ export const Permissions = {
   STREAM_VOICE: 1 << 15, // 32768: Transmitir Tela / Vídeo
   CREATE_INSTANT_INVITE: 1 << 16, // 65536: Criar Convite Instantâneo
   SEND_TTS: 1 << 17, // 131072: Permitir TTS
+  MOVE_MEMBERS: 1 << 18, // 262144: Mover Membros entre canais de voz
 } as const;
 
 export interface CustomActivity {

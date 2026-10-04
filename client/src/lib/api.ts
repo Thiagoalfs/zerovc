@@ -485,7 +485,7 @@ export const api = {
     adminUpdateVoiceState: (
       channelId: string,
       userId: string,
-      data: { is_muted?: boolean; is_deafened?: boolean; disconnect?: boolean }
+      data: { is_muted?: boolean; is_deafened?: boolean; disconnect?: boolean; target_channel_id?: string }
     ) =>
       request<any>(`/channels/${channelId}/members/${userId}/voice-state`, {
         method: 'POST',

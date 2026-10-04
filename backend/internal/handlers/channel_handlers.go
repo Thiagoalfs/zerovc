@@ -719,9 +719,10 @@ func (h *ChannelHandler) UpdateVoiceState(w http.ResponseWriter, r *http.Request
 }
 
 type AdminUpdateVoiceStateRequest struct {
-	IsMuted    *bool `json:"is_muted,omitempty"`
-	IsDeafened *bool `json:"is_deafened,omitempty"`
-	Disconnect *bool `json:"disconnect,omitempty"`
+	IsMuted         *bool      `json:"is_muted,omitempty"`
+	IsDeafened      *bool      `json:"is_deafened,omitempty"`
+	Disconnect      *bool      `json:"disconnect,omitempty"`
+	TargetChannelID *uuid.UUID `json:"target_channel_id,omitempty"`
 }
 
 func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Request) {
@@ -758,6 +759,12 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	var req AdminUpdateVoiceStateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
 	isOwner := adminID == ownerID
 	if !isOwner && adminID != targetUserID {
 		if targetUserID == ownerID {
@@ -770,10 +777,19 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 			http.Error(w, `{"error":"actor not found in guild"}`, http.StatusForbidden)
 			return
 		}
-		hasVoicePerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermMuteVoice) != 0 || (actorCtx.Perms&models.PermMuteMembers) != 0 || (actorCtx.Perms&models.PermDeafenVoice) != 0
-		if !hasVoicePerm {
-			http.Error(w, `{"error":"forbidden: sem permissão para moderar voz"}`, http.StatusForbidden)
-			return
+
+		if req.TargetChannelID != nil {
+			hasMovePerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermMoveMembers) != 0
+			if !hasMovePerm {
+				http.Error(w, `{"error":"forbidden: você não tem permissão para mover membros"}`, http.StatusForbidden)
+				return
+			}
+		} else {
+			hasVoicePerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermMuteVoice) != 0 || (actorCtx.Perms&models.PermMuteMembers) != 0 || (actorCtx.Perms&models.PermDeafenVoice) != 0
+			if !hasVoicePerm {
+				http.Error(w, `{"error":"forbidden: sem permissão para moderar voz"}`, http.StatusForbidden)
+				return
+			}
 		}
 
 		var targetHighestPos int = 999999
@@ -790,9 +806,75 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	var req AdminUpdateVoiceStateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+	if req.TargetChannelID != nil {
+		targetChannelID := *req.TargetChannelID
+		if targetChannelID == channelID {
+			http.Error(w, `{"error":"o membro já está neste canal de voz"}`, http.StatusBadRequest)
+			return
+		}
+
+		var targetType models.ChannelType
+		var isPrivate bool
+		err := h.db.Pool.QueryRow(r.Context(), "SELECT type, is_private FROM channels WHERE id = $1 AND guild_id = $2", targetChannelID, guildID).Scan(&targetType, &isPrivate)
+		if err != nil || targetType != models.ChannelTypeVoice {
+			http.Error(w, `{"error":"canal de voz de destino inválido"}`, http.StatusBadRequest)
+			return
+		}
+
+		if isPrivate {
+			var hasAccess bool
+			privateCheckQuery := `
+				SELECT EXISTS(
+					SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
+					UNION
+					SELECT 1 FROM channel_role_access cra
+					INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+					WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
+				)
+			`
+			if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, targetUserID, targetChannelID).Scan(&hasAccess); err != nil || !hasAccess {
+				http.Error(w, `{"error":"o membro não tem acesso a esse canal privado"}`, http.StatusForbidden)
+				return
+			}
+		}
+
+		updateQuery := `
+			UPDATE voice_sessions
+			SET channel_id = $1, is_screensharing = false, joined_at = CURRENT_TIMESTAMP
+			WHERE user_id = $2 AND channel_id = $3
+			RETURNING id, channel_id, user_id, is_muted, is_deafened, is_screensharing, joined_at
+		`
+		var session models.VoiceSession
+		err = h.db.Pool.QueryRow(r.Context(), updateQuery, targetChannelID, targetUserID, channelID).Scan(
+			&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.IsScreensharing, &session.JoinedAt,
+		)
+		if err != nil {
+			http.Error(w, `{"error":"participante não está mais neste canal de voz"}`, http.StatusNotFound)
+			return
+		}
+
+		var u models.UserPublic
+		h.db.Pool.QueryRow(r.Context(), `
+			SELECT id, username, COALESCE(display_name, ''), COALESCE(avatar_url, ''), COALESCE(banner_url, ''), COALESCE(bio, ''), COALESCE(status, 'offline'), COALESCE(custom_status, '')
+			FROM users WHERE id = $1
+		`, session.UserID).Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus)
+		session.User = u
+
+		h.hub.BroadcastToGuild(guildID, models.WSEvent{
+			Type: models.EventVoiceStateUpdate,
+			Data: map[string]any{
+				"action":            "move",
+				"channel_id":        channelID,
+				"target_channel_id": targetChannelID,
+				"user_id":           targetUserID,
+				"session":           session,
+				"forced":            true,
+				"guild_id":          guildID,
+			},
+		})
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(session)
 		return
 	}
 
