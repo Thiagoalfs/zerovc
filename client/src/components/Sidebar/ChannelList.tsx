@@ -236,7 +236,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     setDragOverTarget(null);
   };
 
-  const handleDropOnRoot = () => {
+  const handleDropOnRoot = (position: 'top' | 'bottom' = 'bottom') => {
     if (!canManageChannels || !activeGuild || !draggedChannelId) {
       setDraggedChannelId(null);
       setDragOverTarget(null);
@@ -250,8 +250,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
       .filter((c) => !c.category_id && c.type !== 'category' && c.id !== dragged.id)
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
-    // Append to root list
-    rootList.push({ ...dragged, category_id: undefined });
+    if (position === 'top') {
+      rootList.unshift({ ...dragged, category_id: undefined });
+    } else {
+      rootList.push({ ...dragged, category_id: undefined });
+    }
 
     const reorderedPayload = rootList.map((c, idx) => ({
       id: c.id,
@@ -1157,10 +1160,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               {categories.map((category) => {
                 const isCollapsed = !!collapsedCategories[category.id];
                 const childChannels = categoryChannelsMap[category.id] || [];
-                const isDragOverCategory = dragOverTarget?.id === category.id && dragOverTarget.isCategory;
+                const isDragOverCategoryHeaderTop = dragOverTarget?.id === category.id && dragOverTarget.position === 'top';
+                const isDragOverCategory = dragOverTarget?.id === category.id && dragOverTarget.isCategory && !isDragOverCategoryHeaderTop;
 
                 return (
-                  <div key={category.id} className="space-y-0.5 rounded-lg">
+                  <div key={category.id} className="space-y-0.5 rounded-lg relative">
                     {/* Category Header */}
                     <div
                       onDragOver={(e) => {
@@ -1168,22 +1172,35 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         e.preventDefault();
                         e.stopPropagation();
                         e.dataTransfer.dropEffect = 'move';
-                        if (dragOverTarget?.id !== category.id || !dragOverTarget.isCategory) {
-                          setDragOverTarget({ id: category.id, isCategory: true });
+
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const isTop = e.clientY < rect.top + rect.height * 0.45;
+                        if (isTop) {
+                          if (dragOverTarget?.id !== category.id || dragOverTarget.position !== 'top') {
+                            setDragOverTarget({ id: category.id, position: 'top', isRoot: true });
+                          }
+                        } else {
+                          if (dragOverTarget?.id !== category.id || !dragOverTarget.isCategory || dragOverTarget.position) {
+                            setDragOverTarget({ id: category.id, isCategory: true });
+                          }
                         }
                       }}
                       onDragLeave={(e) => {
                         const related = e.relatedTarget as Node | null;
                         if (related && e.currentTarget.contains(related)) return;
-                        if (dragOverTarget?.id === category.id && dragOverTarget.isCategory) {
+                        if (dragOverTarget?.id === category.id) {
                           setDragOverTarget(null);
                         }
                       }}
                       onDrop={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (!canManageChannels) return;
-                        handleDropOnCategory(category);
+                        if (!canManageChannels || !draggedChannelId) return;
+                        if (dragOverTarget?.position === 'top') {
+                          handleDropOnRoot('top');
+                        } else {
+                          handleDropOnCategory(category);
+                        }
                       }}
                       onContextMenu={(e) => handleCategoryContextMenu(e, category)}
                       className={`relative flex items-center justify-between px-1 py-1 group text-xs font-bold uppercase tracking-wider cursor-pointer rounded transition-colors ${
@@ -1193,7 +1210,14 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                       }`}
                       onClick={() => toggleCategoryCollapse(category.id)}
                     >
-                      <div className="flex items-center gap-1 truncate min-w-0">
+                      {/* Top drop indicator bar for dropping into root above this category */}
+                      {isDragOverCategoryHeaderTop && (
+                        <div className="absolute -top-[2px] left-0 right-0 h-[2px] bg-brand-500 rounded-full z-30 pointer-events-none shadow-[0_0_8px_rgba(99,102,241,1)]">
+                          <div className="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-brand-500 shadow-sm" />
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-1 truncate min-w-0 pointer-events-none">
                         {isCollapsed ? (
                           <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform" />
                         ) : (
@@ -1259,22 +1283,22 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 );
               })}
 
-              {/* Root Drop Zone at bottom: visible when dragging a channel that belongs to a category */}
-              {canManageChannels && draggedChannel?.category_id && (
+              {/* Bottom drop target for dropping into root below all categories */}
+              {canManageChannels && draggedChannelId && (
                 <div
                   onDragOver={(e) => {
                     if (!canManageChannels || !draggedChannelId) return;
                     e.preventDefault();
                     e.stopPropagation();
                     e.dataTransfer.dropEffect = 'move';
-                    if (dragOverTarget?.id !== 'root-dropzone') {
-                      setDragOverTarget({ id: 'root-dropzone', isRoot: true });
+                    if (dragOverTarget?.id !== 'root-bottom') {
+                      setDragOverTarget({ id: 'root-bottom', isRoot: true, position: 'bottom' });
                     }
                   }}
                   onDragLeave={(e) => {
                     const related = e.relatedTarget as Node | null;
                     if (related && e.currentTarget.contains(related)) return;
-                    if (dragOverTarget?.id === 'root-dropzone') {
+                    if (dragOverTarget?.id === 'root-bottom') {
                       setDragOverTarget(null);
                     }
                   }}
@@ -1282,15 +1306,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     e.preventDefault();
                     e.stopPropagation();
                     if (!canManageChannels) return;
-                    handleDropOnRoot();
+                    handleDropOnRoot('bottom');
                   }}
-                  className={`mt-2 py-2.5 px-3 rounded-lg text-xs font-semibold text-center border border-dashed transition-all cursor-pointer ${
-                    dragOverTarget?.id === 'root-dropzone'
-                      ? 'border-brand-500 bg-brand-500/20 text-brand-300 ring-1 ring-brand-500 shadow-sm'
-                      : 'border-white/20 text-gray-400 hover:border-white/30 bg-background-darkest/40'
-                  }`}
+                  className="relative min-h-[48px] flex-1 cursor-default py-2"
                 >
-                  Solte aqui para mover para a raiz (fora de categorias)
+                  {dragOverTarget?.id === 'root-bottom' && (
+                    <div className="absolute top-2 left-1 right-1 h-[2px] bg-brand-500 rounded-full z-30 pointer-events-none shadow-[0_0_8px_rgba(99,102,241,1)]">
+                      <div className="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-brand-500 shadow-sm" />
+                    </div>
+                  )}
                 </div>
               )}
 
