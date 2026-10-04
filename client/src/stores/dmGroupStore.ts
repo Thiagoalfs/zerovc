@@ -453,17 +453,18 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           nextMsgs = nextMsgs.slice(-200);
         }
 
-        const isViewingThisGroup = isChatActiveNow('group', message.group_id);
+        const isViewingThisGroup = Boolean(
+          (state.activeGroup && state.activeGroup.id === message.group_id) ||
+          isChatActiveNow('group', message.group_id)
+        );
 
         if (message.author_id !== currentUser?.id) {
           playMessageSound(false);
         }
 
-        const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled) && message.content;
+        const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled) && Boolean(message.content);
         if (shouldPlayTTS && isViewingThisGroup) {
-          if (message.is_tts || message.author_id !== currentUser?.id) {
-            speakText(message.content, message.author?.display_name || message.author?.username);
-          }
+          speakText(message.content, message.author?.display_name || message.author?.username);
         }
 
         return {

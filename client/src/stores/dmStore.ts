@@ -421,17 +421,18 @@ export const useDMStore = create<DMState>((set, get) => ({
           nextMessages = nextMessages.slice(-200);
         }
 
-        const isViewingThisDM = isChatActiveNow('dm', message.dm_room_id);
+        const isViewingThisDM = Boolean(
+          (state.activeRoom && state.activeRoom.id === message.dm_room_id) ||
+          isChatActiveNow('dm', message.dm_room_id)
+        );
 
         if (message.author_id !== currentUser?.id) {
           playMessageSound(false);
         }
 
-        const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled) && message.content;
+        const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled) && Boolean(message.content);
         if (shouldPlayTTS && isViewingThisDM) {
-          if (message.is_tts || message.author_id !== currentUser?.id) {
-            speakText(message.content, message.author?.display_name || message.author?.username);
-          }
+          speakText(message.content, message.author?.display_name || message.author?.username);
         }
         return {
           rooms: nextRooms,

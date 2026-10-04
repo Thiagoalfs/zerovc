@@ -414,11 +414,16 @@ export const playUndeafenSound = () => {
 };
 
 // Text-to-Speech synthesizer helper
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+
 export const speakText = (text: string, authorName?: string) => {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    console.warn('[TTS] Web Speech API not supported in this environment');
+    return;
+  }
+
   try {
-    window.speechSynthesis.cancel();
-    // Strip raw URLs or long markdown links for clearer speech
+    // Strip raw URLs, code blocks, or formatting for natural speech
     const cleanText = text
       .replace(/https?:\/\/[^\s]+/g, 'link')
       .replace(/```[\s\S]*?```/g, 'bloco de código')
@@ -426,11 +431,64 @@ export const speakText = (text: string, authorName?: string) => {
       .slice(0, 300);
 
     const fullMessage = authorName ? `${authorName} disse: ${cleanText}` : cleanText;
-    const utterance = new SpeechSynthesisUtterance(fullMessage);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 1.0;
-    utterance.volume = getSoundVolume();
-    window.speechSynthesis.speak(utterance);
-  } catch {}
+    console.log('[TTS] Speaking message:', fullMessage);
+
+    // Cancel any active speech and unpause engine
+    window.speechSynthesis.cancel();
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+
+    // A brief delay prevents Chromium from instantly aborting the new utterance with the prior cancel call
+    setTimeout(() => {
+      try {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+
+        const utterance = new SpeechSynthesisUtterance(fullMessage);
+        activeUtterance = utterance;
+        (window as any).__zerovc_tts_utterance = utterance;
+
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        const vol = getSoundVolume();
+        utterance.volume = Math.max(0.2, Math.min(1.0, isNaN(vol) ? 0.8 : vol));
+
+        // Locate best Portuguese voice if available
+        const voices = window.speechSynthesis.getVoices();
+        if (voices && voices.length > 0) {
+          const ptVoice = voices.find(
+            (v) => v.lang === 'pt-BR' || v.lang === 'pt_BR' || v.lang.toLowerCase().startsWith('pt')
+          );
+          if (ptVoice) {
+            utterance.voice = ptVoice;
+          }
+        }
+
+        utterance.onend = () => {
+          if (activeUtterance === utterance) {
+            activeUtterance = null;
+            (window as any).__zerovc_tts_utterance = null;
+          }
+        };
+
+        utterance.onerror = (e) => {
+          console.warn('[TTS] SpeechSynthesis error:', e);
+          if (activeUtterance === utterance) {
+            activeUtterance = null;
+            (window as any).__zerovc_tts_utterance = null;
+          }
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.error('[TTS] Failed to speak utterance:', err);
+      }
+    }, 40);
+  } catch (err) {
+    console.error('[TTS] Error preparing speech:', err);
+  }
 };
 

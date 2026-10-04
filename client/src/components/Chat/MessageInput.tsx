@@ -92,6 +92,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const { canManageMessages, canKick, canBan } = perms;
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [pickerInitialTab, setPickerInitialTab] = useState<'emoji' | 'gif'>('emoji');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -2046,6 +2047,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         onSelectEmoji={handleSelectEmoji}
         onSelectGif={handleSelectGif}
         positionClass="bottom-20 right-4"
+        initialTab={pickerInitialTab}
       />
 
       <input
@@ -2277,13 +2279,47 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           {/* Emoji Button */}
           <button
             type="button"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            onClick={() => {
+              if (showEmojiPicker && pickerInitialTab === 'emoji') {
+                setShowEmojiPicker(false);
+              } else {
+                setPickerInitialTab('emoji');
+                setShowEmojiPicker(true);
+              }
+            }}
             className={`p-1.5 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer ${
-              showEmojiPicker ? 'text-brand-500' : 'text-gray-400 hover:text-white'
+              showEmojiPicker && pickerInitialTab === 'emoji' ? 'text-brand-500' : 'text-gray-400 hover:text-white'
             }`}
             title="Inserir Emoji"
           >
             <Smile className="w-5 h-5" />
+          </button>
+
+          {/* GIF Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (showEmojiPicker && pickerInitialTab === 'gif') {
+                setShowEmojiPicker(false);
+              } else {
+                setPickerInitialTab('gif');
+                setShowEmojiPicker(true);
+              }
+            }}
+            className={`px-1.5 py-1 rounded-lg hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer flex items-center justify-center ${
+              showEmojiPicker && pickerInitialTab === 'gif' ? 'text-brand-500' : 'text-gray-400 hover:text-white'
+            }`}
+            title="Abrir seletor de GIFs"
+          >
+            <span
+              className={`px-1.5 py-0.5 rounded-[4px] border text-[10px] font-black tracking-wider leading-none transition-colors select-none ${
+                showEmojiPicker && pickerInitialTab === 'gif'
+                  ? 'border-brand-500 bg-brand-500/15 text-brand-400'
+                  : 'border-current'
+              }`}
+            >
+              GIF
+            </span>
           </button>
 
           {/* Voice Record Button or Send Button */}
