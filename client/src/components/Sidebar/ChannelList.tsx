@@ -109,7 +109,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [draggedChannelId, setDraggedChannelId] = useState<string | null>(null);
-  const [dragOverTarget, setDragOverTarget] = useState<{ id: string; isCategory?: boolean } | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<{
+    id: string;
+    isCategory?: boolean;
+    isRoot?: boolean;
+    position?: 'top' | 'bottom';
+  } | null>(null);
 
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
 
@@ -118,14 +123,21 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   const canManageChannels = isOwner || perms.hasAdmin || perms.canManageChannels;
   const canManageServer = isOwner || perms.hasAdmin || perms.canManageGuild;
   const channels = activeGuild?.channels || [];
+  const draggedChannel = draggedChannelId ? channels.find((c) => c.id === draggedChannelId) : null;
 
-  // Group channels
-  const categories = channels.filter((c) => c.type === 'category');
-  const rootChannels = channels.filter((c) => c.type !== 'category' && !c.category_id);
+  // Group channels with stable position ordering
+  const categories = channels
+    .filter((c) => c.type === 'category')
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const rootChannels = channels
+    .filter((c) => c.type !== 'category' && !c.category_id)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const categoryChannelsMap: Record<string, Channel[]> = {};
 
   categories.forEach((cat) => {
-    categoryChannelsMap[cat.id] = channels.filter((c) => c.category_id === cat.id);
+    categoryChannelsMap[cat.id] = channels
+      .filter((c) => c.category_id === cat.id)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   });
 
   const toggleCategoryCollapse = (categoryId: string) => {
@@ -151,8 +163,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   };
 
   // Drag and Drop Logic
-  const handleDropOnChannel = (targetChannel: Channel) => {
-    if (!activeGuild || !draggedChannelId || draggedChannelId === targetChannel.id) {
+  const handleDropOnChannel = (targetChannel: Channel, dropPosition: 'top' | 'bottom') => {
+    if (!canManageChannels || !activeGuild || !draggedChannelId || draggedChannelId === targetChannel.id) {
       setDraggedChannelId(null);
       setDragOverTarget(null);
       return;
@@ -164,14 +176,22 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     const newCategoryId = targetChannel.category_id;
     const isMovingToRoot = !newCategoryId;
 
-    // Filter relevant list
-    const siblingChannels = channels.filter((c) =>
-      isMovingToRoot ? !c.category_id && c.type !== 'category' : c.category_id === newCategoryId
-    );
+    // Filter relevant list of sibling channels
+    const siblingChannels = channels
+      .filter((c) =>
+        isMovingToRoot ? !c.category_id && c.type !== 'category' : c.category_id === newCategoryId
+      )
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
     const filtered = siblingChannels.filter((c) => c.id !== dragged.id);
     const targetIdx = filtered.findIndex((c) => c.id === targetChannel.id);
-    const insertIdx = targetIdx === -1 ? filtered.length : targetIdx;
+
+    let insertIdx = targetIdx;
+    if (targetIdx === -1) {
+      insertIdx = filtered.length;
+    } else if (dropPosition === 'bottom') {
+      insertIdx = targetIdx + 1;
+    }
 
     filtered.splice(insertIdx, 0, { ...dragged, category_id: newCategoryId });
 
@@ -188,7 +208,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   };
 
   const handleDropOnCategory = (category: Channel) => {
-    if (!activeGuild || !draggedChannelId) {
+    if (!canManageChannels || !activeGuild || !draggedChannelId) {
       setDraggedChannelId(null);
       setDragOverTarget(null);
       return;
@@ -197,15 +217,46 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     const dragged = channels.find((c) => c.id === draggedChannelId);
     if (!dragged || dragged.type === 'category') return;
 
-    const childChannels = categoryChannelsMap[category.id] || [];
-    const filtered = childChannels.filter((c) => c.id !== dragged.id);
-    filtered.push({ ...dragged, category_id: category.id });
+    const childChannels = (categoryChannelsMap[category.id] || [])
+      .filter((c) => c.id !== dragged.id)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
-    const reorderedPayload = filtered.map((c, idx) => ({
+    // Place at the top of the category
+    childChannels.unshift({ ...dragged, category_id: category.id });
+
+    const reorderedPayload = childChannels.map((c, idx) => ({
       id: c.id,
       position: idx,
       category_id: category.id,
       clear_category: false,
+    }));
+
+    reorderChannels(activeGuild.id, reorderedPayload);
+    setDraggedChannelId(null);
+    setDragOverTarget(null);
+  };
+
+  const handleDropOnRoot = () => {
+    if (!canManageChannels || !activeGuild || !draggedChannelId) {
+      setDraggedChannelId(null);
+      setDragOverTarget(null);
+      return;
+    }
+
+    const dragged = channels.find((c) => c.id === draggedChannelId);
+    if (!dragged || dragged.type === 'category') return;
+
+    const rootList = channels
+      .filter((c) => !c.category_id && c.type !== 'category' && c.id !== dragged.id)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+    // Append to root list
+    rootList.push({ ...dragged, category_id: undefined });
+
+    const reorderedPayload = rootList.map((c, idx) => ({
+      id: c.id,
+      position: idx,
+      clear_category: true,
     }));
 
     reorderChannels(activeGuild.id, reorderedPayload);
@@ -677,13 +728,32 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     const isInThisVoice = !isText && currentChannelId === channel.id && isConnected;
     const isDragging = draggedChannelId === channel.id;
     const isDragOver = dragOverTarget?.id === channel.id && !isDragging;
+    const isDragOverTop = isDragOver && dragOverTarget?.position === 'top';
+    const isDragOverBottom = isDragOver && dragOverTarget?.position === 'bottom';
 
     return (
-      <div key={channel.id} className="space-y-0.5">
+      <div key={channel.id} className="space-y-0.5 relative">
+        {/* Top drop indicator bar */}
+        {isDragOverTop && (
+          <div className="absolute -top-[2px] left-1 right-1 h-[2px] bg-brand-500 rounded-full z-30 pointer-events-none shadow-[0_0_8px_rgba(99,102,241,1)]">
+            <div className="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-brand-500 shadow-sm" />
+          </div>
+        )}
+
+        {/* Bottom drop indicator bar */}
+        {isDragOverBottom && (
+          <div className="absolute -bottom-[2px] left-1 right-1 h-[2px] bg-brand-500 rounded-full z-30 pointer-events-none shadow-[0_0_8px_rgba(99,102,241,1)]">
+            <div className="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-brand-500 shadow-sm" />
+          </div>
+        )}
+
         <div
           draggable={canManageChannels}
           onDragStart={(e) => {
-            if (!canManageChannels) return;
+            if (!canManageChannels) {
+              e.preventDefault();
+              return;
+            }
             e.dataTransfer.setData('text/plain', channel.id);
             e.dataTransfer.effectAllowed = 'move';
             setDraggedChannelId(channel.id);
@@ -691,17 +761,37 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           onDragOver={(e) => {
             if (!canManageChannels || !draggedChannelId) return;
             e.preventDefault();
+            e.stopPropagation();
             e.dataTransfer.dropEffect = 'move';
-            setDragOverTarget({ id: channel.id });
+
+            if (draggedChannelId === channel.id) {
+              if (dragOverTarget) setDragOverTarget(null);
+              return;
+            }
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            const position: 'top' | 'bottom' = e.clientY < midY ? 'top' : 'bottom';
+
+            if (dragOverTarget?.id !== channel.id || dragOverTarget?.position !== position) {
+              setDragOverTarget({ id: channel.id, position });
+            }
           }}
-          onDragLeave={() => {
-            if (dragOverTarget?.id === channel.id) {
-              setDragOverTarget(null);
+          onDragLeave={(e) => {
+            const related = e.relatedTarget as Node | null;
+            if (!e.currentTarget.contains(related)) {
+              if (dragOverTarget?.id === channel.id) {
+                setDragOverTarget(null);
+              }
             }
           }}
           onDrop={(e) => {
             e.preventDefault();
-            handleDropOnChannel(channel);
+            e.stopPropagation();
+            if (!canManageChannels) return;
+            if (dragOverTarget?.id === channel.id && dragOverTarget.position) {
+              handleDropOnChannel(channel, dragOverTarget.position);
+            }
           }}
           onDragEnd={() => {
             setDraggedChannelId(null);
@@ -711,8 +801,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
             canManageChannels ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
-            isDragOver ? 'border-t-2 border-brand-500 bg-brand-500/10' : ''
-          } ${
             isActive
               ? 'bg-background-light text-white font-medium shadow-sm'
               : isInThisVoice
@@ -1045,6 +1133,40 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4 no-scrollbar">
           {!isHomeActive && (
             <>
+              {/* Root Drop Zone: visible when dragging a channel that belongs to a category */}
+              {canManageChannels && draggedChannel?.category_id && (
+                <div
+                  onDragOver={(e) => {
+                    if (!canManageChannels || !draggedChannelId) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOverTarget?.id !== 'root-dropzone') {
+                      setDragOverTarget({ id: 'root-dropzone', isRoot: true });
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    const related = e.relatedTarget as Node | null;
+                    if (!e.currentTarget.contains(related) && dragOverTarget?.id === 'root-dropzone') {
+                      setDragOverTarget(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!canManageChannels) return;
+                    handleDropOnRoot();
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-semibold text-center border border-dashed transition-all ${
+                    dragOverTarget?.id === 'root-dropzone'
+                      ? 'border-brand-500 bg-brand-500/20 text-brand-300 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-white/20 text-gray-400 hover:border-white/30 bg-background-darkest/40'
+                  }`}
+                >
+                  Solte aqui para mover para fora de categorias
+                </div>
+              )}
+
               {/* 1. Root Channels (no category) */}
               {rootChannels.length > 0 && (
                 <div className="space-y-0.5">
@@ -1059,31 +1181,36 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 const isDragOverCategory = dragOverTarget?.id === category.id && dragOverTarget.isCategory;
 
                 return (
-                  <div
-                    key={category.id}
-                    onDragOver={(e) => {
-                      if (!canManageChannels || !draggedChannelId) return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'move';
-                      setDragOverTarget({ id: category.id, isCategory: true });
-                    }}
-                    onDragLeave={() => {
-                      if (dragOverTarget?.id === category.id) {
-                        setDragOverTarget(null);
-                      }
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleDropOnCategory(category);
-                    }}
-                    className={`space-y-0.5 rounded-lg transition-colors ${
-                      isDragOverCategory ? 'bg-brand-500/10 ring-1 ring-brand-500/40 p-1' : ''
-                    }`}
-                  >
+                  <div key={category.id} className="space-y-0.5 rounded-lg">
                     {/* Category Header */}
                     <div
+                      onDragOver={(e) => {
+                        if (!canManageChannels || !draggedChannelId) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (dragOverTarget?.id !== category.id || !dragOverTarget.isCategory) {
+                          setDragOverTarget({ id: category.id, isCategory: true });
+                        }
+                      }}
+                      onDragLeave={(e) => {
+                        const related = e.relatedTarget as Node | null;
+                        if (!e.currentTarget.contains(related) && dragOverTarget?.id === category.id && dragOverTarget.isCategory) {
+                          setDragOverTarget(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!canManageChannels) return;
+                        handleDropOnCategory(category);
+                      }}
                       onContextMenu={(e) => handleCategoryContextMenu(e, category)}
-                      className="flex items-center justify-between px-1 py-1 group text-xs font-bold text-gray-400 uppercase tracking-wider hover:text-gray-200 cursor-pointer rounded transition-colors"
+                      className={`relative flex items-center justify-between px-1 py-1 group text-xs font-bold uppercase tracking-wider cursor-pointer rounded transition-colors ${
+                        isDragOverCategory
+                          ? 'bg-brand-500/20 text-brand-300 ring-1 ring-brand-500/50'
+                          : 'text-gray-400 hover:text-gray-200'
+                      }`}
                       onClick={() => toggleCategoryCollapse(category.id)}
                     >
                       <div className="flex items-center gap-1 truncate min-w-0">
@@ -1114,8 +1241,35 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                       <div className="space-y-0.5 pl-1">
                         {childChannels.map(renderChannelItem)}
                         {childChannels.length === 0 && (
-                          <div className="px-2 py-1 text-[11px] text-gray-500 italic">
-                            Nenhum canal nesta categoria
+                          <div
+                            onDragOver={(e) => {
+                              if (!canManageChannels || !draggedChannelId) return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              e.dataTransfer.dropEffect = 'move';
+                              if (dragOverTarget?.id !== category.id || !dragOverTarget.isCategory) {
+                                setDragOverTarget({ id: category.id, isCategory: true });
+                              }
+                            }}
+                            onDragLeave={(e) => {
+                              const related = e.relatedTarget as Node | null;
+                              if (!e.currentTarget.contains(related) && dragOverTarget?.id === category.id && dragOverTarget.isCategory) {
+                                setDragOverTarget(null);
+                              }
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (!canManageChannels) return;
+                              handleDropOnCategory(category);
+                            }}
+                            className={`px-2 py-1.5 text-[11px] italic rounded border border-dashed transition-colors ${
+                              isDragOverCategory
+                                ? 'border-brand-500 bg-brand-500/10 text-brand-300'
+                                : 'border-transparent text-gray-500'
+                            }`}
+                          >
+                            Nenhum canal nesta categoria (solte aqui)
                           </div>
                         )}
                       </div>
