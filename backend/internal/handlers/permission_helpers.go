@@ -24,29 +24,33 @@ func loadActorGuildContext(ctx context.Context, db *database.DB, guildID, actorI
 	if err := db.Pool.QueryRow(ctx, "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID); err != nil {
 		return ac, err
 	}
-	ac.IsOwner = ownerID == actorID
-	ac.MaxPos = 999999
+	if ac.IsOwner {
+		ac.MaxPos = -1
+	} else {
+		ac.MaxPos = 999999
+	}
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT gr.position, gr.permissions
+		SELECT gr.name, gr.position, gr.permissions
 		FROM guild_roles gr
 		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
 		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
 	`, guildID, actorID)
 	if err == nil {
 		for rows.Next() {
+			var name string
 			var pos int
 			var p int64
-			if rows.Scan(&pos, &p) == nil {
+			if rows.Scan(&name, &pos, &p) == nil {
 				ac.Perms |= p
-				if pos < ac.MaxPos {
+				if !ac.IsOwner && name != "@everyone" && pos < ac.MaxPos {
 					ac.MaxPos = pos
 				}
 			}
 		}
 		rows.Close()
 	}
-	ac.HasAdmin = (ac.Perms & models.PermAdministrator) != 0
+	ac.HasAdmin = ac.IsOwner || (ac.Perms&models.PermAdministrator) != 0
 	return ac, nil
 }
 

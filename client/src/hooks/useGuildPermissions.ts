@@ -59,21 +59,47 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
       };
     }
 
-    const isCurrentOwner = guild.owner_id === user.id;
-    const currentMember = guild.members?.find((m) => m.id === user.id);
-    const currentUserRoles = currentMember?.roles || [];
+    const isCurrentOwner = Boolean(
+      user.id && guild.owner_id && String(user.id).toLowerCase() === String(guild.owner_id).toLowerCase()
+    );
+    const currentMember = guild.members?.find(
+      (m) => String(m.id).toLowerCase() === String(user.id).toLowerCase()
+    );
+    const rawRoles = (currentMember?.roles && currentMember.roles.length > 0)
+      ? currentMember.roles
+      : (user.roles || []);
 
     const everyoneRole = guild.roles?.find((r) => r.name === '@everyone');
     let currentUserPerms = Number(everyoneRole?.permissions || 0);
-    let currentUserHighestPos = 999999;
 
-    (currentUserRoles || []).forEach((r: any) => {
+    // Resolve roles against live guild.roles to ensure updated permissions are applied immediately
+    const currentUserRoles: Role[] = [];
+    const seenRoleIds = new Set<string>();
+
+    rawRoles.forEach((r: any) => {
       if (!r) return;
-      currentUserPerms |= Number(r.permissions || 0);
-      if (typeof r.position === 'number' && r.position < currentUserHighestPos) {
-        currentUserHighestPos = r.position;
-      }
+      const roleId = typeof r === 'string' ? r : r.id;
+      if (roleId && seenRoleIds.has(String(roleId))) return;
+      if (roleId) seenRoleIds.add(String(roleId));
+
+      const liveRole = guild.roles?.find((gr) => String(gr.id) === String(roleId));
+      const finalRole = liveRole ? { ...r, ...liveRole } : r;
+      currentUserRoles.push(finalRole);
+      currentUserPerms |= Number(finalRole.permissions || 0);
     });
+
+    // Highest role position (lower number = higher hierarchy).
+    // Owner is always -1. For non-owners, @everyone is excluded so custom roles determine rank.
+    let currentUserHighestPos = isCurrentOwner ? -1 : 999999;
+    if (!isCurrentOwner) {
+      currentUserRoles.forEach((r) => {
+        if (!r || r.name === '@everyone') return;
+        const pos = typeof r.position === 'number' ? r.position : 999999;
+        if (pos < currentUserHighestPos) {
+          currentUserHighestPos = pos;
+        }
+      });
+    }
 
     const hasAdmin = isCurrentOwner || (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
     const canManageGuild = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_GUILD) !== 0;
@@ -96,15 +122,20 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
           isHierarchyAllowed: false,
         };
       }
-      const isMe = targetUser.id === user.id;
-      const isTargetOwner = targetUser.id === guild.owner_id;
+      const isMe = String(targetUser.id).toLowerCase() === String(user.id).toLowerCase();
+      const isTargetOwner = String(targetUser.id).toLowerCase() === String(guild.owner_id).toLowerCase();
 
-      const targetMember = guild.members?.find((m) => m.id === targetUser.id) || targetUser;
+      const targetMember = guild.members?.find((m) => String(m.id).toLowerCase() === String(targetUser.id).toLowerCase()) || targetUser;
       let targetHighestPos = 999999;
-      (targetMember.roles || []).forEach((r: any) => {
-        if (!r || r.name === '@everyone') return;
-        if (typeof r.position === 'number' && r.position < targetHighestPos) {
-          targetHighestPos = r.position;
+      const targetRoles = (targetMember as any).roles || [];
+      targetRoles.forEach((r: any) => {
+        if (!r) return;
+        const roleId = typeof r === 'string' ? r : r.id;
+        const liveRole = guild.roles?.find((gr) => String(gr.id) === String(roleId)) || r;
+        if (liveRole.name === '@everyone') return;
+        const pos = typeof liveRole.position === 'number' ? liveRole.position : 999999;
+        if (pos < targetHighestPos) {
+          targetHighestPos = pos;
         }
       });
 
