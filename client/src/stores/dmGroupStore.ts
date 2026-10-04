@@ -246,6 +246,10 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           }
         } catch {}
 
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('zerovc:nav-home', { detail: { target: 'friends' } }));
+        }
+
         return {
           groups: state.groups.filter((g) => g.id !== groupId),
           activeGroup: state.activeGroup?.id === groupId ? null : state.activeGroup,
@@ -265,6 +269,9 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
   leaveGroup: async (groupId: string) => {
     const currentUserId = useAuthStore.getState().user?.id;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zerovc:nav-home', { detail: { target: 'friends' } }));
+    }
     if (currentUserId) {
       await get().removeMember(groupId, currentUserId);
     }
@@ -729,9 +736,21 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
   handleGroupLeave: (data: { group_id: string }) => {
     const groupId = data.group_id;
+    const wasActive = get().activeGroup?.id === groupId;
+    try {
+      const saved = localStorage.getItem('zerovc_last_dm_target');
+      if (saved === `/@me/group/${groupId}`) {
+        localStorage.removeItem('zerovc_last_dm_target');
+      }
+    } catch {}
+
     set((state) => ({
       groups: state.groups.filter((g) => g.id !== groupId),
       activeGroup: state.activeGroup?.id === groupId ? null : state.activeGroup,
     }));
+
+    if (wasActive && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zerovc:nav-home', { detail: { target: 'friends' } }));
+    }
   },
 }));

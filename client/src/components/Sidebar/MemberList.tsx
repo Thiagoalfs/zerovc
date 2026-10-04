@@ -53,13 +53,23 @@ export const MemberList: React.FC<MemberListProps> = ({
   if (!isOpen && !isDragging) return null;
 
   const members = activeGuild.members || [];
-  const guildRoles = activeGuild.roles || [];
+  const guildRoles = useMemo(() => {
+    const seen = new Set<string>();
+    const res: Role[] = [];
+    for (const r of activeGuild.roles || []) {
+      if (r && r.id && !seen.has(String(r.id))) {
+        seen.add(String(r.id));
+        res.push(r);
+      }
+    }
+    return res;
+  }, [activeGuild.roles]);
 
   // Helper to get roles with live metadata from activeGuild.roles
   const getMemberLiveRoles = (member: User) => {
     return (member.roles || [])
       .map((r) => {
-        const liveRole = guildRoles.find((gr) => gr.id === r.id);
+        const liveRole = guildRoles.find((gr) => String(gr.id) === String(r.id));
         return liveRole ? { ...r, ...liveRole } : null;
       })
       .filter((r): r is Role => r !== null);
@@ -95,16 +105,20 @@ export const MemberList: React.FC<MemberListProps> = ({
       .map((role) => {
         const roleMembers = online.filter((m) => {
           const highestHoisted = getMemberHighestHoistedRole(m);
-          return highestHoisted?.id === role.id;
+          return highestHoisted && String(highestHoisted.id) === String(role.id);
         });
         return { role, members: roleMembers };
       })
       .filter((g) => g.members.length > 0);
 
-    const generalOnline = online.filter((m) => {
-      const highestHoisted = getMemberHighestHoistedRole(m);
-      return !highestHoisted;
-    });
+    const hoistedMemberIds = new Set<string>();
+    for (const group of groups) {
+      for (const m of group.members) {
+        hoistedMemberIds.add(String(m.id));
+      }
+    }
+
+    const generalOnline = online.filter((m) => !hoistedMemberIds.has(String(m.id)));
 
     return {
       onlineMembers: online,

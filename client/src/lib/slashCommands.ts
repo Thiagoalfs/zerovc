@@ -18,7 +18,7 @@ export interface SlashCommand {
   subcommands?: SlashOption[];
   options?: SlashOption[];
   guildOnly?: boolean;
-  requiredPermission?: 'manage_messages' | 'kick_members' | 'ban_members';
+  requiredPermission?: 'manage_messages' | 'kick_members' | 'ban_members' | 'send_tts';
 }
 
 export const LEAGUE_REGIONS: SlashOptionChoice[] = [
@@ -222,6 +222,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: 'tts',
     description: 'Envia uma mensagem de texto narrada pelo sintetizador de voz',
+    guildOnly: true,
+    requiredPermission: 'send_tts',
     options: [
       {
         name: 'mensagem',

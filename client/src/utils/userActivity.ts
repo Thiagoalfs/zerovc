@@ -1,4 +1,4 @@
-import { User, Guild, Permissions } from '../types';
+import { User, Guild, Channel, Permissions } from '../types';
 
 export interface DisplayedActivity {
   kind: 'game' | 'music' | 'other' | 'call';
@@ -12,6 +12,163 @@ export interface DisplayedActivity {
   guildName?: string;
   guildIcon?: string;
   participantCount?: number;
+}
+
+/**
+ * Checks whether the current user has permission to view/access a channel in a guild.
+ */
+export function canUserViewChannel(ch: Channel, guild: Guild | null, currentUser: User | null): boolean {
+  if (!guild || !ch || ch.type === 'category' || !currentUser) return false;
+
+  // Server owner always has full access
+  if (guild.owner_id === currentUser.id) return true;
+
+  const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
+  const userRoles = (currentMember?.roles || []).map((r) => {
+    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(r.id));
+    return fullRole ? { ...r, ...fullRole } : r;
+  });
+
+  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
+  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
+  userRoles.forEach((r) => {
+    userPerms |= (r.permissions || 0);
+  });
+
+  // Administrator bypasses restrictions
+  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
+    return true;
+  }
+
+  const canView = (userPerms & Permissions.VIEW_CHANNEL) !== 0;
+  const canConnect = (userPerms & Permissions.CONNECT_VOICE) !== 0;
+  let hasAccess = canView || canConnect;
+
+  // Private channel role check
+  if (ch.is_private) {
+    const hasRole = ch.role_ids && ch.role_ids.length > 0
+      ? userRoles.some((r) => ch.role_ids?.some((id) => String(id) === String(r.id)))
+      : false;
+    if (!hasRole) {
+      hasAccess = false;
+    }
+  }
+
+  // Permission overwrites
+  if (ch.permission_overwrites && ch.permission_overwrites.length > 0) {
+    if (everyoneRole) {
+      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
+      if (ow) {
+        if ((ow.deny & Permissions.VIEW_CHANNEL) !== 0 || (ow.deny & Permissions.CONNECT_VOICE) !== 0) {
+          hasAccess = false;
+        }
+        if ((ow.allow & Permissions.VIEW_CHANNEL) !== 0 || (ow.allow & Permissions.CONNECT_VOICE) !== 0) {
+          hasAccess = true;
+        }
+      }
+    }
+
+    userRoles.forEach((r) => {
+      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(r.id));
+      if (ow) {
+        if ((ow.deny & Permissions.VIEW_CHANNEL) !== 0 || (ow.deny & Permissions.CONNECT_VOICE) !== 0) {
+          hasAccess = false;
+        }
+        if ((ow.allow & Permissions.VIEW_CHANNEL) !== 0 || (ow.allow & Permissions.CONNECT_VOICE) !== 0) {
+          hasAccess = true;
+        }
+      }
+    });
+  }
+
+  return hasAccess;
+}
+
+/**
+  * Checks if a user has permission to use TTS in a channel,
+  * combining guild role permissions, Administrator bypass, and channel permission overwrites.
+  */
+export function canUserSendTTS(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!guild || !currentUser) return false;
+
+  // Server owner always has full access
+  if (guild.owner_id === currentUser.id) return true;
+
+  const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
+  const userRoles = (currentMember?.roles || []).map((r) => {
+    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(r.id));
+    return fullRole ? { ...r, ...fullRole } : r;
+  });
+
+  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
+  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
+  userRoles.forEach((r) => {
+    userPerms |= (r.permissions || 0);
+  });
+
+  // Administrator bypasses restrictions
+  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
+    return true;
+  }
+
+  let hasTTS = (userPerms & Permissions.SEND_TTS) !== 0;
+
+  // Channel permission overwrites
+  if (ch && ch.permission_overwrites && ch.permission_overwrites.length > 0) {
+    if (everyoneRole) {
+      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
+      if (ow) {
+        if ((ow.deny & Permissions.SEND_TTS) !== 0) {
+          hasTTS = false;
+        }
+        if ((ow.allow & Permissions.SEND_TTS) !== 0) {
+          hasTTS = true;
+        }
+      }
+    }
+
+    let roleDeny = false;
+    let roleAllow = false;
+    userRoles.forEach((r) => {
+      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(r.id));
+      if (ow) {
+        if ((ow.deny & Permissions.SEND_TTS) !== 0) {
+          roleDeny = true;
+        }
+        if ((ow.allow & Permissions.SEND_TTS) !== 0) {
+          roleAllow = true;
+        }
+      }
+    });
+
+    if (roleDeny) hasTTS = false;
+    if (roleAllow) hasTTS = true;
+  }
+
+  return hasTTS;
+}
+
+/**
+ * Finds the first accessible channel for the current user in a guild:
+ * Prioritizes text channels, followed by any accessible channel. Categories are excluded.
+ */
+export function findFirstAccessibleChannel(
+  channels: Channel[],
+  guild: Guild | null,
+  currentUser: User | null
+): Channel | null {
+  if (!channels || channels.length === 0 || !guild || !currentUser) return null;
+
+  const nonCategories = channels.filter((c) => c.type !== 'category');
+  const accessible = nonCategories.filter((c) => canUserViewChannel(c, guild, currentUser));
+
+  if (accessible.length === 0) return null;
+
+  return accessible.find((c) => c.type === 'text') || accessible[0];
 }
 
 /**
@@ -92,9 +249,6 @@ export function getUserActivity(
   for (const guild of guilds) {
     if (!guild.channels || guild.channels.length === 0) continue;
 
-    const isOwner = guild.owner_id === currentUser.id;
-    const currentMember = guild.members?.find((m) => m.id === currentUser.id);
-
     for (const ch of guild.channels) {
       if (ch.type !== 'voice') continue;
 
@@ -102,70 +256,7 @@ export function getUserActivity(
       if (!isInVoice) continue;
 
       // Verify if currentUser has permission to see and join this voice channel
-      let hasAccess = false;
-
-      if (isOwner) {
-        hasAccess = true;
-      } else {
-        const userRoles = (currentMember?.roles || []).map((r) => {
-          const fullRole = guild.roles?.find((gr) => gr.id === r.id);
-          return fullRole ? { ...r, ...fullRole } : r;
-        });
-
-        const everyoneRole = guild.roles?.find((r) => r.name === '@everyone');
-        let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
-        userRoles.forEach((r) => {
-          userPerms |= (r.permissions || 0);
-        });
-
-        // Administrator bypasses restrictions
-        if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
-          hasAccess = true;
-        } else {
-          const canView = (userPerms & Permissions.VIEW_CHANNEL) !== 0;
-          const canConnect = (userPerms & Permissions.CONNECT_VOICE) !== 0;
-          if (canView || canConnect) {
-            hasAccess = true;
-          }
-
-          // Private channel role check
-          if (ch.is_private) {
-            const hasRole = ch.role_ids && ch.role_ids.length > 0
-              ? userRoles.some((r) => ch.role_ids?.includes(r.id))
-              : false;
-            if (!hasRole) {
-              hasAccess = false;
-            }
-          }
-
-          // Permission overwrites
-          if (ch.permission_overwrites && ch.permission_overwrites.length > 0) {
-            if (everyoneRole) {
-              const ow = ch.permission_overwrites.find((o) => o.role_id === everyoneRole.id);
-              if (ow) {
-                if ((ow.deny & Permissions.VIEW_CHANNEL) !== 0 || (ow.deny & Permissions.CONNECT_VOICE) !== 0) {
-                  hasAccess = false;
-                }
-                if ((ow.allow & Permissions.VIEW_CHANNEL) !== 0 || (ow.allow & Permissions.CONNECT_VOICE) !== 0) {
-                  hasAccess = true;
-                }
-              }
-            }
-
-            userRoles.forEach((r) => {
-              const ow = ch.permission_overwrites?.find((o) => o.role_id === r.id);
-              if (ow) {
-                if ((ow.deny & Permissions.VIEW_CHANNEL) !== 0 || (ow.deny & Permissions.CONNECT_VOICE) !== 0) {
-                  hasAccess = false;
-                }
-                if ((ow.allow & Permissions.VIEW_CHANNEL) !== 0 || (ow.allow & Permissions.CONNECT_VOICE) !== 0) {
-                  hasAccess = true;
-                }
-              }
-            });
-          }
-        }
-      }
+      const hasAccess = canUserViewChannel(ch, guild, currentUser);
 
       if (hasAccess) {
         const participantCount = ch.voice_sessions?.length || 1;

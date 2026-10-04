@@ -49,6 +49,7 @@ interface DMGroupChatAreaProps {
   onPreviewImage?: (url: string) => void;
   onOpenScreenShare?: () => void;
   onOpenDM?: (userId: string) => void;
+  onSelectFriends?: () => void;
 }
 
 export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
@@ -57,6 +58,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   onPreviewImage,
   onOpenScreenShare,
   onOpenDM,
+  onSelectFriends,
 }) => {
   const { user } = useAuthStore();
   const {
@@ -1090,6 +1092,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                     return;
                   }
                   if (confirm('Tem certeza que deseja sair deste grupo?')) {
+                    onSelectFriends?.();
                     leaveGroup(activeGroup.id);
                   }
                 }}
