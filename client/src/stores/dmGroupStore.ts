@@ -5,6 +5,8 @@ import { useSettingsStore } from './settingsStore';
 import { playMessageSound, speakText } from '../utils/audio';
 import { isChatActiveNow } from '../utils/activeChat';
 import { DMGroup, DMGroupMessage, User } from '../types';
+import { useUploadStore } from './uploadStore';
+import { optimizeImageForUpload } from '../lib/imageOptimizer';
 
 interface DMGroupState {
   groups: DMGroup[];
@@ -34,7 +36,7 @@ interface DMGroupState {
   removeMember: (groupId: string, userId: string) => Promise<void>;
   leaveGroup: (groupId: string) => Promise<void>;
   transferOwnership: (groupId: string, newOwnerId: string) => Promise<void>;
-  sendMessage: (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean) => Promise<void>;
+  sendMessage: (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   togglePin: (messageId: string) => Promise<void>;
@@ -276,7 +278,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     }));
   },
 
-  sendMessage: async (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean) => {
+  sendMessage: async (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File) => {
     const { activeGroup, messages } = get();
     if (!activeGroup) return;
     const currentUser = useAuthStore.getState().user;
@@ -295,6 +297,19 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     }
 
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const abortController = file ? new AbortController() : null;
+
+    if (file && abortController) {
+      useUploadStore.getState().startUpload({
+        id: tempId,
+        fileName: file.name,
+        fileSize: file.size,
+        progress: 0,
+        abortController,
+        onCancel: () => get().removeMessageFromStore(tempId, activeGroup.id),
+      });
+    }
+
     const tempMsg: DMGroupMessage = {
       id: tempId,
       tempId,
@@ -309,6 +324,12 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       is_pinned: false,
       is_tts: Boolean(isTTS),
       status: 'sending',
+      uploadingFile: file
+        ? {
+            name: file.name,
+            size: file.size,
+          }
+        : undefined,
       created_at: new Date().toISOString(),
     };
 
@@ -329,8 +350,22 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     });
 
     try {
+      let finalContent = content;
+
+      if (file && abortController) {
+        const optimizedFile = await optimizeImageForUpload(file, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
+        const uploaded = await api.upload.attachment(optimizedFile, {
+          signal: abortController.signal,
+          onProgress: (percent) => {
+            useUploadStore.getState().updateProgress(tempId, percent);
+          },
+        });
+        useUploadStore.getState().removeUpload(tempId);
+        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
+      }
+
       const confirmedMsg = await api.dmGroups.sendMessage(activeGroup.id, {
-        content,
+        content: finalContent,
         attachments,
         reply_to_id: replyToId,
         is_tts: Boolean(isTTS),
@@ -373,6 +408,13 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         };
       });
     } catch (err: any) {
+      if (file) {
+        useUploadStore.getState().removeUpload(tempId);
+        if (abortController?.signal.aborted) {
+          get().removeMessageFromStore(tempId, activeGroup.id);
+          return;
+        }
+      }
       console.error('Failed to send group message:', err);
       set((state) => {
         const markFailed = (list: DMGroupMessage[]) =>
@@ -401,7 +443,11 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       const groupMsgs = state.messagesByGroup[message.group_id] || [];
       const existingExactIdx = groupMsgs.findIndex((m) => m.id === message.id);
       const tempMatchIdx = groupMsgs.findIndex(
-        (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+        (m) =>
+          m.status === 'sending' &&
+          m.author_id === message.author_id &&
+          (m.content === message.content ||
+            (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
       );
 
       let updatedGroupMsgs = [...groupMsgs];

@@ -5,6 +5,8 @@ import { playMessageSound, speakText } from '../utils/audio';
 import { isChatActiveNow } from '../utils/activeChat';
 import { useAuthStore } from './authStore';
 import { useSettingsStore } from './settingsStore';
+import { useUploadStore } from './uploadStore';
+import { optimizeImageForUpload } from '../lib/imageOptimizer';
 
 interface DMState {
   rooms: DMRoom[];
@@ -29,7 +31,7 @@ interface DMState {
   fetchPinnedMessages: (roomId: string) => Promise<void>;
   openDMWithUser: (recipientId: string) => Promise<DMRoom>;
   closeRoom: (roomId: string) => Promise<void>;
-  sendMessage: (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean) => Promise<void>;
+  sendMessage: (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   removeMessageFromStore: (messageId: string, roomId?: string) => void;
@@ -230,7 +232,7 @@ export const useDMStore = create<DMState>((set, get) => ({
     }
   },
 
-  sendMessage: async (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean) => {
+  sendMessage: async (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File) => {
     const { activeRoom, messages } = get();
     if (!activeRoom) return;
     const currentUser = useAuthStore.getState().user;
@@ -249,6 +251,19 @@ export const useDMStore = create<DMState>((set, get) => ({
     }
 
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const abortController = file ? new AbortController() : null;
+
+    if (file && abortController) {
+      useUploadStore.getState().startUpload({
+        id: tempId,
+        fileName: file.name,
+        fileSize: file.size,
+        progress: 0,
+        abortController,
+        onCancel: () => get().removeMessageFromStore(tempId, activeRoom.id),
+      });
+    }
+
     const tempMsg: DMMessage = {
       id: tempId,
       tempId,
@@ -263,6 +278,12 @@ export const useDMStore = create<DMState>((set, get) => ({
       is_pinned: false,
       is_tts: Boolean(isTTS),
       status: 'sending',
+      uploadingFile: file
+        ? {
+            name: file.name,
+            size: file.size,
+          }
+        : undefined,
       created_at: new Date().toISOString(),
     };
 
@@ -284,7 +305,21 @@ export const useDMStore = create<DMState>((set, get) => ({
     });
 
     try {
-      const confirmedMsg = await api.dms.sendMessage(activeRoom.id, { content, attachments, reply_to_id: replyToId, is_tts: Boolean(isTTS) });
+      let finalContent = content;
+
+      if (file && abortController) {
+        const optimizedFile = await optimizeImageForUpload(file, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
+        const uploaded = await api.upload.attachment(optimizedFile, {
+          signal: abortController.signal,
+          onProgress: (percent) => {
+            useUploadStore.getState().updateProgress(tempId, percent);
+          },
+        });
+        useUploadStore.getState().removeUpload(tempId);
+        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
+      }
+
+      const confirmedMsg = await api.dms.sendMessage(activeRoom.id, { content: finalContent, attachments, reply_to_id: replyToId, is_tts: Boolean(isTTS) });
       const readyMsg: DMMessage = { ...confirmedMsg, status: 'sent', tempId };
 
       set((state) => {
@@ -321,6 +356,13 @@ export const useDMStore = create<DMState>((set, get) => ({
         };
       });
     } catch (err: any) {
+      if (file) {
+        useUploadStore.getState().removeUpload(tempId);
+        if (abortController?.signal.aborted) {
+          get().removeMessageFromStore(tempId, activeRoom.id);
+          return;
+        }
+      }
       console.error('Failed to send DM message:', err);
       set((state) => {
         const markFailed = (list: DMMessage[]) =>
@@ -367,7 +409,11 @@ export const useDMStore = create<DMState>((set, get) => ({
       const roomMsgs = state.messagesByRoom[message.dm_room_id] || [];
       const existingExactIdx = roomMsgs.findIndex((m) => m.id === message.id);
       const tempMatchIdx = roomMsgs.findIndex(
-        (m) => m.status === 'sending' && m.author_id === message.author_id && m.content === message.content
+        (m) =>
+          m.status === 'sending' &&
+          m.author_id === message.author_id &&
+          (m.content === message.content ||
+            (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
       );
 
       let updatedRoomMsgs = [...roomMsgs];

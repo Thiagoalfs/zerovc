@@ -45,7 +45,7 @@ interface MessageInputProps {
   placeholder?: string;
   replyingTo?: { id: string; author?: { username?: string; display_name?: string }; content: string } | null;
   onCancelReply?: () => void;
-  onSendMessage: (content: string, replyToId?: string, isTTS?: boolean) => Promise<void>;
+  onSendMessage: (content: string, replyToId?: string, isTTS?: boolean, file?: File) => Promise<void>;
   onEditLastMessage?: () => void;
   droppedFile?: File | null;
   onClearDroppedFile?: () => void;
@@ -1197,31 +1197,20 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     try {
-      if (fileToUpload) {
-        setIsUploading(true);
-        const optimizedFile = await optimizeImageForUpload(fileToUpload, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
-        const uploaded = await api.upload.attachment(optimizedFile);
-        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
-      }
-
-      await onSendMessage(finalContent, replyId);
+      await onSendMessage(finalContent, replyId, false, fileToUpload || undefined);
     } catch (err: any) {
       console.error('Failed to send message/file:', err);
       setLimitAlert({
         title: 'Erro ao Enviar Mensagem',
         message: err.message || 'Não foi possível enviar a mensagem. Verifique sua conexão.',
       });
-    } finally {
-      setIsUploading(false);
     }
   };
 
   const handleSendVoice = async (audioFile: File) => {
     setIsRecordingVoice(false);
-    setIsUploading(true);
     try {
-      const uploaded = await api.upload.attachment(audioFile);
-      await onSendMessage(uploaded.url, replyingTo?.id);
+      await onSendMessage('', replyingTo?.id, false, audioFile);
       onCancelReply?.();
     } catch (err: any) {
       console.error('Failed to send voice note:', err);
@@ -1229,8 +1218,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         title: 'Erro ao Enviar Mensagem de Voz',
         message: err.message || 'Não foi possível enviar o áudio gravado.',
       });
-    } finally {
-      setIsUploading(false);
     }
   };
 
