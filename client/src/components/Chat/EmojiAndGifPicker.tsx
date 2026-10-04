@@ -24,6 +24,7 @@ interface EmojiAndGifPickerProps {
   onSelectEmoji: (emoji: string) => void;
   onSelectGif: (gifUrl: string) => void;
   positionClass?: string;
+  initialTab?: 'emoji' | 'gif';
 }
 
 const COMMON_EMOJIS = [
@@ -267,15 +268,22 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   onSelectEmoji,
   onSelectGif,
   positionClass = 'bottom-16 right-4',
+  initialTab = 'emoji',
 }) => {
   const { activeGuild, guilds } = useGuildStore();
   const autoplayGifs = useSettingsStore((s) => s.autoplayGifs);
-  const [activeTab, setActiveTab] = useState<'emoji' | 'gif'>('emoji');
+  const [activeTab, setActiveTab] = useState<'emoji' | 'gif'>(initialTab);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [emojiSearch, setEmojiSearch] = useState('');
   const [gifSearch, setGifSearch] = useState('');
   const [klipyGifs, setKlipyGifs] = useState<Array<{ url: string; preview: string; title: string }>>([]);
   const [isLoadingGifs, setIsLoadingGifs] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   // Reset category and search when closed
   useEffect(() => {
