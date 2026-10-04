@@ -138,6 +138,11 @@ export const PERMISSION_GROUPS: { category: string; icon: React.ReactNode; permi
         name: 'Ensurdecer Membros em Voz',
         description: 'Permite ensurdecer outros membros na chamada.',
       },
+      {
+        flag: Permissions.MOVE_MEMBERS,
+        name: 'Mover Membros',
+        description: 'Permite mover membros entre canais de voz.',
+      },
     ],
   },
   {

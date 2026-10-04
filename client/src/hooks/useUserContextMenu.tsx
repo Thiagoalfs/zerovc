@@ -13,6 +13,8 @@ import {
   MicOff,
   Headphones,
   PhoneOff,
+  PhoneForwarded,
+  Volume2,
   UserPlus,
   Crown,
 } from 'lucide-react';
@@ -144,38 +146,79 @@ export function useUserContextMenu() {
       const canModerateTarget = Boolean(perms.isCurrentOwner || (mod && !mod.isTargetOwner && mod.isHierarchyAllowed));
 
       // Voice Channel Moderation
-      if (options.voiceChannelId && !isMe && canModerateTarget && (perms.canMuteVoice || perms.isCurrentOwner || perms.hasAdmin)) {
-        items.push({ label: '', separator: true });
+      if (options.voiceChannelId && !isMe && canModerateTarget) {
+        const canModerateVoice = perms.canMuteVoice || perms.isCurrentOwner || perms.hasAdmin;
+        const canMoveMembers = perms.canMoveMembers || perms.isCurrentOwner || perms.hasAdmin;
 
-        items.push({
-          label: options.isVoiceMuted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
-          icon: options.isVoiceMuted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
-          onClick: async () => {
-            await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
-              is_muted: !options.isVoiceMuted,
-            });
-          },
-        });
+        if (canModerateVoice || canMoveMembers) {
+          items.push({ label: '', separator: true });
+        }
 
-        items.push({
-          label: 'Ensurdecer na Call',
-          icon: <Headphones className="w-4 h-4 text-amber-400" />,
-          onClick: async () => {
-            await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
-              is_deafened: true,
-            });
-          },
-        });
+        if (canModerateVoice) {
+          items.push({
+            label: options.isVoiceMuted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
+            icon: options.isVoiceMuted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
+            onClick: async () => {
+              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+                is_muted: !options.isVoiceMuted,
+              });
+            },
+          });
 
-        items.push({
-          label: 'Desconectar da Call',
-          icon: <PhoneOff className="w-4 h-4 text-dnd" />,
-          onClick: async () => {
-            await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
-              disconnect: true,
+          items.push({
+            label: 'Ensurdecer na Call',
+            icon: <Headphones className="w-4 h-4 text-amber-400" />,
+            onClick: async () => {
+              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+                is_deafened: true,
+              });
+            },
+          });
+        }
+
+        if (canMoveMembers && activeGuild) {
+          const otherVoiceChannels = (activeGuild.channels || []).filter(
+            (c) => c.type === 'voice' && c.id !== options.voiceChannelId
+          );
+          if (otherVoiceChannels.length > 0) {
+            items.push({
+              label: 'Mover para',
+              icon: <PhoneForwarded className="w-4 h-4 text-indigo-400" />,
+              subItems: otherVoiceChannels.map((vc) => ({
+                label: vc.name,
+                icon: <Volume2 className="w-4 h-4 text-gray-400" />,
+                onClick: async () => {
+                  try {
+                    await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+                      target_channel_id: vc.id,
+                    });
+                  } catch (err: any) {
+                    console.error('Erro ao mover membro:', err);
+                  }
+                },
+              })),
             });
-          },
-        });
+          } else {
+            items.push({
+              label: 'Mover para',
+              icon: <PhoneForwarded className="w-4 h-4 text-gray-500" />,
+              disabled: true,
+              tooltip: 'Nenhuma outra chamada disponível',
+            });
+          }
+        }
+
+        if (canModerateVoice) {
+          items.push({
+            label: 'Desconectar da Call',
+            icon: <PhoneOff className="w-4 h-4 text-dnd" />,
+            onClick: async () => {
+              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+                disconnect: true,
+              });
+            },
+          });
+        }
       }
 
       // Server Member Moderation Actions (Roles, Timeout, Kick, Ban)

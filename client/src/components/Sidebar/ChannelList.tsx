@@ -27,6 +27,7 @@ import {
   Mic,
   Headphones,
   PhoneOff,
+  PhoneForwarded,
   Monitor,
   Copy,
 } from 'lucide-react';
@@ -365,33 +366,19 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
     const isMe = targetMember.id === user.id;
     const isTargetOwner = targetMember.id === activeGuild.owner_id;
-    const isCurrentOwner = activeGuild.owner_id === user.id;
+    const isCurrentOwner = perms.isCurrentOwner;
+    const hasAdmin = perms.hasAdmin;
+    const canManageRoles = perms.canManageRoles;
+    const canKick = perms.canKick;
+    const canBan = perms.canBan;
+    const canMute = perms.canMute;
+    const canMuteVoice = perms.canMuteVoice;
+    const canDeafenVoice = perms.canDeafenVoice;
+    const canMoveMembers = perms.canMoveMembers;
+    const currentUserHighestPos = perms.currentUserHighestPos;
 
-    // Calculate permissions
-    const currentUserRoles = activeGuild.members?.find((m) => m.id === user.id)?.roles || [];
-    let currentUserPerms = 0;
-    let currentUserHighestPos = 999999;
-    currentUserRoles.forEach((r) => {
-      currentUserPerms |= Number(r.permissions || 0);
-      if (r.position < currentUserHighestPos) {
-        currentUserHighestPos = r.position;
-      }
-    });
-
-    const hasAdmin = isCurrentOwner || (currentUserPerms & Permissions.ADMINISTRATOR) !== 0;
-    const canManageRoles = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_ROLES) !== 0;
-    const canKick = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.KICK_MEMBERS) !== 0;
-    const canBan = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.BAN_MEMBERS) !== 0;
-    const canMute = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_MEMBERS) !== 0;
-
-    let targetHighestPos = 999999;
-    (targetMember.roles || []).forEach((r) => {
-      if (r && r.name !== '@everyone' && typeof r.position === 'number' && r.position < targetHighestPos) {
-        targetHighestPos = r.position;
-      }
-    });
-
-    const isHierarchyAllowed = !isMe && !isTargetOwner && (isCurrentOwner || currentUserHighestPos < targetHighestPos);
+    const mod = perms.canModerateMember(targetMember);
+    const isHierarchyAllowed = mod.isHierarchyAllowed;
     const guildRoles = activeGuild.roles || [];
 
     const items: ContextMenuItem[] = [
@@ -417,39 +404,78 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         : []),
     ];
 
-    // Voice Call Moderation (Admin)
-    if (isHierarchyAllowed && (canMute || isCurrentOwner || hasAdmin)) {
+    // Voice Call Moderation
+    const canModerateVoice = isHierarchyAllowed && (canMuteVoice || canMute || isCurrentOwner || hasAdmin);
+    const canMove = isHierarchyAllowed && (canMoveMembers || isCurrentOwner || hasAdmin);
+    const otherVoiceChannels = (activeGuild.channels || []).filter(
+      (c) => c.type === 'voice' && c.id !== channel.id
+    );
+
+    if (canModerateVoice || canMove) {
       items.push({ label: '', separator: true });
 
-      items.push({
-        label: vs.is_muted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
-        icon: vs.is_muted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
-        onClick: async () => {
-          await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-            is_muted: !vs.is_muted,
-          });
-        },
-      });
+      if (canModerateVoice) {
+        items.push({
+          label: vs.is_muted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
+          icon: vs.is_muted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
+          onClick: async () => {
+            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+              is_muted: !vs.is_muted,
+            });
+          },
+        });
 
-      items.push({
-        label: vs.is_deafened ? 'Desativar Ensurdecimento' : 'Ensurdecer na Call',
-        icon: <Headphones className={`w-4 h-4 ${vs.is_deafened ? 'text-online' : 'text-amber-400'}`} />,
-        onClick: async () => {
-          await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-            is_deafened: !vs.is_deafened,
-          });
-        },
-      });
+        items.push({
+          label: vs.is_deafened ? 'Desativar Ensurdecimento' : 'Ensurdecer na Call',
+          icon: <Headphones className={`w-4 h-4 ${vs.is_deafened ? 'text-online' : 'text-amber-400'}`} />,
+          onClick: async () => {
+            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+              is_deafened: !vs.is_deafened,
+            });
+          },
+        });
+      }
 
-      items.push({
-        label: 'Desconectar da Call',
-        icon: <PhoneOff className="w-4 h-4 text-dnd" />,
-        onClick: async () => {
-          await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-            disconnect: true,
+      if (canMove) {
+        if (otherVoiceChannels.length > 0) {
+          items.push({
+            label: 'Mover para',
+            icon: <PhoneForwarded className="w-4 h-4 text-indigo-400" />,
+            subItems: otherVoiceChannels.map((vc) => ({
+              label: vc.name,
+              icon: <Volume2 className="w-4 h-4 text-gray-400" />,
+              onClick: async () => {
+                try {
+                  await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+                    target_channel_id: vc.id,
+                  });
+                } catch (err: any) {
+                  console.error('Erro ao mover membro:', err);
+                }
+              },
+            })),
           });
-        },
-      });
+        } else {
+          items.push({
+            label: 'Mover para',
+            icon: <PhoneForwarded className="w-4 h-4 text-gray-500" />,
+            disabled: true,
+            tooltip: 'Nenhuma outra chamada disponível',
+          });
+        }
+      }
+
+      if (canModerateVoice) {
+        items.push({
+          label: 'Desconectar da Call',
+          icon: <PhoneOff className="w-4 h-4 text-dnd" />,
+          onClick: async () => {
+            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
+              disconnect: true,
+            });
+          },
+        });
+      }
     }
 
     // User & Stream Volume Sliders (0 - 200%, default 100%, saved locally)
