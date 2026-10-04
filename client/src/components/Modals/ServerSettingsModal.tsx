@@ -63,6 +63,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     muteMember,
   } = useGuildStore();
 
+  const perms = useGuildPermissions(activeGuild);
+
   const [activeTab, setActiveTab] = useState<'overview' | 'roles' | 'emojis' | 'invites' | 'members' | 'audit_log'>('overview');
   const [mobileView, setMobileView] = useState<'menu' | 'content'>('menu');
 
@@ -256,7 +258,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
 
   if (!isOpen || !activeGuild) return null;
 
-  const perms = useGuildPermissions(activeGuild);
   const isOwner = perms.isCurrentOwner;
   const hasAdmin = perms.hasAdmin;
   const canManageGuild = perms.canManageGuild;

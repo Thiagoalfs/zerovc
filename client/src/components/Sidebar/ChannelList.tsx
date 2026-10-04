@@ -779,19 +779,24 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           }}
           onDragLeave={(e) => {
             const related = e.relatedTarget as Node | null;
-            if (!e.currentTarget.contains(related)) {
-              if (dragOverTarget?.id === channel.id) {
-                setDragOverTarget(null);
-              }
+            if (related && e.currentTarget.contains(related)) {
+              return;
+            }
+            if (dragOverTarget?.id === channel.id) {
+              setDragOverTarget(null);
             }
           }}
           onDrop={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (!canManageChannels) return;
-            if (dragOverTarget?.id === channel.id && dragOverTarget.position) {
-              handleDropOnChannel(channel, dragOverTarget.position);
+            if (!canManageChannels || !draggedChannelId || draggedChannelId === channel.id) return;
+            let pos = dragOverTarget?.position;
+            if (!pos) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const midY = rect.top + rect.height / 2;
+              pos = e.clientY < midY ? 'top' : 'bottom';
             }
+            handleDropOnChannel(channel, pos);
           }}
           onDragEnd={() => {
             setDraggedChannelId(null);
@@ -817,29 +822,37 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
           {/* Drag Handle icon */}
           {canManageChannels && (
-            <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 -ml-0.5 mr-0.5 transition-opacity" />
+            <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 -ml-0.5 mr-0.5 transition-opacity pointer-events-none" />
           )}
 
-          <button
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => (isText ? handleChannelClick(channel) : handleVoiceChannelClick(channel))}
-            className="flex items-center gap-2 truncate flex-1 text-left min-w-0"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                isText ? handleChannelClick(channel) : handleVoiceChannelClick(channel);
+              }
+            }}
+            className="flex items-center gap-2 truncate flex-1 text-left min-w-0 cursor-pointer select-none"
           >
             {isText ? (
-              <Hash className={`w-4 h-4 flex-shrink-0 ${isUnread || isActive ? 'text-white' : 'text-gray-400 group-hover:text-gray-200'}`} />
+              <Hash className={`w-4 h-4 flex-shrink-0 pointer-events-none ${isUnread || isActive ? 'text-white' : 'text-gray-400 group-hover:text-gray-200'}`} />
             ) : (
               <Volume2
-                className={`w-4 h-4 flex-shrink-0 ${isInThisVoice ? 'text-online' : 'text-gray-400 group-hover:text-gray-200'}`}
+                className={`w-4 h-4 flex-shrink-0 pointer-events-none ${isInThisVoice ? 'text-online' : 'text-gray-400 group-hover:text-gray-200'}`}
               />
             )}
-            <span className={`truncate ${isUnread || isActive ? 'text-white font-semibold' : 'text-gray-400 group-hover:text-gray-200 font-medium'}`}>
+            <span className={`truncate pointer-events-none ${isUnread || isActive ? 'text-white font-semibold' : 'text-gray-400 group-hover:text-gray-200 font-medium'}`}>
               {channel.name}
             </span>
             {channel.is_private && (
-              <span title="Canal Privado">
+              <span title="Canal Privado" className="pointer-events-none">
                 <Lock className="w-3 h-3 text-gray-400 flex-shrink-0 ml-0.5" />
               </span>
             )}
-          </button>
+          </div>
 
           {/* Unread Dot / Mention Badge on the Right */}
           {!isActive && (
@@ -1133,40 +1146,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4 no-scrollbar">
           {!isHomeActive && (
             <>
-              {/* Root Drop Zone: visible when dragging a channel that belongs to a category */}
-              {canManageChannels && draggedChannel?.category_id && (
-                <div
-                  onDragOver={(e) => {
-                    if (!canManageChannels || !draggedChannelId) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.dataTransfer.dropEffect = 'move';
-                    if (dragOverTarget?.id !== 'root-dropzone') {
-                      setDragOverTarget({ id: 'root-dropzone', isRoot: true });
-                    }
-                  }}
-                  onDragLeave={(e) => {
-                    const related = e.relatedTarget as Node | null;
-                    if (!e.currentTarget.contains(related) && dragOverTarget?.id === 'root-dropzone') {
-                      setDragOverTarget(null);
-                    }
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!canManageChannels) return;
-                    handleDropOnRoot();
-                  }}
-                  className={`py-2 px-3 rounded-lg text-xs font-semibold text-center border border-dashed transition-all ${
-                    dragOverTarget?.id === 'root-dropzone'
-                      ? 'border-brand-500 bg-brand-500/20 text-brand-300 ring-1 ring-brand-500 shadow-sm'
-                      : 'border-white/20 text-gray-400 hover:border-white/30 bg-background-darkest/40'
-                  }`}
-                >
-                  Solte aqui para mover para fora de categorias
-                </div>
-              )}
-
               {/* 1. Root Channels (no category) */}
               {rootChannels.length > 0 && (
                 <div className="space-y-0.5">
@@ -1195,7 +1174,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                       }}
                       onDragLeave={(e) => {
                         const related = e.relatedTarget as Node | null;
-                        if (!e.currentTarget.contains(related) && dragOverTarget?.id === category.id && dragOverTarget.isCategory) {
+                        if (related && e.currentTarget.contains(related)) return;
+                        if (dragOverTarget?.id === category.id && dragOverTarget.isCategory) {
                           setDragOverTarget(null);
                         }
                       }}
@@ -1253,7 +1233,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                             }}
                             onDragLeave={(e) => {
                               const related = e.relatedTarget as Node | null;
-                              if (!e.currentTarget.contains(related) && dragOverTarget?.id === category.id && dragOverTarget.isCategory) {
+                              if (related && e.currentTarget.contains(related)) return;
+                              if (dragOverTarget?.id === category.id && dragOverTarget.isCategory) {
                                 setDragOverTarget(null);
                               }
                             }}
@@ -1277,6 +1258,41 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   </div>
                 );
               })}
+
+              {/* Root Drop Zone at bottom: visible when dragging a channel that belongs to a category */}
+              {canManageChannels && draggedChannel?.category_id && (
+                <div
+                  onDragOver={(e) => {
+                    if (!canManageChannels || !draggedChannelId) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOverTarget?.id !== 'root-dropzone') {
+                      setDragOverTarget({ id: 'root-dropzone', isRoot: true });
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    const related = e.relatedTarget as Node | null;
+                    if (related && e.currentTarget.contains(related)) return;
+                    if (dragOverTarget?.id === 'root-dropzone') {
+                      setDragOverTarget(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!canManageChannels) return;
+                    handleDropOnRoot();
+                  }}
+                  className={`mt-2 py-2.5 px-3 rounded-lg text-xs font-semibold text-center border border-dashed transition-all cursor-pointer ${
+                    dragOverTarget?.id === 'root-dropzone'
+                      ? 'border-brand-500 bg-brand-500/20 text-brand-300 ring-1 ring-brand-500 shadow-sm'
+                      : 'border-white/20 text-gray-400 hover:border-white/30 bg-background-darkest/40'
+                  }`}
+                >
+                  Solte aqui para mover para a raiz (fora de categorias)
+                </div>
+              )}
 
               {/* Empty State when server has no channels */}
               {channels.length === 0 && (
