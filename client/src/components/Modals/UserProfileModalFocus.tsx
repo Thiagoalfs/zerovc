@@ -254,7 +254,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                   <button
                     type="button"
                     onClick={handleOpenEdit}
-                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg shadow-brand-500/20 cursor-pointer"
+                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <Edit3 className="w-4 h-4" />
                     <span>Editar Perfil</span>
@@ -263,7 +263,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                   <button
                     type="button"
                     onClick={handleStartChat}
-                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg shadow-brand-500/20 cursor-pointer"
+                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <MessageSquare className="w-4 h-4" />
                     <span>Enviar Mensagem</span>
@@ -274,10 +274,10 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                       type="button"
                       onClick={handleAddFriend}
                       disabled={isSendingRequest || isPending || requestSent}
-                      className={`active:scale-95 text-white font-semibold px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-lg cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
+                      className={`active:scale-95 text-white font-semibold px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
                         isPending || requestSent
-                          ? 'bg-emerald-600/80 hover:bg-emerald-600 shadow-emerald-600/20'
-                          : 'bg-online hover:bg-online/90 shadow-online/20'
+                          ? 'bg-emerald-600/80 hover:bg-emerald-600'
+                          : 'bg-online hover:bg-online/90'
                       }`}
                     >
                       {isPending || requestSent ? (
@@ -337,7 +337,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
           </div>
 
           {/* Details Sections Container */}
-          <div className="bg-background-darker/90 rounded-2xl p-4 sm:p-5 border border-white/5 space-y-4">
+          <div className="bg-background-darker/90 rounded-2xl p-4 sm:p-5 space-y-4">
             {/* Atividade Category - Sleek Minimal Layout without box */}
             {activity && (
               <div className="space-y-1.5 animate-in fade-in">

@@ -64,7 +64,7 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-colors cursor-pointer"
+              className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
             >
               Confirmar Banimento
             </button>

@@ -69,7 +69,7 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
             type="button"
             onClick={() => emojiInputRef.current?.click()}
             disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
-            className="px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
           >
             {isUploadingEmoji ? (
               <>
