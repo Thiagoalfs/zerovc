@@ -805,7 +805,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">Cargos</div>
-                        <div className="text-xs text-gray-400">{roles.length} cargos • Hierarquia e permissões</div>
+                        <div className="text-xs text-gray-400">Hierarquia e permissões</div>
                       </div>
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
@@ -820,7 +820,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">Emojis</div>
-                        <div className="text-xs text-gray-400">{emojisList.length} de 50 slots customizados</div>
+                        <div className="text-xs text-gray-400">Slots customizados</div>
                       </div>
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
@@ -835,7 +835,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">Convites</div>
-                        <div className="text-xs text-gray-400">{invitesList.length} links de convite ativos</div>
+                        <div className="text-xs text-gray-400">Links de convite ativos</div>
                       </div>
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
@@ -850,7 +850,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">Membros</div>
-                        <div className="text-xs text-gray-400">{members.length} membros do servidor</div>
+                        <div className="text-xs text-gray-400">Membros do servidor</div>
                       </div>
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
@@ -936,31 +936,25 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('roles')}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                       activeTab === 'roles'
                         ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                     }`}
                   >
                     <span>Cargos</span>
-                    <span className="text-xs bg-background-dark px-1.5 py-0.5 rounded text-gray-400">
-                      {roles.length}
-                    </span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setActiveTab('emojis')}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                       activeTab === 'emojis'
                         ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                     }`}
                   >
                     <span>Emojis</span>
-                    <span className="text-xs bg-background-dark px-1.5 py-0.5 rounded text-gray-400">
-                      {emojisList.length}
-                    </span>
                   </button>
 
                   <button
@@ -978,16 +972,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('members')}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                       activeTab === 'members'
                         ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                     }`}
                   >
                     <span>Membros</span>
-                    <span className="text-xs bg-background-dark px-1.5 py-0.5 rounded text-gray-400">
-                      {members.length}
-                    </span>
                   </button>
 
                   <button
@@ -1108,7 +1099,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     type="button"
                     onClick={handleGenerateNewInvite}
                     disabled={isCreatingInvite}
-                    className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                    className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>{isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}</span>
@@ -1120,7 +1111,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     type="button"
                     onClick={() => emojiInputRef.current?.click()}
                     disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
-                    className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                    className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer"
                   >
                     {isUploadingEmoji ? (
                       <>

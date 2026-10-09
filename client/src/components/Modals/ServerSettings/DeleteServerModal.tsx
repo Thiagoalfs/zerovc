@@ -201,7 +201,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
             type="button"
             disabled={isDeleting || (has2FA && !twoFactorCode.trim())}
             onClick={onConfirmDelete}
-            className="bg-dnd hover:bg-red-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-red-500/20 flex items-center gap-2 cursor-pointer"
+            className="bg-dnd hover:bg-red-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all flex items-center gap-2 cursor-pointer"
           >
             {isDeleting ? (
               <>

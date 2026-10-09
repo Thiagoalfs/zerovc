@@ -172,7 +172,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
                 !transferAcknowledge ||
                 transferConfirmText.trim() !== activeGuild.name.trim()
               }
-              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-lg shadow-amber-600/20 transition-all disabled:opacity-50 cursor-pointer"
+              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
             >
               {isTransferring ? 'Transferindo...' : 'Confirmar Transferência'}
             </button>

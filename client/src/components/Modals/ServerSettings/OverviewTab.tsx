@@ -290,7 +290,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <button
               type="submit"
               disabled={isSavingOverview || !guildName.trim()}
-              className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-brand-500/20 transition-all disabled:opacity-50 cursor-pointer"
+              className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-50 cursor-pointer"
             >
               {isSavingOverview ? 'Salvando...' : 'Salvar Alterações'}
             </button>
