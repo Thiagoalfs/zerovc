@@ -93,7 +93,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
     >
-      <div className="bg-background-dark w-full max-w-xl max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
+      <div className="bg-background-dark w-full max-w-xl max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">

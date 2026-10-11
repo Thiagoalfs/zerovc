@@ -295,7 +295,7 @@ export const SessionsSettingsView: React.FC = () => {
       {/* Modal: Confirm Revoke Single Session */}
       {confirmRevokeSingle && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background-darker border border-white/10 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95">
+          <div className="bg-background-darker border border-white/10 rounded-xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95">
             <div className="flex items-center gap-3 text-red-400">
               <div className="p-2.5 rounded-xl bg-red-500/10">
                 <AlertTriangle className="w-5 h-5" />
@@ -331,7 +331,7 @@ export const SessionsSettingsView: React.FC = () => {
       {/* Modal: Confirm Revoke All Other Sessions */}
       {confirmRevokeOtherOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background-darker border border-white/10 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95">
+          <div className="bg-background-darker border border-white/10 rounded-xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95">
             <div className="flex items-center gap-3 text-red-400">
               <div className="p-2.5 rounded-xl bg-red-500/10">
                 <AlertTriangle className="w-5 h-5" />

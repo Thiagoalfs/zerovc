@@ -149,7 +149,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
       onClick={onClose}
     >
       <div
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-visible shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col relative z-50"
+        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-visible shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col relative z-50"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

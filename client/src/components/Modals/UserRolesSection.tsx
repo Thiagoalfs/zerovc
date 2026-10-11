@@ -224,7 +224,7 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
                     width: '224px',
                     zIndex: 99999,
                   }}
-                  className="bg-background-darkest border border-white/10 rounded-2xl shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-0.5 select-none"
+                  className="bg-background-darkest border border-white/10 rounded-xl shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-0.5 select-none"
                 >
                   <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-0.5 flex items-center justify-between">
                     <span>Cargos do Servidor</span>

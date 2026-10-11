@@ -78,7 +78,7 @@ export const IncomingCallModal: React.FC = () => {
   if (callState !== 'ringing' || !incomingCaller) return null;
 
   return (
-    <div className="fixed top-6 right-6 z-50 bg-background-darkest/95 backdrop-blur-xl border border-brand-500/40 p-4 rounded-3xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-200 select-none max-w-sm">
+    <div className="fixed top-6 right-6 z-50 bg-background-darkest/95 backdrop-blur-xl border border-brand-500/40 p-4 rounded-xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-200 select-none max-w-sm">
       {/* Avatar with pulse ring */}
       <div className="relative">
         <div className="w-14 h-14 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-lg overflow-hidden relative z-10 shadow-lg">

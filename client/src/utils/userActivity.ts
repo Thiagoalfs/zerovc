@@ -199,7 +199,7 @@ export function getUserActivity(
     return {
       kind: 'game',
       type: 'playing',
-      header: 'Jogando agora',
+      header: 'Jogando',
       name: customAct.name,
       details: customAct.details,
       state: customAct.state,
@@ -263,7 +263,7 @@ export function getUserActivity(
         return {
           kind: 'call',
           type: 'call',
-          header: 'Em chamada de voz',
+          header: 'Em chamada',
           name: ch.name,
           details: guild.name,
           state: `${participantCount} ${participantCount === 1 ? 'membro' : 'membros'} no canal`,

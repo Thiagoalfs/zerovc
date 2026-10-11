@@ -36,7 +36,7 @@ export const LimitAlertModal: React.FC<LimitAlertModalProps> = ({
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
     >
-      <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col">
+      <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col">
         {/* Header */}
         <div className="p-4 sm:p-6 pb-2 flex flex-col items-center text-center relative overflow-y-auto no-scrollbar flex-1">
           <button

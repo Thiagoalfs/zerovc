@@ -50,7 +50,7 @@ export const ImageModal: React.FC<ImageModalProps> = ({ imageUrl, isOpen, onClos
         <img
           src={imageUrl}
           alt="Visualização"
-          className="w-full sm:w-auto max-w-[100vw] sm:max-w-[75vw] max-h-[85vh] sm:max-h-[75vh] object-contain rounded-xl sm:rounded-2xl shadow-2xl animate-in zoom-in-95 duration-150 border border-white/5"
+          className="w-full sm:w-auto max-w-[100vw] sm:max-w-[75vw] max-h-[85vh] sm:max-h-[75vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-150 border border-white/5"
         />
       </div>
     </div>
