@@ -77,9 +77,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
 
   return (
     <div className="min-h-full w-full bg-background-darkest text-gray-100 flex flex-col font-sans selection:bg-brand-500/30 selection:text-white">
-      {/* Background Ambient Glows */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] bg-gradient-to-b from-brand-600/20 via-brand-500/5 to-transparent blur-3xl pointer-events-none -z-10" />
-      <div className="fixed top-80 -right-40 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none -z-10" />
 
       {/* -------------------------------------------------------------
           1. NAVBAR
@@ -109,7 +106,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             {user ? (
               <button
                 onClick={() => onNavigate('/@me')}
-                className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-brand-600/30 transition-all cursor-pointer flex-shrink-0"
+                className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs sm:text-sm transition-all cursor-pointer flex-shrink-0"
               >
                 <span>Abrir Chat</span>
                 <ArrowRight className="w-4 h-4" />
@@ -144,11 +141,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
 
         {/* Title */}
         <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight mb-3 sm:mb-4 flex-shrink-0">
-          Baixe o{' '}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-emerald-400">
-            ZeroVC
-          </span>{' '}
-          para o seu dispositivo
+          Baixe o ZeroVC para o seu dispositivo
         </h1>
 
         <p className="text-xs sm:text-base md:text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed mb-6 sm:mb-8 flex-shrink-0">
@@ -161,7 +154,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             onClick={() => setSelectedPlatform('android')}
             className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex-shrink-0 ${
               selectedPlatform === 'android'
-                ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30'
+                ? 'bg-brand-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -173,7 +166,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             onClick={() => setSelectedPlatform('windows')}
             className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex-shrink-0 ${
               selectedPlatform === 'windows'
-                ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30'
+                ? 'bg-brand-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -185,7 +178,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             onClick={() => setSelectedPlatform('ios')}
             className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex-shrink-0 ${
               selectedPlatform === 'ios'
-                ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30'
+                ? 'bg-brand-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -214,10 +207,10 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               {/* Download APK Button */}
               <button
                 onClick={() => handleDownload('android')}
-                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-black text-sm sm:text-lg shadow-2xl transition-all cursor-pointer group flex-shrink-0 ${
+                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-black text-sm sm:text-lg transition-all cursor-pointer group flex-shrink-0 ${
                   downloadStarted
-                    ? 'bg-emerald-600 text-white shadow-emerald-600/40'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/40 hover:shadow-emerald-500/50 hover:-translate-y-1'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white hover:-translate-y-1'
                 }`}
               >
                 {downloadStarted ? (
@@ -298,10 +291,10 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               {/* Main Download Button */}
               <button
                 onClick={() => handleDownload('windows')}
-                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-black text-sm sm:text-lg shadow-2xl transition-all cursor-pointer group flex-shrink-0 ${
+                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-black text-sm sm:text-lg transition-all cursor-pointer group flex-shrink-0 ${
                   downloadStarted
-                    ? 'bg-emerald-600 text-white shadow-emerald-600/40'
-                    : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/40 hover:shadow-brand-500/50 hover:-translate-y-1'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-brand-600 hover:bg-brand-500 text-white hover:-translate-y-1'
                 }`}
               >
                 {downloadStarted ? (
@@ -382,7 +375,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               {/* iOS Direct Action */}
               <button
                 onClick={() => onNavigate(user ? '/@me' : '/signin')}
-                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-black text-sm sm:text-lg shadow-2xl shadow-brand-600/40 hover:shadow-brand-500/50 hover:-translate-y-1 transition-all cursor-pointer flex-shrink-0"
+                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-black text-sm sm:text-lg hover:-translate-y-1 transition-all cursor-pointer flex-shrink-0"
               >
                 <Globe className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
                 <span>Abrir App no Safari</span>
@@ -432,88 +425,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
           </div>
         )}
 
-        {/* -------------------------------------------------------------
-            3. INSTALLATION STEPS (DYNAMIC FOR SELECTED PLATFORM)
-        ------------------------------------------------------------- */}
-        {selectedPlatform === 'android' && (
-          <div className="max-w-3xl w-full mt-16 text-left">
-            <h3 className="text-xl font-bold text-white text-center mb-8">
-              Como instalar o APK no Android
-            </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 font-bold flex items-center justify-center text-sm border border-emerald-500/30">
-                  1
-                </div>
-                <h4 className="font-bold text-white text-sm">Baixe o APK</h4>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Toque no botão de download acima para baixar o arquivo <code className="text-emerald-400 font-mono">ZeroVC.apk</code>.
-                </p>
-              </div>
-
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 font-bold flex items-center justify-center text-sm border border-emerald-500/30">
-                  2
-                </div>
-                <h4 className="font-bold text-white text-sm">Permita a Instalação</h4>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Abra o arquivo baixado. Se o Android perguntar, toque em "Configurações" e marque "Permitir desta fonte".
-                </p>
-              </div>
-
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 font-bold flex items-center justify-center text-sm border border-emerald-500/30">
-                  3
-                </div>
-                <h4 className="font-bold text-white text-sm">Abra e Converse</h4>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Toque em "Instalar" e pronto! O app aparecerá na gaveta de aplicativos pronto para uso.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {selectedPlatform === 'windows' && (
-          <div className="max-w-3xl w-full mt-16 text-left">
-            <h3 className="text-xl font-bold text-white text-center mb-8">
-              Como instalar no Windows em 3 passos
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-300 font-bold flex items-center justify-center text-sm border border-brand-500/30">
-                  1
-                </div>
-                <h4 className="font-bold text-white text-sm">Baixe o Setup</h4>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Clique no botão de download acima e salve o instalador no seu computador.
-                </p>
-              </div>
-
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-300 font-bold flex items-center justify-center text-sm border border-brand-500/30">
-                  2
-                </div>
-                <h4 className="font-bold text-white text-sm">Execute o Assistente</h4>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Abra o instalador e avance pelo Setup Wizard. Ele criará os atalhos automaticamente.
-                </p>
-              </div>
-
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-300 font-bold flex items-center justify-center text-sm border border-brand-500/30">
-                  3
-                </div>
-                <h4 className="font-bold text-white text-sm">Faça Login e Aproveite</h4>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Entre com sua conta do ZeroVC ou crie uma nova em segundos para começar a conversar!
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Web Version Alternative Callout */}
         <div className="mt-14 p-5 rounded-2xl bg-white/5 border border-white/10 max-w-xl w-full flex items-center justify-between gap-4 text-left">
