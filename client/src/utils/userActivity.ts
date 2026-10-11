@@ -193,11 +193,18 @@ export function getUserActivity(
 
   if (user.status === 'offline') return null;
 
-  const customAct = user.custom_activity;
+  const rawCustomAct = user.custom_activity;
+  const customAct = rawCustomAct && rawCustomAct.name !== 'OBS Studio' ? rawCustomAct : undefined;
   const showActivity = user.show_activity_status !== false;
 
   // 1. JOGO (Prioridade Máxima)
   if (showActivity && customAct && customAct.type === 'playing' && customAct.name) {
+    let iconUrl = customAct.icon_url;
+    if (customAct.name.toLowerCase() === 'minecraft') {
+      if (!iconUrl || iconUrl.includes('java') || iconUrl.startsWith('data:image/x-icon') || iconUrl.includes('games/minecraft')) {
+        iconUrl = '/assets/minecraft.webp';
+      }
+    }
     return {
       kind: 'game',
       type: 'playing',
@@ -206,7 +213,7 @@ export function getUserActivity(
       details: customAct.details,
       state: customAct.state,
       emoji: customAct.emoji,
-      icon_url: customAct.icon_url,
+      icon_url: iconUrl,
       start_time: customAct.start_time,
     };
   }

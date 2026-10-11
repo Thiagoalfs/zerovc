@@ -5,6 +5,7 @@ import { api, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
 import { GuildInvite } from '../../types';
 import { DropdownSelect } from '../Common/DropdownSelect';
+import { useStreamerModeStore } from '../../stores/streamerModeStore';
 
 interface InviteModalProps {
   isOpen: boolean;
@@ -97,6 +98,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
   if (!isOpen || !activeGuild) return null;
 
   const inviteCode = invite?.code || '';
+  const isStreamerModeHidingInvites = useStreamerModeStore((s) => s.enabled && s.hideInviteLinks);
   const origin =
     typeof window !== 'undefined' &&
     window.location.origin &&
@@ -207,7 +209,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                     title="Clique para copiar"
                   >
                     <span className="flex-1 font-mono text-lg font-bold text-brand-500 tracking-wider select-all">
-                      {inviteCode}
+                      {isStreamerModeHidingInvites ? '••••••••' : inviteCode}
                     </span>
                     <button
                       type="button"
@@ -244,7 +246,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                     title="Clique para copiar"
                   >
                     <span className="flex-1 text-xs text-gray-300 truncate font-mono select-all">
-                      {fullInviteUrl}
+                      {isStreamerModeHidingInvites ? `${origin}/invite/••••••••` : fullInviteUrl}
                     </span>
                     <button
                       type="button"

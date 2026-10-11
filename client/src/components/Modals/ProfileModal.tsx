@@ -92,6 +92,8 @@ import { SessionsSettingsView } from './SessionsSettingsView';
 import { AccessibilitySettingsView } from './AccessibilitySettingsView';
 import { RegisteredGamesView } from './RegisteredGamesView';
 import { ActivityPrivacySettingsView } from './ActivityPrivacySettingsView';
+import { StreamerModeTab } from './ProfileSettings/StreamerModeTab';
+import { useStreamerModeStore } from '../../stores/streamerModeStore';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -113,6 +115,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     | 'accessibility'
     | 'audio'
     | 'notifications'
+    | 'streamer_mode'
     | 'preferences'
     | 'keybinds'
   >('account');
@@ -607,9 +610,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     };
   }, [isOpen, user]);
 
+  const streamerModeActive = useStreamerModeStore((s) => s.enabled && s.hidePersonalData);
+
   // Masking helpers
   const getMaskedEmail = (email?: string) => {
     if (!email) return 'Não informado';
+    if (streamerModeActive) return '••••••••••••@•••••••';
     if (revealEmail) return email;
     const parts = email.split('@');
     if (parts.length !== 2) return '••••••••••••';
@@ -1323,6 +1329,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('streamer_mode');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Modo Streamer</div>
+                      <div className="text-xs text-gray-400">Proteção de dados, censura e silêncio em transmissões</div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
                 </div>
               </div>
 
@@ -1500,6 +1521,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <span>Notificações & Sons</span>
               </button>
 
+              {/* Tab: Modo Streamer */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('streamer_mode')}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  activeTab === 'streamer_mode'
+                    ? 'bg-indigo-500/15 text-indigo-400 border-l-2 border-indigo-500 font-bold'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                }`}
+              >
+                <span>Modo Streamer</span>
+                {useStreamerModeStore.getState().enabled && (
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                )}
+              </button>
+
               {/* Tab: Preferências */}
               <button
                 type="button"
@@ -1573,6 +1610,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               {activeTab === 'accessibility' && 'Acessibilidade'}
               {activeTab === 'audio' && 'Voz & Vídeo'}
               {activeTab === 'notifications' && 'Notificações'}
+              {activeTab === 'streamer_mode' && 'Modo Streamer'}
               {activeTab === 'preferences' && 'Preferências'}
               {activeTab === 'keybinds' && 'Atalhos'}
             </h2>
@@ -1612,6 +1650,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {activeTab === 'accessibility' && 'Central de Acessibilidade'}
                   {activeTab === 'audio' && 'Voz & Vídeo'}
                   {activeTab === 'notifications' && 'Notificações & Sons'}
+                  {activeTab === 'streamer_mode' && 'Modo Streamer'}
                   {activeTab === 'preferences' && 'Preferências do Sistema'}
                   {activeTab === 'keybinds' && 'Atalhos do Teclado'}
                 </h1>
@@ -1626,6 +1665,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {activeTab === 'accessibility' && 'Ajuste escala tipográfica do chat, alto contraste, redução de movimento, daltonismo e TTS.'}
                   {activeTab === 'audio' && 'Ajuste dispositivos, microfone, webcam e filtros avançados de áudio WebRTC.'}
                   {activeTab === 'notifications' && 'Configure sons do sistema, alertas sonoros e notificações na área de trabalho.'}
+                  {activeTab === 'streamer_mode' && 'Proteja suas informações pessoais, censure nomes de usuários e silencie alertas ao transmitir.'}
                   {activeTab === 'preferences' && 'Configure o comportamento da janela, inicialização e integração com o sistema.'}
                   {activeTab === 'keybinds' && 'Configure atalhos rápidos e Push-to-Talk globais para controle de voz.'}
                 </p>
@@ -1901,14 +1941,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         </span>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-gray-200 font-mono">{getMaskedEmail(user.email)}</span>
-                          <button
-                            type="button"
-                            onClick={() => setRevealEmail(!revealEmail)}
-                            className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
-                          >
-                            {revealEmail ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                            <span>{revealEmail ? 'Ocultar' : 'Revelar e-mail'}</span>
-                          </button>
+                          {!streamerModeActive ? (
+                            <button
+                              type="button"
+                              onClick={() => setRevealEmail(!revealEmail)}
+                              className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
+                            >
+                              {revealEmail ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                              <span>{revealEmail ? 'Ocultar' : 'Revelar e-mail'}</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                              <EyeOff className="w-2.5 h-2.5" />
+                              <span>Oculto pelo Modo Streamer</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                       <button
@@ -3248,6 +3295,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* TAB: MODO STREAMER */}
+            {activeTab === 'streamer_mode' && (
+              <StreamerModeTab />
             )}
 
             {/* TAB: PREFERÊNCIAS DO SISTEMA */}

@@ -22,6 +22,14 @@ class SoundManager {
 
   private isEnabled(): boolean {
     try {
+      const { useStreamerModeStore } = require('../stores/streamerModeStore');
+      const streamerState = useStreamerModeStore.getState();
+      if (streamerState.enabled && streamerState.disableSounds) {
+        return false;
+      }
+    } catch {}
+
+    try {
       const saved = localStorage.getItem('zerovc_sounds_enabled');
       return saved !== null ? saved === 'true' : true;
     } catch {

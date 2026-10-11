@@ -21,6 +21,7 @@ import { ContextMenu } from '../ContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { getActivityColorClass } from '../../utils/userActivity';
+import { getFormattedUsername } from '../../stores/streamerModeStore';
 
 interface MemberListProps {
   isOpen: boolean;
@@ -223,7 +224,7 @@ export const MemberList: React.FC<MemberListProps> = ({
                   : { color: '#E0E0E0' }
               }
             >
-              {member.display_name || member.username}
+              {getFormattedUsername(member.display_name || member.username)}
             </span>
             {isOwner && (
               <span title="Dono do Servidor">

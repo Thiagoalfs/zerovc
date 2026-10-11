@@ -3,7 +3,7 @@ import { Gamepad2, Check, Plus, Trash2, Edit2, X, ChevronDown, Monitor, Sparkles
 import { useRegisteredGamesStore, RegisteredGame } from '../../stores/registeredGamesStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
-import { api } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { GameSearchResult } from '../../types';
 
 function formatLastPlayed(timestamp: number): string {
@@ -89,6 +89,8 @@ export const RegisteredGamesView: React.FC = () => {
   }, [isAddingGame]);
 
   const activeActivity = user?.custom_activity;
+  const isMinecraft = (name?: string) => (name || '').toLowerCase() === 'minecraft';
+
   const currentRunningGame = games.find(
     (g) => g.name.toLowerCase() === activeActivity?.name?.toLowerCase()
   ) || (activeActivity?.name ? {
@@ -97,7 +99,9 @@ export const RegisteredGamesView: React.FC = () => {
     lastPlayed: Date.now(),
     enabled: true,
     isVerified: true,
-    icon_url: activeActivity.icon_url,
+    icon_url: isMinecraft(activeActivity.name)
+      ? (activeActivity.icon_url && !activeActivity.icon_url.includes('java') && !activeActivity.icon_url.startsWith('data:image/x-icon') && !activeActivity.icon_url.includes('games/minecraft') ? activeActivity.icon_url : '/assets/minecraft.webp')
+      : activeActivity.icon_url,
   } : null);
 
   const handleToggleGame = async (game: RegisteredGame) => {
@@ -120,11 +124,14 @@ export const RegisteredGamesView: React.FC = () => {
       }
     } else if (willBeEnabled && !activeActivity) {
       // If no game is active and user enabled this, set as current activity
+      const finalIcon = isMinecraft(game.name)
+        ? (game.icon_url && !game.icon_url.includes('java') && !game.icon_url.startsWith('data:image/x-icon') && !game.icon_url.includes('games/minecraft') ? game.icon_url : '/assets/minecraft.webp')
+        : game.icon_url;
       const newActivity = {
         name: game.name,
         type: 'playing' as const,
         start_time: Math.floor(Date.now() / 1000),
-        icon_url: game.icon_url,
+        icon_url: finalIcon,
       };
       setUser({ custom_activity: newActivity });
       if (user?.id) {
@@ -140,7 +147,9 @@ export const RegisteredGamesView: React.FC = () => {
   };
 
   const handleSelectRawgGame = async (game: GameSearchResult) => {
-    const iconUrl = game.icon_url || game.background_image || '';
+    const iconUrl = isMinecraft(game.name)
+      ? '/assets/minecraft.webp'
+      : (game.icon_url || game.background_image || '');
     addOrUpdateGame(game.name, true, undefined, iconUrl);
     setCustomGameName('');
     setRawgResults([]);
@@ -172,11 +181,13 @@ export const RegisteredGamesView: React.FC = () => {
 
     // Check if the top rawg match matches the exact name
     const topMatch = rawgResults[0];
-    const iconUrl = topMatch && topMatch.name.toLowerCase() === name.toLowerCase()
-      ? topMatch.icon_url || topMatch.background_image
-      : undefined;
+    const iconUrl = isMinecraft(name)
+      ? '/assets/minecraft.webp'
+      : (topMatch && topMatch.name.toLowerCase() === name.toLowerCase()
+        ? topMatch.icon_url || topMatch.background_image
+        : undefined);
 
-    addOrUpdateGame(name, !!iconUrl, undefined, iconUrl);
+    addOrUpdateGame(name, !!iconUrl || isMinecraft(name), undefined, iconUrl);
     setCustomGameName('');
     setRawgResults([]);
     setIsAddingGame(false);
@@ -241,9 +252,15 @@ export const RegisteredGamesView: React.FC = () => {
         {currentRunningGame ? (
           <div className="py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              {currentRunningGame.icon_url ? (
+              {currentRunningGame.icon_url || isMinecraft(currentRunningGame.name) ? (
                 <img
-                  src={currentRunningGame.icon_url}
+                  src={formatAssetUrl(
+                    isMinecraft(currentRunningGame.name)
+                      ? (currentRunningGame.icon_url && !currentRunningGame.icon_url.includes('java') && !currentRunningGame.icon_url.startsWith('data:image/x-icon') && !currentRunningGame.icon_url.includes('games/minecraft')
+                        ? currentRunningGame.icon_url
+                        : '/assets/minecraft.webp')
+                      : currentRunningGame.icon_url
+                  )}
                   alt=""
                   className="w-9 h-9 rounded-xl object-contain p-0.5 bg-white/5 border border-white/10 shrink-0 shadow-sm"
                 />
@@ -390,9 +407,13 @@ export const RegisteredGamesView: React.FC = () => {
                       className="group/item flex items-center justify-between p-2 bg-background-darkest hover:bg-brand-500/15 border border-white/5 hover:border-brand-500/40 rounded-xl transition-all cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        {rawgGame.icon_url || rawgGame.background_image ? (
+                        {rawgGame.icon_url || rawgGame.background_image || isMinecraft(rawgGame.name) ? (
                           <img
-                            src={rawgGame.icon_url || rawgGame.background_image}
+                            src={formatAssetUrl(
+                              isMinecraft(rawgGame.name)
+                                ? '/assets/minecraft.webp'
+                                : (rawgGame.icon_url || rawgGame.background_image)
+                            )}
                             alt=""
                             className="w-11 h-11 rounded-lg object-contain p-0.5 bg-white/5 border border-white/10 shrink-0 shadow-sm"
                           />
@@ -486,9 +507,15 @@ export const RegisteredGamesView: React.FC = () => {
               className="group py-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] px-2 rounded-xl transition-colors"
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                {game.icon_url ? (
+                {game.icon_url || isMinecraft(game.name) ? (
                   <img
-                    src={game.icon_url}
+                    src={formatAssetUrl(
+                      isMinecraft(game.name)
+                        ? (game.icon_url && !game.icon_url.includes('java') && !game.icon_url.startsWith('data:image/x-icon') && !game.icon_url.includes('games/minecraft')
+                          ? game.icon_url
+                          : '/assets/minecraft.webp')
+                        : game.icon_url
+                    )}
                     alt=""
                     className="w-8 h-8 rounded-xl object-contain p-0.5 bg-white/5 border border-white/10 shrink-0"
                   />

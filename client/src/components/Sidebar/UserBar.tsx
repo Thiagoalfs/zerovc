@@ -9,6 +9,7 @@ import { UserAvatar } from '../Common/UserAvatar';
 import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
 import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
 import { useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
+import { getFormattedUsername } from '../../stores/streamerModeStore';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -51,7 +52,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       return activeVoiceChannel?.name || 'Canal de Voz';
     }
     if (voiceType === 'dm') {
-      return dmRecipient?.display_name || dmRecipient?.username || 'Chamada 1:1';
+      return getFormattedUsername(dmRecipient?.display_name || dmRecipient?.username || 'Chamada 1:1');
     }
     if (voiceType === 'group') {
       return dmGroup?.name || 'Chamada em Grupo';
@@ -471,7 +472,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             <div className="flex flex-col truncate min-w-0 flex-1 overflow-hidden">
               <div className="flex items-center gap-1 min-w-0 w-full overflow-hidden">
                 <span className="text-[13px] md:text-[14px] font-bold text-white truncate leading-tight group-hover/usercard:text-brand-300 transition-colors block min-w-0 flex-1">
-                  {user?.display_name || user?.username || 'Usuário'}
+                  {getFormattedUsername(user?.display_name || user?.username || 'Usuário')}
                 </span>
               </div>
               <span className="text-[11px] md:text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">

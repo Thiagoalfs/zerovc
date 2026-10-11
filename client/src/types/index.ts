@@ -408,6 +408,9 @@ declare global {
       relaunchApp?: () => void;
       onActivityDetected?: (callback: (activity: any) => void) => () => void;
       getCurrentActivity?: () => Promise<any>;
+      onStreamerSoftwareStatus?: (callback: (status: { runningApps: string[] }) => void) => () => void;
+      setCustomStreamerProcesses?: (processes: string[]) => void;
+      getStreamerSoftwareStatus?: () => Promise<{ runningApps: string[] }>;
       ytdlpDownload?: (args: { format: 'mp4' | 'mp3'; link: string }) => Promise<{
         success: boolean;
         data?: { base64: string; filename: string; mimeType: string; title: string; size: number };

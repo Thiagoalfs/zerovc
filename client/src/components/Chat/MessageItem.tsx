@@ -42,6 +42,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 
 import { MessageEmbedCard } from './MessageEmbedCard';
 import { UploadProgressCard } from './UploadProgressCard';
+import { getFormattedUsername } from '../../stores/streamerModeStore';
 
 export interface UniversalMessage {
   id: string;
@@ -749,7 +750,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       style={authorRoleColor ? { color: authorRoleColor } : undefined}
                       title="Ver perfil"
                     >
-                      <span>{message.author?.display_name || message.author?.username || 'Usuário'}</span>
+                      <span>{getFormattedUsername(message.author?.display_name || message.author?.username || 'Usuário')}</span>
                       {(message.author?.is_bot || message.author_id === '00000000-0000-0000-0000-000000000001') && (
                         <span className="bg-brand-500 text-white text-[9px] font-bold px-1 py-0.5 rounded leading-none uppercase tracking-wider select-none shadow-sm ml-1 inline-block align-middle">
                           BOT
@@ -895,7 +896,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       style={authorRoleColor ? { color: authorRoleColor } : undefined}
                       title="Ver perfil"
                     >
-                      {message.author?.display_name || message.author?.username || 'Usuário'}
+                      {getFormattedUsername(message.author?.display_name || message.author?.username || 'Usuário')}
                     </span>
                     {(message.author?.is_bot || message.author_id === '00000000-0000-0000-0000-000000000001') && (
                       <span className="bg-brand-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded leading-none uppercase tracking-wider select-none shadow-sm">
