@@ -41,6 +41,8 @@ import { IncomingCallModal } from './components/DM/IncomingCallModal';
 import { TitleBar } from './components/Desktop/TitleBar';
 import { ErrorBoundary } from './components/Common/ErrorBoundary';
 import { NetworkStatusBanner } from './components/Common/NetworkStatusBanner';
+import { StreamerModeBanner } from './components/Streamer/StreamerModeBanner';
+import { useStreamerModeStore } from './stores/streamerModeStore';
 import { livekit } from './lib/livekit';
 import { User } from './types';
 import { Volume2, Mic, MicOff, PhoneOff } from 'lucide-react';
@@ -783,11 +785,19 @@ export const App: React.FC = () => {
                 })
                 .catch(() => {});
             } else if (currentAct && currentAct.name) {
-              useRegisteredGamesStore.getState().addOrUpdateGame(currentAct.name, true);
+              let currentIconUrl = currentAct.icon_url;
+              if (currentAct.name.toLowerCase() === 'minecraft') {
+                if (!currentIconUrl || currentIconUrl.includes('java') || currentIconUrl.startsWith('data:image/x-icon') || currentIconUrl.includes('games/minecraft')) {
+                  currentIconUrl = '/assets/minecraft.webp';
+                  currentAct.icon_url = currentIconUrl;
+                }
+              }
+              useRegisteredGamesStore.getState().addOrUpdateGame(currentAct.name, true, undefined, currentIconUrl);
               const isEnabled = useRegisteredGamesStore.getState().isGameEnabled(currentAct.name);
               if (isEnabled && !currentUser.custom_activity) {
                 const actWithTime = {
                   ...currentAct,
+                  icon_url: currentIconUrl,
                   type: currentAct.type || 'playing',
                   start_time: currentAct.start_time || Math.floor(Date.now() / 1000),
                 };
@@ -814,9 +824,16 @@ export const App: React.FC = () => {
           if (!currentUser || currentUser.auto_detect_activity === false) return;
 
           let resolvedActivity = detectedActivity;
-          if (detectedActivity && detectedActivity.name) {
+          if (detectedActivity && detectedActivity.name === 'OBS Studio') {
+            resolvedActivity = null;
+          } else if (detectedActivity && detectedActivity.name) {
             let iconUrl = detectedActivity.icon_url;
-            if (!iconUrl) {
+            if (detectedActivity.name.toLowerCase() === 'minecraft') {
+              if (!iconUrl || iconUrl.includes('java') || iconUrl.startsWith('data:image/x-icon') || iconUrl.includes('games/minecraft')) {
+                iconUrl = '/assets/minecraft.webp';
+              }
+              resolvedActivity = { ...detectedActivity, icon_url: iconUrl };
+            } else if (!iconUrl) {
               try {
                 const gameMatches = await api.games.search(detectedActivity.name);
                 if (gameMatches && gameMatches.length > 0) {
@@ -876,6 +893,38 @@ export const App: React.FC = () => {
       }
     }
   }, [user?.id, user?.auto_detect_activity]);
+
+  // Streamer Mode Software Detection & Synchronization
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      // Sync initial custom processes
+      const customProcs = useStreamerModeStore.getState().customProcesses;
+      if (customProcs.length > 0 && window.electronAPI.setCustomStreamerProcesses) {
+        window.electronAPI.setCustomStreamerProcesses(customProcs);
+      }
+
+      // Check current initial status
+      if (window.electronAPI.getStreamerSoftwareStatus) {
+        window.electronAPI.getStreamerSoftwareStatus().then((status) => {
+          if (status?.runningApps) {
+            useStreamerModeStore.getState().handleStreamAppsUpdate(status.runningApps);
+          }
+        }).catch(() => {});
+      }
+
+      // Subscribe to real-time status updates
+      if (window.electronAPI.onStreamerSoftwareStatus) {
+        const removeListener = window.electronAPI.onStreamerSoftwareStatus((status) => {
+          if (status?.runningApps) {
+            useStreamerModeStore.getState().handleStreamAppsUpdate(status.runningApps);
+          }
+        });
+        return () => {
+          removeListener?.();
+        };
+      }
+    }
+  }, []);
 
   // Push-to-Talk (PTT) Global Key Listener
   useEffect(() => {
@@ -1652,6 +1701,7 @@ export const App: React.FC = () => {
     >
       <TitleBar />
       <NetworkStatusBanner />
+      <StreamerModeBanner onOpenSettings={() => setIsProfileModalOpen(true)} />
       <div
         className="flex-1 flex w-full h-full overflow-hidden relative min-h-0"
         onTouchStart={handleTouchStart}

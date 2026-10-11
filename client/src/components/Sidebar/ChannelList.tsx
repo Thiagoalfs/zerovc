@@ -43,6 +43,7 @@ import { UserBar } from './UserBar';
 import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
+import { getFormattedUsername } from '../../stores/streamerModeStore';
 
 interface ChannelListProps {
   isHomeActive: boolean;
@@ -970,7 +971,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         )}
                       </div>
                       <span className={`truncate font-medium ${isSpeaking ? 'text-white font-semibold' : 'text-gray-300'}`}>
-                        {targetUser.display_name || targetUser.username || 'Usuário'}
+                        {getFormattedUsername(targetUser.display_name || targetUser.username || 'Usuário')}
                       </span>
                     </div>
 

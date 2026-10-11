@@ -39,7 +39,16 @@ export const sendNativeNotification = ({ title, body, icon, tag, onClick }: Noti
     }
   } catch {}
 
-  // 2. Configuração de notificações de desktop
+  // 2. Modo Streamer - Silenciar notificações
+  try {
+    const { useStreamerModeStore } = require('../stores/streamerModeStore');
+    const streamerState = useStreamerModeStore.getState();
+    if (streamerState.enabled && streamerState.disableNotifications) {
+      return;
+    }
+  } catch {}
+
+  // 3. Configuração de notificações de desktop
   try {
     const isDesktopNotifEnabled = localStorage.getItem('zerovc_notifications_desktop') !== 'false';
     if (!isDesktopNotifEnabled) {

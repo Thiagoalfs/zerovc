@@ -57,6 +57,9 @@ export interface ElectronAPI {
   relaunchApp: () => void;
   onActivityDetected: (callback: (activity: any) => void) => () => void;
   getCurrentActivity: () => Promise<any>;
+  onStreamerSoftwareStatus: (callback: (status: { runningApps: string[] }) => void) => () => void;
+  setCustomStreamerProcesses: (processes: string[]) => void;
+  getStreamerSoftwareStatus: () => Promise<{ runningApps: string[] }>;
   ytdlpDownload: (args: { format: 'mp4' | 'mp3'; link: string }) => Promise<{
     success: boolean;
     data?: { base64: string; filename: string; mimeType: string; title: string; size: number };
@@ -143,6 +146,13 @@ const electronAPI: ElectronAPI = {
     return () => ipcRenderer.removeListener('activity-detected', handler);
   },
   getCurrentActivity: () => ipcRenderer.invoke('get-current-activity'),
+  onStreamerSoftwareStatus: (callback: (status: { runningApps: string[] }) => void) => {
+    const handler = (_: any, status: { runningApps: string[] }) => callback(status);
+    ipcRenderer.on('streamer-software-status', handler);
+    return () => ipcRenderer.removeListener('streamer-software-status', handler);
+  },
+  setCustomStreamerProcesses: (processes: string[]) => ipcRenderer.send('set-custom-streamer-processes', processes),
+  getStreamerSoftwareStatus: () => ipcRenderer.invoke('get-streamer-software-status'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

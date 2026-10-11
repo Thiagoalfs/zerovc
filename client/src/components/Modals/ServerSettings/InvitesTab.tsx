@@ -7,6 +7,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { GuildInvite } from '../../../types';
+import { useStreamerModeStore } from '../../../stores/streamerModeStore';
 
 interface InvitesTabProps {
   invitesList: GuildInvite[];
@@ -33,6 +34,7 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
   hasAdmin,
   canManageGuild,
 }) => {
+  const isStreamerModeHidingInvites = useStreamerModeStore((s) => s.enabled && s.hideInviteLinks);
   return (
     <div className="max-w-4xl space-y-6 animate-fade-in py-6">
       {/* Mobile-only create invite button */}
@@ -74,8 +76,12 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono font-bold text-brand-400">{inv.code}</span>
-                    <span className="text-xs text-gray-500 truncate font-mono">({fullLink})</span>
+                    <span className="text-sm font-mono font-bold text-brand-400">
+                      {isStreamerModeHidingInvites ? '••••••••' : inv.code}
+                    </span>
+                    <span className="text-xs text-gray-500 truncate font-mono">
+                      ({isStreamerModeHidingInvites ? `${origin}/invite/••••••••` : fullLink})
+                    </span>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
                     <span>Criado por @{inv.creator?.username || 'membro'}</span>

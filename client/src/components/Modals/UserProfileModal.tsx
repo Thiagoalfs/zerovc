@@ -280,7 +280,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <div className="flex items-center gap-3 py-1">
                   {activity.icon_url ? (
                     <img
-                      src={activity.icon_url}
+                      src={formatAssetUrl(activity.icon_url)}
                       alt=""
                       className="w-10 h-10 rounded-xl object-contain p-0.5 bg-white/5 border border-white/10 shrink-0 shadow-sm"
                     />

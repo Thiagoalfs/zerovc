@@ -719,6 +719,17 @@ const KNOWN_GAMES_AND_APPS: Array<{
   { processes: ['code.exe'], name: 'Visual Studio Code', type: 'playing' },
 ];
 
+const DEFAULT_STREAMER_APPS: Array<{ name: string; processes: string[] }> = [
+  { name: 'OBS Studio', processes: ['obs64.exe', 'obs32.exe', 'obs.exe', 'obs'] },
+  { name: 'Streamlabs Desktop', processes: ['streamlabs desktop.exe', 'streamlabs obs.exe', 'streamlabs.exe', 'slobs.exe'] },
+  { name: 'XSplit Broadcaster', processes: ['xsplit.core.exe', 'xsplit.exe', 'xsplit.broadcaster.exe'] },
+  { name: 'Twitch Studio', processes: ['twitchstudio.exe', 'twitch studio.exe'] },
+  { name: 'vMix', processes: ['vmix64.exe', 'vmix.exe'] },
+];
+
+let customStreamerProcesses: string[] = [];
+let lastRunningStreamerApps: string[] = [];
+
 let lastDetectedActivity: DetectedActivity | null = null;
 let activeActivityProcesses: string[] | null = null;
 let activeActivityCloseWatcherTimer: NodeJS.Timeout | null = null;
@@ -850,6 +861,20 @@ async function getProcessIcon(gameName: string, processNames: string[]): Promise
     };
 
     const lowerGameName = (gameName || '').toLowerCase();
+
+    // Always pull the classic Minecraft grass block icon from web server /assets/minecraft.webp
+    const isMinecraft =
+      lowerGameName === 'minecraft' ||
+      lowerGameName.includes('minecraft') ||
+      processNames.some((p) => {
+        const lp = p.toLowerCase();
+        return lp.includes('minecraft') || lp === 'javaw.exe';
+      });
+
+    if (isMinecraft) {
+      gameIconCache.set(cacheKey, '/assets/minecraft.webp');
+      return '/assets/minecraft.webp';
+    }
 
     if (process.platform === 'win32') {
       // 1. Query running process executable path via PowerShell for the real native .exe icon
@@ -1003,9 +1028,36 @@ function scanProcessesForActivity() {
     if (err || !stdout) return;
 
     const procSet = parseRunningProcesses(stdout);
+
+    // Check running streamer apps (case-insensitive)
+    const detectedStreamApps: string[] = [];
+    for (const app of DEFAULT_STREAMER_APPS) {
+      if (app.processes.some((p) => procSet.has(p.toLowerCase().trim()))) {
+        detectedStreamApps.push(app.name);
+      }
+    }
+    for (const customProc of customStreamerProcesses) {
+      const norm = customProc.toLowerCase().trim();
+      if (procSet.has(norm) && !detectedStreamApps.includes(norm)) {
+        detectedStreamApps.push(norm);
+      }
+    }
+
+    const streamChanged =
+      detectedStreamApps.length !== lastRunningStreamerApps.length ||
+      detectedStreamApps.some((a) => !lastRunningStreamerApps.includes(a));
+
+    if (streamChanged || !hasPerformedInitialScan) {
+      lastRunningStreamerApps = detectedStreamApps;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('streamer-software-status', { runningApps: detectedStreamApps });
+      }
+    }
+
     let foundMatch: { name: string; type: DetectedActivity['type']; processes: string[] } | null = null;
 
     for (const item of KNOWN_GAMES_AND_APPS) {
+      if (item.name === 'OBS Studio') continue; // Do not broadcast or show OBS Studio as an active activity
       if (item.processes.some((p) => procSet.has(p))) {
         foundMatch = { name: item.name, type: item.type, processes: item.processes };
         break;
@@ -1100,6 +1152,17 @@ function stopActivityScanner() {
 
 ipcMain.handle('get-current-activity', () => {
   return lastDetectedActivity;
+});
+
+ipcMain.on('set-custom-streamer-processes', (_event, processes: string[]) => {
+  if (Array.isArray(processes)) {
+    customStreamerProcesses = processes.map((p) => String(p).toLowerCase().trim()).filter(Boolean);
+    scanProcessesForActivity();
+  }
+});
+
+ipcMain.handle('get-streamer-software-status', () => {
+  return { runningApps: lastRunningStreamerApps };
 });
 
 ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => {

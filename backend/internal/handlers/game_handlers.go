@@ -148,6 +148,21 @@ func (h *GameHandler) SearchGames(w http.ResponseWriter, r *http.Request) {
 
 	results := make([]GameSearchResult, 0)
 
+	// Special-case iconic games: Minecraft with classic grass block
+	if strings.Contains(normQuery, "minecraft") {
+		results = append(results, GameSearchResult{
+			ID:              999999,
+			Name:            "Minecraft",
+			Slug:            "minecraft",
+			BackgroundImage: "/assets/minecraft.webp",
+			IconURL:         "/assets/minecraft.webp",
+			Genres:          []string{"Sandbox", "Survival", "Aventura"},
+			Platforms:       []string{"PC", "Mac", "Linux", "Xbox", "PlayStation", "Nintendo Switch"},
+			Released:        "2011-11-18",
+			Rating:          4.8,
+		})
+	}
+
 	// 4. Call RAWG API if key is present
 	if h.apiKey != "" {
 		rawgURL := fmt.Sprintf("https://api.rawg.io/api/games?key=%s&search=%s&page_size=10",

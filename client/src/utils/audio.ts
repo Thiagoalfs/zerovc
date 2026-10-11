@@ -17,6 +17,14 @@ const getAudioContext = () => {
 
 const isSoundsEnabled = () => {
   try {
+    const { useStreamerModeStore } = require('../stores/streamerModeStore');
+    const streamerState = useStreamerModeStore.getState();
+    if (streamerState.enabled && streamerState.disableSounds) {
+      return false;
+    }
+  } catch {}
+
+  try {
     return localStorage.getItem('zerovc_sounds_enabled') !== 'false';
   } catch {
     return true;
