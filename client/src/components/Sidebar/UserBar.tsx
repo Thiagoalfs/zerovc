@@ -8,6 +8,7 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
 import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
+import { useActivityElapsedTime } from '../../utils/userActivity';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -79,6 +80,19 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     user.custom_activity.type === 'playing' &&
     user.custom_activity.name
   );
+
+  const userActivityObj = useMemo(() => {
+    if (!user?.custom_activity) return null;
+    return {
+      kind: 'game' as const,
+      type: user.custom_activity.type,
+      header: 'Jogando',
+      name: user.custom_activity.name,
+      start_time: user.custom_activity.start_time,
+    };
+  }, [user?.custom_activity]);
+
+  const elapsedGameTime = useActivityElapsedTime(userActivityObj, user?.id);
 
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -308,7 +322,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   {user.custom_activity.name}
                 </span>
                 <span className="text-[10px] text-gray-400 truncate leading-tight mt-0.5">
-                  {user.custom_activity.details || user.custom_activity.state || 'Jogando agora'}
+                  {elapsedGameTime || user.custom_activity.details || user.custom_activity.state || 'Jogando agora'}
                 </span>
               </div>
             </div>

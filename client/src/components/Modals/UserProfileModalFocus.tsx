@@ -25,7 +25,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useFriendStore } from '../../stores/friendStore';
 import { copyToClipboard } from '../../utils/clipboard';
 import { formatAssetUrl } from '../../lib/api';
-import { getUserActivity } from '../../utils/userActivity';
+import { getUserActivity, useActivityElapsedTime } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
 
 export interface UserProfileModalFocusProps {
@@ -85,6 +85,8 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
   const activity = useMemo(() => {
     return getUserActivity(user, currentUser, guilds);
   }, [user, currentUser, guilds]);
+
+  const elapsedTime = useActivityElapsedTime(activity, user?.id);
 
   if (!isOpen || !user) return null;
 
@@ -367,10 +369,15 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                       {activity.emoji && <span>{activity.emoji}</span>}
                       <span>{activity.name}</span>
                     </div>
+                    {elapsedTime && (
+                      <div className="text-xs text-gray-400 truncate font-medium">
+                        {elapsedTime}
+                      </div>
+                    )}
                     {activity.details && (
                       <div className="text-xs text-gray-300 font-medium truncate mt-0.5">{activity.details}</div>
                     )}
-                    {activity.state && (
+                    {activity.state && !elapsedTime && (
                       <div className="text-xs text-gray-400 truncate mt-0.5">{activity.state}</div>
                     )}
                   </div>

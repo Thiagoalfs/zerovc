@@ -567,14 +567,16 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           transform: swipeOffset > 0 ? `translateX(-${swipeOffset}px)` : undefined,
           transition: isSwiping ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
-        className={`relative flex flex-col px-3 md:px-4 group rounded transition-all duration-200 select-text ${
+        className={`relative flex flex-col px-3 md:px-4 group rounded transition-colors duration-150 select-text ${
           isFailed
             ? 'bg-red-500/10 hover:bg-red-500/15 border-l-2 border-red-500 text-red-200'
             : isMentioned
             ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-2 border-amber-500'
+            : isEditing
+            ? 'bg-brand-500/10'
             : isSending && !message.uploadingFile
             ? 'opacity-65 select-none'
-            : 'hover:bg-background-dark/40'
+            : 'hover:bg-brand-500/10'
         } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
       >
         {/* Swipe to Reply Indicator Icon (Mobile) */}
