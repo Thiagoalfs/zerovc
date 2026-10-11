@@ -222,9 +222,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
   // Drag Handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // Ignore clicks on buttons, inputs, links
+    // Ignore drags initiated on sliders, text inputs, or explicit no-drag elements
     const target = e.target as HTMLElement;
-    if (target.closest('button, input, textarea, a, select, [role="button"]')) {
+    if (target.closest('input, textarea, select, [data-no-drag="true"]')) {
       return;
     }
 
@@ -461,7 +461,6 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             {/* User Profile Badge (Click to open profile modal) */}
             <button
               type="button"
-              onPointerDown={(e) => e.stopPropagation()}
               onClick={handleOpenUserProfile}
               className="flex items-center gap-1.5 bg-black/75 hover:bg-black/95 active:scale-95 border border-white/10 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow transition-all cursor-pointer z-30"
               title="Ver perfil do participante"
@@ -479,11 +478,14 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
               </span>
             </button>
 
-            <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={toggleFullscreen}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (hasMovedSignificantlyRef.current) return;
+                  toggleFullscreen(e);
+                }}
                 className="p-1 rounded-lg bg-black/60 hover:bg-white/20 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
                 title="Tela cheia do vídeo"
               >
@@ -493,9 +495,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
               {!isLocal && (
                 <button
                   type="button"
-                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (hasMovedSignificantlyRef.current) return;
                     if (streamParticipant) {
                       unwatchParticipant(streamParticipant.identity);
                     }
@@ -567,8 +569,11 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
           {activeScreenSharer && !activeScreenSharer.isLocal && (
             <button
               type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => watchParticipant(activeScreenSharer.identity, 'exclusive')}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (hasMovedSignificantlyRef.current) return;
+                watchParticipant(activeScreenSharer.identity, 'exclusive');
+              }}
               className="w-full py-2 px-3 bg-brand-500 hover:bg-brand-600 active:scale-98 text-white text-xs font-semibold rounded-xl shadow-lg shadow-brand-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               title="Assistir Transmissão"
             >
@@ -581,31 +586,25 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
       {/* Bottom Voice Control Bar */}
       <div className="p-2.5 px-3 bg-background-darker/90 border-t border-white/5 flex items-center justify-between">
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
+        <div
           onClick={handleOpenVoiceRoom}
-          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0 text-left flex-1 mr-2"
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0 text-left flex-1 mr-2 select-none"
           title="Clique aqui para voltar para a call"
         >
           <div className="w-2 h-2 rounded-full bg-online animate-pulse flex-shrink-0" />
           <span className="text-xs font-semibold text-gray-200 truncate hover:underline hover:text-white">
             #{voiceChannel?.name || 'Voz'}
           </span>
-        </button>
+        </div>
 
-        <div
-          className="flex items-center gap-1.5 flex-shrink-0"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           {!isLocal && targetParticipant && (
             <div className="relative">
               <button
                 type="button"
-                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (hasMovedSignificantlyRef.current) return;
                   setShowVolume(!showVolume);
                 }}
                 className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
@@ -621,7 +620,11 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
               {showVolume && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowVolume(false)} />
-                  <div className="absolute right-0 bottom-full mb-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-44 flex flex-col gap-2.5 animate-in fade-in zoom-in-95">
+                  <div
+                    data-no-drag="true"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="absolute right-0 bottom-full mb-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-44 flex flex-col gap-2.5 animate-in fade-in zoom-in-95"
+                  >
                     {/* User Voice Volume */}
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center justify-between text-[11px] font-semibold text-gray-300">
@@ -675,8 +678,11 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
           <button
             type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={toggleMute}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasMovedSignificantlyRef.current) return;
+              toggleMute();
+            }}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               isMuted
                 ? 'bg-dnd text-white hover:bg-rose-700'
@@ -689,8 +695,11 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
           <button
             type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={toggleDeafen}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasMovedSignificantlyRef.current) return;
+              toggleDeafen();
+            }}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               isDeafened
                 ? 'bg-dnd text-white hover:bg-rose-700'
@@ -703,8 +712,11 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
           <button
             type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={leaveVoice}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasMovedSignificantlyRef.current) return;
+              leaveVoice();
+            }}
             className="p-1.5 rounded-lg text-dnd hover:bg-dnd/20 transition-colors cursor-pointer"
             title="Desconectar da call"
           >

@@ -155,10 +155,7 @@ export const TitleBar: React.FC = () => {
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* Left Branding / Title */}
-      <div
-        className="flex items-center gap-2 text-xs font-bold text-gray-300"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
+      <div className="flex items-center gap-2 text-xs font-bold text-gray-300">
         <ZeroVCLogo className="w-4 h-4 shadow-sm flex-shrink-0" />
         <span className="tracking-wide text-[11px] font-semibold text-gray-300">ZeroVC</span>
         {currentBuildCommit && (
@@ -170,10 +167,7 @@ export const TitleBar: React.FC = () => {
 
       {/* Center: Active Server Icon & Name */}
       {currentGuild && (
-        <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 max-w-[45%] pointer-events-none select-none z-10"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 max-w-[45%] pointer-events-none select-none z-10">
           {currentGuild.icon_url ? (
             <img
               src={formatAssetUrl(currentGuild.icon_url)}

@@ -8,7 +8,7 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
 import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
-import { useActivityElapsedTime } from '../../utils/userActivity';
+import { useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -284,7 +284,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         className={`w-full min-w-0 max-w-full bg-background-darkest border border-white/5 rounded-2xl shadow-inner overflow-visible relative transition-all duration-200 ${
           isInVoice || isGameActive
             ? 'p-2 md:p-2.5 flex flex-col gap-2'
-            : 'h-[48px] md:h-[52px] min-h-[48px] md:min-h-[52px] px-2 md:px-2.5 flex items-center justify-between'
+            : 'h-[48px] md:h-[56px] min-h-[48px] md:min-h-[56px] px-2 md:px-2.5 flex items-center justify-between'
         }`}
       >
         {/* Floating Voice Connection Popout */}
@@ -313,7 +313,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   }}
                 />
               ) : (
-                <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center flex-shrink-0 shadow-sm">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 shadow-sm">
                   <Gamepad2 className="w-4 h-4" />
                 </div>
               )}
@@ -321,7 +321,9 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 <span className="text-xs font-bold text-white truncate leading-tight">
                   {user.custom_activity.name}
                 </span>
-                <span className="text-[10px] text-gray-400 truncate leading-tight mt-0.5">
+                <span className={`text-[10px] truncate leading-tight mt-0.5 font-medium ${
+                  elapsedGameTime ? getActivityColorClass(userActivityObj) : 'text-gray-400'
+                }`}>
                   {elapsedGameTime || user.custom_activity.details || user.custom_activity.state || 'Jogando agora'}
                 </span>
               </div>
@@ -474,11 +476,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               </div>
               <span className="text-[11px] md:text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">
                 {user?.status !== 'offline' && user?.custom_activity && user?.show_activity_status !== false && !isGameActive ? (
-                  <span className="text-brand-300 font-medium flex items-center gap-1 truncate">
+                  <span className={`font-medium flex items-center gap-1 truncate ${getActivityColorClass({ type: user.custom_activity.type })}`}>
                     <span className="truncate">
                       {user.custom_activity.type === 'playing' ? 'Jogando ' :
                        user.custom_activity.type === 'listening' ? 'Ouvindo ' :
-                       user.custom_activity.type === 'watching' ? 'Assistindo ' : ''}
+                       user.custom_activity.type === 'watching' ? 'Assistindo ' :
+                       user.custom_activity.type === 'streaming' ? 'Transmitindo ' : ''}
                       {user.custom_activity.name}
                     </span>
                   </span>

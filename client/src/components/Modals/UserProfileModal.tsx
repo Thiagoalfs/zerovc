@@ -21,7 +21,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { formatAssetUrl } from '../../lib/api';
-import { getUserActivity, useActivityElapsedTime } from '../../utils/userActivity';
+import { getUserActivity, useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
 
 export type { UserProfilePosition };
@@ -288,9 +288,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
                       {activity.kind === 'game' ? <Gamepad2 className="w-5 h-5 text-emerald-400" /> :
                        activity.kind === 'music' ? <Music className="w-5 h-5 text-emerald-400" /> :
-                       activity.kind === 'call' ? <Volume2 className="w-5 h-5 text-brand-400 animate-pulse" /> :
-                       activity.type === 'watching' ? <Tv className="w-5 h-5 text-purple-400" /> :
-                       activity.type === 'streaming' ? <Radio className="w-5 h-5 text-red-400" /> :
+                       activity.kind === 'call' ? <Volume2 className="w-5 h-5 text-emerald-400 animate-pulse" /> :
+                       activity.type === 'watching' ? <Tv className="w-5 h-5 text-indigo-400" /> :
+                       activity.type === 'streaming' ? <Radio className="w-5 h-5 text-purple-400" /> :
                        activity.type === 'competing' ? <Trophy className="w-5 h-5 text-amber-400" /> :
                        <Sparkles className="w-5 h-5 text-brand-400" />}
                     </div>
@@ -301,7 +301,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       <span>{activity.name}</span>
                     </div>
                     {elapsedTime && (
-                      <div className="text-[10.5px] text-gray-400 truncate font-medium">
+                      <div className={`text-[10.5px] truncate font-medium ${getActivityColorClass(activity)}`}>
                         {elapsedTime}
                       </div>
                     )}

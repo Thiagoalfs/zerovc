@@ -20,6 +20,7 @@ import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu } from '../ContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
+import { getActivityColorClass } from '../../utils/userActivity';
 
 interface MemberListProps {
   isOpen: boolean;
@@ -243,7 +244,7 @@ export const MemberList: React.FC<MemberListProps> = ({
             (() => {
               const act = isMe && currentUser ? currentUser.custom_activity! : member.custom_activity!;
               return (
-                <p className="text-[11px] text-brand-300 font-medium truncate flex items-center gap-1">
+                <p className={`text-[11px] font-medium truncate flex items-center gap-1 ${getActivityColorClass({ type: act.type })}`}>
                   {act.type === 'playing' ? <Gamepad2 className="w-3 h-3 flex-shrink-0" /> :
                    act.type === 'listening' ? <Music className="w-3 h-3 flex-shrink-0" /> :
                    act.type === 'watching' ? <Tv className="w-3 h-3 flex-shrink-0" /> :
@@ -252,7 +253,8 @@ export const MemberList: React.FC<MemberListProps> = ({
                   <span className="truncate">
                     {act.type === 'playing' ? 'Jogando ' :
                      act.type === 'listening' ? 'Ouvindo ' :
-                     act.type === 'watching' ? 'Assistindo ' : ''}
+                     act.type === 'watching' ? 'Assistindo ' :
+                     act.type === 'streaming' ? 'Transmitindo ' : ''}
                     {act.name}
                   </span>
                 </p>
@@ -303,7 +305,7 @@ export const MemberList: React.FC<MemberListProps> = ({
           transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
           paddingTop: isCapacitor && typeof window !== 'undefined' && window.innerWidth < 768 ? 'max(env(safe-area-inset-top, 0px), 28px)' : undefined,
         }}
-        className={`fixed md:static inset-y-0 right-0 z-40 md:z-0 w-full md:w-64 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto no-scrollbar shadow-2xl md:shadow-none md:relative flex-shrink-0 ${
+        className={`fixed md:static inset-y-0 right-0 z-40 md:z-0 w-full md:w-64 bg-background-darker flex flex-col h-full border-l border-black/20 select-none p-3 overflow-y-auto chat-scrollbar shadow-2xl md:shadow-none md:relative flex-shrink-0 ${
           isDragging ? '' : isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
         }`}
       >

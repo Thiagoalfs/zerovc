@@ -25,7 +25,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { useFriendStore } from '../../stores/friendStore';
 import { copyToClipboard } from '../../utils/clipboard';
 import { formatAssetUrl } from '../../lib/api';
-import { getUserActivity, useActivityElapsedTime } from '../../utils/userActivity';
+import { getUserActivity, useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
 
 export interface UserProfileModalFocusProps {
@@ -357,9 +357,9 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                     <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
                       {activity.kind === 'game' ? <Gamepad2 className="w-6 h-6 text-emerald-400" /> :
                        activity.kind === 'music' ? <Music className="w-6 h-6 text-emerald-400" /> :
-                       activity.kind === 'call' ? <Volume2 className="w-6 h-6 text-brand-400 animate-pulse" /> :
-                       activity.type === 'watching' ? <Tv className="w-6 h-6 text-purple-400" /> :
-                       activity.type === 'streaming' ? <Radio className="w-6 h-6 text-red-400" /> :
+                       activity.kind === 'call' ? <Volume2 className="w-6 h-6 text-emerald-400 animate-pulse" /> :
+                       activity.type === 'watching' ? <Tv className="w-6 h-6 text-indigo-400" /> :
+                       activity.type === 'streaming' ? <Radio className="w-6 h-6 text-purple-400" /> :
                        activity.type === 'competing' ? <Trophy className="w-6 h-6 text-amber-400" /> :
                        <Sparkles className="w-6 h-6 text-brand-400" />}
                     </div>
@@ -370,7 +370,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                       <span>{activity.name}</span>
                     </div>
                     {elapsedTime && (
-                      <div className="text-xs text-gray-400 truncate font-medium">
+                      <div className={`text-xs truncate font-medium ${getActivityColorClass(activity)}`}>
                         {elapsedTime}
                       </div>
                     )}

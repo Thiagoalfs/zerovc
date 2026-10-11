@@ -2129,7 +2129,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         />
       ) : (
         <div
-          className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 min-h-[48px] md:min-h-[52px] border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
+          className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 min-h-[48px] md:min-h-[56px] border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
             replyingTo ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl'
           }`}
         >

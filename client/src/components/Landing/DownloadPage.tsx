@@ -7,7 +7,6 @@ import {
   Sliders,
   ShieldCheck,
   ArrowRight,
-  Sparkles,
   ArrowLeft,
   Info,
   Check,
@@ -31,7 +30,6 @@ type PlatformType = 'android' | 'windows' | 'ios' | 'web';
 
 export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) => {
   const [downloadStarted, setDownloadStarted] = useState(false);
-  const [detectedPlatform, setDetectedPlatform] = useState<PlatformType>('windows');
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('windows');
 
   useEffect(() => {
@@ -48,7 +46,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
       detected = 'windows';
     }
 
-    setDetectedPlatform(detected);
     setSelectedPlatform(detected);
   }, []);
 
@@ -127,17 +124,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
           2. DOWNLOAD HERO & CARD
       ------------------------------------------------------------- */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-16 flex flex-col items-center text-center">
-
-        {/* Auto-detected Platform Badge */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-300 text-xs font-semibold mb-5 sm:mb-6 animate-in fade-in duration-300 flex-shrink-0">
-          <Sparkles className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
-          <span>
-            {detectedPlatform === 'android' && 'Detectamos que você está usando um dispositivo Android'}
-            {detectedPlatform === 'windows' && 'Detectamos que você está usando Windows'}
-            {detectedPlatform === 'ios' && 'Detectamos que você está usando iPhone / iPad (iOS)'}
-            {detectedPlatform === 'web' && 'Detectamos o seu navegador'}
-          </span>
-        </div>
 
         {/* Title */}
         <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight mb-3 sm:mb-4 flex-shrink-0">
