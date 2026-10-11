@@ -811,8 +811,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
             isActive
               ? 'bg-background-light text-white font-medium shadow-sm'
-              : isInThisVoice
-              ? 'bg-online/15 text-online font-medium'
               : isUnread
               ? 'text-white font-semibold hover:bg-background-light/40'
               : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
@@ -1146,7 +1144,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         )}
 
         {/* Channels List Body */}
-        <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4 no-scrollbar">
+        <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4 chat-scrollbar">
           {!isHomeActive && (
             <>
               {/* 1. Root Channels (no category) */}

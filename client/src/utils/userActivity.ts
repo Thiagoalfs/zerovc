@@ -257,14 +257,15 @@ export function getUserActivity(
     for (const ch of guild.channels) {
       if (ch.type !== 'voice') continue;
 
-      const isInVoice = ch.voice_sessions?.some((s) => s.user_id === targetUser.id);
-      if (!isInVoice) continue;
+      const session = ch.voice_sessions?.find((s) => s.user_id === targetUser.id);
+      if (!session) continue;
 
       // Verify if currentUser has permission to see and join this voice channel
       const hasAccess = canUserViewChannel(ch, guild, currentUser);
 
       if (hasAccess) {
         const participantCount = ch.voice_sessions?.length || 1;
+        const joinedAtMs = session.joined_at ? new Date(session.joined_at).getTime() : undefined;
         return {
           kind: 'call',
           type: 'call',
@@ -275,12 +276,64 @@ export function getUserActivity(
           guildName: guild.name,
           guildIcon: guild.icon_url,
           participantCount,
+          start_time: joinedAtMs,
         };
       }
     }
   }
 
   return null;
+}
+
+/**
+ * Returns the tailwind text color class for an activity timer or label based on its type/kind:
+ * - jogando (game / playing): verde (text-emerald-400)
+ * - transmitindo (streaming): roxo (text-purple-400)
+ * - em call (call): verde (text-emerald-400)
+ * - ouvindo (music / listening): verde (text-emerald-400)
+ * - assistindo (watching): roxo / índigo (text-indigo-400)
+ * - competindo (competing): dourado / amarelo (text-amber-400)
+ * - default: text-brand-400
+ */
+export function getActivityColorClass(
+  activity?: DisplayedActivity | null | { kind?: string; type?: string }
+): string {
+  if (!activity) return 'text-gray-400';
+
+  const kind = activity.kind;
+  const type = activity.type;
+
+  // Jogando = verde
+  if (kind === 'game' || type === 'playing') {
+    return 'text-emerald-400';
+  }
+
+  // Transmitindo = roxo
+  if (type === 'streaming') {
+    return 'text-purple-400';
+  }
+
+  // Em call = verde
+  if (kind === 'call' || type === 'call') {
+    return 'text-emerald-400';
+  }
+
+  // Ouvindo música = verde
+  if (kind === 'music' || type === 'listening') {
+    return 'text-emerald-400';
+  }
+
+  // Assistindo = roxo / índigo
+  if (type === 'watching') {
+    return 'text-indigo-400';
+  }
+
+  // Competindo = dourado / amarelo
+  if (type === 'competing') {
+    return 'text-amber-400';
+  }
+
+  return 'text-brand-400';
 }
 
 const sessionActivityStartTimes = new Map<string, number>();

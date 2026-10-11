@@ -577,7 +577,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             : isSending && !message.uploadingFile
             ? 'opacity-65 select-none'
             : 'hover:bg-brand-500/10'
-        } ${isCompact ? 'py-[1.5px] mt-0' : isDensityCompact ? 'pt-1 pb-[1px] mt-1' : 'pt-2.5 pb-[1.5px] mt-3.5'}`}
+        } ${isCompact ? 'py-1 mt-0' : isDensityCompact ? 'py-1.5 mt-0.5' : 'py-2.5 mt-1.5'}`}
       >
         {/* Swipe to Reply Indicator Icon (Mobile) */}
         {swipeOffset > 0 && (
