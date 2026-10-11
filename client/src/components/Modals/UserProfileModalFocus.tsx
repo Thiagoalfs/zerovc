@@ -330,14 +330,14 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 
             {/* Custom Status */}
             {user.custom_status && (
-              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-background-darker/90 rounded-xl text-xs sm:text-sm text-gray-200 border border-white/5 shadow-inner">
+              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl text-xs sm:text-sm text-gray-200 border border-white/5 shadow-inner">
                 <span>{user.custom_status}</span>
               </div>
             )}
           </div>
 
-          {/* Details Sections Container */}
-          <div className="bg-background-darker/90 rounded-2xl p-4 sm:p-5 space-y-4">
+          {/* Details Sections */}
+          <div className="space-y-4 pt-1">
             {/* Atividade Category - Sleek Minimal Layout without box */}
             {activity && (
               <div className="space-y-1.5 animate-in fade-in">

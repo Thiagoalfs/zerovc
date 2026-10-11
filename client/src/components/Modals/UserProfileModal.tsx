@@ -254,8 +254,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             />
           </div>
 
-          {/* User Details Card */}
-          <div className="bg-background-darker/90 rounded-2xl p-3 space-y-2.5">
+          {/* User Details */}
+          <div className="space-y-3 pt-1">
             {/* Names */}
             <div>
               <h2 className="text-base font-bold text-white leading-snug">
@@ -266,7 +266,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
             {/* Custom Status */}
             {user.custom_status && (
-              <div className="p-2 bg-background-darkest rounded-xl text-xs text-gray-200 border border-white/5 flex items-center gap-1.5">
+              <div className="p-2 bg-white/5 rounded-xl text-xs text-gray-200 border border-white/5 flex items-center gap-1.5">
                 <span>{user.custom_status}</span>
               </div>
             )}
