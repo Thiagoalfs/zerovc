@@ -785,7 +785,18 @@ export const App: React.FC = () => {
             } else if (currentAct && currentAct.name) {
               useRegisteredGamesStore.getState().addOrUpdateGame(currentAct.name, true);
               const isEnabled = useRegisteredGamesStore.getState().isGameEnabled(currentAct.name);
-              if (!isEnabled && currentUser.custom_activity) {
+              if (isEnabled && !currentUser.custom_activity) {
+                const actWithTime = {
+                  ...currentAct,
+                  type: currentAct.type || 'playing',
+                  start_time: currentAct.start_time || Math.floor(Date.now() / 1000),
+                };
+                useAuthStore.getState().setUser({ custom_activity: actWithTime });
+                if (currentUser.id) {
+                  useGuildStore.getState().updateMemberInGuild({ id: currentUser.id, custom_activity: actWithTime });
+                }
+                api.users.updateProfile({ custom_activity: actWithTime }).catch(() => {});
+              } else if (!isEnabled && currentUser.custom_activity) {
                 useAuthStore.getState().setUser({ custom_activity: null });
                 if (currentUser.id) {
                   useGuildStore.getState().updateMemberInGuild({ id: currentUser.id, custom_activity: null });
@@ -823,6 +834,15 @@ export const App: React.FC = () => {
           }
 
           const currentAct = currentUser.custom_activity;
+
+          if (resolvedActivity) {
+            if (currentAct && currentAct.name === resolvedActivity.name && currentAct.start_time) {
+              resolvedActivity.start_time = currentAct.start_time;
+            } else if (!resolvedActivity.start_time) {
+              resolvedActivity.start_time = Math.floor(Date.now() / 1000);
+            }
+          }
+
           if (
             (!currentAct && !resolvedActivity) ||
             (currentAct && resolvedActivity && currentAct.name === resolvedActivity.name && currentAct.type === resolvedActivity.type && currentAct.icon_url === resolvedActivity.icon_url)

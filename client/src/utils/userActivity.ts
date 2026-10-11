@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, Guild, Channel, Permissions } from '../types';
 
 export interface DisplayedActivity {
@@ -9,6 +10,7 @@ export interface DisplayedActivity {
   state?: string;
   emoji?: string;
   icon_url?: string;
+  start_time?: number;
   guildName?: string;
   guildIcon?: string;
   participantCount?: number;
@@ -205,6 +207,7 @@ export function getUserActivity(
       state: customAct.state,
       emoji: customAct.emoji,
       icon_url: customAct.icon_url,
+      start_time: customAct.start_time,
     };
   }
 
@@ -219,6 +222,7 @@ export function getUserActivity(
       state: customAct.state,
       emoji: customAct.emoji,
       icon_url: customAct.icon_url,
+      start_time: customAct.start_time,
     };
   }
 
@@ -239,6 +243,7 @@ export function getUserActivity(
       state: customAct.state,
       emoji: customAct.emoji,
       icon_url: customAct.icon_url,
+      start_time: customAct.start_time,
     };
   }
 
@@ -276,4 +281,67 @@ export function getUserActivity(
   }
 
   return null;
+}
+
+const sessionActivityStartTimes = new Map<string, number>();
+
+/**
+ * Gets or computes the start timestamp (in ms) for an activity.
+ * If rawStartTime is present, normalizes seconds/ms.
+ * Otherwise, records and preserves a session start timestamp for that user + game.
+ */
+export function getActivityStartTime(userId?: string, activityName?: string, rawStartTime?: number): number {
+  if (rawStartTime && rawStartTime > 0) {
+    return rawStartTime < 10000000000 ? rawStartTime * 1000 : rawStartTime;
+  }
+  const key = `${userId || 'unknown'}:${activityName || 'activity'}`;
+  if (!sessionActivityStartTimes.has(key)) {
+    sessionActivityStartTimes.set(key, Date.now());
+  }
+  return sessionActivityStartTimes.get(key)!;
+}
+
+/**
+ * Formats elapsed time into clean digital format:
+ * e.g. "04:32 decorridos" or "01:15:20 decorridos"
+ */
+export function formatElapsedTime(startTimeMs: number, now: number = Date.now()): string {
+  const diffSec = Math.max(0, Math.floor((now - startTimeMs) / 1000));
+  const hours = Math.floor(diffSec / 3600);
+  const minutes = Math.floor((diffSec % 3600) / 60);
+  const seconds = diffSec % 60;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  if (hours > 0) {
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)} decorridos`;
+  }
+  return `${pad(minutes)}:${pad(seconds)} decorridos`;
+}
+
+/**
+ * React hook that live-updates the elapsed time for an active game/activity every second.
+ */
+export function useActivityElapsedTime(
+  activity: DisplayedActivity | null | undefined,
+  userId?: string
+): string | null {
+  const [now, setNow] = useState(() => Date.now());
+
+  const startTimeMs = useMemo(() => {
+    if (!activity || !activity.name) return null;
+    return getActivityStartTime(userId, activity.name, activity.start_time);
+  }, [activity?.name, activity?.start_time, userId]);
+
+  useEffect(() => {
+    if (!startTimeMs) return;
+    setNow(Date.now());
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [startTimeMs]);
+
+  if (!activity || !startTimeMs) return null;
+  return formatElapsedTime(startTimeMs, now);
 }

@@ -21,7 +21,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { formatAssetUrl } from '../../lib/api';
-import { getUserActivity } from '../../utils/userActivity';
+import { getUserActivity, useActivityElapsedTime } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
 
 export type { UserProfilePosition };
@@ -62,6 +62,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const activity = useMemo(() => {
     return getUserActivity(user, currentUser, guilds);
   }, [user, currentUser, guilds]);
+
+  const elapsedTime = useActivityElapsedTime(activity, user?.id);
 
   const popoverStyle: React.CSSProperties = useMemo(() => {
     if (!position || typeof window === 'undefined' || window.innerWidth < 640) {
@@ -298,10 +300,15 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       {activity.emoji && <span>{activity.emoji}</span>}
                       <span>{activity.name}</span>
                     </div>
+                    {elapsedTime && (
+                      <div className="text-[10.5px] text-gray-400 truncate font-medium">
+                        {elapsedTime}
+                      </div>
+                    )}
                     {activity.details && (
                       <div className="text-[11px] text-gray-300 truncate mt-0.5">{activity.details}</div>
                     )}
-                    {activity.state && (
+                    {activity.state && !elapsedTime && (
                       <div className="text-[10px] text-gray-400 truncate mt-0.5">{activity.state}</div>
                     )}
                   </div>
