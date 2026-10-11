@@ -51,8 +51,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             className="flex items-center gap-2.5 cursor-pointer group select-none"
           >
             <ZeroVCLogo className="w-10 h-10 shadow-lg shadow-brand-500/25 group-hover:scale-105 transition-transform" />
-            <span className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
-              Zero<span className="text-brand-400">VC</span>
+            <span className="text-xl font-black tracking-tight text-white">
+              ZeroVC
             </span>
           </div>
 
@@ -142,7 +142,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
         {/* -------------------------------------------------------------
             3. PRODUCT SHOWCASE MOCKUP
         ------------------------------------------------------------- */}
-        <div className="w-full max-w-5xl rounded-3xl p-2 bg-gradient-to-b from-white/15 via-white/5 to-transparent border border-white/10 shadow-2xl shadow-black/80">
+        <div className="w-full max-w-5xl rounded-3xl p-2 bg-white/5 border border-white/10 shadow-2xl shadow-black/80">
           <div className="w-full bg-[#1e1f22] rounded-2xl overflow-hidden border border-white/5 flex flex-col aspect-[16/10] sm:aspect-[16/9] relative text-left shadow-inner">
             {/* Mock Titlebar */}
             <div className="h-9 bg-[#1e1f22] border-b border-black/30 px-4 flex items-center justify-between select-none">
@@ -422,7 +422,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
           5. CTA DOWNLOAD BANNER
       ------------------------------------------------------------- */}
       <section className="py-16 px-6 max-w-5xl mx-auto w-full">
-        <div className="rounded-3xl bg-gradient-to-r from-brand-600 to-indigo-600 p-8 sm:p-12 text-center text-white relative overflow-hidden shadow-2xl">
+        <div className="rounded-3xl bg-brand-600 p-8 sm:p-12 text-center text-white relative overflow-hidden shadow-2xl">
           <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           <div className="relative z-10 max-w-2xl mx-auto space-y-6">
             <h2 className="text-3xl sm:text-4xl font-black tracking-tight">

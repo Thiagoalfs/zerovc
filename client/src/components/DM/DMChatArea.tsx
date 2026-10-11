@@ -444,7 +444,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-2 md:px-4 py-2 no-scrollbar"
+        className="flex-1 overflow-y-auto px-2 md:px-4 py-2 chat-scrollbar"
       >
         {/* Loading older messages indicator */}
         {isLoadingMoreMessages && (

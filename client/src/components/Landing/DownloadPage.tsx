@@ -89,8 +89,8 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             className="flex items-center gap-2.5 cursor-pointer group select-none"
           >
             <ZeroVCLogo className="w-9 h-9 sm:w-10 sm:h-10 shadow-lg shadow-brand-500/25 group-hover:scale-105 transition-transform flex-shrink-0" />
-            <span className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
-              Zero<span className="text-brand-400">VC</span>
+            <span className="text-xl font-black tracking-tight text-white">
+              ZeroVC
             </span>
           </div>
 
@@ -193,7 +193,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
         {selectedPlatform === 'android' && (
           <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
             <div className="flex flex-col items-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-xl shadow-emerald-500/30 mb-4 sm:mb-6 flex-shrink-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-emerald-600 flex items-center justify-center text-white shadow-xl shadow-emerald-500/30 mb-4 sm:mb-6 flex-shrink-0">
                 <Smartphone className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
 
@@ -277,7 +277,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
         {selectedPlatform === 'windows' && (
           <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
             <div className="flex flex-col items-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-xl shadow-brand-500/30 mb-4 sm:mb-6 flex-shrink-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white shadow-xl shadow-brand-500/30 mb-4 sm:mb-6 flex-shrink-0">
                 <Laptop className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
 
@@ -361,7 +361,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
         {selectedPlatform === 'ios' && (
           <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
             <div className="flex flex-col items-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-gray-700 to-gray-900 flex items-center justify-center text-white shadow-xl shadow-black/50 mb-4 sm:mb-6 flex-shrink-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gray-800 flex items-center justify-center text-white shadow-xl shadow-black/50 mb-4 sm:mb-6 flex-shrink-0">
                 <Apple className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
 

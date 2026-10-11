@@ -512,7 +512,7 @@ func main() {
 				if strings.HasPrefix(path, "/assets/") {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 				} else {
-					w.Header().Set("Cache-Control", "public, max-age=86400")
+					w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 				}
 				fileServer.ServeHTTP(w, r)
 				return
@@ -567,6 +567,9 @@ func main() {
 				htmlStr = strings.ReplaceAll(htmlStr, `content="Comunicação por voz, vídeo e texto ultrarrápida, moderna e sem limites para suas comunidades e amigos."`, fmt.Sprintf(`content="%s"`, downloadDesc))
 			}
 
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Write([]byte(htmlStr))
 		})

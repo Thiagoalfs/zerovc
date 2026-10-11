@@ -804,7 +804,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto px-2 md:px-4 py-2 no-scrollbar"
+            className="flex-1 overflow-y-auto px-2 md:px-4 py-2 chat-scrollbar"
           >
             {isLoadingMoreMessages && (
               <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
