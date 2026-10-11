@@ -259,7 +259,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      <div className="bg-background-darkest w-full max-w-lg max-h-[92dvh] my-auto rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-150">
+      <div className="bg-background-darkest w-full max-w-lg max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-150">
         
         {/* Modal Header */}
         <div className="p-4 sm:p-5 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">

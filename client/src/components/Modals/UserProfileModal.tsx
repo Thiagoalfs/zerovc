@@ -210,7 +210,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       <div
         style={popoverStyle}
         onClick={(e) => e.stopPropagation()}
-        className={`fixed z-50 bg-background-darkest rounded-3xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[92dvh] overflow-y-auto no-scrollbar ${
+        className={`fixed z-50 bg-background-darkest rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[92dvh] overflow-y-auto no-scrollbar ${
           !position || (typeof window !== 'undefined' && window.innerWidth < 640)
             ? 'inset-x-4 top-1/2 -translate-y-1/2 sm:translate-y-0 sm:top-auto sm:inset-x-auto max-w-sm mx-auto'
             : ''
@@ -262,20 +262,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 {user.display_name || user.username || 'Usuário'}
               </h2>
               {user.username && <span className="text-xs text-gray-400 font-medium">@{user.username}</span>}
+              {user.custom_status && (
+                <div className="mt-1 text-xs text-gray-300 break-words">
+                  <span>{user.custom_status}</span>
+                </div>
+              )}
             </div>
-
-            {/* Custom Status */}
-            {user.custom_status && (
-              <div className="p-2 bg-white/5 rounded-xl text-xs text-gray-200 border border-white/5 flex items-center gap-1.5">
-                <span>{user.custom_status}</span>
-              </div>
-            )}
 
             {/* Atividade Category - Sleek Minimal Layout without box */}
             {activity && (
               <div className="space-y-1.5 animate-in fade-in">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Atividade
+                  {activity.header || 'Atividade'}
                 </span>
                 <div className="flex items-center gap-3 py-1">
                   {activity.icon_url ? (
@@ -295,19 +293,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                        <Sparkles className="w-5 h-5 text-brand-400" />}
                     </div>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider leading-tight">
-                      {activity.header}
-                    </div>
-                    <div className="text-xs font-bold text-white truncate flex items-center gap-1 mt-0.5">
+                  <div className="min-w-0 flex-1 flex flex-col justify-center">
+                    <div className="text-xs font-bold text-white truncate flex items-center gap-1">
                       {activity.emoji && <span>{activity.emoji}</span>}
                       <span>{activity.name}</span>
                     </div>
                     {activity.details && (
-                      <div className="text-[11px] text-gray-300 truncate">{activity.details}</div>
+                      <div className="text-[11px] text-gray-300 truncate mt-0.5">{activity.details}</div>
                     )}
                     {activity.state && (
-                      <div className="text-[10px] text-gray-400 truncate">{activity.state}</div>
+                      <div className="text-[10px] text-gray-400 truncate mt-0.5">{activity.state}</div>
                     )}
                   </div>
                 </div>
@@ -315,12 +310,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             )}
 
             {/* About Me / Bio */}
-            {user.bio ? (
+            {user.bio && user.bio.trim().length > 0 ? (
               <div>
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
                   Sobre mim
                 </span>
-                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{user.bio}</p>
+                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{user.bio.trim()}</p>
               </div>
             ) : null}
 

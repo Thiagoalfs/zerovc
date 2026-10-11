@@ -44,7 +44,7 @@ export const VoiceDiagnosticModal: React.FC<VoiceDiagnosticModalProps> = ({ isOp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in select-none">
-      <div className="bg-background-darker border border-white/10 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
+      <div className="bg-background-darker border border-white/10 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-background-darkest/50">
           <div className="flex items-center gap-2.5">

@@ -189,7 +189,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
       {/* Centered Modal Window */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative bg-background-darkest border border-white/10 rounded-3xl w-full max-w-lg sm:max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92dvh] overflow-y-auto no-scrollbar select-text"
+        className="relative bg-background-darkest border border-white/10 rounded-xl w-full max-w-lg sm:max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92dvh] overflow-y-auto no-scrollbar select-text"
       >
         {/* Top Banner with Close Button */}
         <div
@@ -330,7 +330,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 
             {/* Custom Status */}
             {user.custom_status && (
-              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl text-xs sm:text-sm text-gray-200 border border-white/5 shadow-inner">
+              <div className="mt-1.5 text-xs sm:text-sm text-gray-300 break-words">
                 <span>{user.custom_status}</span>
               </div>
             )}
@@ -342,7 +342,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
             {activity && (
               <div className="space-y-1.5 animate-in fade-in">
                 <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Atividade
+                  {activity.header || 'Atividade'}
                 </span>
                 <div className="flex items-center gap-3 py-1">
                   {activity.icon_url ? (
@@ -362,19 +362,16 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                        <Sparkles className="w-6 h-6 text-brand-400" />}
                     </div>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider leading-tight">
-                      {activity.header}
-                    </div>
-                    <div className="text-sm font-bold text-white truncate flex items-center gap-1.5 mt-0.5">
+                  <div className="min-w-0 flex-1 flex flex-col justify-center">
+                    <div className="text-sm font-bold text-white truncate flex items-center gap-1.5">
                       {activity.emoji && <span>{activity.emoji}</span>}
                       <span>{activity.name}</span>
                     </div>
                     {activity.details && (
-                      <div className="text-xs text-gray-300 font-medium truncate">{activity.details}</div>
+                      <div className="text-xs text-gray-300 font-medium truncate mt-0.5">{activity.details}</div>
                     )}
                     {activity.state && (
-                      <div className="text-xs text-gray-400 truncate">{activity.state}</div>
+                      <div className="text-xs text-gray-400 truncate mt-0.5">{activity.state}</div>
                     )}
                   </div>
                 </div>
@@ -382,18 +379,16 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
             )}
 
             {/* About Me / Bio */}
-            <div>
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                Sobre mim
-              </span>
-              {user.bio ? (
+            {user.bio && user.bio.trim().length > 0 ? (
+              <div>
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                  Sobre mim
+                </span>
                 <p className="text-xs sm:text-sm text-gray-200 leading-relaxed whitespace-pre-wrap selection:bg-brand-500/30">
-                  {user.bio}
+                  {user.bio.trim()}
                 </p>
-              ) : (
-                <p className="text-xs text-gray-500 italic">Nenhuma biografia informada.</p>
-              )}
-            </div>
+              </div>
+            ) : null}
 
               {/* Server Roles with Dropdown */}
               <UserRolesSection user={user} size="md" />

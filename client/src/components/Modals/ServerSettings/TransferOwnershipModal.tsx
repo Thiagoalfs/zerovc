@@ -52,7 +52,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
       style={{ zIndex: 99999 }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
     >
-      <div className="w-full max-w-lg max-h-[92dvh] my-auto bg-background-darker rounded-2xl border border-amber-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
+      <div className="w-full max-w-lg max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-amber-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400">
             <Crown className="w-6 h-6" />
