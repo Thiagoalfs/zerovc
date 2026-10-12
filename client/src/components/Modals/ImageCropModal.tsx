@@ -12,7 +12,14 @@ import {
   Film,
 } from 'lucide-react';
 import { isGif, cropImageToWebP } from '../../utils/image';
-import { MODAL_DIALOG_TITLE_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_FOOTER_PADDING_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+  MODAL_BACKDROP_CLASS,
+} from '../../constants/modalTypography';
 
 export type CropType = 'avatar' | 'banner' | 'guildIcon' | 'guildBanner' | 'groupIcon';
 
@@ -252,7 +259,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 select-none overflow-y-auto animate-in fade-in duration-150"
+      className={MODAL_BACKDROP_CLASS}
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
@@ -263,7 +270,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
       <div className="bg-background-darkest w-full max-w-lg max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-150">
         
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
           <div className="flex items-center gap-2">
             <h3 className={MODAL_DIALOG_TITLE_CLASS}>
               {modalTitle}
@@ -392,12 +399,12 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-background-darker/80 border-t border-white/5 flex items-center justify-between">
+        <div className={`${MODAL_FOOTER_PADDING_CLASS} bg-background-darker/80 border-t border-white/5 flex items-center justify-between`}>
           <button
             type="button"
             onClick={onCancel}
             disabled={isProcessing}
-            className="text-xs md:text-sm text-gray-400 hover:text-white font-medium px-4 py-2 cursor-pointer transition-colors"
+            className={MODAL_CANCEL_BUTTON_CLASS}
           >
             Cancelar
           </button>
@@ -406,7 +413,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
             type="button"
             onClick={handleApply}
             disabled={isProcessing}
-            className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs md:text-sm font-semibold px-6 py-2.5 rounded-xl shadow-lg shadow-brand-500/25 transition-all flex items-center gap-2 cursor-pointer"
+            className={MODAL_PRIMARY_BUTTON_CLASS}
           >
             {isProcessing ? (
               <span>Processando...</span>

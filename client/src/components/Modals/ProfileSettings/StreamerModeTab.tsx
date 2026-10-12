@@ -4,6 +4,7 @@ import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_SECTION_HEADER_CLASS,
   MODAL_DIVIDER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../../constants/modalTypography';
 
 export const StreamerModeTab: React.FC = () => {
@@ -46,7 +47,7 @@ export const StreamerModeTab: React.FC = () => {
               {enabled ? 'Ativo' : 'Desativado'}
             </span>
           </div>
-          <p className="text-xs text-gray-400 leading-relaxed">
+          <p className={MODAL_DESCRIPTION_CLASS}>
             Proteja suas informações sensíveis, nomes de usuários e alertas sonoros contra vazamento na transmissão ou compartilhamento de tela.
           </p>
         </div>
@@ -90,7 +91,7 @@ export const StreamerModeTab: React.FC = () => {
             <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Ativar automaticamente ao detectar softwares de streaming
             </span>
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p className={MODAL_DESCRIPTION_CLASS}>
               O ZeroVC detecta a abertura do OBS Studio, Streamlabs, XSplit, Twitch Studio ou vMix e liga o modo
               streamer sozinho. Ao fechar os programas, ele se desliga automaticamente.
             </p>
@@ -130,7 +131,7 @@ export const StreamerModeTab: React.FC = () => {
             <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Censurar nomes de usuários (primeiras 3 letras)
             </span>
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p className={MODAL_DESCRIPTION_CLASS}>
               Exibe apenas as 3 primeiras letras de todos os usuários seguidas de reticências no chat, listas de
               membros e canais de voz.
             </p>
@@ -159,7 +160,7 @@ export const StreamerModeTab: React.FC = () => {
             <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Ocultar informações pessoais
             </span>
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p className={MODAL_DESCRIPTION_CLASS}>
               Mascara seu endereço de e-mail, IDs de conta e detalhes de rede nas abas de configurações.
             </p>
           </div>
@@ -187,7 +188,7 @@ export const StreamerModeTab: React.FC = () => {
             <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Ocultar links de convite de servidores
             </span>
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p className={MODAL_DESCRIPTION_CLASS}>
               Converte URLs e códigos de convites em bolinhas na tela (zerovc.safiroko.xyz/••••••••) para evitar invasões na sua live.
               O botão de copiar continua funcionando normalmente.
             </p>
@@ -227,7 +228,7 @@ export const StreamerModeTab: React.FC = () => {
             <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Desativar notificações na área de trabalho
             </span>
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p className={MODAL_DESCRIPTION_CLASS}>
               Bloqueia alertas e popups nativos do Windows/desktop para evitar que prévias de conversas privadas apareçam na sua transmissão.
             </p>
           </div>
@@ -255,7 +256,7 @@ export const StreamerModeTab: React.FC = () => {
             <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Silenciar efeitos sonoros do ZeroVC
             </span>
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p className={MODAL_DESCRIPTION_CLASS}>
               Muta sons de novas mensagens, alertas de entrada e saída de pessoas nos canais de voz e pings.
             </p>
           </div>

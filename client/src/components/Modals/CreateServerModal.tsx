@@ -8,6 +8,7 @@ import {
   MODAL_FIELD_LABEL_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateServerModalProps {
@@ -260,7 +261,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
                     <UploadCloud className="w-5 h-5 text-white" />
                   </div>
                 </button>
-                <span className="text-[11px] text-gray-400 mt-2">
+                <span className={`${MODAL_DESCRIPTION_CLASS} mt-2`}>
                   {iconUrl ? 'Clique para trocar o ícone' : 'Opcional: adicione um ícone'}
                 </span>
               </div>

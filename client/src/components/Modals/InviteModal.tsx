@@ -12,6 +12,7 @@ import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 interface InviteModalProps {
@@ -236,7 +237,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                   <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center justify-between`}>
                     <span>Link de Convite do Servidor</span>
                     {invite && (
-                      <span className="text-[11px] font-normal text-gray-400 normal-case flex items-center gap-2">
+                      <span className={`${MODAL_DESCRIPTION_CLASS} font-normal normal-case flex items-center gap-2`}>
                         <span>{formatExpirationText(invite.expires_at)}</span>
                         <span>•</span>
                         <span>

@@ -21,6 +21,7 @@ import {
   MODAL_CARD_PADDING_CLASS,
   MODAL_ITEM_ROW_PADDING_CLASS,
   MODAL_DIVIDER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip, isSmall }) => {
@@ -148,29 +149,6 @@ export const SessionsSettingsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-white">
-              Sessões Ativas e Dispositivos
-            </h3>
-            <p className="text-xs text-gray-400 mt-1">
-              Gerencie todos os computadores, celulares e navegadores com acesso à sua conta.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={fetchSessions}
-            disabled={isLoading}
-            className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
-            title="Atualizar lista de sessões"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
-
       {/* Success Banner */}
       {successMessage && (
         <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs animate-in fade-in">
@@ -197,9 +175,20 @@ export const SessionsSettingsView: React.FC = () => {
           {/* Current Device */}
           {currentSession && (
             <div className="space-y-2">
-              <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                Este Dispositivo
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className={MODAL_SECTION_HEADER_CLASS}>
+                  Este Dispositivo
+                </h4>
+                <button
+                  type="button"
+                  onClick={fetchSessions}
+                  disabled={isLoading}
+                  className="p-1.5 -mt-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                  title="Atualizar lista de sessões"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-brand-400' : ''}`} />
+                </button>
+              </div>
               <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-start justify-between gap-3`}>
                 <div className="flex items-start gap-3.5 min-w-0">
                   <div className="p-2 rounded-xl bg-white/5 text-brand-300 shrink-0 mt-0.5">
@@ -215,7 +204,7 @@ export const SessionsSettingsView: React.FC = () => {
                         Sessão Atual
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+                    <div className={`flex items-center gap-3 ${MODAL_DESCRIPTION_CLASS} flex-wrap`}>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5 text-gray-500" />
                         {formatLastActive(currentSession.last_active_at)}
@@ -268,7 +257,7 @@ export const SessionsSettingsView: React.FC = () => {
                         <div className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
                           {session.os || 'Dispositivo Remoto'} • {session.browser || 'Navegador'}
                         </div>
-                        <div className="flex items-center gap-3 text-[11px] text-gray-400 flex-wrap">
+                        <div className={`flex items-center gap-3 ${MODAL_DESCRIPTION_CLASS} flex-wrap`}>
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3 text-gray-500" />
                             {formatLastActive(session.last_active_at)}

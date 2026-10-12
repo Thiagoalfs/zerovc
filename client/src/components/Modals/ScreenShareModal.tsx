@@ -2,7 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { X, Monitor, AppWindow, Sparkles, Volume2, Check } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
-import { MODAL_TOGGLE_HEADER_CLASS, MODAL_TITLE_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_TITLE_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_FOOTER_PADDING_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+  MODAL_SWITCH_CONTAINER_CLASS,
+  MODAL_SWITCH_KNOB_CLASS,
+  MODAL_BACKDROP_CLASS,
+} from '../../constants/modalTypography';
 
 interface ScreenShareModalProps {
   isOpen: boolean;
@@ -92,11 +102,11 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
+      className={MODAL_BACKDROP_CLASS}
     >
       <div className="bg-background-dark w-full max-w-xl max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
         {/* Header */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 flex-shrink-0">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
           <div className="flex items-center gap-2">
             <h2 className={MODAL_TITLE_CLASS}>
               Selecione janela ou tela
@@ -274,22 +284,33 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
             </div>
 
             {/* Toggle Switch */}
-            <div
-              className={`w-10 h-5 rounded-full flex items-center px-0.5 transition-colors duration-200 ease-in-out ${
-                includeAudio ? 'bg-brand-500 justify-end' : 'bg-white/20 justify-start'
+            <button
+              type="button"
+              role="switch"
+              aria-checked={includeAudio}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIncludeAudio(!includeAudio);
+              }}
+              className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
+                includeAudio ? 'bg-brand-500' : 'bg-white/10'
               }`}
             >
-              <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-200" />
-            </div>
+              <div
+                className={`${MODAL_SWITCH_KNOB_CLASS} ${
+                  includeAudio ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-background-darkest border-t border-white/5 flex justify-end items-center gap-3">
+        <div className={`${MODAL_FOOTER_PADDING_CLASS} bg-background-darkest border-t border-white/5 flex justify-end items-center gap-3`}>
           <button
             type="button"
             onClick={onClose}
-            className="text-xs md:text-sm font-semibold text-gray-400 hover:text-white px-4 py-2 rounded-xl hover:bg-white/5 transition-colors"
+            className={MODAL_CANCEL_BUTTON_CLASS}
           >
             Cancelar
           </button>
@@ -297,7 +318,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
             type="button"
             onClick={handleShare}
             disabled={!selectedSourceId}
-            className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs md:text-sm transition-all flex items-center gap-2 shadow-lg shadow-brand-500/25"
+            className={MODAL_PRIMARY_BUTTON_CLASS}
           >
             <Sparkles className="w-4 h-4" />
             <span>Iniciar Transmissão</span>

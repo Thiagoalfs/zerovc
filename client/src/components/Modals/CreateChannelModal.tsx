@@ -8,6 +8,7 @@ import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateChannelModalProps {
@@ -132,7 +133,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                   <span className={`${MODAL_TOGGLE_HEADER_CLASS} transition-colors ${type === 'text' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
                     Canal de Texto
                   </span>
-                  <span className="text-xs text-gray-400">
+                  <span className={MODAL_DESCRIPTION_CLASS}>
                     Poste mensagens, imagens e memes
                   </span>
                 </div>
@@ -157,7 +158,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                   <span className={`${MODAL_TOGGLE_HEADER_CLASS} transition-colors ${type === 'voice' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
                     Canal de Voz
                   </span>
-                  <span className="text-xs text-gray-400">
+                  <span className={MODAL_DESCRIPTION_CLASS}>
                     Converse por voz e compartilhe tela
                   </span>
                 </div>
@@ -193,7 +194,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                 <Lock className="w-4 h-4 text-brand-400" />
                 <div>
                   <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Canal Privado</span>
-                  <span className="text-[11px] text-gray-400">Apenas cargos selecionados podem ver este canal</span>
+                  <span className={MODAL_DESCRIPTION_CLASS}>Apenas cargos selecionados podem ver este canal</span>
                 </div>
               </div>
 

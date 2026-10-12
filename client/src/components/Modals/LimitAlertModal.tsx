@@ -1,6 +1,12 @@
 import React, { useEffect } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
-import { MODAL_DIALOG_TITLE_CLASS, MODAL_FOOTER_PADDING_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_FOOTER_PADDING_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+  MODAL_BACKDROP_CLASS,
+} from '../../constants/modalTypography';
 
 interface LimitAlertModalProps {
   isOpen: boolean;
@@ -35,11 +41,11 @@ export const LimitAlertModal: React.FC<LimitAlertModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className={MODAL_BACKDROP_CLASS}
     >
       <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col">
         {/* Header */}
-        <div className="p-4 sm:p-6 pb-2 flex flex-col items-center text-center relative overflow-y-auto no-scrollbar flex-1">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} flex flex-col items-center text-center relative overflow-y-auto no-scrollbar flex-1`}>
           <button
             type="button"
             onClick={onClose}
@@ -66,7 +72,7 @@ export const LimitAlertModal: React.FC<LimitAlertModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors shadow-lg shadow-brand-500/25"
+            className={`w-full ${MODAL_PRIMARY_BUTTON_CLASS} py-2.5`}
           >
             Entendido
           </button>

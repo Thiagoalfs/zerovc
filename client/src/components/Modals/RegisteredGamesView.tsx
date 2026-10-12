@@ -10,6 +10,7 @@ import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_ITEM_ROW_PADDING_CLASS,
   MODAL_DIVIDER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 function formatLastPlayed(timestamp: number): string {
@@ -258,7 +259,7 @@ export const RegisteredGamesView: React.FC = () => {
         </h4>
 
         {currentRunningGame ? (
-          <div className="py-3 flex items-center justify-between gap-4">
+          <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-4`}>
             <div className="flex items-center gap-3 min-w-0">
               {currentRunningGame.icon_url || isMinecraft(currentRunningGame.name) ? (
                 <img
@@ -315,7 +316,7 @@ export const RegisteredGamesView: React.FC = () => {
         ) : (
           <div className="py-2">
             <h5 className={`${MODAL_TOGGLE_HEADER_CLASS} mb-0.5`}>Nenhum jogo detectado</h5>
-            <p className="text-[11px] text-gray-400">
+            <p className={MODAL_DESCRIPTION_CLASS}>
               Não está vendo seu jogo?{' '}
               <button
                 type="button"
@@ -492,7 +493,7 @@ export const RegisteredGamesView: React.FC = () => {
         <div className="flex items-center justify-between mb-2">
           <div>
             <h4 className={MODAL_SECTION_HEADER_CLASS}>Jogos Registrados</h4>
-            <p className="text-[11px] text-gray-400 mt-0.5">
+            <p className={`${MODAL_DESCRIPTION_CLASS} mt-0.5`}>
               Algumas informações sobre jogos (como gênero ou arte da capa) são fornecidas pelo sistema.
             </p>
           </div>
@@ -574,7 +575,7 @@ export const RegisteredGamesView: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <span className="text-[11px] text-gray-400 block mt-0.5">
+                    <span className={`${MODAL_DESCRIPTION_CLASS} block mt-0.5`}>
                       {formatLastPlayed(game.lastPlayed)}
                     </span>
                   </div>

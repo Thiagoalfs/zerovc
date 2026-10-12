@@ -33,6 +33,7 @@ import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_FIELD_LABEL_CLASS,
   MODAL_DIVIDER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 interface ChannelSettingsModalProps {
@@ -791,7 +792,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                         {perm.name}
                                       </span>
                                     </div>
-                                    <p className="text-[11px] text-gray-400 leading-tight">
+                                    <p className={MODAL_DESCRIPTION_CLASS}>
                                       {perm.desc}
                                     </p>
                                   </div>

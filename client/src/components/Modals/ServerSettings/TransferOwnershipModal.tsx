@@ -2,7 +2,14 @@ import React from 'react';
 import { Crown, Search, Check } from 'lucide-react';
 import { Guild, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
-import { MODAL_DIALOG_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../../constants/modalTypography';
+import {
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_CARD_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+  MODAL_BACKDROP_CLASS,
+} from '../../../constants/modalTypography';
 
 interface TransferOwnershipModalProps {
   isOpen: boolean;
@@ -50,17 +57,16 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
           onClose();
         }
       }}
-      style={{ zIndex: 99999 }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+      className={MODAL_BACKDROP_CLASS}
     >
-      <div className="w-full max-w-lg max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-amber-500/40 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto chat-scrollbar">
+      <div className={`w-full max-w-lg max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-amber-500/40 shadow-2xl ${MODAL_CARD_PADDING_CLASS} text-gray-200 overflow-y-auto chat-scrollbar`}>
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400">
             <Crown className="w-6 h-6" />
           </div>
           <div>
             <h3 className={MODAL_DIALOG_TITLE_CLASS}>Transferir Posse do Servidor</h3>
-            <p className="text-xs text-gray-400">Passe o controle total deste servidor para outro membro</p>
+            <p className={MODAL_DESCRIPTION_CLASS}>Passe o controle total deste servidor para outro membro</p>
           </div>
         </div>
 
@@ -161,7 +167,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
+              className={MODAL_CANCEL_BUTTON_CLASS}
             >
               Cancelar
             </button>

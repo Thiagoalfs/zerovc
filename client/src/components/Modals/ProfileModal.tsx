@@ -91,6 +91,7 @@ import {
   MODAL_TITLE_CLASS,
   MODAL_CARD_PADDING_CLASS,
   MODAL_DIVIDER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 import { copyToClipboard } from '../../utils/clipboard';
 import { isElectron } from '../../lib/platform';
@@ -2019,7 +2020,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                             {user.two_factor_enabled ? 'ATIVADO' : 'DESATIVADO'}
                           </span>
                         </div>
-                        <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+                        <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
                           Proteja sua conta adicionando uma etapa de confirmação via código TOTP (Google Authenticator / Authy).
                         </p>
                       </div>
@@ -2113,7 +2114,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="space-y-0.5">
                         <span className="text-xs font-bold text-white block">Exportar Meus Dados (JSON)</span>
-                        <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+                        <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
                           Baixe uma cópia estruturada em JSON com todas as suas informações de perfil, servidores associados e lista de contatos.
                         </p>
                       </div>
@@ -2645,7 +2646,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5 pr-4">
                       <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Reproduzir GIFs automaticamente</span>
-                      <p className="text-[11px] text-gray-400">
+                      <p className={MODAL_DESCRIPTION_CLASS}>
                         Se desativado, GIFs só serão reproduzidos ao passar o cursor do mouse por cima.
                       </p>
                     </div>
@@ -2750,7 +2751,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
                     <div className="space-y-1">
                       <span className="text-xs font-bold text-gray-200 block">Roteamento Automático de Áudio</span>
-                      <span className="text-[11px] text-gray-400 block leading-relaxed">
+                      <span className={`${MODAL_DESCRIPTION_CLASS} block`}>
                         No celular, o áudio e microfone são gerenciados automaticamente pelo sistema ao conectar ou desconectar fones Bluetooth e com fio.
                       </span>
                     </div>
@@ -2762,7 +2763,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-xs font-bold text-gray-200 block">Teste de Microfone</span>
-                      <span className="text-[11px] text-gray-400">
+                      <span className={`${MODAL_DESCRIPTION_CLASS} block`}>
                         Fale para verificar se o microfone está captando seu áudio.
                       </span>
                     </div>
@@ -2792,7 +2793,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                         Determinar sensibilidade de entrada automaticamente
                       </span>
-                      <p className="text-[11px] text-gray-400">
+                      <p className={MODAL_DESCRIPTION_CLASS}>
                         Controla a quantidade de som que o ZeroVC transmite do seu microfone.
                       </p>
                     </div>
@@ -2922,7 +2923,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                         Redução de ruído
                       </span>
-                      <p className="text-[11px] text-gray-400">
+                      <p className={MODAL_DESCRIPTION_CLASS}>
                         Reduz o ruído de fundo do seu microfone.
                       </p>
                     </div>
@@ -2951,7 +2952,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5 pr-4">
                           <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Cancelamento de Eco</span>
-                          <p className="text-[11px] text-gray-400">
+                          <p className={MODAL_DESCRIPTION_CLASS}>
                             Impede que o áudio das caixas de som retorne ao microfone criando microfonia.
                           </p>
                         </div>
@@ -2976,7 +2977,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5 pr-4">
                           <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Controle Automático de Ganho</span>
-                          <p className="text-[11px] text-gray-400">
+                          <p className={MODAL_DESCRIPTION_CLASS}>
                             Normaliza o volume da voz automaticamente.
                           </p>
                         </div>
@@ -3065,7 +3066,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                             Mostrar usuários na barra de voz
                           </span>
-                          <p className="text-[11px] text-gray-400">
+                          <p className={MODAL_DESCRIPTION_CLASS}>
                             Exibe fotos e animação de fala dos participantes conectados abaixo do nome da chamada.
                           </p>
                         </div>
@@ -3164,7 +3165,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                         Exibir Notificações no Computador
                       </span>
-                      <p className="text-[11px] text-gray-400 leading-relaxed max-w-lg">
+                      <p className={`${MODAL_DESCRIPTION_CLASS} max-w-lg`}>
                         Receba avisos instantâneos na área de trabalho quando alguém enviar mensagens diretas ou mencionar você.
                       </p>
                     </div>
@@ -3229,7 +3230,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Sua Entrada e Saída de Chamadas</span>
-                        <p className="text-[11px] text-gray-400">Toca o chime ao você entrar ou desconectar de um canal de voz.</p>
+                        <p className={MODAL_DESCRIPTION_CLASS}>Toca o chime ao você entrar ou desconectar de um canal de voz.</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <button
@@ -3265,7 +3266,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Entrada e Saída de Outros Usuários</span>
-                        <p className="text-[11px] text-gray-400">Aviso sonoro suave quando alguém entra ou sai da chamada que você está participando.</p>
+                        <p className={MODAL_DESCRIPTION_CLASS}>Aviso sonoro suave quando alguém entra ou sai da chamada que você está participando.</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <button
@@ -3301,7 +3302,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Transmissão de Tela (Ao Vivo)</span>
-                        <p className="text-[11px] text-gray-400">Alerta sonoro ao iniciar, entrar ou encerrar uma transmissão de tela na call.</p>
+                        <p className={MODAL_DESCRIPTION_CLASS}>Alerta sonoro ao iniciar, entrar ou encerrar uma transmissão de tela na call.</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <button
@@ -3337,7 +3338,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Mutar e Desmutar Microfone</span>
-                        <p className="text-[11px] text-gray-400">Feedback sonoro imediato ao alternar seu microfone.</p>
+                        <p className={MODAL_DESCRIPTION_CLASS}>Feedback sonoro imediato ao alternar seu microfone.</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <button
@@ -3373,7 +3374,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Novas Mensagens e Menções</span>
-                        <p className="text-[11px] text-gray-400">Alerta sonoro sutil ao receber mensagens no chat.</p>
+                        <p className={MODAL_DESCRIPTION_CLASS}>Alerta sonoro sutil ao receber mensagens no chat.</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <button
@@ -3406,7 +3407,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Resposta Tátil (Vibração no Celular)</span>
-                        <p className="text-[11px] text-gray-400">Vibrações sutis ao segurar mensagens, reagir com emojis, mutar microfone e navegar.</p>
+                        <p className={MODAL_DESCRIPTION_CLASS}>Vibrações sutis ao segurar mensagens, reagir com emojis, mutar microfone e navegar.</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <button
@@ -3465,7 +3466,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                             Ativo por padrão
                           </span>
                         </div>
-                        <p className="text-xs text-gray-400 leading-relaxed max-w-xl">
+                        <p className={`${MODAL_DESCRIPTION_CLASS} max-w-xl`}>
                           Ao clicar no botão de fechar (✕), o ZeroVC permanece aberto na gaveta / bandeja do sistema (próximo ao relógio) para você continuar em chamadas de voz e receber notificações sem interrupções.
                         </p>
                       </div>
@@ -3493,7 +3494,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                           Inicializar com o Sistema Operacional
                         </span>
-                        <p className="text-xs text-gray-400 leading-relaxed max-w-xl">
+                        <p className={`${MODAL_DESCRIPTION_CLASS} max-w-xl`}>
                           Abre o ZeroVC automaticamente ao ligar o computador (em segundo plano na bandeja), pronto para uso imediato.
                         </p>
                       </div>
@@ -3522,7 +3523,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                             Aceleração Gráfica por Hardware (GPU)
                           </span>
-                          <p className="text-xs text-gray-400 leading-relaxed max-w-xl">
+                          <p className={`${MODAL_DESCRIPTION_CLASS} max-w-xl`}>
                             Utiliza a placa de vídeo para renderização com alto desempenho e codificação nativa (NVENC/AMF/QSV) nas transmissões.
                           </p>
                         </div>

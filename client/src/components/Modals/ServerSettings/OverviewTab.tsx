@@ -12,7 +12,7 @@ import {
 import { Guild, Channel, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
 import { DropdownSelect } from '../../Common/DropdownSelect';
-import { MODAL_SECTION_HEADER_CLASS, MODAL_FIELD_LABEL_CLASS, MODAL_DIVIDER_CLASS } from '../../../constants/modalTypography';
+import { MODAL_SECTION_HEADER_CLASS, MODAL_FIELD_LABEL_CLASS, MODAL_DIVIDER_CLASS, MODAL_DESCRIPTION_CLASS } from '../../../constants/modalTypography';
 
 interface OverviewTabProps {
   activeGuild: Guild;
@@ -275,7 +275,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           <label className={MODAL_FIELD_LABEL_CLASS}>
             Canal de Mensagens do Sistema (Boas-Vindas)
           </label>
-          <p className="text-xs text-gray-400">
+          <p className={MODAL_DESCRIPTION_CLASS}>
             O canal onde o servidor pode receber novos membros e avisos importantes.
           </p>
           <DropdownSelect

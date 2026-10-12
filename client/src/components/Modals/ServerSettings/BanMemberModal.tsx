@@ -5,6 +5,10 @@ import {
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
   MODAL_CARD_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+  MODAL_DANGER_BUTTON_CLASS,
+  MODAL_BACKDROP_CLASS,
 } from '../../../constants/modalTypography';
 
 interface BanMemberModalProps {
@@ -33,15 +37,14 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
           onClose();
         }
       }}
-      style={{ zIndex: 99999 }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
+      className={MODAL_BACKDROP_CLASS}
     >
       <div className={`w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-red-500/30 shadow-2xl ${MODAL_CARD_PADDING_CLASS} text-gray-200 overflow-y-auto chat-scrollbar`}>
         <h3 className={`${MODAL_DIALOG_TITLE_CLASS} mb-1 flex items-center gap-2`}>
           <Ban className="w-5 h-5 text-red-500" />
           <span>Banir @{banModalUser.username}</span>
         </h3>
-        <p className="text-xs text-gray-400 mb-4">
+        <p className={`${MODAL_DESCRIPTION_CLASS} mb-4`}>
           O membro será desconectado e impedido de reentrar no servidor até ser desbanido.
         </p>
 
@@ -63,13 +66,13 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-400 hover:text-white text-xs font-medium cursor-pointer"
+              className={MODAL_CANCEL_BUTTON_CLASS}
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              className={MODAL_DANGER_BUTTON_CLASS}
             >
               Confirmar Banimento
             </button>
