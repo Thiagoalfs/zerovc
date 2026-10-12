@@ -583,7 +583,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               type="button"
               onClick={() => handleSave()}
               disabled={isSaving}
-              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-xs transition-all shadow-md shadow-brand-500/25 cursor-pointer"
+              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-xs transition-all cursor-pointer"
             >
               {isSaving ? 'Salvando...' : 'Salvar Alterações'}
             </button>
@@ -872,7 +872,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             type="button"
             onClick={() => handleSave()}
             disabled={isSaving}
-            className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-brand-500/25 cursor-pointer"
+            className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all cursor-pointer"
           >
             {isSaving ? 'Salvando...' : 'Salvar Alterações'}
           </button>

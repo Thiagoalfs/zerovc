@@ -1,11 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Plus,
   Trash2,
   Check,
-  ArrowUp,
-  ArrowDown,
   Shield,
+  GripVertical,
 } from 'lucide-react';
 import { Role, User, Permissions } from '../../../types';
 import { PRESET_ROLE_COLORS, PERMISSION_GROUPS } from './constants';
@@ -23,7 +22,8 @@ interface RolesTabProps {
   setNewRoleName?: (val: string) => void;
   isCreatingRole: boolean;
   isReorderingRoles: boolean;
-  handleMoveRoleHierarchy: (roleId: string, direction: 'up' | 'down') => Promise<void>;
+  handleMoveRoleHierarchy?: (roleId: string, direction: 'up' | 'down') => Promise<void>;
+  handleReorderRoles?: (newOrderedRoles: Role[]) => Promise<void>;
   handleCreateRole: () => Promise<void>;
   handleDeleteRole: (roleId: string) => Promise<void>;
   handleUpdateRoleName: (name: string) => Promise<void>;
@@ -45,6 +45,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   isCreatingRole,
   isReorderingRoles,
   handleMoveRoleHierarchy,
+  handleReorderRoles,
   handleCreateRole,
   handleDeleteRole,
   handleUpdateRoleName,
@@ -54,6 +55,9 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   handleTogglePermission,
   isRoleAdmin,
 }) => {
+  const [draggedRoleId, setDraggedRoleId] = useState<string | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<{ id: string; position: 'top' | 'bottom' } | null>(null);
+
   const sortedRoles = useMemo(() => {
     const seen = new Set<string>();
     const res: Role[] = [];
@@ -65,6 +69,43 @@ export const RolesTab: React.FC<RolesTabProps> = ({
     }
     return res.sort((a, b) => a.position - b.position);
   }, [roles]);
+
+  const handleDropRole = async (sourceId: string, targetId: string, position: 'top' | 'bottom') => {
+    if (sourceId === targetId) return;
+
+    const currentList = [...sortedRoles];
+    const sourceIndex = currentList.findIndex((r) => r.id === sourceId);
+    const targetIndex = currentList.findIndex((r) => r.id === targetId);
+
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const [draggedRole] = currentList.splice(sourceIndex, 1);
+
+    let newIndex = currentList.findIndex((r) => r.id === targetId);
+    if (position === 'bottom') {
+      newIndex += 1;
+    }
+
+    const everyoneIndex = currentList.findIndex((r) => r.name === '@everyone');
+    if (everyoneIndex !== -1 && newIndex > everyoneIndex) {
+      newIndex = everyoneIndex;
+    }
+
+    currentList.splice(newIndex, 0, draggedRole);
+
+    const finalEveryoneIdx = currentList.findIndex((r) => r.name === '@everyone');
+    if (finalEveryoneIdx !== -1 && finalEveryoneIdx !== currentList.length - 1) {
+      const [everyoneRole] = currentList.splice(finalEveryoneIdx, 1);
+      currentList.push(everyoneRole);
+    }
+
+    if (handleReorderRoles) {
+      await handleReorderRoles(currentList);
+    } else if (handleMoveRoleHierarchy) {
+      const dir = newIndex < sourceIndex ? 'up' : 'down';
+      await handleMoveRoleHierarchy(sourceId, dir);
+    }
+  };
 
   return (
     <div className="flex flex-col md:flex-row gap-6 min-h-0 h-auto md:h-[calc(100vh-140px)] animate-fade-in py-4 md:py-6">
@@ -91,54 +132,113 @@ export const RolesTab: React.FC<RolesTabProps> = ({
           {sortedRoles.map((role, idx) => {
             const isSelected = (selectedRoleId === role.id) || (!selectedRoleId && idx === 0);
             const isEveryone = role.name === '@everyone';
-            const memberCount = isEveryone
-              ? members.length
-              : members.filter((m) => m.roles && m.roles.some((r) => String(r.id) === String(role.id))).length;
+            const isDragging = draggedRoleId === role.id;
+            const isDragOverTop = dragOverTarget?.id === role.id && dragOverTarget.position === 'top';
+            const isDragOverBottom = dragOverTarget?.id === role.id && dragOverTarget.position === 'bottom';
 
             return (
-              <div
-                key={role.id}
-                onClick={() => setSelectedRoleId(role.id)}
-                className={`group flex items-center justify-between px-3 py-2 rounded-xl text-sm cursor-pointer transition-all ${
-                  isSelected
-                    ? 'bg-brand-500/15 text-white border border-brand-500/30 font-semibold'
-                    : 'text-gray-300 hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span
-                    className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm"
-                    style={{ backgroundColor: role.color || '#99AAB5' }}
-                  />
-                  <span className="truncate font-medium">
-                    {role.name}
-                  </span>
-                </div>
+              <div key={role.id} className="relative">
+                {/* Top drop indicator bar */}
+                {isDragOverTop && (
+                  <div className="absolute -top-[2px] left-1 right-1 h-[2px] bg-brand-500 rounded-full z-30 pointer-events-none shadow-[0_0_8px_rgba(99,102,241,1)]">
+                    <div className="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-brand-500 shadow-sm" />
+                  </div>
+                )}
 
-                <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
-                  <span className="text-[11px] text-gray-500 mr-1">{memberCount}</span>
-                  {canManageRoles && !isEveryone && (
-                    <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        disabled={idx === 0 || isReorderingRoles}
-                        onClick={() => handleMoveRoleHierarchy(role.id, 'up')}
-                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-20 cursor-pointer"
-                        title="Subir na Hierarquia"
-                      >
-                        <ArrowUp className="w-3 h-3" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={idx === sortedRoles.length - 1 || isReorderingRoles || sortedRoles[idx + 1]?.name === '@everyone'}
-                        onClick={() => handleMoveRoleHierarchy(role.id, 'down')}
-                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-20 cursor-pointer"
-                        title="Descer na Hierarquia"
-                      >
-                        <ArrowDown className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
+                {/* Bottom drop indicator bar */}
+                {isDragOverBottom && (
+                  <div className="absolute -bottom-[2px] left-1 right-1 h-[2px] bg-brand-500 rounded-full z-30 pointer-events-none shadow-[0_0_8px_rgba(99,102,241,1)]">
+                    <div className="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-brand-500 shadow-sm" />
+                  </div>
+                )}
+
+                <div
+                  draggable={canManageRoles && !isEveryone && !isReorderingRoles}
+                  onDragStart={(e) => {
+                    if (!canManageRoles || isEveryone || isReorderingRoles) {
+                      e.preventDefault();
+                      return;
+                    }
+                    e.dataTransfer.setData('text/plain', role.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    setDraggedRoleId(role.id);
+                  }}
+                  onDragOver={(e) => {
+                    if (!canManageRoles || !draggedRoleId) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.dataTransfer.dropEffect = 'move';
+
+                    if (draggedRoleId === role.id) {
+                      if (dragOverTarget) setDragOverTarget(null);
+                      return;
+                    }
+
+                    if (isEveryone) {
+                      if (dragOverTarget?.id !== role.id || dragOverTarget?.position !== 'top') {
+                        setDragOverTarget({ id: role.id, position: 'top' });
+                      }
+                      return;
+                    }
+
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    const position: 'top' | 'bottom' = e.clientY < midY ? 'top' : 'bottom';
+
+                    if (dragOverTarget?.id !== role.id || dragOverTarget?.position !== position) {
+                      setDragOverTarget({ id: role.id, position });
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    const related = e.relatedTarget as Node | null;
+                    if (related && e.currentTarget.contains(related)) {
+                      return;
+                    }
+                    if (dragOverTarget?.id === role.id) {
+                      setDragOverTarget(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!canManageRoles || !draggedRoleId || draggedRoleId === role.id) return;
+                    let pos = dragOverTarget?.position;
+                    if (!pos) {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const midY = rect.top + rect.height / 2;
+                      pos = isEveryone || e.clientY < midY ? 'top' : 'bottom';
+                    }
+                    handleDropRole(draggedRoleId, role.id, pos);
+                    setDraggedRoleId(null);
+                    setDragOverTarget(null);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedRoleId(null);
+                    setDragOverTarget(null);
+                  }}
+                  onClick={() => setSelectedRoleId(role.id)}
+                  className={`group flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-all select-none relative ${
+                    canManageRoles && !isEveryone
+                      ? 'cursor-grab active:cursor-grabbing'
+                      : 'cursor-pointer'
+                  } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
+                    isSelected
+                      ? 'bg-brand-500/15 text-white border border-brand-500/30 font-semibold'
+                      : 'text-gray-300 hover:bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {canManageRoles && !isEveryone && (
+                      <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-70 flex-shrink-0 -ml-1 transition-opacity pointer-events-none" />
+                    )}
+                    <span
+                      className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm"
+                      style={{ backgroundColor: role.color || '#99AAB5' }}
+                    />
+                    <span className="truncate font-medium">
+                      {role.name}
+                    </span>
+                  </div>
                 </div>
               </div>
             );
