@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Camera,
-  Image,
   Sparkles,
   Check,
   LogOut,
@@ -1715,18 +1714,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       <Camera className="w-4 h-4" />
                       <span>{isUploadingBanner ? 'Processando Banner...' : 'Alterar Banner'}</span>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        bannerFileInputRef.current?.click();
-                      }}
-                      className="absolute top-3 right-3 bg-black/50 hover:bg-black/70 backdrop-blur-md text-white text-[11px] font-semibold px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
-                    >
-                      <Image className="w-3.5 h-3.5" />
-                      <span>Mudar Banner</span>
-                    </button>
                   </div>
 
                   {/* Header Row: Avatar + Name + Status */}

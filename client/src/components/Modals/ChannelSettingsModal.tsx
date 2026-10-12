@@ -731,7 +731,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               </div>
 
               {/* Right Column: Permissions for selected role */}
-              <div className="flex-1 space-y-6 overflow-y-auto max-h-[calc(100vh-220px)] no-scrollbar md:pl-2">
+              <div className="flex-1 space-y-6 overflow-y-auto max-h-[calc(100vh-220px)] no-scrollbar md:pl-2 max-w-3xl pr-4 md:pr-6">
                 {selectedRole && (
                   <>
                     {/* Header info of selected role */}
