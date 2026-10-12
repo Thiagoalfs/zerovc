@@ -770,6 +770,20 @@ export const App: React.FC = () => {
           .then((currentAct: any) => {
             const currentUser = useAuthStore.getState().user;
             if (!currentUser || currentUser.auto_detect_activity === false) return;
+
+            // Clear legacy or stray OBS Studio activity if previously stored
+            if (currentUser.custom_activity?.name === 'OBS Studio' || currentUser.custom_activity?.name?.toLowerCase().includes('obs')) {
+              useAuthStore.getState().setUser({ custom_activity: null });
+              if (currentUser.id) {
+                useGuildStore.getState().updateMemberInGuild({ id: currentUser.id, custom_activity: null });
+              }
+              api.users.updateProfile({ custom_activity: null }).catch(() => {});
+            }
+
+            if (currentAct && (currentAct.name === 'OBS Studio' || currentAct.name.toLowerCase().includes('obs'))) {
+              currentAct = null;
+            }
+
             if (!currentAct && currentUser.custom_activity) {
               useAuthStore.getState().setUser({ custom_activity: null });
               if (currentUser.id) {
@@ -824,7 +838,7 @@ export const App: React.FC = () => {
           if (!currentUser || currentUser.auto_detect_activity === false) return;
 
           let resolvedActivity = detectedActivity;
-          if (detectedActivity && detectedActivity.name === 'OBS Studio') {
+          if (detectedActivity && (detectedActivity.name === 'OBS Studio' || detectedActivity.name?.toLowerCase().includes('obs'))) {
             resolvedActivity = null;
           } else if (detectedActivity && detectedActivity.name) {
             let iconUrl = detectedActivity.icon_url;

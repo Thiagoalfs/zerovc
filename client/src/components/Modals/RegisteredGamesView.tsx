@@ -90,8 +90,10 @@ export const RegisteredGamesView: React.FC = () => {
 
   const activeActivity = user?.custom_activity;
   const isMinecraft = (name?: string) => (name || '').toLowerCase() === 'minecraft';
+  const isObs = (name?: string) => (name || '').toLowerCase().includes('obs');
+  const validGames = games.filter((g) => !isObs(g.name));
 
-  const currentRunningGame = games.find(
+  const currentRunningGame = isObs(activeActivity?.name) ? null : (validGames.find(
     (g) => g.name.toLowerCase() === activeActivity?.name?.toLowerCase()
   ) || (activeActivity?.name ? {
     id: 'current-live-game',
@@ -102,7 +104,7 @@ export const RegisteredGamesView: React.FC = () => {
     icon_url: isMinecraft(activeActivity.name)
       ? (activeActivity.icon_url && !activeActivity.icon_url.includes('java') && !activeActivity.icon_url.startsWith('data:image/x-icon') && !activeActivity.icon_url.includes('games/minecraft') ? activeActivity.icon_url : '/assets/minecraft.webp')
       : activeActivity.icon_url,
-  } : null);
+  } : null));
 
   const handleToggleGame = async (game: RegisteredGame) => {
     toggleGameEnabled(game.id);
@@ -501,7 +503,7 @@ export const RegisteredGamesView: React.FC = () => {
         </div>
 
         <div className="divide-y divide-white/5 mt-3">
-          {games.map((game) => (
+          {validGames.map((game) => (
             <div
               key={game.id}
               className="group py-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] px-2 rounded-xl transition-colors"

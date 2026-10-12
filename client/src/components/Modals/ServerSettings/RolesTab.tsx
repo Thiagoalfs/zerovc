@@ -147,7 +147,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
 
       {/* Role Details Editor */}
       {selectedRole ? (
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0 md:pl-2">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 md:pl-2 max-w-3xl">
           <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0 min-h-[48px]">
             <div className="flex items-center gap-3 min-w-0">
               <span
@@ -168,7 +168,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-2 custom-scrollbar touch-pan-y min-h-0">
+          <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-4 md:pr-6 custom-scrollbar touch-pan-y min-h-0">
             {/* Role Name */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400">

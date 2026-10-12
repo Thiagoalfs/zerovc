@@ -77,6 +77,8 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   const isGameActive = Boolean(
     user?.status !== 'offline' &&
     user?.custom_activity &&
+    user.custom_activity.name !== 'OBS Studio' &&
+    !user.custom_activity.name.toLowerCase().includes('obs') &&
     user?.show_activity_status !== false &&
     user.custom_activity.type === 'playing' &&
     user.custom_activity.name
@@ -476,7 +478,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 </span>
               </div>
               <span className="text-[11px] md:text-[12px] text-gray-400 truncate leading-tight mt-0.5 block min-w-0 w-full">
-                {user?.status !== 'offline' && user?.custom_activity && user?.show_activity_status !== false && !isGameActive ? (
+                {user?.status !== 'offline' && user?.custom_activity && user.custom_activity.name !== 'OBS Studio' && !user.custom_activity.name.toLowerCase().includes('obs') && user?.show_activity_status !== false && !isGameActive ? (
                   <span className={`font-medium flex items-center gap-1 truncate ${getActivityColorClass({ type: user.custom_activity.type })}`}>
                     <span className="truncate">
                       {user.custom_activity.type === 'playing' ? 'Jogando ' :
