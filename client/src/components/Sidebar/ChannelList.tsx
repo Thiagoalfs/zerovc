@@ -1044,7 +1044,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     }
                   : undefined
               }
-              className={`w-full px-3 md:px-3.5 border-b border-black/20 flex font-bold text-gray-100 shadow-sm relative overflow-hidden ${
+              className={`w-full px-3 md:px-3.5 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm relative overflow-hidden ${
                 activeGuild?.banner_url
                   ? 'h-36 pt-3 items-start'
                   : 'h-14 md:h-12 items-center'
@@ -1059,12 +1059,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               <button
                 type="button"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all group cursor-pointer max-w-full text-left relative z-10 ${
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all group cursor-pointer min-w-0 max-w-[calc(100%-36px)] text-left relative z-10 ${
                   isDropdownOpen ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-white'
                 }`}
                 title="Opções do Servidor"
               >
-                <span className="truncate max-w-[200px] md:max-w-[170px] text-[17px] md:text-base font-bold text-white group-hover:text-gray-100">
+                <span className="truncate text-[17px] md:text-base font-bold text-white group-hover:text-gray-100">
                   {activeGuild?.name || 'Servidor'}
                 </span>
                 <ChevronDown
@@ -1072,6 +1072,16 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     isDropdownOpen ? 'rotate-180 text-brand-400' : ''
                   }`}
                 />
+              </button>
+
+              {/* Invite People Button */}
+              <button
+                type="button"
+                onClick={onOpenInviteModal}
+                className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer flex-shrink-0 relative z-10"
+                title="Convidar Pessoas"
+              >
+                <UserPlus className="w-4 h-4" />
               </button>
             </div>
 

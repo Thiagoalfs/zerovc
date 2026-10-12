@@ -17,6 +17,7 @@ export interface AudioProcessorConfig {
   echoCancellation: boolean;
   noiseSuppression: boolean;
   autoGainControl: boolean;
+  volume?: number; // 0 to 100
 }
 
 export type VadStateCallback = (data: {
@@ -74,6 +75,10 @@ class AudioProcessorManager {
     if (this.activeConfig) {
       this.activeConfig = { ...this.activeConfig, ...newConfig };
     }
+    if (newConfig.volume !== undefined && this.gainNode) {
+      const vol = Math.max(0, Math.min(100, newConfig.volume)) / 100;
+      this.gainNode.gain.value = vol;
+    }
   }
 
   /**
@@ -124,7 +129,7 @@ class AudioProcessorManager {
 
       // 3. Output Gain Gate Node
       this.gainNode = this.audioContext.createGain();
-      this.gainNode.gain.value = 1.0;
+      this.gainNode.gain.value = config.volume !== undefined ? Math.max(0, Math.min(100, config.volume)) / 100 : 1.0;
 
       // 4. Real-time Analyser for UI visualizer
       this.analyserNode = this.audioContext.createAnalyser();

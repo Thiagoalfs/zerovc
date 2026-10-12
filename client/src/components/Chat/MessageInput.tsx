@@ -463,6 +463,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     if (activeGuild?.roles) {
       for (const r of activeGuild.roles) {
+        if (!r || !r.name || r.name.toLowerCase() === '@everyone' || r.name.toLowerCase() === 'everyone') {
+          continue;
+        }
         const rName = r.name.toLowerCase();
         if (rName.includes(q)) {
           list.push({

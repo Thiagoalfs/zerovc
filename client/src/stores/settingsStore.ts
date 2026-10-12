@@ -53,6 +53,12 @@ interface SettingsState {
   // Privacy
   dmPrivacy: DmPrivacy;
 
+  // Voice & Audio Configuration
+  inputMode: 'activity' | 'ptt';
+  inputVolume: number;
+  outputVolume: number;
+  showVoiceUsersInBar: boolean;
+
   // Actions
   setTheme: (theme: ThemeMode) => void;
   setAccentColor: (color: AccentColor) => void;
@@ -86,6 +92,10 @@ interface SettingsState {
   setNoiseSuppression: (enabled: boolean) => void;
   setAutoGainControl: (enabled: boolean) => void;
   setDmPrivacy: (privacy: DmPrivacy) => void;
+  setInputMode: (mode: 'activity' | 'ptt') => void;
+  setInputVolume: (vol: number) => void;
+  setOutputVolume: (vol: number) => void;
+  setShowVoiceUsersInBar: (enabled: boolean) => void;
   applyThemeToDOM: () => void;
 }
 
@@ -222,6 +232,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   autoGainControl: getStoredBoolean('zerovc_auto_gain_control', true),
 
   dmPrivacy: getStoredString<DmPrivacy>('zerovc_dm_privacy', 'everyone'),
+
+  inputMode: (getStoredString('zerovc_input_mode', 'activity') as 'activity' | 'ptt') || 'activity',
+  inputVolume: Math.max(0, Math.min(100, getStoredNumber('zerovc_input_volume', 100))),
+  outputVolume: Math.max(0, Math.min(100, getStoredNumber('zerovc_output_volume', 100))),
+  showVoiceUsersInBar: getStoredBoolean('zerovc_show_voice_users_bar', true),
 
   setTheme: (theme) => {
     localStorage.setItem('zerovc_theme', theme);
@@ -396,6 +411,37 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setDmPrivacy: (dmPrivacy) => {
     localStorage.setItem('zerovc_dm_privacy', dmPrivacy);
     set({ dmPrivacy });
+  },
+
+  setInputMode: (inputMode) => {
+    localStorage.setItem('zerovc_input_mode', inputMode);
+    set({ inputMode });
+  },
+
+  setInputVolume: (inputVolume) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(inputVolume)));
+    localStorage.setItem('zerovc_input_volume', String(clamped));
+    set({ inputVolume: clamped });
+    import('../lib/livekit').then(({ livekit }) => {
+      livekit.setInputVolume?.(clamped);
+    }).catch(() => {});
+    import('../lib/audioProcessor').then(({ audioProcessor }) => {
+      audioProcessor.updateConfig({ volume: clamped });
+    }).catch(() => {});
+  },
+
+  setOutputVolume: (outputVolume) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(outputVolume)));
+    localStorage.setItem('zerovc_output_volume', String(clamped));
+    set({ outputVolume: clamped });
+    import('../lib/livekit').then(({ livekit }) => {
+      livekit.setOutputVolume?.(clamped);
+    }).catch(() => {});
+  },
+
+  setShowVoiceUsersInBar: (showVoiceUsersInBar) => {
+    localStorage.setItem('zerovc_show_voice_users_bar', String(showVoiceUsersInBar));
+    set({ showVoiceUsersInBar });
   },
 
   applyThemeToDOM: () => {

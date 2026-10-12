@@ -10,6 +10,8 @@ import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
 import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
 import { useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { getFormattedUsername } from '../../stores/streamerModeStore';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { UserBarContextMenuControls } from './UserBarContextMenu';
 
 interface UserBarProps {
   onOpenSettings: () => void;
@@ -42,10 +44,67 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     leaveVoice,
     startScreenShare,
     stopScreenShare,
+    participants,
+    speakingUserIds,
   } = useVoiceStore();
+
+  const showVoiceUsersInBar = useSettingsStore((state) => state.showVoiceUsersInBar);
 
   const { activeGuild, selectChannel } = useGuildStore();
   const activeVoiceChannel = activeGuild?.channels?.find((c) => c.id === currentChannelId);
+
+  const otherParticipants = useMemo(() => {
+    return (participants || []).filter((p) => !p.isLocal && p.identity !== user?.id);
+  }, [participants, user?.id]);
+
+  const getParticipantUser = (p: any) => {
+    let meta: any = null;
+    try {
+      meta = p.metadata ? JSON.parse(p.metadata) : null;
+    } catch {}
+
+    const guildMember = activeGuild?.members?.find((m) => m.id === p.identity);
+    const dmUser = dmRecipient?.id === p.identity ? dmRecipient : null;
+    const groupMember = dmGroup?.members?.find((m) => m.id === p.identity);
+
+    const resolved = guildMember || dmUser || groupMember || null;
+    const displayName =
+      resolved?.display_name ||
+      resolved?.username ||
+      meta?.display_name ||
+      meta?.username ||
+      p.name ||
+      'Usuário';
+
+    return {
+      user: resolved || { id: p.identity, username: displayName, avatar_url: meta?.avatar_url },
+      displayName,
+    };
+  };
+
+  const handleUserBarContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    openContextMenu(
+      { clientX: e.clientX, clientY: e.clientY },
+      [
+        {
+          id: 'userbar-voice-controls',
+          label: 'Configurações de Voz',
+          customRender: (
+            <UserBarContextMenuControls
+              onOpenSettings={() => {
+                closeContextMenu();
+                onOpenSettings();
+              }}
+            />
+          ),
+        },
+      ],
+      'Opções de Voz e Áudio'
+    );
+  };
 
   const voiceTitle = useMemo(() => {
     if (voiceType === 'guild') {
@@ -231,6 +290,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
   return (
     <div
+      onContextMenu={handleUserBarContextMenu}
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
       className="w-full min-w-0 max-w-full flex-shrink-0 overflow-hidden flex flex-col border-r border-black/20 select-none relative px-2 md:px-2.5 pt-0"
     >
@@ -398,6 +458,41 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 </button>
               </div>
             </div>
+
+            {/* Connected Participants Row (if enabled and other participants in call) */}
+            {showVoiceUsersInBar && otherParticipants.length > 0 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 -mt-0.5 scrollbar-none animate-in fade-in duration-150">
+                {otherParticipants.map((p) => {
+                  const { user: participantUser, displayName } = getParticipantUser(p);
+                  const isSpeaking = Boolean(speakingUserIds.includes(p.identity) || (p as any).isSpeaking);
+
+                  return (
+                    <div
+                      key={p.identity}
+                      className="relative group/voiceuser flex-shrink-0"
+                      title={displayName}
+                    >
+                      <div
+                        className={`w-7 h-7 rounded-full overflow-hidden transition-all duration-150 ${
+                          isSpeaking
+                            ? 'ring-2 ring-[#23a55a] shadow-[0_0_8px_rgba(35,165,90,0.85)] scale-105'
+                            : 'ring-1 ring-white/10 hover:ring-white/30'
+                        }`}
+                      >
+                        <UserAvatar
+                          user={participantUser}
+                          size="xs"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      {isSpeaking && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#23a55a] ring-2 ring-background-darkest animate-pulse" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Large Action Buttons (Camera & Screen Share) */}
             <div className="grid grid-cols-2 gap-1.5 w-full animate-in fade-in slide-in-from-bottom-1 duration-150">
