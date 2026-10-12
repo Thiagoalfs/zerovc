@@ -3,6 +3,7 @@ import { X, Sparkles, Compass, ChevronRight, ArrowLeft, Camera, UploadCloud } fr
 import { useGuildStore } from '../../stores/guildStore';
 import { api } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
+import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
 
 interface CreateServerModalProps {
   isOpen: boolean;
@@ -140,7 +141,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
 
           {mode === 'choose' && (
             <>
-              <h2 className="text-xl md:text-2xl font-bold text-white">Adicionar um Servidor</h2>
+              <h2 className={MODAL_TITLE_CLASS}>Adicionar um Servidor</h2>
               <p className="text-xs md:text-sm text-gray-400 mt-1">
                 Seu servidor é onde você e seus amigos se reúnem. Escolha uma opção para começar.
               </p>
@@ -149,7 +150,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
 
           {mode === 'create' && (
             <>
-              <h2 className="text-xl md:text-2xl font-bold text-white">Criar seu Servidor</h2>
+              <h2 className={MODAL_TITLE_CLASS}>Criar seu Servidor</h2>
               <p className="text-xs text-gray-400 mt-1">
                 Dê um nome ao seu novo servidor. Você pode alterá-lo quando quiser.
               </p>
@@ -158,7 +159,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
 
           {mode === 'join' && (
             <>
-              <h2 className="text-xl md:text-2xl font-bold text-white">Entrar em um Servidor</h2>
+              <h2 className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
               <p className="text-xs text-gray-400 mt-1">
                 Digite o código de 10 caracteres ou o link de convite que você recebeu.
               </p>
@@ -260,7 +261,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                <label className={MODAL_FIELD_LABEL_CLASS}>
                   Nome do Servidor
                 </label>
                 <input
@@ -302,7 +303,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
           {mode === 'join' && (
             <form onSubmit={handleJoinSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                <label className={MODAL_FIELD_LABEL_CLASS}>
                   Código de Convite ou Link
                 </label>
                 <input

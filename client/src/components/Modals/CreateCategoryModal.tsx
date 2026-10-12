@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, FolderPlus } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
+import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
 
 interface CreateCategoryModalProps {
   isOpen: boolean;
@@ -79,7 +80,7 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
           </button>
           <div className="flex items-center gap-2">
             <FolderPlus className="w-5 h-5 text-brand-400" />
-            <h2 className="text-lg sm:text-xl font-bold text-white">Criar Categoria</h2>
+            <h2 className={MODAL_TITLE_CLASS}>Criar Categoria</h2>
           </div>
           <p className="text-xs text-gray-400 mt-1 truncate">em {activeGuild.name}</p>
         </div>
@@ -90,7 +91,7 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
 
           {/* Name Field */}
           <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
+            <label className={MODAL_FIELD_LABEL_CLASS}>
               Nome da Categoria
             </label>
             <div className="relative flex items-center">

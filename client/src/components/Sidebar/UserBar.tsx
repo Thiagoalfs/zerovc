@@ -465,6 +465,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 {otherParticipants.map((p) => {
                   const { user: participantUser, displayName } = getParticipantUser(p);
                   const isSpeaking = Boolean(speakingUserIds.includes(p.identity) || (p as any).isSpeaking);
+                  const initial = displayName?.[0]?.toUpperCase() || '?';
 
                   return (
                     <div
@@ -473,20 +474,26 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                       title={displayName}
                     >
                       <div
-                        className={`w-7 h-7 rounded-full overflow-hidden transition-all duration-150 ${
+                        className={`w-6 h-6 rounded-full overflow-hidden flex items-center justify-center bg-brand-500 transition-all duration-150 ${
                           isSpeaking
                             ? 'ring-2 ring-[#23a55a] shadow-[0_0_8px_rgba(35,165,90,0.85)] scale-105'
                             : 'ring-1 ring-white/10 hover:ring-white/30'
                         }`}
                       >
-                        <UserAvatar
-                          user={participantUser}
-                          size="xs"
-                          className="w-full h-full object-cover"
-                        />
+                        {participantUser?.avatar_url ? (
+                          <img
+                            src={formatAssetUrl(participantUser.avatar_url)}
+                            alt={displayName}
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        ) : (
+                          <span className="text-[10px] font-bold text-white leading-none">
+                            {initial}
+                          </span>
+                        )}
                       </div>
                       {isSpeaking && (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#23a55a] ring-2 ring-background-darkest animate-pulse" />
+                        <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#23a55a] ring-1 ring-background-darkest animate-pulse" />
                       )}
                     </div>
                   );

@@ -38,6 +38,7 @@ import { TransferOwnershipModal } from './ServerSettings/TransferOwnershipModal'
 import { BanMemberModal } from './ServerSettings/BanMemberModal';
 import { MuteMemberModal } from './ServerSettings/MuteMemberModal';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
+import { MODAL_TITLE_CLASS, MODAL_DIALOG_TITLE_CLASS } from '../../constants/modalTypography';
 
 interface ServerSettingsModalProps {
   isOpen: boolean;
@@ -753,7 +754,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   >
                     <X className="w-5 h-5" />
                   </button>
-                  <h2 className="text-base font-bold text-white">Configurações do Servidor</h2>
+                  <h2 className={MODAL_DIALOG_TITLE_CLASS}>Configurações do Servidor</h2>
                 </div>
               </div>
 
@@ -926,21 +927,20 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           <div className="hidden md:flex flex-1 max-w-[280px] lg:max-w-[320px] xl:max-w-[360px] 2xl:max-w-[400px] min-w-[220px] justify-end bg-background-darkest border-r border-white/10 shrink-0 overflow-y-auto chat-scrollbar">
             <div className="w-56 lg:w-60 flex flex-col p-4 py-6 xl:py-8 shrink-0 justify-between">
               <div className="flex flex-col items-stretch flex-1 flex-shrink-0">
-                <div className="px-3 py-2 mb-2">
+                <div className="px-2.5 mb-2">
                   <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 truncate">
                     {activeGuild.name}
                   </h2>
-                  <div className="text-[11px] text-gray-500 mt-0.5">Configurações do Servidor</div>
                 </div>
 
-                <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
+                <nav className="flex flex-col items-stretch gap-0.5 flex-1 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => setActiveTab('overview')}
-                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                       activeTab === 'overview'
-                        ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                     }`}
                   >
                     <span>Visão Geral</span>
@@ -949,10 +949,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('roles')}
-                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                       activeTab === 'roles'
-                        ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                     }`}
                   >
                     <span>Cargos</span>
@@ -961,10 +961,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('emojis')}
-                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                       activeTab === 'emojis'
-                        ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                     }`}
                   >
                     <span>Emojis</span>
@@ -973,10 +973,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('invites')}
-                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                       activeTab === 'invites'
-                        ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                     }`}
                   >
                     <span>Convites</span>
@@ -985,10 +985,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('members')}
-                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                       activeTab === 'members'
-                        ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                     }`}
                   >
                     <span>Membros</span>
@@ -997,10 +997,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('audit_log')}
-                    className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                       activeTab === 'audit_log'
-                        ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                     }`}
                   >
                     <span>Auditoria</span>
@@ -1009,21 +1009,21 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               </div>
 
               {isOwner && (
-                <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
+                <div className="pt-2 border-t border-white/10 flex flex-col gap-0.5 flex-shrink-0 mt-auto">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2.5 my-1">
                     Ações do Dono
                   </span>
                   <button
                     type="button"
                     onClick={() => setIsTransferModalOpen(true)}
-                    className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer"
+                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer"
                   >
                     <span>Transferir Posse</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsDeleteModalOpen(true)}
-                    className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
                   >
                     <span>Excluir Servidor</span>
                   </button>
@@ -1071,7 +1071,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             {/* Desktop Top Header */}
             <div className="hidden md:flex items-center justify-between px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
               <div>
-                <h1 className="text-lg font-bold text-white flex items-center gap-2">
+                <h1 className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
                   {activeTab === 'overview' && 'Visão Geral do Servidor'}
                   {activeTab === 'roles' && 'Gerenciamento de Cargos e Hierarquia'}
                   {activeTab === 'emojis' && 'Emojis Customizados do Servidor'}

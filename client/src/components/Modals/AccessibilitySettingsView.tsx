@@ -1,48 +1,19 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
-  Eye,
-  Type,
-  Volume2,
   Play,
-  ZapOff,
-  Contrast,
 } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
-
-const FONT_SIZE_STEPS = [
-  { value: 12, label: '12px (Compacto)' },
-  { value: 14, label: '14px (Padrão)' },
-  { value: 18, label: '18px (Grande)' },
-  { value: 22, label: '22px (Extra Grande)' },
-];
+import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
 
 export const AccessibilitySettingsView: React.FC = () => {
   const {
     reducedMotion,
-    chatFontSize,
     highContrast,
     textToSpeechEnabled,
     setReducedMotion,
-    setChatFontSize,
     setHighContrast,
     setTextToSpeechEnabled,
   } = useSettingsStore();
-
-  const currentStepIndex = useMemo(() => {
-    const exactIndex = FONT_SIZE_STEPS.findIndex((s) => s.value === chatFontSize);
-    if (exactIndex !== -1) return exactIndex;
-    let closestIdx = 1;
-    let minDiff = Infinity;
-    FONT_SIZE_STEPS.forEach((step, idx) => {
-      const diff = Math.abs(step.value - chatFontSize);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIdx = idx;
-      }
-    });
-    return closestIdx;
-  }, [chatFontSize]);
 
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -60,85 +31,11 @@ export const AccessibilitySettingsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Group 1: Tipografia & Escala de Texto */}
+      {/* Group 1: Movimento & Contraste */}
       <div className="space-y-3">
-        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-          Tamanho da Fonte das Mensagens
-        </span>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className={MODAL_TOGGLE_HEADER_CLASS}>Escala Tipográfica do Chat</span>
-            <span className="text-xs font-bold text-brand-400 bg-brand-500/10 px-2.5 py-1 rounded-xl border border-brand-500/20">
-              {chatFontSize}px
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            <input
-              type="range"
-              min={0}
-              max={FONT_SIZE_STEPS.length - 1}
-              step={1}
-              value={currentStepIndex}
-              onChange={(e) => {
-                const idx = Number(e.target.value);
-                setChatFontSize(FONT_SIZE_STEPS[idx].value);
-              }}
-              className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-brand-500"
-            />
-            <div className="flex justify-between text-[10px] font-medium px-1 select-none">
-              {FONT_SIZE_STEPS.map((step, idx) => {
-                const isActive = idx === currentStepIndex;
-                return (
-                  <button
-                    key={step.value}
-                    type="button"
-                    onClick={() => setChatFontSize(step.value)}
-                    className={`transition-colors cursor-pointer ${
-                      isActive ? 'text-brand-400 font-bold' : 'text-gray-500 hover:text-gray-300'
-                    } ${idx === FONT_SIZE_STEPS.length - 1 ? 'text-right' : idx > 0 ? 'text-center' : 'text-left'}`}
-                  >
-                    {step.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Live Chat Message Preview */}
-          <div className="pt-2">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-              Pré-visualização
-            </span>
-            <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-md">
-                Z
-              </div>
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white">ZeroVC</span>
-                  <span className="text-[10px] text-gray-500">Hoje às 14:30</span>
-                </div>
-                <div
-                  style={{ fontSize: `${chatFontSize}px` }}
-                  className="text-gray-200 leading-relaxed transition-all duration-150"
-                >
-                  Esta é uma mensagem de exemplo com a escala tipográfica selecionada ({chatFontSize}px). As mensagens do chat seguirão exatamente este tamanho!
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-white/5" />
-
-      {/* Group 2: Movimento & Contraste */}
-      <div className="space-y-3">
-        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+        <h4 className={MODAL_SECTION_HEADER_CLASS}>
           Visão & Movimento
-        </span>
+        </h4>
 
         <div className="divide-y divide-white/5">
           {/* Reduced Motion Toggle */}
@@ -189,9 +86,9 @@ export const AccessibilitySettingsView: React.FC = () => {
 
       {/* Group 3: Leitor de Mensagens (TTS) */}
       <div className="space-y-3">
-        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+        <h4 className={MODAL_SECTION_HEADER_CLASS}>
           Leitor de Mensagens por Voz (Text-to-Speech)
-        </span>
+        </h4>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4">

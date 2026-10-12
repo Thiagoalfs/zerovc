@@ -6,6 +6,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { GuildInvite } from '../../types';
 import { DropdownSelect } from '../Common/DropdownSelect';
 import { useStreamerModeStore } from '../../stores/streamerModeStore';
+import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
 
 interface InviteModalProps {
   isOpen: boolean;
@@ -157,7 +158,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
         {/* Header */}
         <div className="p-4 sm:p-6 pb-2 flex items-center justify-between relative flex-shrink-0">
           <div>
-            <h2 className="text-base sm:text-xl font-bold text-white flex items-center gap-2">
+            <h2 className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
               <Users className="w-5 h-5 text-brand-500" />
               Convidar amigos
             </h2>
@@ -200,7 +201,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
               {/* If NOT existing invite (e.g. newly generated or created), show code row if desired */}
               {!isExistingInvite && inviteCode && !showSettings && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+                  <label className={MODAL_FIELD_LABEL_CLASS}>
                     Código de Convite (10 Caracteres)
                   </label>
                   <div
@@ -226,7 +227,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
               {/* Full URL Box (Always shown when active invite is present) */}
               {!showSettings && fullInviteUrl && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5 flex items-center justify-between">
+                  <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center justify-between`}>
                     <span>Link de Convite do Servidor</span>
                     {invite && (
                       <span className="text-[11px] font-normal text-gray-400 normal-case flex items-center gap-2">
@@ -264,7 +265,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
               {showSettings ? (
                 <div className="bg-background-darkest/60 border border-white/10 rounded-xl p-4 space-y-4 animate-in fade-in zoom-in-95 duration-100 overflow-visible">
                   <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
-                    <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span className={`${MODAL_SECTION_HEADER_CLASS} flex items-center gap-1.5 !mb-0`}>
                       <Settings2 className="w-4 h-4 text-brand-500" />
                       Configurações do Link de Convite
                     </span>
@@ -280,7 +281,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* Expira em */}
                     <div>
-                      <label className="block text-[11px] font-semibold text-gray-300 uppercase mb-1.5 flex items-center gap-1">
+                      <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center gap-1`}>
                         <Clock className="w-3 h-3 text-gray-400" />
                         Expira em
                       </label>
@@ -297,7 +298,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
 
                     {/* Limite de usos */}
                     <div>
-                      <label className="block text-[11px] font-semibold text-gray-300 uppercase mb-1.5 flex items-center gap-1">
+                      <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center gap-1`}>
                         <Hash className="w-3 h-3 text-gray-400" />
                         Limite de usos
                       </label>

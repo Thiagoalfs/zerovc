@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, Hash, Volume2, Lock } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_TITLE_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+} from '../../constants/modalTypography';
 
 interface CreateChannelModalProps {
   isOpen: boolean;
@@ -92,7 +97,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-          <h2 className="text-lg sm:text-xl font-bold text-white">Criar Canal</h2>
+          <h2 className={MODAL_TITLE_CLASS}>Criar Canal</h2>
           <p className="text-xs text-gray-400 mt-1 truncate">em {activeGuild.name}</p>
         </div>
 
@@ -102,7 +107,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
 
           {/* Type Selector */}
           <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
+            <label className={MODAL_FIELD_LABEL_CLASS}>
               Tipo do Canal
             </label>
             <div className="space-y-1">
@@ -160,7 +165,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
 
           {/* Name Field */}
           <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
+            <label className={MODAL_FIELD_LABEL_CLASS}>
               Nome do Canal
             </label>
             <div className="relative flex items-center">
@@ -208,7 +213,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
             {/* Roles Multi-select when Private */}
             {isPrivate && roles.length > 0 && (
               <div className="space-y-1.5 p-3 rounded-xl bg-background-darkest/70 border border-white/5 animate-in fade-in">
-                <span className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block mb-1">
+                <span className={MODAL_SECTION_HEADER_CLASS + " block"}>
                   Quem pode acessar este canal?
                 </span>
                 <div className="max-h-32 overflow-y-auto space-y-1 pr-1 no-scrollbar">

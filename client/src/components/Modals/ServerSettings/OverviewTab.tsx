@@ -12,6 +12,7 @@ import {
 import { Guild, Channel, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
 import { DropdownSelect } from '../../Common/DropdownSelect';
+import { MODAL_SECTION_HEADER_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../../constants/modalTypography';
 
 interface OverviewTabProps {
   activeGuild: Guild;
@@ -77,7 +78,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     <div className="max-w-3xl space-y-8 animate-fade-in py-6">
       {/* Quick Stats Grid */}
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+        <h3 className={MODAL_SECTION_HEADER_CLASS}>
           Métricas do Servidor
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -143,14 +144,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
       {/* Visual Identity (Icon & Banner) */}
       <div className="space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+        <h3 className={MODAL_SECTION_HEADER_CLASS}>
           Identidade Visual
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-background-darker p-5 rounded-2xl border border-white/10">
           {/* Icon */}
           <div className="flex flex-col gap-3">
-            <label className="text-xs font-medium text-gray-300">Ícone do Servidor</label>
+            <label className={MODAL_FIELD_LABEL_CLASS}>Ícone do Servidor</label>
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 rounded-2xl bg-background-light border-2 border-white/15 flex items-center justify-center overflow-hidden shrink-0 shadow-lg">
                 {activeGuild.icon_url ? (
@@ -196,7 +197,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
           {/* Banner */}
           <div className="flex flex-col gap-3">
-            <label className="text-xs font-medium text-gray-300">Banner do Servidor</label>
+            <label className={MODAL_FIELD_LABEL_CLASS}>Banner do Servidor</label>
             <div className="flex flex-col gap-2">
               <div className="w-full h-20 rounded-xl bg-background-light border border-white/15 overflow-hidden relative group">
                 {activeGuild.banner_url ? (
@@ -248,7 +249,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       {/* General Form */}
       <form onSubmit={handleSaveOverview} className="space-y-6">
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+          <label className={MODAL_FIELD_LABEL_CLASS}>
             Nome do Servidor
           </label>
           <input
@@ -263,7 +264,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
         {/* System Welcome Channel Selector */}
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+          <label className={MODAL_FIELD_LABEL_CLASS}>
             Canal de Mensagens do Sistema (Boas-Vindas)
           </label>
           <p className="text-xs text-gray-400">

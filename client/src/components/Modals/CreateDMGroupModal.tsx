@@ -3,6 +3,7 @@ import { X, Users, Check } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { formatAssetUrl } from '../../lib/api';
+import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
 
 interface CreateDMGroupModalProps {
   isOpen: boolean;
@@ -90,7 +91,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
         <div className="p-4 sm:p-6 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-brand-400" />
-            <h2 className="text-base sm:text-lg font-bold text-white">Criar Grupo de DM</h2>
+            <h2 className={MODAL_TITLE_CLASS}>Criar Grupo de DM</h2>
           </div>
           <button
             type="button"
@@ -107,7 +108,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
 
           {/* Group Name Input */}
           <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+            <label className={MODAL_FIELD_LABEL_CLASS}>
               Nome do Grupo (Opcional)
             </label>
             <input
@@ -122,7 +123,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
           {/* Friends Selection */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 Selecione Amigos
               </label>
               <span className="text-[11px] text-gray-400">

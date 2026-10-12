@@ -1,7 +1,7 @@
 import React from 'react';
 import { Activity, ShieldCheck, Eye, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
+import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
 
 export const ActivityPrivacySettingsView: React.FC = () => {
   const { user, updateProfile, setUser } = useAuthStore();
@@ -11,7 +11,7 @@ export const ActivityPrivacySettingsView: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in">
       <div>
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">
+        <h4 className={MODAL_SECTION_HEADER_CLASS}>
           Status de Atividade & Jogos
         </h4>
 

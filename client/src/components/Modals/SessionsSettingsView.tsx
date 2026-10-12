@@ -15,7 +15,7 @@ import {
 import { api } from '../../lib/api';
 import { UserSession } from '../../types';
 import { fetchLocationFromIP } from '../../utils/location';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
+import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
 
 const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip, isSmall }) => {
   const [location, setLocation] = useState<string>('Calculando localização...');
@@ -191,9 +191,9 @@ export const SessionsSettingsView: React.FC = () => {
           {/* Current Device */}
           {currentSession && (
             <div className="space-y-2">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+              <h4 className={MODAL_SECTION_HEADER_CLASS}>
                 Este Dispositivo
-              </span>
+              </h4>
               <div className="py-2.5 flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3.5 min-w-0">
                   <div className="p-2 rounded-xl bg-white/5 text-brand-300 shrink-0 mt-0.5">
@@ -228,9 +228,9 @@ export const SessionsSettingsView: React.FC = () => {
           {/* Other Devices List */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+              <h4 className={MODAL_SECTION_HEADER_CLASS}>
                 Outros Dispositivos ({otherSessions.length})
-              </span>
+              </h4>
               {otherSessions.length > 0 && (
                 <button
                   type="button"

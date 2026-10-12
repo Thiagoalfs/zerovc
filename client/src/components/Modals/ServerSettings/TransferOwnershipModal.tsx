@@ -2,6 +2,7 @@ import React from 'react';
 import { Crown, Search, Check } from 'lucide-react';
 import { Guild, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
+import { MODAL_DIALOG_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../../constants/modalTypography';
 
 interface TransferOwnershipModalProps {
   isOpen: boolean;
@@ -58,7 +59,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
             <Crown className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">Transferir Posse do Servidor</h3>
+            <h3 className={MODAL_DIALOG_TITLE_CLASS}>Transferir Posse do Servidor</h3>
             <p className="text-xs text-gray-400">Passe o controle total deste servidor para outro membro</p>
           </div>
         </div>
@@ -75,7 +76,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
 
         <form onSubmit={onConfirmTransfer} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <label className={MODAL_FIELD_LABEL_CLASS}>
               1. Selecione o Novo Dono
             </label>
             <div className="relative">
@@ -142,7 +143,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
               </label>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                <label className={MODAL_FIELD_LABEL_CLASS}>
                   2. Digite o nome do servidor para confirmar: <span className="text-white select-all">{activeGuild.name}</span>
                 </label>
                 <input

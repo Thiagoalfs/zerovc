@@ -38,7 +38,6 @@ export const TitleBar: React.FC = () => {
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [isMaximized, setIsMaximized] = useState(false);
   const [initialServerTime, setInitialServerTime] = useState<string | null>(null);
-  const currentBuildCommit = typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : '';
 
   // Check server version for Live Sync
   const checkServerVersion = useCallback(async () => {
@@ -158,11 +157,6 @@ export const TitleBar: React.FC = () => {
       <div className="flex items-center gap-2 text-xs font-bold text-gray-300">
         <ZeroVCLogo className="w-4 h-4 shadow-sm flex-shrink-0" />
         <span className="tracking-wide text-[11px] font-semibold text-gray-300">ZeroVC</span>
-        {currentBuildCommit && (
-          <span className="text-[9px] text-gray-500 font-mono hidden sm:inline">
-            ({currentBuildCommit.substring(0, 7)})
-          </span>
-        )}
       </div>
 
       {/* Center: Active Server Icon & Name */}

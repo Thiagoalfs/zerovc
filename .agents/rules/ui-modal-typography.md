@@ -1,20 +1,15 @@
-# Diretrizes de Tipografia para Toggles e Opções de Modais
+# Diretrizes de Tipografia Padronizada para Modais e Views
 
-## 🎚️ Regra Obrigatória para Headers de Toggles e Opções
-- **Tamanho:** `14px` (`text-sm` no Tailwind CSS).
-- **Peso da fonte:** `font-bold` (peso 700 no Tailwind CSS).
-- **Cor:** `text-white` (ou classe correspondente de alto contraste).
-- **Variável Oficial:** `MODAL_TOGGLE_HEADER_CLASS` ou `MODAL_OPTION_HEADER_CLASS` exportadas de `client/src/constants/modalTypography.ts`.
+## 🎚️ Constantes Oficiais (`client/src/constants/modalTypography.ts`)
+
+| Categoria | Constante | Estilo Tailwind | Descrição |
+|-----------|-----------|-----------------|-----------|
+| **Toggles & Opções** | `MODAL_TOGGLE_HEADER_CLASS` / `MODAL_OPTION_HEADER_CLASS` | `text-sm font-bold text-white` | Títulos de switches, checkboxes e itens selecionáveis (14px, peso 700). |
+| **Seções & Categorias** | `MODAL_SECTION_HEADER_CLASS` | `text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5` | Divisores e grupos de configurações em caixas altas (12px, tracking-wider). |
+| **Labels de Inputs** | `MODAL_FIELD_LABEL_CLASS` | `block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5` | Rótulos de campos de texto, textareas e seletores (12px). |
+| **Títulos de Modais** | `MODAL_TITLE_CLASS` | `text-lg sm:text-xl font-bold text-white` | Cabeçalho principal no topo de modais de diálogo (18-20px). |
+| **Sub-modais / Diálogos** | `MODAL_DIALOG_TITLE_CLASS` | `text-base font-bold text-white` | Títulos de janelas de confirmação e sub-diálogos (16px). |
 
 ## 📌 Escopo de Aplicação
-Esta regra aplica-se a **TODOS os cabeçalhos/títulos de opções e toggles** em **TODAS as views e modais** do aplicativo (Configurações de Usuário, Acessibilidade, Privacidade e Atividades, Preferências de Sistema, Configurações de Servidor, Cargos, Modo Streamer, Atalhos, Canais, etc.).
-
-Exemplo de uso:
-```tsx
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
-
-<span className={MODAL_TOGGLE_HEADER_CLASS}>
-  Ativar Modo Streamer
-</span>
-```
-Nunca utilize `text-xs font-semibold`, `text-xs font-bold` ou `text-sm font-semibold` para títulos de toggles ou opções principais nas telas de configuração. Sempre padronize em `text-sm font-bold text-white`.
+Esta regra aplica-se a **TODOS os modais e views** do aplicativo.
+Sempre importe e utilize as constantes oficiais para evitar discrepâncias visuais de tamanho de fonte, peso ou espaçamentos.

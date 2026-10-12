@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Edit3 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { DMGroup } from '../../types';
+import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
 
 interface EditDMGroupNameModalProps {
   isOpen: boolean;
@@ -66,7 +67,7 @@ export const EditDMGroupNameModal: React.FC<EditDMGroupNameModalProps> = ({
         <div className="p-4 sm:p-6 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Edit3 className="w-5 h-5 text-brand-400" />
-            <h2 className="text-base sm:text-lg font-bold text-white">Mudar Nome do Grupo</h2>
+            <h2 className={MODAL_TITLE_CLASS}>Mudar Nome do Grupo</h2>
           </div>
           <button
             type="button"
@@ -82,7 +83,7 @@ export const EditDMGroupNameModal: React.FC<EditDMGroupNameModalProps> = ({
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg">{error}</div>}
 
           <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+            <label className={MODAL_FIELD_LABEL_CLASS}>
               Nome do Grupo
             </label>
             <input
