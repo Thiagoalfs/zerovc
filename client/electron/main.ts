@@ -1022,7 +1022,7 @@ function scanProcessesForActivity() {
     return;
   }
 
-  exec(cmd, { maxBuffer: 1024 * 1024 * 4, windowsHide: true }, (err: any, stdout: string) => {
+  exec(cmd, { maxBuffer: 1024 * 1024 * 4, windowsHide: true, timeout: 5000 }, (err: any, stdout: string) => {
     isScanning = false;
     if (err || !stdout) return;
 
@@ -1104,7 +1104,8 @@ function scanProcessesForActivity() {
  * restore, minimize, close and active termination watcher.
  */
 function startActivityScanner() {
-  // Initial detection check after app startup
+  // Initial detection check after app startup (fast 400ms scan + follow-up 2000ms scan)
+  setTimeout(scanProcessesForActivity, 400);
   setTimeout(scanProcessesForActivity, 2000);
 
   if (mainWindow) {
@@ -1161,6 +1162,9 @@ ipcMain.on('set-custom-streamer-processes', (_event, processes: string[]) => {
 });
 
 ipcMain.handle('get-streamer-software-status', () => {
+  if (!hasPerformedInitialScan) {
+    scanProcessesForActivity();
+  }
   return { runningApps: lastRunningStreamerApps };
 });
 

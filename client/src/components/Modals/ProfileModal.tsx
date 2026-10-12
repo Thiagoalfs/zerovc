@@ -1526,13 +1526,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 onClick={() => setActiveTab('streamer_mode')}
                 className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   activeTab === 'streamer_mode'
-                    ? 'bg-indigo-500/15 text-indigo-400 border-l-2 border-indigo-500 font-bold'
+                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
                 }`}
               >
                 <span>Modo Streamer</span>
                 {useStreamerModeStore.getState().enabled && (
-                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
                 )}
               </button>
 
