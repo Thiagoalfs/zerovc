@@ -20,7 +20,7 @@ import {
   UserX,
   Star,
 } from 'lucide-react';
-import { Message, User, Permissions } from '../../types';
+import { Message, User, Permissions, Role } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
@@ -216,7 +216,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const currentUserRoles = contextType === 'channel' ? (activeGuild?.members?.find((m) => m.id === user?.id)?.roles || []) : [];
   const authorMember = contextType === 'channel' && activeGuild ? activeGuild.members?.find((m) => m.id === message.author_id) : null;
-  const authorRoleColor = authorMember?.roles?.find((r) => r.color)?.color;
+  const authorRoleColor = authorMember?.roles?.find((r) => r.color && r.color !== '#99aab5' && r.color !== '#99AAB5')?.color;
+
+  const replyAuthorId = message.reply_to?.author?.id;
+  const replyAuthorMember = contextType === 'channel' && activeGuild && replyAuthorId ? activeGuild.members?.find((m) => m.id === replyAuthorId) : null;
+  const replyRoleColor =
+    replyAuthorMember?.roles?.find((r) => r.color && r.color !== '#99aab5' && r.color !== '#99AAB5')?.color ||
+    message.reply_to?.author?.roles?.find((r: Role) => r.color && r.color !== '#99aab5' && r.color !== '#99AAB5')?.color;
 
   const isMentioned =
     user &&
@@ -610,7 +616,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             title="Clique para ir até a mensagem respondida"
           >
             <CornerDownRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 group-hover/reply:text-brand-400 transition-colors" />
-            <span className="font-semibold text-brand-400 group-hover/reply:underline">
+            <span
+              className={`font-semibold group-hover/reply:underline ${!replyRoleColor ? 'text-brand-400' : ''}`}
+              style={replyRoleColor ? { color: replyRoleColor } : undefined}
+            >
               @{message.reply_to?.author?.display_name || message.reply_to?.author?.username || 'Usuário'}
             </span>
             <span className="truncate text-gray-400 max-w-sm italic">

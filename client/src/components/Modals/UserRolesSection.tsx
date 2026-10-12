@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Shield, Plus, Check, Loader2 } from 'lucide-react';
+import { Shield, Plus, Check, Loader2, X } from 'lucide-react';
 import { User, Role } from '../../types';
+import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 
@@ -14,6 +15,7 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
   user,
   size = 'sm',
 }) => {
+  const currentAuthUser = useAuthStore((s) => s.user);
   const activeGuild = useGuildStore((s) => s.activeGuild);
   const assignRole = useGuildStore((s) => s.assignRole);
   const removeRole = useGuildStore((s) => s.removeRole);
@@ -49,7 +51,7 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
         }
         return null;
       })
-      .filter((r): r is Role => !!r && typeof r.id === 'string' && typeof r.name === 'string');
+      .filter((r): r is Role => !!r && typeof r.id === 'string' && typeof r.name === 'string' && r.name !== '@everyone');
   }, [memberInGuild, user?.roles, activeGuild?.roles]);
 
   const canManageMemberRoles = useMemo(() => {
@@ -142,6 +144,47 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
   if (!user) return null;
   if (displayRoles.length === 0 && !canManageMemberRoles) return null;
 
+  const canRemoveRole = (role: Role) => {
+    if (!activeGuild || !user || !role?.id) return false;
+    if (!perms?.canManageRoles) return false;
+    if (perms.isCurrentOwner) return true;
+
+    const isTargetOwner = Boolean(
+      activeGuild.owner_id && String(user.id).toLowerCase() === String(activeGuild.owner_id).toLowerCase()
+    );
+    if (isTargetOwner) return false;
+
+    const isMe = Boolean(
+      currentAuthUser?.id && String(currentAuthUser.id).toLowerCase() === String(user.id).toLowerCase()
+    );
+    const rolePos = typeof role.position === 'number' ? role.position : 999999;
+
+    if (isMe) {
+      // Não permite remover o seu próprio maior cargo na hierarquia (exceto caso seja dono, já tratado acima)
+      return rolePos > perms.currentUserHighestPos;
+    }
+
+    const targetMod = perms.canModerateMember?.(memberInGuild || user);
+    if (!targetMod?.isHierarchyAllowed) return false;
+
+    return rolePos > perms.currentUserHighestPos;
+  };
+
+  const handleRemoveRole = async (role: Role, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activeGuild || !user || !role?.id || operatingRoleId) return;
+    if (!canRemoveRole(role)) return;
+
+    setOperatingRoleId(role.id);
+    try {
+      await removeRole(activeGuild.id, user.id, role.id);
+    } catch (err) {
+      console.error('Falha ao remover cargo:', err);
+    } finally {
+      setOperatingRoleId(null);
+    }
+  };
+
   const handleToggleRole = async (role: Role) => {
     if (!activeGuild || !role?.id || operatingRoleId) return;
     const rolePos = typeof role.position === 'number' ? role.position : 999;
@@ -177,23 +220,44 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
       </span>
 
       <div className={`flex flex-wrap items-center ${isSmall ? 'gap-1' : 'gap-1.5'}`}>
-        {displayRoles.map((role) => (
-          <span
-            key={role.id}
-            className={`${
-              isSmall
-                ? 'text-[10px] px-2 py-0.5'
-                : 'text-xs px-2.5 py-1 shadow-sm'
-            } font-semibold rounded-md bg-white/5 border border-white/10 flex items-center gap-1`}
-            style={{ color: role.color || '#99aab5' }}
-          >
+        {displayRoles.map((role) => {
+          const removable = canRemoveRole(role);
+          const isOperating = operatingRoleId === role.id;
+
+          return (
             <span
-              className={`${isSmall ? 'w-1.5 h-1.5' : 'w-2 h-2'} rounded-full shrink-0`}
-              style={{ backgroundColor: role.color || '#99aab5' }}
-            />
-            <span className="truncate max-w-[140px]">{role.name}</span>
-          </span>
-        ))}
+              key={role.id}
+              className={`${
+                isSmall
+                  ? `text-[10px] ${removable ? 'pl-2 pr-1' : 'px-2'} py-0.5`
+                  : `text-xs ${removable ? 'pl-2.5 pr-1.5' : 'px-2.5'} py-1 shadow-sm`
+              } font-semibold rounded-md bg-white/5 border border-white/10 flex items-center gap-1 group/role`}
+              style={{ color: role.color || '#99aab5' }}
+            >
+              <span
+                className={`${isSmall ? 'w-1.5 h-1.5' : 'w-2 h-2'} rounded-full shrink-0`}
+                style={{ backgroundColor: role.color || '#99aab5' }}
+              />
+              <span className="truncate max-w-[140px]">{role.name}</span>
+
+              {removable && (
+                <button
+                  type="button"
+                  disabled={isOperating}
+                  onClick={(e) => handleRemoveRole(role, e)}
+                  className="ml-0.5 p-0.5 rounded hover:bg-white/10 text-gray-400 hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  title={`Remover cargo ${role.name}`}
+                >
+                  {isOperating ? (
+                    <Loader2 className={`${isSmall ? 'w-2.5 h-2.5' : 'w-3 h-3'} animate-spin`} />
+                  ) : (
+                    <X className={`${isSmall ? 'w-2.5 h-2.5' : 'w-3 h-3'}`} />
+                  )}
+                </button>
+              )}
+            </span>
+          );
+        })}
 
         {canManageMemberRoles && (
           <>
