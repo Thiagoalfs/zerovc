@@ -239,11 +239,12 @@ export const MemberList: React.FC<MemberListProps> = ({
           </div>
 
           {/* Activity / Custom Status / Roles Badges */}
-          {((isMe && currentUser
-            ? currentUser.show_activity_status !== false && !!currentUser.custom_activity
-            : member.status !== 'offline' && member.show_activity_status !== false && !!member.custom_activity)) ? (
-            (() => {
-              const act = isMe && currentUser ? currentUser.custom_activity! : member.custom_activity!;
+          {(() => {
+            const rawAct = isMe && currentUser ? currentUser.custom_activity : member.custom_activity;
+            const showAct = isMe && currentUser ? currentUser.show_activity_status !== false : member.status !== 'offline' && member.show_activity_status !== false;
+            const act = rawAct && rawAct.name !== 'OBS Studio' && !rawAct.name.toLowerCase().includes('obs') ? rawAct : null;
+
+            if (showAct && act) {
               return (
                 <p className={`text-[11px] font-medium truncate flex items-center gap-1 ${getActivityColorClass({ type: act.type })}`}>
                   {act.type === 'playing' ? <Gamepad2 className="w-3 h-3 flex-shrink-0" /> :
@@ -260,10 +261,12 @@ export const MemberList: React.FC<MemberListProps> = ({
                   </span>
                 </p>
               );
-            })()
-          ) : member.custom_status ? (
-            <p className="text-[11px] text-gray-400 truncate">{member.custom_status}</p>
-          ) : null}
+            }
+            if (member.custom_status) {
+              return <p className="text-[11px] text-gray-400 truncate">{member.custom_status}</p>;
+            }
+            return null;
+          })()}
         </div>
       </div>
     );

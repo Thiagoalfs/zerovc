@@ -715,7 +715,6 @@ const KNOWN_GAMES_AND_APPS: Array<{
   { processes: ['spotify.exe', 'spotify'], name: 'Spotify', type: 'listening' },
   { processes: ['blender.exe'], name: 'Blender', type: 'playing' },
   { processes: ['photoshop.exe'], name: 'Adobe Photoshop', type: 'playing' },
-  { processes: ['obs64.exe', 'obs32.exe'], name: 'OBS Studio', type: 'streaming' },
   { processes: ['code.exe'], name: 'Visual Studio Code', type: 'playing' },
 ];
 
@@ -1057,7 +1056,7 @@ function scanProcessesForActivity() {
     let foundMatch: { name: string; type: DetectedActivity['type']; processes: string[] } | null = null;
 
     for (const item of KNOWN_GAMES_AND_APPS) {
-      if (item.name === 'OBS Studio') continue; // Do not broadcast or show OBS Studio as an active activity
+      if (item.name === 'OBS Studio' || item.name.toLowerCase().includes('obs')) continue; // Do not broadcast or show OBS Studio as an active activity
       if (item.processes.some((p) => procSet.has(p))) {
         foundMatch = { name: item.name, type: item.type, processes: item.processes };
         break;
