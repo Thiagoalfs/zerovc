@@ -416,11 +416,7 @@ function setupAutoUpdater() {
   autoUpdater.on('update-downloaded', (info: any) => {
     if (startupPhase) {
       sendSplash({ phase: 'installing', version: info.version });
-      setTimeout(() => {
-        try {
-          autoUpdater?.quitAndInstall(true, true);
-        } catch {}
-      }, 800);
+      setTimeout(shutdownForUpdate, 800);
     } else {
       mainWindow?.webContents.send('update-downloaded', { version: info.version });
     }
@@ -501,6 +497,43 @@ function createSplashWindow(): BrowserWindow {
   splash.loadFile(splashFile, { query: { accent, bg } });
   splash.once('ready-to-show', () => splash.show());
   return splash;
+}
+
+// Desliga tudo de forma limpa antes de rodar o instalador NSIS, para que ele
+// não encontre o ZeroVC.exe ainda em execução (bandeja/janelas/bridge de áudio).
+function shutdownForUpdate() {
+  if (!autoUpdater) return;
+  isQuitting = true;
+
+  // 1. derruba o bridge de áudio nativo (zerovc-audio-capture.exe) se estiver ativo
+  try {
+    activeAudioProcess?.kill();
+  } catch {}
+  activeAudioProcess = null;
+
+  // 2. destrói a bandeja e TODAS as janelas (principal + splash) — evita que o
+  //    minimize-to-tray mantenha o processo vivo na hora de instalar.
+  try {
+    tray?.destroy();
+  } catch {}
+  tray = null;
+  try {
+    BrowserWindow.getAllWindows().forEach((w) => {
+      try {
+        w.destroy();
+      } catch {}
+    });
+  } catch {}
+  mainWindow = null;
+
+  // 3. pequeno respiro para os handles serem liberados, então instala silencioso.
+  setTimeout(() => {
+    try {
+      autoUpdater.quitAndInstall(true, true);
+    } catch (e) {
+      console.error('[AutoUpdater] Falha ao iniciar instalação do update:', e);
+    }
+  }, 150);
 }
 
 // -------------------------------------------------------------
@@ -658,9 +691,7 @@ ipcMain.on('start-download-update', () => {
 });
 
 ipcMain.on('quit-and-install', () => {
-  if (autoUpdater) {
-    autoUpdater.quitAndInstall(true, true);
-  }
+  shutdownForUpdate();
 });
 
 ipcMain.on('open-external', (_event, url) => {
