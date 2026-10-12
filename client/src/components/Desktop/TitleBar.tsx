@@ -8,7 +8,7 @@ import {
   Sparkles,
   Download,
 } from 'lucide-react';
-import { UpdateInfo, UpdateProgress } from '../../types/electron';
+import { UpdateInfo } from '../../types/electron';
 import { ZeroVCLogo } from '../Common/ZeroVCLogo';
 import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
@@ -34,9 +34,8 @@ export const TitleBar: React.FC = () => {
         (window as any).Capacitor?.getPlatform?.() === 'android' ||
         (window as any).Capacitor?.getPlatform?.() === 'ios'));
 
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'downloading' | 'downloaded'>('idle');
   const [webSyncAvailable, setWebSyncAvailable] = useState<boolean>(false);
-  const [downloadProgress, setDownloadProgress] = useState<number>(0);
+  const [binaryUpdateAvailable, setBinaryUpdateAvailable] = useState<boolean>(false);
   const [pendingVersion, setPendingVersion] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [initialServerTime, setInitialServerTime] = useState<string | null>(null);
@@ -72,28 +71,16 @@ export const TitleBar: React.FC = () => {
     checkServerVersion();
     const interval = setInterval(checkServerVersion, 30000);
 
-    // Listen for electron-updater available release
+    // Update binário disponível (verificação periódica): mostra o ícone de download.
+    // NÃO baixa sozinho — o usuário clica para reiniciar e atualizar pelo splash.
     const unsubAvailable = window.electronAPI?.onUpdateAvailable?.((info: UpdateInfo) => {
-      setPendingVersion(info?.version ?? null);
-    });
-
-    // Listen for download progress
-    const unsubProgress = window.electronAPI?.onUpdateProgress?.((prog: UpdateProgress) => {
-      setUpdateStatus('downloading');
-      setDownloadProgress(Math.round(prog.percent));
-    });
-
-    // Listen for update downloaded and ready to install
-    const unsubDownloaded = window.electronAPI?.onUpdateDownloaded?.((info: UpdateInfo) => {
-      setUpdateStatus('downloaded');
+      setBinaryUpdateAvailable(true);
       setPendingVersion(info?.version ?? null);
     });
 
     return () => {
       clearInterval(interval);
       unsubAvailable?.();
-      unsubProgress?.();
-      unsubDownloaded?.();
     };
   }, [isElectron, checkServerVersion]);
 
@@ -123,9 +110,11 @@ export const TitleBar: React.FC = () => {
 
   // Handle update action (Instant Web Sync or binary install)
   const handleDirectUpdate = () => {
-    if (updateStatus === 'downloaded') {
-      window.electronAPI?.quitAndInstall?.();
+    if (binaryUpdateAvailable) {
+      // Fecha tudo e reabre no splash para atualizar.
+      window.electronAPI?.restartToUpdate?.();
     } else if (webSyncAvailable) {
+      // Atualização instantânea da UI (bundle servido pelo backend).
       window.location.reload();
     }
   };
@@ -201,7 +190,7 @@ export const TitleBar: React.FC = () => {
         {isElectron && (
           <>
             {/* Direct One-Click Update Button with FontAwesome Download Icon */}
-            {webSyncAvailable && updateStatus === 'idle' && (
+            {webSyncAvailable && !binaryUpdateAvailable && (
               <button
                 type="button"
                 onClick={handleDirectUpdate}
@@ -220,22 +209,20 @@ export const TitleBar: React.FC = () => {
               </button>
             )}
 
-            {/* Update: Downloading */}
-            {updateStatus === 'downloading' && (
-              <div className="flex items-center gap-2 bg-background-darker border border-brand-500/30 px-2.5 py-0.5 rounded-full text-[11px] text-brand-400 mr-1">
-                <RefreshCw className="w-3 h-3 animate-spin text-brand-400" />
-                <span className="font-mono">{downloadProgress}%</span>
-                <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-brand-500 transition-all duration-200"
-                    style={{ width: `${downloadProgress}%` }}
-                  />
-                </div>
-              </div>
+            {/* Update binário disponível: ícone de download na cor de destaque */}
+            {binaryUpdateAvailable && (
+              <button
+                type="button"
+                onClick={handleDirectUpdate}
+                className="flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md shadow-brand-500/25 transition-all cursor-pointer mr-1"
+                title={pendingVersion ? `Atualização ${pendingVersion} disponível. Clique para reiniciar e atualizar.` : 'Atualização disponível. Clique para reiniciar e atualizar.'}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Atualizar</span>
+              </button>
             )}
 
-            {/* Update: Downloaded & Ready */}
-            {updateStatus === 'downloaded' && (
+            {false && /* atualização ao vivo descontinuada: agora é pelo splash */ (
               <button
                 type="button"
                 onClick={handleDirectUpdate}
