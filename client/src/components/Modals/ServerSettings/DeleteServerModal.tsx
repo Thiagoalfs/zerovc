@@ -81,7 +81,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
         </div>
 
         {/* Server Preview Box */}
-        <div className="px-4 sm:px-5 py-2 overflow-y-auto no-scrollbar flex-1">
+        <div className="px-4 sm:px-5 py-2 overflow-y-auto chat-scrollbar flex-1">
           <div className="bg-background-darkest/90 rounded-2xl p-3 border border-white/5 shadow-inner flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-brand-500 flex items-center justify-center font-bold text-white text-sm flex-shrink-0 overflow-hidden shadow-md">
               {activeGuild.icon_url ? (

@@ -338,7 +338,7 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
       </div>
 
       {/* Logs List Container */}
-      <div className="flex-1 overflow-y-auto space-y-2 no-scrollbar">
+      <div className="flex-1 overflow-y-auto space-y-2 chat-scrollbar">
         {isLoading && logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <RefreshCw className="w-8 h-8 animate-spin text-brand-500 mb-2" />
