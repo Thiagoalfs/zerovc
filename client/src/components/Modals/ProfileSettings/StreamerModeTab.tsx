@@ -1,5 +1,6 @@
 import React from 'react';
 import { useStreamerModeStore } from '../../../stores/streamerModeStore';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../../constants/modalTypography';
 
 export const StreamerModeTab: React.FC = () => {
   const {
@@ -10,7 +11,6 @@ export const StreamerModeTab: React.FC = () => {
     hideInviteLinks,
     disableSounds,
     disableNotifications,
-    runningStreamApps,
     setEnabled,
     setAutoDetect,
     setCensorUsernames,
@@ -21,8 +21,6 @@ export const StreamerModeTab: React.FC = () => {
     dismissForSession,
   } = useStreamerModeStore();
 
-  const hasRunningApps = runningStreamApps.length > 0;
-
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* -------------------------------------------------------------
@@ -31,7 +29,7 @@ export const StreamerModeTab: React.FC = () => {
       <div className="flex items-center justify-between gap-4">
         <div className="space-y-1 pr-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-white">
+            <span className={MODAL_TOGGLE_HEADER_CLASS}>
               Ativar Modo Streamer
             </span>
             <span
@@ -85,7 +83,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Toggle: Auto-detect */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className="text-sm font-semibold text-white block">
+            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Ativar automaticamente ao detectar softwares de streaming
             </span>
             <p className="text-xs text-gray-400 leading-relaxed">
@@ -110,36 +108,6 @@ export const StreamerModeTab: React.FC = () => {
             />
           </button>
         </div>
-
-        {/* Live App Detection Indicator (Only shown when autoDetect is on) */}
-        {autoDetect && (
-          <div
-            className={`p-3 rounded-xl border text-xs flex items-center justify-between transition-colors ${
-              hasRunningApps
-                ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
-                : 'bg-white/[0.03] border-white/5 text-gray-400'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <span
-                className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                  hasRunningApps ? 'bg-emerald-400 animate-pulse' : 'bg-gray-500'
-                }`}
-              />
-              <span>
-                {hasRunningApps
-                  ? `Software detectado em execução: ${runningStreamApps.join(', ')}`
-                  : 'Nenhum software de streaming em execução no momento.'}
-              </span>
-            </div>
-
-            {hasRunningApps && (
-              <span className="text-[11px] font-mono bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-200 border border-emerald-500/30">
-                Monitorando
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="h-px bg-white/5 my-2" />
@@ -155,7 +123,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Censurar Nomes de Usuários */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className="text-sm font-semibold text-white block">
+            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Censurar nomes de usuários (primeiras 3 letras)
             </span>
             <p className="text-xs text-gray-400 leading-relaxed">
@@ -184,7 +152,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Ocultar Informações Pessoais */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className="text-sm font-semibold text-white block">
+            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Ocultar informações pessoais
             </span>
             <p className="text-xs text-gray-400 leading-relaxed">
@@ -212,7 +180,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Ocultar Links de Convite */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className="text-sm font-semibold text-white block">
+            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Ocultar links de convite de servidores
             </span>
             <p className="text-xs text-gray-400 leading-relaxed">
@@ -252,7 +220,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Desativar Notificações na Área de Trabalho */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className="text-sm font-semibold text-white block">
+            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Desativar notificações na área de trabalho
             </span>
             <p className="text-xs text-gray-400 leading-relaxed">
@@ -280,7 +248,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Silenciar Efeitos Sonoros */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className="text-sm font-semibold text-white block">
+            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Silenciar efeitos sonoros do ZeroVC
             </span>
             <p className="text-xs text-gray-400 leading-relaxed">

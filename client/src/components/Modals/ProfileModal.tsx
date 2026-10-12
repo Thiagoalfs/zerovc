@@ -83,6 +83,7 @@ import {
 } from '../../utils/audio';
 import { livekit } from '../../lib/livekit';
 import { api, formatAssetUrl } from '../../lib/api';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
 import { copyToClipboard } from '../../utils/clipboard';
 import { isElectron } from '../../lib/platform';
 import { ImageCropModal } from './ImageCropModal';
@@ -2589,7 +2590,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </h4>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5 pr-4">
-                      <span className="text-xs font-bold text-white block">Reproduzir GIFs automaticamente</span>
+                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Reproduzir GIFs automaticamente</span>
                       <p className="text-[11px] text-gray-400">
                         Se desativado, GIFs só serão reproduzidos ao passar o cursor do mouse por cima.
                       </p>
@@ -2704,7 +2705,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5 pr-4">
-                      <span className="text-xs font-bold text-white block">
+                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                         Determinar sensibilidade de entrada automaticamente
                       </span>
                       <p className="text-[11px] text-gray-400">
@@ -2834,7 +2835,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <div className="space-y-4 pt-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                     <div className="space-y-0.5 pr-2">
-                      <span className="text-xs font-bold text-white block">
+                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                         Redução de ruído
                       </span>
                       <p className="text-[11px] text-gray-400">
@@ -2865,7 +2866,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       {/* Echo Cancellation */}
                       <div className="flex items-center justify-between pt-1 first:pt-0">
                         <div className="space-y-0.5 pr-4">
-                          <span className="text-xs font-bold text-white block">Cancelamento de Eco</span>
+                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Cancelamento de Eco</span>
                           <p className="text-[11px] text-gray-400">
                             Impede que o áudio das caixas de som retorne ao microfone criando microfonia.
                           </p>
@@ -2890,7 +2891,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       {/* Auto Gain Control */}
                       <div className="flex items-center justify-between pt-3.5">
                         <div className="space-y-0.5 pr-4">
-                          <span className="text-xs font-bold text-white block">Controle Automático de Ganho</span>
+                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Controle Automático de Ganho</span>
                           <p className="text-[11px] text-gray-400">
                             Normaliza o volume da voz automaticamente.
                           </p>
@@ -2915,7 +2916,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       {/* Push-to-Talk (PTT) */}
                       <div className="flex items-center justify-between pt-3.5">
                         <div className="space-y-0.5 pr-4">
-                          <span className="text-xs font-bold text-white block">Push-to-Talk (PTT)</span>
+                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Push-to-Talk (PTT)</span>
                           <p className="text-[11px] text-gray-400">
                             Transmite a voz apenas ao segurar a tecla configurada.
                           </p>
@@ -3010,7 +3011,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </h4>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5 pr-4">
-                      <span className="text-xs font-bold text-white block">
+                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                         Exibir Notificações no Computador
                       </span>
                       <p className="text-[11px] text-gray-400 leading-relaxed max-w-lg">
@@ -3048,7 +3049,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         ) : (
                           <Volume2 className="w-4 h-4 text-brand-400" />
                         )}
-                        <span className="text-xs font-semibold text-white">Volume dos Sons</span>
+                        <span className={MODAL_TOGGLE_HEADER_CLASS}>Volume dos Sons</span>
                       </div>
                       <span className="text-xs font-bold font-mono text-brand-400">{soundVolume}%</span>
                     </div>
@@ -3073,7 +3074,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Voice Channel Join / Leave (Local User) */}
                     <div className="flex items-center justify-between pt-1 first:pt-0">
                       <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Sua Entrada e Saída de Chamadas</span>
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Sua Entrada e Saída de Chamadas</span>
                         <p className="text-[11px] text-gray-400">Toca o chime ao você entrar ou desconectar de um canal de voz.</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -3109,7 +3110,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Member Join / Leave Call (Other Users) */}
                     <div className="flex items-center justify-between pt-3.5">
                       <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Entrada e Saída de Outros Usuários</span>
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Entrada e Saída de Outros Usuários</span>
                         <p className="text-[11px] text-gray-400">Aviso sonoro suave quando alguém entra ou sai da chamada que você está participando.</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -3145,7 +3146,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Screen Share / Live Stream Start & Stop */}
                     <div className="flex items-center justify-between pt-3.5">
                       <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Transmissão de Tela (Ao Vivo)</span>
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Transmissão de Tela (Ao Vivo)</span>
                         <p className="text-[11px] text-gray-400">Alerta sonoro ao iniciar, entrar ou encerrar uma transmissão de tela na call.</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -3181,7 +3182,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Mute / Unmute */}
                     <div className="flex items-center justify-between pt-3.5">
                       <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Mutar e Desmutar Microfone</span>
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Mutar e Desmutar Microfone</span>
                         <p className="text-[11px] text-gray-400">Feedback sonoro imediato ao alternar seu microfone.</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -3217,7 +3218,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Messages and Mentions */}
                     <div className="flex items-center justify-between pt-3.5">
                       <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Novas Mensagens e Menções</span>
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Novas Mensagens e Menções</span>
                         <p className="text-[11px] text-gray-400">Alerta sonoro sutil ao receber mensagens no chat.</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -3250,7 +3251,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Haptic Feedback (Mobile Vibration) */}
                     <div className="flex items-center justify-between pt-3.5">
                       <div className="space-y-0.5 pr-4">
-                        <span className="text-xs font-bold text-white block">Resposta Tátil (Vibração no Celular)</span>
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Resposta Tátil (Vibração no Celular)</span>
                         <p className="text-[11px] text-gray-400">Vibrações sutis ao segurar mensagens, reagir com emojis, mutar microfone e navegar.</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -3303,7 +3304,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="flex items-center justify-between pt-1 first:pt-0">
                       <div className="space-y-1 pr-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-white">
+                          <span className={MODAL_TOGGLE_HEADER_CLASS}>
                             Manter na bandeja do sistema ao fechar
                           </span>
                           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30">
@@ -3335,7 +3336,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Item: Iniciar com o Windows / Sistema */}
                     <div className="flex items-center justify-between pt-4">
                       <div className="space-y-1 pr-4">
-                        <span className="text-sm font-bold text-white block">
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                           Inicializar com o Sistema Operacional
                         </span>
                         <p className="text-xs text-gray-400 leading-relaxed max-w-xl">
@@ -3364,7 +3365,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     <div className="pt-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="space-y-1 pr-4">
-                          <span className="text-sm font-bold text-white block">
+                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                             Aceleração Gráfica por Hardware (GPU)
                           </span>
                           <p className="text-xs text-gray-400 leading-relaxed max-w-xl">

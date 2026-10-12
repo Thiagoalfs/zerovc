@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Hash, Volume2, Lock } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
 
 interface CreateChannelModalProps {
   isOpen: boolean;
@@ -121,7 +122,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                 </div>
                 <Hash className={`w-5 h-5 flex-shrink-0 transition-colors ${type === 'text' ? 'text-white' : 'text-gray-400'}`} />
                 <div className="flex flex-col min-w-0">
-                  <span className={`font-semibold text-sm transition-colors ${type === 'text' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
+                  <span className={`${MODAL_TOGGLE_HEADER_CLASS} transition-colors ${type === 'text' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
                     Canal de Texto
                   </span>
                   <span className="text-xs text-gray-400">
@@ -146,7 +147,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                 </div>
                 <Volume2 className={`w-5 h-5 flex-shrink-0 transition-colors ${type === 'voice' ? 'text-white' : 'text-gray-400'}`} />
                 <div className="flex flex-col min-w-0">
-                  <span className={`font-semibold text-sm transition-colors ${type === 'voice' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
+                  <span className={`${MODAL_TOGGLE_HEADER_CLASS} transition-colors ${type === 'voice' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
                     Canal de Voz
                   </span>
                   <span className="text-xs text-gray-400">
@@ -184,7 +185,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
               <div className="flex items-center gap-2">
                 <Lock className="w-4 h-4 text-brand-400" />
                 <div>
-                  <span className="text-xs font-bold text-white block">Canal Privado</span>
+                  <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Canal Privado</span>
                   <span className="text-[11px] text-gray-400">Apenas cargos selecionados podem ver este canal</span>
                 </div>
               </div>

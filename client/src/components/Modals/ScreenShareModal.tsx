@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Monitor, AppWindow, Sparkles, Volume2, Check } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
 
 interface ScreenShareModalProps {
   isOpen: boolean;
@@ -267,7 +268,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
           >
             <div className="flex items-center gap-2">
               <Volume2 className={`w-4 h-4 transition-colors ${includeAudio ? 'text-brand-400' : 'text-gray-400 group-hover:text-gray-300'}`} />
-              <span className={`text-sm font-medium transition-colors ${includeAudio ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'}`}>
+              <span className={`${MODAL_TOGGLE_HEADER_CLASS} transition-colors ${includeAudio ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'}`}>
                 Compartilhar áudio
               </span>
             </div>
