@@ -38,7 +38,8 @@ const USES_OPTIONS = [
 ];
 
 export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => {
-  const { activeGuild } = useGuildStore();
+  const activeGuild = useGuildStore((s) => s.activeGuild);
+  const isStreamerModeHidingInvites = useStreamerModeStore((s) => s.enabled && s.hideInviteLinks);
   const [invite, setInvite] = useState<GuildInvite | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -106,7 +107,6 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
   if (!isOpen || !activeGuild) return null;
 
   const inviteCode = invite?.code || '';
-  const isStreamerModeHidingInvites = useStreamerModeStore((s) => s.enabled && s.hideInviteLinks);
   const origin =
     typeof window !== 'undefined' &&
     window.location.origin &&

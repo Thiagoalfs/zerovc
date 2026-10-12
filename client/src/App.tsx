@@ -542,11 +542,18 @@ export const App: React.FC = () => {
   };
 
   const handleRoute = useCallback(async (pathname: string) => {
-    const cleanPath = pathname.replace(/^\/+|\/+$/g, '');
+    const rawPath = pathname.split('?')[0].split('#')[0];
+    const cleanPath = rawPath.replace(/^\/+|\/+$/g, '');
     const segments = cleanPath ? cleanPath.split('/') : [];
 
-    // Root / Landing / Download / Signin / Signup routes
-    if (segments.length === 0 || segments[0] === 'download') {
+    // Root / Landing / Download / Priority Auth Routes (Reset Password, Forgot Password, Verify Email)
+    if (
+      segments.length === 0 ||
+      segments[0] === 'download' ||
+      segments[0] === 'reset-password' ||
+      segments[0] === 'forgot-password' ||
+      segments[0] === 'verify-email'
+    ) {
       return;
     }
 
@@ -719,7 +726,8 @@ export const App: React.FC = () => {
 
     // Capture initial route/invite before login
     const initialRoute = getCurrentRoute();
-    const cleanPath = initialRoute.replace(/^\/+|\/+$/g, '');
+    const initialRaw = initialRoute.split('?')[0].split('#')[0];
+    const cleanPath = initialRaw.replace(/^\/+|\/+$/g, '');
     const segments = cleanPath ? cleanPath.split('/') : [];
     if (segments.length >= 1 && (segments[0] === 'invite' || segments[0] === 'invites') && segments[1]) {
       sessionStorage.setItem('pending_invite_code', segments[1]);
@@ -731,6 +739,9 @@ export const App: React.FC = () => {
       cleanPath !== 'signup' &&
       cleanPath !== 'register' &&
       cleanPath !== 'download' &&
+      cleanPath !== 'reset-password' &&
+      cleanPath !== 'forgot-password' &&
+      cleanPath !== 'verify-email' &&
       !cleanPath.startsWith('invite')
     ) {
       sessionStorage.setItem('pending_redirect_path', initialRoute);
@@ -1061,7 +1072,15 @@ export const App: React.FC = () => {
         sessionStorage.removeItem('pending_redirect_path');
         handleRoute(pendingRedirect);
       } else {
-        handleRoute(getCurrentRoute());
+        const cur = getCurrentRoute();
+        const curBase = cur.split('?')[0].split('#')[0].replace(/^\/+|\/+$/g, '');
+        if (
+          curBase !== 'reset-password' &&
+          curBase !== 'forgot-password' &&
+          curBase !== 'verify-email'
+        ) {
+          handleRoute(cur);
+        }
       }
 
       // Request notification permissions gracefully on login
@@ -1574,7 +1593,28 @@ export const App: React.FC = () => {
 
   const isResetPassword =
     cleanRoute === 'reset-password' ||
-    Boolean(typeof window !== 'undefined' && (window.location.pathname.includes('reset-password') || window.location.hash.includes('reset-password')));
+    Boolean(
+      typeof window !== 'undefined' &&
+        (window.location.pathname.includes('reset-password') ||
+          window.location.hash.includes('reset-password') ||
+          (window.location.search.includes('token=') &&
+            !window.location.pathname.startsWith('/channels/') &&
+            !window.location.pathname.startsWith('/@me')))
+    );
+
+  const isForgotPassword =
+    cleanRoute === 'forgot-password' ||
+    Boolean(
+      typeof window !== 'undefined' &&
+        (window.location.pathname.includes('forgot-password') || window.location.hash.includes('forgot-password'))
+    );
+
+  const isVerifyEmail =
+    cleanRoute === 'verify-email' ||
+    Boolean(
+      typeof window !== 'undefined' &&
+        (window.location.pathname.includes('verify-email') || window.location.hash.includes('verify-email'))
+    );
 
   // 1. Priority Auth Routes (Reset Password, Forgot Password, Verify Email)
   // These MUST be accessible even if the user is already logged in!
@@ -1594,7 +1634,7 @@ export const App: React.FC = () => {
     );
   }
 
-  if (cleanRoute === 'forgot-password') {
+  if (isForgotPassword) {
     return (
       <div
         style={{
@@ -1610,7 +1650,7 @@ export const App: React.FC = () => {
     );
   }
 
-  if (cleanRoute === 'verify-email') {
+  if (isVerifyEmail) {
     return (
       <div
         style={{
