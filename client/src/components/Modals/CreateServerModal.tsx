@@ -3,7 +3,12 @@ import { X, Sparkles, Compass, ChevronRight, ArrowLeft, Camera, UploadCloud } fr
 import { useGuildStore } from '../../stores/guildStore';
 import { api } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
-import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TITLE_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_BODY_PADDING_CLASS,
+} from '../../constants/modalTypography';
 
 interface CreateServerModalProps {
   isOpen: boolean;
@@ -130,7 +135,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
     >
       <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col">
         {/* Header */}
-        <div className="p-4 sm:p-6 pb-2 text-center relative flex-shrink-0">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} text-center relative flex-shrink-0`}>
           <button
             type="button"
             onClick={handleClose}
@@ -168,7 +173,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
         </div>
 
         {/* Content */}
-        <div className="p-4 sm:p-6 pt-2 sm:pt-4 overflow-y-auto no-scrollbar flex-1">
+        <div className={`${MODAL_BODY_PADDING_CLASS} overflow-y-auto no-scrollbar flex-1`}>
           {error && (
             <div className="mb-4 p-3 bg-dnd/20 border border-dnd/30 text-dnd text-xs rounded-xl font-medium">
               {error}

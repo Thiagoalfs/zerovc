@@ -13,6 +13,7 @@ import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_FIELD_LABEL_CLASS,
   MODAL_DIALOG_TITLE_CLASS,
+  MODAL_DIVIDER_CLASS,
 } from '../../../constants/modalTypography';
 
 interface RolesTabProps {
@@ -333,19 +334,21 @@ export const RolesTab: React.FC<RolesTabProps> = ({
               </div>
             </div>
 
+            <div className={MODAL_DIVIDER_CLASS} />
+
             {/* Role Display Switches (Hoist & Mentionable) */}
-            <div className="space-y-3 pt-3 border-t border-white/10">
+            <div className="space-y-3">
               <label className={MODAL_SECTION_HEADER_CLASS}>
                 Exibição de Membros
               </label>
-              <div className="divide-y divide-white/5">
+              <div className="space-y-4">
                 <div
                   onClick={() => {
                     if (canManageRoles && selectedRole.name !== '@everyone') {
                       handleToggleRoleHoist();
                     }
                   }}
-                  className={`flex items-center justify-between py-3.5 transition-all ${
+                  className={`flex items-center justify-between transition-all ${
                     canManageRoles && selectedRole.name !== '@everyone' ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
                   }`}
                 >
@@ -384,7 +387,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                       handleToggleRoleMentionable();
                     }
                   }}
-                  className={`flex items-center justify-between py-3.5 transition-all ${
+                  className={`flex items-center justify-between transition-all ${
                     canManageRoles ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
                   }`}
                 >
@@ -417,8 +420,10 @@ export const RolesTab: React.FC<RolesTabProps> = ({
               </div>
             </div>
 
+            <div className={MODAL_DIVIDER_CLASS} />
+
             {/* Permission Groups */}
-            <div className="space-y-5 pt-3 border-t border-white/10">
+            <div className="space-y-5">
               <label className={MODAL_SECTION_HEADER_CLASS}>
                 Permissões do Cargo
               </label>

@@ -25,3 +25,25 @@ export const MODAL_TITLE_CLASS = 'text-lg sm:text-xl font-bold text-white';
 // 5. Títulos de Sub-modais / Diálogos de Confirmação (ex: "Mudar Senha", "Banir Membro", "Excluir Servidor")
 // 16px (text-base) + font-bold + text-white
 export const MODAL_DIALOG_TITLE_CLASS = 'text-base font-bold text-white';
+
+// ==========================================
+// 6. Paddings e Layout Estrutural de Modais
+// ==========================================
+
+// Card inteiro de sub-modais e caixas de diálogo simples (ex: Alterar Senha, Confirmar Exclusão)
+export const MODAL_CARD_PADDING_CLASS = 'p-4 sm:p-6';
+
+// Cabeçalho de modais com divisão estruturada (ex: Criar Canal, Criar DM)
+export const MODAL_HEADER_PADDING_CLASS = 'p-4 sm:p-6 pb-3';
+
+// Corpo / Formulário interno de modais
+export const MODAL_BODY_PADDING_CLASS = 'p-4 sm:p-6';
+
+// Rodapé de ações e confirmação de modais
+export const MODAL_FOOTER_PADDING_CLASS = 'p-4 sm:p-6 pt-3';
+
+// Linhas de itens, toggles e opções em listas divididas (dentro de divide-y)
+export const MODAL_ITEM_ROW_PADDING_CLASS = 'py-3.5 first:pt-0 last:pb-0';
+
+// Divisória sutil entre blocos ou seções
+export const MODAL_DIVIDER_CLASS = 'h-px bg-white/5';

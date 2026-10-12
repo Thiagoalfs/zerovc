@@ -3,7 +3,11 @@ import {
   Play,
 } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+  MODAL_DIVIDER_CLASS,
+} from '../../constants/modalTypography';
 
 export const AccessibilitySettingsView: React.FC = () => {
   const {
@@ -30,95 +34,125 @@ export const AccessibilitySettingsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Group 1: Movimento & Contraste */}
-      <div className="space-y-3">
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* Group 1: Visão & Movimento */}
+      <div>
         <h4 className={MODAL_SECTION_HEADER_CLASS}>
           Visão & Movimento
         </h4>
 
-        <div className="divide-y divide-white/5">
+        <div className="space-y-4">
           {/* Reduced Motion Toggle */}
-          <div className="py-3 flex items-center justify-between gap-4">
-            <div className="space-y-0.5 min-w-0">
-              <div className={MODAL_TOGGLE_HEADER_CLASS}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5 pr-4">
+              <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Reduzir Movimento
-              </div>
+              </span>
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Desativa transições, animações rápidas e efeitos de movimento intenso para maior conforto visual.
               </p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                checked={reducedMotion}
-                onChange={(e) => setReducedMotion(e.target.checked)}
-                className="sr-only peer"
+            <button
+              type="button"
+              role="switch"
+              aria-checked={reducedMotion}
+              onClick={() => setReducedMotion(!reducedMotion)}
+              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                reducedMotion ? 'bg-brand-500' : 'bg-white/10'
+              }`}
+            >
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                  reducedMotion ? 'translate-x-6' : 'translate-x-0'
+                }`}
               />
-              <div className="w-10 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
-            </label>
+            </button>
           </div>
 
           {/* High Contrast Toggle */}
-          <div className="py-3 flex items-center justify-between gap-4">
-            <div className="space-y-0.5 min-w-0">
-              <div className={MODAL_TOGGLE_HEADER_CLASS}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5 pr-4">
+              <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Modo de Alto Contraste
-              </div>
+              </span>
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Realça bordas de botões, divisórias e textos para facilitar a distinção de elementos da interface.
               </p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                checked={highContrast}
-                onChange={(e) => setHighContrast(e.target.checked)}
-                className="sr-only peer"
+            <button
+              type="button"
+              role="switch"
+              aria-checked={highContrast}
+              onClick={() => setHighContrast(!highContrast)}
+              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                highContrast ? 'bg-brand-500' : 'bg-white/10'
+              }`}
+            >
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                  highContrast ? 'translate-x-6' : 'translate-x-0'
+                }`}
               />
-              <div className="w-10 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
-            </label>
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="border-t border-white/5" />
+      <div className={MODAL_DIVIDER_CLASS} />
 
-      {/* Group 3: Leitor de Mensagens (TTS) */}
-      <div className="space-y-3">
+      {/* Group 2: Leitor de Mensagens (TTS) */}
+      <div>
         <h4 className={MODAL_SECTION_HEADER_CLASS}>
           Leitor de Mensagens por Voz (Text-to-Speech)
         </h4>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Automatic Reading Toggle */}
           <div className="flex items-center justify-between gap-4">
-            <div className="space-y-0.5 min-w-0">
-              <div className={MODAL_TOGGLE_HEADER_CLASS}>Leitura Automática de Novas Mensagens</div>
+            <div className="space-y-0.5 pr-4">
+              <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+                Leitura Automática de Novas Mensagens
+              </span>
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Quando ativado, novas mensagens recebidas no canal ativo são narradas automaticamente.
               </p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                checked={textToSpeechEnabled}
-                onChange={(e) => setTextToSpeechEnabled(e.target.checked)}
-                className="sr-only peer"
+            <button
+              type="button"
+              role="switch"
+              aria-checked={textToSpeechEnabled}
+              onClick={() => setTextToSpeechEnabled(!textToSpeechEnabled)}
+              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                textToSpeechEnabled ? 'bg-brand-500' : 'bg-white/10'
+              }`}
+            >
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                  textToSpeechEnabled ? 'translate-x-6' : 'translate-x-0'
+                }`}
               />
-              <div className="w-10 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
-            </label>
+            </button>
           </div>
 
-          <div className="pt-2 flex items-center justify-between">
-            <span className="text-[11px] text-gray-400">Verifique a saída do sintetizador no seu dispositivo</span>
+          {/* Test TTS Action Row */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5 pr-4">
+              <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+                Testar Sintetizador de Voz
+              </span>
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Reproduz uma frase de demonstração para verificar a saída de áudio do leitor no seu dispositivo.
+              </p>
+            </div>
             <button
               type="button"
               onClick={handleTestTTS}
               disabled={isSpeaking}
-              className="px-3.5 py-1.5 rounded-xl bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer border border-white/10 shrink-0 disabled:opacity-50"
+              title="Testar áudio do leitor de voz"
             >
-              <Play className={`w-3.5 h-3.5 ${isSpeaking ? 'animate-pulse text-brand-400' : ''}`} />
-              <span>{isSpeaking ? 'Reproduzindo...' : 'Testar Leitor de Voz'}</span>
+              <Play className={`w-3.5 h-3.5 text-brand-400 ${isSpeaking ? 'animate-pulse' : ''}`} />
+              <span>{isSpeaking ? 'Reproduzindo...' : 'Testar Voz'}</span>
             </button>
           </div>
         </div>

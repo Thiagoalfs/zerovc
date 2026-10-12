@@ -12,7 +12,7 @@ import {
 import { Guild, Channel, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
 import { DropdownSelect } from '../../Common/DropdownSelect';
-import { MODAL_SECTION_HEADER_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../../constants/modalTypography';
+import { MODAL_SECTION_HEADER_CLASS, MODAL_FIELD_LABEL_CLASS, MODAL_DIVIDER_CLASS } from '../../../constants/modalTypography';
 
 interface OverviewTabProps {
   activeGuild: Guild;
@@ -142,6 +142,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         </div>
       )}
 
+      <div className={MODAL_DIVIDER_CLASS} />
+
       {/* Visual Identity (Icon & Banner) */}
       <div className="space-y-4">
         <h3 className={MODAL_SECTION_HEADER_CLASS}>
@@ -246,8 +248,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         </div>
       </div>
 
+      <div className={MODAL_DIVIDER_CLASS} />
+
       {/* General Form */}
       <form onSubmit={handleSaveOverview} className="space-y-6">
+        <h3 className={MODAL_SECTION_HEADER_CLASS}>
+          Configurações Gerais
+        </h3>
+
         <div className="space-y-2">
           <label className={MODAL_FIELD_LABEL_CLASS}>
             Nome do Servidor

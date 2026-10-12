@@ -6,7 +6,13 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { GuildInvite } from '../../types';
 import { DropdownSelect } from '../Common/DropdownSelect';
 import { useStreamerModeStore } from '../../stores/streamerModeStore';
-import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TITLE_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_BODY_PADDING_CLASS,
+} from '../../constants/modalTypography';
 
 interface InviteModalProps {
   isOpen: boolean;
@@ -156,7 +162,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-6 pb-2 flex items-center justify-between relative flex-shrink-0">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between relative flex-shrink-0`}>
           <div>
             <h2 className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
               <Users className="w-5 h-5 text-brand-500" />
@@ -176,7 +182,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
         </div>
 
         {/* Content */}
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-visible flex-1">
+        <div className={`${MODAL_BODY_PADDING_CLASS} space-y-4 sm:space-y-5 overflow-visible flex-1`}>
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-8 text-sm text-gray-400 gap-2">
               <RefreshCw className="w-5 h-5 animate-spin text-brand-500" />

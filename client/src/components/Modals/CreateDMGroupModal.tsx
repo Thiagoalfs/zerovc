@@ -3,7 +3,12 @@ import { X, Users, Check } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { formatAssetUrl } from '../../lib/api';
-import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TITLE_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_BODY_PADDING_CLASS,
+} from '../../constants/modalTypography';
 
 interface CreateDMGroupModalProps {
   isOpen: boolean;
@@ -88,7 +93,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
     >
       <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-4 sm:p-6 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-brand-400" />
             <h2 className={MODAL_TITLE_CLASS}>Criar Grupo de DM</h2>
@@ -103,7 +108,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleCreate} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 no-scrollbar">
+        <form onSubmit={handleCreate} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto flex-1 no-scrollbar`}>
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg">{error}</div>}
 
           {/* Group Name Input */}

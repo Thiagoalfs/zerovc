@@ -6,6 +6,8 @@ import {
   MODAL_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
   MODAL_SECTION_HEADER_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_BODY_PADDING_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateChannelModalProps {
@@ -89,7 +91,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
     >
       <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-4 sm:p-6 pb-0 relative flex-shrink-0">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} relative flex-shrink-0 border-b border-white/5`}>
           <button
             type="button"
             onClick={onClose}
@@ -102,7 +104,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-4 sm:px-6 pt-3 pb-4 sm:pb-6 space-y-4 overflow-y-auto flex-1 no-scrollbar">
+        <form onSubmit={handleSubmit} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto flex-1 no-scrollbar`}>
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-md">{error}</div>}
 
           {/* Type Selector */}
@@ -254,7 +256,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
           </div>
 
           {/* Footer actions */}
-          <div className="flex justify-between items-center pt-2">
+          <div className="flex justify-between items-center pt-3 border-t border-white/5">
             <button
               type="button"
               onClick={onClose}

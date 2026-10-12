@@ -15,7 +15,13 @@ import {
 import { api } from '../../lib/api';
 import { UserSession } from '../../types';
 import { fetchLocationFromIP } from '../../utils/location';
-import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+  MODAL_CARD_PADDING_CLASS,
+  MODAL_ITEM_ROW_PADDING_CLASS,
+  MODAL_DIVIDER_CLASS,
+} from '../../constants/modalTypography';
 
 const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip, isSmall }) => {
   const [location, setLocation] = useState<string>('Calculando localização...');
@@ -194,7 +200,7 @@ export const SessionsSettingsView: React.FC = () => {
               <h4 className={MODAL_SECTION_HEADER_CLASS}>
                 Este Dispositivo
               </h4>
-              <div className="py-2.5 flex items-start justify-between gap-3">
+              <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-start justify-between gap-3`}>
                 <div className="flex items-start gap-3.5 min-w-0">
                   <div className="p-2 rounded-xl bg-white/5 text-brand-300 shrink-0 mt-0.5">
                     {getDeviceIcon(currentSession.device_type, currentSession.os)}
@@ -223,7 +229,7 @@ export const SessionsSettingsView: React.FC = () => {
           )}
 
           {/* Divider */}
-          <div className="border-t border-white/5" />
+          <div className={MODAL_DIVIDER_CLASS} />
 
           {/* Other Devices List */}
           <div className="space-y-2">
@@ -252,7 +258,7 @@ export const SessionsSettingsView: React.FC = () => {
                 {otherSessions.map((session) => (
                   <div
                     key={session.id}
-                    className="py-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors"
+                    className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors`}
                   >
                     <div className="flex items-start gap-3 min-w-0">
                       <div className="p-2 rounded-xl bg-white/5 text-gray-400 shrink-0 mt-0.5">
@@ -296,7 +302,7 @@ export const SessionsSettingsView: React.FC = () => {
       {/* Modal: Confirm Revoke Single Session */}
       {confirmRevokeSingle && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background-darker border border-white/10 rounded-xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95">
+          <div className={`bg-background-darker border border-white/10 rounded-xl max-w-sm w-full ${MODAL_CARD_PADDING_CLASS} space-y-4 shadow-2xl animate-in zoom-in-95`}>
             <div className="flex items-center gap-3 text-red-400">
               <div className="p-2.5 rounded-xl bg-red-500/10">
                 <AlertTriangle className="w-5 h-5" />
@@ -332,7 +338,7 @@ export const SessionsSettingsView: React.FC = () => {
       {/* Modal: Confirm Revoke All Other Sessions */}
       {confirmRevokeOtherOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background-darker border border-white/10 rounded-xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95">
+          <div className={`bg-background-darker border border-white/10 rounded-xl max-w-sm w-full ${MODAL_CARD_PADDING_CLASS} space-y-4 shadow-2xl animate-in zoom-in-95`}>
             <div className="flex items-center gap-3 text-red-400">
               <div className="p-2.5 rounded-xl bg-red-500/10">
                 <AlertTriangle className="w-5 h-5" />

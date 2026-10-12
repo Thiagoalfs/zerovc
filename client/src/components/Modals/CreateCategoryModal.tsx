@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, FolderPlus } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
-import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TITLE_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_BODY_PADDING_CLASS,
+} from '../../constants/modalTypography';
 
 interface CreateCategoryModalProps {
   isOpen: boolean;
@@ -70,7 +75,7 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
     >
       <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-4 sm:p-6 pb-0 relative flex-shrink-0">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} relative flex-shrink-0 border-b border-white/5`}>
           <button
             type="button"
             onClick={onClose}
@@ -86,7 +91,7 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-4 sm:px-6 pt-3 pb-4 sm:pb-6 space-y-4 overflow-y-auto no-scrollbar flex-1">
+        <form onSubmit={handleSubmit} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto no-scrollbar flex-1`}>
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-md">{error}</div>}
 
           {/* Name Field */}
@@ -114,7 +119,7 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
           </div>
 
           {/* Footer actions */}
-          <div className="flex justify-between items-center pt-2">
+          <div className="flex justify-between items-center pt-3 border-t border-white/5">
             <button
               type="button"
               onClick={onClose}

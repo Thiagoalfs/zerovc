@@ -1,6 +1,10 @@
 import React from 'react';
 import { useStreamerModeStore } from '../../../stores/streamerModeStore';
-import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+  MODAL_DIVIDER_CLASS,
+} from '../../../constants/modalTypography';
 
 export const StreamerModeTab: React.FC = () => {
   const {
@@ -70,7 +74,7 @@ export const StreamerModeTab: React.FC = () => {
         </button>
       </div>
 
-      <div className="h-px bg-white/5 my-2" />
+      <div className={MODAL_DIVIDER_CLASS} />
 
       {/* -------------------------------------------------------------
           2. GENERAL & AUTOMATION CONTROLS
@@ -110,7 +114,7 @@ export const StreamerModeTab: React.FC = () => {
         </div>
       </div>
 
-      <div className="h-px bg-white/5 my-2" />
+      <div className={MODAL_DIVIDER_CLASS} />
 
       {/* -------------------------------------------------------------
           3. PRIVACY PROTECTIONS (GRANULAR)
@@ -207,7 +211,7 @@ export const StreamerModeTab: React.FC = () => {
         </div>
       </div>
 
-      <div className="h-px bg-white/5 my-2" />
+      <div className={MODAL_DIVIDER_CLASS} />
 
       {/* -------------------------------------------------------------
           5. SOUNDS & NOTIFICATIONS

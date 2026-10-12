@@ -5,7 +5,12 @@ import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { formatAssetUrl } from '../../lib/api';
 import { DMGroup } from '../../types';
-import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TITLE_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_BODY_PADDING_CLASS,
+} from '../../constants/modalTypography';
 
 interface AddDMGroupMembersModalProps {
   isOpen: boolean;
@@ -97,7 +102,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
     >
       <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-4 sm:p-6 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-brand-400" />
             <div>
@@ -115,7 +120,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleAdd} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 no-scrollbar">
+        <form onSubmit={handleAdd} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto flex-1 no-scrollbar`}>
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg">{error}</div>}
 
           {/* Friends Selection */}
@@ -194,7 +199,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
           </div>
 
           {/* Footer actions */}
-          <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+          <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
             <button
               type="button"
               onClick={onClose}

@@ -5,7 +5,12 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { GameSearchResult } from '../../types';
-import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+  MODAL_ITEM_ROW_PADDING_CLASS,
+  MODAL_DIVIDER_CLASS,
+} from '../../constants/modalTypography';
 
 function formatLastPlayed(timestamp: number): string {
   if (!timestamp) return 'Nunca jogado';
@@ -480,13 +485,13 @@ export const RegisteredGamesView: React.FC = () => {
       )}
 
       {/* DIVIDER */}
-      <div className="border-t border-white/5" />
+      <div className={MODAL_DIVIDER_CLASS} />
 
       {/* 2. ADDED GAMES LIST */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h4 className="text-sm font-bold text-white">Jogos Registrados</h4>
+            <h4 className={MODAL_SECTION_HEADER_CLASS}>Jogos Registrados</h4>
             <p className="text-[11px] text-gray-400 mt-0.5">
               Algumas informações sobre jogos (como gênero ou arte da capa) são fornecidas pelo sistema.
             </p>
@@ -507,7 +512,7 @@ export const RegisteredGamesView: React.FC = () => {
           {validGames.map((game) => (
             <div
               key={game.id}
-              className="group py-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] px-2 rounded-xl transition-colors"
+              className={`group ${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-3 hover:bg-white/[0.02] px-2 rounded-xl transition-colors`}
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 {game.icon_url || isMinecraft(game.name) ? (

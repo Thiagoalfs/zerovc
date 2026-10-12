@@ -1,7 +1,11 @@
 import React from 'react';
 import { Ban } from 'lucide-react';
 import { User } from '../../../types';
-import { MODAL_DIALOG_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../../constants/modalTypography';
+import {
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_CARD_PADDING_CLASS,
+} from '../../../constants/modalTypography';
 
 interface BanMemberModalProps {
   isOpen: boolean;
@@ -32,7 +36,7 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
       style={{ zIndex: 99999 }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
     >
-      <div className="w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-red-500/30 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto chat-scrollbar">
+      <div className={`w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-red-500/30 shadow-2xl ${MODAL_CARD_PADDING_CLASS} text-gray-200 overflow-y-auto chat-scrollbar`}>
         <h3 className={`${MODAL_DIALOG_TITLE_CLASS} mb-1 flex items-center gap-2`}>
           <Ban className="w-5 h-5 text-red-500" />
           <span>Banir @{banModalUser.username}</span>
@@ -55,7 +59,7 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
             />
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
             <button
               type="button"
               onClick={onClose}
