@@ -2,7 +2,12 @@ import React from 'react';
 import { X, Lock, Trash2, Loader2 } from 'lucide-react';
 import { Guild, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
-import { MODAL_DIALOG_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../../constants/modalTypography';
+import {
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_HEADER_PADDING_CLASS,
+  MODAL_FOOTER_PADDING_CLASS,
+} from '../../../constants/modalTypography';
 
 interface DeleteServerModalProps {
   isOpen: boolean;
@@ -63,7 +68,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 pb-3 flex-shrink-0">
+        <div className={`${MODAL_HEADER_PADDING_CLASS} flex-shrink-0`}>
           <div className="flex items-center justify-between mb-2">
             <h2 className={`${MODAL_DIALOG_TITLE_CLASS} flex items-center gap-2`}>
               <span>Excluir servidor</span>
@@ -82,7 +87,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
         </div>
 
         {/* Server Preview Box */}
-        <div className="px-4 sm:px-5 py-2 overflow-y-auto chat-scrollbar flex-1">
+        <div className="px-4 sm:px-6 py-2 overflow-y-auto chat-scrollbar flex-1">
           <div className="bg-background-darkest/90 rounded-2xl p-3 border border-white/5 shadow-inner flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-brand-500 flex items-center justify-center font-bold text-white text-sm flex-shrink-0 overflow-hidden shadow-md">
               {activeGuild.icon_url ? (
@@ -188,7 +193,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-5 pt-3 bg-background-darkest/60 border-t border-white/5 flex items-center justify-end gap-3 mt-2 flex-shrink-0">
+        <div className={`${MODAL_FOOTER_PADDING_CLASS} bg-background-darkest/60 border-t border-white/5 flex items-center justify-end gap-3 mt-2 flex-shrink-0`}>
           <button
             type="button"
             disabled={isDeleting}

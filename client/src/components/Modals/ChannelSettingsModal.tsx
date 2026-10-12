@@ -32,6 +32,7 @@ import {
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_SECTION_HEADER_CLASS,
   MODAL_FIELD_LABEL_CLASS,
+  MODAL_DIVIDER_CLASS,
 } from '../../constants/modalTypography';
 
 interface ChannelSettingsModalProps {
@@ -766,21 +767,23 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
                     {/* Permissions Groups */}
                     <div className="space-y-6">
-                      {channelPermsList.map((group) => (
-                        <div key={group.category} className="space-y-3">
-                          <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                            {group.category}
-                          </h4>
+                      {channelPermsList.map((group, idx) => (
+                        <React.Fragment key={group.category}>
+                          {idx > 0 && <div className={MODAL_DIVIDER_CLASS} />}
+                          <div className="space-y-3">
+                            <h4 className={MODAL_SECTION_HEADER_CLASS}>
+                              {group.category}
+                            </h4>
 
-                          <div className="divide-y divide-white/5">
-                            {group.perms.map((perm) => {
-                              const state = getPermissionState(selectedRole.id, perm.flag);
+                            <div className="space-y-4">
+                              {group.perms.map((perm) => {
+                                const state = getPermissionState(selectedRole.id, perm.flag);
 
-                              return (
-                                <div
-                                  key={perm.key}
-                                  className="py-3.5 flex items-center justify-between gap-4 transition-all"
-                                >
+                                return (
+                                  <div
+                                    key={perm.key}
+                                    className="flex items-center justify-between gap-4 transition-all"
+                                  >
                                   <div className="space-y-0.5 min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
                                       {perm.icon}
@@ -856,6 +859,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                             })}
                           </div>
                         </div>
+                      </React.Fragment>
                       ))}
                     </div>
                   </>

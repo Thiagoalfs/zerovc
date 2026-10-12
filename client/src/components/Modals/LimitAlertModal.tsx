@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
-import { MODAL_DIALOG_TITLE_CLASS } from '../../constants/modalTypography';
+import { MODAL_DIALOG_TITLE_CLASS, MODAL_FOOTER_PADDING_CLASS } from '../../constants/modalTypography';
 
 interface LimitAlertModalProps {
   isOpen: boolean;
@@ -62,7 +62,7 @@ export const LimitAlertModal: React.FC<LimitAlertModalProps> = ({
         </div>
 
         {/* Action Button */}
-        <div className="p-6 pt-4 flex justify-center">
+        <div className={`${MODAL_FOOTER_PADDING_CLASS} flex justify-center`}>
           <button
             type="button"
             onClick={onClose}

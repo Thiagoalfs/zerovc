@@ -89,6 +89,8 @@ import {
   MODAL_FIELD_LABEL_CLASS,
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_TITLE_CLASS,
+  MODAL_CARD_PADDING_CLASS,
+  MODAL_DIVIDER_CLASS,
 } from '../../constants/modalTypography';
 import { copyToClipboard } from '../../utils/clipboard';
 import { isElectron } from '../../lib/platform';
@@ -1860,8 +1862,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* Group 2: Personalização do Perfil (Recado & Bio) */}
-                <div className="space-y-4 pt-2">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h4 className={MODAL_SECTION_HEADER_CLASS}>
                       Recado e Sobre Mim
@@ -1936,9 +1940,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Credenciais de Acesso
                   </h4>
-                  <div className="divide-y divide-white/5 space-y-3.5">
+                  <div className="space-y-4">
                     {/* E-mail */}
-                    <div className="flex items-center justify-between pt-1 first:pt-0">
+                    <div className="flex items-center justify-between">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                           Endereço de E-mail
@@ -1977,7 +1981,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Senha */}
-                    <div className="flex items-center justify-between pt-3.5">
+                    <div className="flex items-center justify-between">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                           Senha da Conta
@@ -2001,7 +2005,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Autenticação de Dois Fatores (2FA) */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-white">Autenticação de Dois Fatores (2FA)</span>
@@ -2035,8 +2039,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* 2. Mensagens Diretas (DMs) */}
-                <div className="pt-2">
+                <div>
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Mensagens Diretas (DMs)
                   </h4>
@@ -2095,14 +2101,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* 4. Gestão de Dados e Conta (LGPD / GDPR) */}
-                <div className="pt-2">
+                <div>
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Gestão de Dados e Conta (LGPD)
                   </h4>
-                  <div className="divide-y divide-white/5 space-y-3.5">
+                  <div className="space-y-4">
                     {/* Export Data */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 first:pt-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="space-y-0.5">
                         <span className="text-xs font-bold text-white block">Exportar Meus Dados (JSON)</span>
                         <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
@@ -2130,7 +2138,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Delete Account (Danger Zone) */}
-                    <div className="pt-3.5">
+                    <div>
                       <div className="p-3.5 bg-dnd/10 rounded-2xl border border-dnd/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-0.5">
                           <span className="text-xs font-bold text-dnd block">Excluir Conta Permanentemente</span>
@@ -2391,6 +2399,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   })()}
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* Theme Selector */}
                 <div>
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
@@ -2430,6 +2440,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* Accent Color */}
                 <div>
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
@@ -2465,6 +2477,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     })}
                   </div>
                 </div>
+
+                <div className={MODAL_DIVIDER_CLASS} />
 
                 {/* Chat Density / Estilo de Exibição */}
                 <div>
@@ -2526,6 +2540,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* Font Size Scaling */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -2569,6 +2585,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
                   </div>
                 </div>
+
+                <div className={MODAL_DIVIDER_CLASS} />
 
                 {/* UI Scale / Zoom */}
                 <div>
@@ -2617,8 +2635,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* Media and GIFs */}
-                <div className="pt-2">
+                <div>
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Mídia & Animações
                   </h4>
@@ -2926,9 +2946,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                   {/* Sub-Settings Options (Echo Cancellation, Auto Gain, Push-to-Talk) */}
                   <div className="pt-1">
-                    <div className="divide-y divide-white/5 space-y-3.5 animate-in fade-in duration-150">
+                    <div className="space-y-4 animate-in fade-in duration-150">
                       {/* Echo Cancellation */}
-                      <div className="flex items-center justify-between pt-1 first:pt-0">
+                      <div className="flex items-center justify-between">
                         <div className="space-y-0.5 pr-4">
                           <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Cancelamento de Eco</span>
                           <p className="text-[11px] text-gray-400">
@@ -2953,7 +2973,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       </div>
 
                       {/* Auto Gain Control */}
-                      <div className="flex items-center justify-between pt-3.5">
+                      <div className="flex items-center justify-between">
                         <div className="space-y-0.5 pr-4">
                           <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Controle Automático de Ganho</span>
                           <p className="text-[11px] text-gray-400">
@@ -2978,7 +2998,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       </div>
 
                       {/* Modo de Entrada (Aberto / Push to Talk) */}
-                      <div className="pt-3.5 space-y-2">
+                      <div className="space-y-2">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                           Modo de Entrada
                         </span>
@@ -3040,7 +3060,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       </div>
 
                       {/* Mostrar usuários na barra de voz */}
-                      <div className="flex items-center justify-between pt-3.5">
+                      <div className="flex items-center justify-between">
                         <div className="space-y-0.5 pr-4">
                           <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                             Mostrar usuários na barra de voz
@@ -3069,8 +3089,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* Webcam & Video Section with Live Preview */}
-                <div className="pt-2">
+                <div>
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Configuração de Vídeo / Câmera
                   </h4>
@@ -3164,8 +3186,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* Sound Volume Slider */}
-                <div className="pt-2">
+                <div>
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Volume dos Efeitos Sonoros
                   </h4>
@@ -3193,14 +3217,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                <div className={MODAL_DIVIDER_CLASS} />
+
                 {/* Individual Sound Toggles with Test Buttons */}
-                <div className="pt-2">
+                <div>
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Efeitos Sonoros do Aplicativo
                   </h4>
-                  <div className="divide-y divide-white/5 space-y-3.5">
+                  <div className="space-y-4">
                     {/* Voice Channel Join / Leave (Local User) */}
-                    <div className="flex items-center justify-between pt-1 first:pt-0">
+                    <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Sua Entrada e Saída de Chamadas</span>
                         <p className="text-[11px] text-gray-400">Toca o chime ao você entrar ou desconectar de um canal de voz.</p>
@@ -3236,7 +3262,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Member Join / Leave Call (Other Users) */}
-                    <div className="flex items-center justify-between pt-3.5">
+                    <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Entrada e Saída de Outros Usuários</span>
                         <p className="text-[11px] text-gray-400">Aviso sonoro suave quando alguém entra ou sai da chamada que você está participando.</p>
@@ -3272,7 +3298,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Screen Share / Live Stream Start & Stop */}
-                    <div className="flex items-center justify-between pt-3.5">
+                    <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Transmissão de Tela (Ao Vivo)</span>
                         <p className="text-[11px] text-gray-400">Alerta sonoro ao iniciar, entrar ou encerrar uma transmissão de tela na call.</p>
@@ -3308,7 +3334,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Mute / Unmute */}
-                    <div className="flex items-center justify-between pt-3.5">
+                    <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Mutar e Desmutar Microfone</span>
                         <p className="text-[11px] text-gray-400">Feedback sonoro imediato ao alternar seu microfone.</p>
@@ -3344,7 +3370,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Messages and Mentions */}
-                    <div className="flex items-center justify-between pt-3.5">
+                    <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Novas Mensagens e Menções</span>
                         <p className="text-[11px] text-gray-400">Alerta sonoro sutil ao receber mensagens no chat.</p>
@@ -3377,7 +3403,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Haptic Feedback (Mobile Vibration) */}
-                    <div className="flex items-center justify-between pt-3.5">
+                    <div className="flex items-center justify-between">
                       <div className="space-y-0.5 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Resposta Tátil (Vibração no Celular)</span>
                         <p className="text-[11px] text-gray-400">Vibrações sutis ao segurar mensagens, reagir com emojis, mutar microfone e navegar.</p>
@@ -3427,9 +3453,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     Comportamento do Aplicativo (Desktop)
                   </h4>
 
-                  <div className="divide-y divide-white/5 space-y-4">
+                  <div className="space-y-4">
                     {/* Item: Manter na Gaveta / Bandeja */}
-                    <div className="flex items-center justify-between pt-1 first:pt-0">
+                    <div className="flex items-center justify-between">
                       <div className="space-y-1 pr-4">
                         <div className="flex items-center gap-2">
                           <span className={MODAL_TOGGLE_HEADER_CLASS}>
@@ -3462,7 +3488,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     {/* Item: Iniciar com o Windows / Sistema */}
-                    <div className="flex items-center justify-between pt-4">
+                    <div className="flex items-center justify-between">
                       <div className="space-y-1 pr-4">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                           Inicializar com o Sistema Operacional
@@ -3558,7 +3584,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSaveDisplayName}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
+            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
           >
             <div className="flex items-center justify-between">
               <h4 className={MODAL_DIALOG_TITLE_CLASS}>Alterar Nome de Exibição</h4>
@@ -3620,7 +3646,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSaveUsername}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
+            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
           >
             <div className="flex items-center justify-between">
               <h4 className={MODAL_DIALOG_TITLE_CLASS}>Alterar Nome de Usuário</h4>
@@ -3689,7 +3715,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSaveEmail}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
+            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
           >
             <div className="flex items-center justify-between">
               <h4 className={MODAL_DIALOG_TITLE_CLASS}>Alterar E-mail</h4>
@@ -3763,7 +3789,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSavePhone}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
+            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
           >
             <div className="flex items-center justify-between">
               <h4 className={MODAL_DIALOG_TITLE_CLASS}>
@@ -3830,7 +3856,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSavePassword}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
+            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
           >
             <div className="flex items-center justify-between">
               <h4 className={MODAL_DIALOG_TITLE_CLASS}>Mudar Senha</h4>
@@ -3918,7 +3944,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleToggle2FA}
-            className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
+            className={`bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
           >
             <div className="flex items-center justify-between">
               <h4 className={MODAL_DIALOG_TITLE_CLASS}>
@@ -3997,7 +4023,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           }}
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in"
         >
-          <div className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-6 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95">
+          <div className={`bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}>
             <div className="flex items-center justify-between">
               <h4 className={MODAL_DIALOG_TITLE_CLASS}>
                 Códigos de Backup de 2FA
@@ -4084,7 +4110,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleDeleteAccount}
-            className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-6 border border-dnd/30 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
+            className={`bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-dnd/30 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
           >
             <div className="flex items-center justify-between">
               <h4 className={`${MODAL_DIALOG_TITLE_CLASS} text-dnd`}>

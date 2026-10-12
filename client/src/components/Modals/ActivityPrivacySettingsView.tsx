@@ -1,7 +1,10 @@
 import React from 'react';
 import { Activity, ShieldCheck, Eye, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
-import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+} from '../../constants/modalTypography';
 
 export const ActivityPrivacySettingsView: React.FC = () => {
   const { user, updateProfile, setUser } = useAuthStore();
@@ -15,9 +18,9 @@ export const ActivityPrivacySettingsView: React.FC = () => {
           Status de Atividade & Jogos
         </h4>
 
-        <div className="divide-y divide-white/5 space-y-4">
+        <div className="space-y-4">
           {/* Show Activity Status */}
-          <div className="flex items-center justify-between pt-2 first:pt-0">
+          <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 pr-4">
               <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Exibir atividade atual como mensagem de status
@@ -52,7 +55,7 @@ export const ActivityPrivacySettingsView: React.FC = () => {
           </div>
 
           {/* Auto-detect activity in Electron */}
-          <div className="flex items-center justify-between pt-3.5">
+          <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 pr-4">
               <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Detectar automaticamente jogos em execução
