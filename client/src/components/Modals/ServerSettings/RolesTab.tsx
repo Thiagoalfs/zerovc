@@ -14,6 +14,9 @@ import {
   MODAL_FIELD_LABEL_CLASS,
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_DIVIDER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_SWITCH_CONTAINER_CLASS,
+  MODAL_SWITCH_KNOB_CLASS,
 } from '../../../constants/modalTypography';
 
 interface RolesTabProps {
@@ -356,7 +359,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     <div className={MODAL_TOGGLE_HEADER_CLASS}>
                       Exibir membros deste cargo separadamente
                     </div>
-                    <div className="text-xs text-gray-400 mt-1 leading-relaxed">
+                    <div className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>
                       {selectedRole.name === '@everyone'
                         ? 'O cargo @everyone engloba todos os membros e não pode ser exibido separadamente.'
                         : 'Membros com este cargo aparecerão em uma categoria própria na lista lateral de membros.'}
@@ -364,18 +367,20 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   </div>
                   <button
                     type="button"
+                    role="switch"
+                    aria-checked={selectedRole.hoist}
                     disabled={!canManageRoles || selectedRole.name === '@everyone'}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggleRoleHoist();
                     }}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
-                      selectedRole.hoist ? 'bg-online' : 'bg-gray-600'
+                    className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
+                      selectedRole.hoist ? 'bg-brand-500' : 'bg-white/10'
                     } disabled:opacity-40 disabled:cursor-not-allowed`}
                   >
                     <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                        selectedRole.hoist ? 'translate-x-5' : 'translate-x-0'
+                      className={`${MODAL_SWITCH_KNOB_CLASS} ${
+                        selectedRole.hoist ? 'translate-x-6' : 'translate-x-0'
                       }`}
                     />
                   </button>
@@ -395,24 +400,26 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     <div className={MODAL_TOGGLE_HEADER_CLASS}>
                       Permitir que qualquer um @mencione este cargo
                     </div>
-                    <div className="text-xs text-gray-400 mt-1 leading-relaxed">
+                    <div className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>
                       Permite que membros enviem mensagens com @cargo para notificar todos com este cargo.
                     </div>
                   </div>
                   <button
                     type="button"
+                    role="switch"
+                    aria-checked={selectedRole.mentionable}
                     disabled={!canManageRoles}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggleRoleMentionable();
                     }}
-                    className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
-                      selectedRole.mentionable ? 'bg-online' : 'bg-gray-600'
+                    className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
+                      selectedRole.mentionable ? 'bg-brand-500' : 'bg-white/10'
                     } disabled:opacity-40 disabled:cursor-not-allowed`}
                   >
                     <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                        selectedRole.mentionable ? 'translate-x-5' : 'translate-x-0'
+                      className={`${MODAL_SWITCH_KNOB_CLASS} ${
+                        selectedRole.mentionable ? 'translate-x-6' : 'translate-x-0'
                       }`}
                     />
                   </button>
@@ -456,11 +463,13 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                             <div className={MODAL_TOGGLE_HEADER_CLASS}>
                               {perm.name}
                             </div>
-                            <div className="text-xs text-gray-400 mt-1 leading-relaxed">{perm.description}</div>
+                            <div className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>{perm.description}</div>
                           </div>
 
                           <button
                             type="button"
+                            role="switch"
+                            aria-checked={isChecked}
                             disabled={!canManageRoles || (isRoleAdmin && perm.flag !== Permissions.ADMINISTRATOR)}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -468,13 +477,13 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                                 handleTogglePermission(perm.flag);
                               }
                             }}
-                            className={`w-11 h-6 flex items-center rounded-full p-1 shrink-0 transition-colors cursor-pointer ${
-                              isChecked ? 'bg-[#23a55a]' : 'bg-[#4e5058]'
+                            className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
+                              isChecked ? 'bg-brand-500' : 'bg-white/10'
                             } disabled:opacity-50`}
                           >
                             <div
-                              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                                isChecked ? 'translate-x-5' : 'translate-x-0'
+                              className={`${MODAL_SWITCH_KNOB_CLASS} ${
+                                isChecked ? 'translate-x-6' : 'translate-x-0'
                               }`}
                             />
                           </button>

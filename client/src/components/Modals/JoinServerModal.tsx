@@ -7,6 +7,9 @@ import {
   MODAL_FIELD_LABEL_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+  MODAL_BACKDROP_CLASS,
 } from '../../constants/modalTypography';
 
 interface JoinServerModalProps {
@@ -70,7 +73,7 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className={MODAL_BACKDROP_CLASS}
     >
       <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
@@ -86,7 +89,7 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
             <Compass className="w-6 h-6" />
           </div>
           <h2 className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>
             Digite o código de 10 caracteres ou o link de convite que você recebeu.
           </p>
         </div>
@@ -113,7 +116,7 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
             <button
               type="button"
               onClick={onClose}
-              className="text-sm text-gray-300 hover:underline cursor-pointer"
+              className={MODAL_CANCEL_BUTTON_CLASS}
             >
               Cancelar
             </button>

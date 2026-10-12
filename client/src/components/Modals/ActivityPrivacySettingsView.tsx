@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_SECTION_HEADER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 export const ActivityPrivacySettingsView: React.FC = () => {
@@ -25,7 +26,7 @@ export const ActivityPrivacySettingsView: React.FC = () => {
               <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Exibir atividade atual como mensagem de status
               </span>
-              <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+              <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
                 Permite que outros usuários vejam qual jogo ou aplicativo você está executando em seu perfil e na lista de membros.
               </p>
             </div>
@@ -60,7 +61,7 @@ export const ActivityPrivacySettingsView: React.FC = () => {
               <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Detectar automaticamente jogos em execução
               </span>
-              <p className="text-[11px] text-gray-400 leading-relaxed max-w-md">
+              <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
                 Escaneia processos em segundo plano no desktop e sincroniza seu status de jogo em tempo real.
               </p>
             </div>

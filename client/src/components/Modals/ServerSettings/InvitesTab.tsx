@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { GuildInvite } from '../../../types';
 import { useStreamerModeStore } from '../../../stores/streamerModeStore';
+import { MODAL_DESCRIPTION_CLASS } from '../../../constants/modalTypography';
 
 interface InvitesTabProps {
   invitesList: GuildInvite[];
@@ -58,7 +59,7 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
         <div className="text-center py-16 px-4 rounded-2xl bg-background-darker/60 border border-white/10">
           <LinkIcon className="w-12 h-12 stroke-1 text-gray-500 mx-auto mb-3" />
           <h4 className="text-base font-semibold text-white">Nenhum link de convite ativo</h4>
-          <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
+          <p className={`${MODAL_DESCRIPTION_CLASS} max-w-sm mx-auto mt-1`}>
             Crie um link de convite acima para convidar seus amigos para o servidor!
           </p>
         </div>

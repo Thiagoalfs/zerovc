@@ -8,6 +8,7 @@ import {
   MODAL_FIELD_LABEL_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateDMGroupModalProps {
@@ -131,7 +132,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
               <label className={MODAL_FIELD_LABEL_CLASS}>
                 Selecione Amigos
               </label>
-              <span className="text-[11px] text-gray-400">
+              <span className={MODAL_DESCRIPTION_CLASS}>
                 {selectedFriendIds.length} / 14 selecionados
               </span>
             </div>

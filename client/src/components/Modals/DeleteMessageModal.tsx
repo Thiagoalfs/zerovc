@@ -9,6 +9,10 @@ import {
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_FOOTER_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+  MODAL_DANGER_BUTTON_CLASS,
+  MODAL_BACKDROP_CLASS,
 } from '../../constants/modalTypography';
 
 interface DeleteMessageModalProps {
@@ -61,7 +65,7 @@ export const DeleteMessageModal: React.FC<DeleteMessageModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className={MODAL_BACKDROP_CLASS}
       onClick={onClose}
     >
       <div
@@ -82,7 +86,7 @@ export const DeleteMessageModal: React.FC<DeleteMessageModalProps> = ({
               <X className="w-5 h-5" />
             </button>
           </div>
-          <p className="text-xs text-gray-300 leading-relaxed">
+          <p className={MODAL_DESCRIPTION_CLASS}>
             Tem certeza de que deseja excluir esta mensagem? Esta ação não pode ser desfeita.
           </p>
         </div>
@@ -164,7 +168,7 @@ export const DeleteMessageModal: React.FC<DeleteMessageModalProps> = ({
             type="button"
             disabled={isDeleting}
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-gray-300 hover:text-white hover:underline transition-all cursor-pointer disabled:opacity-50"
+            className={MODAL_CANCEL_BUTTON_CLASS}
           >
             Cancelar
           </button>
@@ -173,7 +177,7 @@ export const DeleteMessageModal: React.FC<DeleteMessageModalProps> = ({
             type="button"
             disabled={isDeleting}
             onClick={handleSubmit}
-            className="bg-dnd hover:bg-red-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-red-500/20 flex items-center gap-2 cursor-pointer"
+            className={MODAL_DANGER_BUTTON_CLASS}
           >
             {isDeleting ? (
               <>

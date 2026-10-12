@@ -218,8 +218,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const authorMember = contextType === 'channel' && activeGuild ? activeGuild.members?.find((m) => m.id === message.author_id) : null;
   const authorRoleColor = authorMember?.roles?.find((r) => r.color && r.color !== '#99aab5' && r.color !== '#99AAB5')?.color;
 
-  const replyAuthorId = message.reply_to?.author?.id;
+  const replyAuthor = message.reply_to?.author || (contextType === 'channel' && activeGuild && message.reply_to?.author_id ? activeGuild.members?.find((m) => m.id === message.reply_to.author_id) : null);
+  const replyAuthorId = replyAuthor?.id || message.reply_to?.author?.id;
   const replyAuthorMember = contextType === 'channel' && activeGuild && replyAuthorId ? activeGuild.members?.find((m) => m.id === replyAuthorId) : null;
+  const effectiveReplyAuthor = replyAuthorMember || replyAuthor;
   const replyRoleColor =
     replyAuthorMember?.roles?.find((r) => r.color && r.color !== '#99aab5' && r.color !== '#99AAB5')?.color ||
     message.reply_to?.author?.roles?.find((r: Role) => r.color && r.color !== '#99aab5' && r.color !== '#99AAB5')?.color;
@@ -598,7 +600,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             <Reply className="w-3.5 h-3.5" />
           </div>
         )}
-        {/* Reply Reference Header (Clickable with smooth scroll) */}
+        {/* Reply Reference Header (Clickable with smooth scroll to message, or click @user to open profile) */}
         {message.reply_to && (
           <div
             onClick={(e) => {
@@ -612,17 +614,33 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 }, 1500);
               }
             }}
-            className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-1 ml-9 md:ml-10 select-none opacity-80 hover:opacity-100 hover:text-gray-200 transition-all cursor-pointer group/reply"
-            title="Clique para ir até a mensagem respondida"
+            className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-1 ml-9 md:ml-10 select-none opacity-80 hover:opacity-100 transition-all cursor-pointer group/reply"
+            title="Clique na mensagem para ir até ela"
           >
             <CornerDownRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 group-hover/reply:text-brand-400 transition-colors" />
             <span
-              className={`font-semibold group-hover/reply:underline ${!replyRoleColor ? 'text-brand-400' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (effectiveReplyAuthor) {
+                  onOpenUserProfile?.(effectiveReplyAuthor, { x: e.clientX, y: e.clientY });
+                }
+              }}
+              onContextMenu={(e) => {
+                e.stopPropagation();
+                if (effectiveReplyAuthor) {
+                  handleUserContextMenu(e, effectiveReplyAuthor);
+                }
+              }}
+              className={`font-semibold hover:underline cursor-pointer transition-colors ${!replyRoleColor ? 'text-brand-400 hover:text-brand-300' : 'hover:opacity-80'}`}
               style={replyRoleColor ? { color: replyRoleColor } : undefined}
+              title={effectiveReplyAuthor ? `Ver perfil de @${effectiveReplyAuthor.username || 'usuário'}` : undefined}
             >
-              @{message.reply_to?.author?.display_name || message.reply_to?.author?.username || 'Usuário'}
+              @{getFormattedUsername(effectiveReplyAuthor?.display_name || effectiveReplyAuthor?.username || 'Usuário')}
             </span>
-            <span className="truncate text-gray-400 max-w-sm italic">
+            <span
+              className="truncate text-gray-400 max-w-sm italic group-hover/reply:text-gray-200 group-hover/reply:underline"
+              title="Clique para ir até a mensagem respondida"
+            >
               "{message.reply_to?.content || ''}"
             </span>
           </div>

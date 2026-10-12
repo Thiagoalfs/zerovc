@@ -8,6 +8,7 @@ import {
   MODAL_FIELD_LABEL_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 interface EditDMGroupNameModalProps {
@@ -100,7 +101,7 @@ export const EditDMGroupNameModal: React.FC<EditDMGroupNameModalProps> = ({
               className="w-full bg-background-darkest border border-white/10 rounded-lg px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
               autoFocus
             />
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>
               Deixe em branco para usar os nomes dos participantes como padrão.
             </p>
           </div>

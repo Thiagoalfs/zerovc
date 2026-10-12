@@ -6,6 +6,7 @@ import {
   MODAL_FIELD_LABEL_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateCategoryModalProps {
@@ -113,7 +114,7 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
                 className="w-full bg-background-darkest text-white pl-9 pr-3 py-2.5 rounded-lg border border-white/5 focus:outline-none focus:border-brand-500 text-sm"
               />
             </div>
-            <p className="text-[11px] text-gray-400 mt-1.5">
+            <p className={`${MODAL_DESCRIPTION_CLASS} mt-1.5`}>
               Use categorias para organizar seus canais de texto e voz.
             </p>
           </div>

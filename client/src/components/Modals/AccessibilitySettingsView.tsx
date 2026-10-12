@@ -7,6 +7,7 @@ import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_SECTION_HEADER_CLASS,
   MODAL_DIVIDER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 
 export const AccessibilitySettingsView: React.FC = () => {
@@ -48,7 +49,7 @@ export const AccessibilitySettingsView: React.FC = () => {
               <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Reduzir Movimento
               </span>
-              <p className="text-[11px] text-gray-400 leading-relaxed">
+              <p className={MODAL_DESCRIPTION_CLASS}>
                 Desativa transições, animações rápidas e efeitos de movimento intenso para maior conforto visual.
               </p>
             </div>
@@ -75,7 +76,7 @@ export const AccessibilitySettingsView: React.FC = () => {
               <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Modo de Alto Contraste
               </span>
-              <p className="text-[11px] text-gray-400 leading-relaxed">
+              <p className={MODAL_DESCRIPTION_CLASS}>
                 Realça bordas de botões, divisórias e textos para facilitar a distinção de elementos da interface.
               </p>
             </div>
@@ -113,7 +114,7 @@ export const AccessibilitySettingsView: React.FC = () => {
               <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Leitura Automática de Novas Mensagens
               </span>
-              <p className="text-[11px] text-gray-400 leading-relaxed">
+              <p className={MODAL_DESCRIPTION_CLASS}>
                 Quando ativado, novas mensagens recebidas no canal ativo são narradas automaticamente.
               </p>
             </div>
@@ -140,7 +141,7 @@ export const AccessibilitySettingsView: React.FC = () => {
               <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Testar Sintetizador de Voz
               </span>
-              <p className="text-[11px] text-gray-400 leading-relaxed">
+              <p className={MODAL_DESCRIPTION_CLASS}>
                 Reproduz uma frase de demonstração para verificar a saída de áudio do leitor no seu dispositivo.
               </p>
             </div>

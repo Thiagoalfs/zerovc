@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Keyboard, Mic, Headphones, Monitor, Radio, RotateCcw, Check, Sparkles, X } from 'lucide-react';
 import { isElectron } from '../../lib/platform';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_ITEM_ROW_PADDING_CLASS,
+} from '../../constants/modalTypography';
 
 interface ShortcutConfig {
   id: string;
@@ -174,7 +178,7 @@ export const KeybindSettingsView: React.FC = () => {
           return (
             <div
               key={sc.id}
-              className={`py-3.5 transition-all ${
+              className={`${MODAL_ITEM_ROW_PADDING_CLASS} transition-all ${
                 isRecording
                   ? 'bg-brand-500/10 px-3 rounded-xl'
                   : ''
@@ -187,7 +191,7 @@ export const KeybindSettingsView: React.FC = () => {
                   </div>
                   <div>
                     <h4 className={MODAL_TOGGLE_HEADER_CLASS}>{sc.name}</h4>
-                    <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
+                    <p className={`${MODAL_DESCRIPTION_CLASS} mt-0.5`}>
                       {sc.description}
                     </p>
                   </div>
