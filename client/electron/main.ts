@@ -34,6 +34,24 @@ try {
   console.warn('[Settings] Failed to load settings:', e);
 }
 
+// ---- Update splash (startup) state ----
+let splashWindow: BrowserWindow | null = null;
+let startupPhase = true;
+let updateCheckTimer: ReturnType<typeof setInterval> | null = null;
+
+function loadSplashColors(): { accent: string; bg: string } {
+  try {
+    const settingsFile = path.join(app.getPath('userData'), 'settings.json');
+    if (fs.existsSync(settingsFile)) {
+      const parsed = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      if (parsed?.splash?.accent && parsed?.splash?.bg) {
+        return { accent: String(parsed.splash.accent), bg: String(parsed.splash.bg) };
+      }
+    }
+  } catch {}
+  return { accent: '99,102,241', bg: '13,17,23' };
+}
+
 if (!hardwareAccelerationEnabled) {
   console.log('[Electron] Hardware acceleration is DISABLED by user preference.');
   app.disableHardwareAcceleration();
@@ -223,7 +241,7 @@ function handleDeepLink(rawUrl: string) {
   }
 }
 
-function createWindow(initialUrl?: string) {
+function createWindow(initialUrl?: string, showImmediately = true) {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -233,6 +251,7 @@ function createWindow(initialUrl?: string) {
     icon: getAppIcon(),
     frame: false, // Frameless window for custom titlebar
     titleBarStyle: 'hidden',
+    show: false, // no arranque, quem revela é o splash (finalizeStartupSplash)
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -240,6 +259,13 @@ function createWindow(initialUrl?: string) {
       webSecurity: true,
     },
   });
+
+  // Aberturas normais (ex.: activate no macOS): mostrar quando pronto.
+  if (showImmediately) {
+    mainWindow.once('ready-to-show', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+    });
+  }
 
   // Restrict in-window navigation to allowed origins
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -336,20 +362,7 @@ function createWindow(initialUrl?: string) {
     mainWindow = null;
   });
 
-  // Setup auto-updater when running in packaged mode
-  if (!isDev && autoUpdater) {
-    setupAutoUpdater();
-    setTimeout(() => {
-      try {
-        autoUpdater?.checkForUpdates()?.catch(() => {});
-      } catch {}
-    }, 3000);
-    setInterval(() => {
-      try {
-        autoUpdater?.checkForUpdates()?.catch(() => {});
-      } catch {}
-    }, 15 * 60 * 1000);
-  }
+  // Auto-updater é orquestrado pela sequência de startup (fluxo do splash).
 }
 
 // -------------------------------------------------------------
@@ -358,44 +371,136 @@ function createWindow(initialUrl?: string) {
 function setupAutoUpdater() {
   if (!autoUpdater) return;
 
-  autoUpdater.autoDownload = true; // Automatically download update in background like Discord
+  // Nunca baixar sozinho: controlamos quando baixar (auto no splash do arranque;
+  // manual via ícone quando o app já está aberto).
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('checking-for-update', () => {
-    console.log('[AutoUpdater] Checking for updates on server...');
+    if (startupPhase) sendSplash({ phase: 'checking' });
   });
 
   autoUpdater.on('update-available', (info: any) => {
-    console.log('[AutoUpdater] Update available:', info.version);
-    mainWindow?.webContents.send('update-available', {
-      version: info.version,
-      releaseNotes: info.releaseNotes,
-    });
+    if (startupPhase) {
+      // No arranque (splash): baixa automaticamente, como o Discord.
+      sendSplash({ phase: 'downloading', version: info.version, percent: 0 });
+      autoUpdater.downloadUpdate().catch((err: any) => {
+        sendSplash({ phase: 'error', message: String(err?.message || err) });
+        setTimeout(finalizeStartupSplash, 1400);
+      });
+    } else {
+      // App já aberto: apenas avisa (ícone de download no TitleBar). Não baixa.
+      mainWindow?.webContents.send('update-available', {
+        version: info.version,
+        releaseNotes: info.releaseNotes,
+      });
+    }
   });
 
   autoUpdater.on('update-not-available', () => {
-    console.log('[AutoUpdater] Application is up to date.');
+    if (startupPhase) finalizeStartupSplash();
   });
 
   autoUpdater.on('download-progress', (progressObj: any) => {
-    mainWindow?.webContents.send('update-progress', {
-      percent: progressObj.percent,
-      bytesPerSecond: progressObj.bytesPerSecond,
-      transferred: progressObj.transferred,
-      total: progressObj.total,
-    });
+    if (startupPhase) {
+      sendSplash({
+        phase: 'downloading',
+        percent: Math.floor(progressObj.percent),
+        bytesPerSecond: progressObj.bytesPerSecond,
+        transferred: progressObj.transferred,
+        total: progressObj.total,
+      });
+    }
   });
 
   autoUpdater.on('update-downloaded', (info: any) => {
-    console.log('[AutoUpdater] Update downloaded:', info.version);
-    mainWindow?.webContents.send('update-downloaded', {
-      version: info.version,
-    });
+    if (startupPhase) {
+      sendSplash({ phase: 'installing', version: info.version });
+      setTimeout(() => {
+        try {
+          autoUpdater?.quitAndInstall(true, true);
+        } catch {}
+      }, 800);
+    } else {
+      mainWindow?.webContents.send('update-downloaded', { version: info.version });
+    }
   });
 
   autoUpdater.on('error', (err: any) => {
-    console.error('[AutoUpdater] Error checking/downloading update:', err);
+    if (startupPhase) {
+      sendSplash({ phase: 'error', message: String(err?.message || err) });
+      setTimeout(finalizeStartupSplash, 1400);
+    } else {
+      console.error('[AutoUpdater] Erro ao verificar/baixar update:', err);
+    }
   });
+}
+
+// ---- Splash (startup) helpers ----
+function sendSplash(data: Record<string, any>) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send('splash-update', data);
+  }
+}
+
+function finalizeStartupSplash() {
+  if (!startupPhase) return;
+  startupPhase = false;
+
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+  }
+  splashWindow = null;
+
+  const reveal = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  };
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents.isLoading()) {
+    mainWindow.once('ready-to-show', reveal);
+    setTimeout(reveal, 6000); // segurança: não travar no splash se o load demorar/falhar
+  } else {
+    reveal();
+  }
+
+  startPeriodicUpdateChecks();
+}
+
+function startPeriodicUpdateChecks() {
+  if (updateCheckTimer) return;
+  updateCheckTimer = setInterval(() => {
+    try {
+      autoUpdater?.checkForUpdates()?.catch(() => {});
+    } catch {}
+  }, 15 * 60 * 1000);
+}
+
+function createSplashWindow(): BrowserWindow {
+  const { accent, bg } = loadSplashColors();
+  const splash = new BrowserWindow({
+    width: 460,
+    height: 360,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    center: true,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: `rgb(${bg})`,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  const splashFile = path.join(__dirname, '../dist/splash.html');
+  splash.loadFile(splashFile, { query: { accent, bg } });
+  splash.once('ready-to-show', () => splash.show());
+  return splash;
 }
 
 // -------------------------------------------------------------
@@ -522,6 +627,28 @@ ipcMain.on('check-for-updates', () => {
   }
 });
 
+// Fecha tudo e reabre no splash para atualizar (chamado pelo ícone do TitleBar).
+ipcMain.on('restart-to-update', () => {
+  if (!app.isPackaged) return;
+  app.relaunch();
+  app.exit(0);
+});
+
+// Renderer envia as cores resolvidas do tema (acento + fundo) para o splash ler.
+ipcMain.handle('set-splash-colors', (_event, colors: { accent: string; bg: string }) => {
+  try {
+    const settingsFile = path.join(app.getPath('userData'), 'settings.json');
+    let settings: any = {};
+    if (fs.existsSync(settingsFile)) {
+      try {
+        settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      } catch {}
+    }
+    settings.splash = { accent: colors?.accent, bg: colors?.bg };
+    fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
+  } catch {}
+});
+
 ipcMain.on('start-download-update', () => {
   if (autoUpdater) {
     autoUpdater.downloadUpdate().catch((err: any) => {
@@ -636,7 +763,16 @@ if (!gotTheLock) {
       }
     }
 
-    createWindow(initialUrl);
+    const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+    if (isDev || !autoUpdater) {
+      createWindow(initialUrl, true);
+    } else {
+      // Fluxo com splash: animação de startup + orquestração do auto-update.
+      setupAutoUpdater();
+      splashWindow = createSplashWindow();
+      createWindow(initialUrl, false); // oculta; revelada ao terminar o splash
+      autoUpdater.checkForUpdates().catch(() => finalizeStartupSplash());
+    }
     createTray();
     startActivityScanner();
 

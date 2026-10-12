@@ -418,6 +418,9 @@ declare global {
       }>;
       onYtdlpProgress?: (callback: (progress: { percent: number; text?: string }) => void) => () => void;
       ytdlpCleanup?: () => Promise<{ success: boolean }>;
+      restartToUpdate?: () => void;
+      setSplashColors?: (colors: { accent: string; bg: string }) => Promise<void>;
+      onSplashUpdate?: (callback: (data: { phase: string; percent?: number; version?: string; message?: string }) => void) => () => void;
     };
   }
 }

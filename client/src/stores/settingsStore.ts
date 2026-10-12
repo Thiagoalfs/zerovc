@@ -483,6 +483,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     root.style.setProperty('--brand-600', brand[600]);
     root.style.setProperty('--brand-700', brand[700]);
 
+    // Persiste as cores resolvidas para o splash (outra janela) usar na próxima abertura.
+    if (typeof window !== 'undefined' && window.electronAPI?.setSplashColors) {
+      window.electronAPI
+        .setSplashColors({
+          accent: root.style.getPropertyValue('--brand-500') || '99,102,241',
+          bg: root.style.getPropertyValue('--bg-darkest') || '13,17,23',
+        })
+        .catch(() => {});
+    }
+
     // 4. Set Zoom Scale (native Electron webFrame for perfect viewport sizing)
     const zoomLevel = uiZoom || 100;
     if (window.electronAPI?.setZoomFactor) {

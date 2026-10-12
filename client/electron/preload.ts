@@ -67,6 +67,9 @@ export interface ElectronAPI {
   }>;
   onYtdlpProgress: (callback: (progress: { percent: number; text?: string }) => void) => () => void;
   ytdlpCleanup: () => Promise<{ success: boolean }>;
+  restartToUpdate: () => void;
+  setSplashColors: (colors: { accent: string; bg: string }) => Promise<void>;
+  onSplashUpdate: (callback: (data: { phase: string; percent?: number; version?: string; message?: string }) => void) => () => void;
 }
 
 const electronAPI: ElectronAPI = {
@@ -153,6 +156,13 @@ const electronAPI: ElectronAPI = {
   },
   setCustomStreamerProcesses: (processes: string[]) => ipcRenderer.send('set-custom-streamer-processes', processes),
   getStreamerSoftwareStatus: () => ipcRenderer.invoke('get-streamer-software-status'),
+  onSplashUpdate: (callback: (data: any) => void) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on('splash-update', handler);
+    return () => ipcRenderer.removeListener('splash-update', handler);
+  },
+  restartToUpdate: () => ipcRenderer.send('restart-to-update'),
+  setSplashColors: (colors: { accent: string; bg: string }) => ipcRenderer.invoke('set-splash-colors', colors),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
