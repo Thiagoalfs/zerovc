@@ -321,7 +321,7 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
                     <span className="text-[9px] text-gray-500 font-normal">{availableRoles.length}</span>
                   </div>
 
-                  <div className="max-h-[160px] overflow-y-auto no-scrollbar space-y-0.5">
+                  <div className="max-h-[160px] overflow-y-auto chat-scrollbar space-y-0.5">
                     {availableRoles.length === 0 ? (
                       <div className="p-2.5 text-center text-xs text-gray-500">
                         Nenhum outro cargo disponível

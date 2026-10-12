@@ -757,7 +757,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y no-scrollbar">
+              <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y chat-scrollbar">
                 {/* Server Mini Card */}
                 <div
                   onClick={() => {
@@ -923,7 +923,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
           )}
 
           {/* DESKTOP SIDEBAR TABS */}
-          <div className="hidden md:flex flex-1 max-w-[280px] lg:max-w-[320px] xl:max-w-[360px] 2xl:max-w-[400px] min-w-[220px] justify-end bg-background-darkest border-r border-white/10 shrink-0 overflow-y-auto no-scrollbar">
+          <div className="hidden md:flex flex-1 max-w-[280px] lg:max-w-[320px] xl:max-w-[360px] 2xl:max-w-[400px] min-w-[220px] justify-end bg-background-darkest border-r border-white/10 shrink-0 overflow-y-auto chat-scrollbar">
             <div className="w-56 lg:w-60 flex flex-col p-4 py-6 xl:py-8 shrink-0 justify-between">
               <div className="flex flex-col items-stretch flex-1 flex-shrink-0">
                 <div className="px-3 py-2 mb-2">
@@ -1177,7 +1177,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             </div>
 
             {/* TAB CONTENTS */}
-            <div className="flex-1 overflow-y-auto py-0 px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 no-scrollbar md:custom-scrollbar overscroll-contain touch-pan-y min-h-0">
+            <div className="flex-1 overflow-y-auto py-0 px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 chat-scrollbar overscroll-contain touch-pan-y min-h-0">
               {activeTab === 'overview' && (
                 <OverviewTab
                   activeGuild={activeGuild}

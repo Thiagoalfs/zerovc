@@ -31,7 +31,7 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
       style={{ zIndex: 99999 }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fade-in"
     >
-      <div className="w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-red-500/30 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto no-scrollbar">
+      <div className="w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-red-500/30 shadow-2xl p-4 sm:p-6 text-gray-200 overflow-y-auto chat-scrollbar">
         <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
           <Ban className="w-5 h-5 text-red-500" />
           <span>Banir @{banModalUser.username}</span>

@@ -1149,7 +1149,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </div>
 
             {/* Mobile Navigation List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y no-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y chat-scrollbar">
               {/* User Mini Profile Card */}
               <div
                 onClick={() => {
@@ -1371,7 +1371,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* ======================================================== */}
         {/* DESKTOP SIDEBAR (Visible on md: and above) */}
         {/* ======================================================== */}
-        <div className="hidden md:flex w-64 bg-background-darkest border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto no-scrollbar justify-between">
+        <div className="hidden md:flex w-64 bg-background-darkest border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto chat-scrollbar justify-between">
           <div className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
             {/* Top User Profile Card Button (Navigates to Minha Conta / Perfil) */}
             <button
@@ -1699,7 +1699,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           />
 
           {/* Scrollable Tab Content Container */}
-          <div className="flex-1 p-4 sm:p-8 overflow-y-auto no-scrollbar md:custom-scrollbar space-y-5 min-h-0 overscroll-contain touch-pan-y">
+          <div className="flex-1 p-4 sm:p-8 overflow-y-auto chat-scrollbar space-y-5 min-h-0 overscroll-contain touch-pan-y">
             {/* TAB 1: MINHA CONTA (UNIFIED WITH PROFILE CUSTOMIZATION) */}
             {activeTab === 'account' && (
               <div className="space-y-5 animate-in fade-in">
@@ -3505,7 +3505,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
             {/* TAB: ATALHOS DO TECLADO (Apenas Electron) */}
             {activeTab === 'keybinds' && isElectron() && (
-              <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar pr-1">
+              <div className="space-y-6 flex-1 overflow-y-auto chat-scrollbar pr-1">
                 <KeybindSettingsView />
               </div>
             )}
@@ -3525,7 +3525,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSaveDisplayName}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Alterar Nome de Exibição</h4>
@@ -3587,7 +3587,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSaveUsername}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Alterar Nome de Usuário</h4>
@@ -3656,7 +3656,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSaveEmail}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Alterar E-mail</h4>
@@ -3730,7 +3730,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSavePhone}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">
@@ -3797,7 +3797,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleSavePassword}
-            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Mudar Senha</h4>
@@ -3885,7 +3885,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleToggle2FA}
-            className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">
@@ -3964,7 +3964,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           }}
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in"
         >
-          <div className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-6 border border-white/10 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95">
+          <div className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-6 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">
                 Códigos de Backup de 2FA
@@ -4051,7 +4051,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <form
             onSubmit={handleDeleteAccount}
-            className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-6 border border-dnd/30 shadow-2xl space-y-4 overflow-y-auto no-scrollbar animate-in zoom-in-95"
+            className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-6 border border-dnd/30 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-dnd">

@@ -128,7 +128,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar min-h-0 touch-pan-y">
+        <div className="flex-1 overflow-y-auto space-y-1 pr-1 chat-scrollbar min-h-0 touch-pan-y">
           {sortedRoles.map((role, idx) => {
             const isSelected = (selectedRoleId === role.id) || (!selectedRoleId && idx === 0);
             const isEveryone = role.name === '@everyone';
@@ -269,7 +269,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-4 md:pr-6 custom-scrollbar touch-pan-y min-h-0">
+          <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-4 md:pr-6 chat-scrollbar touch-pan-y min-h-0">
             {/* Role Name */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400">

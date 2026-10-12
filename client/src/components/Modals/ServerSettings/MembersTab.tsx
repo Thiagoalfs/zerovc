@@ -213,7 +213,7 @@ export const MembersTab: React.FC<MembersTabProps> = ({
                               <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">
                                 Cargos
                               </div>
-                              <div className="max-h-36 overflow-y-auto space-y-0.5 custom-scrollbar pr-1">
+                              <div className="max-h-36 overflow-y-auto space-y-0.5 chat-scrollbar pr-1">
                                 {manageableRoles.map((r) => {
                                   const hasThisRole = memberRoles.some((mr) => mr.id === r.id);
                                   return (

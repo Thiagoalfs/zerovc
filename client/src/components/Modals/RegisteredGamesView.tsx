@@ -348,7 +348,7 @@ export const RegisteredGamesView: React.FC = () => {
           {runningWindows.length > 0 && (
             <div className="space-y-1.5">
               <span className="text-[11px] font-semibold text-gray-400">Janelas e Processos Ativos:</span>
-              <div className="max-h-36 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+              <div className="max-h-36 overflow-y-auto space-y-1 pr-1 chat-scrollbar">
                 {runningWindows.map((win) => (
                   <button
                     key={win}
@@ -402,7 +402,7 @@ export const RegisteredGamesView: React.FC = () => {
                   </span>
                   <span className="text-[10px] text-gray-500">{rawgResults.length} resultados</span>
                 </div>
-                <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1 chat-scrollbar">
                   {rawgResults.map((rawgGame) => (
                     <div
                       key={rawgGame.id}
