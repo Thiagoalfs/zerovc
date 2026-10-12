@@ -415,13 +415,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   });
   const [isTestingMic, setIsTestingMic] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
-  const [inputMode, setInputMode] = useState<'activity' | 'ptt'>(() => {
-    try {
-      return (localStorage.getItem('zerovc_input_mode') as 'activity' | 'ptt') || 'activity';
-    } catch {
-      return 'activity';
-    }
-  });
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -480,6 +473,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setNoiseSuppression,
     setAutoGainControl,
     setDmPrivacy,
+    inputMode,
+    inputVolume,
+    outputVolume,
+    showVoiceUsersInBar,
+    setInputMode,
+    setInputVolume,
+    setOutputVolume,
+    setShowVoiceUsersInBar,
   } = useSettingsStore();
 
   const initialHwAccelRef = useRef(hardwareAcceleration);
@@ -2621,8 +2622,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 {/* Audio Devices */}
                 {!isMobileDevice ? (
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
                         Dispositivo de Entrada (Microfone)
                       </label>
                       <DropdownSelect
@@ -2638,10 +2639,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         }
                         placeholder="Microfone Padrão do Sistema"
                       />
+                      <div className="pt-1 space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-gray-300">Volume de Entrada</span>
+                          <span className="font-mono font-bold text-brand-400">{inputVolume}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={inputVolume}
+                          onChange={(e) => setInputVolume(Number(e.target.value))}
+                          className="w-full accent-brand-500 h-1.5 bg-background-darkest rounded-lg cursor-pointer"
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
                         Dispositivo de Saída (Fone / Alto-falante)
                       </label>
                       <DropdownSelect
@@ -2657,6 +2673,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         }
                         placeholder="Saída Padrão do Sistema"
                       />
+                      <div className="pt-1 space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-gray-300">Volume de Saída</span>
+                          <span className="font-mono font-bold text-brand-400">{outputVolume}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={outputVolume}
+                          onChange={(e) => setOutputVolume(Number(e.target.value))}
+                          className="w-full accent-brand-500 h-1.5 bg-background-darkest rounded-lg cursor-pointer"
+                        />
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -2913,26 +2944,90 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                         </button>
                       </div>
 
-                      {/* Push-to-Talk (PTT) */}
+                      {/* Modo de Entrada (Aberto / Push to Talk) */}
+                      <div className="pt-3.5 space-y-2">
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+                          Modo de Entrada
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => handleInputModeChange('activity')}
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                              inputMode === 'activity'
+                                ? 'bg-brand-500/10 border-brand-500/50 text-white shadow-sm shadow-brand-500/10'
+                                : 'bg-background-darker/60 border-white/5 text-gray-300 hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                                inputMode === 'activity' ? 'bg-brand-500/20 text-brand-400' : 'bg-white/5 text-gray-400'
+                              }`}>
+                                <Mic className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="text-left">
+                                <span className="text-xs font-bold block">Aberto</span>
+                                <span className="text-[10px] text-gray-400 block">Atividade de voz contínua</span>
+                              </div>
+                            </div>
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                              inputMode === 'activity' ? 'border-brand-400 bg-brand-500' : 'border-gray-500 bg-transparent'
+                            }`}>
+                              {inputMode === 'activity' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleInputModeChange('ptt')}
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                              inputMode === 'ptt'
+                                ? 'bg-brand-500/10 border-brand-500/50 text-white shadow-sm shadow-brand-500/10'
+                                : 'bg-background-darker/60 border-white/5 text-gray-300 hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                                inputMode === 'ptt' ? 'bg-brand-500/20 text-brand-400' : 'bg-white/5 text-gray-400'
+                              }`}>
+                                <Radio className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="text-left">
+                                <span className="text-xs font-bold block">Push to Talk</span>
+                                <span className="text-[10px] text-gray-400 block">Aperte para falar</span>
+                              </div>
+                            </div>
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                              inputMode === 'ptt' ? 'border-brand-400 bg-brand-500' : 'border-gray-500 bg-transparent'
+                            }`}>
+                              {inputMode === 'ptt' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Mostrar usuários na barra de voz */}
                       <div className="flex items-center justify-between pt-3.5">
                         <div className="space-y-0.5 pr-4">
-                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Push-to-Talk (PTT)</span>
+                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+                            Mostrar usuários na barra de voz
+                          </span>
                           <p className="text-[11px] text-gray-400">
-                            Transmite a voz apenas ao segurar a tecla configurada.
+                            Exibe fotos e animação de fala dos participantes conectados abaixo do nome da chamada.
                           </p>
                         </div>
                         <button
                           type="button"
                           role="switch"
-                          aria-checked={inputMode === 'ptt'}
-                          onClick={() => handleInputModeChange(inputMode === 'ptt' ? 'activity' : 'ptt')}
+                          aria-checked={showVoiceUsersInBar}
+                          onClick={() => setShowVoiceUsersInBar(!showVoiceUsersInBar)}
                           className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                            inputMode === 'ptt' ? 'bg-brand-500' : 'bg-white/10'
+                            showVoiceUsersInBar ? 'bg-brand-500' : 'bg-white/10'
                           }`}
                         >
                           <div
                             className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                              inputMode === 'ptt' ? 'translate-x-6' : 'translate-x-0'
+                              showVoiceUsersInBar ? 'translate-x-6' : 'translate-x-0'
                             }`}
                           />
                         </button>

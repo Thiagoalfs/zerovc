@@ -215,6 +215,22 @@ class LiveKitManager {
   // segundo dispositivo, não há como separar fisicamente "o que a pessoa ouve" de "o que é
   // capturado" — nesse caso o roteamento não é aplicado (ver pickSecondaryOutputDeviceId).
   private isRoutingCallAudioForCapture: boolean = false;
+  private masterOutputVolume: number = (() => {
+    try {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_output_volume') : null;
+      return saved !== null ? Math.max(0, Math.min(100, Number(saved))) / 100 : 1;
+    } catch {
+      return 1;
+    }
+  })();
+  private masterInputVolume: number = (() => {
+    try {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_input_volume') : null;
+      return saved !== null ? Math.max(0, Math.min(100, Number(saved))) / 100 : 1;
+    } catch {
+      return 1;
+    }
+  })();
 
   getRoom(): Room | null {
     return this.room;
@@ -341,12 +357,12 @@ class LiveKitManager {
           this.attachedStreamAudioElements.set(sid, audioEl);
           const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
           try {
-            audioEl.volume = Math.min(Math.max(streamVol, 0), 1);
+            audioEl.volume = Math.min(Math.max(streamVol * this.masterOutputVolume, 0), 1);
           } catch {}
           const audioTrack = (track as any);
           if (typeof audioTrack.setVolume === 'function') {
             try {
-              audioTrack.setVolume(streamVol);
+              audioTrack.setVolume(streamVol * this.masterOutputVolume);
             } catch (err) {
               console.warn('[LiveKit] Error setting stream volume on subscribed track:', err);
             }
@@ -359,12 +375,12 @@ class LiveKitManager {
           this.attachedUserAudioElements.set(sid, audioEl);
           const userVol = this.userVolumes.get(participant.identity) ?? 1;
           try {
-            audioEl.volume = Math.min(Math.max(userVol, 0), 1);
+            audioEl.volume = Math.min(Math.max(userVol * this.masterOutputVolume, 0), 1);
           } catch {}
           const audioTrack = (track as any);
           if (typeof audioTrack.setVolume === 'function') {
             try {
-              audioTrack.setVolume(userVol);
+              audioTrack.setVolume(userVol * this.masterOutputVolume);
             } catch (err) {
               console.warn('[LiveKit] Error setting user volume on subscribed track:', err);
             }
@@ -961,7 +977,7 @@ class LiveKitManager {
     this.attachedUserAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
         try {
-          el.volume = Math.min(Math.max(volume, 0), 1);
+          el.volume = Math.min(Math.max(volume * this.masterOutputVolume, 0), 1);
         } catch {}
       }
     });
@@ -974,7 +990,7 @@ class LiveKitManager {
         if (pub.source === Track.Source.Microphone && audioTrack) {
           if (typeof audioTrack.setVolume === 'function') {
             try {
-              audioTrack.setVolume(volume);
+              audioTrack.setVolume(volume * this.masterOutputVolume);
             } catch (err) {
               console.warn('[LiveKit] Error setting user track volume:', err);
             }
@@ -999,7 +1015,7 @@ class LiveKitManager {
     this.attachedStreamAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
         try {
-          el.volume = Math.min(Math.max(volume, 0), 1);
+          el.volume = Math.min(Math.max(volume * this.masterOutputVolume, 0), 1);
         } catch {}
       }
     });
@@ -1012,7 +1028,7 @@ class LiveKitManager {
         if (pub.source === Track.Source.ScreenShareAudio && audioTrack) {
           if (typeof audioTrack.setVolume === 'function') {
             try {
-              audioTrack.setVolume(volume);
+              audioTrack.setVolume(volume * this.masterOutputVolume);
             } catch (err) {
               console.warn('[LiveKit] Error setting stream track volume:', err);
             }
@@ -1020,6 +1036,62 @@ class LiveKitManager {
         }
       });
     }
+  }
+
+  setOutputVolume(volume: number) {
+    this.masterOutputVolume = Math.max(0, Math.min(100, volume)) / 100;
+
+    // Adjust user audio elements
+    this.attachedUserAudioElements.forEach((el, key) => {
+      let userVol = 1;
+      for (const [id, v] of this.userVolumes.entries()) {
+        if (key.includes(id) || el.id.includes(id)) {
+          userVol = v;
+          break;
+        }
+      }
+      try {
+        el.volume = Math.min(Math.max(userVol * this.masterOutputVolume, 0), 1);
+      } catch {}
+    });
+
+    // Adjust remote participant audio tracks
+    if (this.room) {
+      this.room.remoteParticipants.forEach((remote, participantIdentity) => {
+        const userVol = this.userVolumes.get(participantIdentity) ?? 1;
+        remote.audioTrackPublications.forEach((pub) => {
+          const audioTrack = pub.track || (pub as any).audioTrack;
+          if (pub.source === Track.Source.Microphone && audioTrack) {
+            if (typeof audioTrack.setVolume === 'function') {
+              try {
+                audioTrack.setVolume(userVol * this.masterOutputVolume);
+              } catch (err) {}
+            }
+          }
+        });
+      });
+    }
+
+    // Adjust stream audio elements
+    this.attachedStreamAudioElements.forEach((el, key) => {
+      let streamVol = 1;
+      for (const [id, v] of this.streamVolumes.entries()) {
+        if (key.includes(id) || el.id.includes(id)) {
+          streamVol = v;
+          break;
+        }
+      }
+      try {
+        el.volume = Math.min(Math.max(streamVol * this.masterOutputVolume, 0), 1);
+      } catch {}
+    });
+  }
+
+  setInputVolume(volume: number) {
+    this.masterInputVolume = Math.max(0, Math.min(100, volume)) / 100;
+    try {
+      audioProcessor.updateConfig({ volume });
+    } catch {}
   }
 
   setStreamAudioSubscribed(participantIdentity: string, subscribed: boolean) {
