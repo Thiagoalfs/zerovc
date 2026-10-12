@@ -180,6 +180,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         new_password: password,
         code: twoFactorCode.trim() || undefined,
       });
+      // Clear any stale session so the user logs in fresh with the new password
+      try {
+        useAuthStore.getState().logout();
+      } catch {}
       setResetSuccess(true);
     } catch (err: any) {
       setLocalError(err.message || 'Falha ao redefinir senha.');

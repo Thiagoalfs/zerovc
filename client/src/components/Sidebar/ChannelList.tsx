@@ -1077,7 +1077,10 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               {/* Invite People Button */}
               <button
                 type="button"
-                onClick={onOpenInviteModal}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenInviteModal();
+                }}
                 className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer flex-shrink-0 relative z-10"
                 title="Convidar Pessoas"
               >
