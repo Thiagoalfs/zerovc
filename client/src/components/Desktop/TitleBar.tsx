@@ -205,7 +205,6 @@ export const TitleBar: React.FC = () => {
                 >
                   <path d="M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32V274.7l-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7V32zM64 352c-35.3 0-64 28.7-64 64v32c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V416c0-35.3-28.7-64-64-64H346.5l-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352H64zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z" />
                 </svg>
-                <span>Update</span>
               </button>
             )}
 
@@ -218,25 +217,6 @@ export const TitleBar: React.FC = () => {
                 title={pendingVersion ? `Atualização ${pendingVersion} disponível. Clique para reiniciar e atualizar.` : 'Atualização disponível. Clique para reiniciar e atualizar.'}
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Atualizar</span>
-              </button>
-            )}
-
-            {false && /* atualização ao vivo descontinuada: agora é pelo splash */ (
-              <button
-                type="button"
-                onClick={handleDirectUpdate}
-                className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-[11px] font-bold px-3 py-0.5 rounded-full shadow-lg shadow-emerald-500/30 transition-all cursor-pointer mr-1 animate-bounce"
-                title={pendingVersion ? `Reiniciar para instalar a versão ${pendingVersion}` : 'Clique para reiniciar e aplicar a atualização agora.'}
-              >
-                <svg
-                  className="w-3 h-3 fill-current"
-                  viewBox="0 0 512 512"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path d="M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32V274.7l-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7V32zM64 352c-35.3 0-64 28.7-64 64v32c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V416c0-35.3-28.7-64-64-64H346.5l-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352H64zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z" />
-                </svg>
-                <span>Update</span>
               </button>
             )}
 
