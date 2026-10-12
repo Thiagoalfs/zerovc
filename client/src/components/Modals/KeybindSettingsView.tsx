@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Keyboard, Mic, Headphones, Monitor, Radio, RotateCcw, Check, Sparkles, X } from 'lucide-react';
 import { isElectron } from '../../lib/platform';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
 
 interface ShortcutConfig {
   id: string;
@@ -156,23 +157,14 @@ export const KeybindSettingsView: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      <div className="flex items-center justify-between pb-2 border-b border-white/5">
-        <div>
-          <h3 className="text-sm font-bold text-white">
-            Atalhos do Teclado
-          </h3>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Configure combinações de teclas rápidas para controle de voz e transmissões no app.
-          </p>
-        </div>
-
-        {savedSuccess && (
+      {savedSuccess && (
+        <div className="flex items-center justify-end">
           <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-xs font-semibold animate-in fade-in">
             <Check className="w-3.5 h-3.5" />
             <span>Salvo!</span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="divide-y divide-white/5">
         {SHORTCUTS.map((sc) => {
@@ -194,7 +186,7 @@ export const KeybindSettingsView: React.FC = () => {
                     {sc.icon}
                   </div>
                   <div>
-                    <h4 className="text-xs font-semibold text-white">{sc.name}</h4>
+                    <h4 className={MODAL_TOGGLE_HEADER_CLASS}>{sc.name}</h4>
                     <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
                       {sc.description}
                     </p>

@@ -8,6 +8,7 @@ import {
   Contrast,
 } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
 
 const FONT_SIZE_STEPS = [
   { value: 12, label: '12px (Compacto)' },
@@ -59,16 +60,6 @@ export const AccessibilitySettingsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h3 className="text-base font-bold text-white">
-          Central de Acessibilidade
-        </h3>
-        <p className="text-xs text-gray-400 mt-1">
-          Personalize a legibilidade, escala de texto, animações e leitor por voz para a melhor experiência.
-        </p>
-      </div>
-
       {/* Group 1: Tipografia & Escala de Texto */}
       <div className="space-y-3">
         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
@@ -77,7 +68,7 @@ export const AccessibilitySettingsView: React.FC = () => {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-white">Escala Tipográfica do Chat</span>
+            <span className={MODAL_TOGGLE_HEADER_CLASS}>Escala Tipográfica do Chat</span>
             <span className="text-xs font-bold text-brand-400 bg-brand-500/10 px-2.5 py-1 rounded-xl border border-brand-500/20">
               {chatFontSize}px
             </span>
@@ -153,7 +144,7 @@ export const AccessibilitySettingsView: React.FC = () => {
           {/* Reduced Motion Toggle */}
           <div className="py-3 flex items-center justify-between gap-4">
             <div className="space-y-0.5 min-w-0">
-              <div className="text-xs font-semibold text-white">
+              <div className={MODAL_TOGGLE_HEADER_CLASS}>
                 Reduzir Movimento
               </div>
               <p className="text-[11px] text-gray-400 leading-relaxed">
@@ -174,7 +165,7 @@ export const AccessibilitySettingsView: React.FC = () => {
           {/* High Contrast Toggle */}
           <div className="py-3 flex items-center justify-between gap-4">
             <div className="space-y-0.5 min-w-0">
-              <div className="text-xs font-semibold text-white">
+              <div className={MODAL_TOGGLE_HEADER_CLASS}>
                 Modo de Alto Contraste
               </div>
               <p className="text-[11px] text-gray-400 leading-relaxed">
@@ -205,7 +196,7 @@ export const AccessibilitySettingsView: React.FC = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 min-w-0">
-              <div className="text-xs font-semibold text-white">Leitura Automática de Novas Mensagens</div>
+              <div className={MODAL_TOGGLE_HEADER_CLASS}>Leitura Automática de Novas Mensagens</div>
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Quando ativado, novas mensagens recebidas no canal ativo são narradas automaticamente.
               </p>

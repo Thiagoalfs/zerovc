@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { GameSearchResult } from '../../types';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
 
 function formatLastPlayed(timestamp: number): string {
   if (!timestamp) return 'Nunca jogado';
@@ -273,7 +274,7 @@ export const RegisteredGamesView: React.FC = () => {
               )}
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-white truncate">{currentRunningGame.name}</span>
+                  <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>{currentRunningGame.name}</span>
                   {currentRunningGame.isVerified && (
                     <span
                       className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#5865F2] text-white shadow-xs shrink-0"
@@ -308,7 +309,7 @@ export const RegisteredGamesView: React.FC = () => {
           </div>
         ) : (
           <div className="py-2">
-            <h5 className="text-xs font-semibold text-white mb-0.5">Nenhum jogo detectado</h5>
+            <h5 className={`${MODAL_TOGGLE_HEADER_CLASS} mb-0.5`}>Nenhum jogo detectado</h5>
             <p className="text-[11px] text-gray-400">
               Não está vendo seu jogo?{' '}
               <button
@@ -558,7 +559,7 @@ export const RegisteredGamesView: React.FC = () => {
                 ) : (
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white truncate">{game.name}</span>
+                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>{game.name}</span>
                       {game.isVerified && (
                         <span
                           className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#5865F2] text-white shadow-xs shrink-0"

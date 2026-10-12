@@ -26,6 +26,7 @@ import { Channel, Role, Permissions, ChannelPermissionOverwrite } from '../../ty
 import { useGuildStore } from '../../stores/guildStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { DropdownSelect } from '../Common/DropdownSelect';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
 
 interface ChannelSettingsModalProps {
   channel: Channel | null;
@@ -777,7 +778,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                   <div className="space-y-0.5 min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
                                       {perm.icon}
-                                      <span className="text-xs font-bold text-gray-100">
+                                      <span className={MODAL_TOGGLE_HEADER_CLASS}>
                                         {perm.name}
                                       </span>
                                     </div>

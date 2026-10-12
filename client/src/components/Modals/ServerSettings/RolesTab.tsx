@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Role, User, Permissions } from '../../../types';
 import { PRESET_ROLE_COLORS, PERMISSION_GROUPS } from './constants';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../../constants/modalTypography';
 
 interface RolesTabProps {
   roles: Role[];
@@ -244,7 +245,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   }`}
                 >
                   <div className="pr-4 select-none">
-                    <div className="text-sm font-semibold text-white">
+                    <div className={MODAL_TOGGLE_HEADER_CLASS}>
                       Exibir membros deste cargo separadamente
                     </div>
                     <div className="text-xs text-gray-400 mt-1 leading-relaxed">
@@ -283,7 +284,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   }`}
                 >
                   <div className="pr-4 select-none">
-                    <div className="text-sm font-semibold text-white">
+                    <div className={MODAL_TOGGLE_HEADER_CLASS}>
                       Permitir que qualquer um @mencione este cargo
                     </div>
                     <div className="text-xs text-gray-400 mt-1 leading-relaxed">
@@ -342,7 +343,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                           }`}
                         >
                           <div className="pr-4 select-none">
-                            <div className="text-sm font-semibold text-white">
+                            <div className={MODAL_TOGGLE_HEADER_CLASS}>
                               {perm.name}
                             </div>
                             <div className="text-xs text-gray-400 mt-1 leading-relaxed">{perm.description}</div>

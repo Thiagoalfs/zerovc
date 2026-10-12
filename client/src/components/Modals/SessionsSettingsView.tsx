@@ -15,6 +15,7 @@ import {
 import { api } from '../../lib/api';
 import { UserSession } from '../../types';
 import { fetchLocationFromIP } from '../../utils/location';
+import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
 
 const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip, isSmall }) => {
   const [location, setLocation] = useState<string>('Calculando localização...');
@@ -200,7 +201,7 @@ export const SessionsSettingsView: React.FC = () => {
                   </div>
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-white truncate">
+                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
                         {currentSession.os || 'Dispositivo'} • {currentSession.browser || 'Navegador'}
                       </span>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
@@ -258,7 +259,7 @@ export const SessionsSettingsView: React.FC = () => {
                         {getDeviceIcon(session.device_type, session.os)}
                       </div>
                       <div className="min-w-0 space-y-0.5">
-                        <div className="text-xs font-semibold text-white truncate">
+                        <div className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
                           {session.os || 'Dispositivo Remoto'} • {session.browser || 'Navegador'}
                         </div>
                         <div className="flex items-center gap-3 text-[11px] text-gray-400 flex-wrap">
