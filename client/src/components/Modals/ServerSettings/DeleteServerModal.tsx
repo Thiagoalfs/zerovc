@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Lock, Trash2, Loader2 } from 'lucide-react';
 import { Guild, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
+import { MODAL_DIALOG_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../../constants/modalTypography';
 
 interface DeleteServerModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
         {/* Header */}
         <div className="p-4 sm:p-5 pb-3 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <h2 className={`${MODAL_DIALOG_TITLE_CLASS} flex items-center gap-2`}>
               <span>Excluir servidor</span>
             </h2>
             <button
@@ -112,7 +113,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
 
           <div className="mt-4 space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 DIGITE O NOME DO SERVIDOR
               </label>
               <button
@@ -142,7 +143,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
           {has2FA && (
             <div className="mt-4 space-y-1.5 animate-in fade-in">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center gap-1.5`}>
                   <Lock className="w-3.5 h-3.5 text-brand-400" />
                   <span>CÓDIGO DE AUTENTICAÇÃO (2FA)</span>
                 </label>

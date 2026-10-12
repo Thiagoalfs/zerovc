@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Monitor, AppWindow, Sparkles, Volume2, Check } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
+import { MODAL_TOGGLE_HEADER_CLASS, MODAL_TITLE_CLASS } from '../../constants/modalTypography';
 
 interface ScreenShareModalProps {
   isOpen: boolean;
@@ -98,7 +98,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-gray-100">
+            <h2 className={MODAL_TITLE_CLASS}>
               Selecione janela ou tela
             </h2>
           </div>

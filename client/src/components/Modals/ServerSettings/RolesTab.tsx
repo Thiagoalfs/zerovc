@@ -8,7 +8,12 @@ import {
 } from 'lucide-react';
 import { Role, User, Permissions } from '../../../types';
 import { PRESET_ROLE_COLORS, PERMISSION_GROUPS } from './constants';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_DIALOG_TITLE_CLASS,
+} from '../../../constants/modalTypography';
 
 interface RolesTabProps {
   roles: Role[];
@@ -112,7 +117,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
       {/* Roles Sidebar / Hierarchy List */}
       <div className="w-full md:w-72 flex flex-col md:pr-6 md:border-r border-white/10 shrink-0 max-h-56 md:max-h-none border-b md:border-b-0 pb-4 md:pb-0">
         <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 px-1">
-          <span className="text-xs font-bold uppercase text-gray-400">
+          <span className={MODAL_SECTION_HEADER_CLASS}>
             Cargos ({sortedRoles.length})
           </span>
           {canManageRoles && (
@@ -255,7 +260,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                 className="w-5 h-5 rounded-full shadow shrink-0"
                 style={{ backgroundColor: selectedRole.color || '#99AAB5' }}
               />
-              <h2 className="text-base font-bold text-white truncate">{selectedRole.name}</h2>
+              <h2 className={`${MODAL_DIALOG_TITLE_CLASS} truncate`}>{selectedRole.name}</h2>
             </div>
 
             {canManageRoles && selectedRole.name !== '@everyone' && (
@@ -272,7 +277,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
           <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-4 md:pr-6 chat-scrollbar touch-pan-y min-h-0">
             {/* Role Name */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 Nome do Cargo
               </label>
               <input
@@ -292,7 +297,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
 
             {/* Role Color */}
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 Cor do Cargo
               </label>
               <div className="flex flex-wrap items-center gap-2">
@@ -330,7 +335,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
 
             {/* Role Display Switches (Hoist & Mentionable) */}
             <div className="space-y-3 pt-3 border-t border-white/10">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              <label className={MODAL_SECTION_HEADER_CLASS}>
                 Exibição de Membros
               </label>
               <div className="divide-y divide-white/5">
@@ -414,7 +419,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
 
             {/* Permission Groups */}
             <div className="space-y-5 pt-3 border-t border-white/10">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              <label className={MODAL_SECTION_HEADER_CLASS}>
                 Permissões do Cargo
               </label>
 

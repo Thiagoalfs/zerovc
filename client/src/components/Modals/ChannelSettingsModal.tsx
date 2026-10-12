@@ -26,7 +26,13 @@ import { Channel, Role, Permissions, ChannelPermissionOverwrite } from '../../ty
 import { useGuildStore } from '../../stores/guildStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { DropdownSelect } from '../Common/DropdownSelect';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_TITLE_CLASS,
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+} from '../../constants/modalTypography';
 
 interface ChannelSettingsModalProps {
   channel: Channel | null;
@@ -351,7 +357,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               >
                 <X className="w-5 h-5" />
               </button>
-              <h2 className="text-base font-bold text-white">Configurações do Canal</h2>
+              <h2 className={MODAL_DIALOG_TITLE_CLASS}>Configurações do Canal</h2>
             </div>
           </div>
 
@@ -480,14 +486,14 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               </div>
             </div>
 
-            <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
+            <nav className="flex flex-col items-stretch gap-0.5 flex-1 flex-shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveTab('overview')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'overview'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Visão Geral</span>
@@ -496,26 +502,26 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('permissions')}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'permissions'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Permissões</span>
                 {customOverwritesCount > 0 && (
-                  <span className="text-xs bg-background-dark px-1.5 py-0.5 rounded text-brand-400 font-bold">
+                  <span className="text-xs bg-background-dark px-1.5 py-0.5 rounded text-gray-300 font-bold">
                     {customOverwritesCount}
                   </span>
                 )}
               </button>
 
-              <div className="pt-2 mt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0">
+              <div className="pt-2 mt-2 border-t border-white/10 flex flex-col gap-0.5 flex-shrink-0">
                 <button
                   type="button"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+                  className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-2" />
                   <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
@@ -563,7 +569,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         {/* Desktop Top Header */}
         <div className="hidden md:flex items-center justify-between px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
           <div>
-            <h1 className="text-lg font-bold text-white flex items-center gap-2">
+            <h1 className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
               {activeTab === 'overview'
                 ? isCategory
                   ? 'Visão Geral da Categoria'
@@ -621,7 +627,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           {activeTab === 'overview' && (
             <div className="max-w-2xl space-y-6 py-6">
               <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                <label className={MODAL_FIELD_LABEL_CLASS}>
                   {isCategory ? 'Nome da Categoria' : 'Nome do Canal'}
                 </label>
                 <div className="relative flex items-center">
@@ -647,7 +653,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
               {!isCategory && categories.length > 0 && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                  <label className={MODAL_FIELD_LABEL_CLASS}>
                     Categoria Pai
                   </label>
                   <DropdownSelect
@@ -668,7 +674,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
               {!isCategory && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                  <label className={MODAL_FIELD_LABEL_CLASS}>
                     Tópico do Canal
                   </label>
                   <textarea
@@ -688,7 +694,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             <div className="flex flex-col md:flex-row gap-6 min-h-0 h-auto md:h-[calc(100vh-140px)] py-4 md:py-6">
               {/* Left Column: Roles list selector */}
               <div className="w-full md:w-64 flex flex-col gap-2 shrink-0 md:pr-6 md:border-r border-white/10 border-b md:border-b-0 pb-4 md:pb-0">
-                <span className="text-xs font-bold uppercase text-gray-400 pb-2 mb-1 border-b border-white/10 px-1 block">
+                <span className={`${MODAL_SECTION_HEADER_CLASS} pb-2 mb-1 border-b border-white/10 px-1 block`}>
                   Cargos do Servidor
                 </span>
 
@@ -762,7 +768,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                     <div className="space-y-6">
                       {channelPermsList.map((group) => (
                         <div key={group.category} className="space-y-3">
-                          <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                          <h4 className={MODAL_SECTION_HEADER_CLASS}>
                             {group.category}
                           </h4>
 

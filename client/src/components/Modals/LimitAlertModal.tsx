@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
+import { MODAL_DIALOG_TITLE_CLASS } from '../../constants/modalTypography';
 
 interface LimitAlertModalProps {
   isOpen: boolean;
@@ -51,7 +52,7 @@ export const LimitAlertModal: React.FC<LimitAlertModalProps> = ({
             <AlertTriangle className="w-8 h-8" />
           </div>
 
-          <h2 className="text-xl font-bold text-white">{title}</h2>
+          <h2 className={MODAL_DIALOG_TITLE_CLASS}>{title}</h2>
           <p className="text-sm text-gray-300 mt-2 leading-relaxed">{message}</p>
           {detail && (
             <span className="mt-2 text-xs font-mono text-gray-400 bg-background-darkest px-3 py-1 rounded-lg border border-white/5">

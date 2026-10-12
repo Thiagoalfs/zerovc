@@ -5,6 +5,7 @@ import { X, Trash2, Loader2, FileText } from 'lucide-react';
 import { Message, DMMessage, DMGroupMessage } from '../../types';
 import { formatAssetUrl } from '../../lib/api';
 import { FormattedMessage } from '../Chat/FormattedMessage';
+import { MODAL_DIALOG_TITLE_CLASS } from '../../constants/modalTypography';
 
 interface DeleteMessageModalProps {
   isOpen: boolean;
@@ -66,7 +67,7 @@ export const DeleteMessageModal: React.FC<DeleteMessageModalProps> = ({
         {/* Header */}
         <div className="p-4 sm:p-5 pb-3 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <h2 className={`${MODAL_DIALOG_TITLE_CLASS} flex items-center gap-2`}>
               <span>Excluir mensagem</span>
             </h2>
             <button

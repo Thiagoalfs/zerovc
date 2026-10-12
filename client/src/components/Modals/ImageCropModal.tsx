@@ -12,6 +12,7 @@ import {
   Film,
 } from 'lucide-react';
 import { isGif, cropImageToWebP } from '../../utils/image';
+import { MODAL_DIALOG_TITLE_CLASS } from '../../constants/modalTypography';
 
 export type CropType = 'avatar' | 'banner' | 'guildIcon' | 'guildBanner' | 'groupIcon';
 
@@ -264,7 +265,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
         {/* Modal Header */}
         <div className="p-4 sm:p-5 pb-3 flex items-center justify-between border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-bold text-white tracking-tight">
+            <h3 className={MODAL_DIALOG_TITLE_CLASS}>
               {modalTitle}
             </h3>
           </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Compass, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useGuildStore } from '../../stores/guildStore';
+import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
 
 interface JoinServerModalProps {
   isOpen: boolean;
@@ -79,7 +80,7 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
           <div className="w-12 h-12 bg-online/10 text-online rounded-2xl flex items-center justify-center mx-auto mb-2">
             <Compass className="w-6 h-6" />
           </div>
-          <h2 className="text-lg sm:text-xl font-bold text-white">Entrar em um Servidor</h2>
+          <h2 className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
           <p className="text-xs text-gray-400 mt-1">
             Digite o código de 10 caracteres ou o link de convite que você recebeu.
           </p>
@@ -90,7 +91,7 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg font-medium">{error}</div>}
 
           <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
+            <label className={MODAL_FIELD_LABEL_CLASS}>
               Link ou Código de Convite (10 Caracteres)
             </label>
             <input

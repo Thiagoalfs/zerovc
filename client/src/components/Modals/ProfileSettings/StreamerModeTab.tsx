@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStreamerModeStore } from '../../../stores/streamerModeStore';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../../constants/modalTypography';
+import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../../constants/modalTypography';
 
 export const StreamerModeTab: React.FC = () => {
   const {
@@ -76,7 +76,7 @@ export const StreamerModeTab: React.FC = () => {
           2. GENERAL & AUTOMATION CONTROLS
       ------------------------------------------------------------- */}
       <div className="space-y-4">
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+        <h4 className={MODAL_SECTION_HEADER_CLASS}>
           Automação & Detecção
         </h4>
 
@@ -116,7 +116,7 @@ export const StreamerModeTab: React.FC = () => {
           3. PRIVACY PROTECTIONS (GRANULAR)
       ------------------------------------------------------------- */}
       <div className="space-y-4">
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+        <h4 className={MODAL_SECTION_HEADER_CLASS}>
           Proteções de Privacidade
         </h4>
 
@@ -213,7 +213,7 @@ export const StreamerModeTab: React.FC = () => {
           5. SOUNDS & NOTIFICATIONS
       ------------------------------------------------------------- */}
       <div className="space-y-4">
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+        <h4 className={MODAL_SECTION_HEADER_CLASS}>
           Sons e Notificações
         </h4>
 

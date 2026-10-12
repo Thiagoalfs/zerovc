@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
   Camera,
@@ -83,7 +83,13 @@ import {
 } from '../../utils/audio';
 import { livekit } from '../../lib/livekit';
 import { api, formatAssetUrl } from '../../lib/api';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_SECTION_HEADER_CLASS,
+  MODAL_FIELD_LABEL_CLASS,
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_TITLE_CLASS,
+} from '../../constants/modalTypography';
 import { copyToClipboard } from '../../utils/clipboard';
 import { isElectron } from '../../lib/platform';
 import { ImageCropModal } from './ImageCropModal';
@@ -94,6 +100,13 @@ import { RegisteredGamesView } from './RegisteredGamesView';
 import { ActivityPrivacySettingsView } from './ActivityPrivacySettingsView';
 import { StreamerModeTab } from './ProfileSettings/StreamerModeTab';
 import { useStreamerModeStore } from '../../stores/streamerModeStore';
+
+const FONT_SIZE_STEPS = [
+  { value: 12, label: '12px (Compacto)' },
+  { value: 14, label: '14px (Padrão)' },
+  { value: 18, label: '18px (Grande)' },
+  { value: 22, label: '22px (Extra Grande)' },
+];
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -477,11 +490,28 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     inputVolume,
     outputVolume,
     showVoiceUsersInBar,
+    chatFontSize,
     setInputMode,
     setInputVolume,
     setOutputVolume,
     setShowVoiceUsersInBar,
+    setChatFontSize,
   } = useSettingsStore();
+
+  const currentFontSizeIndex = useMemo(() => {
+    const exactIndex = FONT_SIZE_STEPS.findIndex((s) => s.value === chatFontSize);
+    if (exactIndex !== -1) return exactIndex;
+    let closestIdx = 1;
+    let minDiff = Infinity;
+    FONT_SIZE_STEPS.forEach((step, idx) => {
+      const diff = Math.abs(step.value - chatFontSize);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = idx;
+      }
+    });
+    return closestIdx;
+  }, [chatFontSize]);
 
   const initialHwAccelRef = useRef(hardwareAcceleration);
   const hasHwAccelChanged = hardwareAcceleration !== initialHwAccelRef.current;
@@ -1144,7 +1174,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 >
                   <X className="w-5 h-5" />
                 </button>
-                <h2 className="text-base font-bold text-white">Configurações</h2>
+                <h2 className={MODAL_DIALOG_TITLE_CLASS}>Configurações</h2>
               </div>
             </div>
 
@@ -1371,49 +1401,34 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* ======================================================== */}
         {/* DESKTOP SIDEBAR (Visible on md: and above) */}
         {/* ======================================================== */}
-        <div className="hidden md:flex w-64 bg-background-darkest border-r border-white/10 flex-col p-4 shrink-0 overflow-y-auto chat-scrollbar justify-between">
-          <div className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
-            {/* Top User Profile Card Button (Navigates to Minha Conta / Perfil) */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('account')}
-              className={`w-full p-2.5 mb-3 rounded-xl flex items-center gap-3 text-left transition-all cursor-pointer group ${
-                activeTab === 'account' || activeTab === 'profile'
-                  ? 'bg-brand-500/15 border border-brand-500/30 shadow-sm'
-                  : 'bg-background-darker/60 hover:bg-background-darker border border-white/5 hover:border-white/10'
-              }`}
-            >
-              <div className="w-10 h-10 rounded-full bg-brand-500 overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow">
-                {user.avatar_url ? (
-                  <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase()}</span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-white truncate leading-tight">
-                  {user.display_name || user.username}
-                </div>
-                <div className="text-xs text-gray-400 group-hover:text-gray-200 flex items-center gap-1.5 mt-0.5 transition-colors">
-                  <span>Editar</span>
-                  <Pencil className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
-                </div>
-              </div>
-            </button>
-
-            <nav className="flex flex-col items-stretch gap-1 flex-1 flex-shrink-0">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
+        <div className="hidden md:flex w-60 bg-background-darkest border-r border-white/10 flex-col p-3 shrink-0 overflow-y-auto chat-scrollbar justify-between">
+          <div className="flex flex-col items-stretch gap-0.5 flex-1 flex-shrink-0">
+            <nav className="flex flex-col items-stretch gap-0.5 flex-1 flex-shrink-0">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2.5 mb-1 mt-1">
                 Configurações de Usuário
               </span>
+
+              {/* Tab: Minha Conta */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('account')}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'account' || activeTab === 'profile'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                }`}
+              >
+                <span>Minha Conta</span>
+              </button>
 
               {/* Tab: Privacidade e Segurança */}
               <button
                 type="button"
                 onClick={() => setActiveTab('privacy')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'privacy'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Privacidade e Segurança</span>
@@ -1423,10 +1438,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('sessions')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'sessions'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Dispositivos & Sessões</span>
@@ -1434,7 +1449,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
               <div className="h-[1px] bg-white/10 my-2 mx-1" />
 
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2.5 mb-1 mt-1">
                 Configurações de Atividade
               </span>
 
@@ -1442,10 +1457,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('registered_games')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'registered_games'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Jogos Registrados</span>
@@ -1455,10 +1470,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('activity_privacy')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'activity_privacy'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Privacidade de Atividade</span>
@@ -1466,7 +1481,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
               <div className="h-[1px] bg-white/10 my-2 mx-1" />
 
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3 my-1">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2.5 mb-1 mt-1">
                 Configurações do App
               </span>
 
@@ -1474,10 +1489,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('appearance')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'appearance'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Aparência</span>
@@ -1487,10 +1502,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('accessibility')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'accessibility'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Acessibilidade</span>
@@ -1500,10 +1515,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('audio')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'audio'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Voz & Vídeo</span>
@@ -1513,10 +1528,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('notifications')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'notifications'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Notificações & Sons</span>
@@ -1526,10 +1541,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('streamer_mode')}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'streamer_mode'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Modo Streamer</span>
@@ -1542,10 +1557,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <button
                 type="button"
                 onClick={() => setActiveTab('preferences')}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'preferences'
-                    ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                 }`}
               >
                 <span>Preferências</span>
@@ -1556,10 +1571,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <button
                   type="button"
                   onClick={() => setActiveTab('keybinds')}
-                  className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                     activeTab === 'keybinds'
-                      ? 'bg-brand-500/15 text-brand-400 border-l-2 border-brand-500 font-bold'
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-background-dark/60'
+                      ? 'bg-white/10 text-white font-medium'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                   }`}
                 >
                   <span>Atalhos do Teclado</span>
@@ -1569,11 +1584,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           </div>
 
           {/* Bottom Logout */}
-          <div className="pt-2 border-t border-white/10 flex flex-col gap-1.5 flex-shrink-0 mt-auto">
+          <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
             <button
               type="button"
               onClick={logout}
-              className="flex items-center px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+              className="flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
             >
               <span>Sair da Conta</span>
             </button>
@@ -1640,7 +1655,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 </button>
               )}
               <div>
-                <h1 className="text-lg font-bold text-white flex items-center gap-2">
+                <h1 className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
                   {activeTab === 'account' && 'Minha Conta e Perfil'}
                   {activeTab === 'profile' && 'Perfil de Usuário'}
                   {activeTab === 'privacy' && 'Privacidade e Segurança'}
@@ -1848,7 +1863,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 {/* Group 2: Personalização do Perfil (Recado & Bio) */}
                 <div className="space-y-4 pt-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    <h4 className={MODAL_SECTION_HEADER_CLASS}>
                       Recado e Sobre Mim
                     </h4>
                   </div>
@@ -1856,7 +1871,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <form onSubmit={handleSaveBioAndStatus} className="space-y-4">
                     {/* Recado / Status Personalizado */}
                     <div>
-                      <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                      <label className={MODAL_FIELD_LABEL_CLASS}>
                         Recado / Status Personalizado
                       </label>
                       <input
@@ -1872,7 +1887,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     {/* Bio / Sobre Mim */}
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">
+                        <label className={MODAL_FIELD_LABEL_CLASS}>
                           Sobre Mim (Bio)
                         </label>
                         <span className="text-[10px] text-gray-500">{bio.length}/255</span>
@@ -1918,7 +1933,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <div className="space-y-6 animate-in fade-in">
                 {/* 1. Credenciais de Acesso (E-mail, Senha & 2FA) */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Credenciais de Acesso
                   </h4>
                   <div className="divide-y divide-white/5 space-y-3.5">
@@ -2022,7 +2037,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                 {/* 2. Mensagens Diretas (DMs) */}
                 <div className="pt-2">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Mensagens Diretas (DMs)
                   </h4>
                   <div className="space-y-2.5">
@@ -2082,7 +2097,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                 {/* 4. Gestão de Dados e Conta (LGPD / GDPR) */}
                 <div className="pt-2">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Gestão de Dados e Conta (LGPD)
                   </h4>
                   <div className="divide-y divide-white/5 space-y-3.5">
@@ -2176,7 +2191,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 {/* Live Interactive Appearance Preview */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <h4 className={`${MODAL_SECTION_HEADER_CLASS} flex items-center gap-1.5 !mb-0`}>
                       <Palette className="w-3.5 h-3.5 text-brand-400" />
                       Prévia de Aparência
                     </h4>
@@ -2210,32 +2225,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                             : 'bg-[#313338] border-white/10 text-gray-100'
                         }`}
                       >
-                        {/* Simulated Channel Top Bar */}
-                        <div
-                          className={`px-4 py-2.5 flex items-center justify-between border-b text-xs select-none ${
-                            isLight
-                              ? 'bg-[#f2f3f5] border-black/10 text-gray-700'
-                              : isOled
-                              ? 'bg-[#0a0a0a] border-white/10 text-gray-300'
-                              : 'bg-[#2b2d31] border-white/10 text-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Hash className="w-4 h-4 text-gray-400" />
-                            <span className="font-bold text-sm">geral</span>
-                            <span className="hidden sm:inline text-xs text-gray-400 border-l border-gray-500/30 pl-2">
-                              Canal de texto principal
-                            </span>
-                          </div>
-                        </div>
-
                         {/* Simulated Messages Area */}
                         <div className="p-3 sm:p-4 space-y-3">
                           {/* Message 1: ZeroVC Bot */}
                           {isCompact ? (
                             /* IRC Compact Message 1 */
-                            <div className="flex items-baseline gap-2 text-xs leading-relaxed">
-                              <span className="font-mono text-[11px] text-gray-500 select-none w-10 shrink-0 text-right">
+                            <div
+                              className="flex items-baseline gap-2 leading-relaxed"
+                              style={{ fontSize: `${chatFontSize}px` }}
+                            >
+                              <span
+                                className="font-mono text-gray-500 select-none w-10 shrink-0 text-right"
+                                style={{ fontSize: `${Math.max(10, chatFontSize - 2)}px` }}
+                              >
                                 11:42
                               </span>
                               <div className="flex-1 min-w-0">
@@ -2249,11 +2251,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                                   Bem-vindo ao servidor! Experimente personalizar suas cores e temas no perfil{' '}
                                 </span>
                                 <span
-                                  className="px-1.5 py-0.2 rounded font-semibold text-[11px] inline-flex items-center gap-0.5"
+                                  className="px-1.5 py-0.2 rounded font-semibold inline-flex items-center gap-0.5"
                                   style={{
                                     backgroundColor: activeAccent.bgSoft,
                                     color: activeAccent.text,
                                     border: `1px solid ${activeAccent.border}`,
+                                    fontSize: `${Math.max(10, chatFontSize - 2)}px`,
                                   }}
                                 >
                                   @{user?.display_name || user?.username || 'Você'}
@@ -2272,8 +2275,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-baseline gap-2 mb-0.5">
                                   <span
-                                    className="font-bold text-xs hover:underline cursor-pointer"
-                                    style={{ color: activeAccent.text }}
+                                    className="font-bold hover:underline cursor-pointer"
+                                    style={{ color: activeAccent.text, fontSize: `${Math.max(12, chatFontSize)}px` }}
                                   >
                                     ZeroVC Bot
                                   </span>
@@ -2285,7 +2288,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                                   </span>
                                   <span className="text-[10px] text-gray-400">Hoje às 11:42</span>
                                 </div>
-                                <div className={`text-xs leading-relaxed ${isLight ? 'text-gray-700' : 'text-gray-300'}`}>
+                                <div
+                                  className={`leading-relaxed ${isLight ? 'text-gray-700' : 'text-gray-300'}`}
+                                  style={{ fontSize: `${chatFontSize}px` }}
+                                >
                                   Bem-vindo ao servidor! Experimente personalizar suas cores e temas no perfil{' '}
                                   <span
                                     className="px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5"
@@ -2293,6 +2299,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                                       backgroundColor: activeAccent.bgSoft,
                                       color: activeAccent.text,
                                       border: `1px solid ${activeAccent.border}`,
+                                      fontSize: `${Math.max(11, chatFontSize - 1)}px`,
                                     }}
                                   >
                                     @{user?.display_name || user?.username || 'Você'}
@@ -2306,8 +2313,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           {isCompact ? (
                             /* IRC Compact Message 2 */
                             <div>
-                              <div className="flex items-baseline gap-2 text-xs leading-relaxed">
-                                <span className="font-mono text-[11px] text-gray-500 select-none w-10 shrink-0 text-right">
+                              <div
+                                className="flex items-baseline gap-2 leading-relaxed"
+                                style={{ fontSize: `${chatFontSize}px` }}
+                              >
+                                <span
+                                  className="font-mono text-gray-500 select-none w-10 shrink-0 text-right"
+                                  style={{ fontSize: `${Math.max(10, chatFontSize - 2)}px` }}
+                                >
                                   11:43
                                 </span>
                                 <div className="flex-1 min-w-0">
@@ -2322,11 +2335,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                               {/* Reaction pill */}
                               <div className="ml-12 mt-1">
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] border cursor-pointer select-none font-semibold transition-transform active:scale-95"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border cursor-pointer select-none font-semibold transition-transform active:scale-95"
                                   style={{
                                     backgroundColor: activeAccent.bgSoft,
                                     borderColor: activeAccent.border,
                                     color: activeAccent.text,
+                                    fontSize: `${Math.max(10, chatFontSize - 2)}px`,
                                   }}
                                 >
                                   <span>🚀</span>
@@ -2340,21 +2354,28 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                               <UserAvatar user={user} size="md" className="flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-baseline gap-2 mb-0.5">
-                                  <span className={`font-bold text-xs hover:underline cursor-pointer ${isLight ? 'text-gray-900' : 'text-gray-100'}`}>
+                                  <span
+                                    className={`font-bold hover:underline cursor-pointer ${isLight ? 'text-gray-900' : 'text-gray-100'}`}
+                                    style={{ fontSize: `${Math.max(12, chatFontSize)}px` }}
+                                  >
                                     {user?.display_name || user?.username || 'Você'}
                                   </span>
                                   <span className="text-[10px] text-gray-400">Hoje às 11:43</span>
                                 </div>
-                                <div className={`text-xs leading-relaxed ${isLight ? 'text-gray-700' : 'text-gray-300'}`}>
+                                <div
+                                  className={`leading-relaxed ${isLight ? 'text-gray-700' : 'text-gray-300'}`}
+                                  style={{ fontSize: `${chatFontSize}px` }}
+                                >
                                   Ficou sensacional! O visual responde instantaneamente em tempo real. 🚀
                                 </div>
                                 <div className="flex items-center gap-1 mt-1.5">
                                   <span
-                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs border cursor-pointer select-none font-semibold transition-transform active:scale-95"
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border cursor-pointer select-none font-semibold transition-transform active:scale-95"
                                     style={{
                                       backgroundColor: activeAccent.bgSoft,
                                       borderColor: activeAccent.border,
                                       color: activeAccent.text,
+                                      fontSize: `${Math.max(10, chatFontSize - 2)}px`,
                                     }}
                                   >
                                     <span>🚀</span>
@@ -2365,38 +2386,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                             </div>
                           )}
                         </div>
-
-                        {/* Simulated Bottom Message Input Bar */}
-                        <div
-                          className={`p-2.5 sm:p-3 border-t flex items-center gap-2 select-none ${
-                            isLight
-                              ? 'bg-[#f2f3f5] border-black/10'
-                              : isOled
-                              ? 'bg-[#0a0a0a] border-white/10'
-                              : 'bg-[#2b2d31] border-white/10'
-                          }`}
-                        >
-                          <div
-                            className={`flex-1 flex items-center justify-between px-3 py-1.5 rounded-xl border text-xs ${
-                              isLight
-                                ? 'bg-white border-black/10 text-gray-400'
-                                : isOled
-                                ? 'bg-[#141414] border-white/10 text-gray-500'
-                                : 'bg-[#383a40] border-white/5 text-gray-400'
-                            }`}
-                          >
-                            <span>Conversar em #geral...</span>
-                            <div className="flex items-center gap-2">
-                              <Smile className="w-4 h-4 text-gray-400" />
-                              <div
-                                className="w-6 h-6 rounded-lg flex items-center justify-center text-white cursor-pointer shadow-sm transition-transform active:scale-90"
-                                style={{ backgroundColor: activeAccent.hex }}
-                              >
-                                <Send className="w-3 h-3" />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     );
                   })()}
@@ -2404,7 +2393,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                 {/* Theme Selector */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Tema da Interface
                   </h4>
                   <div className="flex flex-wrap gap-3 items-center">
@@ -2443,7 +2432,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                 {/* Accent Color */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Cor de Destaque
                   </h4>
                   <div className="flex flex-wrap gap-3 items-center">
@@ -2479,7 +2468,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                 {/* Chat Density / Estilo de Exibição */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Densidade de Exibição do Chat
                   </h4>
                   <div className="space-y-2.5">
@@ -2537,9 +2526,53 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
+                {/* Font Size Scaling */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className={MODAL_SECTION_HEADER_CLASS}>
+                      Tamanho da Fonte das Mensagens
+                    </h4>
+                    <span className="text-xs font-bold text-brand-400 bg-brand-500/10 px-2.5 py-1 rounded-xl border border-brand-500/20 font-mono">
+                      {chatFontSize}px
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={FONT_SIZE_STEPS.length - 1}
+                      step={1}
+                      value={currentFontSizeIndex}
+                      onChange={(e) => {
+                        const idx = Number(e.target.value);
+                        setChatFontSize(FONT_SIZE_STEPS[idx].value);
+                      }}
+                      className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-brand-500"
+                    />
+                    <div className="flex justify-between text-[10px] font-medium px-1 select-none">
+                      {FONT_SIZE_STEPS.map((step, idx) => {
+                        const isActive = idx === currentFontSizeIndex;
+                        return (
+                          <button
+                            key={step.value}
+                            type="button"
+                            onClick={() => setChatFontSize(step.value)}
+                            className={`transition-colors cursor-pointer ${
+                              isActive ? 'text-brand-400 font-bold' : 'text-gray-500 hover:text-gray-300'
+                            } ${idx === FONT_SIZE_STEPS.length - 1 ? 'text-right' : idx > 0 ? 'text-center' : 'text-left'}`}
+                          >
+                            {step.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
                 {/* UI Scale / Zoom */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Escala da Interface (Zoom)
                   </h4>
                   <div className="space-y-3">
@@ -2586,7 +2619,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                 {/* Media and GIFs */}
                 <div className="pt-2">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Mídia & Animações
                   </h4>
                   <div className="flex items-center justify-between">
@@ -2623,7 +2656,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 {!isMobileDevice ? (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+                      <label className={MODAL_FIELD_LABEL_CLASS}>
                         Dispositivo de Entrada (Microfone)
                       </label>
                       <DropdownSelect
@@ -2657,7 +2690,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
 
                     <div className="space-y-2">
-                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+                      <label className={MODAL_FIELD_LABEL_CLASS}>
                         Dispositivo de Saída (Fone / Alto-falante)
                       </label>
                       <DropdownSelect
@@ -3038,12 +3071,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                 {/* Webcam & Video Section with Live Preview */}
                 <div className="pt-2">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Configuração de Vídeo / Câmera
                   </h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                      <label className={MODAL_FIELD_LABEL_CLASS}>
                         Dispositivo de Câmera / Webcam
                       </label>
                       <DropdownSelect
@@ -3101,7 +3134,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <div className="space-y-6 animate-in fade-in">
                 {/* Desktop Notifications */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Notificações de Área de Trabalho
                   </h4>
                   <div className="flex items-center justify-between">
@@ -3133,7 +3166,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                 {/* Sound Volume Slider */}
                 <div className="pt-2">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Volume dos Efeitos Sonoros
                   </h4>
                   <div className="space-y-3">
@@ -3162,7 +3195,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
                 {/* Individual Sound Toggles with Test Buttons */}
                 <div className="pt-2">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Efeitos Sonoros do Aplicativo
                   </h4>
                   <div className="divide-y divide-white/5 space-y-3.5">
@@ -3390,7 +3423,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <div className="space-y-6 animate-in fade-in">
                 {/* Desktop and Window Behavior */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Comportamento do Aplicativo (Desktop)
                   </h4>
 
@@ -3528,7 +3561,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">Alterar Nome de Exibição</h4>
+              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Alterar Nome de Exibição</h4>
               <button
                 type="button"
                 onClick={() => setIsEditDisplayNameOpen(false)}
@@ -3543,7 +3576,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </p>
 
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 Nome de Exibição
               </label>
               <input
@@ -3590,7 +3623,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">Alterar Nome de Usuário</h4>
+              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Alterar Nome de Usuário</h4>
               <button
                 type="button"
                 onClick={() => setIsEditUsernameOpen(false)}
@@ -3605,7 +3638,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </p>
 
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 Novo @
               </label>
               <div className="relative">
@@ -3659,7 +3692,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">Alterar E-mail</h4>
+              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Alterar E-mail</h4>
               <button
                 type="button"
                 onClick={() => setIsEditEmailOpen(false)}
@@ -3671,7 +3704,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                <label className={MODAL_FIELD_LABEL_CLASS}>
                   Novo E-mail
                 </label>
                 <input
@@ -3685,7 +3718,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                <label className={MODAL_FIELD_LABEL_CLASS}>
                   Senha Atual (Confirmação)
                 </label>
                 <input
@@ -3733,7 +3766,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">
+              <h4 className={MODAL_DIALOG_TITLE_CLASS}>
                 {user.phone_number ? 'Editar Número de Telefone' : 'Adicionar Número de Telefone'}
               </h4>
               <button
@@ -3750,7 +3783,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </p>
 
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 Número de Celular
               </label>
               <input
@@ -3800,7 +3833,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             className="bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">Mudar Senha</h4>
+              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Mudar Senha</h4>
               <button
                 type="button"
                 onClick={() => setIsChangePasswordOpen(false)}
@@ -3812,7 +3845,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                <label className={MODAL_FIELD_LABEL_CLASS}>
                   Senha Atual
                 </label>
                 <input
@@ -3826,7 +3859,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                <label className={MODAL_FIELD_LABEL_CLASS}>
                   Nova Senha
                 </label>
                 <input
@@ -3839,7 +3872,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                <label className={MODAL_FIELD_LABEL_CLASS}>
                   Confirmar Nova Senha
                 </label>
                 <input
@@ -3888,7 +3921,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">
+              <h4 className={MODAL_DIALOG_TITLE_CLASS}>
                 {user.two_factor_enabled ? 'Desativar Autenticação 2FA' : 'Configurar Autenticação 2FA (TOTP)'}
               </h4>
               <button
@@ -3918,7 +3951,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </p>
 
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 Código de 6 dígitos
               </label>
               <input
@@ -3966,7 +3999,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         >
           <div className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-6 border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-white">
+              <h4 className={MODAL_DIALOG_TITLE_CLASS}>
                 Códigos de Backup de 2FA
               </h4>
               <button
@@ -4054,7 +4087,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             className="bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl p-4 sm:p-6 border border-dnd/30 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95"
           >
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-dnd">
+              <h4 className={`${MODAL_DIALOG_TITLE_CLASS} text-dnd`}>
                 Excluir Conta Permanentemente
               </h4>
               <button
@@ -4071,7 +4104,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             </p>
 
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 Sua Senha Atual
               </label>
               <input

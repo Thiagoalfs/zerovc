@@ -5,6 +5,7 @@ import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { formatAssetUrl } from '../../lib/api';
 import { DMGroup } from '../../types';
+import { MODAL_TITLE_CLASS, MODAL_FIELD_LABEL_CLASS } from '../../constants/modalTypography';
 
 interface AddDMGroupMembersModalProps {
   isOpen: boolean;
@@ -100,7 +101,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-brand-400" />
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-white leading-tight">Adicionar ao Grupo</h2>
+              <h2 className={MODAL_TITLE_CLASS}>Adicionar ao Grupo</h2>
               <p className="text-xs text-gray-400">{group.name || 'Grupo de DM'}</p>
             </div>
           </div>
@@ -120,7 +121,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
           {/* Friends Selection */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+              <label className={MODAL_FIELD_LABEL_CLASS}>
                 Selecione Amigos
               </label>
               <span className="text-[11px] text-gray-400">

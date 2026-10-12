@@ -5,7 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { GameSearchResult } from '../../types';
-import { MODAL_TOGGLE_HEADER_CLASS } from '../../constants/modalTypography';
+import { MODAL_TOGGLE_HEADER_CLASS, MODAL_SECTION_HEADER_CLASS } from '../../constants/modalTypography';
 
 function formatLastPlayed(timestamp: number): string {
   if (!timestamp) return 'Nunca jogado';
@@ -248,7 +248,7 @@ export const RegisteredGamesView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in">
       {/* 1. CURRENT GAME SECTION */}
       <div>
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+        <h4 className={MODAL_SECTION_HEADER_CLASS}>
           Jogo Atual
         </h4>
 
@@ -328,7 +328,7 @@ export const RegisteredGamesView: React.FC = () => {
       {isAddingGame && (
         <div className="bg-background-darker p-4 rounded-2xl border border-brand-500/30 space-y-3 animate-in fade-in">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+            <span className={`${MODAL_SECTION_HEADER_CLASS} text-white flex items-center gap-1.5 !mb-0`}>
               <Plus className="w-3.5 h-3.5 text-brand-400" />
               Adicionar Jogo ou Aplicativo
             </span>
