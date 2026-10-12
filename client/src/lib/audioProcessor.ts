@@ -88,12 +88,6 @@ class AudioProcessorManager {
     rawTrack: MediaStreamTrack,
     config: AudioProcessorConfig
   ): Promise<MediaStreamTrack> {
-    // If WebRTC native mode or None is chosen, return the track directly without custom neural pipelines
-    if (config.mode === 'webrtc' || config.mode === 'none') {
-      this.cleanup();
-      return rawTrack;
-    }
-
     try {
       this.cleanup();
       this.currentTrack = rawTrack;
@@ -206,7 +200,9 @@ class AudioProcessorManager {
         }
 
         // Apply Gate Envelope
-        const targetGain = this.isGateOpen || config.mode === 'rnnoise' ? 1.0 : 0.0;
+        const targetGain = (config.mode === 'webrtc' || config.mode === 'none')
+          ? 1.0
+          : (this.isGateOpen || config.mode === 'rnnoise' ? 1.0 : 0.0);
         const attackFactor = 0.35;
         const releaseFactor = 0.08;
         const factor = targetGain > this.currentGain ? attackFactor : releaseFactor;
@@ -226,12 +222,15 @@ class AudioProcessorManager {
         }
 
         // Volume UI level calculation (0 to 100)
-        const currentVol = Math.min(100, Math.round(rms * 400));
-        this.smoothedVolume = this.smoothedVolume * 0.8 + currentVol * 0.2;
+        // Decibel scale: -100 dBFS (silence) to 0 dBFS (peak) mapped directly to 0..100%
+        const db = 20 * Math.log10(Math.max(rms, 1e-5));
+        const currentVol = Math.max(0, Math.min(100, Math.round(db + 100)));
+        const smoothingFactor = currentVol > this.smoothedVolume ? 0.45 : 0.2;
+        this.smoothedVolume = this.smoothedVolume * (1 - smoothingFactor) + currentVol * smoothingFactor;
 
         if (this.vadCallback) {
           this.vadCallback({
-            isSpeaking: this.isGateOpen && rms > 0.01,
+            isSpeaking: this.isGateOpen && rms > 0.003,
             volume: Math.round(this.smoothedVolume),
             speechProbability: Math.min(1, Math.max(0, speechProb)),
             gateOpen: this.currentGain > 0.05,

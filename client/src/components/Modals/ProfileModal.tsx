@@ -434,6 +434,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const liveGainNodeRef = useRef<GainNode | null>(null);
 
   // Settings Store
   const {
@@ -500,6 +501,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setShowVoiceUsersInBar,
     setChatFontSize,
   } = useSettingsStore();
+
+  useEffect(() => {
+    if (liveGainNodeRef.current) {
+      liveGainNodeRef.current.gain.value = (inputVolume ?? 100) / 100;
+    }
+  }, [inputVolume]);
 
   const currentFontSizeIndex = useMemo(() => {
     const exactIndex = FONT_SIZE_STEPS.findIndex((s) => s.value === chatFontSize);
@@ -978,6 +985,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           echoCancellation,
           noiseSuppression,
           autoGainControl,
+          volume: inputVolume,
         });
       }
     } catch (err) {
@@ -1029,55 +1037,50 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         }
 
         const source = localAudioCtx.createMediaStreamSource(stream);
+        const gainNode = localAudioCtx.createGain();
+        gainNode.gain.value = (inputVolume ?? 100) / 100;
+        liveGainNodeRef.current = gainNode;
+
         const analyser = localAudioCtx.createAnalyser();
         analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.35;
-        source.connect(analyser);
+        analyser.smoothingTimeConstant = 0.3;
+        source.connect(gainNode);
+        gainNode.connect(analyser);
 
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const timeData = new Float32Array(analyser.fftSize);
         let smoothed = 0;
-        let dynamicNoiseFloor = 8;
         let lastVoiceTime = 0;
         let isSpeaking = false;
 
         const tick = () => {
           if (!isMounted) return;
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          let vocalSum = 0;
-          const startBin = Math.max(1, Math.floor(analyser.frequencyBinCount * (300 / 24000)));
-          const endBin = Math.min(analyser.frequencyBinCount - 1, Math.floor(analyser.frequencyBinCount * (3400 / 24000)));
-          const vocalBinCount = endBin - startBin + 1;
+          analyser.getFloatTimeDomainData(timeData);
 
-          for (let i = 0; i < dataArray.length; i++) {
-            const val = dataArray[i];
-            sum += val;
-            if (i >= startBin && i <= endBin) {
-              vocalSum += val;
-            }
+          let sumSquares = 0;
+          for (let i = 0; i < timeData.length; i++) {
+            const sample = timeData[i];
+            sumSquares += sample * sample;
           }
-          const avg = sum / dataArray.length;
-          const vocalAvg = vocalBinCount > 0 ? vocalSum / vocalBinCount : avg;
+          const rms = Math.sqrt(sumSquares / timeData.length);
 
-          // Adapt noise floor
-          if (avg < dynamicNoiseFloor * 1.5) {
-            dynamicNoiseFloor = dynamicNoiseFloor * 0.95 + avg * 0.05;
-          } else {
-            dynamicNoiseFloor = dynamicNoiseFloor * 0.998 + avg * 0.002;
-          }
+          // Decibel scale: -100 dBFS (silence) to 0 dBFS (peak) mapped directly to 0..100%
+          const db = 20 * Math.log10(Math.max(rms, 1e-5));
+          const currentLevelRaw = Math.max(0, Math.min(100, Math.round(db + 100)));
 
-          const raw = Math.min(100, Math.round((avg / 110) * 100 * 1.6));
-          smoothed = smoothed * 0.7 + raw * 0.3;
+          // Smooth transitions for natural meter response (fast attack, smooth release)
+          const smoothingFactor = currentLevelRaw > smoothed ? 0.45 : 0.2;
+          smoothed = smoothed * (1 - smoothingFactor) + currentLevelRaw * smoothingFactor;
           const currentLevel = Math.round(smoothed);
           setMicLevel(currentLevel);
 
           const now = performance.now();
-          const isVocalDetected = (vocalAvg > dynamicNoiseFloor * 1.35 + 8 && currentLevel > 10) || currentLevel > 24;
+          const speechThreshold = (vadSensitivity ?? 0.5) * 100;
+          const isVocalDetected = currentLevel >= (vadAutoSensitivity ? 48 : speechThreshold);
 
           if (isVocalDetected) {
             lastVoiceTime = now;
             isSpeaking = true;
-          } else if (now - lastVoiceTime > 300) {
+          } else if (now - lastVoiceTime > (vadHangover ?? 250)) {
             isSpeaking = false;
           }
 
@@ -1105,6 +1108,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       if (localAudioCtx && localAudioCtx.state !== 'closed') {
         localAudioCtx.close().catch(() => {});
       }
+      liveGainNodeRef.current = null;
       setMicLevel(0);
     };
   }, [isOpen, activeTab, isTestingMic, selectedInput]);
@@ -2676,26 +2680,54 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 {/* Audio Devices */}
                 {!isMobileDevice ? (
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className={MODAL_FIELD_LABEL_CLASS}>
-                        Dispositivo de Entrada (Microfone)
-                      </label>
-                      <DropdownSelect
-                        value={selectedInput}
-                        onChange={(val) => handleDeviceChange('input', val)}
-                        options={
-                          audioInputs.length > 0
-                            ? audioInputs.map((d) => ({
-                                value: d.deviceId,
-                                label: d.label || `Microfone (${d.deviceId.slice(0, 6)})`,
-                              }))
-                            : [{ value: '', label: 'Microfone Padrão do Sistema' }]
-                        }
-                        placeholder="Microfone Padrão do Sistema"
-                      />
-                      <div className="pt-1 space-y-1">
+                    {/* Linha 1: Dropdowns de Entrada e Saída inline */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      <div className="space-y-2">
+                        <label className={MODAL_FIELD_LABEL_CLASS}>
+                          Dispositivo de Entrada
+                        </label>
+                        <DropdownSelect
+                          prefixIcon={<Mic className="w-4 h-4" />}
+                          value={selectedInput}
+                          onChange={(val) => handleDeviceChange('input', val)}
+                          options={
+                            audioInputs.length > 0
+                              ? audioInputs.map((d) => ({
+                                  value: d.deviceId,
+                                  label: d.label || `Microfone (${d.deviceId.slice(0, 6)})`,
+                                }))
+                              : [{ value: '', label: 'Microfone Padrão do Sistema' }]
+                          }
+                          placeholder="Microfone Padrão do Sistema"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className={MODAL_FIELD_LABEL_CLASS}>
+                          Dispositivo de Saída
+                        </label>
+                        <DropdownSelect
+                          prefixIcon={<Headphones className="w-4 h-4" />}
+                          value={selectedOutput}
+                          onChange={(val) => handleDeviceChange('output', val)}
+                          options={
+                            audioOutputs.length > 0
+                              ? audioOutputs.map((d) => ({
+                                  value: d.deviceId,
+                                  label: d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`,
+                                }))
+                              : [{ value: '', label: 'Saída Padrão do Sistema' }]
+                          }
+                          placeholder="Saída Padrão do Sistema"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Linha 2: Sliders de Volume de Entrada e Saída inline */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-gray-300">Volume de Entrada</span>
+                          <span className={`${MODAL_FIELD_LABEL_CLASS} !mb-0`}>Volume de Entrada</span>
                           <span className="font-mono font-bold text-brand-400">{inputVolume}%</span>
                         </div>
                         <input
@@ -2708,28 +2740,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                           className="w-full accent-brand-500 h-1.5 bg-background-darkest rounded-lg cursor-pointer"
                         />
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <label className={MODAL_FIELD_LABEL_CLASS}>
-                        Dispositivo de Saída (Fone / Alto-falante)
-                      </label>
-                      <DropdownSelect
-                        value={selectedOutput}
-                        onChange={(val) => handleDeviceChange('output', val)}
-                        options={
-                          audioOutputs.length > 0
-                            ? audioOutputs.map((d) => ({
-                                value: d.deviceId,
-                                label: d.label || `Alto-falante (${d.deviceId.slice(0, 6)})`,
-                              }))
-                            : [{ value: '', label: 'Saída Padrão do Sistema' }]
-                        }
-                        placeholder="Saída Padrão do Sistema"
-                      />
-                      <div className="pt-1 space-y-1">
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-gray-300">Volume de Saída</span>
+                          <span className={`${MODAL_FIELD_LABEL_CLASS} !mb-0`}>Volume de Saída</span>
                           <span className="font-mono font-bold text-brand-400">{outputVolume}%</span>
                         </div>
                         <input
@@ -2759,30 +2773,41 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 )}
 
                 {/* Mic Test Section */}
-                <div className="space-y-3 pt-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-gray-200 block">Teste de Microfone</span>
-                      <span className={`${MODAL_DESCRIPTION_CLASS} block`}>
-                        Fale para verificar se o microfone está captando seu áudio.
-                      </span>
-                    </div>
+                <div className="space-y-2 pt-1">
+                  <div>
+                    <span className={MODAL_FIELD_LABEL_CLASS}>Teste de Microfone</span>
+                    <span className={`${MODAL_DESCRIPTION_CLASS} block`}>
+                      Está tendo problemas? Faça um teste para verificar seu microfone.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 pt-0.5">
                     <button
                       type="button"
                       onClick={isTestingMic ? stopMicTest : startMicTest}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        isTestingMic ? 'bg-dnd text-white' : 'bg-brand-500 text-white'
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 ${
+                        isTestingMic
+                          ? 'bg-dnd text-white hover:bg-dnd/90'
+                          : 'bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/25'
                       }`}
                     >
                       {isTestingMic ? 'Parar Teste' : 'Testar Mic'}
                     </button>
-                  </div>
-
-                  <div className="w-full h-3 bg-background-darkest rounded-full overflow-hidden border border-white/10">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500 transition-all duration-75"
-                      style={{ width: `${isTestingMic ? micLevel : 0}%` }}
-                    />
+                    <div className="flex-1 flex items-center gap-[3px] h-8 px-3 bg-background-darkest rounded-xl border border-white/5 overflow-hidden">
+                      {Array.from({ length: 48 }).map((_, i) => {
+                        const threshold = (i / 48) * 100;
+                        const isActive = isTestingMic && micLevel >= threshold;
+                        return (
+                          <div
+                            key={i}
+                            className={`flex-1 h-3.5 rounded-full transition-colors duration-75 ${
+                              isActive
+                                ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]'
+                                : 'bg-white/10'
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
