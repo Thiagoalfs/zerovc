@@ -1033,10 +1033,8 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           </div>
         ) : (
           <div className="relative z-30 flex-shrink-0">
-            {/* Clickable Server Name Header */}
-            <button
-              type="button"
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            {/* Server Name Header */}
+            <div
               style={
                 activeGuild?.banner_url
                   ? {
@@ -1046,10 +1044,10 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     }
                   : undefined
               }
-              className={`w-full px-4 border-b border-black/20 flex justify-between font-bold text-gray-100 shadow-sm transition-all group cursor-pointer text-left relative overflow-hidden ${
+              className={`w-full px-3 md:px-3.5 border-b border-black/20 flex font-bold text-gray-100 shadow-sm relative overflow-hidden ${
                 activeGuild?.banner_url
-                  ? 'h-36 pt-3.5 items-start hover:brightness-105'
-                  : 'h-14 md:h-12 items-center hover:bg-white/5'
+                  ? 'h-36 pt-3 items-start'
+                  : 'h-14 md:h-12 items-center'
               }`}
             >
               {/* Gradient overlay for banner readability */}
@@ -1057,22 +1055,32 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/35 to-transparent pointer-events-none" />
               )}
 
-              <span className="truncate max-w-[200px] md:max-w-[170px] text-[17px] md:text-base font-bold text-white group-hover:text-gray-100 relative z-10">
-                {activeGuild?.name || 'Servidor'}
-              </span>
-              <ChevronDown
-                className={`w-5 h-5 md:w-4 md:h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 relative z-10 ${
-                  isDropdownOpen ? 'rotate-180 text-brand-400' : ''
+              {/* Clickable Server Name + Dropdown Trigger */}
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all group cursor-pointer max-w-full text-left relative z-10 ${
+                  isDropdownOpen ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-white'
                 }`}
-              />
-            </button>
+                title="Opções do Servidor"
+              >
+                <span className="truncate max-w-[200px] md:max-w-[170px] text-[17px] md:text-base font-bold text-white group-hover:text-gray-100">
+                  {activeGuild?.name || 'Servidor'}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 ${
+                    isDropdownOpen ? 'rotate-180 text-brand-400' : ''
+                  }`}
+                />
+              </button>
+            </div>
 
             {/* Dropdown Menu */}
             {isDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
                 <div
-                  className={`absolute left-2 right-2 z-50 bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-1 animate-in fade-in zoom-in-95 duration-100 ${
+                  className={`absolute left-2 right-2 z-50 bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-1 origin-top animate-in fade-in zoom-in-95 duration-150 ease-out ${
                     activeGuild?.banner_url ? 'top-38' : 'top-13'
                   }`}
                 >
