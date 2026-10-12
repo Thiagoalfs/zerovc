@@ -34,8 +34,10 @@ export const TitleBar: React.FC = () => {
         (window as any).Capacitor?.getPlatform?.() === 'android' ||
         (window as any).Capacitor?.getPlatform?.() === 'ios'));
 
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'available' | 'downloading' | 'downloaded'>('idle');
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'downloading' | 'downloaded'>('idle');
+  const [webSyncAvailable, setWebSyncAvailable] = useState<boolean>(false);
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
+  const [pendingVersion, setPendingVersion] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [initialServerTime, setInitialServerTime] = useState<string | null>(null);
 
@@ -48,7 +50,7 @@ export const TitleBar: React.FC = () => {
         if (data.server_time) {
           setInitialServerTime((prev) => {
             if (prev && prev !== data.server_time) {
-              setUpdateStatus('available');
+              setWebSyncAvailable(true);
               return prev;
             }
             return prev || data.server_time;
@@ -71,8 +73,8 @@ export const TitleBar: React.FC = () => {
     const interval = setInterval(checkServerVersion, 30000);
 
     // Listen for electron-updater available release
-    const unsubAvailable = window.electronAPI?.onUpdateAvailable?.(() => {
-      setUpdateStatus('available');
+    const unsubAvailable = window.electronAPI?.onUpdateAvailable?.((info: UpdateInfo) => {
+      setPendingVersion(info?.version ?? null);
     });
 
     // Listen for download progress
@@ -82,8 +84,9 @@ export const TitleBar: React.FC = () => {
     });
 
     // Listen for update downloaded and ready to install
-    const unsubDownloaded = window.electronAPI?.onUpdateDownloaded?.(() => {
+    const unsubDownloaded = window.electronAPI?.onUpdateDownloaded?.((info: UpdateInfo) => {
       setUpdateStatus('downloaded');
+      setPendingVersion(info?.version ?? null);
     });
 
     return () => {
@@ -122,8 +125,7 @@ export const TitleBar: React.FC = () => {
   const handleDirectUpdate = () => {
     if (updateStatus === 'downloaded') {
       window.electronAPI?.quitAndInstall?.();
-    } else {
-      // Instant reload with cache-bust to get the newest production bundle
+    } else if (webSyncAvailable) {
       window.location.reload();
     }
   };
@@ -199,12 +201,12 @@ export const TitleBar: React.FC = () => {
         {isElectron && (
           <>
             {/* Direct One-Click Update Button with FontAwesome Download Icon */}
-            {updateStatus === 'available' && (
+            {webSyncAvailable && updateStatus === 'idle' && (
               <button
                 type="button"
                 onClick={handleDirectUpdate}
                 className="flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md shadow-brand-500/25 transition-all cursor-pointer mr-1"
-                title="Nova atualização disponível! Clique para atualizar agora."
+                title="Nova versão disponível! Clique para atualizar agora."
               >
                 {/* FontAwesome Download Icon (SVG) */}
                 <svg
@@ -238,7 +240,7 @@ export const TitleBar: React.FC = () => {
                 type="button"
                 onClick={handleDirectUpdate}
                 className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-[11px] font-bold px-3 py-0.5 rounded-full shadow-lg shadow-emerald-500/30 transition-all cursor-pointer mr-1 animate-bounce"
-                title="Clique para reiniciar e aplicar a atualização agora."
+                title={pendingVersion ? `Reiniciar para instalar a versão ${pendingVersion}` : 'Clique para reiniciar e aplicar a atualização agora.'}
               >
                 <svg
                   className="w-3 h-3 fill-current"

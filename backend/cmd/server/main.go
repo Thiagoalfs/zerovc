@@ -489,7 +489,7 @@ func main() {
 	// 7. Downloads Route
 	downloadsDir := filepath.Join(webDir, "downloads")
 	r.Get("/downloads/*", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		http.StripPrefix("/downloads/", http.FileServer(http.Dir(downloadsDir))).ServeHTTP(w, r)

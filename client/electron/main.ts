@@ -532,7 +532,7 @@ ipcMain.on('start-download-update', () => {
 
 ipcMain.on('quit-and-install', () => {
   if (autoUpdater) {
-    autoUpdater.quitAndInstall(false, true);
+    autoUpdater.quitAndInstall(true, true);
   }
 });
 
@@ -548,12 +548,6 @@ ipcMain.on('reload-app', () => {
     mainWindow?.loadURL('http://localhost:5173');
   } else {
     mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
-});
-
-ipcMain.on('check-for-updates', () => {
-  if (app.isPackaged) {
-    autoUpdater.checkForUpdates().catch(() => {});
   }
 });
 
