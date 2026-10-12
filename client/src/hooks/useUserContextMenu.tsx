@@ -224,7 +224,8 @@ export function useUserContextMenu() {
       // Server Member Moderation Actions (Roles, Timeout, Kick, Ban)
       if (isGuildContext && activeGuild && mod) {
         // Change Roles Submenu
-        if (!mod.isTargetOwner && (perms.isCurrentOwner || (isMe ? perms.canManageRoles : mod.isHierarchyAllowed))) {
+        const canManageTargetRoles = perms.isCurrentOwner || (!mod.isTargetOwner && (isMe ? perms.canManageRoles : mod.isHierarchyAllowed));
+        if (canManageTargetRoles) {
           if (perms.canManageRoles && activeGuild.roles && activeGuild.roles.length > 0) {
             const roleSubItems: ContextMenuItem[] = activeGuild.roles
               .filter((role) => {

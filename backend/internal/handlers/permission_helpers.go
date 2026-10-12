@@ -24,6 +24,7 @@ func loadActorGuildContext(ctx context.Context, db *database.DB, guildID, actorI
 	if err := db.Pool.QueryRow(ctx, "SELECT owner_id FROM guilds WHERE id = $1", guildID).Scan(&ownerID); err != nil {
 		return ac, err
 	}
+	ac.IsOwner = (ownerID == actorID)
 	if ac.IsOwner {
 		ac.MaxPos = -1
 	} else {

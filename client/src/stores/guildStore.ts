@@ -1642,12 +1642,12 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     // Optimistic local update
     set((state) => {
       if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
-      const targetRole = (state.activeGuild.roles || []).find((r) => r.id === roleId);
+      const targetRole = (state.activeGuild.roles || []).find((r) => String(r.id).toLowerCase() === String(roleId).toLowerCase());
       if (!targetRole) return state;
       const members = (state.activeGuild.members || []).map((m) => {
-        if (m.id === userId) {
+        if (String(m.id).toLowerCase() === String(userId).toLowerCase()) {
           const currentRoles = m.roles || [];
-          if (currentRoles.some((r) => r.id === roleId)) return m;
+          if (currentRoles.some((r) => String((r as any)?.id || r).toLowerCase() === String(roleId).toLowerCase())) return m;
           return { ...m, roles: [...currentRoles, targetRole] };
         }
         return m;
@@ -1661,7 +1661,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         set((state) => {
           if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
           const members = (state.activeGuild.members || []).map((m) =>
-            m.id === userId ? { ...m, roles: res.roles } : m
+            String(m.id).toLowerCase() === String(userId).toLowerCase() ? { ...m, roles: res.roles } : m
           );
           return { activeGuild: { ...state.activeGuild, members } };
         });
@@ -1681,9 +1681,9 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
       const members = (state.activeGuild.members || []).map((m) => {
-        if (m.id === userId) {
+        if (String(m.id).toLowerCase() === String(userId).toLowerCase()) {
           const currentRoles = m.roles || [];
-          return { ...m, roles: currentRoles.filter((r) => r.id !== roleId) };
+          return { ...m, roles: currentRoles.filter((r) => String((r as any)?.id || r).toLowerCase() !== String(roleId).toLowerCase()) };
         }
         return m;
       });
@@ -1696,7 +1696,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         set((state) => {
           if (!state.activeGuild || state.activeGuild.id !== guildId) return state;
           const members = (state.activeGuild.members || []).map((m) =>
-            m.id === userId ? { ...m, roles: res.roles } : m
+            String(m.id).toLowerCase() === String(userId).toLowerCase() ? { ...m, roles: res.roles } : m
           );
           return { activeGuild: { ...state.activeGuild, members } };
         });

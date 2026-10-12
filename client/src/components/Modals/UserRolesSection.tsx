@@ -23,14 +23,14 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [operatingRoleId, setOperatingRoleId] = useState<string | null>(null);
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Sync with active guild member if inside a server context
   const memberInGuild = useMemo(() => {
     if (!activeGuild || !user || !Array.isArray(activeGuild.members)) return null;
-    return activeGuild.members.find((m) => m && m.id === user.id) || null;
+    return activeGuild.members.find((m) => m && String(m.id).toLowerCase() === String(user.id).toLowerCase()) || null;
   }, [activeGuild, user]);
 
   const displayRoles: Role[] = useMemo(() => {
@@ -55,15 +55,21 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
   }, [memberInGuild, user?.roles, activeGuild?.roles]);
 
   const canManageMemberRoles = useMemo(() => {
-    if (!activeGuild || !memberInGuild || !perms?.canManageRoles) return false;
+    if (!activeGuild || !user || !perms?.canManageRoles) return false;
+    if (perms.isCurrentOwner) return true;
     try {
-      const mod = perms.canModerateMember?.(memberInGuild);
+      const target = memberInGuild || user;
+      const mod = perms.canModerateMember?.(target);
       if (!mod) return false;
-      return Boolean(perms.isCurrentOwner || (!mod.isTargetOwner && mod.isHierarchyAllowed));
+      const isMe = Boolean(
+        currentAuthUser?.id && String(currentAuthUser.id).toLowerCase() === String(user.id).toLowerCase()
+      );
+      if (isMe) return true;
+      return !mod.isTargetOwner && mod.isHierarchyAllowed;
     } catch {
       return false;
     }
-  }, [activeGuild, memberInGuild, perms]);
+  }, [activeGuild, memberInGuild, user, perms, currentAuthUser]);
 
   const availableRoles = useMemo(() => {
     if (!activeGuild?.roles || !Array.isArray(activeGuild.roles)) return [];
@@ -81,8 +87,8 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
       );
   }, [activeGuild?.roles, perms.isCurrentOwner, perms.currentUserHighestPos]);
 
-  const updateDropdownPos = () => {
-    if (!buttonRef.current) return;
+  const calculateDropdownPos = () => {
+    if (!buttonRef.current) return null;
     const rect = buttonRef.current.getBoundingClientRect();
     const dropdownWidth = 224;
     const dropdownHeight = 220;
@@ -99,7 +105,28 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
       left = Math.max(margin, window.innerWidth - dropdownWidth - margin);
     }
 
-    setDropdownPos({ top, left });
+    return { top, left };
+  };
+
+  const updateDropdownPos = () => {
+    const pos = calculateDropdownPos();
+    if (pos) {
+      setDropdownPos(pos);
+    }
+  };
+
+  const handleToggleDropdown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDropdownOpen) {
+      setIsDropdownOpen(false);
+      setDropdownPos(null);
+    } else {
+      const pos = calculateDropdownPos();
+      if (pos) {
+        setDropdownPos(pos);
+      }
+      setIsDropdownOpen(true);
+    }
   };
 
   useLayoutEffect(() => {
@@ -120,11 +147,13 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
         !buttonRef.current.contains(e.target as Node)
       ) {
         setIsDropdownOpen(false);
+        setDropdownPos(null);
       }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsDropdownOpen(false);
+        setDropdownPos(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -191,7 +220,7 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
     const isManageable = perms.isCurrentOwner || rolePos > (perms.currentUserHighestPos ?? 999999);
     if (!isManageable) return;
 
-    const hasRole = displayRoles.some((r) => r && r.id === role.id);
+    const hasRole = displayRoles.some((r) => r && String(r.id).toLowerCase() === String(role.id).toLowerCase());
     setOperatingRoleId(role.id);
     try {
       if (hasRole) {
@@ -264,10 +293,7 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
             <button
               ref={buttonRef}
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsDropdownOpen((prev) => !prev);
-              }}
+              onClick={handleToggleDropdown}
               className={`rounded-md bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-all ${
                 isSmall ? 'p-0.5 px-1.5 text-[10px]' : 'p-1 px-2 text-xs'
               }`}
@@ -276,7 +302,7 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
               <Plus className={isSmall ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
             </button>
 
-            {isDropdownOpen && typeof document !== 'undefined' &&
+            {isDropdownOpen && dropdownPos && typeof document !== 'undefined' &&
               createPortal(
                 <div
                   ref={dropdownRef}
