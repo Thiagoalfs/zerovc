@@ -525,15 +525,26 @@ function shutdownForUpdate() {
     });
   } catch {}
   mainWindow = null;
+  splashWindow = null;
 
-  // 3. pequeno respiro para os handles serem liberados, então instala silencioso.
+  // 3. espera os handles serem liberados, dispara a instalação silenciosa e
+  //    FORÇA a saída do processo (app.exit) para liberar o app.asar/ZeroVC.exe
+  //    ANTES de o instalador remover a versão antiga. Sem isso, a desinstalação
+  //    falha com "Falha ao desinstalar os arquivos do aplicativo antigo".
   setTimeout(() => {
+    if (!autoUpdater) return;
     try {
       autoUpdater.quitAndInstall(true, true);
     } catch (e) {
       console.error('[AutoUpdater] Falha ao iniciar instalação do update:', e);
+      app.exit(0);
+      return;
     }
-  }, 150);
+    // O instalador roda DESTACADO (sobrevive à nossa saída). Encerramos o
+    // processo imediatamente para os arquivos da versão antiga serem liberados
+    // antes da etapa de desinstalar do instalador NSIS.
+    setTimeout(() => app.exit(0), 500);
+  }, 600);
 }
 
 // -------------------------------------------------------------
