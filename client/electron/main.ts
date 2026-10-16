@@ -579,8 +579,8 @@ function startPeriodicUpdateChecks() {
 function createSplashWindow(): BrowserWindow {
   const { accent, bg } = loadSplashColors();
   const splash = new BrowserWindow({
-    width: 460,
-    height: 360,
+    width: 320,
+    height: 280,
     frame: false,
     resizable: false,
     minimizable: false,
