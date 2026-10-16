@@ -6,7 +6,7 @@ import { useVoiceStore } from './stores/voiceStore';
 import { useDMStore } from './stores/dmStore';
 import { useCallStore } from './stores/callStore';
 import { socket } from './lib/socket';
-import { Message, VoiceSession, Channel, DMRoom, UserProfilePosition } from './types';
+import { Message, VoiceSession, Channel, DMRoom, UserProfilePosition, Guild } from './types';
 import { api } from './lib/api';
 import { sendNativeNotification, requestNotificationPermission } from './lib/notifications';
 import { ServerList } from './components/Sidebar/ServerList';
@@ -148,8 +148,12 @@ export const App: React.FC = () => {
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<{
     user: User;
     position?: UserProfilePosition;
+    guild?: Guild | null;
   } | null>(null);
-  const [focusedUserProfile, setFocusedUserProfile] = useState<User | null>(null);
+  const [focusedUserProfile, setFocusedUserProfile] = useState<{
+    user: User;
+    guild?: Guild | null;
+  } | null>(null);
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
   const [channelToEdit, setChannelToEdit] = useState<Channel | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -1992,7 +1996,7 @@ export const App: React.FC = () => {
                   navigateTo(`/@me/group/${group.id}`);
                 }}
                 onOpenUserProfile={(targetUser, pos) =>
-                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                  setSelectedUserForProfile({ user: targetUser, position: pos, guild: null })
                 }
                 onOpenSettings={() => setIsProfileModalOpen(true)}
                 onOpenScreenShare={() => setIsScreenShareOpen(true)}
@@ -2039,7 +2043,7 @@ export const App: React.FC = () => {
                   handleToggleMemberList(true);
                 }}
                 onSelectUser={(targetUser, pos) => {
-                  setSelectedUserForProfile({ user: targetUser, position: pos });
+                  setSelectedUserForProfile({ user: targetUser, position: pos, guild: activeGuild });
                 }}
                 onOpenDM={async (userId) => {
                   setIsHomeActive(true);
@@ -2074,7 +2078,7 @@ export const App: React.FC = () => {
               <FriendsView
                 onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
                 onOpenUserProfile={(targetUser, pos) =>
-                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                  setSelectedUserForProfile({ user: targetUser, position: pos, guild: null })
                 }
                 onOpenDM={(userId, room) => {
                   setIsHomeActive(true);
@@ -2092,7 +2096,7 @@ export const App: React.FC = () => {
               <DMGroupChatArea
                 onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
                 onOpenUserProfile={(targetUser, pos) =>
-                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                  setSelectedUserForProfile({ user: targetUser, position: pos, guild: null })
                 }
                 onPreviewImage={(url) => setPreviewImageUrl(url)}
                 onOpenScreenShare={() => setIsScreenShareOpen(true)}
@@ -2111,7 +2115,7 @@ export const App: React.FC = () => {
                 onOpenScreenShare={() => setIsScreenShareOpen(true)}
                 onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
                 onOpenUserProfile={(targetUser, pos) =>
-                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                  setSelectedUserForProfile({ user: targetUser, position: pos, guild: null })
                 }
                 onPreviewImage={(url) => setPreviewImageUrl(url)}
               />
@@ -2119,7 +2123,7 @@ export const App: React.FC = () => {
               <FriendsView
                 onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
                 onOpenUserProfile={(targetUser, pos) =>
-                  setSelectedUserForProfile({ user: targetUser, position: pos })
+                  setSelectedUserForProfile({ user: targetUser, position: pos, guild: null })
                 }
                 onOpenDM={(userId, room) => {
                   setIsHomeActive(true);
@@ -2140,7 +2144,7 @@ export const App: React.FC = () => {
               onOpenScreenShare={() => setIsScreenShareOpen(true)}
               onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
               onOpenUserProfile={(targetUser, pos) =>
-                setSelectedUserForProfile({ user: targetUser, position: pos })
+                setSelectedUserForProfile({ user: targetUser, position: pos, guild: activeGuild })
               }
               onOpenDM={async (userId) => {
                 setIsHomeActive(true);
@@ -2156,7 +2160,7 @@ export const App: React.FC = () => {
             <ChatArea
               onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
               onOpenUserProfile={(targetUser, pos) =>
-                setSelectedUserForProfile({ user: targetUser, position: pos })
+                setSelectedUserForProfile({ user: targetUser, position: pos, guild: activeGuild })
               }
               onOpenDM={async (userId) => {
                 setIsHomeActive(true);
@@ -2188,7 +2192,7 @@ export const App: React.FC = () => {
               }
             }}
             onOpenUserProfile={(targetUser, pos) => {
-              setSelectedUserForProfile({ user: targetUser, position: pos });
+              setSelectedUserForProfile({ user: targetUser, position: pos, guild: !isHomeActive ? activeGuild : null });
             }}
           />
         )}
@@ -2246,11 +2250,13 @@ export const App: React.FC = () => {
           <UserProfileModal
             user={selectedUserForProfile?.user || null}
             position={selectedUserForProfile?.position || null}
+            guild={selectedUserForProfile?.guild ?? (!isHomeActive ? activeGuild : null)}
             isOpen={!!selectedUserForProfile}
             onClose={() => setSelectedUserForProfile(null)}
-            onOpenFullProfile={(u) => {
+            onOpenFullProfile={(u, g) => {
+              const targetGuild = g !== undefined ? g : (selectedUserForProfile?.guild ?? (!isHomeActive ? activeGuild : null));
               setSelectedUserForProfile(null);
-              setFocusedUserProfile(u);
+              setFocusedUserProfile({ user: u, guild: targetGuild });
             }}
             onOpenDM={async (userId) => {
               setSelectedUserForProfile(null);
@@ -2271,7 +2277,8 @@ export const App: React.FC = () => {
 
         <ErrorBoundary>
           <UserProfileModalFocus
-            user={focusedUserProfile}
+            user={focusedUserProfile?.user || null}
+            guild={focusedUserProfile?.guild || null}
             isOpen={!!focusedUserProfile}
             onClose={() => setFocusedUserProfile(null)}
             onOpenDM={async (userId) => {

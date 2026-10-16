@@ -16,7 +16,7 @@ import {
   Loader2,
   AlertTriangle,
 } from 'lucide-react';
-import { User, UserProfilePosition } from '../../types';
+import { User, UserProfilePosition, Guild } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
@@ -29,16 +29,18 @@ export type { UserProfilePosition };
 export interface UserProfileModalProps {
   user: User | null;
   position?: UserProfilePosition | null;
+  guild?: Guild | null;
   isOpen: boolean;
   onClose: () => void;
   onOpenDM?: (userId: string) => void;
   onEditOwnProfile?: () => void;
-  onOpenFullProfile?: (user: User) => void;
+  onOpenFullProfile?: (user: User, guild?: Guild | null) => void;
 }
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   user,
   position,
+  guild,
   isOpen,
   onClose,
   onOpenDM,
@@ -193,7 +195,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const handleAvatarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onOpenFullProfile) {
-      onOpenFullProfile(user);
+      onOpenFullProfile(user, guild);
     }
   };
 
@@ -327,7 +329,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             ) : null}
 
             {/* Server Roles with Dropdown */}
-            <UserRolesSection user={user} size="sm" />
+            <UserRolesSection user={user} guild={guild} size="sm" />
 
             {/* Account Created Date */}
             {joinDateStr && (
