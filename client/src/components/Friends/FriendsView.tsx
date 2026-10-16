@@ -11,6 +11,7 @@ import { DMRoom, User } from '../../types';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { setActiveChat } from '../../utils/activeChat';
+import { showConfirm, showAlert } from '../../stores/confirmModalStore';
 
 interface FriendsViewProps {
   onOpenMobileDrawer?: () => void;
@@ -166,11 +167,21 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                   icon: <UserMinus className="w-4 h-4" />,
                   variant: 'danger' as const,
                   onClick: async () => {
-                    if (window.confirm(`Tem certeza que deseja remover @${targetUser.username} dos seus amigos?`)) {
+                    const confirmed = await showConfirm({
+                      title: 'Remover Amigo',
+                      message: `Tem certeza que deseja remover @${targetUser.username} dos seus amigos?`,
+                      confirmText: 'Remover Amigo',
+                      variant: 'danger',
+                    });
+                    if (confirmed) {
                       try {
                         if (friendship) await removeFriend(friendship.id);
                       } catch (err: any) {
-                        alert(err?.message || 'Erro ao remover amigo');
+                        showAlert({
+                          title: 'Erro',
+                          message: err?.message || 'Erro ao remover amigo',
+                          variant: 'danger',
+                        });
                       }
                     }
                   },
@@ -182,9 +193,17 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                   onClick: async () => {
                     try {
                       await sendRequest(targetUser.username);
-                      alert(`Pedido de amizade enviado para @${targetUser.username}!`);
+                      showAlert({
+                        title: 'Pedido de Amizade',
+                        message: `Pedido de amizade enviado para @${targetUser.username}!`,
+                        variant: 'success',
+                      });
                     } catch (err: any) {
-                      alert(err?.message || 'Erro ao enviar pedido de amizade');
+                      showAlert({
+                        title: 'Erro',
+                        message: err?.message || 'Erro ao enviar pedido de amizade',
+                        variant: 'danger',
+                      });
                     }
                   },
                 },
@@ -194,13 +213,27 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
               icon: <Ban className="w-4 h-4" />,
               variant: 'danger' as const,
               onClick: async () => {
-                if (window.confirm(`Tem certeza que deseja bloquear @${targetUser.username}? Vocês não poderão mais trocar mensagens nem ver o status um do outro.`)) {
+                const confirmed = await showConfirm({
+                  title: 'Bloquear Usuário',
+                  message: `Tem certeza que deseja bloquear @${targetUser.username}? Vocês não poderão mais trocar mensagens nem ver o status um do outro.`,
+                  confirmText: 'Bloquear',
+                  variant: 'danger',
+                });
+                if (confirmed) {
                   try {
                     await api.users.block(targetUser.id);
                     await fetchFriends();
-                    alert(`Usuário @${targetUser.username} bloqueado.`);
+                    showAlert({
+                      title: 'Usuário Bloqueado',
+                      message: `Usuário @${targetUser.username} bloqueado.`,
+                      variant: 'info',
+                    });
                   } catch (err: any) {
-                    alert(err?.message || 'Erro ao bloquear usuário');
+                    showAlert({
+                      title: 'Erro',
+                      message: err?.message || 'Erro ao bloquear usuário',
+                      variant: 'danger',
+                    });
                   }
                 }
               },

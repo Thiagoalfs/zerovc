@@ -26,6 +26,7 @@ import { Channel, Role, Permissions, ChannelPermissionOverwrite } from '../../ty
 import { useGuildStore } from '../../stores/guildStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { DropdownSelect } from '../Common/DropdownSelect';
+import { DeleteChannelModal } from './DeleteChannelModal';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_TITLE_CLASS,
@@ -74,6 +75,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   // Status
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Initialize state when modal opens or channel changes
@@ -322,21 +324,20 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
     }
   };
 
-  const handleDelete = async () => {
-    const confirmMessage = isCategory
-      ? `Tem certeza que deseja excluir a categoria "${channel.name}"? Os canais dentro dela serão movidos para a raiz.`
-      : `Tem certeza que deseja excluir o canal #${channel.name}? Esta ação não pode ser desfeita.`;
+  const handleDelete = () => {
+    setIsDeleteModalOpen(true);
+  };
 
-    if (confirm(confirmMessage)) {
-      setIsDeleting(true);
-      try {
-        await deleteChannel(channel.id);
-        onClose();
-      } catch (err) {
-        console.error('Failed to delete channel:', err);
-      } finally {
-        setIsDeleting(false);
-      }
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteChannel(channel.id);
+      setIsDeleteModalOpen(false);
+      onClose();
+    } catch (err) {
+      console.error('Failed to delete channel:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -896,6 +897,14 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           </button>
         </div>
       </div>
+
+      <DeleteChannelModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        channel={channel}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 };

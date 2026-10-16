@@ -10,6 +10,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { ServerFolder, DMRoom, DMGroup } from '../../types';
+import { showConfirm, showAlert } from '../../stores/confirmModalStore';
 
 interface ServerListProps {
   isHomeActive: boolean;
@@ -376,17 +377,31 @@ export const ServerList: React.FC<ServerListProps> = ({
         tooltip: isOwner ? 'Donos de servidor não podem sair sem antes transferir ou excluir o servidor nas configurações' : undefined,
         onClick: async () => {
           if (isOwner) {
-            alert('Você é o dono deste servidor. Transfira a posse ou exclua o servidor nas configurações.');
+            showAlert({
+              title: 'Proprietário do Servidor',
+              message: 'Você é o dono deste servidor. Transfira a posse para outro membro ou exclua o servidor nas configurações.',
+              variant: 'warning',
+            });
             return;
           }
-          if (window.confirm(`Tem certeza que deseja sair do servidor "${guild.name}"?`)) {
+          const confirmed = await showConfirm({
+            title: 'Sair do Servidor',
+            message: `Tem certeza que deseja sair do servidor "${guild.name}"? Você precisará de um novo convite para entrar novamente.`,
+            confirmText: 'Sair do Servidor',
+            variant: 'danger',
+          });
+          if (confirmed) {
             try {
               await leaveGuild(guild.id);
               if (activeGuild?.id === guild.id) {
                 onSelectHome();
               }
             } catch (err: any) {
-              alert(err?.message || 'Erro ao sair do servidor');
+              showAlert({
+                title: 'Erro ao Sair',
+                message: err?.message || 'Erro ao sair do servidor',
+                variant: 'danger',
+              });
             }
           }
         },

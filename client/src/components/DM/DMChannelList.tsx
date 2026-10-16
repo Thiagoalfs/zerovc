@@ -17,6 +17,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { AddDMGroupMembersModal } from '../Modals/AddDMGroupMembersModal';
 import { EditDMGroupNameModal } from '../Modals/EditDMGroupNameModal';
 import { ImageCropModal } from '../Modals/ImageCropModal';
+import { showConfirm, showAlert } from '../../stores/confirmModalStore';
 
 interface DMChannelListProps {
   currentView: 'friends' | 'dm' | 'group';
@@ -271,13 +272,27 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
               icon: <Ban className="w-4 h-4" />,
               variant: 'danger' as const,
               onClick: async () => {
-                if (window.confirm(`Tem certeza que deseja bloquear @${targetUser.username}? Vocês não poderão mais trocar mensagens nem ver o status um do outro.`)) {
+                const confirmed = await showConfirm({
+                  title: 'Bloquear Usuário',
+                  message: `Tem certeza que deseja bloquear @${targetUser.username}? Vocês não poderão mais trocar mensagens nem ver o status um do outro.`,
+                  confirmText: 'Bloquear',
+                  variant: 'danger',
+                });
+                if (confirmed) {
                   try {
                     await api.users.block(targetUser.id);
                     await fetchFriends();
-                    alert(`Usuário @${targetUser.username} bloqueado.`);
+                    showAlert({
+                      title: 'Usuário Bloqueado',
+                      message: `Usuário @${targetUser.username} foi bloqueado com sucesso.`,
+                      variant: 'info',
+                    });
                   } catch (err: any) {
-                    alert(err?.message || 'Erro ao bloquear usuário');
+                    showAlert({
+                      title: 'Erro ao Bloquear',
+                      message: err?.message || 'Erro ao bloquear usuário',
+                      variant: 'danger',
+                    });
                   }
                 }
               },
@@ -365,10 +380,20 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
         variant: 'danger',
         onClick: async () => {
           if (group.owner_id === currentUser?.id && (group.members?.length || 0) > 1) {
-            alert('Você é o dono deste grupo. Transfira a posse do grupo para outro membro antes de sair.');
+            showAlert({
+              title: 'Proprietário do Grupo',
+              message: 'Você é o dono deste grupo. Transfira a posse do grupo para outro membro antes de sair.',
+              variant: 'warning',
+            });
             return;
           }
-          if (confirm(`Tem certeza que deseja sair do grupo "${groupDisplayName}"?`)) {
+          const confirmed = await showConfirm({
+            title: 'Sair do Grupo',
+            message: `Tem certeza que deseja sair do grupo "${groupDisplayName}"?`,
+            confirmText: 'Sair do Grupo',
+            variant: 'danger',
+          });
+          if (confirmed) {
             if (activeGroup?.id === group.id) {
               onSelectFriends();
             }

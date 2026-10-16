@@ -38,6 +38,7 @@ const UserProfileModal = React.lazy(() => import('./components/Modals/UserProfil
 const UserProfileModalFocus = React.lazy(() => import('./components/Modals/UserProfileModalFocus').then(m => ({ default: m.UserProfileModalFocus })));
 const ImageModal = React.lazy(() => import('./components/Modals/ImageModal').then(m => ({ default: m.ImageModal })));
 import { IncomingCallModal } from './components/DM/IncomingCallModal';
+import { GlobalConfirmModal } from './components/Modals/GlobalConfirmModal';
 import { TitleBar } from './components/Desktop/TitleBar';
 import { ErrorBoundary } from './components/Common/ErrorBoundary';
 import { NetworkStatusBanner } from './components/Common/NetworkStatusBanner';
@@ -2456,6 +2457,9 @@ export const App: React.FC = () => {
 
       {/* Global Incoming Call Popup */}
       <IncomingCallModal />
+
+      {/* Global Floating Confirm & Alert Modal */}
+      <GlobalConfirmModal />
       </div>
     </div>
   );

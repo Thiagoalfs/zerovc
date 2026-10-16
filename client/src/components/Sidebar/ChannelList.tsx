@@ -44,6 +44,7 @@ import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { getFormattedUsername } from '../../stores/streamerModeStore';
+import { DeleteChannelModal } from '../Modals/DeleteChannelModal';
 
 interface ChannelListProps {
   isHomeActive: boolean;
@@ -118,6 +119,21 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   } | null>(null);
 
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+  const [channelToDelete, setChannelToDelete] = useState<Channel | null>(null);
+  const [isDeletingChannel, setIsDeletingChannel] = useState(false);
+
+  const handleConfirmDeleteChannel = async () => {
+    if (!channelToDelete) return;
+    setIsDeletingChannel(true);
+    try {
+      await deleteChannel(channelToDelete.id);
+      setChannelToDelete(null);
+    } catch (err) {
+      console.error('Failed to delete channel/category:', err);
+    } finally {
+      setIsDeletingChannel(false);
+    }
+  };
 
   const perms = useGuildPermissions(activeGuild);
   const isOwner = perms.isCurrentOwner;
@@ -301,9 +317,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               icon: <Trash2 className="w-4 h-4" />,
               variant: 'danger' as const,
               onClick: () => {
-                if (confirm(`Excluir canal #${channel.name}?`)) {
-                  deleteChannel(channel.id);
-                }
+                setChannelToDelete(channel);
               },
             },
           ]
@@ -370,9 +384,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               icon: <Trash2 className="w-4 h-4" />,
               variant: 'danger' as const,
               onClick: () => {
-                if (confirm(`Excluir categoria "${category.name}"? Os canais serão movidos para a raiz.`)) {
-                  deleteChannel(category.id);
-                }
+                setChannelToDelete(category);
               },
             },
           ]
@@ -1362,6 +1374,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
       {/* Context Menu Component */}
       <ContextMenu menu={menu} onClose={closeContextMenu} />
+
+      {/* Floating Modal for Channel/Category Deletion Confirmation */}
+      <DeleteChannelModal
+        isOpen={Boolean(channelToDelete)}
+        onClose={() => setChannelToDelete(null)}
+        onConfirm={handleConfirmDeleteChannel}
+        channel={channelToDelete}
+        isDeleting={isDeletingChannel}
+      />
     </>
   );
 };
