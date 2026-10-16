@@ -10,6 +10,8 @@ import { useGuildStore } from './guildStore';
 import { useDMStore } from './dmStore';
 import { useDMGroupStore } from './dmGroupStore';
 import { useFriendStore } from './friendStore';
+import { deriveAccountVaultKey } from '../crypto/recovery';
+import { backupManager } from '../crypto/backupManager';
 
 interface AuthState {
   user: User | null;
@@ -160,6 +162,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         } else if (res.user.csrf_token) {
           setCsrfToken(res.user.csrf_token);
         }
+
+        try {
+          const { key, rawBytes } = await deriveAccountVaultKey(password, res.user.id);
+          backupManager.setVaultKey(key, res.user.id);
+          await backupManager.saveVaultKeyToStore(rawBytes);
+          await backupManager.autoRestore(key);
+        } catch (vaultErr) {
+          console.warn('[authStore] Failed to derive or autoRestore account vault key:', vaultErr);
+        }
+
         set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
         socket.connect();
       }
@@ -187,6 +199,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         } else if (res.user.csrf_token) {
           setCsrfToken(res.user.csrf_token);
         }
+
+        try {
+          const { key, rawBytes } = await deriveAccountVaultKey(password, res.user.id);
+          backupManager.setVaultKey(key, res.user.id);
+          await backupManager.saveVaultKeyToStore(rawBytes);
+        } catch (vaultErr) {
+          console.warn('[authStore] Failed to initialize account vault key on register:', vaultErr);
+        }
+
         set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
         socket.connect();
       }
@@ -221,6 +242,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     try {
+      backupManager.clearVaultKey();
+    } catch {}
+    try {
       await api.auth.logout();
     } catch {}
     if (isElectron()) {
@@ -237,12 +261,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (user?.csrf_token) {
         setCsrfToken(user.csrf_token);
       }
+      if (user?.id) {
+        try {
+          const key = await backupManager.loadVaultKeyFromStore();
+          if (key) {
+            backupManager.setVaultKey(key, user.id);
+            backupManager.autoRestore(key).catch((err) => {
+              console.warn('[checkAuth] autoRestore error in background:', err);
+            });
+          }
+        } catch (vaultErr) {
+          console.warn('[checkAuth] Failed to load vault key from store:', vaultErr);
+        }
+      }
       const token = isElectron()
         ? localStorage.getItem('token') || localStorage.getItem('zerovc_token') || 'cookie_session'
         : 'cookie_session';
       set({ user, token, isCheckingAuth: false, isLoading: false });
       socket.connect();
     } catch {
+      try {
+        backupManager.clearVaultKey();
+      } catch {}
       if (isElectron()) {
         localStorage.removeItem('token');
         localStorage.removeItem('zerovc_token');

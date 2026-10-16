@@ -14,6 +14,7 @@ import { keyStore } from './keyStore';
 import { EnvelopeV1, serializeEnvelope, parseEnvelope } from './envelope';
 import { safeCryptoLogger } from './safeLogger';
 import { api } from '../lib/api';
+import { backupManager } from './backupManager';
 
 export type { EnvelopeV1 };
 
@@ -101,6 +102,12 @@ export class MegolmManager {
       );
     } catch (err) {
       safeCryptoLogger.warn('Failed to auto-register self inbound session', err);
+    }
+
+    try {
+      backupManager.triggerAutoBackup();
+    } catch (err) {
+      safeCryptoLogger.warn('Failed to trigger auto-backup for new outbound session', err);
     }
 
     return { session, isNew: true, sessionKey };
@@ -225,6 +232,12 @@ export class MegolmManager {
     });
 
     safeCryptoLogger.debug('Registered inbound Megolm session', { sessionId, conversationId, epoch });
+
+    try {
+      backupManager.triggerAutoBackup();
+    } catch (err) {
+      safeCryptoLogger.warn('Failed to trigger auto-backup after inbound session registration', err);
+    }
   }
 
   /**

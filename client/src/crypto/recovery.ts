@@ -188,3 +188,68 @@ export async function decryptBackupPayload(
 
   return new Uint8Array(decryptedBuffer);
 }
+
+export const VAULT_SALT_SUFFIX = 'zerovc-e2ee-vault-salt-v1';
+
+/**
+ * Imports an AES-GCM-256 CryptoKey from raw byte material.
+ */
+export async function importVaultKeyFromBytes(rawBytes: Uint8Array): Promise<CryptoKey> {
+  return await globalThis.crypto.subtle.importKey(
+    'raw',
+    rawBytes as unknown as BufferSource,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+/**
+ * Exports an extractable CryptoKey to raw byte material (if key allows extraction).
+ */
+export async function exportVaultKeyToBytes(key: CryptoKey): Promise<Uint8Array> {
+  const exported = await globalThis.crypto.subtle.exportKey('raw', key);
+  return new Uint8Array(exported);
+}
+
+/**
+ * Derives a deterministic Account Vault Key for account-linked E2EE backup/restore.
+ * Uses PBKDF2 with 100,000 iterations (SHA-256) and a deterministic salt combining
+ * userId with the suffix 'zerovc-e2ee-vault-salt-v1'.
+ */
+export async function deriveAccountVaultKey(
+  password: string,
+  userId: string
+): Promise<{ key: CryptoKey; salt: string; rawBytes: Uint8Array }> {
+  const salt = `${userId}:${VAULT_SALT_SUFFIX}`;
+  const saltBytes = new TextEncoder().encode(salt);
+  const passwordBytes = new TextEncoder().encode(password);
+
+  const baseKey = await globalThis.crypto.subtle.importKey(
+    'raw',
+    passwordBytes as unknown as BufferSource,
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+
+  const rawBuffer = await globalThis.crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltBytes as unknown as BufferSource,
+      iterations: PBKDF2_ITERATIONS,
+      hash: 'SHA-256',
+    },
+    baseKey,
+    256 // 256 bits = 32 bytes
+  );
+
+  const rawBytes = new Uint8Array(rawBuffer);
+  const key = await importVaultKeyFromBytes(rawBytes);
+
+  return {
+    key,
+    salt,
+    rawBytes,
+  };
+}

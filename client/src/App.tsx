@@ -60,6 +60,7 @@ import { rosterManager } from './crypto/rosterManager';
 import { callKeyManager } from './crypto/callKeys';
 import { deviceManager } from './crypto/deviceManager';
 import { safeCryptoLogger } from './crypto/safeLogger';
+import { messageCodec } from './messaging/messageCodec';
 
 export const App: React.FC = () => {
   const { user, token, isCheckingAuth, checkAuth, setUser } = useAuthStore();
@@ -936,6 +937,129 @@ export const App: React.FC = () => {
         safeCryptoLogger.warn('App: Failed to auto-register E2EE device', err);
       });
     }
+  }, [user?.id]);
+
+  // Retroactive re-decryption of undecryptable messages after cloud key vault auto-restore
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const handleKeysRestored = async () => {
+      // 1. Re-attempt decrypting active DM messages
+      try {
+        const dmState = useDMStore.getState();
+        const activeRoomId = dmState.activeRoom?.id;
+        if (activeRoomId) {
+          const roomMsgs = dmState.messagesByRoom[activeRoomId] || dmState.messages || [];
+          const undecrypted = roomMsgs.filter(
+            (m) => m.encrypted && m.decryption_status === 'undecryptable'
+          );
+          for (const msg of undecrypted) {
+            const decoded = await messageCodec.decodeMessage(msg);
+            if (decoded.decryptionStatus === 'decrypted') {
+              useDMStore.setState((s) => {
+                const updateMsg = (m: any) =>
+                  m.id === msg.id
+                    ? {
+                        ...m,
+                        content: decoded.content,
+                        attachments: decoded.attachments,
+                        decryption_status: decoded.decryptionStatus,
+                      }
+                    : m;
+                return {
+                  messages: s.activeRoom?.id === activeRoomId ? s.messages.map(updateMsg) : s.messages,
+                  messagesByRoom: {
+                    ...s.messagesByRoom,
+                    [activeRoomId]: (s.messagesByRoom[activeRoomId] || []).map(updateMsg),
+                  },
+                };
+              });
+            }
+          }
+        }
+      } catch (e) {
+        safeCryptoLogger.warn('App: Failed to re-decrypt DM messages after auto-restore', e);
+      }
+
+      // 2. Re-attempt decrypting active DM Group messages
+      try {
+        const groupState = useDMGroupStore.getState();
+        const activeGroupId = groupState.activeGroup?.id;
+        if (activeGroupId) {
+          const groupMsgs = groupState.messagesByGroup[activeGroupId] || groupState.messages || [];
+          const undecrypted = groupMsgs.filter(
+            (m) => m.encrypted && m.decryption_status === 'undecryptable'
+          );
+          for (const msg of undecrypted) {
+            const decoded = await messageCodec.decodeMessage(msg);
+            if (decoded.decryptionStatus === 'decrypted') {
+              useDMGroupStore.setState((s) => {
+                const updateMsg = (m: any) =>
+                  m.id === msg.id
+                    ? {
+                        ...m,
+                        content: decoded.content,
+                        attachments: decoded.attachments,
+                        decryption_status: decoded.decryptionStatus,
+                      }
+                    : m;
+                return {
+                  messages: s.activeGroup?.id === activeGroupId ? s.messages.map(updateMsg) : s.messages,
+                  messagesByGroup: {
+                    ...s.messagesByGroup,
+                    [activeGroupId]: (s.messagesByGroup[activeGroupId] || []).map(updateMsg),
+                  },
+                };
+              });
+            }
+          }
+        }
+      } catch (e) {
+        safeCryptoLogger.warn('App: Failed to re-decrypt DM group messages after auto-restore', e);
+      }
+
+      // 3. Re-attempt decrypting active Channel messages
+      try {
+        const guildState = useGuildStore.getState();
+        const activeChannelId = guildState.activeChannel?.id;
+        if (activeChannelId) {
+          const channelMsgs = guildState.messagesByChannel[activeChannelId] || guildState.messages || [];
+          const undecrypted = channelMsgs.filter(
+            (m) => m.encrypted && m.decryption_status === 'undecryptable'
+          );
+          for (const msg of undecrypted) {
+            const decoded = await messageCodec.decodeMessage(msg);
+            if (decoded.decryptionStatus === 'decrypted') {
+              useGuildStore.setState((s) => {
+                const updateMsg = (m: any) =>
+                  m.id === msg.id
+                    ? {
+                        ...m,
+                        content: decoded.content,
+                        attachments: decoded.attachments,
+                        decryption_status: decoded.decryptionStatus,
+                      }
+                    : m;
+                return {
+                  messages: s.activeChannel?.id === activeChannelId ? s.messages.map(updateMsg) : s.messages,
+                  messagesByChannel: {
+                    ...s.messagesByChannel,
+                    [activeChannelId]: (s.messagesByChannel[activeChannelId] || []).map(updateMsg),
+                  },
+                };
+              });
+            }
+          }
+        }
+      } catch (e) {
+        safeCryptoLogger.warn('App: Failed to re-decrypt channel messages after auto-restore', e);
+      }
+    };
+
+    window.addEventListener('zerovc:keys-restored', handleKeysRestored);
+    return () => {
+      window.removeEventListener('zerovc:keys-restored', handleKeysRestored);
+    };
   }, [user?.id]);
 
   // Streamer Mode Software Detection & Synchronization
