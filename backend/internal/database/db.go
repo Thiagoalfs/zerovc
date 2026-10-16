@@ -253,6 +253,24 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	db.Pool.Exec(ctx, "ALTER TABLE e2ee_key_backups ALTER COLUMN backup_public_key DROP NOT NULL")
 	db.Pool.Exec(ctx, "ALTER TABLE e2ee_key_backups ALTER COLUMN wrapped_private_key DROP NOT NULL")
 
+	// Ensure E2EE room keys table and indexes exist
+	db.Pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS e2ee_room_keys (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			conversation_type VARCHAR(16) NOT NULL CHECK (conversation_type IN ('dm', 'dm_group', 'channel')),
+			conversation_id UUID NOT NULL,
+			session_id TEXT NOT NULL,
+			session_key TEXT NOT NULL,
+			sender_device_id TEXT NOT NULL DEFAULT '',
+			epoch INT NOT NULL DEFAULT 1,
+			created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT uq_e2ee_room_keys_conv_session UNIQUE (conversation_id, session_id)
+		)
+	`)
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_room_keys_conv ON e2ee_room_keys (conversation_id)")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_room_keys_session ON e2ee_room_keys (session_id)")
+
 	log.Println("Database schema migration executed successfully")
 	return nil
 }

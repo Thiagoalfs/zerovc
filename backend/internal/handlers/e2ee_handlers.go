@@ -1623,3 +1623,248 @@ func (h *E2EEHandler) SubmitKeyRequest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ---------------------------------------------------------------------
+// 7. E2EE Room Keys
+// ---------------------------------------------------------------------
+
+// SaveRoomKey handles POST /api/e2ee/room-keys
+func (h *E2EEHandler) SaveRoomKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method_not_allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req models.SaveRoomKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid_request"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.ConversationType != string(models.ConversationTypeDM) &&
+		req.ConversationType != string(models.ConversationTypeDMGroup) &&
+		req.ConversationType != string(models.ConversationTypeChannel) {
+		http.Error(w, `{"error":"invalid_conversation_type"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.ConversationID == uuid.Nil || strings.TrimSpace(req.SessionID) == "" || strings.TrimSpace(req.SessionKey) == "" {
+		http.Error(w, `{"error":"invalid_room_key_payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Epoch < 1 {
+		req.Epoch = 1
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var isMember bool
+	switch req.ConversationType {
+	case string(models.ConversationTypeDM):
+		var dummy int
+		err := h.db.Pool.QueryRow(ctx, "SELECT 1 FROM dm_rooms WHERE id = $1 AND (user1_id = $2 OR user2_id = $2)", req.ConversationID, userID).Scan(&dummy)
+		isMember = (err == nil)
+	case string(models.ConversationTypeDMGroup):
+		var dummy int
+		err := h.db.Pool.QueryRow(ctx, "SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2", req.ConversationID, userID).Scan(&dummy)
+		isMember = (err == nil)
+	case string(models.ConversationTypeChannel):
+		var dummy int
+		err := h.db.Pool.QueryRow(ctx, `
+			SELECT 1 FROM channels c
+			INNER JOIN guild_members gm ON gm.guild_id = c.guild_id
+			WHERE c.id = $1 AND gm.user_id = $2
+		`, req.ConversationID, userID).Scan(&dummy)
+		isMember = (err == nil)
+	}
+
+	if !isMember {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	query := `
+		INSERT INTO e2ee_room_keys (conversation_type, conversation_id, session_id, session_key, sender_device_id, epoch, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (conversation_id, session_id) DO UPDATE SET
+			session_key = EXCLUDED.session_key,
+			epoch = GREATEST(e2ee_room_keys.epoch, EXCLUDED.epoch)
+	`
+	_, err := h.db.Pool.Exec(ctx, query, req.ConversationType, req.ConversationID, req.SessionID, req.SessionKey, req.SenderDeviceID, req.Epoch, userID)
+	if err != nil {
+		log.Printf("[E2EE] Failed to save room key: %v", err)
+		http.Error(w, `{"error":"failed_to_save_room_key"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+
+// GetMyRoomKeys handles GET /api/e2ee/my-room-keys
+func (h *E2EEHandler) GetMyRoomKeys(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"method_not_allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT rk.id, rk.conversation_type, rk.conversation_id, rk.session_id, rk.session_key, rk.sender_device_id, rk.epoch, rk.created_by, rk.created_at
+		FROM e2ee_room_keys rk
+		WHERE (
+			rk.conversation_type = 'dm' AND rk.conversation_id IN (
+				SELECT id FROM dm_rooms WHERE user1_id = $1 OR user2_id = $1
+			)
+		) OR (
+			rk.conversation_type = 'dm_group' AND rk.conversation_id IN (
+				SELECT group_id FROM dm_group_members WHERE user_id = $1
+			)
+		) OR (
+			rk.conversation_type = 'channel' AND rk.conversation_id IN (
+				SELECT c.id FROM channels c
+				INNER JOIN guild_members gm ON gm.guild_id = c.guild_id
+				WHERE gm.user_id = $1
+			)
+		)
+		ORDER BY rk.created_at ASC
+	`
+
+	rows, err := h.db.Pool.Query(ctx, query, userID)
+	if err != nil {
+		log.Printf("[E2EE] Failed to query user room keys: %v", err)
+		http.Error(w, `{"error":"failed_to_get_room_keys"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	keys := make([]models.E2EERoomKeyResponse, 0)
+	for rows.Next() {
+		var k models.E2EERoomKeyResponse
+		if err := rows.Scan(
+			&k.ID,
+			&k.ConversationType,
+			&k.ConversationID,
+			&k.SessionID,
+			&k.SessionKey,
+			&k.SenderDeviceID,
+			&k.Epoch,
+			&k.CreatedBy,
+			&k.CreatedAt,
+		); err != nil {
+			log.Printf("[E2EE] Failed to scan room key: %v", err)
+			http.Error(w, `{"error":"internal_error"}`, http.StatusInternalServerError)
+			return
+		}
+		keys = append(keys, k)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("[E2EE] Rows error on room keys: %v", err)
+		http.Error(w, `{"error":"internal_error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(keys)
+}
+
+// GetConversationRoomKeys handles GET /api/e2ee/conversations/{conversation_id}/keys
+func (h *E2EEHandler) GetConversationRoomKeys(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"method_not_allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	convIDStr := chi.URLParam(r, "conversation_id")
+	convID, err := uuid.Parse(convIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid_conversation_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var authorized bool
+	err = h.db.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM dm_rooms WHERE id = $1 AND (user1_id = $2 OR user2_id = $2)
+			UNION ALL
+			SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2
+			UNION ALL
+			SELECT 1 FROM channels c INNER JOIN guild_members gm ON gm.guild_id = c.guild_id WHERE c.id = $1 AND gm.user_id = $2
+		)
+	`, convID, userID).Scan(&authorized)
+	if err != nil || !authorized {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	query := `
+		SELECT id, conversation_type, conversation_id, session_id, session_key, sender_device_id, epoch, created_by, created_at
+		FROM e2ee_room_keys
+		WHERE conversation_id = $1
+		ORDER BY created_at ASC
+	`
+	rows, err := h.db.Pool.Query(ctx, query, convID)
+	if err != nil {
+		log.Printf("[E2EE] Failed to query conversation room keys: %v", err)
+		http.Error(w, `{"error":"failed_to_get_room_keys"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	keys := make([]models.E2EERoomKeyResponse, 0)
+	for rows.Next() {
+		var k models.E2EERoomKeyResponse
+		if err := rows.Scan(
+			&k.ID,
+			&k.ConversationType,
+			&k.ConversationID,
+			&k.SessionID,
+			&k.SessionKey,
+			&k.SenderDeviceID,
+			&k.Epoch,
+			&k.CreatedBy,
+			&k.CreatedAt,
+		); err != nil {
+			log.Printf("[E2EE] Failed to scan conversation room key: %v", err)
+			http.Error(w, `{"error":"internal_error"}`, http.StatusInternalServerError)
+			return
+		}
+		keys = append(keys, k)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("[E2EE] Rows error on conversation room keys: %v", err)
+		http.Error(w, `{"error":"internal_error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(keys)
+}
+

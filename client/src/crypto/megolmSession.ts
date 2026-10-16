@@ -104,6 +104,19 @@ export class MegolmManager {
       safeCryptoLogger.warn('Failed to auto-register self inbound session', err);
     }
 
+    if (sessionKey) {
+      api.e2ee
+        .saveRoomKey({
+          conversation_type: 'dm',
+          conversation_id: conversationId,
+          session_id: session.sessionId(),
+          session_key: sessionKey,
+          sender_device_id: senderDeviceId,
+          epoch: currentEpoch,
+        })
+        .catch(() => {});
+    }
+
     try {
       backupManager.triggerAutoBackup();
     } catch (err) {
@@ -336,6 +349,88 @@ export class MegolmManager {
         },
       ]);
       safeCryptoLogger.debug('Responded to key_request', { sessionId: request.session_id, requester: request.requester_device_id });
+    }
+  }
+
+  /**
+   * Synchronizes all room keys for the current user across all DMs and groups from the server.
+   */
+  async syncAllUserRoomKeys(): Promise<{ importedCount: number }> {
+    try {
+      const keys = await api.e2ee.getMyRoomKeys();
+      if (!Array.isArray(keys) || keys.length === 0) {
+        return { importedCount: 0 };
+      }
+
+      let importedCount = 0;
+      for (const k of keys) {
+        if (!k.session_id || !k.session_key) continue;
+        try {
+          await this.registerInboundSession(
+            k.conversation_id,
+            k.session_id,
+            k.session_key,
+            k.sender_device_id || 'remote',
+            k.epoch || 0
+          );
+          importedCount++;
+        } catch (err) {
+          safeCryptoLogger.warn('Failed to register inbound session during syncAllUserRoomKeys', {
+            sessionId: k.session_id,
+            err,
+          });
+        }
+      }
+
+      if (importedCount > 0 && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('zerovc:keys-restored', {
+            detail: { count: importedCount },
+          })
+        );
+      }
+
+      return { importedCount };
+    } catch (err) {
+      safeCryptoLogger.error('Failed to sync all user room keys', err);
+      return { importedCount: 0 };
+    }
+  }
+
+  /**
+   * Synchronizes room keys for a specific conversation from the server.
+   */
+  async syncConversationRoomKeys(conversationId: string): Promise<number> {
+    try {
+      const keys = await api.e2ee.getConversationRoomKeys(conversationId);
+      if (!Array.isArray(keys) || keys.length === 0) {
+        return 0;
+      }
+
+      let importedCount = 0;
+      for (const k of keys) {
+        if (!k.session_id || !k.session_key) continue;
+        try {
+          await this.registerInboundSession(
+            k.conversation_id,
+            k.session_id,
+            k.session_key,
+            k.sender_device_id || 'remote',
+            k.epoch || 0
+          );
+          importedCount++;
+        } catch (err) {
+          safeCryptoLogger.warn('Failed to register inbound session during syncConversationRoomKeys', {
+            sessionId: k.session_id,
+            err,
+          });
+        }
+      }
+
+      return importedCount;
+    } catch (err) {
+      safeCryptoLogger.error('Failed to sync conversation room keys', { conversationId, err });
+      return 0;
     }
   }
 

@@ -481,6 +481,11 @@ func main() {
 			// E2EE Key Requests (Gossip / Forwarding)
 			r.Post("/api/e2ee/key-requests", e2eeHandler.SubmitKeyRequest)
 
+			// E2EE Room Keys
+			r.Post("/api/e2ee/room-keys", e2eeHandler.SaveRoomKey)
+			r.Get("/api/e2ee/my-room-keys", e2eeHandler.GetMyRoomKeys)
+			r.Get("/api/e2ee/conversations/{conversation_id}/keys", e2eeHandler.GetConversationRoomKeys)
+
 			// E2EE Server Channels Audience & Opt-in
 			r.Get("/api/channels/{id}/e2ee/audience", e2eeHandler.GetChannelAudience)
 			r.Post("/api/channels/{id}/e2ee/enable", e2eeHandler.EnableChannelE2EE)
