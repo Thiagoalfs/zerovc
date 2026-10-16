@@ -26,6 +26,8 @@ import { Message, User, Permissions, Role } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
+import { useDMGroupStore } from '../../stores/dmGroupStore';
+import { messageCodec } from '../../messaging/messageCodec';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { api, getApiBaseUrl, formatAssetUrl } from '../../lib/api';
@@ -568,18 +570,48 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const isUndecryptable = Boolean(message.encrypted && (message.decryption_status === 'undecryptable' || !message.content));
   const isDecrypting = Boolean(message.encrypted && message.decryption_status === 'decrypting');
 
-  const handleRequestKey = (e: React.MouseEvent) => {
+  const [requestKeyFeedback, setRequestKeyFeedback] = useState<string | null>(null);
+
+  const handleRequestKey = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (message.e2ee_meta?.session_id) {
-      const convId = (message as any).dm_room_id || (message as any).group_id || (message as any).channel_id;
-      const convType = (message as any).dm_room_id ? 'dm' : ((message as any).group_id ? 'dm_group' : 'channel');
-      keyRequestManager.queueKeyRequest({
+    if (!message.e2ee_meta?.session_id) return;
+
+    const convId = (message as any).dm_room_id || (message as any).group_id || (message as any).channel_id;
+    const convType = (message as any).dm_room_id ? 'dm' : ((message as any).group_id ? 'dm_group' : 'channel');
+
+    try {
+      // 1. Try local self-recovery first (e.g. from local outbound session in KeyStore)
+      const decoded = await messageCodec.decodeMessage(message);
+      if (decoded.decryptionStatus === 'decrypted') {
+        if (convType === 'dm_group') {
+          useDMGroupStore.getState().handleGroupMessageUpdate(decoded as any);
+        } else if (convType === 'dm') {
+          useDMStore.getState().handleDMMessageUpdateEvent(decoded as any);
+        } else {
+          useGuildStore.getState().updateMessageInStore(decoded as any);
+        }
+        return;
+      }
+
+      // 2. Queue network key request with author user ID for multi-device resolution
+      const sent = await keyRequestManager.queueKeyRequest({
         conversationId: convId,
         conversationType: convType,
         sessionId: message.e2ee_meta.session_id,
         epoch: message.e2ee_meta.epoch || 0,
         senderDeviceId: message.e2ee_meta.sender_device_id,
-      }).catch(() => {});
+        authorUserId: message.author_id,
+      });
+
+      if (sent) {
+        setRequestKeyFeedback('Chave solicitada');
+      } else {
+        setRequestKeyFeedback('Aguardando resposta...');
+      }
+      setTimeout(() => setRequestKeyFeedback(null), 3500);
+    } catch {
+      setRequestKeyFeedback('Erro ao solicitar');
+      setTimeout(() => setRequestKeyFeedback(null), 3000);
     }
   };
 
@@ -811,7 +843,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         <ShieldAlert className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                         <span>Mensagem criptografada indisponível</span>
                         <button type="button" onClick={handleRequestKey} className="underline text-[11px] text-amber-200 hover:text-white cursor-pointer ml-1">
-                          Solicitar chave
+                          {requestKeyFeedback || 'Solicitar chave'}
                         </button>
                       </span>
                     ) : isDecrypting ? (
@@ -1033,7 +1065,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                           onClick={handleRequestKey}
                           className="ml-auto text-[11px] underline text-amber-200 hover:text-white cursor-pointer"
                         >
-                          Solicitar chave
+                          {requestKeyFeedback || 'Solicitar chave'}
                         </button>
                       </div>
                     ) : isDecrypting ? (

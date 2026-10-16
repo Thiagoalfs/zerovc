@@ -61,7 +61,8 @@ export class MegolmManager {
    */
   async getOrCreateOutboundSession(
     conversationId: string,
-    currentEpoch: number
+    currentEpoch: number,
+    senderDeviceId?: string
   ): Promise<{ session: GroupSession; isNew: boolean; sessionKey?: string }> {
     await ensureVodozemacInitialized();
 
@@ -88,6 +89,20 @@ export class MegolmManager {
     const sessionKey = session.sessionKey();
 
     await this.persistOutbound(conversationId, session, currentEpoch, Date.now());
+
+    // Auto-register inbound session for self so the sender can always decrypt their own messages across reloads/restarts
+    try {
+      await this.registerInboundSession(
+        conversationId,
+        session.sessionId(),
+        sessionKey,
+        senderDeviceId || 'self',
+        currentEpoch
+      );
+    } catch (err) {
+      safeCryptoLogger.warn('Failed to auto-register self inbound session', err);
+    }
+
     return { session, isNew: true, sessionKey };
   }
 
@@ -224,10 +239,38 @@ export class MegolmManager {
    * Decrypts a ciphertext message using the corresponding InboundGroupSession.
    * Advances the inbound ratchet and persists state.
    */
-  async decryptMessage(sessionId: string, ciphertext: string, expectedIndex: number): Promise<EnvelopeV1> {
+  async decryptMessage(
+    sessionId: string,
+    ciphertext: string,
+    expectedIndex: number,
+    conversationId?: string
+  ): Promise<EnvelopeV1> {
     await ensureVodozemacInitialized();
 
-    const storedPickle = await keyStore.retrieveAndDecryptPickle('megolm_inbound', sessionId);
+    let storedPickle = await keyStore.retrieveAndDecryptPickle('megolm_inbound', sessionId);
+
+    // Fallback: If not in inbound, check if we own the outbound session locally in KeyStore
+    if (!storedPickle && conversationId) {
+      try {
+        const storedOutbound = await keyStore.retrieveAndDecryptPickle('megolm_outbound', conversationId);
+        const meta = await keyStore.getRecordMeta('megolm_outbound', conversationId);
+        if (storedOutbound && meta && meta.sessionId === sessionId) {
+          const outboundSession = GroupSession.fromPickle(storedOutbound);
+          const sessionKey = outboundSession.sessionKey();
+          await this.registerInboundSession(
+            conversationId,
+            sessionId,
+            sessionKey,
+            meta.senderDeviceId || 'self',
+            meta.epoch || 0
+          );
+          storedPickle = await keyStore.retrieveAndDecryptPickle('megolm_inbound', sessionId);
+        }
+      } catch (err) {
+        safeCryptoLogger.warn('Failed to derive inbound session from local outbound session', err);
+      }
+    }
+
     if (!storedPickle) {
       throw new Error('KEY_MISSING'); // Prompts key_request protocol
     }

@@ -56,6 +56,7 @@ export class KeyRequestManager {
     epoch: number;
     senderDeviceId?: string;
     requesterDeviceId?: string;
+    authorUserId?: string;
   }): Promise<boolean> {
     const key = `${params.conversationId}:${params.sessionId}`;
     const now = Date.now();
@@ -101,7 +102,7 @@ export class KeyRequestManager {
 
     this.requestTimestamps.push(now);
 
-    // 3. Dispatch to-device key_request
+    // 3. Dispatch to-device key_request with robust UUID target resolution
     const requesterDeviceId = params.requesterDeviceId || (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || 'local_device';
     const payload = {
       msg_type: 'key_request',
@@ -112,19 +113,45 @@ export class KeyRequestManager {
       requester_device_id: requesterDeviceId,
     };
 
+    const isValidUUID = (s?: string) => Boolean(s && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s));
+
     try {
-      if (params.senderDeviceId) {
-        await api.e2ee.sendToDevice([
-          {
-            recipient_device_id: params.senderDeviceId,
-            sender_device_id: requesterDeviceId,
-            msg_type: 'key_request',
-            payload: JSON.stringify(payload),
-          },
-        ]);
+      const recipientDeviceIds = new Set<string>();
+
+      if (isValidUUID(params.senderDeviceId)) {
+        recipientDeviceIds.add(params.senderDeviceId!);
       }
-      safeCryptoLogger.debug('Dispatched to-device key_request', { sessionId: params.sessionId });
-      return true;
+
+      // If senderDeviceId is not a valid UUID or missing, query author's active registered devices
+      if (recipientDeviceIds.size === 0 && params.authorUserId) {
+        try {
+          const authorDevices = await api.e2ee.getUserDevices(params.authorUserId);
+          if (Array.isArray(authorDevices)) {
+            for (const d of authorDevices) {
+              if (d?.id && !d.revoked_at && isValidUUID(d.id)) {
+                recipientDeviceIds.add(d.id);
+              }
+            }
+          }
+        } catch (e) {
+          safeCryptoLogger.warn('Failed to query author devices for key_request', e);
+        }
+      }
+
+      if (recipientDeviceIds.size > 0) {
+        const toDeviceMessages = Array.from(recipientDeviceIds).map((targetId) => ({
+          recipient_device_id: targetId,
+          sender_device_id: requesterDeviceId,
+          msg_type: 'key_request',
+          payload: JSON.stringify(payload),
+        }));
+        await api.e2ee.sendToDevice(toDeviceMessages);
+        safeCryptoLogger.debug('Dispatched to-device key_request', { sessionId: params.sessionId, targets: toDeviceMessages.length });
+        return true;
+      } else {
+        safeCryptoLogger.warn('No valid recipient device found for key_request', { senderDeviceId: params.senderDeviceId, authorUserId: params.authorUserId });
+        return false;
+      }
     } catch (err: any) {
       safeCryptoLogger.error('Failed to send key_request to-device', { error: err.message });
       return false;

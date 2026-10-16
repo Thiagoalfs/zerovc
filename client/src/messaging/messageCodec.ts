@@ -70,12 +70,15 @@ export class MessageCodec {
       };
     }
 
+    const conversationId = rawMessage.dm_room_id || rawMessage.group_id || rawMessage.channel_id;
+
     try {
       // 3. Attempt Megolm Inbound decryption
       const envelope = await megolmManager.decryptMessage(
         meta.session_id,
         ciphertext,
-        meta.msg_index
+        meta.msg_index,
+        conversationId
       );
 
       return {
@@ -93,7 +96,6 @@ export class MessageCodec {
     } catch (err: any) {
       // 4. In case of missing key, trigger key_request in background
       if (err.message === 'KEY_MISSING') {
-        const conversationId = rawMessage.dm_room_id || rawMessage.group_id || rawMessage.channel_id;
         const conversationType = rawMessage.dm_room_id
           ? 'dm'
           : rawMessage.group_id
@@ -107,6 +109,7 @@ export class MessageCodec {
             sessionId: meta.session_id,
             epoch: meta.epoch || 0,
             senderDeviceId: meta.sender_device_id,
+            authorUserId: rawMessage.author_id,
           }).catch(() => {});
         }
       }
@@ -145,10 +148,11 @@ export class MessageCodec {
     e2ee_meta: E2EEMeta;
     content: string;
   }> {
-    // 1. Get or create outbound session with ratchet rotation check
+    // 1. Get or create outbound session with ratchet rotation check and self-inbound registration
     const { session, isNew, sessionKey } = await megolmManager.getOrCreateOutboundSession(
       params.conversationId,
-      params.currentEpoch
+      params.currentEpoch,
+      params.senderDeviceId
     );
 
     // 2. If new session, distribute key to roster devices via to-device Olm

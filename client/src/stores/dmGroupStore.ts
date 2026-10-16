@@ -10,6 +10,7 @@ import { optimizeImageForUpload } from '../lib/imageOptimizer';
 import { messageCodec } from '../messaging/messageCodec';
 import { keyRequestManager } from '../crypto/keyRequestManager';
 import { megolmManager } from '../crypto/megolmSession';
+import { deviceManager } from '../crypto/deviceManager';
 
 interface DMGroupState {
   groups: DMGroup[];
@@ -436,7 +437,15 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       }
 
       if (activeGroup.e2ee_enabled) {
-        const myDeviceId = (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || 'my_device';
+        let myDeviceId = deviceManager.getDeviceId() || (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || '';
+        if (!myDeviceId || myDeviceId === 'my_device') {
+          try {
+            const curUserId = useAuthStore.getState().user?.id;
+            if (curUserId) {
+              myDeviceId = await deviceManager.ensureRegistered(curUserId, api.e2ee);
+            }
+          } catch {}
+        }
         let rosterDevices: any[] = [];
         try {
           const rosterRes = await api.e2ee.getLatestRoster(activeGroup.id);
