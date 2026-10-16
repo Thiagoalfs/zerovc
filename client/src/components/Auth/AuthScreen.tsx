@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Shield, ArrowLeft, KeyRound, Mail, CheckCircle, RefreshCw, Lock, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { api, formatAssetUrl } from '../../lib/api';
+import { TurnstileWidget, TurnstileWidgetRef } from '../Common/TurnstileWidget';
 
 type AuthMode = 'login' | 'register' | 'verify_email' | 'forgot_password' | 'reset_password';
 
@@ -16,6 +17,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Turnstile state (lê exclusivamente da variável de ambiente VITE_TURNSTILE_SITE_KEY)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetRef>(null);
+  const hasTurnstileSiteKey = Boolean((import.meta as any).env?.VITE_TURNSTILE_SITE_KEY);
 
   // 2FA in Login and Reset
   const [twoFactorCode, setTwoFactorCode] = useState('');
@@ -69,6 +75,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
       setMode(initialMode);
     }
   }, [initialMode]);
+
+  // Reset Turnstile token on mode or 2FA state switch
+  useEffect(() => {
+    setTurnstileToken(null);
+    turnstileRef.current?.reset();
+  }, [mode, requires2FA]);
 
   // Cooldown timer for email resend
   useEffect(() => {
@@ -215,7 +227,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
     if (mode === 'login') {
       try {
         const codeToSend = twoFactorCode.trim() || undefined;
-        const res = await login(email.trim().toLowerCase(), password, codeToSend);
+        const res = await login(email.trim().toLowerCase(), password, codeToSend, turnstileToken || undefined);
         if (res?.requires_2fa) {
           setRequires2FA(true);
         } else if (res?.requires_verification) {
@@ -223,7 +235,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
           setMode('verify_email');
         }
       } catch {
-        // Handled in authStore
+        // Reset turnstile on failure to allow retry with fresh token
+        turnstileRef.current?.reset();
+        setTurnstileToken(null);
       }
       return;
     }
@@ -245,13 +259,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
       }
 
       try {
-        const res = await register(cleanUsername, email.trim().toLowerCase(), password);
+        const res = await register(cleanUsername, email.trim().toLowerCase(), password, turnstileToken || undefined);
         if (res?.requires_verification) {
           if (res.email) setEmail(res.email);
           setMode('verify_email');
         }
       } catch {
-        // Handled in authStore
+        // Reset turnstile on failure to allow retry with fresh token
+        turnstileRef.current?.reset();
+        setTurnstileToken(null);
       }
     }
   };
@@ -712,9 +728,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 </>
               )}
 
+              {/* Cloudflare Turnstile Verification (ativo quando VITE_TURNSTILE_SITE_KEY estiver configurada) */}
+              {!requires2FA && hasTurnstileSiteKey && (
+                <TurnstileWidget
+                  ref={turnstileRef}
+                  action={mode}
+                  onSuccess={(token) => setTurnstileToken(token)}
+                  onExpire={() => setTurnstileToken(null)}
+                  onError={() => setTurnstileToken(null)}
+                />
+              )}
+
               <button
                 type="submit"
-                disabled={isLoading || (requires2FA && (useBackupCode ? twoFactorCode.length < 8 : twoFactorCode.length !== 6))}
+                disabled={
+                  isLoading ||
+                  (!requires2FA && hasTurnstileSiteKey && !turnstileToken) ||
+                  (requires2FA && (useBackupCode ? twoFactorCode.length < 8 : twoFactorCode.length !== 6))
+                }
                 className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
               >
                 {isLoading

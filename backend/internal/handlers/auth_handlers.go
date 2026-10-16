@@ -11,6 +11,8 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -77,15 +79,76 @@ func ContextWithUserID(ctx context.Context, userID uuid.UUID) context.Context {
 }
 
 type RegisterRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Username       string `json:"username"`
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	TurnstileToken string `json:"turnstile_token,omitempty"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Code     string `json:"code,omitempty"` // Optional 2FA TOTP code
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	Code           string `json:"code,omitempty"` // Optional 2FA TOTP code
+	TurnstileToken string `json:"turnstile_token,omitempty"`
+}
+
+type TurnstileVerifyResponse struct {
+	Success     bool      `json:"success"`
+	ChallengeTS time.Time `json:"challenge_ts,omitempty"`
+	Hostname    string    `json:"hostname,omitempty"`
+	ErrorCodes  []string  `json:"error-codes,omitempty"`
+	Action      string    `json:"action,omitempty"`
+	CData       string    `json:"cdata,omitempty"`
+}
+
+func verifyTurnstileToken(token string, remoteIP string) bool {
+	secretKey := strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY"))
+	if secretKey == "" {
+		// Se nenhuma chave secreta foi configurada no ambiente (.env),
+		// permite passar (modo de compatibilidade/desenvolvimento local).
+		return true
+	}
+
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+
+	formData := url.Values{}
+	formData.Set("secret", secretKey)
+	formData.Set("response", token)
+	if remoteIP != "" {
+		formData.Set("remoteip", remoteIP)
+	}
+
+	client := &http.Client{
+		Timeout: 6 * time.Second,
+	}
+
+	resp, err := client.PostForm("https://challenges.cloudflare.com/turnstile/v0/siteverify", formData)
+	if err != nil {
+		log.Printf("[Turnstile] Erro de rede ao validar token: %v", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[Turnstile] Cloudflare retornou status HTTP %d", resp.StatusCode)
+		return false
+	}
+
+	var verifyRes TurnstileVerifyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&verifyRes); err != nil {
+		log.Printf("[Turnstile] Erro ao decodificar JSON da Cloudflare: %v", err)
+		return false
+	}
+
+	if !verifyRes.Success {
+		log.Printf("[Turnstile] Validação falhou: error-codes=%v", verifyRes.ErrorCodes)
+		return false
+	}
+
+	return true
 }
 
 type VerifyEmailRequest struct {
@@ -147,6 +210,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	clientIP := getClientIP(r)
+	if !verifyTurnstileToken(req.TurnstileToken, clientIP) {
+		http.Error(w, `{"error":"Falha na verificação de segurança (Turnstile). Por favor, tente novamente."}`, http.StatusBadRequest)
 		return
 	}
 
@@ -599,6 +668,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
 		return
+	}
+
+	if req.Code == "" || req.TurnstileToken != "" {
+		clientIP := getClientIP(r)
+		if !verifyTurnstileToken(req.TurnstileToken, clientIP) {
+			http.Error(w, `{"error":"Falha na verificação de segurança (Turnstile). Por favor, tente novamente."}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))

@@ -198,7 +198,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
 
 export const api = {
   auth: {
-    register: (data: { username: string; email: string; password: string }) =>
+    register: (data: { username: string; email: string; password: string; turnstile_token?: string }) =>
       request<{ token?: string; csrf_token?: string; requires_verification?: boolean; email?: string; user?: User }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -228,7 +228,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    login: (data: { email: string; password: string; code?: string }) =>
+    login: (data: { email: string; password: string; code?: string; turnstile_token?: string }) =>
       request<{ token?: string; csrf_token?: string; requires_2fa?: boolean; requires_verification?: boolean; email?: string; user?: User }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(data),
