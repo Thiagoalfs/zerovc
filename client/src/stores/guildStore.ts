@@ -10,6 +10,7 @@ import { optimizeImageForUpload } from '../lib/imageOptimizer';
 import { findFirstAccessibleChannel } from '../utils/userActivity';
 import { useVoiceStore } from './voiceStore';
 import { messageCodec } from '../messaging/messageCodec';
+import { deviceManager } from '../crypto/deviceManager';
 
 interface GuildState {
   guilds: Guild[];
@@ -796,7 +797,15 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       }
 
       if (activeChannel.e2ee_enabled) {
-        const myDeviceId = (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || 'my_device';
+        let myDeviceId = deviceManager.getDeviceId() || (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || '';
+        if (!myDeviceId || myDeviceId === 'my_device') {
+          try {
+            const curUserId = useAuthStore.getState().user?.id;
+            if (curUserId) {
+              myDeviceId = await deviceManager.ensureRegistered(curUserId, api.e2ee);
+            }
+          } catch {}
+        }
         let rosterDevices: any[] = [];
         try {
           const audienceRes = await api.e2ee.getChannelAudience(activeChannel.id);

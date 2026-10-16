@@ -9,6 +9,7 @@ import { useUploadStore } from './uploadStore';
 import { optimizeImageForUpload } from '../lib/imageOptimizer';
 import { messageCodec } from '../messaging/messageCodec';
 import { keyRequestManager } from '../crypto/keyRequestManager';
+import { deviceManager } from '../crypto/deviceManager';
 
 interface DMState {
   rooms: DMRoom[];
@@ -370,7 +371,15 @@ export const useDMStore = create<DMState>((set, get) => ({
       }
 
       if (activeRoom.e2ee_enabled) {
-        const myDeviceId = (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || 'my_device';
+        let myDeviceId = deviceManager.getDeviceId() || (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || '';
+        if (!myDeviceId || myDeviceId === 'my_device') {
+          try {
+            const curUserId = useAuthStore.getState().user?.id;
+            if (curUserId) {
+              myDeviceId = await deviceManager.ensureRegistered(curUserId, api.e2ee);
+            }
+          } catch {}
+        }
         let rosterDevices: any[] = [];
         try {
           const rosterRes = await api.e2ee.getLatestRoster(activeRoom.id);

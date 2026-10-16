@@ -58,6 +58,7 @@ import { keyRequestManager } from './crypto/keyRequestManager';
 import { megolmManager, RoomKeyToDevicePayload } from './crypto/megolmSession';
 import { rosterManager } from './crypto/rosterManager';
 import { callKeyManager } from './crypto/callKeys';
+import { deviceManager } from './crypto/deviceManager';
 import { safeCryptoLogger } from './crypto/safeLogger';
 
 export const App: React.FC = () => {
@@ -924,6 +925,15 @@ export const App: React.FC = () => {
     }
   }, [user?.id, user?.auto_detect_activity]);
 
+  // Automatic E2EE Device Identity Registration
+  useEffect(() => {
+    if (user?.id) {
+      deviceManager.ensureRegistered(user.id, api.e2ee).catch((err) => {
+        safeCryptoLogger.warn('App: Failed to auto-register E2EE device', err);
+      });
+    }
+  }, [user?.id]);
+
   // Streamer Mode Software Detection & Synchronization
   useEffect(() => {
     if (typeof window !== 'undefined' && window.electronAPI) {
@@ -1564,6 +1574,17 @@ export const App: React.FC = () => {
       socket.on('E2EE_ROSTER_UPDATE', handleE2EERosterUpdate);
       socket.on('E2EE_ROTATION_REQUIRED', handleE2EERotationRequired);
 
+      // Drain pending offline to-device messages on initial connection
+      api.e2ee.getToDevice().then(async (pending) => {
+        if (Array.isArray(pending) && pending.length > 0) {
+          for (const msg of pending) {
+            await handleE2EEToDevice(msg);
+          }
+        }
+      }).catch((e) => {
+        safeCryptoLogger.debug('Failed to drain initial to-device messages', e);
+      });
+
       const unsubscribeReconnect = socket.onReconnect(async () => {
         try {
           // 1. Resync active channel messages
@@ -1602,6 +1623,18 @@ export const App: React.FC = () => {
           // 4. Resync DM rooms & groups
           useDMStore.getState().fetchRooms().catch(() => {});
           useDMGroupStore.getState().fetchGroups().catch(() => {});
+
+          // 5. Drain pending to-device messages on reconnect
+          try {
+            const pendingToDevice = await api.e2ee.getToDevice();
+            if (Array.isArray(pendingToDevice) && pendingToDevice.length > 0) {
+              for (const toDevMsg of pendingToDevice) {
+                await handleE2EEToDevice(toDevMsg);
+              }
+            }
+          } catch (e) {
+            safeCryptoLogger.debug('Failed to drain to-device messages on reconnect', e);
+          }
         } catch (err) {
           console.error('[Socket Resync] Failed to resync on reconnection:', err);
         }
