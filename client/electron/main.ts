@@ -602,6 +602,44 @@ function createSplashWindow(): BrowserWindow {
   return splash;
 }
 
+// Garante que, após o instalador NSIS encerrar, o ZeroVC seja reaberto automaticamente
+// caso o hook nativo do NSIS (ExecShellAsUser) não tenha iniciado o processo.
+function spawnPostUpdateRelaunchWatchdog() {
+  if (process.platform !== 'win32' || !app.isPackaged) return;
+  try {
+    const appExePath = app.getPath('exe');
+    const watchdogScript = [
+      'Start-Sleep -Seconds 3;',
+      '$deadline = (Get-Date).AddSeconds(120);',
+      'while ((Get-Date) -lt $deadline) {',
+      '  $inst = Get-Process | Where-Object { $_.ProcessName -like "ZeroVC-Setup*" -or $_.ProcessName -like "*ZeroVC*Uninstall*" } -ErrorAction SilentlyContinue;',
+      '  if (-not $inst) { break }',
+      '  Start-Sleep -Seconds 1;',
+      '}',
+      'Start-Sleep -Seconds 2;',
+      '$running = Get-Process -Name "ZeroVC" -ErrorAction SilentlyContinue;',
+      'if (-not $running -and $env:ZEROVC_EXE_PATH -and (Test-Path -LiteralPath $env:ZEROVC_EXE_PATH)) {',
+      '  Start-Process -FilePath $env:ZEROVC_EXE_PATH -ArgumentList "--updated" -WorkingDirectory (Split-Path -LiteralPath $env:ZEROVC_EXE_PATH -Parent);',
+      '}',
+    ].join(' ');
+
+    const child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', watchdogScript],
+      {
+        cwd: os.tmpdir(),
+        env: { ...process.env, ZEROVC_EXE_PATH: appExePath },
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      }
+    );
+    child.unref();
+  } catch (err) {
+    console.warn('[AutoUpdater] Failed to spawn post-update relaunch watchdog:', err);
+  }
+}
+
 // Desliga tudo de forma limpa antes de rodar o instalador NSIS, para que ele
 // não encontre o ZeroVC.exe nem processos filhos segurando a pasta de instalação.
 function shutdownForUpdate() {
@@ -646,7 +684,11 @@ function shutdownForUpdate() {
     process.chdir(os.tmpdir());
   } catch {}
 
-  // 5. Aguarda os handles serem liberados, dispara quitAndInstall uma única vez
+  // 5. Inicia o watchdog desacoplado em %TEMP% que garante a reabertura do app
+  //    assim que o instalador NSIS terminar, caso ele não tenha aberto sozinho.
+  spawnPostUpdateRelaunchWatchdog();
+
+  // 6. Aguarda os handles serem liberados, dispara quitAndInstall uma única vez
   //    e garante encerramento imediato do processo antigo.
   setTimeout(() => {
     if (!autoUpdater) return;
@@ -895,6 +937,7 @@ if (!gotTheLock) {
     );
 
     if (mainWindow) {
+      if (!startupPhase && !mainWindow.isVisible()) mainWindow.show();
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
 
