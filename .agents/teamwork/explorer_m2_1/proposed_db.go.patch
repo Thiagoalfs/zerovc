@@ -1,0 +1,30 @@
+*** backend/internal/database/db.go
+--- backend/internal/database/db.go
+@@ -165,2 +165,28 @@
+ 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_bot_temp_files_expires_at ON bot_temp_files (expires_at)")
++
++	// Ensure E2EE conversation flags and rotation epochs exist
++	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE")
++	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
++	db.Pool.Exec(ctx, "ALTER TABLE dm_groups ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE")
++	db.Pool.Exec(ctx, "ALTER TABLE dm_groups ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
++	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE")
++	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
++
++	// Ensure E2EE message ciphertext and metadata columns exist
++	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE")
++	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT")
++	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS e2ee_meta JSONB")
++	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE")
++	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT")
++	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS e2ee_meta JSONB")
++	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE")
++	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT")
++	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS e2ee_meta JSONB")
++	db.Pool.Exec(ctx, "ALTER TABLE reactions ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT")
++
++	// Ensure E2EE performance indexes exist
++	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_devices_user ON e2ee_devices (user_id) WHERE revoked_at IS NULL")
++	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_one_time_keys_device ON e2ee_one_time_keys (device_id) WHERE claimed_at IS NULL")
++	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_to_device_recipient ON e2ee_to_device (recipient_device_id, created_at ASC)")
++	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_rosters_latest ON e2ee_rosters (conversation_type, conversation_id, version DESC)")

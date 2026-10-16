@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Menu, Search, X, Pin, Users } from 'lucide-react';
+import { Menu, Search, X, Pin, Users, Shield, ShieldCheck } from 'lucide-react';
 import { SearchAutocompletePopout } from './SearchAutocompletePopout';
 import { User } from '../../types';
 
@@ -11,6 +11,10 @@ export interface ChatHeaderProps {
   icon?: React.ReactNode;
   title: React.ReactNode;
   subtitle?: React.ReactNode;
+
+  // E2EE status
+  isE2EE?: boolean;
+  onToggleE2EE?: () => void;
 
   // Custom action buttons (e.g. Call button, Group voice button)
   actions?: React.ReactNode;
@@ -45,6 +49,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   icon,
   title,
   subtitle,
+  isE2EE,
+  onToggleE2EE,
   actions,
   showPinnedOnly,
   onTogglePinned,
@@ -91,6 +97,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
         <div className="flex items-center gap-2 truncate min-w-0">
           <div className="flex items-baseline gap-1.5 truncate min-w-0">{title}</div>
+          {isE2EE && (
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] md:text-xs font-semibold select-none flex-shrink-0"
+              title="Criptografia de Ponta a Ponta Ativa"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">E2EE Ativo</span>
+            </div>
+          )}
           {subtitle && (
             <>
               <div className="hidden md:block w-[1px] h-3.5 bg-white/10 mx-1 flex-shrink-0" />
@@ -107,6 +122,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         onClick={(e) => e.stopPropagation()}
         className="flex items-center gap-1.5 md:gap-2 flex-shrink-0 relative"
       >
+        {!isE2EE && onToggleE2EE && (
+          <button
+            type="button"
+            onClick={onToggleE2EE}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-gray-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors cursor-pointer border border-transparent hover:border-emerald-500/20"
+            title="Ativar Criptografia de Ponta a Ponta"
+          >
+            <Shield className="w-4 h-4 text-gray-400 hover:text-emerald-400" />
+            <span className="hidden lg:inline text-[11px]">Ativar E2EE</span>
+          </button>
+        )}
+
         {actions}
 
         {/* Pinned Messages Toggle */}

@@ -1,0 +1,35 @@
+*** backend/cmd/server/main.go
+--- backend/cmd/server/main.go
+@@ -171,2 +171,3 @@
+ 	tempCleaner := services.NewTempFileCleaner(db, botTempAssetsDir)
++	e2eeHandler := handlers.NewE2EEHandler(db, hub)
+@@ -259,2 +260,5 @@
+ 	r.With(httprate.LimitByIP(20, time.Minute)).Get("/api/link-preview", linkPreviewHandler.GetMetadata)
++
++	// Public E2EE Protocol Discovery & Capability Config
++	r.Get("/api/e2ee/config", e2eeHandler.GetConfig)
+@@ -430,2 +434,22 @@
+ 		r.With(uploadLimiter.Middleware).Post("/api/upload/attachment", uploadHandler.UploadAttachment)
++
++		// E2EE Identity & Device Endpoints (Strict POST for mutations + CSRF HMAC enforced)
++		r.Post("/api/e2ee/identities", e2eeHandler.RegisterIdentity)
++		r.Get("/api/e2ee/identities/{user_id}", e2eeHandler.GetIdentity)
++		r.Post("/api/e2ee/devices", e2eeHandler.RegisterDevice)
++		r.Get("/api/e2ee/users/{user_id}/devices", e2eeHandler.ListUserDevices)
++		r.Post("/api/e2ee/devices/{device_id}/revoke", e2eeHandler.RevokeDevice)
++		r.Post("/api/e2ee/devices/{device_id}/keys", e2eeHandler.ReplenishOTKs)
++		r.Post("/api/e2ee/devices/keys/claim", e2eeHandler.ClaimKeys)
++
++		// E2EE To-Device Queue & Real-Time Delivery
++		r.Post("/api/e2ee/to-device", e2eeHandler.SendToDevice)
++		r.Get("/api/e2ee/to-device", e2eeHandler.GetPendingToDevice)
++		r.Post("/api/e2ee/to-device/ack", e2eeHandler.AckToDevice)
++
++		// E2EE Chained Signed Rosters
++		r.Post("/api/e2ee/rosters", e2eeHandler.SubmitRoster)
++		r.Get("/api/e2ee/rosters/{conversation_id}", e2eeHandler.GetLatestRoster)
++
++		// E2EE Session Key Backup (Opt-in)
++		r.Post("/api/e2ee/backup", e2eeHandler.UploadBackup)
++		r.Get("/api/e2ee/backup", e2eeHandler.GetBackup)
++		r.Post("/api/e2ee/backup/delete", e2eeHandler.DeleteBackup)

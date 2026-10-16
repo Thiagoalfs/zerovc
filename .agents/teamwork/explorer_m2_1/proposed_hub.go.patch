@@ -1,0 +1,55 @@
+*** backend/internal/gateway/hub.go
+--- backend/internal/gateway/hub.go
+@@ -15,4 +15,6 @@
+ 	clients map[uuid.UUID]map[*Client]bool
++	clientsByDevice map[uuid.UUID]*Client
+ 
+ 	// Subscriptions: GuildID -> map[UserID]bool
+@@ -40,3 +42,4 @@
+ 		clients:      make(map[uuid.UUID]map[*Client]bool),
++		clientsByDevice: make(map[uuid.UUID]*Client),
+ 		guildMembers: make(map[uuid.UUID]map[uuid.UUID]bool),
+ 		Register:     make(chan *Client),
+@@ -66,2 +69,5 @@
+ 			h.clients[client.UserID][client] = true
++			if client.DeviceID != nil {
++				h.clientsByDevice[*client.DeviceID] = client
++			}
+ 			h.mu.Unlock()
+@@ -79,2 +85,5 @@
+ 				delete(userClients, client)
++				if client.DeviceID != nil {
++					delete(h.clientsByDevice, *client.DeviceID)
++				}
+ 				close(client.send)
+@@ -239,1 +248,32 @@
+ }
++
++func (h *Hub) IsDeviceOnline(deviceID uuid.UUID) bool {
++	h.mu.RLock()
++	defer h.mu.RUnlock()
++	_, exists := h.clientsByDevice[deviceID]
++	return exists
++}
++
++func (h *Hub) SendToDevice(deviceID uuid.UUID, event models.WSEvent) bool {
++	payload, err := json.Marshal(event)
++	if err != nil {
++		return false
++	}
++
++	h.mu.RLock()
++	defer h.mu.RUnlock()
++
++	client, exists := h.clientsByDevice[deviceID]
++	if !exists {
++		return false
++	}
++
++	select {
++	case client.send <- payload:
++		return true
++	default:
++		return false
++	}
++}

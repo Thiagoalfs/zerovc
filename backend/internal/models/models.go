@@ -184,6 +184,10 @@ type Channel struct {
 	RoleIDs              []uuid.UUID                  `json:"role_ids,omitempty"`
 	PermissionOverwrites []ChannelPermissionOverwrite `json:"permission_overwrites,omitempty"`
 	VoiceSessions        []VoiceSession               `json:"voice_sessions,omitempty"`
+	E2EEEnabled          bool                         `json:"e2ee_enabled"`
+	RotationEpoch        int                          `json:"rotation_epoch"`
+	AudienceLimit        int                          `json:"audience_limit"`
+	AudienceHash         *string                      `json:"audience_hash,omitempty"`
 	CreatedAt            time.Time                    `json:"created_at"`
 }
 
@@ -195,9 +199,21 @@ type Attachment struct {
 }
 
 type MessageReaction struct {
-	Emoji   string      `json:"emoji"`
-	Count   int         `json:"count"`
-	UserIDs []uuid.UUID `json:"user_ids"`
+	Emoji          string      `json:"emoji"`
+	Count          int         `json:"count"`
+	UserIDs        []uuid.UUID `json:"user_ids"`
+	E2EECiphertext *string     `json:"e2ee_ciphertext,omitempty"`
+}
+
+type MessageReactionRecord struct {
+	ID               uuid.UUID  `json:"id"`
+	MessageID        *uuid.UUID `json:"message_id,omitempty"`
+	DMMessageID      *uuid.UUID `json:"dm_message_id,omitempty"`
+	DMGroupMessageID *uuid.UUID `json:"dm_group_message_id,omitempty"`
+	UserID           uuid.UUID  `json:"user_id"`
+	Emoji            string     `json:"emoji,omitempty"`
+	E2EECiphertext   *string    `json:"e2ee_ciphertext,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
 }
 
 type MessageReplyInfo struct {
@@ -257,8 +273,11 @@ type Message struct {
 	IsPinned    bool              `json:"is_pinned"`
 	IsEdited    bool              `json:"is_edited"`
 	IsTTS       bool              `json:"is_tts"`
-	EditedAt    *time.Time        `json:"edited_at,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
+	EditedAt       *time.Time        `json:"edited_at,omitempty"`
+	Encrypted      bool              `json:"encrypted"`
+	E2EECiphertext *string           `json:"e2ee_ciphertext,omitempty"`
+	E2EEMeta       json.RawMessage   `json:"e2ee_meta,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
@@ -309,65 +328,75 @@ type Friendship struct {
 
 // Direct Message Room
 type DMRoom struct {
-	ID          uuid.UUID    `json:"id"`
-	User1ID     uuid.UUID    `json:"user1_id"`
-	User2ID     uuid.UUID    `json:"user2_id"`
-	Recipient   UserPublic   `json:"recipient"`
-	LastMessage *DMMessage   `json:"last_message,omitempty"`
-	CreatedAt   time.Time    `json:"created_at"`
+	ID            uuid.UUID    `json:"id"`
+	User1ID       uuid.UUID    `json:"user1_id"`
+	User2ID       uuid.UUID    `json:"user2_id"`
+	Recipient     UserPublic   `json:"recipient"`
+	LastMessage   *DMMessage   `json:"last_message,omitempty"`
+	E2EEEnabled   bool         `json:"e2ee_enabled"`
+	RotationEpoch int          `json:"rotation_epoch"`
+	CreatedAt     time.Time    `json:"created_at"`
 }
 
 // Direct Message
 type DMMessage struct {
-	ID          uuid.UUID         `json:"id"`
-	DMRoomID    uuid.UUID         `json:"dm_room_id"`
-	AuthorID    uuid.UUID         `json:"author_id"`
-	Author      UserPublic        `json:"author"`
-	InvokerID   *uuid.UUID        `json:"invoker_id,omitempty"`
-	Invoker     *UserPublic       `json:"invoker,omitempty"`
-	Content     string            `json:"content"`
-	Attachments []Attachment      `json:"attachments"`
-	Embeds      []MessageEmbed    `json:"embeds,omitempty"`
-	ReplyToID   *uuid.UUID        `json:"reply_to_id,omitempty"`
-	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
-	IsPinned    bool              `json:"is_pinned"`
-	IsEdited    bool              `json:"is_edited"`
-	IsTTS       bool              `json:"is_tts"`
-	EditedAt    *time.Time        `json:"edited_at,omitempty"`
-	Reactions   []MessageReaction `json:"reactions,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
+	ID             uuid.UUID         `json:"id"`
+	DMRoomID       uuid.UUID         `json:"dm_room_id"`
+	AuthorID       uuid.UUID         `json:"author_id"`
+	Author         UserPublic        `json:"author"`
+	InvokerID      *uuid.UUID        `json:"invoker_id,omitempty"`
+	Invoker        *UserPublic       `json:"invoker,omitempty"`
+	Content        string            `json:"content"`
+	Attachments    []Attachment      `json:"attachments"`
+	Embeds         []MessageEmbed    `json:"embeds,omitempty"`
+	ReplyToID      *uuid.UUID        `json:"reply_to_id,omitempty"`
+	ReplyTo        *MessageReplyInfo `json:"reply_to,omitempty"`
+	IsPinned       bool              `json:"is_pinned"`
+	IsEdited       bool              `json:"is_edited"`
+	IsTTS          bool              `json:"is_tts"`
+	EditedAt       *time.Time        `json:"edited_at,omitempty"`
+	Reactions      []MessageReaction `json:"reactions,omitempty"`
+	Encrypted      bool              `json:"encrypted"`
+	E2EECiphertext *string           `json:"e2ee_ciphertext,omitempty"`
+	E2EEMeta       json.RawMessage   `json:"e2ee_meta,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
 }
 
 // DM Group
 type DMGroup struct {
-	ID          uuid.UUID       `json:"id"`
-	Name        *string         `json:"name"`
-	IconURL     *string         `json:"icon_url"`
-	OwnerID     uuid.UUID       `json:"owner_id"`
-	Members     []UserPublic    `json:"members"`
-	LastMessage *DMGroupMessage `json:"last_message,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
+	ID            uuid.UUID       `json:"id"`
+	Name          *string         `json:"name"`
+	IconURL       *string         `json:"icon_url"`
+	OwnerID       uuid.UUID       `json:"owner_id"`
+	Members       []UserPublic    `json:"members"`
+	LastMessage   *DMGroupMessage `json:"last_message,omitempty"`
+	E2EEEnabled   bool            `json:"e2ee_enabled"`
+	RotationEpoch int             `json:"rotation_epoch"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
 
 // DM Group Message
 type DMGroupMessage struct {
-	ID          uuid.UUID         `json:"id"`
-	GroupID     uuid.UUID         `json:"group_id"`
-	AuthorID    uuid.UUID         `json:"author_id"`
-	Author      UserPublic        `json:"author"`
-	InvokerID   *uuid.UUID        `json:"invoker_id,omitempty"`
-	Invoker     *UserPublic       `json:"invoker,omitempty"`
-	Content     string            `json:"content"`
-	Attachments []Attachment      `json:"attachments"`
-	Embeds      []MessageEmbed    `json:"embeds,omitempty"`
-	ReplyToID   *uuid.UUID        `json:"reply_to_id,omitempty"`
-	ReplyTo     *MessageReplyInfo `json:"reply_to,omitempty"`
-	IsPinned    bool              `json:"is_pinned"`
-	IsEdited    bool              `json:"is_edited"`
-	IsTTS       bool              `json:"is_tts"`
-	EditedAt    *time.Time        `json:"edited_at,omitempty"`
-	Reactions   []MessageReaction `json:"reactions,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
+	ID             uuid.UUID         `json:"id"`
+	GroupID        uuid.UUID         `json:"group_id"`
+	AuthorID       uuid.UUID         `json:"author_id"`
+	Author         UserPublic        `json:"author"`
+	InvokerID      *uuid.UUID        `json:"invoker_id,omitempty"`
+	Invoker        *UserPublic       `json:"invoker,omitempty"`
+	Content        string            `json:"content"`
+	Attachments    []Attachment      `json:"attachments"`
+	Embeds         []MessageEmbed    `json:"embeds,omitempty"`
+	ReplyToID      *uuid.UUID        `json:"reply_to_id,omitempty"`
+	ReplyTo        *MessageReplyInfo `json:"reply_to,omitempty"`
+	IsPinned       bool              `json:"is_pinned"`
+	IsEdited       bool              `json:"is_edited"`
+	IsTTS          bool              `json:"is_tts"`
+	EditedAt       *time.Time        `json:"edited_at,omitempty"`
+	Reactions      []MessageReaction `json:"reactions,omitempty"`
+	Encrypted      bool              `json:"encrypted"`
+	E2EECiphertext *string           `json:"e2ee_ciphertext,omitempty"`
+	E2EEMeta       json.RawMessage   `json:"e2ee_meta,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
 }
 
 // WebSocket Event Types

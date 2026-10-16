@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
@@ -34,10 +36,14 @@ type CreateDMRoomRequest struct {
 }
 
 type SendDMMessageRequest struct {
-	Content     string              `json:"content"`
-	Attachments []models.Attachment `json:"attachments"`
-	ReplyToID   *uuid.UUID          `json:"reply_to_id,omitempty"`
-	IsTTS       bool                `json:"is_tts,omitempty"`
+	ID             *uuid.UUID          `json:"id,omitempty"`
+	Content        string              `json:"content"`
+	Attachments    []models.Attachment `json:"attachments"`
+	ReplyToID      *uuid.UUID          `json:"reply_to_id,omitempty"`
+	IsTTS          bool                `json:"is_tts,omitempty"`
+	Encrypted      *bool               `json:"encrypted,omitempty"`
+	E2EECiphertext *string             `json:"e2ee_ciphertext,omitempty"`
+	E2EEMeta       json.RawMessage     `json:"e2ee_meta,omitempty"`
 }
 
 func (h *DMHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
@@ -48,13 +54,13 @@ func (h *DMHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT r.id, r.user1_id, r.user2_id, r.created_at,
+		SELECT r.id, r.user1_id, r.user2_id, COALESCE(r.e2ee_enabled, false), COALESCE(r.rotation_epoch, 1), r.created_at,
 		       u.id, u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
-		       lm.id, lm.content, lm.created_at
+		       lm.id, lm.content, COALESCE(lm.encrypted, false), lm.e2ee_ciphertext, lm.e2ee_meta, lm.created_at
 		FROM dm_rooms r
 		INNER JOIN users u ON u.id = (CASE WHEN r.user1_id = $1 THEN r.user2_id ELSE r.user1_id END)
 		LEFT JOIN LATERAL (
-			SELECT id, content, created_at
+			SELECT id, content, encrypted, e2ee_ciphertext, e2ee_meta, created_at
 			FROM dm_messages
 			WHERE dm_room_id = r.id
 			ORDER BY created_at DESC
@@ -81,18 +87,24 @@ func (h *DMHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 		var recipient models.UserPublic
 		var lastMsgID *uuid.UUID
 		var lastMsgContent *string
+		var lastMsgEncrypted bool
+		var lastMsgCiphertext *string
+		var lastMsgMeta json.RawMessage
 		var lastMsgCreatedAt *time.Time
 		if err := rows.Scan(
-			&room.ID, &room.User1ID, &room.User2ID, &room.CreatedAt,
+			&room.ID, &room.User1ID, &room.User2ID, &room.E2EEEnabled, &room.RotationEpoch, &room.CreatedAt,
 			&recipient.ID, &recipient.Username, &recipient.DisplayName, &recipient.AvatarURL, &recipient.BannerURL, &recipient.Bio, &recipient.Status, &recipient.CustomStatus,
-			&lastMsgID, &lastMsgContent, &lastMsgCreatedAt,
+			&lastMsgID, &lastMsgContent, &lastMsgEncrypted, &lastMsgCiphertext, &lastMsgMeta, &lastMsgCreatedAt,
 		); err == nil {
 			room.Recipient = recipient
 			if lastMsgID != nil && lastMsgCreatedAt != nil {
 				room.LastMessage = &models.DMMessage{
-					ID:        *lastMsgID,
-					Content:   *lastMsgContent,
-					CreatedAt: *lastMsgCreatedAt,
+					ID:             *lastMsgID,
+					Content:        *lastMsgContent,
+					Encrypted:      lastMsgEncrypted,
+					E2EECiphertext: lastMsgCiphertext,
+					E2EEMeta:       lastMsgMeta,
+					CreatedAt:      *lastMsgCreatedAt,
 				}
 			}
 			rooms = append(rooms, room)
@@ -253,7 +265,7 @@ func (h *DMHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at,
+		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, COALESCE(m.encrypted, false), m.e2ee_ciphertext, m.e2ee_meta, m.created_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url,
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
@@ -287,7 +299,7 @@ func (h *DMHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		var invUsername, invDisplayName, invAvatar *string
 
 		if err := rows.Scan(
-			&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &attachmentsJSON, &embedsJSON, &msg.InvokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt,
+			&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &attachmentsJSON, &embedsJSON, &msg.InvokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.Encrypted, &msg.E2EECiphertext, &msg.E2EEMeta, &msg.CreatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
 			&invID, &invUsername, &invDisplayName, &invAvatar,
@@ -412,22 +424,55 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req SendDMMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Content == "" && len(req.Attachments) == 0) {
-		http.Error(w, `{"error":"message content cannot be empty"}`, http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
 
-	if len(req.Content) > 2000 {
-		http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
-		return
-	}
-
-	// Verify participant and find other user
+	// Verify participant and find other user, plus load E2EE status
 	var user1ID, user2ID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
+	var e2eeEnabled bool
+	var rotationEpoch int
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id, COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1) FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID, &e2eeEnabled, &rotationEpoch)
 	if err != nil || (user1ID != userID && user2ID != userID) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
+	}
+
+	isEncrypted := req.Encrypted != nil && *req.Encrypted
+
+	// Plaintext Gating State Machine:
+	if e2eeEnabled {
+		if !isEncrypted || req.E2EECiphertext == nil || *req.E2EECiphertext == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(`{"error":"e2ee_required"}`))
+			return
+		}
+	} else {
+		if isEncrypted || (req.E2EECiphertext != nil && *req.E2EECiphertext != "") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(`{"error":"e2ee_not_enabled"}`))
+			return
+		}
+	}
+
+	// Payload validity check
+	if !isEncrypted {
+		if req.Content == "" && len(req.Attachments) == 0 {
+			http.Error(w, `{"error":"message content cannot be empty"}`, http.StatusBadRequest)
+			return
+		}
+		if len(req.Content) > 2000 {
+			http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
+			return
+		}
+	} else {
+		if req.E2EECiphertext == nil || *req.E2EECiphertext == "" {
+			http.Error(w, `{"error":"ciphertext and metadata required for encrypted message"}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	recipientID := user1ID
@@ -456,17 +501,130 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 	)
 
+	// Idempotency Contract: Check if req.ID already exists
+	if req.ID != nil && *req.ID != uuid.Nil {
+		var existing models.DMMessage
+		var existAttach, existEmbeds []byte
+		checkQuery := `
+			SELECT id, dm_room_id, author_id, content, attachments, embeds, reply_to_id, is_pinned, is_edited, is_tts, edited_at, COALESCE(encrypted, false), e2ee_ciphertext, e2ee_meta, created_at
+			FROM dm_messages
+			WHERE dm_room_id = $1 AND id = $2
+		`
+		rowErr := h.db.Pool.QueryRow(r.Context(), checkQuery, roomID, *req.ID).Scan(
+			&existing.ID, &existing.DMRoomID, &existing.AuthorID, &existing.Content, &existAttach, &existEmbeds, &existing.ReplyToID, &existing.IsPinned, &existing.IsEdited, &existing.IsTTS, &existing.EditedAt, &existing.Encrypted, &existing.E2EECiphertext, &existing.E2EEMeta, &existing.CreatedAt,
+		)
+		if rowErr == nil {
+			if existing.AuthorID != userID {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				w.Write([]byte(`{"error":"idempotency_conflict"}`))
+				return
+			}
+
+			payloadMatches := false
+			if isEncrypted {
+				if existing.Encrypted && existing.E2EECiphertext != nil && req.E2EECiphertext != nil && *existing.E2EECiphertext == *req.E2EECiphertext {
+					payloadMatches = true
+				}
+			} else {
+				if !existing.Encrypted && existing.Content == req.Content {
+					payloadMatches = true
+				}
+			}
+
+			if !payloadMatches {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				w.Write([]byte(`{"error":"idempotency_conflict"}`))
+				return
+			}
+
+			existing.Author = author
+			if len(existAttach) > 0 {
+				_ = json.Unmarshal(existAttach, &existing.Attachments)
+			}
+			if existing.Attachments == nil {
+				existing.Attachments = make([]models.Attachment, 0)
+			}
+			existing.Reactions = make([]models.MessageReaction, 0)
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(existing)
+			return
+		}
+	}
+
+	// Zero plaintext storage
+	contentToStore := req.Content
+	if isEncrypted {
+		contentToStore = ""
+	}
+
 	attachmentsJSON, _ := json.Marshal(req.Attachments)
+	messageID := uuid.New()
+	if req.ID != nil && *req.ID != uuid.Nil {
+		messageID = *req.ID
+	}
+
 	var msg models.DMMessage
 	query := `
-		INSERT INTO dm_messages (dm_room_id, author_id, content, attachments, reply_to_id, is_tts)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, dm_room_id, author_id, content, reply_to_id, is_pinned, is_edited, is_tts, edited_at, created_at
+		INSERT INTO dm_messages (id, dm_room_id, author_id, content, attachments, reply_to_id, is_tts, encrypted, e2ee_ciphertext, e2ee_meta)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id, dm_room_id, author_id, content, reply_to_id, is_pinned, is_edited, is_tts, edited_at, COALESCE(encrypted, false), e2ee_ciphertext, e2ee_meta, created_at
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, roomID, userID, req.Content, attachmentsJSON, req.ReplyToID, req.IsTTS).Scan(
-		&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt,
+	err = h.db.Pool.QueryRow(r.Context(), query, messageID, roomID, userID, contentToStore, attachmentsJSON, req.ReplyToID, req.IsTTS, isEncrypted, req.E2EECiphertext, req.E2EEMeta).Scan(
+		&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.Content, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.Encrypted, &msg.E2EECiphertext, &msg.E2EEMeta, &msg.CreatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			var existing models.DMMessage
+			var existAttach, existEmbeds []byte
+			checkQuery := `
+				SELECT id, dm_room_id, author_id, content, attachments, embeds, reply_to_id, is_pinned, is_edited, is_tts, edited_at, COALESCE(encrypted, false), e2ee_ciphertext, e2ee_meta, created_at
+				FROM dm_messages
+				WHERE dm_room_id = $1 AND id = $2
+			`
+			if qErr := h.db.Pool.QueryRow(r.Context(), checkQuery, roomID, messageID).Scan(
+				&existing.ID, &existing.DMRoomID, &existing.AuthorID, &existing.Content, &existAttach, &existEmbeds, &existing.ReplyToID, &existing.IsPinned, &existing.IsEdited, &existing.IsTTS, &existing.EditedAt, &existing.Encrypted, &existing.E2EECiphertext, &existing.E2EEMeta, &existing.CreatedAt,
+			); qErr == nil {
+				if existing.AuthorID != userID {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					w.Write([]byte(`{"error":"idempotency_conflict"}`))
+					return
+				}
+				payloadMatches := false
+				if isEncrypted {
+					if existing.Encrypted && existing.E2EECiphertext != nil && req.E2EECiphertext != nil && *existing.E2EECiphertext == *req.E2EECiphertext {
+						payloadMatches = true
+					}
+				} else {
+					if !existing.Encrypted && existing.Content == req.Content {
+						payloadMatches = true
+					}
+				}
+				if !payloadMatches {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					w.Write([]byte(`{"error":"idempotency_conflict"}`))
+					return
+				}
+				existing.Author = author
+				if len(existAttach) > 0 {
+					_ = json.Unmarshal(existAttach, &existing.Attachments)
+				}
+				if existing.Attachments == nil {
+					existing.Attachments = make([]models.Attachment, 0)
+				}
+				existing.Reactions = make([]models.MessageReaction, 0)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(existing)
+				return
+			}
+		}
 		http.Error(w, `{"error":"failed to save dm message"}`, http.StatusInternalServerError)
 		return
 	}
@@ -516,6 +674,71 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(msg)
 }
 
+// EnableE2EE handles POST /api/dms/{roomID}/e2ee/enable
+func (h *DMHandler) EnableE2EE(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	roomIDStr := chi.URLParam(r, "roomID")
+	if roomIDStr == "" {
+		roomIDStr = chi.URLParam(r, "id")
+	}
+	roomID, err := uuid.Parse(roomIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid room id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var user1ID, user2ID uuid.UUID
+	var currentE2EE bool
+	var currentEpoch int
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT user1_id, user2_id, COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1)
+		FROM dm_rooms WHERE id = $1
+	`, roomID).Scan(&user1ID, &user2ID, &currentE2EE, &currentEpoch)
+	if err != nil || (user1ID != userID && user2ID != userID) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	if !currentE2EE {
+		currentEpoch = 1
+		_, err = h.db.Pool.Exec(r.Context(), `
+			UPDATE dm_rooms
+			SET e2ee_enabled = TRUE, rotation_epoch = 1
+			WHERE id = $1
+		`, roomID)
+		if err != nil {
+			http.Error(w, `{"error":"failed to enable e2ee"}`, http.StatusInternalServerError)
+			return
+		}
+		currentE2EE = true
+
+		// Broadcast E2EE_ROTATION_REQUIRED to both participants
+		rotationEvent := models.WSEvent{
+			Type: models.EventE2EERotationRequired,
+			Data: map[string]any{
+				"conversation_type": "dm",
+				"conversation_id":   roomID,
+				"rotation_epoch":    1,
+			},
+		}
+		h.hub.SendToUser(user1ID, rotationEvent)
+		h.hub.SendToUser(user2ID, rotationEvent)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":             roomID,
+		"e2ee_enabled":   true,
+		"rotation_epoch": currentEpoch,
+	})
+}
+
+
 func (h *DMHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -533,8 +756,12 @@ func (h *DMHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ReactionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Emoji) == 0 {
-		http.Error(w, `{"error":"emoji is required"}`, http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Emoji) == 0 && (req.E2EECiphertext == nil || *req.E2EECiphertext == "") {
+		http.Error(w, `{"error":"emoji or e2ee_ciphertext is required"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -556,10 +783,10 @@ func (h *DMHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = h.db.Pool.Exec(r.Context(), `
-		INSERT INTO message_reactions (dm_message_id, user_id, emoji)
-		VALUES ($1, $2, $3)
+		INSERT INTO message_reactions (dm_message_id, user_id, emoji, e2ee_ciphertext)
+		VALUES ($1, $2, $3, $4)
 		ON CONFLICT DO NOTHING
-	`, messageID, userID, req.Emoji)
+	`, messageID, userID, req.Emoji, req.E2EECiphertext)
 	if err != nil {
 		http.Error(w, `{"error":"failed to add reaction"}`, http.StatusInternalServerError)
 		return
@@ -648,6 +875,23 @@ func (h *DMHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
 
+// DMCallInviteResponse represents the response payload for a DM call invitation.
+type DMCallInviteResponse struct {
+	Success     bool      `json:"success"`
+	RoomID      uuid.UUID `json:"room_id"`
+	E2EEEnabled bool      `json:"e2ee_enabled"`
+}
+
+// DMCallAcceptResponse represents the response payload for accepting a DM call.
+type DMCallAcceptResponse struct {
+	Success     bool      `json:"success"`
+	RoomID      uuid.UUID `json:"room_id"`
+	RoomName    string    `json:"room_name"`
+	Token       string    `json:"token"`
+	LiveKitURL  string    `json:"livekit_url"`
+	E2EEEnabled bool      `json:"e2ee_enabled"`
+}
+
 // 1x1 Call Endpoints
 
 func (h *DMHandler) InviteCall(w http.ResponseWriter, r *http.Request) {
@@ -666,7 +910,8 @@ func (h *DMHandler) InviteCall(w http.ResponseWriter, r *http.Request) {
 
 	// Verify participant and find recipient
 	var user1ID, user2ID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
+	var isE2EE bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id, COALESCE(e2ee_enabled, false) FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID, &isE2EE)
 	if err != nil || (user1ID != userID && user2ID != userID) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
@@ -695,14 +940,19 @@ func (h *DMHandler) InviteCall(w http.ResponseWriter, r *http.Request) {
 	h.hub.SendToUser(recipientID, models.WSEvent{
 		Type: "CALL_INCOMING",
 		Data: map[string]any{
-			"room_id":   roomID,
-			"caller":    caller,
-			"call_type": "dm",
+			"room_id":      roomID,
+			"caller":       caller,
+			"call_type":    "dm",
+			"e2ee_enabled": isE2EE,
 		},
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"success": true, "room_id": roomID})
+	json.NewEncoder(w).Encode(DMCallInviteResponse{
+		Success:     true,
+		RoomID:      roomID,
+		E2EEEnabled: isE2EE,
+	})
 }
 
 func (h *DMHandler) AcceptCall(w http.ResponseWriter, r *http.Request) {
@@ -720,7 +970,8 @@ func (h *DMHandler) AcceptCall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user1ID, user2ID uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID)
+	var isE2EE bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id, COALESCE(e2ee_enabled, false) FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID, &isE2EE)
 	if err != nil || (user1ID != userID && user2ID != userID) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
@@ -740,18 +991,8 @@ func (h *DMHandler) AcceptCall(w http.ResponseWriter, r *http.Request) {
 		&otherU.ID, &otherU.Username, &otherU.DisplayName, &otherU.AvatarURL, &otherU.BannerURL, &otherU.Bio, &otherU.Status, &otherU.CustomStatus,
 	)
 
-	currentMetaJSON, _ := json.Marshal(map[string]any{
-		"avatar_url":    currentU.AvatarURL,
-		"display_name":  currentU.DisplayName,
-		"username":      currentU.Username,
-		"custom_status": currentU.CustomStatus,
-	})
-	otherMetaJSON, _ := json.Marshal(map[string]any{
-		"avatar_url":    otherU.AvatarURL,
-		"display_name":  otherU.DisplayName,
-		"username":      otherU.Username,
-		"custom_status": otherU.CustomStatus,
-	})
+	currentMetaJSON := BuildLiveKitParticipantMetadata(currentU.AvatarURL, currentU.DisplayName, currentU.Username, currentU.CustomStatus, userID, isE2EE)
+	otherMetaJSON := BuildLiveKitParticipantMetadata(otherU.AvatarURL, otherU.DisplayName, otherU.Username, otherU.CustomStatus, otherUserID, isE2EE)
 
 	livekitRoomName := "dm-" + roomID.String()
 
@@ -781,21 +1022,23 @@ func (h *DMHandler) AcceptCall(w http.ResponseWriter, r *http.Request) {
 	h.hub.SendToUser(otherUserID, models.WSEvent{
 		Type: "CALL_ACCEPT",
 		Data: map[string]any{
-			"room_id":     roomID,
-			"room_name":   livekitRoomName,
-			"token":       tokenCaller,
-			"livekit_url": h.livekit.GetPublicURL(),
+			"room_id":      roomID,
+			"room_name":    livekitRoomName,
+			"token":        tokenCaller,
+			"livekit_url":  h.livekit.GetPublicURL(),
+			"e2ee_enabled": isE2EE,
 		},
 	})
 
 	// Respond to acceptor with their token and URL
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"success":     true,
-		"room_id":     roomID,
-		"room_name":   livekitRoomName,
-		"token":       tokenAcceptor,
-		"livekit_url": h.livekit.GetPublicURL(),
+	json.NewEncoder(w).Encode(DMCallAcceptResponse{
+		Success:     true,
+		RoomID:      roomID,
+		RoomName:    livekitRoomName,
+		Token:       tokenAcceptor,
+		LiveKitURL:  h.livekit.GetPublicURL(),
+		E2EEEnabled: isE2EE,
 	})
 }
 

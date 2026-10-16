@@ -172,6 +172,10 @@ export interface Channel {
   role_ids?: string[];
   permission_overwrites?: ChannelPermissionOverwrite[];
   voice_sessions?: VoiceSession[];
+  e2ee_enabled?: boolean;
+  rotation_epoch?: number;
+  audience_limit?: number;
+  audience_hash?: string;
   created_at: string;
 }
 
@@ -253,6 +257,10 @@ export interface BaseMessage {
     size: number;
     progress?: number;
   };
+  encrypted?: boolean;
+  e2ee_ciphertext?: string;
+  e2ee_meta?: any;
+  decryption_status?: 'decrypted' | 'undecryptable' | 'decrypting' | 'plaintext';
 }
 
 export interface Message extends BaseMessage {
@@ -271,6 +279,8 @@ export interface DMRoom {
   recipient: User;
   last_message?: DMMessage;
   created_at: string;
+  e2ee_enabled?: boolean;
+  rotation_epoch?: number;
 }
 
 export interface DMMessage extends BaseMessage {
@@ -287,6 +297,8 @@ export interface DMGroup {
   members: User[];
   last_message?: DMGroupMessage;
   created_at: string;
+  e2ee_enabled?: boolean;
+  rotation_epoch?: number;
 }
 
 export interface DMGroupMessage extends BaseMessage {

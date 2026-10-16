@@ -470,5 +470,146 @@ CREATE TABLE IF NOT EXISTS bot_temp_files (
 
 CREATE INDEX IF NOT EXISTS idx_bot_temp_files_expires_at ON bot_temp_files (expires_at);
 
+-- 31. End-to-End Encryption (E2EE) Infrastructure
 
+-- Conversation E2EE flags and rotation epoch (default: 1)
+ALTER TABLE dm_rooms    ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE dm_rooms    ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1;
 
+ALTER TABLE dm_groups   ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE dm_groups   ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1;
+
+ALTER TABLE channels    ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE channels    ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1;
+ALTER TABLE channels    ADD COLUMN IF NOT EXISTS audience_limit INT DEFAULT 15;
+ALTER TABLE channels    ADD COLUMN IF NOT EXISTS audience_hash TEXT;
+
+-- Message E2EE columns (content remains '' when encrypted, protecting search_vector and lateral joins)
+ALTER TABLE messages           ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE;
+ALTER TABLE messages           ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT;
+ALTER TABLE messages           ADD COLUMN IF NOT EXISTS e2ee_meta JSONB;
+
+ALTER TABLE dm_messages        ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE;
+ALTER TABLE dm_messages        ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT;
+ALTER TABLE dm_messages        ADD COLUMN IF NOT EXISTS e2ee_meta JSONB;
+
+ALTER TABLE dm_group_messages  ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE;
+ALTER TABLE dm_group_messages  ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT;
+ALTER TABLE dm_group_messages  ADD COLUMN IF NOT EXISTS e2ee_meta JSONB;
+
+ALTER TABLE message_reactions  ADD COLUMN IF NOT EXISTS dm_group_message_id UUID REFERENCES dm_group_messages(id) ON DELETE CASCADE;
+ALTER TABLE message_reactions  ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT;
+ALTER TABLE message_reactions  ALTER COLUMN emoji DROP NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_group_reaction ON message_reactions (dm_group_message_id, user_id, emoji) WHERE dm_group_message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_message_reactions_dm_group ON message_reactions (dm_group_message_id);
+
+-- 1. E2EE Account Master Identities (Ed25519)
+CREATE TABLE IF NOT EXISTS e2ee_identities (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    identity_public_key TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. E2EE Devices
+CREATE TABLE IF NOT EXISTS e2ee_devices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_id UUID REFERENCES user_sessions(id) ON DELETE SET NULL,
+    curve25519_key TEXT NOT NULL,
+    ed25519_key TEXT NOT NULL,
+    identity_signature TEXT NOT NULL,
+    fallback_key TEXT,
+    revoked_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_e2ee_devices_user ON e2ee_devices (user_id) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_e2ee_devices_session ON e2ee_devices (session_id);
+
+-- 3. One-Time Keys (OTKs)
+CREATE TABLE IF NOT EXISTS e2ee_one_time_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_id UUID NOT NULL REFERENCES e2ee_devices(id) ON DELETE CASCADE,
+    key_id TEXT NOT NULL,
+    public_key TEXT NOT NULL,
+    claimed_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX IF NOT EXISTS idx_e2ee_one_time_keys_device ON e2ee_one_time_keys (device_id) WHERE claimed_at IS NULL;
+
+-- 4. To-Device Message Queue
+CREATE TABLE IF NOT EXISTS e2ee_to_device (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    recipient_device_id UUID NOT NULL REFERENCES e2ee_devices(id) ON DELETE CASCADE,
+    sender_device_id UUID NOT NULL REFERENCES e2ee_devices(id) ON DELETE CASCADE,
+    msg_type VARCHAR(32) NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_e2ee_to_device_recipient ON e2ee_to_device (recipient_device_id, created_at ASC);
+
+-- 5. Session Key Cloud Backups
+CREATE TABLE IF NOT EXISTS e2ee_key_backups (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    backup_public_key TEXT NOT NULL DEFAULT '',
+    wrapped_private_key TEXT NOT NULL DEFAULT '',
+    ciphertext TEXT,
+    iv TEXT,
+    salt TEXT,
+    key_count INT DEFAULT 0,
+    version BIGINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 6. Individual Encrypted Backup Sessions
+CREATE TABLE IF NOT EXISTS e2ee_backup_sessions (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    conversation_type VARCHAR(16) NOT NULL CHECK (conversation_type IN ('dm', 'dm_group', 'channel')),
+    conversation_id UUID NOT NULL,
+    megolm_session_id TEXT NOT NULL,
+    session_data TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, megolm_session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_e2ee_backup_sessions_created ON e2ee_backup_sessions (user_id, created_at);
+
+-- 7. Chained Signed Rosters
+CREATE TABLE IF NOT EXISTS e2ee_rosters (
+    conversation_type VARCHAR(16) NOT NULL CHECK (conversation_type IN ('dm', 'dm_group', 'channel')),
+    conversation_id UUID NOT NULL,
+    version BIGINT NOT NULL,
+    epoch BIGINT NOT NULL,
+    members JSONB NOT NULL,
+    devices JSONB NOT NULL,
+    signer_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    signer_device_id UUID NOT NULL REFERENCES e2ee_devices(id) ON DELETE RESTRICT,
+    prev_roster_hash TEXT,
+    audience_hash TEXT NOT NULL,
+    signature TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (conversation_type, conversation_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_e2ee_rosters_latest ON e2ee_rosters (conversation_type, conversation_id, version DESC);
+
+-- 8. Encrypted Attachments (Opaque Blobs)
+CREATE TABLE IF NOT EXISTS e2ee_attachments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    uploader_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    file_size BIGINT NOT NULL,
+    associated_message_id UUID,
+    conversation_type VARCHAR(16) CHECK (conversation_type IN ('dm', 'dm_group', 'channel')),
+    conversation_id UUID,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_e2ee_attachments_uploader ON e2ee_attachments (uploader_id);
+CREATE INDEX IF NOT EXISTS idx_e2ee_attachments_created ON e2ee_attachments (created_at);
+
+-- 9. Idempotency Composite Indexes
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_msg_room_id ON dm_messages (dm_room_id, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_group_msg_group_id ON dm_group_messages (group_id, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_channel_msg_channel_id ON messages (channel_id, id);

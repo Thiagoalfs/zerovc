@@ -16,21 +16,47 @@ class SocketClient {
   private reconnectAttempts = 0;
   private hadConnectedOnce = false;
   private reconnectListeners: Set<() => void> = new Set();
+  private currentDeviceId: string | null = null;
 
   onReconnect(callback: () => void): () => void {
     this.reconnectListeners.add(callback);
     return () => this.reconnectListeners.delete(callback);
   }
 
+  getE2EEDeviceId(): string | null {
+    return this.currentDeviceId;
+  }
+
+  updateE2EEDeviceId(deviceId: string) {
+    if (this.currentDeviceId === deviceId) return;
+    this.currentDeviceId = deviceId;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('zerovc_device_id', deviceId);
+    }
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.disconnect();
+      this.connect();
+    }
+  }
+
   connect() {
     const baseUrl = getApiBaseUrl().replace(/^http/, 'ws');
-    let wsUrl = `${baseUrl}/ws`;
+    const params = new URLSearchParams();
 
     if (isElectron()) {
-      const token = localStorage.getItem('token') || localStorage.getItem('zerovc_token');
+      const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('token') || localStorage.getItem('zerovc_token')) : null;
       if (!token) return;
-      wsUrl += `?token=${token}`;
+      params.set('token', token);
     }
+
+    const deviceId = this.currentDeviceId || (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : null);
+    if (deviceId) {
+      params.set('device_id', deviceId);
+    }
+    params.set('e2ee_version', '1');
+
+    const queryString = params.toString();
+    const wsUrl = `${baseUrl}/ws${queryString ? `?${queryString}` : ''}`;
 
     this.isExplicitlyClosed = false;
 

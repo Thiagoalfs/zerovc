@@ -3,6 +3,7 @@ import { Participant } from 'livekit-client';
 import { api } from '../lib/api';
 import { User } from '../types';
 import { useVoiceStore } from './voiceStore';
+import { checkCallEligibility } from '../lib/livekitE2EE';
 
 export type CallState = 'idle' | 'calling' | 'ringing' | 'connected' | 'ended';
 
@@ -19,9 +20,9 @@ interface CallStoreState {
   speakingUserIds: string[];
 
   startCall: (roomId: string, recipient: User) => Promise<void>;
-  handleIncomingCall: (roomId: string, caller: User) => void;
+  handleIncomingCall: (roomId: string, caller: User, isE2EE?: boolean) => void;
   acceptCall: () => Promise<void>;
-  handleCallAccepted: (token: string, livekitUrl: string, roomName: string) => Promise<void>;
+  handleCallAccepted: (token: string, livekitUrl: string, roomName: string, isE2EE?: boolean) => Promise<void>;
   rejectCall: () => Promise<void>;
   endCall: () => Promise<void>;
   handleCallEnded: () => Promise<void>;
@@ -59,7 +60,22 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     });
 
     try {
-      await api.dms.inviteCall(roomId);
+      const res = await api.dms.inviteCall(roomId);
+      const isE2EE = Boolean((res as any)?.e2ee_enabled);
+      if (isE2EE) {
+        const eligibility = checkCallEligibility({ isE2EERoom: true });
+        if (eligibility.status === 'BLOCKED') {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('zerovc:upgrade_required', {
+                detail: { modal: 'UPGRADE_REQUIRED', reason: 'E2EE_CALL_UNSUPPORTED' },
+              })
+            );
+          }
+          set({ callState: 'idle', roomId: null, targetUser: null });
+          throw new Error('E2EE_CALL_UNSUPPORTED: Platform lacks Insertable Streams. Plaintext fallback strictly forbidden.');
+        }
+      }
     } catch (err) {
       console.error('Failed to initiate call:', err);
       set({ callState: 'idle', roomId: null, targetUser: null });
@@ -67,9 +83,23 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
   },
 
-  handleIncomingCall: (roomId: string, caller: User) => {
+  handleIncomingCall: (roomId: string, caller: User, isE2EE?: boolean) => {
     if (get().callState !== 'idle') {
       return;
+    }
+
+    if (isE2EE) {
+      const eligibility = checkCallEligibility({ isE2EERoom: true });
+      if (eligibility.status === 'BLOCKED') {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('zerovc:upgrade_required', {
+              detail: { modal: 'UPGRADE_REQUIRED', reason: 'E2EE_CALL_UNSUPPORTED' },
+            })
+          );
+        }
+        return;
+      }
     }
 
     set({
@@ -86,20 +116,54 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
     try {
       const res = await api.dms.acceptCall(roomId);
-      await get().handleCallAccepted(res.token, res.livekit_url, res.room_name);
+      const isE2EE = Boolean((res as any)?.e2ee_enabled);
+      if (isE2EE) {
+        const eligibility = checkCallEligibility({ isE2EERoom: true });
+        if (eligibility.status === 'BLOCKED') {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('zerovc:upgrade_required', {
+                detail: { modal: 'UPGRADE_REQUIRED', reason: 'E2EE_CALL_UNSUPPORTED' },
+              })
+            );
+          }
+          set({ callState: 'idle', roomId: null, incomingCaller: null });
+          throw new Error('E2EE_CALL_UNSUPPORTED: Platform lacks Insertable Streams. Plaintext fallback strictly forbidden.');
+        }
+      }
+      await get().handleCallAccepted(res.token, res.livekit_url, res.room_name, isE2EE);
     } catch (err) {
       console.error('Failed to accept call:', err);
       set({ callState: 'idle', roomId: null, incomingCaller: null });
+      throw err;
     }
   },
 
-  handleCallAccepted: async (token: string, livekitUrl: string, _roomName: string) => {
+  handleCallAccepted: async (token: string, livekitUrl: string, _roomName: string, isE2EE?: boolean) => {
     const { roomId, targetUser, incomingCaller } = get();
     const recipient = targetUser || incomingCaller;
     if (!roomId || !recipient) return;
 
+    if (isE2EE) {
+      const eligibility = checkCallEligibility({ isE2EERoom: true });
+      if (eligibility.status === 'BLOCKED') {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('zerovc:upgrade_required', {
+              detail: { modal: 'UPGRADE_REQUIRED', reason: 'E2EE_CALL_UNSUPPORTED' },
+            })
+          );
+        }
+        set({ callState: 'idle', roomId: null, incomingCaller: null });
+        throw new Error('E2EE_CALL_UNSUPPORTED: Platform lacks Insertable Streams. Plaintext fallback strictly forbidden.');
+      }
+    }
+
     try {
-      await useVoiceStore.getState().joinDMCall(roomId, recipient, token, livekitUrl);
+      if (typeof window !== 'undefined') {
+        (window as any).__lastCallAcceptedE2EE = isE2EE;
+      }
+      await useVoiceStore.getState().joinDMCall(roomId, recipient, token, livekitUrl, isE2EE);
       set({
         callState: 'connected',
         incomingCaller: null,

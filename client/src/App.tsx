@@ -54,6 +54,11 @@ import {
   playStartStreamSound,
   playStopStreamSound,
 } from './utils/audio';
+import { keyRequestManager } from './crypto/keyRequestManager';
+import { megolmManager, RoomKeyToDevicePayload } from './crypto/megolmSession';
+import { rosterManager } from './crypto/rosterManager';
+import { callKeyManager } from './crypto/callKeys';
+import { safeCryptoLogger } from './crypto/safeLogger';
 
 export const App: React.FC = () => {
   const { user, token, isCheckingAuth, checkAuth, setUser } = useAuthStore();
@@ -1251,11 +1256,11 @@ export const App: React.FC = () => {
       };
 
       const handleCallIncoming = (event: any) => {
-        useCallStore.getState().handleIncomingCall(event.data.room_id, event.data.caller);
+        useCallStore.getState().handleIncomingCall(event.data.room_id, event.data.caller, event.data.e2ee_enabled);
       };
 
       const handleCallAccept = (event: any) => {
-        useCallStore.getState().handleCallAccepted(event.data.token, event.data.livekit_url, event.data.room_name);
+        useCallStore.getState().handleCallAccepted(event.data.token, event.data.livekit_url, event.data.room_name, event.data.e2ee_enabled);
       };
 
       const handleCallEnd = () => {
@@ -1436,6 +1441,83 @@ export const App: React.FC = () => {
         }
       };
 
+      const handleE2EEToDevice = async (event: any) => {
+        const msg = event?.data || event;
+        if (!msg) return;
+
+        if (msg.msg_type === 'room_key') {
+          try {
+            const payload: RoomKeyToDevicePayload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
+            await keyRequestManager.handleRoomKeyReceived(payload);
+          } catch (e) {
+            safeCryptoLogger.error('Falha ao processar room_key to-device recebida', e);
+          }
+        } else if (msg.msg_type === 'key_request') {
+          try {
+            const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
+            const myDeviceId = (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || '';
+            await megolmManager.handleIncomingKeyRequest(payload, myDeviceId);
+          } catch (e) {
+            safeCryptoLogger.error('Falha ao processar key_request to-device recebida', e);
+          }
+        } else if (msg.msg_type === 'call_key') {
+          try {
+            const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
+            await callKeyManager.handleIncomingCallKey(payload);
+          } catch (e) {
+            safeCryptoLogger.error('Falha ao processar call_key to-device recebida', e);
+          }
+        }
+
+        if (msg.id) {
+          api.e2ee.ackToDevice([msg.id]).catch(() => {});
+        }
+      };
+
+      const handleE2EERosterUpdate = async (event: any) => {
+        const roster = event?.data?.roster || event?.roster || event?.data;
+        if (roster && roster.conversation_id) {
+          try {
+            await rosterManager.handleRosterUpdate(roster);
+          } catch (e) {
+            safeCryptoLogger.error('Falha ao processar roster update recebido', e);
+          }
+        }
+      };
+
+      const handleE2EERotationRequired = (event: any) => {
+        const data = event?.data || event;
+        const targetId = data?.conversation_id || data?.channel_id;
+        const conversation_type = data?.conversation_type || (data?.channel_id ? 'channel' : undefined);
+        const epoch = data?.epoch ?? data?.new_epoch;
+        if (targetId) {
+          megolmManager.invalidateOutboundSession(targetId).catch(() => {});
+          if (conversation_type === 'dm') {
+            useDMStore.setState((s) => ({
+              rooms: s.rooms.map((r) => (r.id === targetId ? { ...r, rotation_epoch: epoch } : r)),
+              activeRoom: s.activeRoom && s.activeRoom.id === targetId ? { ...s.activeRoom, rotation_epoch: epoch } : s.activeRoom,
+            }));
+          } else if (conversation_type === 'dm_group') {
+            useDMGroupStore.setState((s) => ({
+              groups: s.groups.map((g) => (g.id === targetId ? { ...g, rotation_epoch: epoch } : g)),
+              activeGroup: s.activeGroup && s.activeGroup.id === targetId ? { ...s.activeGroup, rotation_epoch: epoch } : s.activeGroup,
+            }));
+          } else if (conversation_type === 'channel') {
+            useGuildStore.setState((s) => ({
+              guilds: s.guilds.map((g) => ({
+                ...g,
+                channels: g.channels ? g.channels.map((c) => (c.id === targetId ? { ...c, rotation_epoch: epoch } : c)) : g.channels,
+              })),
+              activeGuild: s.activeGuild ? {
+                ...s.activeGuild,
+                channels: s.activeGuild.channels ? s.activeGuild.channels.map((c) => (c.id === targetId ? { ...c, rotation_epoch: epoch } : c)) : s.activeGuild.channels,
+              } : s.activeGuild,
+              activeChannel: s.activeChannel && s.activeChannel.id === targetId ? { ...s.activeChannel, rotation_epoch: epoch } : s.activeChannel,
+            }));
+          }
+        }
+      };
+
       socket.on('MESSAGE_CREATE', handleMessageCreate);
       socket.on('MESSAGE_UPDATE', handleMessageUpdate);
       socket.on('MESSAGE_DELETE', handleMessageDelete);
@@ -1478,6 +1560,9 @@ export const App: React.FC = () => {
       socket.on('GUILD_EMOJI_UPDATE', handleGuildEmojiUpdate);
       socket.on('GUILD_EMOJI_DELETE', handleGuildEmojiDelete);
       socket.on('SESSION_REVOKED', handleSessionRevoked);
+      socket.on('E2EE_TO_DEVICE', handleE2EEToDevice);
+      socket.on('E2EE_ROSTER_UPDATE', handleE2EERosterUpdate);
+      socket.on('E2EE_ROTATION_REQUIRED', handleE2EERotationRequired);
 
       const unsubscribeReconnect = socket.onReconnect(async () => {
         try {
@@ -1566,6 +1651,9 @@ export const App: React.FC = () => {
         socket.off('GUILD_EMOJI_UPDATE', handleGuildEmojiUpdate);
         socket.off('GUILD_EMOJI_DELETE', handleGuildEmojiDelete);
         socket.off('SESSION_REVOKED', handleSessionRevoked);
+        socket.off('E2EE_TO_DEVICE', handleE2EEToDevice);
+        socket.off('E2EE_ROSTER_UPDATE', handleE2EERosterUpdate);
+        socket.off('E2EE_ROTATION_REQUIRED', handleE2EERotationRequired);
       };
     }
   }, [token, user]);

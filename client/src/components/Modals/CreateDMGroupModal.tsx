@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Users, Check } from 'lucide-react';
+import { X, Users, Check, Shield } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { formatAssetUrl } from '../../lib/api';
@@ -27,6 +27,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
 
   const [name, setName] = useState('');
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const [isE2EE, setIsE2EE] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,6 +36,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
       fetchFriends();
       setName('');
       setSelectedFriendIds([]);
+      setIsE2EE(false);
       setError('');
     }
   }, [isOpen]);
@@ -75,7 +77,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
     setIsLoading(true);
     setError('');
     try {
-      const group = await createGroup(name.trim() || undefined, selectedFriendIds);
+      const group = await createGroup(name.trim() || undefined, selectedFriendIds, isE2EE);
       onClose();
       onGroupCreated(group.id);
     } catch (err: any) {
@@ -124,6 +126,32 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
               placeholder="ex: Galera do Game"
               className="w-full bg-background-darkest border border-white/10 rounded-lg px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
             />
+          </div>
+
+          {/* E2EE Opt-in Toggle */}
+          <div className="p-3 rounded-xl bg-background-darkest border border-white/5 flex items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <Shield className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isE2EE ? 'text-emerald-400' : 'text-gray-400'}`} />
+              <div>
+                <p className="text-xs font-semibold text-white">Criptografia de Ponta a Ponta (E2EE)</p>
+                <p className="text-[11px] text-gray-400 leading-tight">
+                  Mensagens e arquivos protegidos com chaves Megolm. Máximo de 15 pessoas.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsE2EE(!isE2EE)}
+              className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                isE2EE ? 'bg-emerald-500' : 'bg-gray-700'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  isE2EE ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
 
           {/* Friends Selection */}

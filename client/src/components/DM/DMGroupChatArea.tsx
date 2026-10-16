@@ -80,6 +80,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     loadMoreMessages,
     firstUnreadMessageIdByGroup,
     clearUnreadDivider,
+    enableE2EE,
   } = useDMGroupStore();
   const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
   const {
@@ -604,6 +605,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           </div>
         }
         subtitle={`${activeGroup.members?.length || 0} membros`}
+        isE2EE={Boolean(activeGroup.e2ee_enabled)}
+        onToggleE2EE={activeGroup && !activeGroup.e2ee_enabled ? () => enableE2EE(activeGroup.id) : undefined}
         actions={
           <button
             onClick={handleToggleVoice}

@@ -51,7 +51,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             className="flex items-center gap-2.5 cursor-pointer group select-none"
           >
             <ZeroVCLogo className="w-10 h-10 shadow-lg shadow-brand-500/25 group-hover:scale-105 transition-transform" />
-            <span className="text-xl font-black tracking-tight text-white">
+            <span className="text-xl font-bold tracking-tight text-white">
               ZeroVC
             </span>
           </div>
@@ -170,7 +170,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                     <div className="w-8 h-0.5 bg-white/10 rounded-full my-1" />
                     <div className="relative group flex items-center justify-center">
                       <div className="absolute -left-3 w-1.5 h-8 bg-white rounded-r-full" />
-                      <div className="w-11 h-11 rounded-2xl bg-brand-600 flex items-center justify-center text-xs font-bold text-white transition-all">
+                      <div className="w-11 h-11 rounded-2xl bg-brand-600 flex items-center justify-center text-xs font-semibold text-white transition-all">
                         ZC
                       </div>
                     </div>
@@ -183,7 +183,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                   <div className="w-52 bg-[#2b2d31] flex flex-col justify-between overflow-hidden">
                     <div>
                       {/* Server Header */}
-                      <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between font-bold text-gray-100 shadow-sm text-sm">
+                      <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between font-semibold text-gray-100 shadow-sm text-sm">
                         <span className="truncate">ZeroVC HQ</span>
                         <ChevronDown className="w-4 h-4 text-gray-400" />
                       </div>
@@ -191,7 +191,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                       {/* Channels list */}
                       <div className="p-2 space-y-3">
                         <div>
-                          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 mb-1">
+                          <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider px-2 mb-1">
                             Canais de Texto
                           </div>
                           <div className="space-y-0.5 text-xs font-medium">
@@ -210,7 +210,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                         </div>
 
                         <div>
-                          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 mb-1">
+                          <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider px-2 mb-1">
                             Canais de Voz
                           </div>
                           <div className="space-y-0.5 text-xs">
@@ -219,16 +219,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                                 <Volume2 className="w-4 h-4 text-online" />
                                 <span>Sala Principal</span>
                               </div>
-                              <span className="text-[10px] font-mono font-bold bg-online/20 px-1.5 py-0.5 rounded text-online">3/∞</span>
+                              <span className="text-[10px] font-mono font-medium bg-online/20 px-1.5 py-0.5 rounded text-online">3/∞</span>
                             </div>
                             {/* Connected voice participants preview */}
                             <div className="pl-6 pt-1 space-y-1">
                               <div className="flex items-center gap-1.5 text-[11px] text-gray-300">
-                                <div className="w-4 h-4 rounded-full bg-indigo-500 ring-1 ring-online flex items-center justify-center text-[9px] font-bold text-white">A</div>
+                                <div className="w-4 h-4 rounded-full bg-indigo-500 ring-1 ring-online flex items-center justify-center text-[9px] font-semibold text-white">A</div>
                                 <span className="truncate">Alexandre</span>
                               </div>
                               <div className="flex items-center gap-1.5 text-[11px] text-gray-300">
-                                <div className="w-4 h-4 rounded-full bg-emerald-500 ring-1 ring-online flex items-center justify-center text-[9px] font-bold text-white">M</div>
+                                <div className="w-4 h-4 rounded-full bg-emerald-500 ring-1 ring-online flex items-center justify-center text-[9px] font-semibold text-white">M</div>
                                 <span className="truncate">Marina</span>
                               </div>
                             </div>
@@ -243,12 +243,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                 <div className="p-2 bg-[#1e1f22] border-t border-black/20">
                   <div className="w-full bg-[#111214] border border-white/5 rounded-2xl shadow-inner px-2.5 py-1.5 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <div className="relative w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                      <div className="relative w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
                         <span>U</span>
                         <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-online border-2 border-[#111214]" />
                       </div>
                       <div className="flex flex-col min-w-0 flex-1 truncate">
-                        <span className="text-[13px] font-bold text-white truncate leading-tight">Você</span>
+                        <span className="text-[13px] font-semibold text-white truncate leading-tight">Você</span>
                         <span className="text-[11px] text-gray-400 truncate leading-tight mt-0.5">Disponível</span>
                       </div>
                     </div>
@@ -274,7 +274,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                 <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm flex-shrink-0">
                   <div className="flex items-center gap-2 truncate">
                     <Hash className="w-5 h-5 text-gray-400" />
-                    <span className="font-bold text-gray-100 text-sm">geral</span>
+                    <span className="font-semibold text-gray-100 text-sm">geral</span>
                     <span className="text-gray-600 hidden sm:inline">|</span>
                     <span className="text-xs text-gray-400 hidden sm:inline truncate">Canal principal da comunidade</span>
                   </div>
@@ -284,12 +284,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                 <div className="flex-1 p-4 space-y-4 overflow-hidden">
                   {/* Message 1 */}
                   <div className="flex gap-3 items-start">
-                    <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm">
+                    <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0 shadow-sm">
                       A
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-bold text-white">Alexandre</span>
+                        <span className="text-xs font-semibold text-white">Alexandre</span>
                         <span className="text-[10px] text-gray-400">Hoje às 11:42</span>
                       </div>
                       <div className="text-xs text-gray-200 mt-0.5 leading-relaxed">
@@ -300,12 +300,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
 
                   {/* Message 2 */}
                   <div className="flex gap-3 items-start">
-                    <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm">
+                    <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0 shadow-sm">
                       M
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-bold text-white">Marina</span>
+                        <span className="text-xs font-semibold text-white">Marina</span>
                         <span className="text-[10px] text-gray-400">Hoje às 11:43</span>
                       </div>
                       <div className="text-xs text-gray-200 mt-0.5 leading-relaxed">
@@ -326,7 +326,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
                       <Smile className="w-4 h-4 hover:text-white cursor-pointer" />
-                      <span className="px-1.5 py-0.5 rounded-[4px] border border-current text-[10px] font-black tracking-wider leading-none select-none">
+                      <span className="px-1.5 py-0.5 rounded-[4px] border border-current text-[10px] font-semibold tracking-wider leading-none select-none">
                         GIF
                       </span>
                       <Mic className="w-4 h-4 hover:text-white cursor-pointer" />
@@ -423,7 +423,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
       ------------------------------------------------------------- */}
       <section className="py-16 px-6 max-w-5xl mx-auto w-full">
         <div className="rounded-3xl bg-brand-600 p-8 sm:p-12 text-center text-white relative overflow-hidden shadow-2xl">
-          <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           <div className="relative z-10 max-w-2xl mx-auto space-y-6">
             <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
               Pronto para elevar suas conversas a outro nível?

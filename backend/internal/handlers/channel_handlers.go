@@ -16,9 +16,10 @@ import (
 )
 
 type ChannelHandler struct {
-	db      *database.DB
-	hub     *gateway.Hub
-	livekit *voice.LiveKitService
+	db        *database.DB
+	hub       *gateway.Hub
+	livekit   *voice.LiveKitService
+	debouncer *ChannelAudienceDebouncer
 }
 
 func NewChannelHandler(db *database.DB, hub *gateway.Hub, livekit *voice.LiveKitService) *ChannelHandler {
@@ -27,6 +28,10 @@ func NewChannelHandler(db *database.DB, hub *gateway.Hub, livekit *voice.LiveKit
 		hub:     hub,
 		livekit: livekit,
 	}
+}
+
+func (h *ChannelHandler) SetAudienceDebouncer(d *ChannelAudienceDebouncer) {
+	h.debouncer = d
 }
 
 type CreateChannelRequest struct {
@@ -327,6 +332,10 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Data: channel,
 	})
 
+	if h.debouncer != nil {
+		h.debouncer.Trigger(channel.ID)
+	}
+
 	audit.Log(r.Context(), h.db, h.hub, guildID, userID, "CHANNEL_UPDATE", &channel.ID, map[string]any{
 		"name":  channel.Name,
 		"topic": channel.Topic,
@@ -480,10 +489,32 @@ func (h *ChannelHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
 
+// BuildLiveKitParticipantMetadata creates the standard JSON metadata payload for LiveKit voice/video participants.
+// If isE2EE is true, e2ee_required: true and user_id are strictly injected.
+// Optional deviceID can also be provided and included in the metadata.
+func BuildLiveKitParticipantMetadata(avatarURL, displayName, username, customStatus string, userID uuid.UUID, isE2EE bool, deviceID ...string) []byte {
+	metaMap := map[string]any{
+		"avatar_url":    avatarURL,
+		"display_name":  displayName,
+		"username":      username,
+		"custom_status": customStatus,
+	}
+	if isE2EE {
+		metaMap["e2ee_required"] = true
+		metaMap["user_id"] = userID.String()
+	}
+	if len(deviceID) > 0 && deviceID[0] != "" {
+		metaMap["device_id"] = deviceID[0]
+	}
+	b, _ := json.Marshal(metaMap)
+	return b
+}
+
 type JoinVoiceResponse struct {
-	Token      string `json:"token"`
-	LiveKitURL string `json:"livekit_url"`
-	RoomName   string `json:"room_name"`
+	Token       string `json:"token"`
+	LiveKitURL  string `json:"livekit_url"`
+	RoomName    string `json:"room_name"`
+	E2EEEnabled bool   `json:"e2ee_enabled"`
 }
 
 func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
@@ -503,13 +534,14 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	var guildID uuid.UUID
 	var channelType models.ChannelType
 	var isPrivate bool
+	var isE2EE bool
 	var isMember bool
 	var user models.User
 
 	// Combina a checagem de canal, pertinência do membro à guild e dados do usuário em 1 roundtrip
 	consolidatedQuery := `
 		SELECT 
-			c.guild_id, c.type, c.is_private,
+			c.guild_id, c.type, c.is_private, COALESCE(c.e2ee_enabled, false),
 			EXISTS(SELECT 1 FROM guild_members gm WHERE gm.guild_id = c.guild_id AND gm.user_id = $2) AS is_member,
 			u.id, u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
 		FROM channels c
@@ -517,7 +549,7 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		WHERE c.id = $1 AND u.id = $2
 	`
 	err = h.db.Pool.QueryRow(r.Context(), consolidatedQuery, channelID, userID).Scan(
-		&guildID, &channelType, &isPrivate, &isMember,
+		&guildID, &channelType, &isPrivate, &isE2EE, &isMember,
 		&user.ID, &user.Username, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus,
 	)
 	if err != nil || channelType != models.ChannelTypeVoice {
@@ -587,12 +619,7 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	session.User = user.ToPublic()
 
 	roomName := channelID.String()
-	metaJSON, _ := json.Marshal(map[string]any{
-		"avatar_url":    user.AvatarURL,
-		"display_name":  user.DisplayName,
-		"username":      user.Username,
-		"custom_status": user.CustomStatus,
-	})
+	metaJSON := BuildLiveKitParticipantMetadata(user.AvatarURL, user.DisplayName, user.Username, user.CustomStatus, userID, isE2EE)
 	token, err := h.livekit.GenerateJoinToken(roomName, userID, user.Username, string(metaJSON), true)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate voice token"}`, http.StatusInternalServerError)
@@ -609,9 +636,10 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(JoinVoiceResponse{
-		Token:      token,
-		LiveKitURL: h.livekit.GetPublicURL(),
-		RoomName:   roomName,
+		Token:       token,
+		LiveKitURL:  h.livekit.GetPublicURL(),
+		RoomName:    roomName,
+		E2EEEnabled: isE2EE,
 	})
 }
 
@@ -1024,6 +1052,10 @@ func (h *ChannelHandler) UpdatePermissionOverwrite(w http.ResponseWriter, r *htt
 		Data: channel,
 	})
 
+	if h.debouncer != nil {
+		h.debouncer.Trigger(channel.ID)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(channel)
 }
@@ -1096,6 +1128,10 @@ func (h *ChannelHandler) DeletePermissionOverwrite(w http.ResponseWriter, r *htt
 		Type: models.EventChannelUpdate,
 		Data: channel,
 	})
+
+	if h.debouncer != nil {
+		h.debouncer.Trigger(channel.ID)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(channel)

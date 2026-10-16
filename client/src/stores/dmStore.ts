@@ -7,6 +7,8 @@ import { useAuthStore } from './authStore';
 import { useSettingsStore } from './settingsStore';
 import { useUploadStore } from './uploadStore';
 import { optimizeImageForUpload } from '../lib/imageOptimizer';
+import { messageCodec } from '../messaging/messageCodec';
+import { keyRequestManager } from '../crypto/keyRequestManager';
 
 interface DMState {
   rooms: DMRoom[];
@@ -31,6 +33,7 @@ interface DMState {
   fetchPinnedMessages: (roomId: string) => Promise<void>;
   openDMWithUser: (recipientId: string) => Promise<DMRoom>;
   closeRoom: (roomId: string) => Promise<void>;
+  enableE2EE: (roomId: string) => Promise<void>;
   sendMessage: (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
@@ -118,6 +121,30 @@ export const useDMStore = create<DMState>((set, get) => ({
           },
           isLoadingMessages: false,
         }));
+
+        // Asynchronously decode encrypted messages
+        const encryptedList = messages.filter((m) => m.encrypted);
+        if (encryptedList.length > 0) {
+          Promise.all(encryptedList.map((m) => messageCodec.decodeMessage(m))).then((decodedList) => {
+            const decMap = new Map(decodedList.map((d) => [d.id, d]));
+            set((state) => {
+              const applyDec = (list: DMMessage[]) =>
+                list.map((m) => {
+                  const dec = decMap.get(m.id);
+                  return dec
+                    ? { ...m, content: dec.content, attachments: dec.attachments as any, decryption_status: dec.decryptionStatus }
+                    : m;
+                });
+              return {
+                messages: state.activeRoom?.id === room.id ? applyDec(state.messages) : state.messages,
+                messagesByRoom: {
+                  ...state.messagesByRoom,
+                  [room.id]: applyDec(state.messagesByRoom[room.id] || []),
+                },
+              };
+            });
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error('Failed to fetch DM messages:', err);
         set({ isLoadingMessages: false });
@@ -238,6 +265,19 @@ export const useDMStore = create<DMState>((set, get) => ({
     }
   },
 
+  enableE2EE: async (roomId: string) => {
+    const res = await api.e2ee.enableDME2EE(roomId);
+    set((state) => ({
+      rooms: state.rooms.map((r) =>
+        r.id === roomId ? { ...r, e2ee_enabled: true, rotation_epoch: res.rotation_epoch || 1 } : r
+      ),
+      activeRoom:
+        state.activeRoom?.id === roomId
+          ? { ...state.activeRoom, e2ee_enabled: true, rotation_epoch: res.rotation_epoch || 1 }
+          : state.activeRoom,
+    }));
+  },
+
   sendMessage: async (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File) => {
     const { activeRoom, messages } = get();
     if (!activeRoom) return;
@@ -283,6 +323,8 @@ export const useDMStore = create<DMState>((set, get) => ({
       reactions: [],
       is_pinned: false,
       is_tts: Boolean(isTTS),
+      encrypted: Boolean(activeRoom.e2ee_enabled),
+      decryption_status: activeRoom.e2ee_enabled ? 'decrypted' : 'plaintext',
       status: 'sending',
       uploadingFile: file
         ? {
@@ -312,6 +354,8 @@ export const useDMStore = create<DMState>((set, get) => ({
 
     try {
       let finalContent = content;
+      let e2eePayload: { encrypted: true; e2ee_ciphertext: string; e2ee_meta: any } | null = null;
+      const clientMsgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
       if (file && abortController) {
         const optimizedFile = await optimizeImageForUpload(file, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
@@ -325,8 +369,53 @@ export const useDMStore = create<DMState>((set, get) => ({
         finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
       }
 
-      const confirmedMsg = await api.dms.sendMessage(activeRoom.id, { content: finalContent, attachments, reply_to_id: replyToId, is_tts: Boolean(isTTS) });
-      const readyMsg: DMMessage = { ...confirmedMsg, status: 'sent', tempId };
+      if (activeRoom.e2ee_enabled) {
+        const myDeviceId = (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || 'my_device';
+        let rosterDevices: any[] = [];
+        try {
+          const rosterRes = await api.e2ee.getLatestRoster(activeRoom.id);
+          if (rosterRes && Array.isArray(rosterRes.devices)) {
+            rosterDevices = rosterRes.devices;
+          }
+        } catch {}
+
+        const encoded = await messageCodec.encodeMessage({
+          conversationId: activeRoom.id,
+          conversationType: 'dm',
+          currentEpoch: activeRoom.rotation_epoch || 1,
+          envelope: {
+            v: 1,
+            body: finalContent,
+            reply_to: replyToId,
+            attachments: attachments || [],
+          },
+          senderDeviceId: myDeviceId,
+          rosterDevices,
+        });
+
+        e2eePayload = {
+          encrypted: true,
+          e2ee_ciphertext: encoded.e2ee_ciphertext,
+          e2ee_meta: encoded.e2ee_meta,
+        };
+      }
+
+      const confirmedMsg = await api.dms.sendMessage(activeRoom.id, {
+        content: e2eePayload ? '' : finalContent,
+        attachments: e2eePayload ? [] : attachments,
+        reply_to_id: replyToId,
+        is_tts: Boolean(isTTS),
+        message_id: clientMsgId,
+        ...(e2eePayload || {}),
+      });
+      const readyMsg: DMMessage = {
+        ...confirmedMsg,
+        content: finalContent,
+        attachments: attachments || [],
+        decryption_status: e2eePayload ? 'decrypted' : 'plaintext',
+        status: 'sent',
+        tempId,
+      };
 
       set((state) => {
         const replaceTemp = (list: DMMessage[]) => {
@@ -531,6 +620,29 @@ export const useDMStore = create<DMState>((set, get) => ({
         };
       }
     });
+
+    if (message.encrypted) {
+      messageCodec.decodeMessage(message).then((decoded) => {
+        set((state) => {
+          const updateMsg = (m: DMMessage) =>
+            m.id === message.id
+              ? {
+                  ...m,
+                  content: decoded.content,
+                  attachments: decoded.attachments as any,
+                  decryption_status: decoded.decryptionStatus,
+                }
+              : m;
+          return {
+            messages: state.activeRoom?.id === message.dm_room_id ? state.messages.map(updateMsg) : state.messages,
+            messagesByRoom: {
+              ...state.messagesByRoom,
+              [message.dm_room_id]: (state.messagesByRoom[message.dm_room_id] || []).map(updateMsg),
+            },
+          };
+        });
+      }).catch(() => {});
+    }
   },
 
   handleDMReactionEvent: ({ message_id, dm_room_id, user_id, emoji, is_add }) => {
@@ -727,3 +839,36 @@ export const useDMStore = create<DMState>((set, get) => ({
     });
   },
 }));
+
+// Retroactive decryption listener for imported Megolm sessions
+keyRequestManager.onSessionImported((conversationId, sessionId) => {
+  const state = useDMStore.getState();
+  const roomMsgs = state.messagesByRoom[conversationId] || [];
+  const undecrypted = roomMsgs.filter(
+    (m) => m.encrypted && m.e2ee_meta?.session_id === sessionId && m.decryption_status === 'undecryptable'
+  );
+
+  for (const msg of undecrypted) {
+    messageCodec.decodeMessage(msg).then((decoded) => {
+      useDMStore.setState((s) => {
+        const updateMsg = (m: DMMessage) =>
+          m.id === msg.id
+            ? {
+                ...m,
+                content: decoded.content,
+                attachments: decoded.attachments as any,
+                decryption_status: decoded.decryptionStatus,
+              }
+            : m;
+        return {
+          messages: s.activeRoom?.id === conversationId ? s.messages.map(updateMsg) : s.messages,
+          messagesByRoom: {
+            ...s.messagesByRoom,
+            [conversationId]: (s.messagesByRoom[conversationId] || []).map(updateMsg),
+          },
+        };
+      });
+    }).catch(() => {});
+  }
+});
+

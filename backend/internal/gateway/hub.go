@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
@@ -12,6 +13,7 @@ import (
 type Hub struct {
 	// Registered clients mapped by UserID -> map[*Client]bool
 	clients map[uuid.UUID]map[*Client]bool
+	clientsByDevice map[uuid.UUID]*Client
 
 	// Subscriptions: GuildID -> map[UserID]bool
 	guildMembers map[uuid.UUID]map[uuid.UUID]bool
@@ -24,6 +26,7 @@ type Hub struct {
 	// Hooks
 	OnUserConnected    func(userID uuid.UUID)
 	OnUserDisconnected func(userID uuid.UUID)
+	DeviceValidator    func(ctx context.Context, userID, deviceID uuid.UUID) bool
 
 	mu sync.RWMutex
 }
@@ -37,11 +40,12 @@ type BroadcastMessage struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		clients:      make(map[uuid.UUID]map[*Client]bool),
-		guildMembers: make(map[uuid.UUID]map[uuid.UUID]bool),
-		Register:     make(chan *Client),
-		Unregister:   make(chan *Client),
-		Broadcast:    make(chan BroadcastMessage, 1024),
+		clients:         make(map[uuid.UUID]map[*Client]bool),
+		clientsByDevice: make(map[uuid.UUID]*Client),
+		guildMembers:    make(map[uuid.UUID]map[uuid.UUID]bool),
+		Register:        make(chan *Client),
+		Unregister:      make(chan *Client),
+		Broadcast:       make(chan BroadcastMessage, 1024),
 	}
 }
 
@@ -63,6 +67,9 @@ func (h *Hub) Run() {
 				isFirstConnect = true
 			}
 			h.clients[client.UserID][client] = true
+			if client.DeviceID != nil {
+				h.clientsByDevice[*client.DeviceID] = client
+			}
 			h.mu.Unlock()
 
 			log.Printf("[Gateway] Client connected: user_id=%s, socket_count=%d", client.UserID, len(h.clients[client.UserID]))
@@ -75,6 +82,17 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			if userClients, ok := h.clients[client.UserID]; ok {
 				delete(userClients, client)
+				if client.DeviceID != nil {
+					if h.clientsByDevice[*client.DeviceID] == client {
+						delete(h.clientsByDevice, *client.DeviceID)
+						for otherClient := range userClients {
+							if otherClient != client && otherClient.DeviceID != nil && *otherClient.DeviceID == *client.DeviceID {
+								h.clientsByDevice[*client.DeviceID] = otherClient
+								break
+							}
+						}
+					}
+				}
 				close(client.send)
 				if len(userClients) == 0 {
 					delete(h.clients, client.UserID)
@@ -236,3 +254,33 @@ func (h *Hub) SendToUser(userID uuid.UUID, event models.WSEvent) {
 		}
 	}
 }
+
+func (h *Hub) IsDeviceOnline(deviceID uuid.UUID) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	_, exists := h.clientsByDevice[deviceID]
+	return exists
+}
+
+func (h *Hub) SendToDevice(deviceID uuid.UUID, event models.WSEvent) bool {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return false
+	}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	client, exists := h.clientsByDevice[deviceID]
+	if !exists {
+		return false
+	}
+
+	select {
+	case client.send <- payload:
+		return true
+	default:
+		return false
+	}
+}
+
