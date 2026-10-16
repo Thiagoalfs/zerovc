@@ -483,6 +483,7 @@ func main() {
 
 			// E2EE Room Keys
 			r.Post("/api/e2ee/room-keys", e2eeHandler.SaveRoomKey)
+			r.Post("/api/e2ee/room-keys/batch", e2eeHandler.SaveRoomKeysBatch)
 			r.Get("/api/e2ee/my-room-keys", e2eeHandler.GetMyRoomKeys)
 			r.Get("/api/e2ee/conversations/{conversation_id}/keys", e2eeHandler.GetConversationRoomKeys)
 

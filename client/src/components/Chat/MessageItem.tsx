@@ -34,6 +34,7 @@ import { api, getApiBaseUrl, formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { keyRequestManager } from '../../crypto/keyRequestManager';
 import { megolmManager } from '../../crypto/megolmSession';
+import { backupManager } from '../../crypto/backupManager';
 import { UserVolumeSlider } from '../Voice/VolumeSliders';
 import { FormattedMessage } from './FormattedMessage';
 import { GifEmbed } from './GifEmbed';
@@ -585,8 +586,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         await megolmManager.syncConversationRoomKeys(convId);
       }
 
-      // Try re-decoding message after sync or from local session
-      const decoded = await messageCodec.decodeMessage(message);
+      // 1. Try re-decoding message after conversation sync
+      let decoded = await messageCodec.decodeMessage(message);
       if (decoded.decryptionStatus === 'decrypted') {
         if (convType === 'dm_group') {
           useDMGroupStore.getState().handleGroupMessageUpdate(decoded as any);
@@ -600,7 +601,39 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         return;
       }
 
-      // Only if still missing key, dispatch queueKeyRequest
+      // 2. Try fetching all user room keys from server
+      await megolmManager.syncAllUserRoomKeys();
+      decoded = await messageCodec.decodeMessage(message);
+      if (decoded.decryptionStatus === 'decrypted') {
+        if (convType === 'dm_group') {
+          useDMGroupStore.getState().handleGroupMessageUpdate(decoded as any);
+        } else if (convType === 'dm') {
+          useDMStore.getState().handleDMMessageUpdateEvent(decoded as any);
+        } else {
+          useGuildStore.getState().updateMessageInStore(decoded as any);
+        }
+        setRequestKeyFeedback('Chave recuperada!');
+        setTimeout(() => setRequestKeyFeedback(null), 3000);
+        return;
+      }
+
+      // 3. Try restoring from account cloud backup vault
+      await backupManager.autoRestore();
+      decoded = await messageCodec.decodeMessage(message);
+      if (decoded.decryptionStatus === 'decrypted') {
+        if (convType === 'dm_group') {
+          useDMGroupStore.getState().handleGroupMessageUpdate(decoded as any);
+        } else if (convType === 'dm') {
+          useDMStore.getState().handleDMMessageUpdateEvent(decoded as any);
+        } else {
+          useGuildStore.getState().updateMessageInStore(decoded as any);
+        }
+        setRequestKeyFeedback('Chave recuperada!');
+        setTimeout(() => setRequestKeyFeedback(null), 3000);
+        return;
+      }
+
+      // 4. Only if still missing key, dispatch queueKeyRequest
       const sent = await keyRequestManager.queueKeyRequest({
         conversationId: convId,
         conversationType: convType,

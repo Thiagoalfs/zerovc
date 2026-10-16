@@ -175,6 +175,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
         megolmManager.syncAllUserRoomKeys().catch(() => {});
+        megolmManager.syncAllLocalKeysToServer().catch(() => {});
         socket.connect();
       }
     } catch (err: any) {
@@ -212,6 +213,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
         megolmManager.syncAllUserRoomKeys().catch(() => {});
+        megolmManager.syncAllLocalKeysToServer().catch(() => {});
         socket.connect();
       }
     } catch (err: any) {
@@ -282,6 +284,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         : 'cookie_session';
       set({ user, token, isCheckingAuth: false, isLoading: false });
       megolmManager.syncAllUserRoomKeys().catch(() => {});
+      megolmManager.syncAllLocalKeysToServer().catch(() => {});
       socket.connect();
     } catch {
       try {

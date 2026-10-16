@@ -1175,7 +1175,7 @@ export const api = {
       }),
 
     saveRoomKey: (payload: {
-      conversation_type: string;
+      conversation_type?: string;
       conversation_id: string;
       session_id: string;
       session_key: string;
@@ -1185,6 +1185,19 @@ export const api = {
       request<{ status: string }>('/e2ee/room-keys', {
         method: 'POST',
         body: JSON.stringify(payload),
+      }),
+
+    saveRoomKeysBatch: (keys: Array<{
+      conversation_type?: string;
+      conversation_id: string;
+      session_id: string;
+      session_key: string;
+      sender_device_id?: string;
+      epoch?: number;
+    }>) =>
+      request<{ status: string; saved_count: number }>('/e2ee/room-keys/batch', {
+        method: 'POST',
+        body: JSON.stringify({ keys }),
       }),
 
     getMyRoomKeys: () =>
