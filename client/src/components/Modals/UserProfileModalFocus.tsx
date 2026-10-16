@@ -19,7 +19,7 @@ import {
   Check,
   UserPlus,
 } from 'lucide-react';
-import { User } from '../../types';
+import { User, Guild } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useFriendStore } from '../../stores/friendStore';
@@ -30,6 +30,7 @@ import { UserRolesSection } from './UserRolesSection';
 
 export interface UserProfileModalFocusProps {
   user: User | null;
+  guild?: Guild | null;
   isOpen: boolean;
   onClose: () => void;
   onOpenDM?: (userId: string) => void;
@@ -39,6 +40,7 @@ export interface UserProfileModalFocusProps {
 
 export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
   user,
+  guild,
   isOpen,
   onClose,
   onOpenDM,
@@ -398,7 +400,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
             ) : null}
 
               {/* Server Roles with Dropdown */}
-              <UserRolesSection user={user} size="md" />
+              <UserRolesSection user={user} guild={guild} size="md" />
 
               {/* Account Created Date */}
               {joinDateStr && (

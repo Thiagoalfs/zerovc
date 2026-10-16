@@ -1,22 +1,24 @@
 import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Shield, Plus, Check, Loader2, X } from 'lucide-react';
-import { User, Role } from '../../types';
+import { User, Role, Guild } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 
 export interface UserRolesSectionProps {
   user: User | null;
+  guild?: Guild | null;
   size?: 'sm' | 'md';
 }
 
 export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
   user,
+  guild,
   size = 'sm',
 }) => {
   const currentAuthUser = useAuthStore((s) => s.user);
-  const activeGuild = useGuildStore((s) => s.activeGuild);
+  const activeGuild = guild ?? null;
   const assignRole = useGuildStore((s) => s.assignRole);
   const removeRole = useGuildStore((s) => s.removeRole);
   const perms = useGuildPermissions(activeGuild);
@@ -234,6 +236,10 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
       setOperatingRoleId(null);
     }
   };
+
+  if (!activeGuild || (displayRoles.length === 0 && !canManageMemberRoles)) {
+    return null;
+  }
 
   const isSmall = size === 'sm';
 
