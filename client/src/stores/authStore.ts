@@ -12,6 +12,7 @@ import { useDMGroupStore } from './dmGroupStore';
 import { useFriendStore } from './friendStore';
 import { deriveAccountVaultKey } from '../crypto/recovery';
 import { backupManager } from '../crypto/backupManager';
+import { megolmManager } from '../crypto/megolmSession';
 
 interface AuthState {
   user: User | null;
@@ -173,6 +174,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
 
         set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
+        megolmManager.syncAllUserRoomKeys().catch(() => {});
         socket.connect();
       }
     } catch (err: any) {
@@ -209,6 +211,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
 
         set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
+        megolmManager.syncAllUserRoomKeys().catch(() => {});
         socket.connect();
       }
     } catch (err: any) {
@@ -278,6 +281,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ? localStorage.getItem('token') || localStorage.getItem('zerovc_token') || 'cookie_session'
         : 'cookie_session';
       set({ user, token, isCheckingAuth: false, isLoading: false });
+      megolmManager.syncAllUserRoomKeys().catch(() => {});
       socket.connect();
     } catch {
       try {

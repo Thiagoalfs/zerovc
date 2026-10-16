@@ -284,3 +284,24 @@ type ChannelAudienceResponse struct {
 	Devices       []E2EERosterDeviceSnapshot `json:"devices"`
 }
 
+type SaveRoomKeyRequest struct {
+	ConversationType string    `json:"conversation_type"`
+	ConversationID   uuid.UUID `json:"conversation_id"`
+	SessionID        string    `json:"session_id"`
+	SessionKey       string    `json:"session_key"`
+	SenderDeviceID   string    `json:"sender_device_id"`
+	Epoch            int       `json:"epoch"`
+}
+
+type E2EERoomKeyResponse struct {
+	ID               uuid.UUID `json:"id"`
+	ConversationType string    `json:"conversation_type"`
+	ConversationID   uuid.UUID `json:"conversation_id"`
+	SessionID        string    `json:"session_id"`
+	SessionKey       string    `json:"session_key"`
+	SenderDeviceID   string    `json:"sender_device_id"`
+	Epoch            int       `json:"epoch"`
+	CreatedBy        uuid.UUID `json:"created_by"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+

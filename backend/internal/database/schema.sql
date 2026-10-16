@@ -613,3 +613,19 @@ CREATE INDEX IF NOT EXISTS idx_e2ee_attachments_created ON e2ee_attachments (cre
 CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_msg_room_id ON dm_messages (dm_room_id, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_group_msg_group_id ON dm_group_messages (group_id, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_channel_msg_channel_id ON messages (channel_id, id);
+
+-- 10. E2EE Room Keys
+CREATE TABLE IF NOT EXISTS e2ee_room_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_type VARCHAR(16) NOT NULL CHECK (conversation_type IN ('dm', 'dm_group', 'channel')),
+    conversation_id UUID NOT NULL,
+    session_id TEXT NOT NULL,
+    session_key TEXT NOT NULL,
+    sender_device_id TEXT NOT NULL DEFAULT '',
+    epoch INT NOT NULL DEFAULT 1,
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_e2ee_room_keys_conv_session UNIQUE (conversation_id, session_id)
+);
+CREATE INDEX IF NOT EXISTS idx_e2ee_room_keys_conv ON e2ee_room_keys (conversation_id);
+CREATE INDEX IF NOT EXISTS idx_e2ee_room_keys_session ON e2ee_room_keys (session_id);

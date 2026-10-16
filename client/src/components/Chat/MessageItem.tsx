@@ -33,6 +33,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { api, getApiBaseUrl, formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { keyRequestManager } from '../../crypto/keyRequestManager';
+import { megolmManager } from '../../crypto/megolmSession';
 import { UserVolumeSlider } from '../Voice/VolumeSliders';
 import { FormattedMessage } from './FormattedMessage';
 import { GifEmbed } from './GifEmbed';
@@ -580,7 +581,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     const convType = (message as any).dm_room_id ? 'dm' : ((message as any).group_id ? 'dm_group' : 'channel');
 
     try {
-      // 1. Try local self-recovery first (e.g. from local outbound session in KeyStore)
+      if (convId) {
+        await megolmManager.syncConversationRoomKeys(convId);
+      }
+
+      // Try re-decoding message after sync or from local session
       const decoded = await messageCodec.decodeMessage(message);
       if (decoded.decryptionStatus === 'decrypted') {
         if (convType === 'dm_group') {
@@ -590,10 +595,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         } else {
           useGuildStore.getState().updateMessageInStore(decoded as any);
         }
+        setRequestKeyFeedback('Chave recuperada!');
+        setTimeout(() => setRequestKeyFeedback(null), 3000);
         return;
       }
 
-      // 2. Queue network key request with author user ID for multi-device resolution
+      // Only if still missing key, dispatch queueKeyRequest
       const sent = await keyRequestManager.queueKeyRequest({
         conversationId: convId,
         conversationType: convType,

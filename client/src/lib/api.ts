@@ -1173,5 +1173,44 @@ export const api = {
       request<{ status: string }>('/e2ee/backup/delete', {
         method: 'POST',
       }),
+
+    saveRoomKey: (payload: {
+      conversation_type: string;
+      conversation_id: string;
+      session_id: string;
+      session_key: string;
+      sender_device_id?: string;
+      epoch?: number;
+    }) =>
+      request<{ status: string }>('/e2ee/room-keys', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    getMyRoomKeys: () =>
+      request<
+        Array<{
+          id: string;
+          conversation_type: string;
+          conversation_id: string;
+          session_id: string;
+          session_key: string;
+          sender_device_id?: string;
+          epoch: number;
+        }>
+      >('/e2ee/my-room-keys'),
+
+    getConversationRoomKeys: (conversationId: string) =>
+      request<
+        Array<{
+          id: string;
+          conversation_type: string;
+          conversation_id: string;
+          session_id: string;
+          session_key: string;
+          sender_device_id?: string;
+          epoch: number;
+        }>
+      >(`/e2ee/conversations/${conversationId}/keys`),
   },
 };
