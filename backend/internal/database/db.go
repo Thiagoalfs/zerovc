@@ -54,6 +54,15 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	// Clean up any stale voice sessions on server startup
 	db.Pool.Exec(ctx, "DELETE FROM voice_sessions")
 
+	// Defensive cleanup of legacy bot Gork
+	db.Pool.Exec(ctx, "UPDATE messages SET author_id = invoker_id WHERE author_id = '00000000-0000-0000-0000-000000000001' AND invoker_id IS NOT NULL")
+	db.Pool.Exec(ctx, "DELETE FROM messages WHERE author_id = '00000000-0000-0000-0000-000000000001'")
+	db.Pool.Exec(ctx, "UPDATE dm_messages SET author_id = invoker_id WHERE author_id = '00000000-0000-0000-0000-000000000001' AND invoker_id IS NOT NULL")
+	db.Pool.Exec(ctx, "DELETE FROM dm_messages WHERE author_id = '00000000-0000-0000-0000-000000000001'")
+	db.Pool.Exec(ctx, "UPDATE dm_group_messages SET author_id = invoker_id WHERE author_id = '00000000-0000-0000-0000-000000000001' AND invoker_id IS NOT NULL")
+	db.Pool.Exec(ctx, "DELETE FROM dm_group_messages WHERE author_id = '00000000-0000-0000-0000-000000000001'")
+	db.Pool.Exec(ctx, "DELETE FROM users WHERE id = '00000000-0000-0000-0000-000000000001' OR LOWER(username) = 'gork'")
+
 	// Ensure guild_roles columns exist
 	db.Pool.Exec(ctx, "ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS hoist BOOLEAN DEFAULT FALSE")
 	db.Pool.Exec(ctx, "ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS mentionable BOOLEAN DEFAULT FALSE")

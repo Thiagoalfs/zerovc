@@ -63,7 +63,7 @@ export function useUserContextMenu() {
       e.stopPropagation();
 
       const isMe = targetUser.id === currentUser?.id;
-      const isBot = Boolean(targetUser.is_bot || targetUser.id === '00000000-0000-0000-0000-000000000001' || targetUser.username?.toLowerCase() === 'gork');
+      const isBot = Boolean(targetUser.is_bot);
       const isGuildContext = options.contextType === 'guild' || (!options.contextType && Boolean(activeGuild));
 
       if (isBot) {

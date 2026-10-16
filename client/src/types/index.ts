@@ -423,13 +423,6 @@ declare global {
       onStreamerSoftwareStatus?: (callback: (status: { runningApps: string[] }) => void) => () => void;
       setCustomStreamerProcesses?: (processes: string[]) => void;
       getStreamerSoftwareStatus?: () => Promise<{ runningApps: string[] }>;
-      ytdlpDownload?: (args: { format: 'mp4' | 'mp3'; link: string }) => Promise<{
-        success: boolean;
-        data?: { base64: string; filename: string; mimeType: string; title: string; size: number };
-        error?: string;
-      }>;
-      onYtdlpProgress?: (callback: (progress: { percent: number; text?: string }) => void) => () => void;
-      ytdlpCleanup?: () => Promise<{ success: boolean }>;
       restartToUpdate?: () => void;
       setSplashColors?: (colors: { accent: string; bg: string }) => Promise<void>;
       onSplashUpdate?: (callback: (data: { phase: string; percent?: number; version?: string; message?: string }) => void) => () => void;

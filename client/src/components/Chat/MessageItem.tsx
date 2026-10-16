@@ -445,9 +445,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const renderFormattedContent = (content: string) => {
     const lines = content.split('\n');
     return lines.map((line, lineIdx) => {
-      const urlRegex = /(https?:\/\/[^\s]+|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|\/assets\/bot_temp\/[^\s]+)/g;
+      const urlRegex = /(https?:\/\/[^\s]+|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+)/g;
       const mentionRegex = /(@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
-      const combinedRegex = /(https?:\/\/[^\s]+|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|\/assets\/bot_temp\/[^\s]+|@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
+      const combinedRegex = /(https?:\/\/[^\s]+|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|@[a-zA-Z0-9_.-]+|@everyone|@here)/g;
 
       const parts = line.split(combinedRegex);
 
@@ -458,8 +458,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               const isImage =
                 part.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) ||
                 part.startsWith('/assets/user/') ||
-                part.startsWith('/assets/guild/') ||
-                part.startsWith('/assets/bot_temp/');
+                part.startsWith('/assets/guild/');
 
               const fullSrc = formatAssetUrl(part);
 
@@ -830,7 +829,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       title="Ver perfil"
                     >
                       <span>{getFormattedUsername(message.author?.display_name || message.author?.username || 'Usuário')}</span>
-                      {(message.author?.is_bot || message.author_id === '00000000-0000-0000-0000-000000000001') && (
+                      {Boolean(message.author?.is_bot) && (
                         <span className="bg-brand-500 text-white text-[9px] font-bold px-1 py-0.5 rounded leading-none uppercase tracking-wider select-none shadow-sm ml-1 inline-block align-middle">
                           BOT
                         </span>
@@ -989,7 +988,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     >
                       {getFormattedUsername(message.author?.display_name || message.author?.username || 'Usuário')}
                     </span>
-                    {(message.author?.is_bot || message.author_id === '00000000-0000-0000-0000-000000000001') && (
+                    {Boolean(message.author?.is_bot) && (
                       <span className="bg-brand-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded leading-none uppercase tracking-wider select-none shadow-sm">
                         BOT
                       </span>

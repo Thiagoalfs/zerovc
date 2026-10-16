@@ -855,7 +855,6 @@ export const api = {
     attachment: async (
       file: File,
       options?: {
-        botId?: string;
         temp?: boolean;
         signal?: AbortSignal;
         onProgress?: (percent: number, loaded: number, total: number) => void;
@@ -867,7 +866,6 @@ export const api = {
       const token = getStorageItem('token') || getStorageItem('zerovc_token');
       const csrf = getCsrfToken();
       const params = new URLSearchParams();
-      if (options?.botId) params.append('bot_id', options.botId);
       if (options?.temp) params.append('temp', 'true');
       const qs = params.toString() ? `?${params.toString()}` : '';
       const uploadUrl = `${getApiBaseUrl()}/api/upload/attachment${qs}`;
@@ -879,7 +877,6 @@ export const api = {
 
         if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         if (csrf) xhr.setRequestHeader('X-CSRF-Token', csrf);
-        if (options?.botId) xhr.setRequestHeader('X-Bot-ID', options.botId);
 
         if (options?.signal) {
           if (options.signal.aborted) {

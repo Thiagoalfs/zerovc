@@ -17,8 +17,6 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/models"
 )
 
-var GorkBotUserID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
-
 type TempCleaner struct {
 	db        *database.DB
 	uploadDir string

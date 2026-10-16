@@ -198,28 +198,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     ],
   },
   {
-    name: 'yt-dlp',
-    description: 'Baixa e compartilha áudio (MP3) ou vídeo (MP4) de um link pelo Gork',
-    options: [
-      {
-        name: 'format',
-        description: 'Formato do arquivo para download',
-        type: 'choice',
-        required: true,
-        choices: [
-          { name: 'mp4 (Vídeo)', value: 'mp4' },
-          { name: 'mp3 (Áudio)', value: 'mp3' },
-        ],
-      },
-      {
-        name: 'link',
-        description: 'URL do vídeo/música individual (playlists não permitidas)',
-        type: 'string',
-        required: true,
-      },
-    ],
-  },
-  {
     name: 'tts',
     description: 'Envia uma mensagem de texto narrada pelo sintetizador de voz',
     guildOnly: true,
@@ -350,52 +328,6 @@ export function parseSlashCommand(input: string): ParsedCommand | null {
     };
   }
 
-  if (cmdName === 'yt-dlp' || cmdName === 'ytdlp') {
-    let format = 'mp4';
-    let link = '';
-
-    for (let i = 1; i < tokens.length; i++) {
-      const token = tokens[i];
-      const lower = token.toLowerCase();
-      if (lower === 'mp3' || lower === 'format:mp3' || lower.startsWith('format:mp3')) {
-        format = 'mp3';
-      } else if (lower === 'mp4' || lower === 'format:mp4' || lower.startsWith('format:mp4')) {
-        format = 'mp4';
-      } else if (lower.startsWith('link:')) {
-        const extracted = token.slice(5).trim();
-        if (extracted) {
-          link = extracted;
-        }
-      } else if (
-        lower.startsWith('http://') ||
-        lower.startsWith('https://') ||
-        lower.includes('youtube.com') ||
-        lower.includes('youtu.be') ||
-        lower.includes('tiktok.com') ||
-        lower.includes('instagram.com') ||
-        lower.includes('twitter.com') ||
-        lower.includes('x.com')
-      ) {
-        link = token.trim();
-      }
-    }
-
-    if (!link) {
-      const nonFormatTokens = tokens
-        .slice(1)
-        .filter((t) => !t.toLowerCase().startsWith('format:') && t.toLowerCase() !== 'mp3' && t.toLowerCase() !== 'mp4');
-      link = nonFormatTokens.join(' ').replace(/^link:\s*/i, '').trim();
-    } else {
-      link = link.replace(/^link:\s*/i, '').trim();
-    }
-
-    return {
-      command: 'yt-dlp',
-      args: { format, link },
-      raw: trimmed,
-    };
-  }
-
   if (cmdName === 'clear' || cmdName === 'purge' || cmdName === 'limpar') {
     let amount = '10';
     let userArg: string | undefined;
@@ -487,26 +419,6 @@ export interface SlashValidationResult {
   errorMessage?: string;
 }
 
-export function isPlaylistOrRadioUrl(url: string): boolean {
-  if (!url) return false;
-  const lower = url.toLowerCase().trim();
-
-  if (
-    lower.includes('list=') ||
-    lower.includes('/playlist') ||
-    lower.includes('playlist?') ||
-    lower.includes('start_radio=') ||
-    lower.includes('&radio=') ||
-    lower.includes('?radio=') ||
-    (lower.includes('soundcloud.com') && lower.includes('/sets/')) ||
-    (lower.includes('spotify.com') && (lower.includes('/playlist/') || lower.includes('/album/')))
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
 export function validateSlashOption(
   commandName: string,
   optionName: string,
@@ -551,49 +463,6 @@ export function validateSlashOption(
           isValid: false,
           errorTitle: 'Mensagem Vazia',
           errorMessage: 'Informe a mensagem para narração por voz.',
-        };
-      }
-    }
-  }
-
-  if (lowerCmd === 'yt-dlp' || lowerCmd === 'ytdlp') {
-    if (optionName === 'link') {
-      const lower = trimmed.toLowerCase();
-
-      if (isPlaylistOrRadioUrl(trimmed)) {
-        return {
-          isValid: false,
-          errorTitle: 'Playlist / Rádio Não Suportada',
-          errorMessage: 'Playlists e mixes de rádio (start_radio) não são permitidos. Por favor, insira o link de um vídeo ou áudio individual.',
-        };
-      }
-
-      if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
-        return {
-          isValid: false,
-          errorTitle: 'Link Inválido',
-          errorMessage: 'O link deve começar com http:// ou https://.',
-        };
-      }
-
-      try {
-        new URL(trimmed);
-      } catch {
-        return {
-          isValid: false,
-          errorTitle: 'Link Inválido',
-          errorMessage: 'Formato de URL inválido. Verifique o link digitado.',
-        };
-      }
-    }
-
-    if (optionName === 'format') {
-      const lower = trimmed.toLowerCase();
-      if (lower !== 'mp4' && lower !== 'mp3') {
-        return {
-          isValid: false,
-          errorTitle: 'Formato Inválido',
-          errorMessage: 'O formato deve ser "mp4" (Vídeo) ou "mp3" (Áudio).',
         };
       }
     }

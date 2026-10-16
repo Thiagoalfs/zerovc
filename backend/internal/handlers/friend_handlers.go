@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -121,7 +120,7 @@ func (h *FriendHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isBot || target.ID == uuid.MustParse("00000000-0000-0000-0000-000000000001") || strings.EqualFold(target.Username, "gork") {
+	if isBot {
 		http.Error(w, `{"error":"Não é possível adicionar bots como amigo."}`, http.StatusBadRequest)
 		return
 	}

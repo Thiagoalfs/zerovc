@@ -30,8 +30,6 @@ func NewUploadHandler(baseDir string) *UploadHandler {
 	}
 }
 
-var GorkBotID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
-
 var dangerousExtensions = map[string]bool{
 	".exe":   true,
 	".bat":   true,
@@ -143,40 +141,14 @@ func (h *UploadHandler) UploadAttachment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	isTemp := r.URL.Query().Get("temp") == "true"
-	isBot := r.URL.Query().Get("bot_id") == GorkBotID.String() ||
-		r.Header.Get("X-Bot-ID") == GorkBotID.String() ||
-		userID == GorkBotID ||
-		isTemp
-
-	folder := "user"
-	prefix := "att"
-	if isBot && isTemp {
-		folder = "bot_temp"
-		prefix = "bot_tmp"
-	}
-
-	h.handleUpload(w, r, folder, prefix, false, userID, isBot)
+	h.handleUpload(w, r, "user", "att", false, userID)
 }
 
-func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string, imageOnly bool, userID uuid.UUID, isBotOptional ...bool) {
+func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string, imageOnly bool, userID uuid.UUID) {
 	maxSize := int64(20 << 20) // 20 MB padrão
 
-	isGork := userID == GorkBotID
-	if len(isBotOptional) > 0 && isBotOptional[0] {
-		isGork = true
-	}
-
-	if isGork {
-		maxSize = 100 << 20 // Permite até 100MB para o bot Gork
-	}
-
 	if err := r.ParseMultipartForm(maxSize); err != nil {
-		if isGork {
-			http.Error(w, `{"error":"O limite de arquivos para o bot Gork é 100MB"}`, http.StatusBadRequest)
-		} else {
-			http.Error(w, `{"error":"O limite de arquivos é 20MB"}`, http.StatusBadRequest)
-		}
+		http.Error(w, `{"error":"O limite de arquivos é 20MB"}`, http.StatusBadRequest)
 		return
 	}
 

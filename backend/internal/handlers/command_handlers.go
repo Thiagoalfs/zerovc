@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,8 +16,6 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/models"
 	"github.com/zerovc/zerovc/backend/internal/services"
 )
-
-var GorkUserID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
 type CommandHandler struct {
 	db        *database.DB
@@ -36,27 +33,6 @@ func NewCommandHandler(db *database.DB, hub *gateway.Hub, riot *services.RiotSer
 	}
 }
 
-func (h *CommandHandler) trackBotTempFiles(ctx context.Context, msgID uuid.UUID, channelID *uuid.UUID, dmRoomID *uuid.UUID, dmGroupID *uuid.UUID, attachments []models.Attachment) {
-	for _, att := range attachments {
-		if att.URL == "" {
-			continue
-		}
-		// ONLY track temporary bot downloads (i.e. inside bot_temp)
-		if !strings.Contains(att.URL, "bot_temp") {
-			continue
-		}
-		relPath := att.URL
-		if idx := strings.Index(relPath, "assets/"); idx != -1 {
-			relPath = strings.TrimPrefix(relPath[idx:], "assets/")
-		}
-		diskPath := filepath.Join(h.uploadDir, filepath.Clean(relPath))
-		_, _ = h.db.Pool.Exec(ctx, `
-			INSERT INTO bot_temp_files (file_url, file_path, message_id, channel_id, dm_room_id, dm_group_id, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP + INTERVAL '1 day')
-		`, att.URL, diskPath, msgID, channelID, dmRoomID, dmGroupID)
-	}
-}
-
 type ExecuteCommandRequest struct {
 	Command     string              `json:"command"`
 	Subcommand  string              `json:"subcommand,omitempty"`
@@ -68,35 +44,6 @@ type CommandResult struct {
 	Content     string                `json:"content"`
 	Embeds      []models.MessageEmbed `json:"embeds"`
 	Attachments []models.Attachment   `json:"attachments"`
-}
-
-func (h *CommandHandler) getGorkAuthor(ctx context.Context) models.UserPublic {
-	var gork models.UserPublic
-	err := h.db.Pool.QueryRow(ctx, `
-		SELECT id, username, display_name, avatar_url, banner_url, bio, status, is_bot
-		FROM users
-		WHERE id = $1
-	`, GorkUserID).Scan(
-		&gork.ID,
-		&gork.Username,
-		&gork.DisplayName,
-		&gork.AvatarURL,
-		&gork.BannerURL,
-		&gork.Bio,
-		&gork.Status,
-		&gork.IsBot,
-	)
-	if err != nil {
-		return models.UserPublic{
-			ID:          GorkUserID,
-			Username:    "gork",
-			DisplayName: "gork",
-			AvatarURL:   "/assets/gork.jpg",
-			IsBot:       true,
-			Status:      "online",
-		}
-	}
-	return gork
 }
 
 func (h *CommandHandler) resolveTargetUser(ctx context.Context, raw string) (uuid.UUID, models.User, error) {
@@ -1021,61 +968,6 @@ func (h *CommandHandler) processCommand(
 			Embeds: []models.MessageEmbed{embed},
 		}, nil
 
-	case "ytdlp_progress":
-		progressVal, _ := req.Args["progress"].(float64)
-		statusText, _ := req.Args["text"].(string)
-		if statusText == "" {
-			statusText = "Iniciando download..."
-		}
-		content := fmt.Sprintf("⏳ **Baixando mídia com yt-dlp...** (%.0f%%)\n`%s`", progressVal, statusText)
-		if progressVal <= 0 {
-			content = fmt.Sprintf("⏳ **Baixando mídia com yt-dlp...**\n`%s`", statusText)
-		}
-		return CommandResult{
-			Content: content,
-		}, nil
-
-	case "ytdlp_publish":
-		title, _ := req.Args["title"].(string)
-		urlStr, _ := req.Args["url"].(string)
-		formatType, _ := req.Args["format"].(string)
-
-		if strings.TrimSpace(title) == "" {
-			title = "Download"
-		}
-
-		var desc string
-		if strings.ToLower(formatType) == "mp3" {
-			desc = fmt.Sprintf("🎵 **Audio pronto:** [%s](%s)", title, urlStr)
-		} else {
-			desc = fmt.Sprintf("🎬 **Vídeo pronto:** [%s](%s)", title, urlStr)
-		}
-
-		return CommandResult{
-			Content:     desc,
-			Attachments: req.Attachments,
-		}, nil
-
-	case "ytdlp_error":
-		errMsg, _ := req.Args["error"].(string)
-		if errMsg == "" {
-			errMsg = "Falha ao processar o download do vídeo."
-		}
-
-		return CommandResult{
-			Embeds: []models.MessageEmbed{
-				{
-					Title:       "❌ Erro no YT-DLP",
-					Description: errMsg,
-					Color:       "#f43f5e",
-					Footer: &models.EmbedFooter{
-						Text: fmt.Sprintf("Solicitado por @%s", invoker.Username),
-					},
-					Timestamp: &now,
-				},
-			},
-		}, nil
-
 	default:
 		return CommandResult{
 			Embeds: []models.MessageEmbed{
@@ -1146,7 +1038,6 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	gorkAuthor := h.getGorkAuthor(ctx)
 	embedsJSON, _ := json.Marshal(result.Embeds)
 	attachmentsJSON, _ := json.Marshal(result.Attachments)
 
@@ -1155,7 +1046,7 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 		INSERT INTO messages (channel_id, author_id, invoker_id, content, attachments, embeds)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, channel_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, created_at, updated_at
-	`, channelID, GorkUserID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
+	`, channelID, userID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
 		&msg.ID, &msg.ChannelID, &msg.AuthorID, &msg.InvokerID, &msg.Content, &attachmentsJSON, &embedsJSON,
 		&msg.IsPinned, &msg.IsEdited, &msg.CreatedAt, &msg.UpdatedAt,
 	)
@@ -1165,14 +1056,10 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 	}
 
 	msg.GuildID = &guildID
-	msg.Author = gorkAuthor
+	msg.Author = invokerPublic
 	msg.Invoker = &invokerPublic
 	msg.Embeds = result.Embeds
 	msg.Attachments = result.Attachments
-
-	if len(result.Attachments) > 0 {
-		h.trackBotTempFiles(ctx, msg.ID, &channelID, nil, nil, result.Attachments)
-	}
 
 	// Broadcast WS event
 	wsEvent := models.WSEvent{
@@ -1230,7 +1117,6 @@ func (h *CommandHandler) ExecuteDMRoomCommand(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	gorkAuthor := h.getGorkAuthor(ctx)
 	embedsJSON, _ := json.Marshal(result.Embeds)
 	attachmentsJSON, _ := json.Marshal(result.Attachments)
 
@@ -1239,7 +1125,7 @@ func (h *CommandHandler) ExecuteDMRoomCommand(w http.ResponseWriter, r *http.Req
 		INSERT INTO dm_messages (dm_room_id, author_id, invoker_id, content, attachments, embeds)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, dm_room_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, created_at
-	`, roomID, GorkUserID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
+	`, roomID, userID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
 		&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.InvokerID, &msg.Content, &attachmentsJSON, &embedsJSON,
 		&msg.IsPinned, &msg.IsEdited, &msg.CreatedAt,
 	)
@@ -1248,14 +1134,10 @@ func (h *CommandHandler) ExecuteDMRoomCommand(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	msg.Author = gorkAuthor
+	msg.Author = invokerPublic
 	msg.Invoker = &invokerPublic
 	msg.Embeds = result.Embeds
 	msg.Attachments = result.Attachments
-
-	if len(result.Attachments) > 0 {
-		h.trackBotTempFiles(ctx, msg.ID, nil, &roomID, nil, result.Attachments)
-	}
 
 	wsEvent := models.WSEvent{
 		Type: models.EventDMMessageCreate,
@@ -1308,7 +1190,6 @@ func (h *CommandHandler) ExecuteDMGroupCommand(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	gorkAuthor := h.getGorkAuthor(ctx)
 	embedsJSON, _ := json.Marshal(result.Embeds)
 	attachmentsJSON, _ := json.Marshal(result.Attachments)
 
@@ -1317,7 +1198,7 @@ func (h *CommandHandler) ExecuteDMGroupCommand(w http.ResponseWriter, r *http.Re
 		INSERT INTO dm_group_messages (group_id, author_id, invoker_id, content, attachments, embeds)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, group_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, created_at
-	`, groupID, GorkUserID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
+	`, groupID, userID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
 		&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.InvokerID, &msg.Content, &attachmentsJSON, &embedsJSON,
 		&msg.IsPinned, &msg.IsEdited, &msg.CreatedAt,
 	)
@@ -1326,14 +1207,10 @@ func (h *CommandHandler) ExecuteDMGroupCommand(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	msg.Author = gorkAuthor
+	msg.Author = invokerPublic
 	msg.Invoker = &invokerPublic
 	msg.Embeds = result.Embeds
 	msg.Attachments = result.Attachments
-
-	if len(result.Attachments) > 0 {
-		h.trackBotTempFiles(ctx, msg.ID, nil, nil, &groupID, result.Attachments)
-	}
 
 	// Get all group members for broadcast
 	rows, err := h.db.Pool.Query(ctx, "SELECT user_id FROM dm_group_members WHERE group_id = $1", groupID)
