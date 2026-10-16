@@ -306,7 +306,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     openUserMenu(e, targetUser, {
       onOpenUserProfile,
       onOpenDM,
-      contextType: contextType === 'channel' ? 'guild' : 'dm',
+      contextType: contextType === 'channel' ? 'guild' : (contextType === 'dm_group' ? 'dm_group' : 'dm'),
+      groupId: contextType === 'dm_group' ? (message.group_id || message.dm_group_id) : undefined,
     });
   };
 

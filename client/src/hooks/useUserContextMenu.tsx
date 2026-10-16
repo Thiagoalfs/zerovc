@@ -64,7 +64,7 @@ export function useUserContextMenu() {
 
       const isMe = targetUser.id === currentUser?.id;
       const isBot = Boolean(targetUser.is_bot);
-      const isGuildContext = options.contextType === 'guild' || (!options.contextType && Boolean(activeGuild));
+      const isGuildContext = options.contextType === 'guild';
 
       if (isBot) {
         const botItems: ContextMenuItem[] = [
@@ -329,14 +329,16 @@ export function useUserContextMenu() {
         }
       }
 
-      // DM Group Moderation / Ownership Actions
-      const targetGroup = options.groupId
-        ? useDMGroupStore.getState().groups.find((g) => g.id === options.groupId) || activeGroup
-        : activeGroup;
+      // DM Group Moderation / Ownership Actions (only in dm_group context)
+      const isGroupContext = options.contextType === 'dm_group';
+      const targetGroup = isGroupContext
+        ? (options.groupId
+            ? useDMGroupStore.getState().groups.find((g) => g.id === options.groupId) || activeGroup
+            : activeGroup)
+        : null;
 
       const isGroupMember = Boolean(
-        targetGroup &&
-        (options.contextType === 'dm_group' || targetGroup.members?.some((m) => m.id === targetUser.id))
+        targetGroup && targetGroup.members?.some((m) => m.id === targetUser.id)
       );
 
       const isGroupOwner = Boolean(

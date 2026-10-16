@@ -66,6 +66,8 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     (!!window.electronAPI?.isElectron || navigator.userAgent.includes('Electron'));
   const {
     currentChannelId,
+    voiceType,
+    dmGroupId,
     isConnected,
     isMuted,
     isDeafened,
@@ -354,13 +356,15 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     e.stopPropagation();
     if (!user || !targetParticipant) return;
 
+    const pipContextType = voiceType === 'guild' ? 'guild' : (voiceType === 'group' ? 'dm_group' : (voiceType === 'dm' ? 'dm' : (activeGuild ? 'guild' : 'voice')));
     handleUserContextMenu(e, targetUser, {
       onOpenUserProfile,
       isVoiceActive: true,
       isVoiceMuted: !targetParticipant.isMicrophoneEnabled,
       isScreenSharing: hasScreenVideoTrack,
-      voiceChannelId: currentChannelId || undefined,
-      contextType: activeGuild ? 'guild' : 'voice',
+      voiceChannelId: voiceType === 'guild' ? (currentChannelId || undefined) : undefined,
+      contextType: pipContextType,
+      groupId: voiceType === 'group' ? (dmGroupId || undefined) : undefined,
     });
   };
 
