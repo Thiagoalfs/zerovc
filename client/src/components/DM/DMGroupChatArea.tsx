@@ -629,10 +629,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 <span className="hidden sm:inline">Desconectar ({participants.length})</span>
               </>
             ) : (
-              <>
-                <Phone className="w-4 h-4" />
-                <span className="hidden sm:inline">Voz</span>
-              </>
+              <Phone className="w-4 h-4" />
             )}
           </button>
         }
