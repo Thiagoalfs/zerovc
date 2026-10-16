@@ -1044,9 +1044,9 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 	var msg models.Message
 	err = h.db.Pool.QueryRow(ctx, `
 		INSERT INTO messages (channel_id, author_id, invoker_id, content, attachments, embeds)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, NULL, $3, $4, $5)
 		RETURNING id, channel_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, created_at, updated_at
-	`, channelID, userID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
+	`, channelID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
 		&msg.ID, &msg.ChannelID, &msg.AuthorID, &msg.InvokerID, &msg.Content, &attachmentsJSON, &embedsJSON,
 		&msg.IsPinned, &msg.IsEdited, &msg.CreatedAt, &msg.UpdatedAt,
 	)
@@ -1057,7 +1057,6 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 
 	msg.GuildID = &guildID
 	msg.Author = invokerPublic
-	msg.Invoker = &invokerPublic
 	msg.Embeds = result.Embeds
 	msg.Attachments = result.Attachments
 
@@ -1123,9 +1122,9 @@ func (h *CommandHandler) ExecuteDMRoomCommand(w http.ResponseWriter, r *http.Req
 	var msg models.DMMessage
 	err = h.db.Pool.QueryRow(ctx, `
 		INSERT INTO dm_messages (dm_room_id, author_id, invoker_id, content, attachments, embeds)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, NULL, $3, $4, $5)
 		RETURNING id, dm_room_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, created_at
-	`, roomID, userID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
+	`, roomID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
 		&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.InvokerID, &msg.Content, &attachmentsJSON, &embedsJSON,
 		&msg.IsPinned, &msg.IsEdited, &msg.CreatedAt,
 	)
@@ -1135,7 +1134,6 @@ func (h *CommandHandler) ExecuteDMRoomCommand(w http.ResponseWriter, r *http.Req
 	}
 
 	msg.Author = invokerPublic
-	msg.Invoker = &invokerPublic
 	msg.Embeds = result.Embeds
 	msg.Attachments = result.Attachments
 
@@ -1196,9 +1194,9 @@ func (h *CommandHandler) ExecuteDMGroupCommand(w http.ResponseWriter, r *http.Re
 	var msg models.DMGroupMessage
 	err = h.db.Pool.QueryRow(ctx, `
 		INSERT INTO dm_group_messages (group_id, author_id, invoker_id, content, attachments, embeds)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, NULL, $3, $4, $5)
 		RETURNING id, group_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, created_at
-	`, groupID, userID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
+	`, groupID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
 		&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.InvokerID, &msg.Content, &attachmentsJSON, &embedsJSON,
 		&msg.IsPinned, &msg.IsEdited, &msg.CreatedAt,
 	)
@@ -1208,7 +1206,6 @@ func (h *CommandHandler) ExecuteDMGroupCommand(w http.ResponseWriter, r *http.Re
 	}
 
 	msg.Author = invokerPublic
-	msg.Invoker = &invokerPublic
 	msg.Embeds = result.Embeds
 	msg.Attachments = result.Attachments
 
