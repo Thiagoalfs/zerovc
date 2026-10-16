@@ -14,7 +14,6 @@ import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from 
 import { canUserSendTTS } from '../../utils/userActivity';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
 import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand, validateSlashOption } from '../../lib/slashCommands';
-import { executeYtdlpCommand } from '../../lib/ytdlpRunner';
 
 interface MentionSuggestionItem {
   id: string;
@@ -334,9 +333,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const parts = trimmed.slice(1).split(/\s+/);
 
     if (parts.length > 2 || (parts.length === 2 && content.includes(' ') && !content.endsWith(parts[1]))) {
-      return [];
-    }
-    if (parts.length === 1 && content.includes(' ') && (parts[0] === 'yt-dlp' || parts[0] === 'ytdlp')) {
       return [];
     }
 
@@ -800,49 +796,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     isSendingRef.current = true;
 
     try {
-      if (commandName === 'yt-dlp' || commandName === 'ytdlp') {
-        const link = args.link?.trim() || '';
-        const linkValidation = validateSlashOption('yt-dlp', 'link', link);
-        if (!linkValidation.isValid) {
-          triggerErrorShake();
-          setCommandError({
-            title: linkValidation.errorTitle || 'Link Inválido',
-            message: linkValidation.errorMessage || 'Link inválido para download.',
-            field: 'link',
-          });
-          selectOptionToFocus('link');
-          return;
-        }
-
-        // Validated successfully: Clear the command input immediately
-        setActiveSlash(null);
-        setSelectedOptionIndex(-1);
-        setContent('');
-        setCommandError(null);
-
-        executeYtdlpCommand({
-          format: args.format === 'mp3' ? 'mp3' : 'mp4',
-          link,
-          contextType,
-          contextId: channel?.id || '',
-          onError: (errMessage) => {
-            triggerErrorShake();
-            setCommandError({
-              title: 'Erro no Download (yt-dlp)',
-              message: errMessage,
-            });
-          },
-        }).catch((err: any) => {
-          console.error('Failed to execute yt-dlp command:', err);
-          triggerErrorShake();
-          setCommandError({
-            title: 'Erro no Download (yt-dlp)',
-            message: err?.message || 'Falha ao executar o comando.',
-          });
-        });
-        return;
-      }
-
       if (commandName === 'tts') {
         if (contextType === 'channel' && !canSendTTS) {
           setLimitAlert({
@@ -1087,81 +1040,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       isSendingRef.current = true;
 
       try {
-        if (parsed.command === 'yt-dlp' || parsed.command === 'ytdlp') {
-          const link = parsed.args.link?.trim() || '';
-          if (!link) {
-            triggerErrorShake();
-            const cmdDef = SLASH_COMMANDS.find((c) => c.name === 'yt-dlp');
-            if (cmdDef) {
-              setActiveSlash({
-                command: cmdDef,
-                subcommand: undefined,
-                args: parsed.args,
-                activeOptionName: 'link',
-              });
-            }
-            setCommandError({
-              title: 'Opção Obrigatória Faltando',
-              message: 'Informe o formato e o link do vídeo/música individual.\nExemplo: `/yt-dlp mp4 https://www.youtube.com/watch?v=...`',
-              field: 'link',
-            });
-            return;
-          }
-
-          const linkValidation = validateSlashOption('yt-dlp', 'link', link);
-          if (!linkValidation.isValid) {
-            triggerErrorShake();
-            const cmdDef = SLASH_COMMANDS.find((c) => c.name === 'yt-dlp');
-            if (cmdDef) {
-              setActiveSlash({
-                command: cmdDef,
-                subcommand: undefined,
-                args: parsed.args,
-                activeOptionName: 'link',
-              });
-            }
-            setCommandError({
-              title: linkValidation.errorTitle || 'Link Inválido',
-              message: linkValidation.errorMessage || 'Link inválido para download.',
-              field: 'link',
-            });
-            return;
-          }
-
-          setContent('');
-          setSelectedFile(null);
-          setSelectedImagePreview(null);
-          setShowEmojiPicker(false);
-          setChannelQuery(null);
-          setMentionQuery(null);
-          setEmojiQuery(null);
-          onCancelReply?.();
-          if (textareaRef.current) textareaRef.current.style.height = 'auto';
-          setCommandError(null);
-
-          executeYtdlpCommand({
-            format: parsed.args.format === 'mp3' ? 'mp3' : 'mp4',
-            link,
-            contextType,
-            contextId: channel?.id || '',
-            onError: (errMessage) => {
-              triggerErrorShake();
-              setCommandError({
-                title: 'Erro no Download (yt-dlp)',
-                message: errMessage,
-              });
-            },
-          }).catch((err: any) => {
-            console.error('Failed to execute yt-dlp command:', err);
-            triggerErrorShake();
-            setCommandError({
-              title: 'Erro no Download (yt-dlp)',
-              message: err?.message || 'Falha ao executar o comando.',
-            });
-          });
-          return;
-        }
-
         if (parsed.command === 'tts') {
           if (contextType === 'channel' && !canSendTTS) {
             setLimitAlert({
@@ -1598,7 +1476,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
               <Bot className="w-3.5 h-3.5" />
-              <span>Comandos do Gork ({slashSuggestions.length})</span>
+              <span>Comandos ({slashSuggestions.length})</span>
             </span>
             <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
           </div>
@@ -2230,14 +2108,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 className="flex items-center gap-1.5 flex-shrink-0 select-none bg-brand-500/10 border border-brand-500/25 px-2 py-1 rounded-lg cursor-pointer hover:bg-brand-500/15 transition-colors"
               >
                 <div className="w-4 h-4 rounded-full overflow-hidden bg-brand-500 flex items-center justify-center flex-shrink-0">
-                  <img
-                    src="/assets/gork.jpg"
-                    alt="Gork"
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
                   <Bot className="w-3 h-3 text-white" />
                 </div>
                 <div className="flex items-center text-xs font-bold leading-none">

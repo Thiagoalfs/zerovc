@@ -135,7 +135,7 @@ func (h *DMHandler) CreateOrGetRoom(w http.ResponseWriter, r *http.Request) {
 
 	var isBot bool
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COALESCE(is_bot, false) FROM users WHERE id = $1`, req.RecipientID).Scan(&isBot)
-	if isBot || req.RecipientID == uuid.MustParse("00000000-0000-0000-0000-000000000001") {
+	if isBot {
 		http.Error(w, `{"error":"Não é possível iniciar conversa privada com bots."}`, http.StatusBadRequest)
 		return
 	}
@@ -482,7 +482,7 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	var isRecipientBot bool
 	_ = h.db.Pool.QueryRow(r.Context(), `SELECT COALESCE(is_bot, false) FROM users WHERE id = $1`, recipientID).Scan(&isRecipientBot)
-	if isRecipientBot || recipientID == uuid.MustParse("00000000-0000-0000-0000-000000000001") {
+	if isRecipientBot {
 		http.Error(w, `{"error":"Não é possível enviar mensagens privadas para bots."}`, http.StatusBadRequest)
 		return
 	}

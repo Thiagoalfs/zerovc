@@ -60,13 +60,6 @@ export interface ElectronAPI {
   onStreamerSoftwareStatus: (callback: (status: { runningApps: string[] }) => void) => () => void;
   setCustomStreamerProcesses: (processes: string[]) => void;
   getStreamerSoftwareStatus: () => Promise<{ runningApps: string[] }>;
-  ytdlpDownload: (args: { format: 'mp4' | 'mp3'; link: string }) => Promise<{
-    success: boolean;
-    data?: { base64: string; filename: string; mimeType: string; title: string; size: number };
-    error?: string;
-  }>;
-  onYtdlpProgress: (callback: (progress: { percent: number; text?: string }) => void) => () => void;
-  ytdlpCleanup: () => Promise<{ success: boolean }>;
   restartToUpdate: () => void;
   setSplashColors: (colors: { accent: string; bg: string }) => Promise<void>;
   onSplashUpdate: (callback: (data: { phase: string; percent?: number; version?: string; message?: string }) => void) => () => void;
@@ -75,13 +68,6 @@ export interface ElectronAPI {
 const electronAPI: ElectronAPI = {
   isElectron: true,
   platform: process.platform,
-  ytdlpDownload: (args) => ipcRenderer.invoke('ytdlp-download', args),
-  onYtdlpProgress: (callback) => {
-    const handler = (_: any, progress: { percent: number; text?: string }) => callback(progress);
-    ipcRenderer.on('ytdlp-progress', handler);
-    return () => ipcRenderer.removeListener('ytdlp-progress', handler);
-  },
-  ytdlpCleanup: () => ipcRenderer.invoke('ytdlp-cleanup'),
   startProcessAudioCapture: (options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => ipcRenderer.invoke('start-process-audio-capture', options),
   stopProcessAudioCapture: () => ipcRenderer.invoke('stop-process-audio-capture'),
   onProcessAudioChunk: (callback) => {

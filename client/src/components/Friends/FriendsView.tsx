@@ -66,7 +66,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
 
   const handleUserContextMenu = (e: React.MouseEvent, targetUser?: User) => {
     if (!targetUser) return;
-    const isBot = Boolean(targetUser.is_bot || targetUser.id === '00000000-0000-0000-0000-000000000001' || targetUser.username?.toLowerCase() === 'gork');
+    const isBot = Boolean(targetUser.is_bot);
     if (isBot) {
       const botItems: ContextMenuItem[] = [
         {

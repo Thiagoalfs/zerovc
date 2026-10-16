@@ -91,7 +91,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
   if (!isOpen || !user) return null;
 
   const isMe = currentUser?.id === user.id;
-  const isBot = Boolean(user.is_bot || user.id === '00000000-0000-0000-0000-000000000001' || user.username?.toLowerCase() === 'gork');
+  const isBot = Boolean(user.is_bot);
 
   const getStatusColor = (s?: string) => {
     switch (s) {

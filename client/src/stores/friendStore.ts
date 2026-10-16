@@ -39,11 +39,6 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   },
 
   sendRequest: async (username: string) => {
-    if (username.trim().toLowerCase() === 'gork') {
-      const err = new Error('Não é possível adicionar bots como amigo.');
-      set({ error: err.message });
-      throw err;
-    }
     set({ error: null });
     try {
       const friendship = await api.friends.sendRequest(username);
