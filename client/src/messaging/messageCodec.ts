@@ -152,7 +152,8 @@ export class MessageCodec {
     const { session, isNew, sessionKey } = await megolmManager.getOrCreateOutboundSession(
       params.conversationId,
       params.currentEpoch,
-      params.senderDeviceId
+      params.senderDeviceId,
+      params.conversationType
     );
 
     // 2. If new session, distribute key to roster devices via to-device Olm

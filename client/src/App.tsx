@@ -951,7 +951,7 @@ export const App: React.FC = () => {
         if (activeRoomId) {
           const roomMsgs = dmState.messagesByRoom[activeRoomId] || dmState.messages || [];
           const undecrypted = roomMsgs.filter(
-            (m) => m.encrypted && m.decryption_status === 'undecryptable'
+            (m) => m.encrypted && m.decryption_status !== 'decrypted'
           );
           for (const msg of undecrypted) {
             const decoded = await messageCodec.decodeMessage(msg);
@@ -988,7 +988,7 @@ export const App: React.FC = () => {
         if (activeGroupId) {
           const groupMsgs = groupState.messagesByGroup[activeGroupId] || groupState.messages || [];
           const undecrypted = groupMsgs.filter(
-            (m) => m.encrypted && m.decryption_status === 'undecryptable'
+            (m) => m.encrypted && m.decryption_status !== 'decrypted'
           );
           for (const msg of undecrypted) {
             const decoded = await messageCodec.decodeMessage(msg);
@@ -1025,7 +1025,7 @@ export const App: React.FC = () => {
         if (activeChannelId) {
           const channelMsgs = guildState.messagesByChannel[activeChannelId] || guildState.messages || [];
           const undecrypted = channelMsgs.filter(
-            (m) => m.encrypted && m.decryption_status === 'undecryptable'
+            (m) => m.encrypted && m.decryption_status !== 'decrypted'
           );
           for (const msg of undecrypted) {
             const decoded = await messageCodec.decodeMessage(msg);

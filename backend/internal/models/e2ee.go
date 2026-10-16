@@ -305,3 +305,7 @@ type E2EERoomKeyResponse struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
+type BatchSaveRoomKeysRequest struct {
+	Keys []SaveRoomKeyRequest `json:"keys"`
+}
+
