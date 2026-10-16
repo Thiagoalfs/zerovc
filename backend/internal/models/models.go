@@ -155,6 +155,7 @@ const (
 	PermCreateInstantInvite int64 = 1 << 16 // 65536: Criar Convite Instantâneo
 	PermSendTTS             int64 = 1 << 17 // 131072: Permitir TTS
 	PermMoveMembers         int64 = 1 << 18 // 262144: Mover Membros entre canais de voz
+	PermUseCommands         int64 = 1 << 19 // 524288: Usar Comandos de Barra
 )
 
 type ChannelPermissionOverwrite struct {

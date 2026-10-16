@@ -66,6 +66,8 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	// Ensure guild_roles columns exist
 	db.Pool.Exec(ctx, "ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS hoist BOOLEAN DEFAULT FALSE")
 	db.Pool.Exec(ctx, "ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS mentionable BOOLEAN DEFAULT FALSE")
+	// Backfill PermUseCommands (524288) for existing roles that already have PermSendMessages (128)
+	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 524288 WHERE (permissions & 128) != 0 AND (permissions & 524288) = 0")
 
 	// Ensure guild_invites columns exist
 	db.Pool.Exec(ctx, "ALTER TABLE guild_invites ADD COLUMN IF NOT EXISTS max_uses INT DEFAULT 0")

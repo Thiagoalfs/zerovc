@@ -11,7 +11,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
-import { canUserSendTTS } from '../../utils/userActivity';
+import { canUserSendTTS, canUserUseCommands } from '../../utils/userActivity';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
 import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand, validateSlashOption } from '../../lib/slashCommands';
 
@@ -96,6 +96,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const canSendTTS = useMemo(() => {
     if (contextType !== 'channel') return true;
     return canUserSendTTS(channel as any, activeGuild, user);
+  }, [contextType, channel, activeGuild, user]);
+
+  const canUseCommands = useMemo(() => {
+    if (contextType !== 'channel') return true;
+    return canUserUseCommands(channel as any, activeGuild, user);
   }, [contextType, channel, activeGuild, user]);
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -327,6 +332,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   // Compute filtered slash commands suggestions (when typing / in standard input)
   const slashSuggestions = useMemo(() => {
     if (activeSlash || !content.startsWith('/')) return [];
+    if (contextType === 'channel' && !canUseCommands) return [];
     if (mentionQuery !== null || emojiQuery !== null || channelQuery !== null) return [];
 
     const trimmed = content.trim();
@@ -394,7 +400,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     return list.slice(0, 50);
-  }, [activeSlash, content, contextType, mentionQuery, emojiQuery, channelQuery, canManageMessages, canKick, canBan, canSendTTS]);
+  }, [activeSlash, content, contextType, mentionQuery, emojiQuery, channelQuery, canManageMessages, canKick, canBan, canSendTTS, canUseCommands]);
 
   const allAvailableEmojis = useMemo(() => {
     const list: any[] = [];
@@ -828,6 +834,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
 
       // Backend Slash Commands (/server, /user, /league)
+      if (contextType === 'channel' && !canUseCommands) {
+        setLimitAlert({
+          title: 'Permissão Necessária',
+          message: 'Você precisa da permissão "Usar Comandos de Barra" no seu cargo ou canal para executar comandos.',
+        });
+        return;
+      }
+
       const payload = {
         command: commandName,
         subcommand: subcommandName,
@@ -1075,6 +1089,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         }
 
         // Backend Slash Commands
+        if (contextType === 'channel' && !canUseCommands) {
+          triggerErrorShake();
+          setCommandError({
+            title: 'Permissão Negada',
+            message: 'Você precisa da permissão "Usar Comandos de Barra" no seu cargo ou canal para executar comandos.',
+          });
+          return;
+        }
+
         try {
           const payload = {
             command: parsed.command,

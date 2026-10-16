@@ -17,6 +17,7 @@ export interface GuildPermissionsResult {
   canMute: boolean;
   canManageMessages: boolean;
   canSendTTS: boolean;
+  canUseCommands: boolean;
   canMuteVoice: boolean;
   canDeafenVoice: boolean;
   canMoveMembers: boolean;
@@ -49,6 +50,7 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
         canMute: false,
         canManageMessages: false,
         canSendTTS: false,
+        canUseCommands: false,
         canMuteVoice: false,
         canDeafenVoice: false,
         canMoveMembers: false,
@@ -112,6 +114,7 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
     const canMute = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_MEMBERS) !== 0;
     const canManageMessages = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MANAGE_MESSAGES) !== 0;
     const canSendTTS = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.SEND_TTS) !== 0;
+    const canUseCommands = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.USE_COMMANDS) !== 0;
     const canMuteVoice = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MUTE_VOICE) !== 0;
     const canDeafenVoice = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.DEAFEN_VOICE) !== 0;
     const canMoveMembers = isCurrentOwner || hasAdmin || (currentUserPerms & Permissions.MOVE_MEMBERS) !== 0;
@@ -166,6 +169,7 @@ export function useGuildPermissions(customGuild?: Guild | null): GuildPermission
       canMute,
       canManageMessages,
       canSendTTS,
+      canUseCommands,
       canMuteVoice,
       canDeafenVoice,
       canMoveMembers,

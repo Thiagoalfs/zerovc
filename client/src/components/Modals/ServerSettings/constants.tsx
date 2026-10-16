@@ -107,6 +107,11 @@ export const PERMISSION_GROUPS: { category: string; icon: React.ReactNode; permi
         name: 'Permitir TTS',
         description: 'Permite aos membros utilizarem o comando /tts para que suas mensagens sejam reproduzidas em áudio falado.',
       },
+      {
+        flag: Permissions.USE_COMMANDS,
+        name: 'Usar Comandos de Barra',
+        description: 'Permite aos membros utilizarem comandos com barra (slash commands) neste servidor.',
+      },
     ],
   },
   {
