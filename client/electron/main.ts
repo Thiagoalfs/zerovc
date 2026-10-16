@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { spawn, execSync, ChildProcess } from 'child_process';
 
 app.name = 'ZeroVC';
@@ -37,7 +38,68 @@ try {
 // ---- Update splash (startup) state ----
 let splashWindow: BrowserWindow | null = null;
 let startupPhase = true;
+let isInstallingUpdate = false;
+let pendingInitialUrl: string | undefined = undefined;
+let pendingUpdateAvailableInfo: { version: string; releaseNotes?: any } | null = null;
 let updateCheckTimer: ReturnType<typeof setInterval> | null = null;
+
+interface UpdateAttemptRecord {
+  version: string;
+  count: number;
+  timestamp: number;
+}
+
+function getLastUpdateAttempt(): UpdateAttemptRecord | null {
+  try {
+    const settingsFile = path.join(app.getPath('userData'), 'settings.json');
+    if (fs.existsSync(settingsFile)) {
+      const parsed = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      const attempt = parsed?.lastUpdateAttempt;
+      if (attempt && typeof attempt.version === 'string' && typeof attempt.count === 'number') {
+        return {
+          version: attempt.version,
+          count: attempt.count,
+          timestamp: Number(attempt.timestamp) || 0,
+        };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function recordUpdateAttempt(version: string) {
+  try {
+    const settingsFile = path.join(app.getPath('userData'), 'settings.json');
+    let settings: any = {};
+    if (fs.existsSync(settingsFile)) {
+      try {
+        settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      } catch {}
+    }
+    const prev = settings.lastUpdateAttempt;
+    const count = prev && prev.version === version ? (Number(prev.count) || 0) + 1 : 1;
+    settings.lastUpdateAttempt = {
+      version,
+      count,
+      timestamp: Date.now(),
+    };
+    fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[AutoUpdater] Failed to record update attempt:', err);
+  }
+}
+
+function clearUpdateAttempt() {
+  try {
+    const settingsFile = path.join(app.getPath('userData'), 'settings.json');
+    if (!fs.existsSync(settingsFile)) return;
+    const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    if (settings && 'lastUpdateAttempt' in settings) {
+      delete settings.lastUpdateAttempt;
+      fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
+    }
+  } catch {}
+}
 
 function loadSplashColors(): { accent: string; bg: string } {
   try {
@@ -351,6 +413,12 @@ function createWindow(initialUrl?: string, showImmediately = true) {
     });
   }
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (pendingUpdateAvailableInfo && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-available', pendingUpdateAvailableInfo);
+    }
+  });
+
   mainWindow.on('close', (event) => {
     if (!isQuitting && minimizeToTray) {
       event.preventDefault();
@@ -371,17 +439,40 @@ function createWindow(initialUrl?: string, showImmediately = true) {
 function setupAutoUpdater() {
   if (!autoUpdater) return;
 
-  // Nunca baixar sozinho: controlamos quando baixar (auto no splash do arranque;
-  // manual via ícone quando o app já está aberto).
+  // Se o app já iniciou na versão da última tentativa de update, limpa o registro.
+  const prevAttemptOnBoot = getLastUpdateAttempt();
+  if (prevAttemptOnBoot && prevAttemptOnBoot.version === app.getVersion()) {
+    clearUpdateAttempt();
+  }
+
+  // Nunca baixar nem instalar no quit sozinho: controlamos explicitamente quando
+  // baixar e quando chamar quitAndInstall (evitando dupla execução do NSIS no will-quit).
   autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on('checking-for-update', () => {
     if (startupPhase) sendSplash({ phase: 'checking' });
   });
 
   autoUpdater.on('update-available', (info: any) => {
+    pendingUpdateAvailableInfo = {
+      version: info.version,
+      releaseNotes: info.releaseNotes,
+    };
+
     if (startupPhase) {
+      // Circuit breaker: se já tentamos instalar esta exata versão no boot anterior e
+      // o instalador NSIS falhou (o app continua na versão antiga), não prender o usuário
+      // em loop infinito no splash. Abre o app normalmente e mantém o ícone no TitleBar.
+      const prevAttempt = getLastUpdateAttempt();
+      if (prevAttempt && prevAttempt.version === info.version && prevAttempt.count >= 1) {
+        console.warn(
+          `[AutoUpdater] Circuit breaker ativo: atualização para v${info.version} falhou na tentativa anterior (#${prevAttempt.count}). Abrindo app normalmente.`
+        );
+        finalizeStartupSplash();
+        return;
+      }
+
       // No arranque (splash): baixa automaticamente, como o Discord.
       sendSplash({ phase: 'downloading', version: info.version, percent: 0 });
       autoUpdater.downloadUpdate().catch((err: any) => {
@@ -398,6 +489,8 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('update-not-available', () => {
+    pendingUpdateAvailableInfo = null;
+    clearUpdateAttempt();
     if (startupPhase) finalizeStartupSplash();
   });
 
@@ -414,9 +507,11 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('update-downloaded', (info: any) => {
+    pendingUpdateAvailableInfo = null;
     if (startupPhase) {
+      recordUpdateAttempt(info.version);
       sendSplash({ phase: 'installing', version: info.version });
-      setTimeout(shutdownForUpdate, 800);
+      setTimeout(shutdownForUpdate, 600);
     } else {
       mainWindow?.webContents.send('update-downloaded', { version: info.version });
     }
@@ -442,6 +537,14 @@ function sendSplash(data: Record<string, any>) {
 function finalizeStartupSplash() {
   if (!startupPhase) return;
   startupPhase = false;
+
+  // Só inicializa a janela principal, bandeja e scanner de atividades DEPOIS que o
+  // splash concluiu (evita processos filhos e locks em app.asar durante auto-update).
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow(pendingInitialUrl, false);
+  }
+  createTray();
+  startActivityScanner();
 
   if (splashWindow && !splashWindow.isDestroyed()) {
     splashWindow.close();
@@ -500,19 +603,29 @@ function createSplashWindow(): BrowserWindow {
 }
 
 // Desliga tudo de forma limpa antes de rodar o instalador NSIS, para que ele
-// não encontre o ZeroVC.exe ainda em execução (bandeja/janelas/bridge de áudio).
+// não encontre o ZeroVC.exe nem processos filhos segurando a pasta de instalação.
 function shutdownForUpdate() {
-  if (!autoUpdater) return;
+  if (!autoUpdater || isInstallingUpdate) return;
+  isInstallingUpdate = true;
   isQuitting = true;
 
-  // 1. derruba o bridge de áudio nativo (zerovc-audio-capture.exe) se estiver ativo
+  // 1. Para timers e scanners que criam processos filhos (tasklist/powershell)
+  stopActivityScanner();
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = null;
+  }
+  try {
+    globalShortcut.unregisterAll();
+  } catch {}
+
+  // 2. Derruba o bridge de áudio nativo (zerovc-audio-capture.exe) se estiver ativo
   try {
     activeAudioProcess?.kill();
   } catch {}
   activeAudioProcess = null;
 
-  // 2. destrói a bandeja e TODAS as janelas (principal + splash) — evita que o
-  //    minimize-to-tray mantenha o processo vivo na hora de instalar.
+  // 3. Destrói a bandeja e TODAS as janelas (principal + splash)
   try {
     tray?.destroy();
   } catch {}
@@ -527,10 +640,14 @@ function shutdownForUpdate() {
   mainWindow = null;
   splashWindow = null;
 
-  // 3. espera os handles serem liberados, dispara a instalação silenciosa e
-  //    FORÇA a saída do processo (app.exit) para liberar o app.asar/ZeroVC.exe
-  //    ANTES de o instalador remover a versão antiga. Sem isso, a desinstalação
-  //    falha com "Falha ao desinstalar os arquivos do aplicativo antigo".
+  // 4. Muda o CWD para %TEMP% para que nem este processo nem o instalador filho
+  //    bloqueiem o Rename/RMDir da pasta %LOCALAPPDATA%\Programs\ZeroVC no NSIS.
+  try {
+    process.chdir(os.tmpdir());
+  } catch {}
+
+  // 5. Aguarda os handles serem liberados, dispara quitAndInstall uma única vez
+  //    e garante encerramento imediato do processo antigo.
   setTimeout(() => {
     if (!autoUpdater) return;
     try {
@@ -540,11 +657,8 @@ function shutdownForUpdate() {
       app.exit(0);
       return;
     }
-    // O instalador roda DESTACADO (sobrevive à nossa saída). Encerramos o
-    // processo imediatamente para os arquivos da versão antiga serem liberados
-    // antes da etapa de desinstalar do instalador NSIS.
-    setTimeout(() => app.exit(0), 500);
-  }, 600);
+    setTimeout(() => app.exit(0), 250);
+  }, 300);
 }
 
 // -------------------------------------------------------------
@@ -674,6 +788,7 @@ ipcMain.on('check-for-updates', () => {
 // Fecha tudo e reabre no splash para atualizar (chamado pelo ícone do TitleBar).
 ipcMain.on('restart-to-update', () => {
   if (!app.isPackaged) return;
+  clearUpdateAttempt();
   app.relaunch();
   app.exit(0);
 });
@@ -702,6 +817,7 @@ ipcMain.on('start-download-update', () => {
 });
 
 ipcMain.on('quit-and-install', () => {
+  clearUpdateAttempt();
   shutdownForUpdate();
 });
 
@@ -774,17 +890,23 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, commandLine) => {
-    // Focus our window if another instance was opened
+    const urlArg = commandLine.find(
+      (arg) => arg.startsWith('zerovc://') || arg.startsWith('https://zerovc.safiroko.xyz')
+    );
+
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
 
-      // Find deep link in arguments
-      const urlArg = commandLine.find(
-        (arg) => arg.startsWith('zerovc://') || arg.startsWith('https://zerovc.safiroko.xyz')
-      );
       if (urlArg) {
         handleDeepLink(urlArg);
+      }
+    } else if (urlArg) {
+      const targetPath = extractValidTargetPath(urlArg);
+      if (targetPath) {
+        const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+        const baseUrl = isDev ? 'http://localhost:5173' : REMOTE_SERVER_URL;
+        pendingInitialUrl = `${baseUrl}${targetPath}`;
       }
     }
   });
@@ -804,22 +926,24 @@ if (!gotTheLock) {
         initialUrl = `${baseUrl}${targetPath}`;
       }
     }
+    pendingInitialUrl = initialUrl;
 
     const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
     if (isDev || !autoUpdater) {
+      startupPhase = false;
       createWindow(initialUrl, true);
+      createTray();
+      startActivityScanner();
     } else {
-      // Fluxo com splash: animação de startup + orquestração do auto-update.
+      // Fluxo com splash: cria APENAS o splash primeiro; mainWindow, Tray e ActivityScanner
+      // só são criados em finalizeStartupSplash() se não houver update a instalar agora.
       setupAutoUpdater();
       splashWindow = createSplashWindow();
-      createWindow(initialUrl, false); // oculta; revelada ao terminar o splash
       autoUpdater.checkForUpdates().catch(() => finalizeStartupSplash());
     }
-    createTray();
-    startActivityScanner();
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+      if (!startupPhase && BrowserWindow.getAllWindows().length === 0) {
         createWindow();
       }
     });
@@ -1505,6 +1629,7 @@ app.on('will-quit', () => {
 });
 
 app.on('window-all-closed', () => {
+  if (isInstallingUpdate) return;
   if (process.platform !== 'darwin') {
     if (!minimizeToTray || isQuitting) {
       app.quit();
