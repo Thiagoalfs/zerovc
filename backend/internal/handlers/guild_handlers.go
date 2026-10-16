@@ -86,7 +86,7 @@ func (h *GuildHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var everyoneRoleID uuid.UUID
 	everyoneRoleQuery := `
 		INSERT INTO guild_roles (guild_id, name, color, position, permissions)
-		VALUES ($1, '@everyone', '#99aab5', 9999, 3712)
+		VALUES ($1, '@everyone', '#99aab5', 9999, 528000)
 		RETURNING id
 	`
 	if err := tx.QueryRow(r.Context(), everyoneRoleQuery, guild.ID).Scan(&everyoneRoleID); err != nil {

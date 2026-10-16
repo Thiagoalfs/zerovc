@@ -155,6 +155,74 @@ export function canUserSendTTS(
 }
 
 /**
+ * Checks if a user has permission to use slash commands in a channel,
+ * combining guild role permissions, Administrator bypass, and channel permission overwrites.
+ */
+export function canUserUseCommands(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!guild || !currentUser) return true;
+
+  // Server owner always has full access
+  if (guild.owner_id === currentUser.id) return true;
+
+  const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
+  const userRoles = (currentMember?.roles || []).map((r) => {
+    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(r.id));
+    return fullRole ? { ...r, ...fullRole } : r;
+  });
+
+  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
+  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
+  userRoles.forEach((r) => {
+    userPerms |= (r.permissions || 0);
+  });
+
+  // Administrator bypasses restrictions
+  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
+    return true;
+  }
+
+  let hasPerm = (userPerms & Permissions.USE_COMMANDS) !== 0;
+
+  // Channel permission overwrites
+  if (ch && ch.permission_overwrites && ch.permission_overwrites.length > 0) {
+    if (everyoneRole) {
+      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
+      if (ow) {
+        if ((ow.deny & Permissions.USE_COMMANDS) !== 0) {
+          hasPerm = false;
+        }
+        if ((ow.allow & Permissions.USE_COMMANDS) !== 0) {
+          hasPerm = true;
+        }
+      }
+    }
+
+    let roleDeny = false;
+    let roleAllow = false;
+    userRoles.forEach((r) => {
+      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(r.id));
+      if (ow) {
+        if ((ow.deny & Permissions.USE_COMMANDS) !== 0) {
+          roleDeny = true;
+        }
+        if ((ow.allow & Permissions.USE_COMMANDS) !== 0) {
+          roleAllow = true;
+        }
+      }
+    });
+
+    if (roleDeny) hasPerm = false;
+    if (roleAllow) hasPerm = true;
+  }
+
+  return hasPerm;
+}
+
+/**
  * Finds the first accessible channel for the current user in a guild:
  * Prioritizes text channels, followed by any accessible channel. Categories are excluded.
  */

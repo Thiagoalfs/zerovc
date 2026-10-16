@@ -1021,6 +1021,17 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Verify command permissions in this channel
+	canUse, err := canUserUseCommands(ctx, h.db, guildID, channelID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to check permissions"}`, http.StatusInternalServerError)
+		return
+	}
+	if !canUse {
+		http.Error(w, `{"error":"forbidden: você não tem permissão para usar comandos neste canal"}`, http.StatusForbidden)
+		return
+	}
+
 	// Get invoker
 	var invoker models.User
 	err = h.db.Pool.QueryRow(ctx, "SELECT id, username, display_name, COALESCE(avatar_url, '') FROM users WHERE id = $1", userID).Scan(

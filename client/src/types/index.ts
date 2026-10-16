@@ -21,6 +21,7 @@ export const Permissions = {
   CREATE_INSTANT_INVITE: 1 << 16, // 65536: Criar Convite Instantâneo
   SEND_TTS: 1 << 17, // 131072: Permitir TTS
   MOVE_MEMBERS: 1 << 18, // 262144: Mover Membros entre canais de voz
+  USE_COMMANDS: 1 << 19, // 524288: Usar Comandos de Barra
 } as const;
 
 export interface CustomActivity {

@@ -187,6 +187,13 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 flag: Permissions.SEND_TTS,
                 icon: <Volume2 className="w-4 h-4 text-pink-400" />,
               },
+              {
+                key: 'USE_COMMANDS',
+                name: 'Usar Comandos de Barra',
+                desc: 'Permite aos membros utilizarem comandos com barra (slash commands) neste canal.',
+                flag: Permissions.USE_COMMANDS,
+                icon: <Slash className="w-4 h-4 text-brand-400" />,
+              },
             ],
           },
         ]
