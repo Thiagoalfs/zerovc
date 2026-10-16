@@ -101,10 +101,10 @@ func (h *DMGroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	// Create Group
 	var group models.DMGroup
 	err = tx.QueryRow(r.Context(), `
-		INSERT INTO dm_groups (name, owner_id)
-		VALUES ($1, $2)
-		RETURNING id, name, icon_url, owner_id, created_at
-	`, req.Name, userID).Scan(&group.ID, &group.Name, &group.IconURL, &group.OwnerID, &group.CreatedAt)
+		INSERT INTO dm_groups (name, owner_id, e2ee_enabled, rotation_epoch)
+		VALUES ($1, $2, TRUE, 1)
+		RETURNING id, name, icon_url, owner_id, e2ee_enabled, rotation_epoch, created_at
+	`, req.Name, userID).Scan(&group.ID, &group.Name, &group.IconURL, &group.OwnerID, &group.E2EEEnabled, &group.RotationEpoch, &group.CreatedAt)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create dm group"}`, http.StatusInternalServerError)
 		return
@@ -142,7 +142,7 @@ func (h *DMGroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT g.id, g.name, g.icon_url, g.owner_id, COALESCE(g.e2ee_enabled, false), COALESCE(g.rotation_epoch, 1), g.created_at,
+		SELECT g.id, g.name, g.icon_url, g.owner_id, COALESCE(g.e2ee_enabled, true), COALESCE(g.rotation_epoch, 1), g.created_at,
 		       lm.id, lm.content, COALESCE(lm.encrypted, false), lm.e2ee_ciphertext, lm.e2ee_meta, lm.created_at
 		FROM dm_groups g
 		INNER JOIN dm_group_members gm ON gm.group_id = g.id
@@ -219,7 +219,7 @@ func (h *DMGroupHandler) GetGroup(w http.ResponseWriter, r *http.Request) {
 
 	var g models.DMGroup
 	err = h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, name, icon_url, owner_id, COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1), created_at
+		SELECT id, name, icon_url, owner_id, COALESCE(e2ee_enabled, true), COALESCE(rotation_epoch, 1), created_at
 		FROM dm_groups
 		WHERE id = $1
 	`, groupID).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.E2EEEnabled, &g.RotationEpoch, &g.CreatedAt)
@@ -711,7 +711,7 @@ func (h *DMGroupHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	var e2eeEnabled bool
 	var rotationEpoch int
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1) FROM dm_groups WHERE id = $1", groupID).Scan(&e2eeEnabled, &rotationEpoch)
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT COALESCE(e2ee_enabled, true), COALESCE(rotation_epoch, 1) FROM dm_groups WHERE id = $1", groupID).Scan(&e2eeEnabled, &rotationEpoch)
 	if err != nil {
 		http.Error(w, `{"error":"group not found"}`, http.StatusNotFound)
 		return
@@ -1021,7 +1021,7 @@ func (h *DMGroupHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	err = h.db.Pool.QueryRow(r.Context(), `
 		SELECT 
 			EXISTS(SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2),
-			COALESCE(g.e2ee_enabled, false)
+			COALESCE(g.e2ee_enabled, true)
 		FROM dm_groups g
 		WHERE g.id = $1
 	`, groupID, userID).Scan(&isMember, &isE2EE)

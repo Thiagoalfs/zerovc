@@ -54,7 +54,7 @@ func (h *DMHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT r.id, r.user1_id, r.user2_id, COALESCE(r.e2ee_enabled, false), COALESCE(r.rotation_epoch, 1), r.created_at,
+		SELECT r.id, r.user1_id, r.user2_id, COALESCE(r.e2ee_enabled, true), COALESCE(r.rotation_epoch, 1), r.created_at,
 		       u.id, u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       lm.id, lm.content, COALESCE(lm.encrypted, false), lm.e2ee_ciphertext, lm.e2ee_meta, lm.created_at
 		FROM dm_rooms r
@@ -156,13 +156,13 @@ func (h *DMHandler) CreateOrGetRoom(w http.ResponseWriter, r *http.Request) {
 
 	var room models.DMRoom
 	query := `
-		INSERT INTO dm_rooms (user1_id, user2_id)
-		VALUES ($1, $2)
+		INSERT INTO dm_rooms (user1_id, user2_id, e2ee_enabled, rotation_epoch)
+		VALUES ($1, $2, TRUE, 1)
 		ON CONFLICT (user1_id, user2_id) DO UPDATE SET user1_id = EXCLUDED.user1_id
-		RETURNING id, user1_id, user2_id, created_at
+		RETURNING id, user1_id, user2_id, COALESCE(e2ee_enabled, true), COALESCE(rotation_epoch, 1), created_at
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, u1, u2).Scan(
-		&room.ID, &room.User1ID, &room.User2ID, &room.CreatedAt,
+		&room.ID, &room.User1ID, &room.User2ID, &room.E2EEEnabled, &room.RotationEpoch, &room.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create dm room"}`, http.StatusInternalServerError)
@@ -433,7 +433,7 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	var user1ID, user2ID uuid.UUID
 	var e2eeEnabled bool
 	var rotationEpoch int
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id, COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1) FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID, &e2eeEnabled, &rotationEpoch)
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id, COALESCE(e2ee_enabled, true), COALESCE(rotation_epoch, 1) FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID, &e2eeEnabled, &rotationEpoch)
 	if err != nil || (user1ID != userID && user2ID != userID) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
@@ -911,7 +911,7 @@ func (h *DMHandler) InviteCall(w http.ResponseWriter, r *http.Request) {
 	// Verify participant and find recipient
 	var user1ID, user2ID uuid.UUID
 	var isE2EE bool
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id, COALESCE(e2ee_enabled, false) FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID, &isE2EE)
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id, COALESCE(e2ee_enabled, true) FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID, &isE2EE)
 	if err != nil || (user1ID != userID && user2ID != userID) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
@@ -971,7 +971,7 @@ func (h *DMHandler) AcceptCall(w http.ResponseWriter, r *http.Request) {
 
 	var user1ID, user2ID uuid.UUID
 	var isE2EE bool
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id, COALESCE(e2ee_enabled, false) FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID, &isE2EE)
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user1_id, user2_id, COALESCE(e2ee_enabled, true) FROM dm_rooms WHERE id = $1", roomID).Scan(&user1ID, &user2ID, &isE2EE)
 	if err != nil || (user1ID != userID && user2ID != userID) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return

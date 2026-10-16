@@ -216,14 +216,21 @@ export const useDMStore = create<DMState>((set, get) => ({
 
   openDMWithUser: async (recipientId: string) => {
     const room = await api.dms.createOrGet(recipientId);
+    const normalizedRoom = {
+      ...room,
+      e2ee_enabled: room.e2ee_enabled !== undefined ? room.e2ee_enabled : true,
+      rotation_epoch: room.rotation_epoch || 1,
+    };
     set((state) => {
-      const exists = state.rooms.some((r) => r.id === room.id);
+      const exists = state.rooms.some((r) => r.id === normalizedRoom.id);
       return {
-        rooms: exists ? state.rooms : [room, ...state.rooms],
+        rooms: exists
+          ? state.rooms.map((r) => (r.id === normalizedRoom.id ? { ...r, ...normalizedRoom } : r))
+          : [normalizedRoom, ...state.rooms],
       };
     });
-    await get().selectRoom(room);
-    return room;
+    await get().selectRoom(normalizedRoom);
+    return normalizedRoom;
   },
 
   closeRoom: async (roomId: string) => {

@@ -174,11 +174,16 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	`)
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_bot_temp_files_expires_at ON bot_temp_files (expires_at)")
 
-	// Ensure E2EE conversation flags and rotation epochs exist
-	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE")
+	// Ensure E2EE conversation flags and rotation epochs exist (default TRUE for DMs and DM Groups)
+	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT TRUE")
 	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
-	db.Pool.Exec(ctx, "ALTER TABLE dm_groups ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ALTER COLUMN e2ee_enabled SET DEFAULT TRUE")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_groups ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT TRUE")
 	db.Pool.Exec(ctx, "ALTER TABLE dm_groups ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_groups ALTER COLUMN e2ee_enabled SET DEFAULT TRUE")
+	// Activate E2EE for all active DMs and groups
+	db.Pool.Exec(ctx, "UPDATE dm_rooms SET e2ee_enabled = TRUE, rotation_epoch = COALESCE(rotation_epoch, 1) WHERE e2ee_enabled IS NOT TRUE")
+	db.Pool.Exec(ctx, "UPDATE dm_groups SET e2ee_enabled = TRUE, rotation_epoch = COALESCE(rotation_epoch, 1) WHERE e2ee_enabled IS NOT TRUE")
 	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE")
 	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
 	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS audience_limit INT DEFAULT 15")

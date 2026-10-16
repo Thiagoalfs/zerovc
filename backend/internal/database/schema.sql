@@ -472,11 +472,11 @@ CREATE INDEX IF NOT EXISTS idx_bot_temp_files_expires_at ON bot_temp_files (expi
 
 -- 31. End-to-End Encryption (E2EE) Infrastructure
 
--- Conversation E2EE flags and rotation epoch (default: 1)
-ALTER TABLE dm_rooms    ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE;
+-- Conversation E2EE flags and rotation epoch (default: 1, DMs and Groups default TRUE)
+ALTER TABLE dm_rooms    ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT TRUE;
 ALTER TABLE dm_rooms    ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1;
 
-ALTER TABLE dm_groups   ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE dm_groups   ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT TRUE;
 ALTER TABLE dm_groups   ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1;
 
 ALTER TABLE channels    ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE;
