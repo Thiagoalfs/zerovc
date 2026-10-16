@@ -871,11 +871,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       </span>
                     )}
 
-                    {message.invoker && (
-                      <span className="text-[10px] text-gray-400 ml-2 select-none">
-                        (invocado por @{message.invoker.display_name || message.invoker.username})
-                      </span>
-                    )}
+
 
                     {message.uploadingFile && (
                       <div className="mt-1.5">
@@ -1009,20 +1005,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         <Pin className="w-2.5 h-2.5" /> Fixada
                       </span>
                     )}
-                    {message.invoker && (
-                      <span className="text-[11px] text-gray-400 flex items-center gap-1 ml-1">
-                        <span className="text-gray-500">• Invocado por</span>
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            message.invoker && onOpenUserProfile?.(message.invoker, { x: e.clientX, y: e.clientY });
-                          }}
-                          className="text-brand-400 hover:underline cursor-pointer font-medium"
-                        >
-                          @{message.invoker.display_name || message.invoker.username}
-                        </span>
-                      </span>
-                    )}
+
                   </div>
                 )}
 
