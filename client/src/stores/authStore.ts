@@ -20,8 +20,8 @@ interface AuthState {
   isCheckingAuth: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string, code?: string) => Promise<{ requires_2fa?: boolean; requires_verification?: boolean; email?: string } | void>;
-  register: (username: string, email: string, password: string) => Promise<{ requires_verification?: boolean; email?: string } | void>;
+  login: (email: string, password: string, code?: string, turnstileToken?: string) => Promise<{ requires_2fa?: boolean; requires_verification?: boolean; email?: string } | void>;
+  register: (username: string, email: string, password: string, turnstileToken?: string) => Promise<{ requires_verification?: boolean; email?: string } | void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   clearError: () => void;
   logout: () => Promise<void>;
@@ -141,10 +141,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  login: async (email, password, code) => {
+  login: async (email, password, code, turnstileToken) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await api.auth.login({ email, password, code });
+      const res = await api.auth.login({ email, password, code, turnstile_token: turnstileToken });
       if (res.requires_2fa) {
         set({ isLoading: false });
         return { requires_2fa: true };
@@ -183,10 +183,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  register: async (username, email, password) => {
+  register: async (username, email, password, turnstileToken) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await api.auth.register({ username, email, password });
+      const res = await api.auth.register({ username, email, password, turnstile_token: turnstileToken });
       if (res.requires_verification) {
         set({ isLoading: false });
         return { requires_verification: true, email: res.email || email };
