@@ -63,6 +63,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
   const {
     currentChannelId,
+    voiceType,
+    dmGroupId,
     speakingUserIds,
     stopScreenShare,
     userVolumes,
@@ -331,15 +333,16 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         status: 'online',
       };
 
+    const cardContextType = voiceType === 'guild' ? 'guild' : (voiceType === 'group' ? 'dm_group' : (voiceType === 'dm' ? 'dm' : (activeGuild ? 'guild' : 'voice')));
     handleUserContextMenu(e, targetMember, {
       onOpenUserProfile,
       onOpenDM,
       isVoiceActive: true,
       isVoiceMuted: isMuted,
       isScreenSharing,
-      voiceChannelId: currentChannelId || undefined,
-      contextType: activeGuild ? 'guild' : (activeGroup ? 'dm_group' : 'voice'),
-      groupId: activeGroup?.id,
+      voiceChannelId: voiceType === 'guild' ? (currentChannelId || undefined) : undefined,
+      contextType: cardContextType,
+      groupId: voiceType === 'group' ? (dmGroupId || activeGroup?.id) : undefined,
     });
   };
 
