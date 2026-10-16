@@ -11,14 +11,16 @@ import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
 import { useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { getFormattedUsername } from '../../stores/streamerModeStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { User, UserProfilePosition, Guild } from '../../types';
 import { UserBarContextMenuControls } from './UserBarContextMenu';
 
 interface UserBarProps {
   onOpenSettings: () => void;
   onOpenScreenShare: () => void;
+  onOpenUserProfile?: (user: User, position?: UserProfilePosition, guild?: Guild | null) => void;
 }
 
-export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenShare }) => {
+export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenShare, onOpenUserProfile }) => {
   const { user, updateProfile } = useAuthStore();
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showVoicePopout, setShowVoicePopout] = useState(false);
@@ -77,7 +79,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       'Usuário';
 
     return {
-      user: resolved || { id: p.identity, username: displayName, avatar_url: meta?.avatar_url },
+      user: (resolved || {
+        id: p.identity,
+        username: displayName,
+        avatar_url: meta?.avatar_url,
+        status: 'online',
+      }) as User,
       displayName,
     };
   };
@@ -468,16 +475,39 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   const initial = displayName?.[0]?.toUpperCase() || '?';
 
                   return (
-                    <div
+                    <button
                       key={p.identity}
-                      className="relative group/voiceuser flex-shrink-0"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (participantUser && onOpenUserProfile) {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          onOpenUserProfile(
+                            participantUser,
+                            {
+                              x: rect.right + 8,
+                              y: rect.top,
+                              anchorRect: {
+                                left: rect.left,
+                                top: rect.top,
+                                right: rect.right,
+                                bottom: rect.bottom,
+                                width: rect.width,
+                                height: rect.height,
+                              },
+                            },
+                            voiceType === 'guild' ? activeGuild : null
+                          );
+                        }
+                      }}
+                      className="relative group/voiceuser flex-shrink-0 cursor-pointer focus:outline-none transition-transform hover:scale-110 active:scale-95"
                       title={displayName}
                     >
                       <div
                         className={`w-6 h-6 rounded-full overflow-hidden flex items-center justify-center bg-brand-500 transition-all duration-150 ${
                           isSpeaking
                             ? 'ring-2 ring-[#23a55a] shadow-[0_0_8px_rgba(35,165,90,0.85)] scale-105'
-                            : 'ring-1 ring-white/10 hover:ring-white/30'
+                            : 'ring-1 ring-white/10 group-hover/voiceuser:ring-white/40'
                         }`}
                       >
                         {participantUser?.avatar_url ? (
@@ -495,7 +525,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                       {isSpeaking && (
                         <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#23a55a] ring-1 ring-background-darkest animate-pulse" />
                       )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>

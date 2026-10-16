@@ -2191,6 +2191,13 @@ export const App: React.FC = () => {
           <UserBar
             onOpenSettings={() => setIsProfileModalOpen(true)}
             onOpenScreenShare={() => setIsScreenShareOpen(true)}
+            onOpenUserProfile={(targetUser, pos, g) =>
+              setSelectedUserForProfile({
+                user: targetUser,
+                position: pos,
+                guild: g !== undefined ? g : (!isHomeActive ? activeGuild : null),
+              })
+            }
           />
         </div>
 
