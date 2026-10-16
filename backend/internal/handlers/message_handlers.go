@@ -3,12 +3,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/zerovc/zerovc/backend/internal/audit"
 	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/database"
@@ -66,10 +68,14 @@ func (h *MessageHandler) broadcastChannelEvent(ctx context.Context, guildID, cha
 }
 
 type SendMessageRequest struct {
-	Content     string              `json:"content"`
-	Attachments []models.Attachment `json:"attachments"`
-	ReplyToID   *uuid.UUID          `json:"reply_to_id,omitempty"`
-	IsTTS       bool                `json:"is_tts,omitempty"`
+	ID             *uuid.UUID          `json:"id,omitempty"`
+	Content        string              `json:"content"`
+	Attachments    []models.Attachment `json:"attachments"`
+	ReplyToID      *uuid.UUID          `json:"reply_to_id,omitempty"`
+	IsTTS          bool                `json:"is_tts,omitempty"`
+	Encrypted      *bool               `json:"encrypted,omitempty"`
+	E2EECiphertext *string             `json:"e2ee_ciphertext,omitempty"`
+	E2EEMeta       json.RawMessage     `json:"e2ee_meta,omitempty"`
 }
 
 type UpdateMessageRequest struct {
@@ -77,7 +83,9 @@ type UpdateMessageRequest struct {
 }
 
 type ReactionRequest struct {
-	Emoji string `json:"emoji"`
+	Emoji          string  `json:"emoji"`
+	Encrypted      *bool   `json:"encrypted,omitempty"`
+	E2EECiphertext *string `json:"e2ee_ciphertext,omitempty"`
 }
 
 func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
@@ -100,23 +108,50 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Content) == 0 && len(req.Attachments) == 0 {
-		http.Error(w, `{"error":"message content or attachment is required"}`, http.StatusBadRequest)
-		return
-	}
-
-	if len(req.Content) > 2000 {
-		http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
-		return
-	}
-
-	// 1. Verify channel & membership
+	// 1. Verify channel & membership, plus load E2EE state
 	var guildID uuid.UUID
 	var isPrivate bool
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate)
+	var e2eeEnabled bool
+	var rotationEpoch int
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private, COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1) FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate, &e2eeEnabled, &rotationEpoch)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
+	}
+
+	isEncrypted := req.Encrypted != nil && *req.Encrypted
+
+	// Plaintext Gating State Machine:
+	if e2eeEnabled {
+		if !isEncrypted || req.E2EECiphertext == nil || *req.E2EECiphertext == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(`{"error":"e2ee_required"}`))
+			return
+		}
+	} else {
+		if isEncrypted || (req.E2EECiphertext != nil && *req.E2EECiphertext != "") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(`{"error":"e2ee_not_enabled"}`))
+			return
+		}
+	}
+
+	if !isEncrypted {
+		if len(req.Content) == 0 && len(req.Attachments) == 0 {
+			http.Error(w, `{"error":"message content or attachment is required"}`, http.StatusBadRequest)
+			return
+		}
+		if len(req.Content) > 2000 {
+			http.Error(w, `{"error":"O limite de tamanho de mensagem é 2.000 caracteres"}`, http.StatusBadRequest)
+			return
+		}
+	} else {
+		if req.E2EECiphertext == nil || *req.E2EECiphertext == "" {
+			http.Error(w, `{"error":"ciphertext and metadata required for encrypted message"}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	var isMember bool
@@ -166,18 +201,128 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Idempotency Contract Check
+	if req.ID != nil && *req.ID != uuid.Nil {
+		var existing models.Message
+		var existAttach, existEmbeds []byte
+		checkQuery := `
+			SELECT id, channel_id, author_id, content, attachments, embeds, reply_to_id, is_pinned, is_edited, is_tts, edited_at, COALESCE(encrypted, false), e2ee_ciphertext, e2ee_meta, created_at, updated_at
+			FROM messages
+			WHERE channel_id = $1 AND id = $2
+		`
+		rowErr := h.db.Pool.QueryRow(r.Context(), checkQuery, channelID, *req.ID).Scan(
+			&existing.ID, &existing.ChannelID, &existing.AuthorID, &existing.Content, &existAttach, &existEmbeds, &existing.ReplyToID, &existing.IsPinned, &existing.IsEdited, &existing.IsTTS, &existing.EditedAt, &existing.Encrypted, &existing.E2EECiphertext, &existing.E2EEMeta, &existing.CreatedAt, &existing.UpdatedAt,
+		)
+		if rowErr == nil {
+			if existing.AuthorID != userID {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				w.Write([]byte(`{"error":"idempotency_conflict"}`))
+				return
+			}
+			payloadMatches := false
+			if isEncrypted {
+				if existing.Encrypted && existing.E2EECiphertext != nil && req.E2EECiphertext != nil && *existing.E2EECiphertext == *req.E2EECiphertext {
+					payloadMatches = true
+				}
+			} else {
+				if !existing.Encrypted && existing.Content == req.Content {
+					payloadMatches = true
+				}
+			}
+			if !payloadMatches {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				w.Write([]byte(`{"error":"idempotency_conflict"}`))
+				return
+			}
+			existing.GuildID = &guildID
+			existing.Author = author
+			if len(existAttach) > 0 {
+				_ = json.Unmarshal(existAttach, &existing.Attachments)
+			}
+			if existing.Attachments == nil {
+				existing.Attachments = make([]models.Attachment, 0)
+			}
+			existing.Reactions = make([]models.MessageReaction, 0)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(existing)
+			return
+		}
+	}
+
+	contentToStore := req.Content
+	if isEncrypted {
+		contentToStore = ""
+	}
+
 	// 3. Insert message
 	attachmentsJSON, _ := json.Marshal(req.Attachments)
+	messageID := uuid.New()
+	if req.ID != nil && *req.ID != uuid.Nil {
+		messageID = *req.ID
+	}
+
 	var msg models.Message
 	query := `
-		INSERT INTO messages (channel_id, author_id, content, attachments, reply_to_id, is_tts)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, channel_id, author_id, content, reply_to_id, is_pinned, is_edited, is_tts, edited_at, created_at, updated_at
+		INSERT INTO messages (id, channel_id, author_id, content, attachments, reply_to_id, is_tts, encrypted, e2ee_ciphertext, e2ee_meta)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id, channel_id, author_id, content, reply_to_id, is_pinned, is_edited, is_tts, edited_at, COALESCE(encrypted, false), e2ee_ciphertext, e2ee_meta, created_at, updated_at
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, channelID, userID, req.Content, attachmentsJSON, req.ReplyToID, req.IsTTS).Scan(
-		&msg.ID, &msg.ChannelID, &msg.AuthorID, &msg.Content, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt, &msg.UpdatedAt,
+	err = h.db.Pool.QueryRow(r.Context(), query, messageID, channelID, userID, contentToStore, attachmentsJSON, req.ReplyToID, req.IsTTS, isEncrypted, req.E2EECiphertext, req.E2EEMeta).Scan(
+		&msg.ID, &msg.ChannelID, &msg.AuthorID, &msg.Content, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.Encrypted, &msg.E2EECiphertext, &msg.E2EEMeta, &msg.CreatedAt, &msg.UpdatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			var existing models.Message
+			var existAttach, existEmbeds []byte
+			checkQuery := `
+				SELECT id, channel_id, author_id, content, attachments, embeds, reply_to_id, is_pinned, is_edited, is_tts, edited_at, COALESCE(encrypted, false), e2ee_ciphertext, e2ee_meta, created_at, updated_at
+				FROM messages
+				WHERE channel_id = $1 AND id = $2
+			`
+			if qErr := h.db.Pool.QueryRow(r.Context(), checkQuery, channelID, messageID).Scan(
+				&existing.ID, &existing.ChannelID, &existing.AuthorID, &existing.Content, &existAttach, &existEmbeds, &existing.ReplyToID, &existing.IsPinned, &existing.IsEdited, &existing.IsTTS, &existing.EditedAt, &existing.Encrypted, &existing.E2EECiphertext, &existing.E2EEMeta, &existing.CreatedAt, &existing.UpdatedAt,
+			); qErr == nil {
+				if existing.AuthorID != userID {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					w.Write([]byte(`{"error":"idempotency_conflict"}`))
+					return
+				}
+				payloadMatches := false
+				if isEncrypted {
+					if existing.Encrypted && existing.E2EECiphertext != nil && req.E2EECiphertext != nil && *existing.E2EECiphertext == *req.E2EECiphertext {
+						payloadMatches = true
+					}
+				} else {
+					if !existing.Encrypted && existing.Content == req.Content {
+						payloadMatches = true
+					}
+				}
+				if !payloadMatches {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					w.Write([]byte(`{"error":"idempotency_conflict"}`))
+					return
+				}
+				existing.GuildID = &guildID
+				existing.Author = author
+				if len(existAttach) > 0 {
+					_ = json.Unmarshal(existAttach, &existing.Attachments)
+				}
+				if existing.Attachments == nil {
+					existing.Attachments = make([]models.Attachment, 0)
+				}
+				existing.Reactions = make([]models.MessageReaction, 0)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(existing)
+				return
+			}
+		}
 		http.Error(w, `{"error":"failed to save message"}`, http.StatusInternalServerError)
 		return
 	}
@@ -423,7 +568,7 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at, m.updated_at,
+		SELECT m.id, m.channel_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, COALESCE(m.encrypted, false), m.e2ee_ciphertext, m.e2ee_meta, m.created_at, m.updated_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url,
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
@@ -458,7 +603,7 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		var invUsername, invDisplayName, invAvatar *string
 
 		if err := rows.Scan(
-			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &m.InvokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.IsTTS, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &attachmentsJSON, &embedsJSON, &m.InvokerID, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.IsTTS, &m.EditedAt, &m.Encrypted, &m.E2EECiphertext, &m.E2EEMeta, &m.CreatedAt, &m.UpdatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
 			&invID, &invUsername, &invDisplayName, &invAvatar,
@@ -586,8 +731,12 @@ func (h *MessageHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req ReactionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Emoji) == 0 {
-		http.Error(w, `{"error":"emoji is required"}`, http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Emoji) == 0 && (req.E2EECiphertext == nil || *req.E2EECiphertext == "") {
+		http.Error(w, `{"error":"emoji or e2ee_ciphertext is required"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -612,10 +761,10 @@ func (h *MessageHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = h.db.Pool.Exec(r.Context(), `
-		INSERT INTO message_reactions (message_id, user_id, emoji)
-		VALUES ($1, $2, $3)
+		INSERT INTO message_reactions (message_id, user_id, emoji, e2ee_ciphertext)
+		VALUES ($1, $2, $3, $4)
 		ON CONFLICT DO NOTHING
-	`, messageID, userID, req.Emoji)
+	`, messageID, userID, req.Emoji, req.E2EECiphertext)
 	if err != nil {
 		http.Error(w, `{"error":"failed to add reaction"}`, http.StatusInternalServerError)
 		return
@@ -1039,6 +1188,7 @@ func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
 		      WHERE cra.channel_id = c.id AND gmr.guild_id = c.guild_id AND gmr.user_id = $3
 		    )
 		  )
+		  AND (m.encrypted IS FALSE OR m.encrypted IS NULL)
 		  AND (m.search_vector @@ plainto_tsquery('portuguese', $2) OR m.content ILIKE '%' || $2 || '%')
 	`
 	args := []any{guildID, queryTerm, userID}

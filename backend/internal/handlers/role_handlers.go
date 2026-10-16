@@ -14,8 +14,9 @@ import (
 )
 
 type RoleHandler struct {
-	db  *database.DB
-	hub *gateway.Hub
+	db        *database.DB
+	hub       *gateway.Hub
+	debouncer *ChannelAudienceDebouncer
 }
 
 func NewRoleHandler(db *database.DB, hub *gateway.Hub) *RoleHandler {
@@ -23,6 +24,10 @@ func NewRoleHandler(db *database.DB, hub *gateway.Hub) *RoleHandler {
 		db:  db,
 		hub: hub,
 	}
+}
+
+func (h *RoleHandler) SetAudienceDebouncer(d *ChannelAudienceDebouncer) {
+	h.debouncer = d
 }
 
 type CreateRoleRequest struct {
@@ -244,6 +249,10 @@ func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		"mentionable": role.Mentionable,
 	})
 
+	if h.debouncer != nil {
+		h.debouncer.TriggerGuildChannels(r.Context(), guildID)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(role)
 }
@@ -384,6 +393,10 @@ func (h *RoleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	audit.Log(r.Context(), h.db, h.hub, guildID, userID, "ROLE_DELETE", &roleID, nil)
 
+	if h.debouncer != nil {
+		h.debouncer.TriggerGuildChannels(r.Context(), guildID)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
@@ -493,6 +506,10 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 		"role_id":   roleID,
 		"role_name": roleName,
 	})
+
+	if h.debouncer != nil {
+		h.debouncer.TriggerGuildChannels(r.Context(), guildID)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "roles": updatedRoles})
@@ -608,6 +625,10 @@ func (h *RoleHandler) RemoveRole(w http.ResponseWriter, r *http.Request) {
 		"role_id":   roleID,
 		"role_name": roleName,
 	})
+
+	if h.debouncer != nil {
+		h.debouncer.TriggerGuildChannels(r.Context(), guildID)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "roles": updatedRoles})

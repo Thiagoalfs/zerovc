@@ -260,10 +260,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
 
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-background-darkest select-none p-4 relative overflow-hidden">
-      {/* Background ambient glow */}
-      <div className="absolute w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-3xl pointer-events-none -top-20 -left-20" />
-      <div className="absolute w-[500px] h-[500px] bg-online/10 rounded-full blur-3xl pointer-events-none -bottom-20 -right-20" />
-
       {/* Main Card */}
       <div className="w-full max-w-md bg-background-dark rounded-3xl p-8 shadow-2xl border border-white/10 relative z-10 animate-in fade-in zoom-in-95 duration-200">
         
@@ -296,7 +292,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                     setMode('login');
                     onNavigate?.('/signin');
                   }}
-                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 cursor-pointer"
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 cursor-pointer"
                 >
                   Ir para o Login
                 </button>
@@ -312,7 +308,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 <button
                   type="button"
                   onClick={() => setMode('forgot_password')}
-                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl transition-all cursor-pointer"
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-xl transition-all cursor-pointer"
                 >
                   Solicitar Novo Link
                 </button>
@@ -326,7 +322,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+                  <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
                     Nova Senha
                   </label>
                   <input
@@ -340,7 +336,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+                  <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
                     Confirmar Nova Senha
                   </label>
                   <input
@@ -356,7 +352,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 {/* 2FA Protection Input if Account has 2FA */}
                 {resetRequires2FA && (
                   <div className="p-4 bg-background-darker rounded-2xl border border-brand-500/30 space-y-2.5 animate-in fade-in">
-                    <div className="flex items-center gap-2 text-xs font-bold text-brand-300 uppercase">
+                    <div className="flex items-center gap-2 text-xs font-medium text-brand-300 uppercase">
                       <Shield className="w-4 h-4 text-brand-400" />
                       <span>Autenticação em 2 Etapas (Obrigatório)</span>
                     </div>
@@ -377,7 +373,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 <button
                   type="submit"
                   disabled={localLoading}
-                  className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
+                  className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
                 >
                   {localLoading ? 'Redefinindo...' : 'Salvar Nova Senha'}
                 </button>
@@ -404,7 +400,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 <div className="p-4 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl text-emerald-300 text-xs leading-relaxed flex items-start gap-3">
                   <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold text-white block mb-0.5">E-mail de recuperação enviado!</span>
+                    <span className="font-semibold text-white block mb-0.5">E-mail de recuperação enviado!</span>
                     Se houver uma conta associada a <strong className="text-white">{email}</strong>, enviamos um link para redefinir a senha (válido por 15 minutos).
                   </div>
                 </div>
@@ -416,7 +412,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                     setMode('login');
                     onNavigate?.('/signin');
                   }}
-                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl transition-all cursor-pointer shadow-lg shadow-brand-500/20"
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-xl transition-all cursor-pointer shadow-lg shadow-brand-500/20"
                 >
                   Voltar para o Login
                 </button>
@@ -430,7 +426,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+                  <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
                     Seu E-mail
                   </label>
                   <input
@@ -447,7 +443,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 <button
                   type="submit"
                   disabled={localLoading || !email.trim()}
-                  className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
+                  className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
                 >
                   {localLoading ? 'Enviando...' : 'Enviar Link de Redefinição'}
                 </button>
@@ -497,7 +493,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5 text-center">
+                <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5 text-center">
                   Código de Verificação
                 </label>
                 <input
@@ -515,7 +511,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
               <button
                 type="submit"
                 disabled={isLoading || verificationCode.length !== 6}
-                className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
+                className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
               >
                 {isLoading ? 'Verificando...' : 'Confirmar e Entrar'}
               </button>
@@ -584,7 +580,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 {invitePreview.icon_url ? (
                   <img src={formatAssetUrl(invitePreview.icon_url)} alt="" className="w-10 h-10 rounded-full object-cover shadow" />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center font-bold text-white shadow">
+                  <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center font-semibold text-white shadow">
                     {invitePreview.guild_name[0]?.toUpperCase()}
                   </div>
                 )}
@@ -608,7 +604,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
               {requires2FA ? (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5 flex items-center gap-1">
+                    <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5 flex items-center gap-1">
                       <KeyRound className="w-3.5 h-3.5 text-brand-400" />
                       <span>{useBackupCode ? 'Código de Backup (8 caracteres)' : 'Código 2FA (6 dígitos)'}</span>
                     </label>
@@ -647,11 +643,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 <>
                   {mode === 'register' && (
                     <div>
-                      <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+                      <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
                         Nome de Usuário (@)
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-400 font-bold text-sm select-none">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-400 font-medium text-sm select-none">
                           @
                         </span>
                         <input
@@ -671,7 +667,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                   )}
 
                   <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase mb-1.5">
+                    <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
                       E-mail {mode === 'login' ? 'ou Nome de Usuário' : ''}
                     </label>
                     <input
@@ -686,7 +682,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-bold text-gray-300 uppercase">
+                      <label className="block text-xs font-medium text-gray-300 uppercase">
                         Senha
                       </label>
                       {mode === 'login' && (
@@ -719,7 +715,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
               <button
                 type="submit"
                 disabled={isLoading || (requires2FA && (useBackupCode ? twoFactorCode.length < 8 : twoFactorCode.length !== 6))}
-                className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
+                className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
               >
                 {isLoading
                   ? 'Processando...'

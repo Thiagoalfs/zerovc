@@ -7,6 +7,9 @@ import { isChatActiveNow } from '../utils/activeChat';
 import { DMGroup, DMGroupMessage, User } from '../types';
 import { useUploadStore } from './uploadStore';
 import { optimizeImageForUpload } from '../lib/imageOptimizer';
+import { messageCodec } from '../messaging/messageCodec';
+import { keyRequestManager } from '../crypto/keyRequestManager';
+import { megolmManager } from '../crypto/megolmSession';
 
 interface DMGroupState {
   groups: DMGroup[];
@@ -30,7 +33,8 @@ interface DMGroupState {
   clearUnreadDivider: (groupId: string) => void;
   loadMoreMessages: (groupId: string) => Promise<void>;
   fetchPinnedMessages: (groupId: string) => Promise<void>;
-  createGroup: (name?: string, memberIds?: string[]) => Promise<DMGroup>;
+  createGroup: (name?: string, memberIds?: string[], isE2EE?: boolean) => Promise<DMGroup>;
+  enableE2EE: (groupId: string) => Promise<void>;
   updateGroup: (groupId: string, data: { name?: string; icon_url?: string }) => Promise<void>;
   addMembers: (groupId: string, memberIds: string[]) => Promise<void>;
   removeMember: (groupId: string, userId: string) => Promise<void>;
@@ -124,6 +128,29 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           },
           isLoadingMessages: false,
         }));
+
+        const encryptedList = (messages || []).filter((m) => m.encrypted);
+        if (encryptedList.length > 0) {
+          Promise.all(encryptedList.map((m) => messageCodec.decodeMessage(m))).then((decodedList) => {
+            const decMap = new Map(decodedList.map((d) => [d.id, d]));
+            set((state) => {
+              const applyDec = (list: DMGroupMessage[]) =>
+                list.map((m) => {
+                  const dec = decMap.get(m.id);
+                  return dec
+                    ? { ...m, content: dec.content, attachments: dec.attachments as any, decryption_status: dec.decryptionStatus }
+                    : m;
+                });
+              return {
+                messages: state.activeGroup?.id === group.id ? applyDec(state.messages) : state.messages,
+                messagesByGroup: {
+                  ...state.messagesByGroup,
+                  [group.id]: applyDec(state.messagesByGroup[group.id] || []),
+                },
+              };
+            });
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error('Failed to fetch group messages:', err);
         set({ isLoadingMessages: false });
@@ -210,10 +237,31 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     }
   },
 
-  createGroup: async (name?: string, memberIds: string[] = []) => {
+  createGroup: async (name?: string, memberIds: string[] = [], isE2EE = false) => {
+    if (memberIds.length > 14) {
+      throw new Error('Grupos de DM podem ter no máximo 15 membros (criador + 14 amigos)');
+    }
     const group = await api.dmGroups.create({ name, member_ids: memberIds });
-    set((state) => ({ groups: [group, ...state.groups], activeGroup: group }));
-    return group;
+    let finalGroup = group;
+    if (isE2EE) {
+      const e2eeRes = await api.e2ee.enableDMGroupE2EE(group.id);
+      finalGroup = { ...group, e2ee_enabled: true, rotation_epoch: e2eeRes.rotation_epoch || 1 };
+    }
+    set((state) => ({ groups: [finalGroup, ...state.groups], activeGroup: finalGroup }));
+    return finalGroup;
+  },
+
+  enableE2EE: async (groupId: string) => {
+    const res = await api.e2ee.enableDMGroupE2EE(groupId);
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId ? { ...g, e2ee_enabled: true, rotation_epoch: res.rotation_epoch || 1 } : g
+      ),
+      activeGroup:
+        state.activeGroup?.id === groupId
+          ? { ...state.activeGroup, e2ee_enabled: true, rotation_epoch: res.rotation_epoch || 1 }
+          : state.activeGroup,
+    }));
   },
 
   updateGroup: async (groupId: string, data) => {
@@ -225,7 +273,19 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   },
 
   addMembers: async (groupId: string, memberIds: string[]) => {
+    const { groups, activeGroup } = get();
+    const group = groups.find((g) => g.id === groupId) || activeGroup;
+    const currentCount = group?.members?.length || 0;
+    if (currentCount + memberIds.length > 15) {
+      throw new Error('o grupo não pode ultrapassar 15 membros');
+    }
+
     const members = await api.dmGroups.addMembers(groupId, memberIds);
+    if (group?.e2ee_enabled) {
+      // History isolation: rotate outbound Megolm session so new members cannot decrypt past messages
+      await megolmManager.invalidateOutboundSession(groupId);
+    }
+
     set((state) => ({
       groups: state.groups.map((g) => (g.id === groupId ? { ...g, members } : g)),
       activeGroup: state.activeGroup?.id === groupId ? { ...state.activeGroup, members } : state.activeGroup,
@@ -330,6 +390,8 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       reactions: [],
       is_pinned: false,
       is_tts: Boolean(isTTS),
+      encrypted: Boolean(activeGroup.e2ee_enabled),
+      decryption_status: activeGroup.e2ee_enabled ? 'decrypted' : 'plaintext',
       status: 'sending',
       uploadingFile: file
         ? {
@@ -358,6 +420,8 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
     try {
       let finalContent = content;
+      let e2eePayload: { encrypted: true; e2ee_ciphertext: string; e2ee_meta: any } | null = null;
+      const clientMsgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
       if (file && abortController) {
         const optimizedFile = await optimizeImageForUpload(file, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
@@ -371,13 +435,53 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
       }
 
+      if (activeGroup.e2ee_enabled) {
+        const myDeviceId = (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || 'my_device';
+        let rosterDevices: any[] = [];
+        try {
+          const rosterRes = await api.e2ee.getLatestRoster(activeGroup.id);
+          if (rosterRes && Array.isArray(rosterRes.devices)) {
+            rosterDevices = rosterRes.devices;
+          }
+        } catch {}
+
+        const encoded = await messageCodec.encodeMessage({
+          conversationId: activeGroup.id,
+          conversationType: 'dm_group',
+          currentEpoch: activeGroup.rotation_epoch || 1,
+          envelope: {
+            v: 1,
+            body: finalContent,
+            reply_to: replyToId,
+            attachments: attachments || [],
+          },
+          senderDeviceId: myDeviceId,
+          rosterDevices,
+        });
+
+        e2eePayload = {
+          encrypted: true,
+          e2ee_ciphertext: encoded.e2ee_ciphertext,
+          e2ee_meta: encoded.e2ee_meta,
+        };
+      }
+
       const confirmedMsg = await api.dmGroups.sendMessage(activeGroup.id, {
-        content: finalContent,
-        attachments,
+        content: e2eePayload ? '' : finalContent,
+        attachments: e2eePayload ? [] : attachments,
         reply_to_id: replyToId,
         is_tts: Boolean(isTTS),
+        message_id: clientMsgId,
+        ...(e2eePayload || {}),
       });
-      const readyMsg: DMGroupMessage = { ...confirmedMsg, status: 'sent', tempId };
+      const readyMsg: DMGroupMessage = {
+        ...confirmedMsg,
+        content: finalContent,
+        attachments: attachments || [],
+        decryption_status: e2eePayload ? 'decrypted' : 'plaintext',
+        status: 'sent',
+        tempId,
+      };
 
       set((state) => {
         if (state.activeGroup?.id !== activeGroup.id) return state;
@@ -565,6 +669,29 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         };
       }
     });
+
+    if (message.encrypted) {
+      messageCodec.decodeMessage(message).then((decoded) => {
+        set((state) => {
+          const updateMsg = (m: DMGroupMessage) =>
+            m.id === message.id
+              ? {
+                  ...m,
+                  content: decoded.content,
+                  attachments: decoded.attachments as any,
+                  decryption_status: decoded.decryptionStatus,
+                }
+              : m;
+          return {
+            messages: state.activeGroup?.id === message.group_id ? state.messages.map(updateMsg) : state.messages,
+            messagesByGroup: {
+              ...state.messagesByGroup,
+              [message.group_id]: (state.messagesByGroup[message.group_id] || []).map(updateMsg),
+            },
+          };
+        });
+      }).catch(() => {});
+    }
   },
 
   editMessage: async (messageId: string, content: string) => {
@@ -758,3 +885,36 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     }
   },
 }));
+
+// Retroactive decryption listener for imported Megolm sessions in DM Groups
+keyRequestManager.onSessionImported((conversationId, sessionId) => {
+  const state = useDMGroupStore.getState();
+  const groupMsgs = state.messagesByGroup[conversationId] || [];
+  const undecrypted = groupMsgs.filter(
+    (m) => m.encrypted && m.e2ee_meta?.session_id === sessionId && m.decryption_status === 'undecryptable'
+  );
+
+  for (const msg of undecrypted) {
+    messageCodec.decodeMessage(msg).then((decoded) => {
+      useDMGroupStore.setState((s) => {
+        const updateMsg = (m: DMGroupMessage) =>
+          m.id === msg.id
+            ? {
+                ...m,
+                content: decoded.content,
+                attachments: decoded.attachments as any,
+                decryption_status: decoded.decryptionStatus,
+              }
+            : m;
+        return {
+          messages: s.activeGroup?.id === conversationId ? s.messages.map(updateMsg) : s.messages,
+          messagesByGroup: {
+            ...s.messagesByGroup,
+            [conversationId]: (s.messagesByGroup[conversationId] || []).map(updateMsg),
+          },
+        };
+      });
+    }).catch(() => {});
+  }
+});
+

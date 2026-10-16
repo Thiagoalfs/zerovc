@@ -1,0 +1,21 @@
+*** backend/internal/gateway/client.go
+--- backend/internal/gateway/client.go
+@@ -43,2 +43,3 @@
+ 	UserID     uuid.UUID
++	DeviceID   *uuid.UUID
+ 	send       chan []byte
+@@ -187,7 +188,15 @@
++	var deviceIDPtr *uuid.UUID
++	if devIDStr := r.URL.Query().Get("device_id"); devIDStr != "" {
++		if parsed, err := uuid.Parse(devIDStr); err == nil {
++			deviceIDPtr = &parsed
++		}
++	}
++
+ 	client := &Client{
+ 		Hub:      hub,
+ 		Conn:     conn,
+ 		UserID:   userID,
++		DeviceID: deviceIDPtr,
+ 		send:     make(chan []byte, 256),
+ 	}

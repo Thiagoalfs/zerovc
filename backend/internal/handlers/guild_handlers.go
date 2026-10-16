@@ -16,8 +16,9 @@ import (
 )
 
 type GuildHandler struct {
-	db  *database.DB
-	hub *gateway.Hub
+	db        *database.DB
+	hub       *gateway.Hub
+	debouncer *ChannelAudienceDebouncer
 }
 
 func NewGuildHandler(db *database.DB, hub *gateway.Hub) *GuildHandler {
@@ -25,6 +26,10 @@ func NewGuildHandler(db *database.DB, hub *gateway.Hub) *GuildHandler {
 		db:  db,
 		hub: hub,
 	}
+}
+
+func (h *GuildHandler) SetAudienceDebouncer(d *ChannelAudienceDebouncer) {
+	h.debouncer = d
 }
 
 type CreateGuildRequest struct {
@@ -618,6 +623,10 @@ func (h *GuildHandler) KickMember(w http.ResponseWriter, r *http.Request) {
 
 	h.LogAudit(r.Context(), guildID, actorID, "MEMBER_KICK", &targetUserID, map[string]any{"reason": "Expulso por moderador"})
 
+	if h.debouncer != nil {
+		h.debouncer.TriggerGuildChannels(r.Context(), guildID)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "user_id": targetUserID})
 }
@@ -700,6 +709,10 @@ func (h *GuildHandler) BanMember(w http.ResponseWriter, r *http.Request) {
 
 	h.LogAudit(r.Context(), guildID, actorID, "MEMBER_BAN", &req.UserID, map[string]any{"reason": req.Reason})
 
+	if h.debouncer != nil {
+		h.debouncer.TriggerGuildChannels(r.Context(), guildID)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "user_id": req.UserID})
 }
@@ -754,6 +767,10 @@ func (h *GuildHandler) UnbanMember(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.LogAudit(r.Context(), guildID, actorID, "MEMBER_UNBAN", &targetUserID, nil)
+
+	if h.debouncer != nil {
+		h.debouncer.TriggerGuildChannels(r.Context(), guildID)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "user_id": targetUserID})
@@ -1074,6 +1091,10 @@ func (h *GuildHandler) Leave(w http.ResponseWriter, r *http.Request) {
 			"guild_id": guildID,
 		},
 	})
+
+	if h.debouncer != nil {
+		h.debouncer.TriggerGuildChannels(r.Context(), guildID)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "guild_id": guildID})

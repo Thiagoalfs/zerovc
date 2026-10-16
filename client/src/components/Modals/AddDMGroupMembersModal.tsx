@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, UserPlus, Check } from 'lucide-react';
+import { X, UserPlus, Check, Shield } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { formatAssetUrl } from '../../lib/api';
@@ -123,6 +123,24 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
         {/* Form */}
         <form onSubmit={handleAdd} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto flex-1 no-scrollbar`}>
           {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg">{error}</div>}
+
+          {group.e2ee_enabled && (
+            <div className="p-3 rounded-xl bg-brand-500/10 border border-brand-500/20 text-xs text-brand-300 flex items-start gap-2.5">
+              <Shield className="w-4 h-4 text-brand-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-white">Grupo Criptografado (E2EE)</p>
+                <p className="text-[11px] text-gray-300 leading-tight mt-0.5">
+                  Por segurança e isolamento de histórico, novos membros adicionados não terão acesso a mensagens anteriores ao seu ingresso.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {maxAddable === 0 && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs rounded-xl">
+              Este grupo atingiu a capacidade máxima de 15 membros.
+            </div>
+          )}
 
           {/* Friends Selection */}
           <div>

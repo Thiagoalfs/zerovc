@@ -3,6 +3,8 @@ import { Participant, DisconnectReason } from 'livekit-client';
 import { api } from '../lib/api';
 import { livekit } from '../lib/livekit';
 import { User, DMGroup } from '../types';
+import { checkCallEligibility, createE2EEOptions, livekitE2EEManager } from '../lib/livekitE2EE';
+import { callKeyManager } from '../crypto/callKeys';
 import {
   playJoinVoiceSound,
   playLeaveVoiceSound,
@@ -47,7 +49,7 @@ interface VoiceState {
   setWatchedParticipant: (identity: string | null) => void;
 
   joinVoice: (channelId: string, guildId?: string) => Promise<void>;
-  joinDMCall: (roomId: string, recipient: User, token?: string, livekitUrl?: string) => Promise<void>;
+  joinDMCall: (roomId: string, recipient: User, token?: string, livekitUrl?: string, isE2EE?: boolean) => Promise<void>;
   joinGroupVoice: (groupId: string, group?: DMGroup) => Promise<void>;
   leaveVoice: () => Promise<void>;
 
@@ -115,17 +117,81 @@ const initialStreamVolumes = loadSavedStreamVolumes();
 const initialMuted = loadSavedMuteState();
 const initialDeafened = loadSavedDeafenState();
 
+/**
+ * Safely resolves the local device UUID.
+ * Guarantees a valid RFC4122 v4 UUID, preventing PostgreSQL syntax errors
+ * caused by invalid placeholder strings like 'local_device'.
+ */
+const getLocalDeviceId = (): string => {
+  try {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : null;
+    if (stored && stored !== 'local_device' && stored.trim().length > 0) {
+      return stored.trim();
+    }
+    const generated =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c: any) =>
+            (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
+          );
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('zerovc_device_id', generated);
+    }
+    return generated;
+  } catch {
+    return '00000000-0000-0000-0000-000000000000';
+  }
+};
+
+/**
+ * Extracts the E2EE device ID from LiveKit participant metadata.
+ * Participant metadata contains JSON with optional device_id.
+ * Falls back to participant.identity if metadata is absent or unparseable.
+ */
+const extractParticipantDeviceId = (participant: Participant): string => {
+  if (participant.metadata) {
+    try {
+      const meta = JSON.parse(participant.metadata);
+      if (meta && typeof meta.device_id === 'string' && meta.device_id.trim().length > 0) {
+        return meta.device_id.trim();
+      }
+    } catch {
+      // Safely ignore non-JSON or legacy metadata
+    }
+  }
+  return participant.identity;
+};
+
 export const useVoiceStore = create<VoiceState>((set, get) => {
   // Helper to attach LiveKit room connection listeners and sync state
   const connectLiveKitRoom = async (
     livekitUrl: string,
     token: string,
     shouldMute: boolean,
-    shouldDeafen: boolean
+    shouldDeafen: boolean,
+    isE2EERoom: boolean = false,
+    callId?: string
   ) => {
+    let e2eeSetup = undefined;
+    if (isE2EERoom) {
+      const eligibility = checkCallEligibility({ isE2EERoom: true });
+      if (eligibility.status === 'BLOCKED') {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('zerovc:upgrade_required', {
+              detail: { modal: 'UPGRADE_REQUIRED', reason: 'E2EE_CALL_UNSUPPORTED' },
+            })
+          );
+        }
+        throw new Error('E2EE_CALL_UNSUPPORTED: Platform lacks Insertable Streams. Plaintext fallback strictly forbidden.');
+      }
+      e2eeSetup = createE2EEOptions();
+    }
+
     let prevParticipantIds = new Set<string>();
     let prevScreenShareIds = new Set<string>();
     let isInitialSync = true;
+    const participantDeviceMap = new Map<string, string>();
 
     await livekit.connect(livekitUrl, token, {
       autoEnableMicrophone: !shouldMute,
@@ -223,7 +289,20 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           api.channels.updateVoiceState(currentChannelId, { is_screensharing: false }).catch(() => {});
         }
       },
+      onParticipantConnected: (participant) => {
+        const deviceId = extractParticipantDeviceId(participant);
+        participantDeviceMap.set(participant.identity, deviceId);
+        callKeyManager.handleParticipantJoined(deviceId);
+      },
+      onParticipantDisconnected: (participant) => {
+        const deviceId = participantDeviceMap.get(participant.identity) || extractParticipantDeviceId(participant);
+        participantDeviceMap.delete(participant.identity);
+        callKeyManager.handleParticipantLeft(deviceId);
+      },
       onDisconnected: (reason) => {
+        participantDeviceMap.clear();
+        callKeyManager.endCall();
+        livekitE2EEManager.cleanup();
         console.warn('[Voice] LiveKit room disconnected. Reason:', reason);
         playLeaveVoiceSound();
         const isDuplicate =
@@ -252,7 +331,24 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           alert('Você entrou na chamada por outro dispositivo ou navegador.');
         }
       },
-    });
+    }, e2eeSetup);
+
+    // Sync pre-existing room participants into CallKeyManager immediately after connect
+    if (isE2EERoom && callId) {
+      const myDeviceId = getLocalDeviceId();
+      const existingDeviceIds: string[] = [];
+      const room = livekit.getRoom();
+
+      if (room && room.remoteParticipants) {
+        for (const participant of room.remoteParticipants.values()) {
+          const devId = extractParticipantDeviceId(participant);
+          participantDeviceMap.set(participant.identity, devId);
+          existingDeviceIds.push(devId);
+        }
+      }
+
+      await callKeyManager.startCall(callId, myDeviceId, existingDeviceIds);
+    }
 
     playJoinVoiceSound();
 
@@ -278,6 +374,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
   };
 
   const cleanupPreviousConnection = async () => {
+    callKeyManager.endCall();
+    livekitE2EEManager.cleanup();
     const { voiceType, currentChannelId, dmRoomId, isScreensharing } = get();
     if (isScreensharing) {
       try {
@@ -413,7 +511,14 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         // Check if user changed mind or joined another channel while requesting
         if (get().currentChannelId !== channelId || get().voiceType !== 'guild') return;
 
-        await connectLiveKitRoom(res.livekit_url, res.token, shouldMute, shouldDeafen);
+        await connectLiveKitRoom(
+          res.livekit_url,
+          res.token,
+          shouldMute,
+          shouldDeafen,
+          Boolean((res as any)?.e2ee_enabled),
+          channelId
+        );
 
         // Sync initial voice state with backend
         if (shouldMute || shouldDeafen) {
@@ -425,6 +530,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             .catch(() => {});
         }
       } catch (err) {
+        callKeyManager.endCall();
+        livekitE2EEManager.cleanup();
         console.error('[Voice] Failed to join guild voice:', err);
         set({
           voiceType: null,
@@ -436,7 +543,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       }
     },
 
-    joinDMCall: async (roomId: string, recipient: User, token?: string, livekitUrl?: string) => {
+    joinDMCall: async (roomId: string, recipient: User, token?: string, livekitUrl?: string, isE2EE?: boolean) => {
       if (
         get().voiceType === 'dm' &&
         get().dmRoomId === roomId &&
@@ -465,17 +572,30 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       try {
         let finalToken = token;
         let finalUrl = livekitUrl;
+        let finalIsE2EE = isE2EE;
 
         if (!finalToken || !finalUrl) {
           const res = await api.dms.acceptCall(roomId);
           finalToken = res.token;
           finalUrl = res.livekit_url;
+          if ((res as any)?.e2ee_enabled !== undefined) {
+            finalIsE2EE = Boolean((res as any)?.e2ee_enabled);
+          }
         }
 
         if (get().dmRoomId !== roomId || get().voiceType !== 'dm') return;
 
-        await connectLiveKitRoom(finalUrl, finalToken, shouldMute, shouldDeafen);
+        await connectLiveKitRoom(
+          finalUrl,
+          finalToken,
+          shouldMute,
+          shouldDeafen,
+          Boolean(finalIsE2EE),
+          roomId
+        );
       } catch (err) {
+        callKeyManager.endCall();
+        livekitE2EEManager.cleanup();
         console.error('[Voice] Failed to join DM call:', err);
         set({
           voiceType: null,
@@ -519,8 +639,17 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
 
         if (get().dmGroupId !== groupId || get().voiceType !== 'group') return;
 
-        await connectLiveKitRoom(res.livekit_url, res.token, shouldMute, shouldDeafen);
+        await connectLiveKitRoom(
+          res.livekit_url,
+          res.token,
+          shouldMute,
+          shouldDeafen,
+          Boolean((res as any)?.e2ee_enabled),
+          groupId
+        );
       } catch (err) {
+        callKeyManager.endCall();
+        livekitE2EEManager.cleanup();
         console.error('[Voice] Failed to join DM group voice:', err);
         set({
           voiceType: null,
@@ -534,6 +663,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     },
 
     leaveVoice: async () => {
+      callKeyManager.endCall();
+      livekitE2EEManager.cleanup();
       const { voiceType, currentChannelId, dmRoomId } = get();
       if (!voiceType && !currentChannelId && !dmRoomId) return;
 

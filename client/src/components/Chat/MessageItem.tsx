@@ -12,6 +12,8 @@ import {
   MessageSquare,
   Copy,
   Shield,
+  ShieldAlert,
+  Lock,
   Volume2,
   VolumeX,
   UserMinus,
@@ -28,6 +30,7 @@ import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { api, getApiBaseUrl, formatAssetUrl } from '../../lib/api';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { keyRequestManager } from '../../crypto/keyRequestManager';
 import { UserVolumeSlider } from '../Voice/VolumeSliders';
 import { FormattedMessage } from './FormattedMessage';
 import { GifEmbed } from './GifEmbed';
@@ -562,6 +565,23 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const isSending = message.status === 'sending';
   const isFailed = message.status === 'failed';
+  const isUndecryptable = Boolean(message.encrypted && (message.decryption_status === 'undecryptable' || !message.content));
+  const isDecrypting = Boolean(message.encrypted && message.decryption_status === 'decrypting');
+
+  const handleRequestKey = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (message.e2ee_meta?.session_id) {
+      const convId = (message as any).dm_room_id || (message as any).group_id || (message as any).channel_id;
+      const convType = (message as any).dm_room_id ? 'dm' : ((message as any).group_id ? 'dm_group' : 'channel');
+      keyRequestManager.queueKeyRequest({
+        conversationId: convId,
+        conversationType: convType,
+        sessionId: message.e2ee_meta.session_id,
+        epoch: message.e2ee_meta.epoch || 0,
+        senderDeviceId: message.e2ee_meta.sender_device_id,
+      }).catch(() => {});
+    }
+  };
 
   return (
     <>
@@ -786,18 +806,30 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       <span>:</span>
                     </button>
 
-                    <span className={`inline ${
-                      isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
-                    }`}>
-                      <FormattedMessage
-                        content={message.content}
-                        inline
-                        onPreviewImage={onPreviewImage}
-                        onImageLoad={onImageLoad}
-                        onOpenUserProfile={onOpenUserProfile}
-                        onOpenUserContextMenu={handleUserContextMenu}
-                      />
-                    </span>
+                    {isUndecryptable ? (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs my-0.5 select-none">
+                        <ShieldAlert className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                        <span>Mensagem criptografada indisponível</span>
+                        <button type="button" onClick={handleRequestKey} className="underline text-[11px] text-amber-200 hover:text-white cursor-pointer ml-1">
+                          Solicitar chave
+                        </button>
+                      </span>
+                    ) : isDecrypting ? (
+                      <span className="text-xs text-gray-400 italic">Decifrando mensagem...</span>
+                    ) : (
+                      <span className={`inline ${
+                        isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
+                      }`}>
+                        <FormattedMessage
+                          content={message.content}
+                          inline
+                          onPreviewImage={onPreviewImage}
+                          onImageLoad={onImageLoad}
+                          onOpenUserProfile={onOpenUserProfile}
+                          onOpenUserContextMenu={handleUserContextMenu}
+                        />
+                      </span>
+                    )}
 
                     {message.is_edited && (
                       <span className="text-[10px] text-gray-500 font-normal ml-1 select-none">(editado)</span>
@@ -930,7 +962,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         BOT
                       </span>
                     )}
-                    <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">{formattedTime}</span>
+                    <span className="text-[10px] md:text-[11px] text-gray-400 font-normal inline-flex items-center gap-1">
+                      {formattedTime}
+                      {message.encrypted && (
+                        <span title="Criptografada ponta a ponta" className="inline-flex items-center">
+                          <Lock className="w-2.5 h-2.5 text-emerald-400" />
+                        </span>
+                      )}
+                    </span>
                     {message.is_edited && (
                       <span className="text-[10px] text-gray-500 font-normal">(editado)</span>
                     )}
@@ -985,7 +1024,24 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   </div>
                 ) : (
                   <>
-                    {message.content && (
+                    {isUndecryptable ? (
+                      <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs my-1 select-none">
+                        <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                        <span className="font-medium">Mensagem criptografada indisponível</span>
+                        <button
+                          type="button"
+                          onClick={handleRequestKey}
+                          className="ml-auto text-[11px] underline text-amber-200 hover:text-white cursor-pointer"
+                        >
+                          Solicitar chave
+                        </button>
+                      </div>
+                    ) : isDecrypting ? (
+                      <div className="text-xs text-gray-400 italic py-1 flex items-center gap-1.5 select-none">
+                        <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse" />
+                        Decifrando mensagem...
+                      </div>
+                    ) : message.content ? (
                       <div className={`text-[0.9375rem] break-words leading-[1.375rem] font-normal select-text ${
                         isFailed ? 'text-red-300' : isSending ? 'text-gray-400' : 'text-gray-200'
                       }`}>
@@ -997,7 +1053,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                           onOpenUserContextMenu={handleUserContextMenu}
                         />
                       </div>
-                    )}
+                    ) : null}
 
                     {message.uploadingFile && (
                       <UploadProgressCard

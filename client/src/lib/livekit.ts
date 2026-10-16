@@ -6,6 +6,7 @@ import {
   Track,
   Participant,
   DisconnectReason,
+  E2EEOptions,
 } from 'livekit-client';
 import { processAudioBridge } from './processAudioBridge';
 import { audioProcessor } from './audioProcessor';
@@ -231,9 +232,14 @@ class LiveKitManager {
       return 1;
     }
   })();
+  private currentE2EEOptions?: E2EEOptions;
 
   getRoom(): Room | null {
     return this.room;
+  }
+
+  isE2EEEnabled(): boolean {
+    return !!this.currentE2EEOptions;
   }
 
   async connect(
@@ -246,12 +252,16 @@ class LiveKitManager {
       onTrackUpdated?: () => void;
       onScreenShareEnded?: () => void;
       onDisconnected?: (reason?: DisconnectReason) => void;
-    }
+      onParticipantConnected?: (participant: Participant) => void;
+      onParticipantDisconnected?: (participant: Participant) => void;
+    },
+    e2eeOptions?: E2EEOptions
   ) {
     if (this.room) {
       await this.disconnect();
     }
 
+    this.currentE2EEOptions = e2eeOptions;
     this.onParticipantsChanged = callbacks.onParticipantsChanged;
     this.onSpeakingChanged = callbacks.onSpeakingChanged;
     this.onTrackUpdated = callbacks.onTrackUpdated;
@@ -262,6 +272,7 @@ class LiveKitManager {
       adaptiveStream: true,
       dynacast: true,
       stopLocalTrackOnUnpublish: true,
+      e2ee: e2eeOptions,
       audioCaptureDefaults: {
         autoGainControl: true,
         echoCancellation: true,
@@ -318,11 +329,13 @@ class LiveKitManager {
       }
     });
 
-    room.on(RoomEvent.ParticipantConnected, () => {
+    room.on(RoomEvent.ParticipantConnected, (participant) => {
+      callbacks.onParticipantConnected?.(participant);
       updateParticipants();
     });
 
-    room.on(RoomEvent.ParticipantDisconnected, () => {
+    room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      callbacks.onParticipantDisconnected?.(participant);
       updateParticipants();
     });
 
@@ -479,6 +492,16 @@ class LiveKitManager {
         iceTransportPolicy: 'all',
       },
     });
+
+    if (e2eeOptions) {
+      try {
+        await room.setE2EEEnabled(true);
+        console.log('[LiveKit] Room E2EE enabled successfully for:', room.name);
+      } catch (err) {
+        console.error('[LiveKit] Failed to enable room E2EE:', err);
+        throw err;
+      }
+    }
 
     // Auto-enable microphone in background without blocking fast connection
     if (callbacks.autoEnableMicrophone !== false) {
@@ -1259,6 +1282,7 @@ class LiveKitManager {
       } catch {}
     });
     this.activeMediaStreamTracks.clear();
+    this.currentE2EEOptions = undefined;
 
     if (this.room) {
       await this.room.disconnect();

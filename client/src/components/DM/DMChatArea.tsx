@@ -59,6 +59,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     loadMoreMessages,
     firstUnreadMessageIdByRoom,
     clearUnreadDivider,
+    enableE2EE,
   } = useDMStore();
   const { friends } = useFriendStore();
   const { startCall, callState, roomId } = useCallStore();
@@ -390,6 +391,8 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           )
         }
         subtitle={recipient ? `@${recipient.username}` : undefined}
+        isE2EE={Boolean(activeRoom?.e2ee_enabled)}
+        onToggleE2EE={activeRoom && !activeRoom.e2ee_enabled ? () => enableE2EE(activeRoom.id) : undefined}
         actions={
           !isCallActiveInThisRoom ? (
             <button

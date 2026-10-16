@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/zerovc/zerovc/backend/internal/middleware"
 	"github.com/zerovc/zerovc/backend/internal/models"
 )
 
@@ -40,6 +42,7 @@ type Client struct {
 	Hub        *Hub
 	Conn       *websocket.Conn
 	UserID     uuid.UUID
+	DeviceID   *uuid.UUID
 	send       chan []byte
 	lastTyping time.Time
 }
@@ -178,17 +181,48 @@ func (c *Client) WritePump() {
 }
 
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request, userID uuid.UUID) {
+	// Validate e2ee_version if present in query parameters or headers
+	verStr := r.URL.Query().Get("e2ee_version")
+	if verStr == "" {
+		verStr = r.Header.Get("X-Client-E2EE-Version")
+	}
+	if verStr != "" {
+		ver, err := strconv.Atoi(verStr)
+		minVer := middleware.GetMinE2EEClientVersion()
+		if err != nil || ver < minVer {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUpgradeRequired)
+			json.NewEncoder(w).Encode(map[string]any{
+				"error":       "E2EE_VERSION_TOO_OLD",
+				"min_version": minVer,
+			})
+			return
+		}
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[Gateway] Failed to upgrade to websocket: %v", err)
 		return
 	}
 
+	var deviceIDPtr *uuid.UUID
+	if devIDStr := r.URL.Query().Get("device_id"); devIDStr != "" {
+		if parsed, err := uuid.Parse(devIDStr); err == nil {
+			if hub.DeviceValidator == nil || hub.DeviceValidator(r.Context(), userID, parsed) {
+				deviceIDPtr = &parsed
+			} else {
+				log.Printf("[Gateway] Device %s rejected for user %s (revoked or not owned)", parsed, userID)
+			}
+		}
+	}
+
 	client := &Client{
-		Hub:    hub,
-		Conn:   conn,
-		UserID: userID,
-		send:   make(chan []byte, 256),
+		Hub:      hub,
+		Conn:     conn,
+		UserID:   userID,
+		DeviceID: deviceIDPtr,
+		send:     make(chan []byte, 256),
 	}
 
 	client.Hub.Register <- client

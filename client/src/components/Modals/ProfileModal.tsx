@@ -103,6 +103,7 @@ import { RegisteredGamesView } from './RegisteredGamesView';
 import { ActivityPrivacySettingsView } from './ActivityPrivacySettingsView';
 import { StreamerModeTab } from './ProfileSettings/StreamerModeTab';
 import { useStreamerModeStore } from '../../stores/streamerModeStore';
+import { SecurityView } from './SecurityView';
 
 const FONT_SIZE_STEPS = [
   { value: 12, label: '12px (Compacto)' },
@@ -124,6 +125,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     | 'account'
     | 'profile'
     | 'privacy'
+    | 'security'
     | 'sessions'
     | 'registered_games'
     | 'activity_privacy'
@@ -1250,6 +1252,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <button
                     type="button"
                     onClick={() => {
+                      setActiveTab('security');
+                      setMobileView('content');
+                    }}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">Criptografia & Segurança</div>
+                      <div className="text-xs text-gray-400">Chaves E2EE, verificação e backup</div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
                       setActiveTab('sessions');
                       setMobileView('content');
                     }}
@@ -1441,6 +1458,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <span>Privacidade e Segurança</span>
               </button>
 
+              {/* Tab: Criptografia & Segurança */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('security')}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'security'
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                }`}
+              >
+                <span>Criptografia & Segurança</span>
+              </button>
+
               {/* Tab: Dispositivos & Sessões */}
               <button
                 type="button"
@@ -1626,6 +1656,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               {activeTab === 'account' && 'Minha Conta'}
               {activeTab === 'profile' && 'Perfil de Usuário'}
               {activeTab === 'privacy' && 'Privacidade'}
+              {activeTab === 'security' && 'Criptografia & Segurança'}
               {activeTab === 'sessions' && 'Sessões & Dispositivos'}
               {activeTab === 'registered_games' && 'Jogos Registrados'}
               {activeTab === 'activity_privacy' && 'Privacidade de Atividade'}
@@ -1666,6 +1697,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {activeTab === 'account' && 'Minha Conta e Perfil'}
                   {activeTab === 'profile' && 'Perfil de Usuário'}
                   {activeTab === 'privacy' && 'Privacidade e Segurança'}
+                  {activeTab === 'security' && 'Criptografia e Segurança E2EE'}
                   {activeTab === 'sessions' && 'Sessões Ativas e Dispositivos'}
                   {activeTab === 'registered_games' && 'Jogos Registrados'}
                   {activeTab === 'activity_privacy' && 'Privacidade de Atividade'}
@@ -1681,6 +1713,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   {activeTab === 'account' && 'Personalize seu perfil, avatar, banner, nome de exibição e recado.'}
                   {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
                   {activeTab === 'privacy' && 'Gerencie credenciais de acesso, e-mail, senha, autenticação 2FA e dados.'}
+                  {activeTab === 'security' && 'Gerencie chaves criptográficas, verificação de aparelhos e backup em nuvem.'}
                   {activeTab === 'sessions' && 'Visualize aparelhos conectados e encerre sessões ativas remotamente.'}
                   {activeTab === 'registered_games' && 'Gerencie jogos detectados no seu computador, adicione jogos customizados e controle status.'}
                   {activeTab === 'activity_privacy' && 'Configure a exibição de status de jogo e detecção automática de processos em segundo plano.'}
@@ -2167,6 +2200,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* TAB: CRIPTOGRAFIA & SEGURANÇA E2EE */}
+            {activeTab === 'security' && (
+              <div className="animate-in fade-in">
+                <SecurityView />
               </div>
             )}
 

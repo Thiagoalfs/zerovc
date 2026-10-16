@@ -10,15 +10,27 @@
     "electron": "concurrently \"vite\" \"npm run build:electron && electron .\"",
     "package": "npm run build && npm run build:electron && electron-builder --win nsis && node -e \"const fs=require('fs');const d='../backend/web/downloads/';fs.mkdirSync(d,{recursive:true});['ZeroVC-Setup.exe','ZeroVC-Setup.exe.blockmap','latest.yml'].forEach(f=>{if(fs.existsSync('release/'+f))fs.copyFileSync('release/'+f,d+f);});\"",
     "package:dir": "npm run build && npm run build:electron && electron-builder --win --dir",
-    "build:apk": "npm run build && npx cap sync android && cd android && gradlew.bat assembleRelease"
+    "build:apk": "npm run build && npx cap sync android && cd android && gradlew.bat assembleRelease",
+    "test:frontend-m2": "tsx scripts/test-frontend-m2.ts",
+    "test:frontend-m3": "tsx -r ./scripts/test-setup-worker.ts scripts/test-frontend-m3.ts",
+    "test:e2ee-spike": "tsx scripts/test-e2ee-spike.ts",
+    "test:e2ee-adversarial": "tsx scripts/test-adversarial-crypto.ts",
+    "test:livekit-gate": "tsx -r ./scripts/test-setup-worker.ts scripts/test-livekit-gate-adversarial.ts",
+    "test:livekit-m4": "tsx scripts/test-livekit-m4.ts",
+    "test:callkeys-adversarial": "tsx scripts/challenger-m4-adversarial.ts",
+    "test:channels-m5": "tsx -r ./scripts/test-setup-worker.ts scripts/test-channels-m5.ts",
+    "test:recovery-m6": "tsx scripts/test-recovery-m6.ts",
+    "test:e2e": "tsx tests/e2e/runner.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/core": "^8.5.2",
+    "@kinsh/vodozemac-wasm": "^0.4.2",
     "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
+    "tsx": "^4.23.15",
     "@types/node": "^20.12.7",
     "@types/react": "^18.2.79",
     "@types/react-dom": "^18.2.25",

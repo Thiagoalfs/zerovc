@@ -9,6 +9,7 @@ import { useUploadStore } from './uploadStore';
 import { optimizeImageForUpload } from '../lib/imageOptimizer';
 import { findFirstAccessibleChannel } from '../utils/userActivity';
 import { useVoiceStore } from './voiceStore';
+import { messageCodec } from '../messaging/messageCodec';
 
 interface GuildState {
   guilds: Guild[];
@@ -266,6 +267,29 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           },
           isLoadingMessages: false,
         }));
+
+        const encryptedList = (messages || []).filter((m) => m.encrypted);
+        if (encryptedList.length > 0) {
+          Promise.all(encryptedList.map((m) => messageCodec.decodeMessage(m))).then((decodedList) => {
+            const decMap = new Map(decodedList.map((d) => [d.id, d]));
+            set((state) => {
+              const applyDec = (list: Message[]) =>
+                list.map((m) => {
+                  const dec = decMap.get(m.id);
+                  return dec
+                    ? { ...m, content: dec.content, attachments: dec.attachments as any, decryption_status: dec.decryptionStatus }
+                    : m;
+                });
+              return {
+                messages: state.activeChannel?.id === channel.id ? applyDec(state.messages) : state.messages,
+                messagesByChannel: {
+                  ...state.messagesByChannel,
+                  [channel.id]: applyDec(state.messagesByChannel[channel.id] || []),
+                },
+              };
+            });
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error('Failed to fetch messages for channel:', err);
         set({ isLoadingMessages: false });
@@ -304,6 +328,29 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         },
         isLoadingMoreMessages: false,
       }));
+
+      const encryptedList = olderMessages.filter((m) => m.encrypted);
+      if (encryptedList.length > 0) {
+        Promise.all(encryptedList.map((m) => messageCodec.decodeMessage(m))).then((decodedList) => {
+          const decMap = new Map(decodedList.map((d) => [d.id, d]));
+          set((state) => {
+            const applyDec = (list: Message[]) =>
+              list.map((m) => {
+                const dec = decMap.get(m.id);
+                return dec
+                  ? { ...m, content: dec.content, attachments: dec.attachments as any, decryption_status: dec.decryptionStatus }
+                  : m;
+              });
+            return {
+              messages: state.activeChannel?.id === channelId ? applyDec(state.messages) : state.messages,
+              messagesByChannel: {
+                ...state.messagesByChannel,
+                [channelId]: applyDec(state.messagesByChannel[channelId] || []),
+              },
+            };
+          });
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to load older messages:', err);
       set({ isLoadingMoreMessages: false });
@@ -733,6 +780,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
     try {
       let finalContent = content;
+      let e2eePayload: { encrypted: true; e2ee_ciphertext: string; e2ee_meta: any } | null = null;
+      const clientMsgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
       if (file && abortController) {
         const optimizedFile = await optimizeImageForUpload(file, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
@@ -746,9 +795,60 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
       }
 
+      if (activeChannel.e2ee_enabled) {
+        const myDeviceId = (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || 'my_device';
+        let rosterDevices: any[] = [];
+        try {
+          const audienceRes = await api.e2ee.getChannelAudience(activeChannel.id);
+          if (audienceRes && Array.isArray(audienceRes.devices)) {
+            rosterDevices = audienceRes.devices;
+          }
+        } catch {
+          try {
+            const rosterRes = await api.e2ee.getLatestRoster(activeChannel.id);
+            if (rosterRes && Array.isArray(rosterRes.devices)) {
+              rosterDevices = rosterRes.devices;
+            }
+          } catch {}
+        }
+
+        const encoded = await messageCodec.encodeMessage({
+          conversationId: activeChannel.id,
+          conversationType: 'channel',
+          currentEpoch: activeChannel.rotation_epoch || 1,
+          envelope: {
+            v: 1,
+            body: finalContent,
+            reply_to: replyToId,
+            attachments: [],
+          },
+          senderDeviceId: myDeviceId,
+          rosterDevices,
+        });
+
+        e2eePayload = {
+          encrypted: true,
+          e2ee_ciphertext: encoded.e2ee_ciphertext,
+          e2ee_meta: encoded.e2ee_meta,
+        };
+      }
+
       // 2. Send to backend API
-      const confirmedMsg = await api.channels.sendMessage(activeChannel.id, { content: finalContent, reply_to_id: replyToId, is_tts: Boolean(isTTS) });
-      const readyMsg: Message = { ...confirmedMsg, status: 'sent', tempId };
+      const confirmedMsg = await api.channels.sendMessage(activeChannel.id, {
+        content: e2eePayload ? '' : finalContent,
+        attachments: e2eePayload ? [] : undefined,
+        reply_to_id: replyToId,
+        is_tts: Boolean(isTTS),
+        message_id: clientMsgId,
+        ...(e2eePayload || {}),
+      });
+      const readyMsg: Message = {
+        ...confirmedMsg,
+        content: finalContent,
+        status: 'sent',
+        tempId,
+        decryption_status: e2eePayload ? 'decrypted' : undefined,
+      };
 
       set((state) => {
         const replaceTemp = (list: Message[]) => {
@@ -992,6 +1092,26 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         };
       }
     });
+
+    if (message.encrypted) {
+      messageCodec.decodeMessage(message).then((decoded) => {
+        set((state) => {
+          const updateDec = (list: Message[]) =>
+            list.map((m) =>
+              m.id === message.id
+                ? { ...m, content: decoded.content, attachments: decoded.attachments as any, decryption_status: decoded.decryptionStatus }
+                : m
+            );
+          return {
+            messages: state.activeChannel?.id === message.channel_id ? updateDec(state.messages) : state.messages,
+            messagesByChannel: {
+              ...state.messagesByChannel,
+              [message.channel_id]: updateDec(state.messagesByChannel[message.channel_id] || []),
+            },
+          };
+        });
+      }).catch(() => {});
+    }
   },
 
   updateMessageInStore: (message: Message) => {

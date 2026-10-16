@@ -163,6 +163,80 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	`)
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_bot_temp_files_expires_at ON bot_temp_files (expires_at)")
 
+	// Ensure E2EE conversation flags and rotation epochs exist
+	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_rooms ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_groups ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_groups ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
+	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS e2ee_enabled BOOLEAN DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
+	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS audience_limit INT DEFAULT 15")
+	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS audience_hash TEXT")
+
+	// Ensure E2EE message ciphertext and metadata columns exist
+	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT")
+	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS e2ee_meta JSONB")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS e2ee_meta JSONB")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT")
+	db.Pool.Exec(ctx, "ALTER TABLE dm_group_messages ADD COLUMN IF NOT EXISTS e2ee_meta JSONB")
+	db.Pool.Exec(ctx, "ALTER TABLE message_reactions ADD COLUMN IF NOT EXISTS dm_group_message_id UUID REFERENCES dm_group_messages(id) ON DELETE CASCADE")
+	db.Pool.Exec(ctx, "ALTER TABLE message_reactions ADD COLUMN IF NOT EXISTS e2ee_ciphertext TEXT")
+	db.Pool.Exec(ctx, "ALTER TABLE message_reactions ALTER COLUMN emoji DROP NOT NULL")
+	db.Pool.Exec(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_group_reaction ON message_reactions (dm_group_message_id, user_id, emoji) WHERE dm_group_message_id IS NOT NULL")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_message_reactions_dm_group ON message_reactions (dm_group_message_id)")
+
+	// Ensure E2EE attachments table exists
+	db.Pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS e2ee_attachments (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			uploader_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			file_size BIGINT NOT NULL,
+			associated_message_id UUID,
+			conversation_type VARCHAR(16) CHECK (conversation_type IN ('dm', 'dm_group', 'channel')),
+			conversation_id UUID,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_attachments_uploader ON e2ee_attachments (uploader_id)")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_attachments_created ON e2ee_attachments (created_at)")
+
+	// Ensure composite unique indexes for message idempotency exist
+	db.Pool.Exec(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_msg_room_id ON dm_messages (dm_room_id, id)")
+	db.Pool.Exec(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_dm_group_msg_group_id ON dm_group_messages (group_id, id)")
+	db.Pool.Exec(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_uniq_channel_msg_channel_id ON messages (channel_id, id)")
+
+	// Ensure E2EE performance indexes exist
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_devices_user ON e2ee_devices (user_id) WHERE revoked_at IS NULL")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_one_time_keys_device ON e2ee_one_time_keys (device_id) WHERE claimed_at IS NULL")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_to_device_recipient ON e2ee_to_device (recipient_device_id, created_at ASC)")
+	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_e2ee_rosters_latest ON e2ee_rosters (conversation_type, conversation_id, version DESC)")
+
+	// Ensure E2EE key backups table and envelope columns exist
+	db.Pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS e2ee_key_backups (
+			user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			backup_public_key TEXT NOT NULL DEFAULT '',
+			wrapped_private_key TEXT NOT NULL DEFAULT '',
+			ciphertext TEXT,
+			iv TEXT,
+			salt TEXT,
+			key_count INT DEFAULT 0,
+			version BIGINT NOT NULL DEFAULT 1,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	db.Pool.Exec(ctx, "ALTER TABLE e2ee_key_backups ADD COLUMN IF NOT EXISTS ciphertext TEXT")
+	db.Pool.Exec(ctx, "ALTER TABLE e2ee_key_backups ADD COLUMN IF NOT EXISTS iv TEXT")
+	db.Pool.Exec(ctx, "ALTER TABLE e2ee_key_backups ADD COLUMN IF NOT EXISTS salt TEXT")
+	db.Pool.Exec(ctx, "ALTER TABLE e2ee_key_backups ADD COLUMN IF NOT EXISTS key_count INT DEFAULT 0")
+	db.Pool.Exec(ctx, "ALTER TABLE e2ee_key_backups ALTER COLUMN backup_public_key DROP NOT NULL")
+	db.Pool.Exec(ctx, "ALTER TABLE e2ee_key_backups ALTER COLUMN wrapped_private_key DROP NOT NULL")
+
 	log.Println("Database schema migration executed successfully")
 	return nil
 }

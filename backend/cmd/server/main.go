@@ -76,6 +76,11 @@ func main() {
 	csrfService := appMiddleware.NewCSRFService(jwtSecret)
 	livekitService := voice.NewLiveKitService(livekitKey, livekitSecret, livekitPublicURL)
 	hub := gateway.NewHub()
+	hub.DeviceValidator = func(ctx context.Context, userID, deviceID uuid.UUID) bool {
+		var exists bool
+		err := db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM e2ee_devices WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL)", deviceID, userID).Scan(&exists)
+		return err == nil && exists
+	}
 
 	// On user connection: update user status to 'online' if was 'offline', and broadcast
 	hub.OnUserConnected = func(userID uuid.UUID) {
@@ -168,6 +173,10 @@ func main() {
 
 	rawgAPIKey := getEnv("RAWG_API_KEY", "")
 	gameHandler := handlers.NewGameHandler(rawgAPIKey)
+	e2eeHandler := handlers.NewE2EEHandler(db, hub)
+	channelHandler.SetAudienceDebouncer(e2eeHandler.Debouncer)
+	guildHandler.SetAudienceDebouncer(e2eeHandler.Debouncer)
+	roleHandler.SetAudienceDebouncer(e2eeHandler.Debouncer)
 
 	// 5. Router & Middleware
 	r := chi.NewRouter()
@@ -256,6 +265,9 @@ func main() {
 
 	// Public Link OpenGraph Metadata Preview (Rate limit: 20 req/min por IP + SSRF Protection)
 	r.With(httprate.LimitByIP(20, time.Minute)).Get("/api/link-preview", linkPreviewHandler.GetMetadata)
+
+	// Public E2EE Protocol Discovery & Capability Config
+	r.Get("/api/e2ee/config", e2eeHandler.GetConfig)
 
 	// Protected API Routes
 	r.Group(func(r chi.Router) {
@@ -367,6 +379,10 @@ func main() {
 		r.Get("/api/dms", dmHandler.ListRooms)
 		r.Post("/api/dms", dmHandler.CreateOrGetRoom)
 		r.Post("/api/dms/{roomID}/close", dmHandler.CloseRoom)
+		r.Post("/api/dms/{roomID}/e2ee/enable", dmHandler.EnableE2EE)
+		r.Post("/api/dm/rooms/{roomID}/e2ee/enable", dmHandler.EnableE2EE)
+		r.Post("/api/dms/{id}/e2ee/enable", dmHandler.EnableE2EE)
+		r.Post("/api/dm/rooms/{id}/e2ee/enable", dmHandler.EnableE2EE)
 		r.Get("/api/dms/{roomID}/messages", dmHandler.ListMessages)
 		r.Get("/api/dms/{roomID}/pins", dmHandler.ListPinned)
 		r.With(messageLimiter.Middleware).Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)
@@ -394,6 +410,7 @@ func main() {
 		r.Post("/api/dm/groups/{id}/members", dmGroupHandler.AddMembers)
 		r.Delete("/api/dm/groups/{id}/members/{userID}", dmGroupHandler.RemoveMember)
 		r.With(dmGroupLimiter.Middleware).Post("/api/dm/groups/{id}/transfer-ownership", dmGroupHandler.TransferOwnership)
+		r.Post("/api/dm/groups/{id}/e2ee/enable", dmGroupHandler.EnableE2EE)
 		r.Get("/api/dm/groups/{id}/messages", dmGroupHandler.ListMessages)
 		r.Get("/api/dm/groups/{id}/pins", dmGroupHandler.ListPinned)
 		r.With(messageLimiter.Middleware).Post("/api/dm/groups/{id}/messages", dmGroupHandler.SendMessage)
@@ -428,6 +445,46 @@ func main() {
 		r.With(uploadLimiter.Middleware).Post("/api/upload/guild-banner", uploadHandler.UploadGuildBanner)
 		r.With(uploadLimiter.Middleware).Post("/api/upload/banner", uploadHandler.UploadBanner)
 		r.With(uploadLimiter.Middleware).Post("/api/upload/attachment", uploadHandler.UploadAttachment)
+
+		// E2EE Identity, Devices, Rosters, Backups & Queues (Strict POST + CSRF + E2EE Version gating)
+		r.Group(func(r chi.Router) {
+			r.Use(appMiddleware.RequireE2EEClientVersion(appMiddleware.GetMinE2EEClientVersion()))
+
+			// E2EE Identity & Device Endpoints (Strict POST for mutations)
+			r.Post("/api/e2ee/identities", e2eeHandler.RegisterIdentity)
+			r.Get("/api/e2ee/identities/{user_id}", e2eeHandler.GetIdentity)
+			r.Post("/api/e2ee/devices", e2eeHandler.RegisterDevice)
+			r.Get("/api/e2ee/users/{user_id}/devices", e2eeHandler.ListUserDevices)
+			r.Post("/api/e2ee/devices/{device_id}/revoke", e2eeHandler.RevokeDevice)
+			r.Post("/api/e2ee/devices/{device_id}/keys", e2eeHandler.ReplenishOTKs)
+			r.Post("/api/e2ee/devices/keys/claim", e2eeHandler.ClaimKeys)
+
+			// E2EE To-Device Queue & Real-Time Delivery
+			r.Post("/api/e2ee/to-device", e2eeHandler.SendToDevice)
+			r.Get("/api/e2ee/to-device", e2eeHandler.GetPendingToDevice)
+			r.Post("/api/e2ee/to-device/ack", e2eeHandler.AckToDevice)
+
+			// E2EE Chained Signed Rosters
+			r.Post("/api/e2ee/rosters", e2eeHandler.SubmitRoster)
+			r.Get("/api/e2ee/rosters/{conversation_id}", e2eeHandler.GetLatestRoster)
+
+			// E2EE Session Key Backup (Opt-in)
+			r.Post("/api/e2ee/backup", e2eeHandler.UploadBackup)
+			r.Get("/api/e2ee/backup", e2eeHandler.GetBackup)
+			r.Post("/api/e2ee/backup/delete", e2eeHandler.DeleteBackup)
+			r.Delete("/api/e2ee/backup", e2eeHandler.DeleteBackup)
+
+			// E2EE Attachments
+			r.With(uploadLimiter.Middleware).Post("/api/e2ee/attachments", e2eeHandler.UploadAttachment)
+			r.Get("/api/e2ee/attachments/{id}", e2eeHandler.DownloadAttachment)
+
+			// E2EE Key Requests (Gossip / Forwarding)
+			r.Post("/api/e2ee/key-requests", e2eeHandler.SubmitKeyRequest)
+
+			// E2EE Server Channels Audience & Opt-in
+			r.Get("/api/channels/{id}/e2ee/audience", e2eeHandler.GetChannelAudience)
+			r.Post("/api/channels/{id}/e2ee/enable", e2eeHandler.EnableChannelE2EE)
+		})
 
 		// WebSocket Gateway (Protected)
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
