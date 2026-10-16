@@ -17,6 +17,7 @@ import {
   playDeafenSound,
   playUndeafenSound,
 } from '../utils/audio';
+import { showAlert } from './confirmModalStore';
 
 export type VoiceType = 'guild' | 'dm' | 'group';
 
@@ -328,7 +329,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         });
 
         if (isDuplicate) {
-          alert('Você entrou na chamada por outro dispositivo ou navegador.');
+          showAlert({
+            title: 'Sessão Concorrente',
+            message: 'Você entrou na chamada por outro dispositivo ou navegador.',
+            variant: 'warning',
+          });
         }
       },
     }, e2eeSetup);

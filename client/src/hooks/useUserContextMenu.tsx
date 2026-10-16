@@ -28,6 +28,7 @@ import { useContextMenu, ContextMenuItem } from '../components/ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from '../components/Voice/VolumeSliders';
 import { useGuildPermissions } from './useGuildPermissions';
 import { api } from '../lib/api';
+import { showConfirm, showAlert } from '../stores/confirmModalStore';
 import { copyToClipboard } from '../utils/clipboard';
 
 export interface UserContextMenuOptions {
@@ -117,9 +118,17 @@ export function useUserContextMenu() {
             onClick: async () => {
               try {
                 await sendRequest(targetUser.username);
-                alert(`Pedido de amizade enviado para @${targetUser.username}!`);
+                showAlert({
+                  title: 'Pedido de Amizade',
+                  message: `Pedido de amizade enviado para @${targetUser.username}!`,
+                  variant: 'success',
+                });
               } catch (err: any) {
-                alert(err?.message || 'Erro ao enviar pedido de amizade');
+                showAlert({
+                  title: 'Erro de Amizade',
+                  message: err?.message || 'Erro ao enviar pedido de amizade',
+                  variant: 'danger',
+                });
               }
             },
           });
@@ -305,8 +314,15 @@ export function useUserContextMenu() {
               label: `Expulsar ${targetMember.display_name || targetMember.username}`,
               icon: <UserMinus className="w-4 h-4 text-amber-400" />,
               variant: 'danger',
-              onClick: () => {
-                if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
+              onClick: async () => {
+                const confirmed = await showConfirm({
+                  title: 'Expulsar Membro',
+                  message: `Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username} do servidor?`,
+                  confirmText: 'Expulsar',
+                  variant: 'danger',
+                  icon: 'user',
+                });
+                if (confirmed) {
                   kickMember(activeGuild.id, targetMember.id);
                 }
               },
@@ -319,8 +335,15 @@ export function useUserContextMenu() {
               label: `Banir ${targetMember.display_name || targetMember.username}`,
               icon: <Ban className="w-4 h-4 text-dnd" />,
               variant: 'danger',
-              onClick: () => {
-                if (confirm(`Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor?`)) {
+              onClick: async () => {
+                const confirmed = await showConfirm({
+                  title: 'Banir Membro',
+                  message: `Tem certeza que deseja banir ${targetMember.display_name || targetMember.username} do servidor? Esta ação removerá o usuário permanentemente.`,
+                  confirmText: 'Banir Membro',
+                  variant: 'danger',
+                  icon: 'user',
+                });
+                if (confirmed) {
                   banMember(activeGuild.id, targetMember.id);
                 }
               },
@@ -354,12 +377,26 @@ export function useUserContextMenu() {
             icon: <Crown className="w-4 h-4 text-amber-400" />,
             onClick: async () => {
               const targetName = targetUser.display_name || targetUser.username;
-              if (window.confirm(`Tem certeza que deseja transferir a posse do grupo para "${targetName}"?`)) {
+              const confirmed = await showConfirm({
+                title: 'Transferir Posse do Grupo',
+                message: `Tem certeza que deseja transferir a posse do grupo para "${targetName}"? Você deixará de ser o administrador principal do grupo.`,
+                confirmText: 'Transferir Posse',
+                variant: 'warning',
+              });
+              if (confirmed) {
                 try {
                   await transferOwnership(targetGroup.id, targetUser.id);
-                  alert(`Posse do grupo transferida com sucesso para @${targetUser.username}!`);
+                  showAlert({
+                    title: 'Posse Transferida',
+                    message: `Posse do grupo transferida com sucesso para @${targetUser.username}!`,
+                    variant: 'success',
+                  });
                 } catch (err: any) {
-                  alert(err?.message || 'Erro ao transferir a posse do grupo');
+                  showAlert({
+                    title: 'Erro ao Transferir',
+                    message: err?.message || 'Erro ao transferir a posse do grupo',
+                    variant: 'danger',
+                  });
                 }
               }
             },
@@ -371,11 +408,22 @@ export function useUserContextMenu() {
             variant: 'danger',
             onClick: async () => {
               const targetName = targetUser.display_name || targetUser.username;
-              if (window.confirm(`Tem certeza que deseja remover ${targetName} do grupo?`)) {
+              const confirmed = await showConfirm({
+                title: 'Remover do Grupo',
+                message: `Tem certeza que deseja remover ${targetName} do grupo?`,
+                confirmText: 'Remover',
+                variant: 'danger',
+                icon: 'user',
+              });
+              if (confirmed) {
                 try {
                   await removeGroupMember(targetGroup.id, targetUser.id);
                 } catch (err: any) {
-                  alert(err?.message || 'Erro ao remover membro do grupo');
+                  showAlert({
+                    title: 'Erro',
+                    message: err?.message || 'Erro ao remover membro do grupo',
+                    variant: 'danger',
+                  });
                 }
               }
             },
@@ -390,7 +438,14 @@ export function useUserContextMenu() {
           icon: <UserX className="w-4 h-4 text-dnd" />,
           variant: 'danger',
           onClick: async () => {
-            if (confirm(`Deseja bloquear @${targetUser.username}? Você não receberá mais mensagens diretas deste usuário.`)) {
+            const confirmed = await showConfirm({
+              title: 'Bloquear Usuário',
+              message: `Deseja bloquear @${targetUser.username}? Vocês não receberão mais mensagens diretas nem poderão se conectar.`,
+              confirmText: 'Bloquear',
+              variant: 'danger',
+              icon: 'user',
+            });
+            if (confirmed) {
               await api.users.block(targetUser.id);
             }
           },
