@@ -238,15 +238,19 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     }
   },
 
-  createGroup: async (name?: string, memberIds: string[] = [], isE2EE = false) => {
+  createGroup: async (name?: string, memberIds: string[] = [], isE2EE = true) => {
     if (memberIds.length > 14) {
       throw new Error('Grupos de DM podem ter no máximo 15 membros (criador + 14 amigos)');
     }
     const group = await api.dmGroups.create({ name, member_ids: memberIds });
-    let finalGroup = group;
-    if (isE2EE) {
-      const e2eeRes = await api.e2ee.enableDMGroupE2EE(group.id);
-      finalGroup = { ...group, e2ee_enabled: true, rotation_epoch: e2eeRes.rotation_epoch || 1 };
+    let finalGroup = { ...group, e2ee_enabled: true, rotation_epoch: group.rotation_epoch || 1 };
+    if (!group.e2ee_enabled && isE2EE) {
+      try {
+        const e2eeRes = await api.e2ee.enableDMGroupE2EE(group.id);
+        finalGroup = { ...group, e2ee_enabled: true, rotation_epoch: e2eeRes.rotation_epoch || 1 };
+      } catch (e) {
+        console.warn('Failed to ensure e2ee on new dm group:', e);
+      }
     }
     set((state) => ({ groups: [finalGroup, ...state.groups], activeGroup: finalGroup }));
     return finalGroup;

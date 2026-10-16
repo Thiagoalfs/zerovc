@@ -27,7 +27,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
 
   const [name, setName] = useState('');
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
-  const [isE2EE, setIsE2EE] = useState(false);
+  const [isE2EE, setIsE2EE] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,7 +36,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
       fetchFriends();
       setName('');
       setSelectedFriendIds([]);
-      setIsE2EE(false);
+      setIsE2EE(true);
       setError('');
     }
   }, [isOpen]);
