@@ -1628,6 +1628,9 @@ func (h *E2EEHandler) SubmitKeyRequest(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------
 
 func (h *E2EEHandler) verifyAndResolveConversationType(ctx context.Context, convID uuid.UUID, userID uuid.UUID) (string, bool) {
+	if h.db == nil || h.db.Pool == nil {
+		return "", false
+	}
 	var dummy int
 	// DM
 	if err := h.db.Pool.QueryRow(ctx, "SELECT 1 FROM dm_rooms WHERE id = $1 AND (user1_id = $2 OR user2_id = $2)", convID, userID).Scan(&dummy); err == nil {
@@ -1669,6 +1672,14 @@ func (h *E2EEHandler) SaveRoomKey(w http.ResponseWriter, r *http.Request) {
 
 	if req.ConversationID == uuid.Nil || strings.TrimSpace(req.SessionID) == "" || strings.TrimSpace(req.SessionKey) == "" {
 		http.Error(w, `{"error":"invalid_room_key_payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.ConversationType != "" &&
+		req.ConversationType != string(models.ConversationTypeDM) &&
+		req.ConversationType != string(models.ConversationTypeDMGroup) &&
+		req.ConversationType != string(models.ConversationTypeChannel) {
+		http.Error(w, `{"error":"invalid_conversation_type"}`, http.StatusBadRequest)
 		return
 	}
 

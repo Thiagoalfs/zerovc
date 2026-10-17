@@ -930,7 +930,7 @@ func (h *CommandHandler) processCommand(
 		var masteryLines []string
 		for i, c := range prof.TopChampions {
 			medal := medals[i]
-			masteryLines = append(masteryLines, fmt.Sprintf("%s **%s** (M%d) — `%s pts`", medal, c.ChampionName, c.Level, c.FormattedPts))
+			masteryLines = append(masteryLines, fmt.Sprintf("%s **%s** (M%d) • `%s pts`", medal, c.ChampionName, c.Level, c.FormattedPts))
 		}
 
 		masteryContent := "Nenhum campeão registrado."

@@ -1,5 +1,5 @@
-/**
- * ZeroVC Opt-in E2EE — Megolm Group Session Management
+﻿/**
+ * ZeroVC Opt-in E2EE - Megolm Group Session Management
  *
  * Implements Milestone M3 (Requirement R3 §8, §10.1, §10.2):
  *  - Outbound GroupSession and InboundGroupSession via @kinsh/vodozemac-wasm
@@ -559,3 +559,4 @@ export class MegolmManager {
 }
 
 export const megolmManager = new MegolmManager();
+

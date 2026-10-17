@@ -1,5 +1,5 @@
-/**
- * ZeroVC Opt-in E2EE — LiveKit Call Key State Machine & Manager
+﻿/**
+ * ZeroVC Opt-in E2EE - LiveKit Call Key State Machine & Manager
  *
  * Implements Milestone M4 (Requirement R4, Spec §13):
  *  - State machine: NO_KEY -> GENERATING -> DISTRIBUTING -> ACTIVE -> ROTATING / REQUESTING
@@ -517,3 +517,4 @@ export class CallKeyManager {
 }
 
 export const callKeyManager = new CallKeyManager();
+

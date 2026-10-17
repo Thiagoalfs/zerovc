@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Download,
-  CheckCircle2,
   Monitor,
   Headphones,
   Sliders,
@@ -85,7 +84,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             onClick={() => onNavigate('/')}
             className="flex items-center gap-2.5 cursor-pointer group select-none"
           >
-            <ZeroVCLogo className="w-9 h-9 sm:w-10 sm:h-10 shadow-lg shadow-brand-500/25 group-hover:scale-105 transition-transform flex-shrink-0" />
+            <ZeroVCLogo className="w-9 h-9 sm:w-10 sm:h-10 group-hover:scale-105 transition-transform flex-shrink-0" />
             <span className="text-xl font-bold tracking-tight text-white">
               ZeroVC
             </span>
@@ -177,9 +176,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             PLATFORM CARD: ANDROID
         ------------------------------------------------------------- */}
         {selectedPlatform === 'android' && (
-          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
+          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
             <div className="flex flex-col items-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-emerald-600 flex items-center justify-center text-white shadow-xl shadow-emerald-500/30 mb-4 sm:mb-6 flex-shrink-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white mb-4 sm:mb-6 flex-shrink-0">
                 <Smartphone className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
 
@@ -193,27 +192,27 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               {/* Download APK Button */}
               <button
                 onClick={() => handleDownload('android')}
-                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-bold text-sm sm:text-lg transition-all cursor-pointer group flex-shrink-0 ${
+                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-bold text-sm sm:text-lg transition-colors cursor-pointer group flex-shrink-0 ${
                   downloadStarted
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white hover:-translate-y-1'
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-brand-600 hover:bg-brand-500 text-white'
                 }`}
               >
                 {downloadStarted ? (
                   <>
-                    <Check className="w-5 h-5 sm:w-6 sm:h-6 animate-bounce flex-shrink-0" />
+                    <Check className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
                     <span>Download Iniciado!</span>
                   </>
                 ) : (
                   <>
-                    <Download className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-y-0.5 transition-transform flex-shrink-0" />
+                    <Download className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
                     <span>Baixar ZeroVC APK (.apk)</span>
                   </>
                 )}
               </button>
 
               {downloadStarted && (
-                <p className="text-xs text-emerald-400 mt-4 animate-in fade-in">
+                <p className="text-xs text-brand-400 mt-4 animate-in fade-in">
                   O arquivo <code className="font-mono font-semibold">ZeroVC.apk</code> está sendo baixado. Se o download
                   não começar,{' '}
                   <a href="/downloads/ZeroVC.apk" className="underline font-semibold hover:text-white">
@@ -222,37 +221,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                   .
                 </p>
               )}
-
-              <div className="w-full h-px bg-white/10 my-8" />
-
-              {/* Android Features */}
-              <div className="w-full text-left space-y-3.5">
-                <div className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-2">
-                  Destaques da Versão Android:
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-300">
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span>Áudio WebRTC de alta fidelidade em segundo plano</span>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span>Gestos de swipe para navegação fluida em canais</span>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span>Suporte a câmera frontal/traseira em chamadas</span>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span>Leve, rápido e sem anúncios</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -261,9 +229,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             PLATFORM CARD: WINDOWS
         ------------------------------------------------------------- */}
         {selectedPlatform === 'windows' && (
-          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
+          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
             <div className="flex flex-col items-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white shadow-xl shadow-brand-500/30 mb-4 sm:mb-6 flex-shrink-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white mb-4 sm:mb-6 flex-shrink-0">
                 <Laptop className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
 
@@ -277,27 +245,27 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               {/* Main Download Button */}
               <button
                 onClick={() => handleDownload('windows')}
-                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-bold text-sm sm:text-lg transition-all cursor-pointer group flex-shrink-0 ${
+                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-bold text-sm sm:text-lg transition-colors cursor-pointer group flex-shrink-0 ${
                   downloadStarted
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-brand-600 hover:bg-brand-500 text-white hover:-translate-y-1'
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-brand-600 hover:bg-brand-500 text-white'
                 }`}
               >
                 {downloadStarted ? (
                   <>
-                    <Check className="w-5 h-5 sm:w-6 sm:h-6 animate-bounce flex-shrink-0" />
+                    <Check className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
                     <span>Download Iniciado!</span>
                   </>
                 ) : (
                   <>
-                    <Download className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-y-0.5 transition-transform flex-shrink-0" />
+                    <Download className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
                     <span>Baixar ZeroVC Setup (.exe)</span>
                   </>
                 )}
               </button>
 
               {downloadStarted && (
-                <p className="text-xs text-emerald-400 mt-4 animate-in fade-in">
+                <p className="text-xs text-brand-400 mt-4 animate-in fade-in">
                   O arquivo <code className="font-mono font-semibold">ZeroVC-Setup.exe</code> está sendo baixado. Se o download
                   não começar,{' '}
                   <a href="/downloads/ZeroVC-Setup.exe" className="underline font-semibold hover:text-white">
@@ -306,37 +274,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                   .
                 </p>
               )}
-
-              <div className="w-full h-px bg-white/10 my-8" />
-
-              {/* Desktop Features */}
-              <div className="w-full text-left space-y-3.5">
-                <div className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-2">
-                  Recursos Exclusivos da Versão Desktop:
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-300">
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span>Push-to-Talk Global (funciona dentro de qualquer jogo)</span>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span>Transmissão de tela 60 FPS com áudio do sistema</span>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span>Aceleração por hardware GPU e menor uso de CPU</span>
-                  </div>
-
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span>Atalhos globais para Mutar e Ensurdecer</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -345,9 +282,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             PLATFORM CARD: iOS
         ------------------------------------------------------------- */}
         {selectedPlatform === 'ios' && (
-          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 shadow-2xl relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
+          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
             <div className="flex flex-col items-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gray-800 flex items-center justify-center text-white shadow-xl shadow-black/50 mb-4 sm:mb-6 flex-shrink-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white mb-4 sm:mb-6 flex-shrink-0">
                 <Apple className="w-8 h-8 sm:w-10 sm:h-10" />
               </div>
 
@@ -361,7 +298,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               {/* iOS Direct Action */}
               <button
                 onClick={() => onNavigate(user ? '/@me' : '/signin')}
-                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm sm:text-lg hover:-translate-y-1 transition-all cursor-pointer flex-shrink-0"
+                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm sm:text-lg transition-colors cursor-pointer flex-shrink-0"
               >
                 <Globe className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
                 <span>Abrir App no Safari</span>
@@ -437,7 +374,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
       <footer className="border-t border-white/5 py-8 px-6 bg-[#090d12] text-xs text-gray-500 text-center">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <ZeroVCLogo className="w-6 h-6 shadow-md shadow-brand-500/25 flex-shrink-0" />
+            <ZeroVCLogo className="w-6 h-6 flex-shrink-0" />
             <span className="font-bold text-white">ZeroVC</span>
             <span>•</span>
             <span>Disponível para Windows, Android e Web</span>

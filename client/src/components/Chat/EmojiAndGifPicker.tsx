@@ -4,7 +4,6 @@ import {
   Film,
   Search,
   Star,
-  Sparkles,
   TrendingUp,
   X,
   Check,
@@ -15,7 +14,7 @@ import {
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useGuildStore } from '../../stores/guildStore';
-import { formatAssetUrl } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { EMOJI_DATABASE } from '../../utils/emojis';
 
 interface EmojiAndGifPickerProps {
@@ -278,9 +277,11 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
   const [gifSearch, setGifSearch] = useState('');
   const [klipyGifs, setKlipyGifs] = useState<Array<{ url: string; preview: string; title: string }>>([]);
   const [isLoadingGifs, setIsLoadingGifs] = useState(false);
+  const [hasLoadedKlipyOnce, setHasLoadedKlipyOnce] = useState(false);
 
   const emojiInputRef = useRef<HTMLInputElement>(null);
   const gifInputRef = useRef<HTMLInputElement>(null);
+  const pickerContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -310,6 +311,23 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
     }
   }, [isOpen]);
 
+  // Auto-clamp pickerWidth so it never exceeds the chatview container
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const clampWidthToChatView = () => {
+      const parentContainer = pickerContainerRef.current?.parentElement;
+      if (parentContainer) {
+        const maxAllowed = Math.max(280, parentContainer.clientWidth - 32);
+        setPickerWidth((prev) => (prev > maxAllowed ? maxAllowed : prev));
+      }
+    };
+
+    clampWidthToChatView();
+    window.addEventListener('resize', clampWidthToChatView);
+    return () => window.removeEventListener('resize', clampWidthToChatView);
+  }, [isOpen]);
+
   // Horizontal Resize State (Desktop only)
   const [pickerWidth, setPickerWidth] = useState<number>(() => {
     try {
@@ -335,10 +353,16 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
     const startX = e.clientX;
     const startWidth = pickerWidth;
 
+    // Get parent chatview container width to strictly clamp max width
+    const parentContainer = pickerContainerRef.current?.parentElement;
+    const parentWidth = parentContainer ? parentContainer.clientWidth : window.innerWidth;
+    const effectiveMaxWidth = Math.min(MAX_PICKER_WIDTH, Math.max(MIN_PICKER_WIDTH, parentWidth - 32));
+    const effectiveMinWidth = Math.min(MIN_PICKER_WIDTH, effectiveMaxWidth);
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
       // Anchored to the right: dragging left (lower X) increases width
       const deltaX = startX - moveEvent.clientX;
-      const newWidth = Math.min(MAX_PICKER_WIDTH, Math.max(MIN_PICKER_WIDTH, startWidth + deltaX));
+      const newWidth = Math.min(effectiveMaxWidth, Math.max(effectiveMinWidth, startWidth + deltaX));
       setPickerWidth(newWidth);
       try {
         localStorage.setItem('emoji_picker_width', newWidth.toString());
@@ -367,43 +391,58 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
     }
   }, [isOpen, hasLoaded, fetchFavorites]);
 
-  // Klipy API fetch
+  // Klipy API fetch (Go Backend Proxy with direct Klipy fallback)
   useEffect(() => {
     if (activeTab !== 'gif') return;
     if (selectedCategory === 'Favoritos') return;
     if (!selectedCategory && !gifSearch.trim()) {
       setKlipyGifs([]);
-      return;
-    }
-
-    const apiKey = (import.meta as any).env?.VITE_KLIPY_API_KEY || localStorage.getItem('klipy_api_key') || '';
-    if (!apiKey) {
-      // Use curated library if no Klipy key set
+      setHasLoadedKlipyOnce(false);
       return;
     }
 
     const query = gifSearch.trim() || (selectedCategory && selectedCategory !== 'Em Alta' ? selectedCategory : '');
-    const endpoint = query
-      ? `https://api.klipy.com/v1/gifs/search?api_key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}&limit=24`
-      : `https://api.klipy.com/v1/gifs/trending?api_key=${encodeURIComponent(apiKey)}&limit=24`;
 
     const timer = setTimeout(async () => {
       setIsLoadingGifs(true);
       try {
-        const res = await fetch(endpoint);
-        if (res.ok) {
-          const json = await res.json();
-          const items = (json.data || json.results || []).map((item: any) => ({
-            url: item.images?.original?.url || item.media_formats?.gif?.url || item.media_formats?.webp?.url || item.url,
-            preview: item.images?.fixed_height?.url || item.media_formats?.tinygif?.url || item.media_formats?.tinywebp?.url || item.preview_url || item.url,
-            title: item.title || 'GIF',
-          }));
-          if (items.length > 0) {
-            setKlipyGifs(items);
+        let items: Array<{ url: string; preview: string; title: string }> = [];
+
+        // 1. Try Go backend proxy (/api/gifs/...)
+        try {
+          if (query) {
+            items = await api.gifs.search(query, 24);
+          } else {
+            items = await api.gifs.trending(24);
+          }
+        } catch {
+          items = [];
+        }
+
+        // 2. Direct Klipy API fallback (using correct endpoint and mapping)
+        if (!items || items.length === 0) {
+          const clientKey = (import.meta as any).env?.VITE_KLIPY_API_KEY || localStorage.getItem('klipy_api_key') || '';
+          if (clientKey) {
+            const endpoint = query
+              ? `https://api.klipy.com/api/v1/${encodeURIComponent(clientKey)}/gifs/search?q=${encodeURIComponent(query)}&per_page=24`
+              : `https://api.klipy.com/api/v1/${encodeURIComponent(clientKey)}/gifs/trending?per_page=24`;
+            const res = await fetch(endpoint);
+            if (res.ok) {
+              const json = await res.json();
+              items = (json.data || []).map((item: any) => ({
+                url: item.file?.hd?.gif?.url || item.file?.md?.gif?.url || item.file?.sm?.gif?.url || item.url || '',
+                preview: item.file?.sm?.webp?.url || item.file?.sm?.gif?.url || item.file?.xs?.webp?.url || item.file?.md?.webp?.url || item.file?.xs?.gif?.url || item.preview || '',
+                title: item.title || item.slug || 'GIF',
+              })).filter((it: any) => Boolean(it.url));
+            }
           }
         }
+
+        setKlipyGifs(items || []);
+        setHasLoadedKlipyOnce(true);
       } catch (err) {
-        console.error('Failed to fetch from Klipy API:', err);
+        console.error('Failed to fetch from GIF API:', err);
+        setHasLoadedKlipyOnce(true);
       } finally {
         setIsLoadingGifs(false);
       }
@@ -481,6 +520,13 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
       return klipyGifs;
     }
 
+    // If search or category was actively queried and returned 0 results
+    if (gifSearch.trim() || selectedCategory) {
+      if (!isLoadingGifs && hasLoadedKlipyOnce) {
+        return [];
+      }
+    }
+
     let list = CURATED_GIFS;
     if (selectedCategory && selectedCategory !== 'Em Alta') {
       list = list.filter((g) => g.category.toLowerCase() === selectedCategory.toLowerCase());
@@ -490,7 +536,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
       list = list.filter((g) => g.title.toLowerCase().includes(q) || g.category.toLowerCase().includes(q));
     }
     return list;
-  }, [selectedCategory, favoriteGifs, klipyGifs, gifSearch]);
+  }, [selectedCategory, favoriteGifs, klipyGifs, gifSearch, isLoadingGifs, hasLoadedKlipyOnce]);
 
   const categoryCols = pickerWidth >= 540 ? 'grid-cols-3' : 'grid-cols-2';
 
@@ -521,12 +567,13 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
       <div className="fixed inset-0 z-40" onClick={onClose} />
 
       <div
+        ref={pickerContainerRef}
         className={`absolute ${positionClass} z-50 bg-background-darkest rounded-3xl shadow-2xl border border-white/10 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 select-none ${
           isResizing ? 'transition-none pointer-events-auto' : 'transition-[width]'
         }`}
         style={{
-          width: typeof window !== 'undefined' && window.innerWidth < 640 ? 'calc(100vw - 2rem)' : `${pickerWidth}px`,
-          maxWidth: 'calc(100vw - 2rem)',
+          width: typeof window !== 'undefined' && window.innerWidth < 640 ? 'calc(100% - 2rem)' : `${pickerWidth}px`,
+          maxWidth: 'calc(100% - 2rem)',
           height: '420px',
         }}
       >
@@ -534,7 +581,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
         <div
           onMouseDown={handleResizeStart}
           className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-brand-500/20 active:bg-brand-500/40 z-30 transition-colors hidden sm:flex items-center justify-center group/resizer"
-          title="Arrastar para redimensionar (até o dobro do tamanho)"
+          title="Arrastar para redimensionar (limitado ao espaço do chat)"
         >
           <div className="w-1 h-8 bg-white/20 group-hover/resizer:bg-brand-400 group-hover/resizer:scale-y-125 rounded-full transition-all" />
         </div>
@@ -566,9 +613,6 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
             >
               <Film className="w-4 h-4" />
               <span>GIFs</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-500/30 text-purple-200 border border-purple-500/40">
-                Klipy
-              </span>
             </button>
           </div>
 
@@ -706,7 +750,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                   type="text"
                   value={gifSearch}
                   onChange={(e) => setGifSearch(e.target.value)}
-                  placeholder={selectedCategory === 'Favoritos' ? 'Busque nos favoritos...' : 'Pesquisar GIFs no Klipy...'}
+                  placeholder={selectedCategory === 'Favoritos' ? 'Busque nos favoritos...' : 'Pesquisar GIFs...'}
                   className="w-full bg-background-darker text-white text-xs pl-9 pr-8 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-brand-500 placeholder-gray-500"
                 />
                 {gifSearch && (
@@ -844,7 +888,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                   {isLoadingGifs ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
                       <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
-                      <span className="text-xs">Carregando GIFs do Klipy...</span>
+                      <span className="text-xs">Carregando GIFs...</span>
                     </div>
                   ) : selectedCategory === 'Favoritos' && displayedGifs.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center p-4 text-gray-400 space-y-2">
@@ -901,14 +945,6 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                 </div>
               </div>
             )}
-
-            {/* Klipy Footer Info */}
-            <div className="p-2 bg-background-darker/70 border-t border-white/5 flex items-center justify-center text-[10px] text-gray-400 px-3">
-              <span className="flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-purple-400" />
-                <span>Powered by Klipy GIF API</span>
-              </span>
-            </div>
           </div>
         )}
       </div>

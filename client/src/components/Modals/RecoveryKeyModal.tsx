@@ -81,7 +81,7 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
   const handleDownload = () => {
     if (!recoveryData) return;
     try {
-      const content = `ZeroVC — Chave de Recuperação E2EE\n==================================\n\nChave: ${recoveryData.recoveryKey}\n\nAVISO DE SEGURANÇA:\nGuarde esta chave em um local seguro (gerenciador de senhas ou impresso em papel).\nNenhum funcionário do ZeroVC tem acesso a esta chave. Se você perder esta chave e todos os seus dispositivos, seu histórico de mensagens criptografadas será perdido permanentemente.`;
+      const content = `ZeroVC - Chave de Recuperação E2EE\n==================================\n\nChave: ${recoveryData.recoveryKey}\n\nAVISO DE SEGURANÇA:\nGuarde esta chave em um local seguro (gerenciador de senhas ou impresso em papel).\nNenhum funcionário do ZeroVC tem acesso a esta chave. Se você perder esta chave e todos os seus dispositivos, seu histórico de mensagens criptografadas será perdido permanentemente.`;
       const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');

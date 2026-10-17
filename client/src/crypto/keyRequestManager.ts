@@ -1,5 +1,5 @@
-/**
- * ZeroVC Opt-in E2EE — Key Request Protocol Manager
+﻿/**
+ * ZeroVC Opt-in E2EE - Key Request Protocol Manager
  *
  * Implements Milestone M3 (Requirement R3 §7.7, §10.2):
  *  - Reactive key_request protocol when receiving undecryptable ciphertext
@@ -219,3 +219,4 @@ export class KeyRequestManager {
 }
 
 export const keyRequestManager = new KeyRequestManager();
+

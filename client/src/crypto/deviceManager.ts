@@ -1,5 +1,5 @@
-/**
- * ZeroVC Opt-in E2EE — Device Registration & Lifecycle Manager
+﻿/**
+ * ZeroVC Opt-in E2EE - Device Registration & Lifecycle Manager
  *
  * Implements Milestone M2 (Requirement R2 §10.1, §10.2):
  *  - Automatic Olm account & device registration on login
@@ -250,3 +250,4 @@ export class DeviceManager {
 }
 
 export const deviceManager = new DeviceManager();
+

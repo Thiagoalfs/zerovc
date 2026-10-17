@@ -377,7 +377,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
           <div className="space-y-6 max-w-2xl">
             <div>
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                PEDIDOS RECEBIDOS — {incoming.length}
+                PEDIDOS RECEBIDOS ({incoming.length})
               </h3>
               {incoming.length === 0 ? (
                 <div className="text-xs text-gray-500 italic py-2">Nenhum pedido de amizade pendente para aceitar.</div>
@@ -428,7 +428,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
 
             <div>
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                PEDIDOS ENVIADOS — {pending.length}
+                PEDIDOS ENVIADOS ({pending.length})
               </h3>
               {pending.length === 0 ? (
                 <div className="text-xs text-gray-500 italic py-2">Nenhum pedido de amizade enviado pendente.</div>
@@ -475,7 +475,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
           <div className="max-w-3xl space-y-2">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                {activeTab === 'online' ? `DISPONÍVEIS — ${onlineFriends.length}` : `TODOS OS AMIGOS — ${friends.length}`}
+                {activeTab === 'online' ? `DISPONÍVEIS (${onlineFriends.length})` : `TODOS OS AMIGOS (${friends.length})`}
               </h3>
               <button
                 onClick={() => setActiveTab('add')}

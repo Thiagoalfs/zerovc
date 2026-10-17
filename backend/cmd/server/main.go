@@ -43,7 +43,7 @@ func getEnv(key, fallback string) string {
 func mustGetEnv(key string) string {
 	val := os.Getenv(key)
 	if val == "" {
-		log.Fatalf("%s não definido — defina uma variável de ambiente forte antes de iniciar o servidor", key)
+		log.Fatalf("%s não definido - defina uma variável de ambiente forte antes de iniciar o servidor", key)
 	}
 	return val
 }
@@ -173,6 +173,8 @@ func main() {
 
 	rawgAPIKey := getEnv("RAWG_API_KEY", "")
 	gameHandler := handlers.NewGameHandler(rawgAPIKey)
+	klipyAPIKey := getEnv("KLIPY_API_KEY", getEnv("VITE_KLIPY_API_KEY", ""))
+	gifHandler := handlers.NewGIFHandler(klipyAPIKey)
 	e2eeHandler := handlers.NewE2EEHandler(db, hub)
 	channelHandler.SetAudienceDebouncer(e2eeHandler.Debouncer)
 	guildHandler.SetAudienceDebouncer(e2eeHandler.Debouncer)
@@ -209,7 +211,7 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	// Public Auth Endpoints — rate limit só aqui dentro
+	// Public Auth Endpoints - rate limit só aqui dentro
 	loginLimiter := ratelimit.NewLoginRateLimiter(
 		5, 5.0/60.0,   // 5 req/min per IP:username
 		10, 10.0/60.0, // 10 req/min per username globally
@@ -319,6 +321,11 @@ func main() {
 
 		// Games Database Search (RAWG)
 		r.With(searchLimiter.Middleware).Get("/api/games/search", gameHandler.SearchGames)
+
+		// GIF Database Search & Trending (Klipy API Proxy)
+		gifSearchLimiter := ratelimit.NewUserRateLimiter(45, 45.0/60.0, "Você está buscando GIFs muito rápido. Aguarde um instante.")
+		r.With(gifSearchLimiter.Middleware).Get("/api/gifs/trending", gifHandler.Trending)
+		r.With(gifSearchLimiter.Middleware).Get("/api/gifs/search", gifHandler.Search)
 
 		// Guilds (Protected)
 		r.Get("/api/guilds", guildHandler.List)
@@ -528,7 +535,7 @@ func main() {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		// Avatares e banners (prefixo avatar_/banner_) precisam continuar renderizando inline em <img>.
 		// Só anexos de chat (prefixo att_) podem conter tipos arbitrários e vão sempre como download,
-		// nunca executados/renderizados como HTML pelo navegador — mitigação para F4.
+		// nunca executados/renderizados como HTML pelo navegador - mitigação para F4.
 		if strings.HasPrefix(strings.TrimPrefix(r.URL.Path, "/assets/user/"), "att_") {
 			w.Header().Set("Content-Disposition", "attachment")
 			w.Header().Set("Content-Security-Policy", "sandbox")
@@ -538,7 +545,7 @@ func main() {
 	r.Get("/assets/guild/*", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		// guild/* só recebe icon_/banner_ (imageOnly=true) hoje — sem rota de anexo genérico aqui.
+		// guild/* só recebe icon_/banner_ (imageOnly=true) hoje - sem rota de anexo genérico aqui.
 		// Mesmo assim aplicamos nosniff acima como defesa em profundidade.
 		http.StripPrefix("/assets/guild/", http.FileServer(http.Dir(guildAssetsDir))).ServeHTTP(w, r)
 	})
@@ -617,16 +624,16 @@ func main() {
 					}
 
 					// Replace OpenGraph & Twitter tags
-					htmlStr = strings.ReplaceAll(htmlStr, "<title>ZeroVC — Voz, Vídeo e Mensagens em Tempo Real</title>", fmt.Sprintf("<title>%s — Convite ZeroVC</title>", html.EscapeString(guildName)))
-					htmlStr = strings.ReplaceAll(htmlStr, `content="ZeroVC — Voz, Vídeo e Mensagens em Tempo Real"`, fmt.Sprintf(`content="%s"`, html.EscapeString(inviteTitle)))
+					htmlStr = strings.ReplaceAll(htmlStr, "<title>ZeroVC | Voz, Vídeo e Mensagens em Tempo Real</title>", fmt.Sprintf("<title>%s | Convite ZeroVC</title>", html.EscapeString(guildName)))
+					htmlStr = strings.ReplaceAll(htmlStr, `content="ZeroVC | Voz, Vídeo e Mensagens em Tempo Real"`, fmt.Sprintf(`content="%s"`, html.EscapeString(inviteTitle)))
 					htmlStr = strings.ReplaceAll(htmlStr, `content="Comunicação por voz, vídeo e texto ultrarrápida, moderna e sem limites para suas comunidades e amigos."`, fmt.Sprintf(`content="%s"`, html.EscapeString(inviteDesc)))
 					htmlStr = strings.ReplaceAll(htmlStr, `content="https://zerovc.safiroko.xyz/icon.png"`, fmt.Sprintf(`content="%s"`, html.EscapeString(inviteImg)))
 				}
 			} else if trimmedPath == "download" {
-				downloadTitle := "Baixar o ZeroVC para Windows — Cliente Desktop Oficial"
+				downloadTitle := "Baixar o ZeroVC para Windows | Cliente Desktop Oficial"
 				downloadDesc := "Baixe o aplicativo desktop oficial do ZeroVC com suporte a Push-to-Talk global, overlay de tela e máxima performance."
-				htmlStr = strings.ReplaceAll(htmlStr, "<title>ZeroVC — Voz, Vídeo e Mensagens em Tempo Real</title>", "<title>Baixar ZeroVC para Windows — Cliente Desktop</title>")
-				htmlStr = strings.ReplaceAll(htmlStr, `content="ZeroVC — Voz, Vídeo e Mensagens em Tempo Real"`, fmt.Sprintf(`content="%s"`, downloadTitle))
+				htmlStr = strings.ReplaceAll(htmlStr, "<title>ZeroVC | Voz, Vídeo e Mensagens em Tempo Real</title>", "<title>Baixar ZeroVC para Windows | Cliente Desktop</title>")
+				htmlStr = strings.ReplaceAll(htmlStr, `content="ZeroVC | Voz, Vídeo e Mensagens em Tempo Real"`, fmt.Sprintf(`content="%s"`, downloadTitle))
 				htmlStr = strings.ReplaceAll(htmlStr, `content="Comunicação por voz, vídeo e texto ultrarrápida, moderna e sem limites para suas comunidades e amigos."`, fmt.Sprintf(`content="%s"`, downloadDesc))
 			}
 

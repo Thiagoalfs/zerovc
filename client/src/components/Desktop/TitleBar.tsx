@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import {
   Minus,
   Square,
@@ -72,7 +72,7 @@ export const TitleBar: React.FC = () => {
     const interval = setInterval(checkServerVersion, 30000);
 
     // Update binário disponível (verificação periódica): mostra o ícone de download.
-    // NÃO baixa sozinho — o usuário clica para reiniciar e atualizar pelo splash.
+    // NÃO baixa sozinho - o usuário clica para reiniciar e atualizar pelo splash.
     const unsubAvailable = window.electronAPI?.onUpdateAvailable?.((info: UpdateInfo) => {
       setBinaryUpdateAvailable(true);
       setPendingVersion(info?.version ?? null);
