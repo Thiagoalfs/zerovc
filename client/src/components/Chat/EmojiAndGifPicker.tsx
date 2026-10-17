@@ -429,7 +429,10 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
             const res = await fetch(endpoint);
             if (res.ok) {
               const json = await res.json();
-              items = (json.data || []).map((item: any) => ({
+              const rawItems = Array.isArray(json.data)
+                ? json.data
+                : (Array.isArray(json.data?.data) ? json.data.data : []);
+              items = rawItems.map((item: any) => ({
                 url: item.file?.hd?.gif?.url || item.file?.md?.gif?.url || item.file?.sm?.gif?.url || item.url || '',
                 preview: item.file?.sm?.webp?.url || item.file?.sm?.gif?.url || item.file?.xs?.webp?.url || item.file?.md?.webp?.url || item.file?.xs?.gif?.url || item.preview || '',
                 title: item.title || item.slug || 'GIF',
