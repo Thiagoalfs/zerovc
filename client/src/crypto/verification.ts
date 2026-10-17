@@ -1,4 +1,4 @@
-/**
+﻿/**
  * E2EE Safety Number Verification & Offline SVG QR Code Generator.
  * Conforms to ZeroVC Milestone M6 cryptographic specifications.
  * Zero external network calls (e.g., api.qrserver.com) to guarantee zero leak of identity keys.
@@ -111,7 +111,7 @@ function rsCompute(data: Uint8Array, ecLength: number): Uint8Array {
 
 /**
  * Generates an offline SVG string representing a QR Code for the given payload string.
- * Completely client-side and offline — zero requests to external servers.
+ * Completely client-side and offline - zero requests to external servers.
  */
 export function generateOfflineSVGQR(payload: string, size = 200): string {
   // Select QR Version based on payload length
@@ -396,3 +396,4 @@ export async function getVerifiedDevices(): Promise<string[]> {
 
   return verified;
 }
+

@@ -963,7 +963,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
           >
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/5">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                Membros — {activeGroup.members?.length || 0}
+                Membros ({activeGroup.members?.length || 0})
               </span>
               {(activeGroup.members?.length || 0) < 15 && (
                 <button

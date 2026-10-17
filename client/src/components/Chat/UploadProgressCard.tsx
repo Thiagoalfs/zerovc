@@ -59,7 +59,7 @@ export const UploadProgressCard: React.FC<UploadProgressCardProps> = ({
           <span className="truncate text-gray-100 font-semibold" title={fileName}>
             {fileName}
           </span>
-          <span className="text-gray-400 font-normal flex-shrink-0">—</span>
+          <span className="text-gray-400 font-normal flex-shrink-0">•</span>
           <span className="text-gray-400 text-xs sm:text-sm font-normal flex-shrink-0">
             {formatFileSize(fileSize)}
           </span>

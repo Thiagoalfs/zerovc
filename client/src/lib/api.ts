@@ -943,6 +943,16 @@ export const api = {
       return request<GameSearchResult[]>(`/games/search?${q.toString()}`);
     },
   },
+  gifs: {
+    trending: (perPage = 24, page = 1) => {
+      const q = new URLSearchParams({ per_page: String(perPage), page: String(page) });
+      return request<Array<{ id: string; title: string; url: string; preview: string }>>(`/gifs/trending?${q.toString()}`);
+    },
+    search: (query: string, perPage = 24, page = 1) => {
+      const q = new URLSearchParams({ q: query, per_page: String(perPage), page: String(page) });
+      return request<Array<{ id: string; title: string; url: string; preview: string }>>(`/gifs/search?${q.toString()}`);
+    },
+  },
   commands: {
     executeChannelCommand: (channelId: string, data: { command: string; subcommand?: string; args?: Record<string, any>; attachments?: any[] }) =>
       request<Message>(`/channels/${channelId}/bot/command`, {

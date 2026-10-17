@@ -1,5 +1,5 @@
-/**
- * ZeroVC Opt-in E2EE — Canonical Envelopes (RFC 8785 Compatible)
+﻿/**
+ * ZeroVC Opt-in E2EE - Canonical Envelopes (RFC 8785 Compatible)
  *
  * Implements Milestone M3 (Requirement R3 §8, §10.1):
  *  - Canonical JSON serialization of message payloads
@@ -205,3 +205,4 @@ export function parseEnvelope(serialized: string): EnvelopeV1 {
 
   return envelope;
 }
+

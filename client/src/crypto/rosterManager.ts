@@ -1,5 +1,5 @@
-/**
- * ZeroVC Opt-in E2EE — Chained Signed Roster Manager
+﻿/**
+ * ZeroVC Opt-in E2EE - Chained Signed Roster Manager
  *
  * Implements Milestone M2 (Requirement R2 §6, §10.1):
  *  - Canonical JSON serialization (RFC 8785 compatible sorting)
@@ -520,3 +520,4 @@ export class RosterManager {
 }
 
 export const rosterManager = new RosterManager();
+

@@ -447,7 +447,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                       }
                     }}
                     className="text-[11px] text-gray-400 hover:text-gray-200 truncate leading-tight block min-w-0 cursor-pointer"
-                    title={voiceSubtitle ? `${voiceTitle} — ${voiceSubtitle}` : voiceTitle}
+                    title={voiceSubtitle ? `${voiceTitle} / ${voiceSubtitle}` : voiceTitle}
                   >
                     {voiceTitle}
                   </span>

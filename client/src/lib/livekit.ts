@@ -1,4 +1,4 @@
-import {
+﻿import {
   Room,
   RoomEvent,
   VideoPresets,
@@ -210,11 +210,11 @@ class LiveKitManager {
   // para um dispositivo de saída SECUNDÁRIO, diferente do currentOutputDeviceId. Isso evita
   // que a captura de áudio do sistema (usada ao compartilhar tela com "áudio do sistema")
   // re-capture as vozes da própria call e as retransmita como eco para quem está assistindo
-  // — sem silenciar nem abaixar nada para quem está compartilhando, que continua ouvindo
+  // - sem silenciar nem abaixar nada para quem está compartilhando, que continua ouvindo
   // todo mundo normalmente, só que por outra saída (ex: fone em vez de alto-falante).
   // Exige que existam 2+ dispositivos de saída de áudio no sistema; se não existir um
   // segundo dispositivo, não há como separar fisicamente "o que a pessoa ouve" de "o que é
-  // capturado" — nesse caso o roteamento não é aplicado (ver pickSecondaryOutputDeviceId).
+  // capturado" - nesse caso o roteamento não é aplicado (ver pickSecondaryOutputDeviceId).
   private isRoutingCallAudioForCapture: boolean = false;
   private masterOutputVolume: number = (() => {
     try {
@@ -580,7 +580,7 @@ class LiveKitManager {
 
   // Escolhe um dispositivo de saída de áudio DIFERENTE do currentOutputDeviceId (o
   // dispositivo "principal", que é o que a captura de áudio do sistema vai ler ao
-  // compartilhar tela). Retorna null se só existir um dispositivo de saída no sistema —
+  // compartilhar tela). Retorna null se só existir um dispositivo de saída no sistema -
   // nesse caso não há como separar fisicamente "o que a pessoa ouve" do que é capturado.
   private async pickSecondaryOutputDeviceId(): Promise<string | null> {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return null;
@@ -606,7 +606,7 @@ class LiveKitManager {
       // ('default'). É o mecanismo padrão para separar "áudio de
       // chamada" de "áudio geral", e acompanha automaticamente se a pessoa trocar o
       // dispositivo de comunicação nas configurações do Windows. groupId identifica o
-      // hardware físico por trás do deviceId "mágico" — comparamos por ele, não pelo
+      // hardware físico por trás do deviceId "mágico" - comparamos por ele, não pelo
       // deviceId em si, já que 'default'/'communications' são só ponteiros para o hardware
       // real e não têm significado físico próprio.
       const defaultEntry = outputs.find((d) => d.deviceId === 'default');
@@ -638,7 +638,7 @@ class LiveKitManager {
 
     if (!secondaryId) {
       console.warn(
-        '[LiveKit] Only one audio output device detected — cannot route call audio away from ' +
+        '[LiveKit] Only one audio output device detected - cannot route call audio away from ' +
         'what system-audio screen capture reads. This is a hardware limitation, not fixable ' +
         'in software: connect a second output device (e.g. headphones) to avoid hearing an ' +
         'echo of the call through this screen share.'
@@ -725,7 +725,7 @@ class LiveKitManager {
       // resolver automaticamente a tela principal e usar a MESMA ponte nativa WASAPI do
       // compartilhamento por canal. Isso evita cair no branch getDisplayMedia, cujo handler
       // (setDisplayMediaRequestHandler no main.ts) devolvia audio:'loopback' = mix do PC
-      // inteiro SEM exclusão de árvore — a causa do eco das vozes da call nas DMs.
+      // inteiro SEM exclusão de árvore - a causa do eco das vozes da call nas DMs.
       let resolvedSourceId = sourceId;
       if (!resolvedSourceId && (window as any).electronAPI?.getScreenSources) {
         try {
@@ -920,7 +920,7 @@ class LiveKitManager {
         }
 
         // O picker nativo do navegador decide se o áudio do sistema foi realmente incluído
-        // (checkbox "compartilhar áudio"), então só sabemos depois de tentar publicar —
+        // (checkbox "compartilhar áudio"), então só sabemos depois de tentar publicar -
         // se existir uma publicação de ScreenShareAudio, o ducking precisa ser ativado.
         const nativeAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
         if (nativeAudioPub) {

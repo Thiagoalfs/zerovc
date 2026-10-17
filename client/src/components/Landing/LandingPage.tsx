@@ -2,16 +2,9 @@ import React from 'react';
 import {
   Download,
   Globe,
-  Radio,
-  Monitor,
-  ShieldCheck,
-  Users,
-  MessageSquare,
   ArrowRight,
   Headphones,
-  Sliders,
   Smile,
-  ChevronRight,
   ChevronDown,
   Hash,
   Volume2,
@@ -50,7 +43,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             onClick={() => onNavigate('/')}
             className="flex items-center gap-2.5 cursor-pointer group select-none"
           >
-            <ZeroVCLogo className="w-10 h-10 shadow-lg shadow-brand-500/25 group-hover:scale-105 transition-transform" />
+            <ZeroVCLogo className="w-10 h-10 group-hover:scale-105 transition-transform" />
             <span className="text-xl font-bold tracking-tight text-white">
               ZeroVC
             </span>
@@ -119,9 +112,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto justify-center mb-16">
           <button
             onClick={() => onNavigate('/download')}
-            className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-base hover:-translate-y-1 transition-all cursor-pointer group"
+            className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-base transition-colors cursor-pointer group"
           >
-            <Download className="w-5 h-5 group-hover:translate-y-0.5 transition-transform" />
+            <Download className="w-5 h-5" />
             <span>
               {os === 'android' && 'Baixar para Android (.apk)'}
               {os === 'windows' && 'Baixar para Windows (Setup)'}
@@ -132,7 +125,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
 
           <button
             onClick={() => onNavigate(user ? '/@me' : '/signin')}
-            className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-100 font-semibold text-base border border-white/10 hover:border-white/20 hover:-translate-y-1 transition-all cursor-pointer"
+            className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-100 font-semibold text-base border border-white/10 hover:border-white/20 transition-colors cursor-pointer"
           >
             <Globe className="w-5 h-5 text-gray-400" />
             <span>Abrir no Navegador</span>
@@ -142,15 +135,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
         {/* -------------------------------------------------------------
             3. PRODUCT SHOWCASE MOCKUP
         ------------------------------------------------------------- */}
-        <div className="w-full max-w-5xl rounded-3xl p-2 bg-white/5 border border-white/10 shadow-2xl shadow-black/80">
-          <div className="w-full bg-[#1e1f22] rounded-2xl overflow-hidden border border-white/5 flex flex-col aspect-[16/10] sm:aspect-[16/9] relative text-left shadow-inner">
+        <div className="w-full max-w-5xl rounded-3xl p-2 bg-white/5 border border-white/10">
+          <div className="w-full bg-[#1e1f22] rounded-2xl overflow-hidden border border-white/5 flex flex-col aspect-[16/10] sm:aspect-[16/9] relative text-left">
             {/* Mock Titlebar */}
             <div className="h-9 bg-[#1e1f22] border-b border-black/30 px-4 flex items-center justify-between select-none">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
                 <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
                 <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-                <span className="text-xs font-semibold text-gray-400 ml-2">ZeroVC — Comunidade</span>
+                <span className="text-xs font-semibold text-gray-400 ml-2">ZeroVC • Comunidade</span>
               </div>
             </div>
 
@@ -183,7 +176,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                   <div className="w-52 bg-[#2b2d31] flex flex-col justify-between overflow-hidden">
                     <div>
                       {/* Server Header */}
-                      <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between font-semibold text-gray-100 shadow-sm text-sm">
+                      <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between font-semibold text-gray-100 text-sm">
                         <span className="truncate">ZeroVC HQ</span>
                         <ChevronDown className="w-4 h-4 text-gray-400" />
                       </div>
@@ -195,7 +188,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                             Canais de Texto
                           </div>
                           <div className="space-y-0.5 text-xs font-medium">
-                            <div className="px-2.5 py-1.5 rounded-lg bg-white/10 text-white flex items-center gap-2 shadow-sm">
+                            <div className="px-2.5 py-1.5 rounded-lg bg-white/10 text-white flex items-center gap-2">
                               <Hash className="w-4 h-4 text-gray-300" />
                               <span className="font-semibold">geral</span>
                             </div>
@@ -241,7 +234,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
 
                 {/* Unified UserBar Footer */}
                 <div className="p-2 bg-[#1e1f22] border-t border-black/20">
-                  <div className="w-full bg-[#111214] border border-white/5 rounded-2xl shadow-inner px-2.5 py-1.5 flex items-center justify-between text-xs">
+                  <div className="w-full bg-[#111214] border border-white/5 rounded-2xl px-2.5 py-1.5 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <div className="relative w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
                         <span>U</span>
@@ -271,7 +264,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
               {/* Main Chat Area Mockup */}
               <div className="flex-1 bg-[#313338] flex flex-col justify-between overflow-hidden">
                 {/* Chat Header */}
-                <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between shadow-sm flex-shrink-0">
+                <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between flex-shrink-0">
                   <div className="flex items-center gap-2 truncate">
                     <Hash className="w-5 h-5 text-gray-400" />
                     <span className="font-semibold text-gray-100 text-sm">geral</span>
@@ -284,7 +277,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                 <div className="flex-1 p-4 space-y-4 overflow-hidden">
                   {/* Message 1 */}
                   <div className="flex gap-3 items-start">
-                    <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0 shadow-sm">
+                    <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0">
                       A
                     </div>
                     <div className="flex-1 min-w-0">
@@ -300,7 +293,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
 
                   {/* Message 2 */}
                   <div className="flex gap-3 items-start">
-                    <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0 shadow-sm">
+                    <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0">
                       M
                     </div>
                     <div className="flex-1 min-w-0">
@@ -317,7 +310,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
 
                 {/* Chat Input Bar */}
                 <div className="p-4 pt-0">
-                  <div className="h-11 bg-[#383a40] rounded-xl px-3 flex items-center justify-between text-xs text-gray-400 select-none shadow-sm">
+                  <div className="h-11 bg-[#383a40] rounded-xl px-3 flex items-center justify-between text-xs text-gray-400 select-none">
                     <div className="flex items-center gap-2.5 flex-1 min-w-0">
                       <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-gray-300 hover:text-white cursor-pointer">
                         <Plus className="w-3.5 h-3.5" />
@@ -340,81 +333,61 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
       </section>
 
       {/* -------------------------------------------------------------
-          4. FEATURES SECTION
+          4. FEATURES SECTION (Bento Grid)
       ------------------------------------------------------------- */}
-      <section id="features" className="py-20 px-6 max-w-7xl mx-auto border-t border-white/5">
+      <section id="features" className="py-24 px-6 max-w-7xl mx-auto border-t border-white/5">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <p className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-            Tudo o que você precisa para se comunicar sem interrupções.
+          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
+            Construído para latência zero e foco total.
+          </h2>
+          <p className="text-base sm:text-lg text-gray-400 leading-relaxed max-w-2xl mx-auto">
+            Uma stack moderna em Go, LiveKit WebRTC nativo e criptografia de chave ponta a ponta. Nada de lentidão, nada de rastreamento.
           </p>
         </div>
 
+        {/* Features Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Feature 1 */}
-          <div className="p-7 rounded-3xl bg-background-dark/80 border border-white/5 hover:border-brand-500/30 transition-all duration-300 group hover:-translate-y-1 shadow-lg">
-            <div className="w-12 h-12 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 mb-5 group-hover:scale-110 transition-transform">
-              <Headphones className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Voz em tempo real</h3>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              WebRTC via LiveKit, com cancelamento de ruído e latência baixa pra ninguém falar por cima do outro.
+
+          {/* CARD 1 (Destaque Voz LiveKit WebRTC) */}
+          <div className="lg:col-span-2 rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 sm:p-8 flex flex-col justify-center transition-all duration-200">
+            <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">Voz cristalina com resposta instantânea</h3>
+            <p className="text-sm sm:text-base text-gray-300 leading-relaxed">
+              Diga adeus a atrasos em chamadas. Nosso pipeline WebRTC via LiveKit ajusta a taxa de bits dinamicamente em 48 kHz com cancelamento inteligente de ruído para você nunca mais falar por cima do seu amigo.
             </p>
           </div>
 
-          {/* Feature 2 */}
-          <div className="p-7 rounded-3xl bg-background-dark/80 border border-white/5 hover:border-brand-500/30 transition-all duration-300 group hover:-translate-y-1 shadow-lg">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-5 group-hover:scale-110 transition-transform">
-              <Monitor className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Compartilhamento de tela a 60 FPS</h3>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              Transmita jogo ou janela com o áudio do sistema (loopback nativo) e codificação por GPU no app desktop.
+          {/* CARD 2 (Screen Share 60 FPS com Áudio) */}
+          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-center transition-all duration-200">
+            <h3 className="text-xl font-bold text-white mb-2">Stream a 60 FPS com som do sistema</h3>
+            <p className="text-sm text-gray-300 leading-relaxed">
+              Transmita sua gameplay ou qualquer janela com som estéreo perfeito via captura WASAPI nativa no app desktop.
             </p>
           </div>
 
-          {/* Feature 3 */}
-          <div className="p-7 rounded-3xl bg-background-dark/80 border border-white/5 hover:border-brand-500/30 transition-all duration-300 group hover:-translate-y-1 shadow-lg">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-5 group-hover:scale-110 transition-transform">
-              <MessageSquare className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Chat com Markdown</h3>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              Negrito, spoiler, bloco de código, busca de GIF e prévia de imagem, vídeo e áudio na própria conversa.
+          {/* CARD 3 (Criptografia E2EE & Privacidade) */}
+          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-center transition-all duration-200">
+            <h3 className="text-xl font-bold text-white mb-2">Criptografia Ponta a Ponta</h3>
+            <p className="text-sm text-gray-300 leading-relaxed">
+              Mensagens cifradas com o protocolo Vodozemac Megolm. As chaves residem apenas nos seus dispositivos, com zero texto legível no servidor.
             </p>
           </div>
 
-          {/* Feature 4 */}
-          <div className="p-7 rounded-3xl bg-background-dark/80 border border-white/5 hover:border-brand-500/30 transition-all duration-300 group hover:-translate-y-1 shadow-lg">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-5 group-hover:scale-110 transition-transform">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Login com 2FA</h3>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              Google Authenticator, Authy com códigos de backup, pra você não perder a conta junto com o celular.
+          {/* CARD 4 (Chat Rico & Markdown) */}
+          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-center transition-all duration-200">
+            <h3 className="text-xl font-bold text-white mb-2">Markdown, código e reações</h3>
+            <p className="text-sm text-gray-300 leading-relaxed">
+              Blocos de código com destaque, spoilers, busca de GIFs integrados e prévias instantâneas de imagens e vídeos no próprio fluxo.
             </p>
           </div>
 
-          {/* Feature 5 */}
-          <div className="p-7 rounded-3xl bg-background-dark/80 border border-white/5 hover:border-brand-500/30 transition-all duration-300 group hover:-translate-y-1 shadow-lg">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-5 group-hover:scale-110 transition-transform">
-              <Users className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Servidores, canais e DMs</h3>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              Categorias, canais de texto e voz, cargos personalizados, mensagens diretas e grupos de amigos.
+          {/* CARD 5 (Push-to-Talk & Atalhos Globais) */}
+          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-center transition-all duration-200">
+            <h3 className="text-xl font-bold text-white mb-2">Push-to-talk global</h3>
+            <p className="text-sm text-gray-300 leading-relaxed">
+              Mute, ensurdeça ou fale usando botões laterais do mouse ou atalhos de teclado sem sair da partida e com o app minimizado.
             </p>
           </div>
 
-          {/* Feature 6 */}
-          <div className="p-7 rounded-3xl bg-background-dark/80 border border-white/5 hover:border-brand-500/30 transition-all duration-300 group hover:-translate-y-1 shadow-lg">
-            <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 mb-5 group-hover:scale-110 transition-transform">
-              <Sliders className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Push-to-talk global</h3>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              Atalhos pra mutar, ensurdecer e alternar o microfone com o app minimizado, no meio do jogo.
-            </p>
-          </div>
         </div>
       </section>
 
@@ -422,7 +395,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
           5. CTA DOWNLOAD BANNER
       ------------------------------------------------------------- */}
       <section className="py-16 px-6 max-w-5xl mx-auto w-full">
-        <div className="rounded-3xl bg-brand-600 p-8 sm:p-12 text-center text-white relative overflow-hidden shadow-2xl">
+        <div className="rounded-3xl bg-brand-600 p-8 sm:p-12 text-center text-white relative overflow-hidden">
           <div className="relative z-10 max-w-2xl mx-auto space-y-6">
             <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
               Pronto para elevar suas conversas a outro nível?
@@ -433,7 +406,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
               <button
                 onClick={() => onNavigate('/download')}
-                className="px-8 py-3.5 rounded-2xl bg-white text-gray-900 font-bold hover:bg-gray-100 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="px-8 py-3.5 rounded-2xl bg-white text-gray-900 font-bold hover:bg-gray-100 transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <Download className="w-5 h-5 text-brand-600" />
                 <span>Baixar Instalador Windows</span>
@@ -456,7 +429,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
       <footer className="mt-auto border-t border-white/5 py-10 px-6 bg-[#090d12] text-sm text-gray-400">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2.5">
-            <ZeroVCLogo className="w-7 h-7 shadow-md shadow-brand-500/25 flex-shrink-0" />
+            <ZeroVCLogo className="w-7 h-7 flex-shrink-0" />
             <span className="font-bold text-white">ZeroVC</span>
             <span className="text-xs text-gray-500">© 2026 • Todos os direitos reservados</span>
           </div>

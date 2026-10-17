@@ -1,5 +1,5 @@
-/**
- * ZeroVC Opt-in E2EE — Client-Side Attachments (AES-256-GCM)
+﻿/**
+ * ZeroVC Opt-in E2EE - Client-Side Attachments (AES-256-GCM)
  *
  * Implements Milestone M3 (Requirement R3 §8, §10.4):
  *  - Client-side WebCrypto AES-256-GCM encryption with 256-bit ephemeral keys
@@ -172,3 +172,4 @@ export async function decryptEnvelopeAttachment(
 
   return new Blob([decryptedBuffer], { type: attachment.mime || 'application/octet-stream' });
 }
+

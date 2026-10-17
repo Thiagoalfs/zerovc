@@ -1,5 +1,5 @@
-/**
- * ZeroVC Opt-in E2EE — Pure Messaging Codec
+﻿/**
+ * ZeroVC Opt-in E2EE - Pure Messaging Codec
  *
  * Implements Milestone M3 (Requirement R3 §8, §10.1, §11.2):
  *  - Pure, functional transformation between transport payloads and renderable models
@@ -193,3 +193,4 @@ export class MessageCodec {
 }
 
 export const messageCodec = new MessageCodec();
+
