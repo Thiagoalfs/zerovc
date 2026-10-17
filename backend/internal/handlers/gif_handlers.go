@@ -48,11 +48,8 @@ type klipyGIFItem struct {
 }
 
 type klipyResponse struct {
-	Result      bool           `json:"result"`
-	Data        []klipyGIFItem `json:"data"`
-	CurrentPage int            `json:"current_page"`
-	PerPage     int            `json:"per_page"`
-	HasNext     bool           `json:"has_next"`
+	Result bool            `json:"result"`
+	Data   json.RawMessage `json:"data"`
 }
 
 type cachedGIFSearch struct {
@@ -285,8 +282,21 @@ func (h *GIFHandler) fetchFromKlipy(ctx context.Context, reqURL string) ([]GIFIt
 		return nil, err
 	}
 
-	items := make([]GIFItem, 0, len(klipyRes.Data))
-	for _, raw := range klipyRes.Data {
+	var rawList []klipyGIFItem
+	trimmed := strings.TrimSpace(string(klipyRes.Data))
+	if strings.HasPrefix(trimmed, "[") {
+		_ = json.Unmarshal(klipyRes.Data, &rawList)
+	} else if strings.HasPrefix(trimmed, "{") {
+		var wrapper struct {
+			Data []klipyGIFItem `json:"data"`
+		}
+		if err := json.Unmarshal(klipyRes.Data, &wrapper); err == nil {
+			rawList = wrapper.Data
+		}
+	}
+
+	items := make([]GIFItem, 0, len(rawList))
+	for _, raw := range rawList {
 		normalized := h.normalizeKlipyItem(raw)
 		if normalized.URL != "" {
 			items = append(items, normalized)
