@@ -1332,6 +1332,7 @@ func (h *GuildHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 type TransferOwnershipRequest struct {
 	NewOwnerID uuid.UUID `json:"new_owner_id"`
+	Code       string    `json:"code,omitempty"`
 }
 
 func (h *GuildHandler) TransferOwnership(w http.ResponseWriter, r *http.Request) {
@@ -1365,6 +1366,47 @@ func (h *GuildHandler) TransferOwnership(w http.ResponseWriter, r *http.Request)
 	if req.NewOwnerID == userID {
 		http.Error(w, `{"error":"você já é o dono do servidor"}`, http.StatusBadRequest)
 		return
+	}
+
+	// Check if owner has 2FA enabled
+	var twoFactorSecret string
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&twoFactorSecret)
+	if err == nil && twoFactorSecret != "" {
+		code := strings.TrimSpace(r.Header.Get("X-2FA-Code"))
+		if code == "" {
+			code = strings.TrimSpace(r.URL.Query().Get("code"))
+		}
+		if code == "" && req.Code != "" {
+			code = strings.TrimSpace(req.Code)
+		}
+		if code == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPreconditionRequired)
+			json.NewEncoder(w).Encode(map[string]any{
+				"error":        "2fa_required",
+				"requires_2fa": true,
+				"message":      "Autenticação de dois fatores (2FA) necessária para transferir a posse do servidor.",
+			})
+			return
+		}
+
+		cleanCode := strings.TrimSpace(code)
+		totpValid := auth.VerifyTOTPCode(twoFactorSecret, cleanCode)
+		if !totpValid {
+			backupHash := auth.HashBackupCode(cleanCode)
+			var backupID uuid.UUID
+			err := h.db.Pool.QueryRow(r.Context(), `
+				SELECT id FROM user_2fa_backup_codes
+				WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+			`, userID, backupHash).Scan(&backupID)
+
+			if err == nil {
+				h.db.Pool.Exec(r.Context(), `UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1`, backupID)
+			} else {
+				http.Error(w, `{"error":"código de 2fa inválido ou expirado"}`, http.StatusUnauthorized)
+				return
+			}
+		}
 	}
 
 	// 2. Verify target is a member of the guild
@@ -1531,6 +1573,23 @@ func (h *GuildHandler) CreateEmoji(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cleanURL := strings.TrimSpace(req.ImageURL)
+	if !strings.HasPrefix(cleanURL, "https://") && !strings.HasPrefix(cleanURL, "http://") && !strings.HasPrefix(cleanURL, "/assets/") {
+		http.Error(w, `{"error":"URL da imagem do emoji inválida"}`, http.StatusBadRequest)
+		return
+	}
+	if strings.Contains(strings.ToLower(cleanURL), "javascript:") {
+		http.Error(w, `{"error":"URL não permitida"}`, http.StatusBadRequest)
+		return
+	}
+
+	var count int
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM guild_emojis WHERE guild_id = $1", guildID).Scan(&count)
+	if count >= 50 {
+		http.Error(w, `{"error":"limite máximo de 50 emojis atingido para este servidor"}`, http.StatusBadRequest)
+		return
+	}
+
 	// Clean name (alphanumeric and underscores, max 32 chars)
 	cleanName := strings.TrimSpace(req.Name)
 	cleanName = strings.Trim(cleanName, ":")
@@ -1544,7 +1603,7 @@ func (h *GuildHandler) CreateEmoji(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, guild_id, name, image_url, creator_id, created_at
 	`
-	err = h.db.Pool.QueryRow(r.Context(), insertQuery, guildID, cleanName, req.ImageURL, userID).Scan(
+	err = h.db.Pool.QueryRow(r.Context(), insertQuery, guildID, cleanName, cleanURL, userID).Scan(
 		&emoji.ID, &emoji.GuildID, &emoji.Name, &emoji.ImageURL, &emoji.CreatorID, &emoji.CreatedAt,
 	)
 	if err != nil {

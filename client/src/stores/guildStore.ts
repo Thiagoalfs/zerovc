@@ -1050,17 +1050,17 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           (state.activeChannel && state.activeChannel.id === message.channel_id) ||
           isChatActiveNow('channel', message.channel_id)
         );
-        const isTTSCommand = message.content?.startsWith('📢 **TTS');
+        const isTTS = Boolean(message.is_tts);
 
         if (message.author_id !== currentUser?.id && !isServerMuted && !isDND) {
           playMessageSound(isMention);
         }
 
         // Play TTS if the user is actively in this channel (explicit /tts messages bypass ambient server mute/DND)
-        const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled || isTTSCommand) && Boolean(message.content);
-        const canPlayByStatus = message.is_tts || isTTSCommand || (!isServerMuted && !isDND);
+        const shouldPlayTTS = (isTTS || useSettingsStore.getState().textToSpeechEnabled) && Boolean(message.content);
+        const canPlayByStatus = isTTS || (!isServerMuted && !isDND);
         if (shouldPlayTTS && isViewingChannel && canPlayByStatus) {
-          const textToSpeak = isTTSCommand
+          const textToSpeak = isTTS
             ? message.content.replace(/^📢\s*\*\*TTS\s*\([^)]+\):\*\*\s*/i, '')
             : message.content;
           speakText(textToSpeak, message.author?.display_name || message.author?.username);

@@ -271,6 +271,13 @@ func (h *UserHandler) AddFavoriteGIF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var count int
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM user_favorite_gifs WHERE user_id = $1", userID).Scan(&count)
+	if count >= 100 {
+		http.Error(w, `{"error":"limite máximo de 100 GIFs favoritos atingido"}`, http.StatusBadRequest)
+		return
+	}
+
 	var g models.FavoriteGIF
 	query := `
 		INSERT INTO user_favorite_gifs (user_id, gif_url, preview_url, title)

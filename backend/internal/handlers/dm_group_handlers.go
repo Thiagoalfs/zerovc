@@ -751,6 +751,20 @@ func (h *DMGroupHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if len(req.Attachments) > 10 {
+		http.Error(w, `{"error":"O limite máximo é de 10 anexos por mensagem"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.ReplyToID != nil && *req.ReplyToID != uuid.Nil {
+		var replyExists bool
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_group_messages WHERE id = $1 AND group_id = $2)", *req.ReplyToID, groupID).Scan(&replyExists)
+		if !replyExists {
+			http.Error(w, `{"error":"mensagem respondida não encontrada neste grupo"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
 	if !isEncrypted {
 		if req.Content == "" && len(req.Attachments) == 0 {
 			http.Error(w, `{"error":"content required"}`, http.StatusBadRequest)
@@ -1193,7 +1207,13 @@ func (h *DMGroupHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 
 	var authorID uuid.UUID
 	var invokerID *uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id, invoker_id FROM dm_group_messages WHERE id = $1 AND group_id = $2", messageID, groupID).Scan(&authorID, &invokerID)
+	var isEncrypted, e2eeEnabled bool
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT m.author_id, m.invoker_id, COALESCE(m.encrypted, false), COALESCE(g.e2ee_enabled, false)
+		FROM dm_group_messages m
+		JOIN dm_groups g ON g.id = m.group_id
+		WHERE m.id = $1 AND m.group_id = $2
+	`, messageID, groupID).Scan(&authorID, &invokerID, &isEncrypted, &e2eeEnabled)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
@@ -1202,6 +1222,11 @@ func (h *DMGroupHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 	isInvoker := invokerID != nil && *invokerID == userID
 	if userID != authorID && !isInvoker {
 		http.Error(w, `{"error":"forbidden: only author can edit message"}`, http.StatusForbidden)
+		return
+	}
+
+	if isEncrypted || e2eeEnabled {
+		http.Error(w, `{"error":"mensagens criptografadas de ponta a ponta não podem ser editadas em texto puro"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -1366,15 +1391,26 @@ func (h *DMGroupHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var isPinned bool
-	err = h.db.Pool.QueryRow(r.Context(), `
-		UPDATE dm_group_messages
-		SET is_pinned = NOT is_pinned
-		WHERE id = $1 AND group_id = $2
-		RETURNING is_pinned
-	`, messageID, groupID).Scan(&isPinned)
+	var currentlyPinned bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT is_pinned FROM dm_group_messages WHERE id = $1 AND group_id = $2", messageID, groupID).Scan(&currentlyPinned)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if !currentlyPinned {
+		var pinnedCount int
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm_group_messages WHERE group_id = $1 AND is_pinned = true", groupID).Scan(&pinnedCount)
+		if pinnedCount >= 50 {
+			http.Error(w, `{"error":"limite máximo de 50 mensagens fixadas atingido neste grupo"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
+	isPinned := !currentlyPinned
+	_, err = h.db.Pool.Exec(r.Context(), "UPDATE dm_group_messages SET is_pinned = $1 WHERE id = $2 AND group_id = $3", isPinned, messageID, groupID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update pin status"}`, http.StatusInternalServerError)
 		return
 	}
 

@@ -925,6 +925,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 if (activeGroup) {
                   socket.send('TYPING_START', {
                     channel_id: activeGroup.id,
+                    user_ids: activeGroup.members?.map((m) => m.id),
                   });
                 }
               }}

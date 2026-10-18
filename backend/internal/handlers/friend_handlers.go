@@ -198,15 +198,26 @@ func (h *FriendHandler) AcceptRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var senderID uuid.UUID
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT user_id FROM friendships WHERE id = $1 AND friend_id = $2 AND status = 'pending'", friendshipID, userID).Scan(&senderID)
+	if err != nil {
+		http.Error(w, `{"error":"request not found"}`, http.StatusNotFound)
+		return
+	}
+
+	var isBlocked bool
+	blockCheckQuery := `SELECT EXISTS(SELECT 1 FROM user_blocks WHERE (user_id = $1 AND blocked_user_id = $2) OR (user_id = $2 AND blocked_user_id = $1))`
+	if err := h.db.Pool.QueryRow(r.Context(), blockCheckQuery, userID, senderID).Scan(&isBlocked); err == nil && isBlocked {
+		http.Error(w, `{"error":"não é possível aceitar a solicitação devido a um bloqueio ativo"}`, http.StatusForbidden)
+		return
+	}
+
 	query := `
 		UPDATE friendships
 		SET status = 'accepted', updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1 AND friend_id = $2 AND status = 'pending'
-		RETURNING user_id
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, friendshipID, userID).Scan(&senderID)
-	if err != nil {
-		http.Error(w, `{"error":"request not found"}`, http.StatusNotFound)
+	if _, err := h.db.Pool.Exec(r.Context(), query, friendshipID, userID); err != nil {
+		http.Error(w, `{"error":"failed to accept request"}`, http.StatusInternalServerError)
 		return
 	}
 

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -103,6 +104,24 @@ func (c *Client) ReadPump() {
 				}
 				if typingData.GuildID != nil && *typingData.GuildID != uuid.Nil {
 					if c.Hub.IsGuildMember(*typingData.GuildID, c.UserID) {
+						if c.Hub.ChannelUsersProvider != nil {
+							ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+							allowedUsers, isPrivate := c.Hub.ChannelUsersProvider(ctx, *typingData.GuildID, typingData.ChannelID)
+							cancel()
+							if isPrivate {
+								userAllowed := false
+								for _, u := range allowedUsers {
+									if u == c.UserID {
+										userAllowed = true
+										break
+									}
+								}
+								if userAllowed && len(allowedUsers) > 0 {
+									c.Hub.BroadcastToUsers(allowedUsers, event)
+								}
+								continue
+							}
+						}
 						c.Hub.BroadcastToGuild(*typingData.GuildID, event)
 					}
 				} else if len(typingData.UserIDs) > 0 {
@@ -121,14 +140,6 @@ func (c *Client) ReadPump() {
 					}
 				} else if typingData.RecipientID != nil && *typingData.RecipientID != uuid.Nil && *typingData.RecipientID != c.UserID {
 					c.Hub.BroadcastToUsers([]uuid.UUID{*typingData.RecipientID}, event)
-				} else {
-					c.Hub.mu.RLock()
-					for gID, members := range c.Hub.guildMembers {
-						if members[c.UserID] {
-							c.Hub.BroadcastToGuild(gID, event)
-						}
-					}
-					c.Hub.mu.RUnlock()
 				}
 			}
 

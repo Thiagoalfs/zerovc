@@ -24,9 +24,10 @@ type Hub struct {
 	Broadcast  chan BroadcastMessage
 
 	// Hooks
-	OnUserConnected    func(userID uuid.UUID)
-	OnUserDisconnected func(userID uuid.UUID)
-	DeviceValidator    func(ctx context.Context, userID, deviceID uuid.UUID) bool
+	OnUserConnected      func(userID uuid.UUID)
+	OnUserDisconnected   func(userID uuid.UUID)
+	DeviceValidator      func(ctx context.Context, userID, deviceID uuid.UUID) bool
+	ChannelUsersProvider func(ctx context.Context, guildID, channelID uuid.UUID) ([]uuid.UUID, bool)
 
 	mu sync.RWMutex
 }

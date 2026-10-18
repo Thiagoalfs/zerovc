@@ -81,6 +81,47 @@ func main() {
 		err := db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM e2ee_devices WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL)", deviceID, userID).Scan(&exists)
 		return err == nil && exists
 	}
+	hub.ChannelUsersProvider = func(ctx context.Context, guildID, channelID uuid.UUID) ([]uuid.UUID, bool) {
+		var isPrivate bool
+		err := db.Pool.QueryRow(ctx, "SELECT is_private FROM channels WHERE id = $1 AND guild_id = $2", channelID, guildID).Scan(&isPrivate)
+		if err != nil || !isPrivate {
+			return nil, false
+		}
+
+		query := `
+			SELECT DISTINCT gm.user_id
+			FROM guild_members gm
+			INNER JOIN guilds g ON g.id = gm.guild_id
+			WHERE g.id = $1 AND (
+				g.owner_id = gm.user_id
+				OR EXISTS (
+					SELECT 1 FROM guild_roles gr
+					INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+					WHERE gmr.guild_id = $1 AND gmr.user_id = gm.user_id
+					  AND (gr.permissions & $3) != 0
+				)
+				OR EXISTS (
+					SELECT 1 FROM channel_role_access cra
+					INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+					WHERE cra.channel_id = $2 AND gmr.guild_id = $1 AND gmr.user_id = gm.user_id
+				)
+			)
+		`
+		rows, err := db.Pool.Query(ctx, query, guildID, channelID, models.PermAdministrator)
+		if err != nil {
+			return nil, true
+		}
+		defer rows.Close()
+
+		var uids []uuid.UUID
+		for rows.Next() {
+			var uid uuid.UUID
+			if err := rows.Scan(&uid); err == nil {
+				uids = append(uids, uid)
+			}
+		}
+		return uids, true
+	}
 
 	// On user connection: update user status to 'online' if was 'offline', and broadcast
 	hub.OnUserConnected = func(userID uuid.UUID) {

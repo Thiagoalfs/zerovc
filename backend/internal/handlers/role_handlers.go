@@ -126,10 +126,16 @@ func (h *RoleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.Color = "#5865F2"
 	}
 
-	// A non-admin cannot create a role with PermAdministrator
-	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (req.Permissions&models.PermAdministrator) != 0 {
-		http.Error(w, `{"error":"forbidden: apenas administradores podem criar cargos com permissão de administrador"}`, http.StatusForbidden)
-		return
+	// A non-admin/non-owner cannot grant PermAdministrator or permissions they do not possess
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin {
+		if (req.Permissions & models.PermAdministrator) != 0 {
+			http.Error(w, `{"error":"forbidden: apenas administradores podem criar cargos com permissão de administrador"}`, http.StatusForbidden)
+			return
+		}
+		if (req.Permissions & ^actorCtx.Perms) != 0 {
+			http.Error(w, `{"error":"forbidden: você não pode conceder permissões que você não possui"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	var role models.Role
@@ -203,10 +209,14 @@ func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If updating permissions, cannot grant PermAdministrator if not owner/admin
+	// If updating permissions, cannot grant PermAdministrator or unheld permissions if not owner/admin
 	if req.Permissions != nil && !actorCtx.IsOwner && !actorCtx.HasAdmin {
 		if (*req.Permissions & models.PermAdministrator) != 0 {
 			http.Error(w, `{"error":"forbidden: apenas administradores podem conceder permissão de administrador"}`, http.StatusForbidden)
+			return
+		}
+		if (*req.Permissions & ^actorCtx.Perms) != 0 {
+			http.Error(w, `{"error":"forbidden: você não pode conceder permissões que você não possui"}`, http.StatusForbidden)
 			return
 		}
 	}
@@ -430,7 +440,8 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 
 	var rolePosition int
 	var roleName string
-	if err := h.db.Pool.QueryRow(r.Context(), "SELECT position, name FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&rolePosition, &roleName); err != nil {
+	var rolePerms int64
+	if err := h.db.Pool.QueryRow(r.Context(), "SELECT position, name, permissions FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&rolePosition, &roleName, &rolePerms); err != nil {
 		http.Error(w, `{"error":"role not found"}`, http.StatusNotFound)
 		return
 	}
@@ -443,6 +454,17 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 	if allowed, msg := actorCtx.canAssignRolePosition(rolePosition); !allowed {
 		http.Error(w, `{"error":"`+msg+`"}`, http.StatusForbidden)
 		return
+	}
+
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin {
+		if (rolePerms & models.PermAdministrator) != 0 {
+			http.Error(w, `{"error":"forbidden: apenas administradores podem atribuir cargos com permissão de administrador"}`, http.StatusForbidden)
+			return
+		}
+		if (rolePerms & ^actorCtx.Perms) != 0 {
+			http.Error(w, `{"error":"forbidden: você não pode atribuir um cargo que concede permissões que você não possui"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	if !actorCtx.IsOwner {

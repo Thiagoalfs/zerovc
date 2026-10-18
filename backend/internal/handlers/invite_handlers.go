@@ -425,10 +425,12 @@ func (h *InviteHandler) JoinByInvite(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, 'member')
 		ON CONFLICT (guild_id, user_id) DO NOTHING
 	`
-	if _, err := tx.Exec(r.Context(), joinQuery, guildID, userID); err != nil {
+	res, err := tx.Exec(r.Context(), joinQuery, guildID, userID)
+	if err != nil {
 		http.Error(w, `{"error":"failed to join server"}`, http.StatusInternalServerError)
 		return
 	}
+	wasNewMember := res.RowsAffected() > 0
 
 	// 4. Assign @everyone base role
 	assignEveryoneQuery := `
@@ -443,10 +445,17 @@ func (h *InviteHandler) JoinByInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. Increment invite uses count
-	if _, err := tx.Exec(r.Context(), "UPDATE guild_invites SET uses = uses + 1 WHERE code = $1", code); err != nil {
-		http.Error(w, `{"error":"failed to update invite uses"}`, http.StatusInternalServerError)
-		return
+	// 5. Increment invite uses count ONLY if a new member actually joined
+	if wasNewMember {
+		if _, err := tx.Exec(r.Context(), "UPDATE guild_invites SET uses = uses + 1 WHERE code = $1", code); err != nil {
+			http.Error(w, `{"error":"failed to update invite uses"}`, http.StatusInternalServerError)
+			return
+		}
+		if maxUses > 0 && uses+1 >= maxUses {
+			h.mu.Lock()
+			delete(h.cache, code)
+			h.mu.Unlock()
+		}
 	}
 
 	// Commit Transaction

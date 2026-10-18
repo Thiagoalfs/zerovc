@@ -13,11 +13,17 @@ import (
 	"time"
 )
 
+type profileCacheEntry struct {
+	profile   *RiotFullProfile
+	expiresAt time.Time
+}
+
 type RiotService struct {
 	client       *http.Client
 	apiKey       string
 	ddragonVer   string
 	champMap     map[int]ChampionData // key: championKey (e.g. 82) -> Name: Mordekaiser, ID: Mordekaiser
+	profileCache map[string]profileCacheEntry
 	mu           sync.RWMutex
 	lastDDragon  time.Time
 }
@@ -91,8 +97,9 @@ func NewRiotService() *RiotService {
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		apiKey:   apiKey,
-		champMap: make(map[int]ChampionData),
+		apiKey:       apiKey,
+		champMap:     make(map[int]ChampionData),
+		profileCache: make(map[string]profileCacheEntry),
 	}
 	go s.refreshDataDragon()
 	return s
@@ -385,6 +392,14 @@ func formatNumber(n int) string {
 }
 
 func (s *RiotService) FetchFullProfile(gameName, tagLine, region string) (*RiotFullProfile, error) {
+	cacheKey := strings.ToLower(fmt.Sprintf("%s#%s@%s", gameName, tagLine, region))
+	s.mu.RLock()
+	if entry, ok := s.profileCache[cacheKey]; ok && time.Now().Before(entry.expiresAt) {
+		s.mu.RUnlock()
+		return entry.profile, nil
+	}
+	s.mu.RUnlock()
+
 	acc, err := s.GetAccount(gameName, tagLine, region)
 	if err != nil {
 		return nil, err
@@ -472,7 +487,7 @@ func (s *RiotService) FetchFullProfile(gameName, tagLine, region string) (*RiotF
 
 	iconURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/profileicon/%d.png", ver, summoner.ProfileIconID)
 
-	return &RiotFullProfile{
+	profile := &RiotFullProfile{
 		GameName:       acc.GameName,
 		TagLine:        acc.TagLine,
 		Region:         strings.ToUpper(strings.TrimSuffix(regNorm, "1")),
@@ -488,5 +503,14 @@ func (s *RiotService) FetchFullProfile(gameName, tagLine, region string) (*RiotF
 		TopChampions:   topChamps,
 		OpggURL:        opggURL,
 		PatchVersion:   ver,
-	}, nil
+	}
+
+	s.mu.Lock()
+	s.profileCache[cacheKey] = profileCacheEntry{
+		profile:   profile,
+		expiresAt: time.Now().Add(3 * time.Minute),
+	}
+	s.mu.Unlock()
+
+	return profile, nil
 }

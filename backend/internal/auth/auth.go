@@ -96,8 +96,8 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// 3. Fallback to Query param for WebSocket connections (?token=...)
-		if tokenString == "" {
+		// 3. Fallback to Query param ONLY for WebSocket connections (?token=...)
+		if tokenString == "" && (r.Header.Get("Upgrade") == "websocket" || r.URL.Path == "/ws") {
 			tokenString = r.URL.Query().Get("token")
 		}
 

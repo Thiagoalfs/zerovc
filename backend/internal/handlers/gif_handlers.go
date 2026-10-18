@@ -175,6 +175,17 @@ func (h *GIFHandler) Trending(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mu.Lock()
+	if len(h.cache) > 1000 {
+		now := time.Now()
+		for k, v := range h.cache {
+			if now.After(v.expiresAt) {
+				delete(h.cache, k)
+			}
+		}
+		if len(h.cache) > 1000 {
+			h.cache = make(map[string]cachedGIFSearch)
+		}
+	}
 	h.cache[cacheKey] = cachedGIFSearch{
 		items:     items,
 		expiresAt: time.Now().Add(10 * time.Minute),
@@ -243,6 +254,17 @@ func (h *GIFHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mu.Lock()
+	if len(h.cache) > 1000 {
+		now := time.Now()
+		for k, v := range h.cache {
+			if now.After(v.expiresAt) {
+				delete(h.cache, k)
+			}
+		}
+		if len(h.cache) > 1000 {
+			h.cache = make(map[string]cachedGIFSearch)
+		}
+	}
 	h.cache[cacheKey] = cachedGIFSearch{
 		items:     items,
 		expiresAt: time.Now().Add(5 * time.Minute),

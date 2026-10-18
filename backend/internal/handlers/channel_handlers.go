@@ -168,6 +168,13 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Categories cannot have a parent category
 	if req.Type == models.ChannelTypeCategory {
 		req.CategoryID = nil
+	} else if req.CategoryID != nil {
+		var validCategory bool
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channels WHERE id = $1 AND guild_id = $2 AND type = 'category')", req.CategoryID, guildID).Scan(&validCategory)
+		if !validCategory {
+			http.Error(w, `{"error":"categoria inválida ou não pertence a este servidor"}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	var channel models.Channel
@@ -259,6 +266,12 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
 		)
 	} else if req.CategoryID != nil {
+		var validCategory bool
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channels WHERE id = $1 AND guild_id = $2 AND type = 'category')", req.CategoryID, guildID).Scan(&validCategory)
+		if !validCategory {
+			http.Error(w, `{"error":"categoria inválida ou não pertence a este servidor"}`, http.StatusBadRequest)
+			return
+		}
 		query = `
 			UPDATE channels
 			SET name = COALESCE($1, name),
@@ -295,22 +308,31 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Update role access if provided
 	if req.RoleIDs != nil {
 		h.db.Pool.Exec(r.Context(), "DELETE FROM channel_role_access WHERE channel_id = $1", channelID)
+		validRoleIDs := make([]uuid.UUID, 0, len(req.RoleIDs))
 		for _, roleID := range req.RoleIDs {
-			h.db.Pool.Exec(r.Context(), "INSERT INTO channel_role_access (channel_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", channelID, roleID)
+			var roleBelongs bool
+			_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_roles WHERE id = $1 AND guild_id = $2)", roleID, guildID).Scan(&roleBelongs)
+			if roleBelongs {
+				h.db.Pool.Exec(r.Context(), "INSERT INTO channel_role_access (channel_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", channelID, roleID)
+				validRoleIDs = append(validRoleIDs, roleID)
+			}
 		}
-		channel.RoleIDs = req.RoleIDs
+		channel.RoleIDs = validRoleIDs
 	}
 
 	// Update permission overwrites if provided
 	if req.PermissionOverwrites != nil {
 		h.db.Pool.Exec(r.Context(), "DELETE FROM channel_permission_overwrites WHERE channel_id = $1", channelID)
 		for _, ow := range *req.PermissionOverwrites {
-			if ow.Allow != 0 || ow.Deny != 0 {
+			var roleBelongs bool
+			_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_roles WHERE id = $1 AND guild_id = $2)", ow.RoleID, guildID).Scan(&roleBelongs)
+			if roleBelongs && (ow.Allow != 0 || ow.Deny != 0) {
+				allowClean := ow.Allow & ^models.PermAdministrator
 				h.db.Pool.Exec(r.Context(), `
 					INSERT INTO channel_permission_overwrites (channel_id, role_id, allow, deny)
 					VALUES ($1, $2, $3, $4)
 					ON CONFLICT (channel_id, role_id) DO UPDATE SET allow = EXCLUDED.allow, deny = EXCLUDED.deny
-				`, channelID, ow.RoleID, ow.Allow, ow.Deny)
+				`, channelID, ow.RoleID, allowClean, ow.Deny)
 			}
 		}
 	}
@@ -563,21 +585,20 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isPrivate {
-		var hasAccess bool
-		privateCheckQuery := `
-			SELECT EXISTS(
-				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
-				UNION
-				SELECT 1 FROM channel_role_access cra
-				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
-				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
-			)
-		`
-		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
-			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
+		canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+		if err != nil || !canAccess {
+			http.Error(w, `{"error":"forbidden: você não tem acesso a este canal privado"}`, http.StatusForbidden)
 			return
 		}
 	}
+
+	canConnect, err := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermConnectVoice)
+	if err != nil || !canConnect {
+		http.Error(w, `{"error":"forbidden: você não tem permissão para conectar neste canal de voz"}`, http.StatusForbidden)
+		return
+	}
+
+	canSpeak, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermSpeakVoice)
 
 	var joinReq struct {
 		IsMuted    *bool `json:"is_muted,omitempty"`
@@ -635,7 +656,7 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 
 	roomName := channelID.String()
 	metaJSON := BuildLiveKitParticipantMetadata(user.AvatarURL, user.DisplayName, user.Username, user.CustomStatus, userID, isE2EE)
-	token, err := h.livekit.GenerateJoinToken(roomName, userID, user.Username, string(metaJSON), true)
+	token, err := h.livekit.GenerateJoinToken(roomName, userID, user.Username, string(metaJSON), canSpeak)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate voice token"}`, http.StatusInternalServerError)
 		return

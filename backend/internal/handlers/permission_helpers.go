@@ -110,9 +110,9 @@ func (ac actorGuildContext) canModerateTarget(ctx context.Context, db *database.
 	return true, ""
 }
 
-// canUserSendTTS checa se o usuário tem permissão para enviar TTS em um canal específico,
-// combinando permissões de cargos no servidor, bypass de Admin/Owner e sobrescritas de canal.
-func canUserSendTTS(ctx context.Context, db *database.DB, guildID, channelID, userID uuid.UUID) (bool, error) {
+// canUserPerformInChannel avalia uma permissão específica em um canal, combinando
+// hierarquia, bypass de Admin/Owner, permissões dos cargos do membro e sobrescritas de canal.
+func canUserPerformInChannel(ctx context.Context, db *database.DB, guildID, channelID, userID uuid.UUID, permFlag int64) (bool, error) {
 	actorCtx, err := loadActorGuildContext(ctx, db, guildID, userID)
 	if err != nil {
 		return false, err
@@ -121,8 +121,8 @@ func canUserSendTTS(ctx context.Context, db *database.DB, guildID, channelID, us
 		return true, nil
 	}
 
-	// 1. Permissão base vinda dos cargos do membro
-	hasPerm := (actorCtx.Perms & models.PermSendTTS) != 0
+	// 1. Permissão base vinda dos cargos do membro (inclui @everyone)
+	hasPerm := (actorCtx.Perms & permFlag) != 0
 
 	// 2. Sobrescritas de permissão no canal
 	rows, err := db.Pool.Query(ctx, `
@@ -145,17 +145,17 @@ func canUserSendTTS(ctx context.Context, db *database.DB, guildID, channelID, us
 		var isMemberRole bool
 		if err := rows.Scan(&roleID, &allow, &deny, &roleName, &isMemberRole); err == nil {
 			if roleName == "@everyone" {
-				if (deny & models.PermSendTTS) != 0 {
+				if (deny & permFlag) != 0 {
 					hasPerm = false
 				}
-				if (allow & models.PermSendTTS) != 0 {
+				if (allow & permFlag) != 0 {
 					hasPerm = true
 				}
 			} else if isMemberRole {
-				if (deny & models.PermSendTTS) != 0 {
+				if (deny & permFlag) != 0 {
 					roleDeny = true
 				}
-				if (allow & models.PermSendTTS) != 0 {
+				if (allow & permFlag) != 0 {
 					roleAllow = true
 				}
 			}
@@ -172,9 +172,35 @@ func canUserSendTTS(ctx context.Context, db *database.DB, guildID, channelID, us
 	return hasPerm, nil
 }
 
-// canUserUseCommands checa se o usuário tem permissão para usar comandos slash em um canal específico,
-// combinando permissões de cargos no servidor, bypass de Admin/Owner e sobrescritas de canal.
+// canUserSendTTS checa se o usuário tem permissão para enviar TTS em um canal específico.
+func canUserSendTTS(ctx context.Context, db *database.DB, guildID, channelID, userID uuid.UUID) (bool, error) {
+	return canUserPerformInChannel(ctx, db, guildID, channelID, userID, models.PermSendTTS)
+}
+
+// canUserUseCommands checa se o usuário tem permissão para usar comandos slash em um canal específico.
 func canUserUseCommands(ctx context.Context, db *database.DB, guildID, channelID, userID uuid.UUID) (bool, error) {
+	return canUserPerformInChannel(ctx, db, guildID, channelID, userID, models.PermUseCommands)
+}
+
+// canUserManageMessages checa se o usuário tem permissão para gerenciar mensagens em um canal específico.
+func canUserManageMessages(ctx context.Context, db *database.DB, guildID, channelID, userID uuid.UUID) (bool, error) {
+	return canUserPerformInChannel(ctx, db, guildID, channelID, userID, models.PermManageMessages)
+}
+
+// canUserSendMessages checa se o usuário tem permissão para enviar mensagens normais em um canal específico.
+func canUserSendMessages(ctx context.Context, db *database.DB, guildID, channelID, userID uuid.UUID) (bool, error) {
+	return canUserPerformInChannel(ctx, db, guildID, channelID, userID, models.PermSendMessages)
+}
+
+// canUserAttachFiles checa se o usuário tem permissão para anexar arquivos em um canal específico.
+func canUserAttachFiles(ctx context.Context, db *database.DB, guildID, channelID, userID uuid.UUID) (bool, error) {
+	return canUserPerformInChannel(ctx, db, guildID, channelID, userID, models.PermAttachFiles)
+}
+
+// canUserAccessChannel checa se o usuário tem permissão de ver/acessar um canal.
+// Em canais privados, exige ser Owner, Admin ou ter cargo explícito em channel_role_access.
+// Em canais públicos, valida a permissão PermViewChannel considerando sobrescritas.
+func canUserAccessChannel(ctx context.Context, db *database.DB, guildID, channelID, userID uuid.UUID) (bool, error) {
 	actorCtx, err := loadActorGuildContext(ctx, db, guildID, userID)
 	if err != nil {
 		return false, err
@@ -183,53 +209,23 @@ func canUserUseCommands(ctx context.Context, db *database.DB, guildID, channelID
 		return true, nil
 	}
 
-	// 1. Permissão base vinda dos cargos do membro
-	hasPerm := (actorCtx.Perms & models.PermUseCommands) != 0
-
-	// 2. Sobrescritas de permissão no canal
-	rows, err := db.Pool.Query(ctx, `
-		SELECT cpo.role_id, cpo.allow, cpo.deny, gr.name,
-		       EXISTS(SELECT 1 FROM guild_member_roles gmr WHERE gmr.guild_id = $1 AND gmr.user_id = $2 AND gmr.role_id = cpo.role_id) as is_member_role
-		FROM channel_permission_overwrites cpo
-		INNER JOIN guild_roles gr ON gr.id = cpo.role_id
-		WHERE cpo.channel_id = $3
-	`, guildID, userID, channelID)
+	var isPrivate bool
+	err = db.Pool.QueryRow(ctx, "SELECT is_private FROM channels WHERE id = $1 AND guild_id = $2", channelID, guildID).Scan(&isPrivate)
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
 
-	var roleAllow, roleDeny bool
-	for rows.Next() {
-		var roleID uuid.UUID
-		var allow, deny int64
-		var roleName string
-		var isMemberRole bool
-		if err := rows.Scan(&roleID, &allow, &deny, &roleName, &isMemberRole); err == nil {
-			if roleName == "@everyone" {
-				if (deny & models.PermUseCommands) != 0 {
-					hasPerm = false
-				}
-				if (allow & models.PermUseCommands) != 0 {
-					hasPerm = true
-				}
-			} else if isMemberRole {
-				if (deny & models.PermUseCommands) != 0 {
-					roleDeny = true
-				}
-				if (allow & models.PermUseCommands) != 0 {
-					roleAllow = true
-				}
-			}
-		}
+	if isPrivate {
+		var hasAccess bool
+		err = db.Pool.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id = $1 AND gmr.guild_id = $2 AND gmr.user_id = $3
+			)
+		`, channelID, guildID, userID).Scan(&hasAccess)
+		return hasAccess, err
 	}
 
-	if roleDeny {
-		hasPerm = false
-	}
-	if roleAllow {
-		hasPerm = true
-	}
-
-	return hasPerm, nil
+	return canUserPerformInChannel(ctx, db, guildID, channelID, userID, models.PermViewChannel)
 }

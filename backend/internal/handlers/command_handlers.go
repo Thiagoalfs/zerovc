@@ -44,9 +44,10 @@ type CommandResult struct {
 	Content     string                `json:"content"`
 	Embeds      []models.MessageEmbed `json:"embeds"`
 	Attachments []models.Attachment   `json:"attachments"`
+	IsTTS       bool                  `json:"is_tts,omitempty"`
 }
 
-func (h *CommandHandler) resolveTargetUser(ctx context.Context, raw string) (uuid.UUID, models.User, error) {
+func (h *CommandHandler) resolveTargetUser(ctx context.Context, raw string, guildID *uuid.UUID) (uuid.UUID, models.User, error) {
 	var target models.User
 	clean := strings.TrimSpace(raw)
 	clean = strings.TrimPrefix(clean, "<@")
@@ -58,6 +59,7 @@ func (h *CommandHandler) resolveTargetUser(ctx context.Context, raw string) (uui
 		return uuid.Nil, target, fmt.Errorf("usuário não informado")
 	}
 
+	// 1. Direct UUID (e.g. mention <@uuid> or direct ID string)
 	if parsedID, err := uuid.Parse(clean); err == nil {
 		err = h.db.Pool.QueryRow(ctx, `
 			SELECT id, username, display_name, COALESCE(avatar_url, '')
@@ -69,10 +71,48 @@ func (h *CommandHandler) resolveTargetUser(ctx context.Context, raw string) (uui
 		}
 	}
 
+	// 2. If within a guild, strictly prioritize guild members:
+	if guildID != nil {
+		// Exact username first among members
+		err := h.db.Pool.QueryRow(ctx, `
+			SELECT u.id, u.username, u.display_name, COALESCE(u.avatar_url, '')
+			FROM users u
+			INNER JOIN guild_members gm ON gm.user_id = u.id AND gm.guild_id = $2
+			WHERE LOWER(u.username) = LOWER($1)
+			LIMIT 1
+		`, clean, *guildID).Scan(&target.ID, &target.Username, &target.DisplayName, &target.AvatarURL)
+		if err == nil {
+			return target.ID, target, nil
+		}
+
+		// Exact display name among members
+		err = h.db.Pool.QueryRow(ctx, `
+			SELECT u.id, u.username, u.display_name, COALESCE(u.avatar_url, '')
+			FROM users u
+			INNER JOIN guild_members gm ON gm.user_id = u.id AND gm.guild_id = $2
+			WHERE LOWER(u.display_name) = LOWER($1)
+			LIMIT 1
+		`, clean, *guildID).Scan(&target.ID, &target.Username, &target.DisplayName, &target.AvatarURL)
+		if err == nil {
+			return target.ID, target, nil
+		}
+	}
+
+	// 3. Global lookup fallback: match exact username first, then display_name
 	err := h.db.Pool.QueryRow(ctx, `
 		SELECT id, username, display_name, COALESCE(avatar_url, '')
 		FROM users
-		WHERE LOWER(username) = LOWER($1) OR LOWER(display_name) = LOWER($1)
+		WHERE LOWER(username) = LOWER($1)
+		LIMIT 1
+	`, clean).Scan(&target.ID, &target.Username, &target.DisplayName, &target.AvatarURL)
+	if err == nil {
+		return target.ID, target, nil
+	}
+
+	err = h.db.Pool.QueryRow(ctx, `
+		SELECT id, username, display_name, COALESCE(avatar_url, '')
+		FROM users
+		WHERE LOWER(display_name) = LOWER($1)
 		LIMIT 1
 	`, clean).Scan(&target.ID, &target.Username, &target.DisplayName, &target.AvatarURL)
 	if err != nil {
@@ -109,17 +149,17 @@ func (h *CommandHandler) processCommand(
 			}, nil
 		}
 
-		actorCtx, err := loadActorGuildContext(ctx, h.db, *guildID, invoker.ID)
+		canManage, err := canUserManageMessages(ctx, h.db, *guildID, *channelID, invoker.ID)
 		if err != nil {
 			return CommandResult{}, fmt.Errorf("erro ao verificar permissões: %w", err)
 		}
 
-		if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageMessages) == 0 {
+		if !canManage {
 			return CommandResult{
 				Embeds: []models.MessageEmbed{
 					{
 						Title:       "❌ Permissão Negada",
-						Description: "Você precisa de um cargo com a permissão **Gerenciar Mensagens** para usar `/clear`.",
+						Description: "Você precisa de um cargo com a permissão **Gerenciar Mensagens** neste canal para usar `/clear`.",
 						Color:       "#f43f5e",
 						Timestamp:   &now,
 					},
@@ -149,7 +189,7 @@ func (h *CommandHandler) processCommand(
 		var targetUser models.User
 		if uVal, ok := req.Args["user"]; ok && uVal != nil {
 			if uStr, ok := uVal.(string); ok && strings.TrimSpace(uStr) != "" {
-				tID, tU, err := h.resolveTargetUser(ctx, uStr)
+				tID, tU, err := h.resolveTargetUser(ctx, uStr, guildID)
 				if err == nil && tID != uuid.Nil {
 					targetUserID = &tID
 					targetUser = tU
@@ -275,7 +315,7 @@ func (h *CommandHandler) processCommand(
 			}, nil
 		}
 
-		targetID, targetUser, err := h.resolveTargetUser(ctx, userRaw)
+		targetID, targetUser, err := h.resolveTargetUser(ctx, userRaw, guildID)
 		if err != nil {
 			return CommandResult{
 				Embeds: []models.MessageEmbed{
@@ -319,12 +359,15 @@ func (h *CommandHandler) processCommand(
 		}
 
 		reason, _ := req.Args["reason"].(string)
-		if strings.TrimSpace(reason) == "" {
+		reason = strings.TrimSpace(reason)
+		if reason == "" {
 			reason = "Nenhum motivo especificado."
+		} else if len(reason) > 500 {
+			reason = reason[:500]
 		}
 
 		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", *guildID, targetID)
-		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM voice_sessions WHERE user_id = $1", targetID)
+		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM voice_sessions WHERE user_id = $1 AND channel_id IN (SELECT id FROM channels WHERE guild_id = $2)", targetID, *guildID)
 		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", *guildID, targetID)
 
 		h.hub.RemoveGuildMember(*guildID, targetID)
@@ -402,7 +445,7 @@ func (h *CommandHandler) processCommand(
 			}, nil
 		}
 
-		targetID, targetUser, err := h.resolveTargetUser(ctx, userRaw)
+		targetID, targetUser, err := h.resolveTargetUser(ctx, userRaw, guildID)
 		if err != nil {
 			return CommandResult{
 				Embeds: []models.MessageEmbed{
@@ -431,8 +474,11 @@ func (h *CommandHandler) processCommand(
 		}
 
 		reason, _ := req.Args["reason"].(string)
-		if strings.TrimSpace(reason) == "" {
+		reason = strings.TrimSpace(reason)
+		if reason == "" {
 			reason = "Nenhum motivo especificado."
+		} else if len(reason) > 500 {
+			reason = reason[:500]
 		}
 
 		_, err = h.db.Pool.Exec(ctx, `
@@ -445,7 +491,7 @@ func (h *CommandHandler) processCommand(
 		}
 
 		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM guild_member_roles WHERE guild_id = $1 AND user_id = $2", *guildID, targetID)
-		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM voice_sessions WHERE user_id = $1", targetID)
+		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM voice_sessions WHERE user_id = $1 AND channel_id IN (SELECT id FROM channels WHERE guild_id = $2)", targetID, *guildID)
 		_, _ = h.db.Pool.Exec(ctx, "DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2", *guildID, targetID)
 
 		h.hub.RemoveGuildMember(*guildID, targetID)
@@ -538,8 +584,13 @@ func (h *CommandHandler) processCommand(
 			}, nil
 		}
 
+		if len(msgText) > 2000 {
+			msgText = msgText[:2000]
+		}
+
 		return CommandResult{
 			Content: fmt.Sprintf("📢 **TTS (%s):** %s", invoker.DisplayName, msgText),
+			IsTTS:   true,
 		}, nil
 	case "server":
 		if guildID == nil {
@@ -1054,12 +1105,12 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 
 	var msg models.Message
 	err = h.db.Pool.QueryRow(ctx, `
-		INSERT INTO messages (channel_id, author_id, invoker_id, content, attachments, embeds)
-		VALUES ($1, $2, NULL, $3, $4, $5)
-		RETURNING id, channel_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, created_at, updated_at
-	`, channelID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
+		INSERT INTO messages (channel_id, author_id, invoker_id, content, attachments, embeds, is_tts)
+		VALUES ($1, $2, NULL, $3, $4, $5, $6)
+		RETURNING id, channel_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, is_tts, created_at, updated_at
+	`, channelID, userID, result.Content, attachmentsJSON, embedsJSON, result.IsTTS).Scan(
 		&msg.ID, &msg.ChannelID, &msg.AuthorID, &msg.InvokerID, &msg.Content, &attachmentsJSON, &embedsJSON,
-		&msg.IsPinned, &msg.IsEdited, &msg.CreatedAt, &msg.UpdatedAt,
+		&msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.CreatedAt, &msg.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create message"}`, http.StatusInternalServerError)
@@ -1132,12 +1183,12 @@ func (h *CommandHandler) ExecuteDMRoomCommand(w http.ResponseWriter, r *http.Req
 
 	var msg models.DMMessage
 	err = h.db.Pool.QueryRow(ctx, `
-		INSERT INTO dm_messages (dm_room_id, author_id, invoker_id, content, attachments, embeds)
-		VALUES ($1, $2, NULL, $3, $4, $5)
-		RETURNING id, dm_room_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, created_at
-	`, roomID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
+		INSERT INTO dm_messages (dm_room_id, author_id, invoker_id, content, attachments, embeds, is_tts)
+		VALUES ($1, $2, NULL, $3, $4, $5, $6)
+		RETURNING id, dm_room_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, is_tts, created_at
+	`, roomID, userID, result.Content, attachmentsJSON, embedsJSON, result.IsTTS).Scan(
 		&msg.ID, &msg.DMRoomID, &msg.AuthorID, &msg.InvokerID, &msg.Content, &attachmentsJSON, &embedsJSON,
-		&msg.IsPinned, &msg.IsEdited, &msg.CreatedAt,
+		&msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create dm message"}`, http.StatusInternalServerError)
@@ -1204,12 +1255,12 @@ func (h *CommandHandler) ExecuteDMGroupCommand(w http.ResponseWriter, r *http.Re
 
 	var msg models.DMGroupMessage
 	err = h.db.Pool.QueryRow(ctx, `
-		INSERT INTO dm_group_messages (group_id, author_id, invoker_id, content, attachments, embeds)
-		VALUES ($1, $2, NULL, $3, $4, $5)
-		RETURNING id, group_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, created_at
-	`, groupID, userID, result.Content, attachmentsJSON, embedsJSON).Scan(
+		INSERT INTO dm_group_messages (group_id, author_id, invoker_id, content, attachments, embeds, is_tts)
+		VALUES ($1, $2, NULL, $3, $4, $5, $6)
+		RETURNING id, group_id, author_id, invoker_id, content, attachments, embeds, is_pinned, is_edited, is_tts, created_at
+	`, groupID, userID, result.Content, attachmentsJSON, embedsJSON, result.IsTTS).Scan(
 		&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.InvokerID, &msg.Content, &attachmentsJSON, &embedsJSON,
-		&msg.IsPinned, &msg.IsEdited, &msg.CreatedAt,
+		&msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.CreatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create dm group message"}`, http.StatusInternalServerError)

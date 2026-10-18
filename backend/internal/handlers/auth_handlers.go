@@ -1816,6 +1816,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, `{"error":"código 2FA ou backup incorreto"}`, http.StatusUnauthorized)
 				return
 			}
+			h.db.Pool.Exec(r.Context(), `UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1`, backupID)
 		}
 	}
 
@@ -1893,6 +1894,7 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, `{"error":"código 2FA ou backup incorreto"}`, http.StatusUnauthorized)
 				return
 			}
+			h.db.Pool.Exec(r.Context(), `UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1`, backupID)
 		}
 	}
 

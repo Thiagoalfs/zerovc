@@ -271,7 +271,7 @@ func (h *DMHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM dm_messages m
 		INNER JOIN users u ON u.id = m.author_id
-		LEFT JOIN dm_messages rm ON rm.id = m.reply_to_id
+		LEFT JOIN dm_messages rm ON rm.id = m.reply_to_id AND rm.dm_room_id = m.dm_room_id
 		LEFT JOIN users ru ON ru.id = rm.author_id
 		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE m.dm_room_id = $1 AND ($3::timestamptz IS NULL OR m.created_at < $3)
@@ -459,6 +459,20 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Payload validity check
+	if len(req.Attachments) > 10 {
+		http.Error(w, `{"error":"O limite máximo é de 10 anexos por mensagem"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.ReplyToID != nil && *req.ReplyToID != uuid.Nil {
+		var replyExists bool
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_messages WHERE id = $1 AND dm_room_id = $2)", *req.ReplyToID, roomID).Scan(&replyExists)
+		if !replyExists {
+			http.Error(w, `{"error":"mensagem respondida não encontrada nesta conversa"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
 	if !isEncrypted {
 		if req.Content == "" && len(req.Attachments) == 0 {
 			http.Error(w, `{"error":"message content cannot be empty"}`, http.StatusBadRequest)
@@ -648,8 +662,8 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 			SELECT m.id, m.content, u.id, u.username, u.display_name, u.avatar_url
 			FROM dm_messages m
 			JOIN users u ON u.id = m.author_id
-			WHERE m.id = $1
-		`, *msg.ReplyToID).Scan(&replyAuthor.ID, &replyContent, &replyAuthor.ID, &replyAuthor.Username, &replyAuthor.DisplayName, &replyAuthor.AvatarURL)
+			WHERE m.id = $1 AND m.dm_room_id = $2
+		`, *msg.ReplyToID, roomID).Scan(&replyAuthor.ID, &replyContent, &replyAuthor.ID, &replyAuthor.Username, &replyAuthor.DisplayName, &replyAuthor.AvatarURL)
 		if err == nil {
 			msg.ReplyTo = &models.MessageReplyInfo{
 				ID:      *msg.ReplyToID,
@@ -764,6 +778,10 @@ func (h *DMHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"emoji or e2ee_ciphertext is required"}`, http.StatusBadRequest)
 		return
 	}
+	if len(req.Emoji) > 128 {
+		http.Error(w, `{"error":"o emoji especificado excede o tamanho máximo de 128 caracteres"}`, http.StatusBadRequest)
+		return
+	}
 
 	var user1ID, user2ID uuid.UUID
 	err := h.db.Pool.QueryRow(r.Context(), `
@@ -826,6 +844,10 @@ func (h *DMHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
 	messageID, err2 := uuid.Parse(messageIDStr)
 	if err1 != nil || err2 != nil || emoji == "" {
 		http.Error(w, `{"error":"invalid id or emoji"}`, http.StatusBadRequest)
+		return
+	}
+	if len(emoji) > 128 {
+		http.Error(w, `{"error":"emoji inválido"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -1273,18 +1295,33 @@ func (h *DMHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var currentlyPinned bool
 	var user1ID, user2ID uuid.UUID
-	var isPinned bool
 	err = h.db.Pool.QueryRow(r.Context(), `
-		UPDATE dm_messages
-		SET is_pinned = NOT is_pinned
-		FROM dm_rooms
-		WHERE dm_messages.id = $1 AND dm_rooms.id = dm_messages.dm_room_id AND dm_rooms.id = $2
+		SELECT dm_messages.is_pinned, dm_rooms.user1_id, dm_rooms.user2_id
+		FROM dm_messages
+		JOIN dm_rooms ON dm_rooms.id = dm_messages.dm_room_id
+		WHERE dm_messages.id = $1 AND dm_rooms.id = $2
 		  AND (dm_rooms.user1_id = $3 OR dm_rooms.user2_id = $3)
-		RETURNING dm_messages.is_pinned, dm_rooms.user1_id, dm_rooms.user2_id
-	`, messageID, roomID, userID).Scan(&isPinned, &user1ID, &user2ID)
+	`, messageID, roomID, userID).Scan(&currentlyPinned, &user1ID, &user2ID)
 	if err != nil {
 		http.Error(w, `{"error":"message not found or forbidden"}`, http.StatusNotFound)
+		return
+	}
+
+	if !currentlyPinned {
+		var pinnedCount int
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm_messages WHERE dm_room_id = $1 AND is_pinned = true", roomID).Scan(&pinnedCount)
+		if pinnedCount >= 50 {
+			http.Error(w, `{"error":"limite máximo de 50 mensagens fixadas atingido nesta conversa"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
+	isPinned := !currentlyPinned
+	_, err = h.db.Pool.Exec(r.Context(), "UPDATE dm_messages SET is_pinned = $1 WHERE id = $2 AND dm_room_id = $3", isPinned, messageID, roomID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update message pin status"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -1429,7 +1466,13 @@ func (h *DMHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 
 	var authorID uuid.UUID
 	var invokerID *uuid.UUID
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT author_id, invoker_id FROM dm_messages WHERE id = $1 AND dm_room_id = $2", messageID, roomID).Scan(&authorID, &invokerID)
+	var isEncrypted, e2eeEnabled bool
+	err = h.db.Pool.QueryRow(r.Context(), `
+		SELECT m.author_id, m.invoker_id, COALESCE(m.encrypted, false), COALESCE(r.e2ee_enabled, false)
+		FROM dm_messages m
+		JOIN dm_rooms r ON r.id = m.dm_room_id
+		WHERE m.id = $1 AND m.dm_room_id = $2
+	`, messageID, roomID).Scan(&authorID, &invokerID, &isEncrypted, &e2eeEnabled)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
 		return
@@ -1438,6 +1481,11 @@ func (h *DMHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 	isInvoker := invokerID != nil && *invokerID == userID
 	if authorID != userID && !isInvoker {
 		http.Error(w, `{"error":"forbidden: only author can edit message"}`, http.StatusForbidden)
+		return
+	}
+
+	if isEncrypted || e2eeEnabled {
+		http.Error(w, `{"error":"mensagens criptografadas de ponta a ponta não podem ser editadas em texto puro"}`, http.StatusBadRequest)
 		return
 	}
 

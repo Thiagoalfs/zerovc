@@ -44,13 +44,19 @@ func (h *MessageHandler) broadcastChannelEvent(ctx context.Context, guildID, cha
 		WHERE g.id = $1 AND (
 			g.owner_id = gm.user_id
 			OR EXISTS (
+				SELECT 1 FROM guild_roles gr
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+				WHERE gmr.guild_id = $1 AND gmr.user_id = gm.user_id
+				  AND (gr.permissions & $3) != 0
+			)
+			OR EXISTS (
 				SELECT 1 FROM channel_role_access cra
 				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
 				WHERE cra.channel_id = $2 AND gmr.guild_id = $1 AND gmr.user_id = gm.user_id
 			)
 		)
 	`
-	rows, err := h.db.Pool.Query(ctx, query, guildID, channelID)
+	rows, err := h.db.Pool.Query(ctx, query, guildID, channelID, models.PermAdministrator)
 	if err != nil {
 		return
 	}
@@ -161,19 +167,35 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isPrivate {
-		var hasAccess bool
-		privateCheckQuery := `
-			SELECT EXISTS(
-				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
-				UNION
-				SELECT 1 FROM channel_role_access cra
-				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
-				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
-			)
-		`
-		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
-			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
+	canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: você não tem acesso a este canal"}`, http.StatusForbidden)
+		return
+	}
+
+	canSendMsg, err := canUserSendMessages(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canSendMsg {
+		http.Error(w, `{"error":"forbidden: você não tem permissão para enviar mensagens neste canal"}`, http.StatusForbidden)
+		return
+	}
+
+	if len(req.Attachments) > 0 {
+		if len(req.Attachments) > 10 {
+			http.Error(w, `{"error":"O limite máximo é de 10 anexos por mensagem"}`, http.StatusBadRequest)
+			return
+		}
+		canAttach, err := canUserAttachFiles(r.Context(), h.db, guildID, channelID, userID)
+		if err != nil || !canAttach {
+			http.Error(w, `{"error":"forbidden: você não tem permissão para anexar arquivos neste canal"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	if req.ReplyToID != nil && *req.ReplyToID != uuid.Nil {
+		var replyExists bool
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1 AND channel_id = $2)", *req.ReplyToID, channelID).Scan(&replyExists)
+		if !replyExists {
+			http.Error(w, `{"error":"mensagem respondida não encontrada neste canal"}`, http.StatusBadRequest)
 			return
 		}
 	}
@@ -340,8 +362,8 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 			SELECT m.id, m.content, u.id, u.username, u.display_name, u.avatar_url
 			FROM messages m
 			JOIN users u ON u.id = m.author_id
-			WHERE m.id = $1
-		`, *msg.ReplyToID).Scan(&replyID, &replyContent, &replyAuthor.ID, &replyAuthor.Username, &replyAuthor.DisplayName, &replyAuthor.AvatarURL)
+			WHERE m.id = $1 AND m.channel_id = $2
+		`, *msg.ReplyToID, channelID).Scan(&replyID, &replyContent, &replyAuthor.ID, &replyAuthor.Username, &replyAuthor.DisplayName, &replyAuthor.AvatarURL)
 		if err == nil {
 			msg.ReplyTo = &models.MessageReplyInfo{
 				ID:      *msg.ReplyToID,
@@ -387,20 +409,35 @@ func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check author & update
+	// Check author & E2EE status
 	var channelID, guildID uuid.UUID
 	var isPrivate bool
-	now := time.Now().UTC()
-	query := `
-		UPDATE messages m
-		SET content = $1, is_edited = true, edited_at = $2, updated_at = $2
-		FROM channels c
-		WHERE m.id = $3 AND (m.author_id = $4 OR m.invoker_id = $4) AND c.id = m.channel_id
-		RETURNING m.channel_id, c.guild_id, c.is_private
+	var isEncrypted, e2eeEnabled bool
+	checkQuery := `
+		SELECT m.channel_id, c.guild_id, c.is_private, COALESCE(m.encrypted, false), COALESCE(c.e2ee_enabled, false)
+		FROM messages m
+		JOIN channels c ON c.id = m.channel_id
+		WHERE m.id = $1 AND (m.author_id = $2 OR m.invoker_id = $2)
 	`
-	err = h.db.Pool.QueryRow(r.Context(), query, req.Content, now, messageID, userID).Scan(&channelID, &guildID, &isPrivate)
+	err = h.db.Pool.QueryRow(r.Context(), checkQuery, messageID, userID).Scan(&channelID, &guildID, &isPrivate, &isEncrypted, &e2eeEnabled)
 	if err != nil {
 		http.Error(w, `{"error":"message not found or you are not the author"}`, http.StatusForbidden)
+		return
+	}
+	if isEncrypted || e2eeEnabled {
+		http.Error(w, `{"error":"mensagens criptografadas de ponta a ponta não podem ser editadas em texto puro"}`, http.StatusBadRequest)
+		return
+	}
+
+	now := time.Now().UTC()
+	query := `
+		UPDATE messages
+		SET content = $1, is_edited = true, edited_at = $2, updated_at = $2
+		WHERE id = $3
+	`
+	_, err = h.db.Pool.Exec(r.Context(), query, req.Content, now, messageID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update message"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -458,18 +495,17 @@ func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isInvoker := invokerID != nil && *invokerID == userID
-	if authorID != userID && ownerID != userID && !isInvoker {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageMessages) == 0 {
+	if authorID != userID && !isInvoker {
+		canManage, err := canUserManageMessages(r.Context(), h.db, guildID, channelID, userID)
+		if err != nil || !canManage {
 			http.Error(w, `{"error":"forbidden: you do not have permission to delete this message"}`, http.StatusForbidden)
+			return
+		}
+	} else {
+		var isMember bool
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, userID).Scan(&isMember)
+		if !isMember {
+			http.Error(w, `{"error":"forbidden: você não é membro deste servidor"}`, http.StatusForbidden)
 			return
 		}
 	}
@@ -529,21 +565,10 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isPrivate {
-		var hasAccess bool
-		privateCheckQuery := `
-			SELECT EXISTS(
-				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
-				UNION
-				SELECT 1 FROM channel_role_access cra
-				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
-				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
-			)
-		`
-		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
-			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
-			return
-		}
+	canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: you do not have access to this channel"}`, http.StatusForbidden)
+		return
 	}
 
 	limit := 50
@@ -574,7 +599,7 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM messages m
 		INNER JOIN users u ON u.id = m.author_id
-		LEFT JOIN messages rm ON rm.id = m.reply_to_id
+		LEFT JOIN messages rm ON rm.id = m.reply_to_id AND rm.channel_id = m.channel_id
 		LEFT JOIN users ru ON ru.id = rm.author_id
 		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE m.channel_id = $1 AND ($3::timestamptz IS NULL OR m.created_at < $3)
@@ -739,6 +764,10 @@ func (h *MessageHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"emoji or e2ee_ciphertext is required"}`, http.StatusBadRequest)
 		return
 	}
+	if len(req.Emoji) > 128 {
+		http.Error(w, `{"error":"o emoji especificado excede o tamanho máximo de 128 caracteres"}`, http.StatusBadRequest)
+		return
+	}
 
 	var channelID, guildID uuid.UUID
 	var isPrivate bool
@@ -757,6 +786,12 @@ func (h *MessageHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server to react"}`, http.StatusForbidden)
+		return
+	}
+
+	canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: você não tem acesso a este canal"}`, http.StatusForbidden)
 		return
 	}
 
@@ -798,6 +833,10 @@ func (h *MessageHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, `{"error":"invalid message id or emoji"}`, http.StatusBadRequest)
 		return
 	}
+	if len(emoji) > 128 {
+		http.Error(w, `{"error":"emoji inválido"}`, http.StatusBadRequest)
+		return
+	}
 
 	var channelID, guildID uuid.UUID
 	var isPrivate bool
@@ -816,6 +855,12 @@ func (h *MessageHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) 
 	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
 	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server to react"}`, http.StatusForbidden)
+		return
+	}
+
+	canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: você não tem acesso a este canal"}`, http.StatusForbidden)
 		return
 	}
 
@@ -870,28 +915,31 @@ func (h *MessageHandler) TogglePin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var isMember bool
-	var ownerID uuid.UUID
-	checkQuery := `
-		SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2),
-		       (SELECT owner_id FROM guilds WHERE id = $1)
-	`
-	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember, &ownerID); err != nil || !isMember {
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server to pin messages"}`, http.StatusForbidden)
 		return
 	}
 
-	if userID != ownerID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
+	canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: você não tem acesso a este canal"}`, http.StatusForbidden)
+		return
+	}
 
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageMessages) == 0 {
-			http.Error(w, `{"error":"forbidden: você não tem permissão para fixar mensagens"}`, http.StatusForbidden)
+	canManage, err := canUserManageMessages(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canManage {
+		http.Error(w, `{"error":"forbidden: você não tem permissão para fixar mensagens neste canal"}`, http.StatusForbidden)
+		return
+	}
+
+	var isCurrentlyPinned bool
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT is_pinned FROM messages WHERE id = $1", messageID).Scan(&isCurrentlyPinned)
+	if !isCurrentlyPinned {
+		var pinnedCount int
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM messages WHERE channel_id = $1 AND is_pinned = true", channelID).Scan(&pinnedCount)
+		if pinnedCount >= 50 {
+			http.Error(w, `{"error":"O limite de 50 mensagens fixadas por canal foi atingido"}`, http.StatusBadRequest)
 			return
 		}
 	}
@@ -956,21 +1004,10 @@ func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isPrivate {
-		var hasAccess bool
-		privateCheckQuery := `
-			SELECT EXISTS(
-				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
-				UNION
-				SELECT 1 FROM channel_role_access cra
-				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
-				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
-			)
-		`
-		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
-			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
-			return
-		}
+	canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: você não tem acesso a este canal"}`, http.StatusForbidden)
+		return
 	}
 
 	query := `
@@ -980,7 +1017,7 @@ func (h *MessageHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM messages m
 		INNER JOIN users u ON u.id = m.author_id
-		LEFT JOIN messages rm ON rm.id = m.reply_to_id
+		LEFT JOIN messages rm ON rm.id = m.reply_to_id AND rm.channel_id = m.channel_id
 		LEFT JOIN users ru ON ru.id = rm.author_id
 		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE m.channel_id = $1 AND m.is_pinned = true
@@ -1180,8 +1217,21 @@ func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN users iu ON iu.id = m.invoker_id
 		WHERE c.guild_id = $1
 		  AND (
-		    c.is_private = false
-		    OR EXISTS (SELECT 1 FROM guilds g WHERE g.id = c.guild_id AND g.owner_id = $3)
+		    EXISTS (SELECT 1 FROM guilds g WHERE g.id = c.guild_id AND g.owner_id = $3)
+		    OR EXISTS (
+		        SELECT 1 FROM guild_roles gr
+		        INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+		        WHERE gmr.guild_id = $1 AND gmr.user_id = $3 AND (gr.permissions & 1) != 0
+		    )
+		    OR (
+		        c.is_private = false AND NOT EXISTS (
+		            SELECT 1 FROM channel_permission_overwrites cpo
+		            WHERE cpo.channel_id = c.id AND (cpo.deny & 16384) != 0 AND (
+		                cpo.role_id = (SELECT id FROM guild_roles WHERE guild_id = $1 AND name = '@everyone')
+		                OR EXISTS (SELECT 1 FROM guild_member_roles gmr WHERE gmr.guild_id = $1 AND gmr.user_id = $3 AND gmr.role_id = cpo.role_id)
+		            )
+		        )
+		    )
 		    OR EXISTS (
 		      SELECT 1 FROM channel_role_access cra
 		      INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
@@ -1286,21 +1336,10 @@ func (h *MessageHandler) AckChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isPrivate {
-		var hasAccess bool
-		privateCheckQuery := `
-			SELECT EXISTS(
-				SELECT 1 FROM guilds WHERE id = $1 AND owner_id = $2
-				UNION
-				SELECT 1 FROM channel_role_access cra
-				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
-				WHERE cra.channel_id = $3 AND gmr.guild_id = $1 AND gmr.user_id = $2
-			)
-		`
-		if err := h.db.Pool.QueryRow(r.Context(), privateCheckQuery, guildID, userID, channelID).Scan(&hasAccess); err != nil || !hasAccess {
-			http.Error(w, `{"error":"forbidden: you do not have access to this private channel"}`, http.StatusForbidden)
-			return
-		}
+	canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: you do not have access to this channel"}`, http.StatusForbidden)
+		return
 	}
 
 	var lastMsgID *uuid.UUID = req.MessageID
