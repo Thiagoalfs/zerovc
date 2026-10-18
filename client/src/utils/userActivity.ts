@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { User, Guild, Channel, Permissions, VoiceSession } from '../types';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useGuildStore } from '../stores/guildStore';
+import { serverTimeToClientTime } from './timeSync';
 
 export interface DisplayedActivity {
   kind: 'game' | 'music' | 'other' | 'call';
@@ -367,7 +368,17 @@ export function getUserActivity(
         const participantCount = guildSessions
           ? guildSessions.filter((s) => s.channel_id === ch.id).length
           : ch.voice_sessions?.length || 1;
-        const joinedAtMs = session.joined_at ? new Date(session.joined_at).getTime() : undefined;
+        let startTimeMs: number | undefined;
+        if (isMe) {
+          startTimeMs = useVoiceStore.getState().connectedAt || undefined;
+        }
+        if (!startTimeMs && session.joined_at) {
+          const rawServerMs = new Date(session.joined_at).getTime();
+          if (!isNaN(rawServerMs) && rawServerMs > 0) {
+            startTimeMs = serverTimeToClientTime(rawServerMs);
+          }
+        }
+
         return {
           kind: 'call',
           type: 'call',
@@ -378,7 +389,7 @@ export function getUserActivity(
           guildName: effectiveGuild.name,
           guildIcon: effectiveGuild.icon_url,
           participantCount,
-          start_time: joinedAtMs,
+          start_time: startTimeMs,
         };
       }
     }

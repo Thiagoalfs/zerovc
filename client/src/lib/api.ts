@@ -1,6 +1,7 @@
 import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession, VoiceSession, GameSearchResult } from '../types';
 import { convertToWebP } from '../utils/image';
 import { isElectron } from './platform';
+import { updateServerTime } from '../utils/timeSync';
 
 const getStorageItem = (key: string): string | null => {
   if (typeof localStorage === 'undefined') return null;
@@ -138,6 +139,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
   const resCsrf = response.headers.get('X-CSRF-Token');
   if (resCsrf) {
     setCsrfToken(resCsrf);
+  }
+
+  // Sincroniza offset de relógio do servidor via cabeçalho HTTP padrão Date
+  const resDate = response.headers.get('date');
+  if (resDate) {
+    updateServerTime(resDate);
   }
 
   if (!response.ok) {

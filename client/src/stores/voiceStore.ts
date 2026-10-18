@@ -33,6 +33,7 @@ interface VoiceState {
   dmGroup: DMGroup | null;
   isConnected: boolean;
   isConnecting: boolean;
+  connectedAt: number | null;
   isMuted: boolean;
   isDeafened: boolean;
   isScreensharing: boolean;
@@ -384,6 +385,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     set({
       isConnected: true,
       isConnecting: false,
+      connectedAt: Date.now(),
       isMuted: shouldMute,
       isDeafened: shouldDeafen,
       isCameraOn: false,
@@ -435,6 +437,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     dmGroup: null,
     isConnected: false,
     isConnecting: false,
+    connectedAt: null,
     isMuted: initialMuted || initialDeafened,
     isDeafened: initialDeafened,
     isScreensharing: false,
@@ -791,6 +794,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         dmGroup: null,
         isConnected: false,
         isConnecting: false,
+        connectedAt: null,
         isScreensharing: false,
         isCameraOn: false,
         participants: [],
