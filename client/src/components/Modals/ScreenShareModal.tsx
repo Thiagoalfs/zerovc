@@ -90,26 +90,6 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
-  const handleShare = async () => {
-    if (!selectedSourceId) return;
-    const selectedSource = sources.find((s) => s.id === selectedSourceId);
-    let matchedFamily;
-    try {
-      matchedFamily = selectedSource
-        ? matchWindowToGameFamily(selectedSource.name, sources, selectedSource.id)?.family
-        : undefined;
-    } catch {}
-
-    if (callState === 'connected' || callState === 'calling') {
-      await startCallScreenShare(selectedSourceId, { resolution, fps, includeAudio }, matchedFamily);
-    } else {
-      await startVoiceScreenShare(selectedSourceId, { resolution, fps, includeAudio }, matchedFamily);
-    }
-    onClose();
-  };
-
   const filteredSources = useMemo(() => {
     let list = (sources || []).filter((s) => {
       if (!s || !s.id) return false;
@@ -135,6 +115,26 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
 
     return list;
   }, [sources, activeTab]);
+
+  if (!isOpen) return null;
+
+  const handleShare = async () => {
+    if (!selectedSourceId) return;
+    const selectedSource = sources.find((s) => s.id === selectedSourceId);
+    let matchedFamily;
+    try {
+      matchedFamily = selectedSource
+        ? matchWindowToGameFamily(selectedSource.name, sources, selectedSource.id)?.family
+        : undefined;
+    } catch {}
+
+    if (callState === 'connected' || callState === 'calling') {
+      await startCallScreenShare(selectedSourceId, { resolution, fps, includeAudio }, matchedFamily);
+    } else {
+      await startVoiceScreenShare(selectedSourceId, { resolution, fps, includeAudio }, matchedFamily);
+    }
+    onClose();
+  };
 
   return (
     <div

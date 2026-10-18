@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Minus,
   Square,
@@ -141,7 +141,7 @@ export const TitleBar: React.FC = () => {
 
   return (
     <header
-      className="h-8 bg-background-darkest/95 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-3 select-none flex-shrink-0 z-50 relative"
+      className="h-8 bg-background-darkest border-b border-white/5 flex items-center justify-between px-3 select-none flex-shrink-0 z-[9999999] relative"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* Left Branding / Title */}

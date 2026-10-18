@@ -127,7 +127,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
     const backdropOpacity = Math.max(0, Math.min(0.6, 0.6 - (dragY / 400)));
 
     return (
-      <div className="fixed inset-0 z-[99999] pointer-events-auto flex flex-col justify-end">
+      <div className="fixed inset-0 z-[99999999] pointer-events-auto flex flex-col justify-end">
         {/* Dark translucent backdrop */}
         <div
           style={{
@@ -154,7 +154,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
             transition: isDragging ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
             paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)',
           }}
-          className="relative z-[100000] w-full max-h-[50vh] bg-[#111214] border-t border-white/10 rounded-t-3xl shadow-2xl flex flex-col text-gray-200 select-none animate-in slide-in-from-bottom duration-200 font-sans overflow-hidden"
+          className="relative z-[100000000] w-full max-h-[50vh] bg-[#111214] border-t border-white/10 rounded-t-3xl shadow-2xl flex flex-col text-gray-200 select-none animate-in slide-in-from-bottom duration-200 font-sans overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Interactive Drag Pill Handle Area */}
@@ -301,7 +301,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
 
   // ==================== DESKTOP CURSOR CONTEXT MENU ====================
   return (
-    <div className="fixed inset-0 z-[99999] pointer-events-auto">
+    <div className="fixed inset-0 z-[99999999] pointer-events-auto">
       <div
         className="fixed inset-0 bg-transparent"
         onClick={(e) => {
@@ -322,7 +322,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
           left: `${position.x}px`,
           transition: 'none',
         }}
-        className="fixed z-[100000] min-w-[200px] max-w-[280px] bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 text-gray-200 select-none animate-in fade-in zoom-in-95 duration-75 font-sans"
+        className="fixed z-[100000000] min-w-[200px] max-w-[280px] bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 text-gray-200 select-none animate-in fade-in zoom-in-95 duration-75 font-sans"
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -412,7 +412,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
 
                 {hasSubmenu && isSubmenuOpen && (
                   <div
-                    className={`absolute top-0 min-w-[190px] max-w-[260px] max-h-[300px] overflow-y-auto no-scrollbar bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-0.5 z-[100001] animate-in fade-in zoom-in-95 duration-100 ${
+                    className={`absolute top-0 min-w-[190px] max-w-[260px] max-h-[300px] overflow-y-auto no-scrollbar bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-0.5 z-[100000001] animate-in fade-in zoom-in-95 duration-100 ${
                       submenuSide === 'left'
                         ? 'right-full mr-1'
                         : 'left-full ml-1'

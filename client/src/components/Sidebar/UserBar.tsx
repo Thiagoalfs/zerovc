@@ -389,7 +389,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
         {/* 1. Game Activity Preview Bar (Top Tier - Expands upwards when game is detected) */}
         {isGameActive && user?.custom_activity && (
-          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-background-darker/70 border border-white/5 animate-in fade-in slide-in-from-bottom-2 duration-200 min-w-0">
+          <div className="flex items-center justify-between gap-2 px-1 py-1 animate-in fade-in slide-in-from-bottom-2 duration-200 min-w-0">
             <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
               {user.custom_activity.icon_url ? (
                 <img

@@ -52,21 +52,19 @@ export const MemberList: React.FC<MemberListProps> = ({
   const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
   const memberListWidth = useSettingsStore((s) => s.memberListWidth);
 
-  if (!activeGuild) return null;
-  if (!isOpen && !isDragging) return null;
-
-  const members = activeGuild.members || [];
+  const members = activeGuild?.members || [];
   const guildRoles = useMemo(() => {
+    if (!activeGuild?.roles) return [];
     const seen = new Set<string>();
     const res: Role[] = [];
-    for (const r of activeGuild.roles || []) {
+    for (const r of activeGuild.roles) {
       if (r && r.id && !seen.has(String(r.id))) {
         seen.add(String(r.id));
         res.push(r);
       }
     }
     return res;
-  }, [activeGuild.roles]);
+  }, [activeGuild?.roles]);
 
   // Helper to get roles with live metadata from activeGuild.roles
   const getMemberLiveRoles = (member: User) => {
@@ -130,6 +128,9 @@ export const MemberList: React.FC<MemberListProps> = ({
       generalOnlineMembers: generalOnline,
     };
   }, [members, guildRoles, currentUser?.id, currentUser?.status]);
+
+  if (!activeGuild) return null;
+  if (!isOpen && !isDragging) return null;
 
   const renderMember = (member: User) => {
     const isMe = member.id === currentUser?.id;

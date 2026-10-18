@@ -496,12 +496,17 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsServersExpanded((prev) => !prev)}
-                      className="w-full flex items-center justify-between py-2 px-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 transition-all cursor-pointer group text-left"
+                      className="w-full flex items-center gap-2 py-1.5 px-1 hover:bg-white/5 rounded-lg transition-all cursor-pointer group text-left"
                     >
                       <span className="text-xs font-semibold text-gray-300 group-hover:text-white transition-colors">
                         Servidores em comum
                       </span>
                       <div className="flex items-center gap-2">
+                        <ChevronRight
+                          className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 shrink-0 ${
+                            isServersExpanded ? 'rotate-90 text-white' : ''
+                          }`}
+                        />
                         {mutualGuilds.length > 0 ? (
                           <div className="flex items-center -space-x-1.5 shrink-0">
                             {mutualGuilds.slice(0, 3).map((item, idx) => (
@@ -537,16 +542,11 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                         ) : (
                           <span className="text-xs text-gray-500 font-medium">0</span>
                         )}
-                        <ChevronRight
-                          className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 shrink-0 ${
-                            isServersExpanded ? 'rotate-90 text-white' : ''
-                          }`}
-                        />
                       </div>
                     </button>
 
                     {isServersExpanded && (
-                      <div className="mt-1.5 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1 max-h-44 overflow-y-auto no-scrollbar animate-in fade-in duration-150">
+                      <div className="mt-1 space-y-1 max-h-44 overflow-y-auto no-scrollbar animate-in fade-in duration-150">
                         {mutualGuilds.length > 0 ? (
                           mutualGuilds.map((g) => (
                             <button
@@ -581,12 +581,17 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsFriendsExpanded((prev) => !prev)}
-                      className="w-full flex items-center justify-between py-2 px-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 transition-all cursor-pointer group text-left"
+                      className="w-full flex items-center gap-2 py-1.5 px-1 hover:bg-white/5 rounded-lg transition-all cursor-pointer group text-left"
                     >
                       <span className="text-xs font-semibold text-gray-300 group-hover:text-white transition-colors">
                         Amigos em comum
                       </span>
                       <div className="flex items-center gap-2">
+                        <ChevronRight
+                          className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 shrink-0 ${
+                            isFriendsExpanded ? 'rotate-90 text-white' : ''
+                          }`}
+                        />
                         {mutualFriends.length > 0 ? (
                           <div className="flex items-center -space-x-1.5 shrink-0">
                             {mutualFriends.slice(0, 3).map((item, idx) => (
@@ -622,16 +627,11 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                         ) : (
                           <span className="text-xs text-gray-500 font-medium">0</span>
                         )}
-                        <ChevronRight
-                          className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 shrink-0 ${
-                            isFriendsExpanded ? 'rotate-90 text-white' : ''
-                          }`}
-                        />
                       </div>
                     </button>
 
                     {isFriendsExpanded && (
-                      <div className="mt-1.5 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1 max-h-44 overflow-y-auto no-scrollbar animate-in fade-in duration-150">
+                      <div className="mt-1 space-y-1 max-h-44 overflow-y-auto no-scrollbar animate-in fade-in duration-150">
                         {mutualFriends.length > 0 ? (
                           mutualFriends.map((f) => (
                             <button
@@ -671,7 +671,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                     </span>
                     <div className={`grid gap-2 ${guild ? 'grid-cols-2' : 'grid-cols-1'}`}>
                       {/* Data de criação da conta */}
-                      <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 min-w-0">
+                      <div className="flex items-center gap-2.5 py-1 px-1 min-w-0">
                         <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center shrink-0">
                           <Calendar className="w-4 h-4 text-brand-400" />
                         </div>
@@ -685,7 +685,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 
                       {/* Data de quando entrou no servidor (ao lado, somente quando dentro de um servidor) */}
                       {guild && (
-                        <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 min-w-0">
+                        <div className="flex items-center gap-2.5 py-1 px-1 min-w-0">
                           {guild.icon_url ? (
                             <img
                               src={formatAssetUrl(guild.icon_url)}
