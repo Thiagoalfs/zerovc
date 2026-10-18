@@ -31,7 +31,7 @@ export const GAME_FAMILIES: GameFamily[] = [
       {
         stage: 'launcher',
         label: 'Lobby / Cliente',
-        patterns: [/riot client/i, /leagueclient/i, /league client/i],
+        patterns: [/riot client/i, /leagueclient/i, /league client/i, /^league of legends$/i],
       },
     ],
   },
@@ -47,7 +47,7 @@ export const GAME_FAMILIES: GameFamily[] = [
       {
         stage: 'launcher',
         label: 'Lobby / Cliente',
-        patterns: [/riot client/i, /leagueclient/i],
+        patterns: [/riot client/i, /leagueclient/i, /^league of legends$/i],
       },
     ],
   },
@@ -136,11 +136,22 @@ export function matchWindowToGameFamily<T extends { id: string; name: string }>(
   if (/^league of legends$/i.test(cleanTitle)) {
     const lolFamily = GAME_FAMILIES.find((f) => f.id === 'league_of_legends')!;
     if (allSources && allSources.length > 0) {
+      // Check if there is an explicit match window running alongside
+      const hasExplicitMatch = allSources.some(
+        (s) => s.id?.startsWith('window:') && /league of legends \(tm\)/i.test((s.name || '').trim())
+      );
+      if (hasExplicitMatch) {
+        return {
+          family: lolFamily,
+          stage: 'launcher',
+          label: 'Lobby / Cliente',
+        };
+      }
       const lolWindows = allSources.filter(
         (s) => s.id?.startsWith('window:') && /^league of legends$/i.test((s.name || '').trim())
       );
       if (lolWindows.length > 1) {
-        // First in Z-order is active match, second is lobby
+        // If there are multiple "League of Legends" windows, first in Z-order is active match, second is lobby
         const isFirst = lolWindows[0]?.id === sourceId;
         return {
           family: lolFamily,
@@ -149,11 +160,11 @@ export function matchWindowToGameFamily<T extends { id: string; name: string }>(
         };
       }
     }
-    // Single League of Legends window
+    // Single League of Legends window without (TM): this is the client lobby
     return {
       family: lolFamily,
-      stage: 'game',
-      label: 'Partida / Jogo',
+      stage: 'launcher',
+      label: 'Lobby / Cliente',
     };
   }
 

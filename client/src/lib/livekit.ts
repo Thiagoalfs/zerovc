@@ -258,6 +258,8 @@ class LiveKitManager {
   private activeGameFamily: GameFamily | null = null;
   private gameFamilyWatcherTimer: any = null;
   private isSwitchingScreenSource: boolean = false;
+  private isGameFamilyTransitioning: boolean = false;
+  private transitionHoldingTrack?: MediaStreamTrack;
 
   getRoom(): Room | null {
     return this.room;
@@ -1002,6 +1004,12 @@ class LiveKitManager {
       this.activeGameFamily = null;
       this.currentScreenShareSourceId = null;
       this.currentScreenShareConfig = undefined;
+      this.isGameFamilyTransitioning = false;
+      if (this.transitionHoldingTrack) {
+        try { this.transitionHoldingTrack.stop(); } catch {}
+        this.activeMediaStreamTracks.delete(this.transitionHoldingTrack);
+        this.transitionHoldingTrack = undefined;
+      }
 
       await this.room.localParticipant.setScreenShareEnabled(false);
       const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
@@ -1028,12 +1036,16 @@ class LiveKitManager {
    * Background watcher that detects window transitions for known game families
    * (e.g. automatically moving from LeagueClientUx lobby to League of Legends.exe match).
    */
+  /**
+   * Background watcher that detects window transitions for known game families
+   * (e.g. automatically moving from LeagueClientUx lobby to League of Legends.exe match).
+   */
   private startGameFamilyWindowWatcher() {
     this.stopGameFamilyWindowWatcher();
     if (!this.activeGameFamily || typeof window === 'undefined' || !(window as any).electronAPI?.getScreenSources) return;
 
     this.gameFamilyWatcherTimer = setInterval(async () => {
-      if (!this.activeGameFamily || !this.currentScreenShareSourceId || this.isSwitchingScreenSource) return;
+      if (!this.activeGameFamily || !this.currentScreenShareSourceId || this.isSwitchingScreenSource || this.isGameFamilyTransitioning) return;
 
       try {
         const sources = await (window as any).electronAPI.getScreenSources({
@@ -1053,15 +1065,14 @@ class LiveKitManager {
           // The window being captured was closed or hidden!
           if (best && best.source.id !== this.currentScreenShareSourceId) {
             console.log(
-              `[LiveKit] Captured window was closed, auto-switching to active game window: ${best.source.id} (${best.source.name})`
+              `[LiveKit] Captured window was closed, auto-switching to active companion window: ${best.source.id} (${best.source.name})`
             );
             await this.switchScreenShareSource(best.source.id);
             return;
           } else {
-            // No companion window found; cleanly end screen share
-            console.log('[LiveKit] Captured game window closed and no companion found. Stopping share.');
-            await this.setScreenShareEnabled(false);
-            this.onScreenShareEnded?.();
+            // Companion window not visible yet (e.g. client closed to launch game match, or game closed to reopen client)
+            // Enter transition grace period instead of immediately tearing down the stream!
+            void this.handleGameFamilyTransition();
             return;
           }
         }
@@ -1087,11 +1098,125 @@ class LiveKitManager {
   }
 
   /**
-   * Handles track ending (e.g. when the match window closes at the end of a game).
-   * Automatically attempts to recover and switch back to the launcher window before tearing down the stream.
+   * Creates a lightweight placeholder video track during game transitions so the WebRTC
+   * connection remains alive and remote peers don't experience crashes or stream drops.
+   */
+  private createHoldingTrack(): MediaStreamTrack {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#0b0e14';
+      ctx.fillRect(0, 0, 1280, 720);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      const gameName = this.activeGameFamily?.name || 'Jogo';
+      ctx.fillText(`${gameName}: Aguardando inicialização...`, 640, 360);
+    }
+    const stream = canvas.captureStream(5);
+    return stream.getVideoTracks()[0];
+  }
+
+  private async engageHoldingTrack(): Promise<void> {
+    if (!this.room) return;
+    try {
+      await processAudioBridge.stopCapture();
+      const holdingTrack = this.createHoldingTrack();
+      this.activeMediaStreamTracks.add(holdingTrack);
+      this.transitionHoldingTrack = holdingTrack;
+
+      const oldScreenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+      const oldTrack = oldScreenPub?.track;
+      if (oldTrack) {
+        oldTrack.mediaStreamTrack.onended = null;
+        try { (oldTrack as any).stop?.(); } catch {}
+        this.activeMediaStreamTracks.delete(oldTrack.mediaStreamTrack);
+        await this.room.localParticipant.unpublishTrack(oldTrack);
+      }
+
+      await this.room.localParticipant.publishTrack(holdingTrack, {
+        name: 'screen_share',
+        source: Track.Source.ScreenShare,
+        simulcast: false,
+        videoCodec: 'vp8',
+        backupCodec: false,
+        videoEncoding: {
+          maxBitrate: 300_000,
+          maxFramerate: 5,
+          priority: 'low',
+        },
+      });
+      console.log('[LiveKit] Holding track engaged during game family transition');
+    } catch (err) {
+      console.warn('[LiveKit] Failed to engage holding track:', err);
+    }
+  }
+
+  /**
+   * Grace period loop when a game window closes/hides.
+   * Polls every second for up to 35 seconds to allow the companion window
+   * (e.g. League match booting or client reopening) to spawn and be captured.
+   */
+  private async handleGameFamilyTransition(): Promise<void> {
+    if (this.isGameFamilyTransitioning || !this.activeGameFamily || !this.room) return;
+    this.isGameFamilyTransitioning = true;
+    console.log(
+      `[LiveKit] Active window for ${this.activeGameFamily.name} closed/hidden. Entering companion window transition grace period...`
+    );
+
+    // Put holding track in place so WebRTC publication remains healthy and doesn't crash/drop
+    await this.engageHoldingTrack();
+
+    // Poll for the companion window (client -> game match, or game match -> client lobby)
+    const maxAttempts = 35; // 35 seconds total
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      await new Promise((r) => setTimeout(r, 1000));
+
+      // User manually stopped sharing or left call during transition
+      if (!this.activeGameFamily || !this.room) {
+        console.log('[LiveKit] Game transition aborted: user stopped sharing or left room');
+        this.isGameFamilyTransitioning = false;
+        return;
+      }
+
+      if (!(window as any).electronAPI?.getScreenSources) break;
+
+      try {
+        const sources = await (window as any).electronAPI.getScreenSources({
+          thumbnail: false,
+          fetchWindowIcons: false,
+        });
+        if (Array.isArray(sources) && sources.length > 0) {
+          const best = findBestSourceForGameFamily(this.activeGameFamily, sources, null);
+          if (best && best.source?.id) {
+            console.log(
+              `[LiveKit] Companion window detected on attempt ${attempt}: ${best.source.name} (${best.source.id}). Switching now!`
+            );
+            this.isGameFamilyTransitioning = false;
+            await this.switchScreenShareSource(best.source.id);
+            return;
+          }
+        }
+      } catch (pollErr) {
+        console.debug('[LiveKit] Error polling sources during game transition:', pollErr);
+      }
+    }
+
+    // Grace period expired and no window from the game family appeared
+    console.log(`[LiveKit] Game family transition grace period expired after ${maxAttempts}s. Ending screen share.`);
+    this.isGameFamilyTransitioning = false;
+    await this.setScreenShareEnabled(false);
+    this.onScreenShareEnded?.();
+  }
+
+  /**
+   * Handles track ending (e.g. when the match window closes at the end of a game, or client closes to launch the match).
+   * Automatically attempts to recover and switch to companion window with a transition grace period.
    */
   private async handleScreenShareTrackEnded() {
-    if (this.isSwitchingScreenSource) return;
+    if (this.isSwitchingScreenSource || this.isGameFamilyTransitioning) return;
 
     if (this.activeGameFamily && typeof window !== 'undefined' && (window as any).electronAPI?.getScreenSources) {
       try {
@@ -1106,17 +1231,22 @@ class LiveKitManager {
         );
         if (best && best.source.id !== this.currentScreenShareSourceId) {
           console.log(
-            `[LiveKit] Match window closed, seamlessly switching stream back to companion launcher: ${best.source.name}`
+            `[LiveKit] Window closed, immediately switching to companion window: ${best.source.name}`
           );
           const switched = await this.switchScreenShareSource(best.source.id);
           if (switched) return;
         }
       } catch (err) {
-        console.warn('[LiveKit] Error in handleScreenShareTrackEnded auto-recovery:', err);
+        console.warn('[LiveKit] Error in handleScreenShareTrackEnded immediate recovery:', err);
       }
+
+      // Companion window is not yet ready (process is booting or loading).
+      // Enter the transition grace period to wait for the game / client window to open!
+      void this.handleGameFamilyTransition();
+      return;
     }
 
-    // No companion window available or game completely closed
+    // No game family active, standard window closed
     this.setScreenShareEnabled(false);
     this.onScreenShareEnded?.();
   }
@@ -1125,7 +1255,7 @@ class LiveKitManager {
    * Seamlessly switches the active screen share source track without dropping the call or stream.
    */
   async switchScreenShareSource(newSourceId: string): Promise<boolean> {
-    if (!this.room || !this.currentScreenShareSourceId || this.isSwitchingScreenSource) return false;
+    if (!this.room || (!this.currentScreenShareSourceId && !this.isGameFamilyTransitioning) || this.isSwitchingScreenSource) return false;
     this.isSwitchingScreenSource = true;
 
     try {
@@ -1172,6 +1302,12 @@ class LiveKitManager {
       }
 
       this.currentScreenShareSourceId = newSourceId;
+      this.isGameFamilyTransitioning = false;
+      if (this.transitionHoldingTrack) {
+        try { this.transitionHoldingTrack.stop(); } catch {}
+        this.activeMediaStreamTracks.delete(this.transitionHoldingTrack);
+        this.transitionHoldingTrack = undefined;
+      }
 
       const newVideoTrack = stream.getVideoTracks()[0];
       newVideoTrack.contentHint = frameRate >= 60 ? 'motion' : 'detail';
