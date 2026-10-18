@@ -490,8 +490,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return;
       }
 
-      await cleanupPreviousConnection();
-
+      // Update UI state immediately for instant feedback
       set({
         voiceType: 'guild',
         isConnecting: true,
@@ -508,10 +507,14 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       const shouldMute = shouldDeafen || isPTT || get().isMuted;
 
       try {
-        const res = await api.channels.joinVoice(channelId, {
-          is_muted: shouldMute,
-          is_deafened: shouldDeafen,
-        });
+        // Parallelize token fetch with cleanup of previous connection to eliminate sequential waiting
+        const [res] = await Promise.all([
+          api.channels.joinVoice(channelId, {
+            is_muted: shouldMute,
+            is_deafened: shouldDeafen,
+          }),
+          cleanupPreviousConnection(),
+        ]);
 
         // Check if user changed mind or joined another channel while requesting
         if (get().currentChannelId !== channelId || get().voiceType !== 'guild') return;
@@ -557,8 +560,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return;
       }
 
-      await cleanupPreviousConnection();
-
+      // Update UI state immediately for instant feedback
       set({
         voiceType: 'dm',
         isConnecting: true,
@@ -575,27 +577,31 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       const shouldMute = shouldDeafen || isPTT || get().isMuted;
 
       try {
-        let finalToken = token;
-        let finalUrl = livekitUrl;
-        let finalIsE2EE = isE2EE;
+        const fetchTokenPromise = (token && livekitUrl)
+          ? Promise.resolve({
+              token,
+              livekit_url: livekitUrl,
+              e2ee_enabled: isE2EE,
+            })
+          : api.dms.acceptCall(roomId).then((res) => ({
+              token: res.token,
+              livekit_url: res.livekit_url,
+              e2ee_enabled: (res as any)?.e2ee_enabled !== undefined ? Boolean((res as any)?.e2ee_enabled) : isE2EE,
+            }));
 
-        if (!finalToken || !finalUrl) {
-          const res = await api.dms.acceptCall(roomId);
-          finalToken = res.token;
-          finalUrl = res.livekit_url;
-          if ((res as any)?.e2ee_enabled !== undefined) {
-            finalIsE2EE = Boolean((res as any)?.e2ee_enabled);
-          }
-        }
+        const [res] = await Promise.all([
+          fetchTokenPromise,
+          cleanupPreviousConnection(),
+        ]);
 
         if (get().dmRoomId !== roomId || get().voiceType !== 'dm') return;
 
         await connectLiveKitRoom(
-          finalUrl,
-          finalToken,
+          res.livekit_url,
+          res.token,
           shouldMute,
           shouldDeafen,
-          Boolean(finalIsE2EE),
+          Boolean(res.e2ee_enabled),
           roomId
         );
       } catch (err) {
@@ -622,8 +628,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return;
       }
 
-      await cleanupPreviousConnection();
-
+      // Update UI state immediately for instant feedback
       set({
         voiceType: 'group',
         isConnecting: true,
@@ -640,7 +645,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       const shouldMute = shouldDeafen || isPTT || get().isMuted;
 
       try {
-        const res = await api.dmGroups.getVoiceToken(groupId);
+        const [res] = await Promise.all([
+          api.dmGroups.getVoiceToken(groupId),
+          cleanupPreviousConnection(),
+        ]);
 
         if (get().dmGroupId !== groupId || get().voiceType !== 'group') return;
 

@@ -1,4 +1,4 @@
-﻿import {
+import {
   Room,
   RoomEvent,
   VideoPresets,
@@ -167,6 +167,25 @@ class LiveKitManager {
       console.debug('[LiveKit] WebRTC prewarm notice:', e);
     }
   }
+
+  /**
+   * Pre-warms the WebAudio AudioContext in response to an early user gesture,
+   * avoiding WASAPI audio subsystem cold-start stalls when joining a call later.
+   */
+  public prewarmAudio(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtxClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtxClass && (!this.audioContext || this.audioContext.state === 'closed')) {
+        this.audioContext = new AudioCtxClass();
+      }
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        void this.audioContext.resume().catch(() => {});
+      }
+    } catch (e) {
+      console.debug('[LiveKit] Audio prewarm notice:', e);
+    }
+  }
   private onParticipantsChanged?: (participants: Participant[]) => void;
   private onSpeakingChanged?: (speakingUserIds: string[]) => void;
   private onTrackUpdated?: () => void;
@@ -293,7 +312,9 @@ class LiveKitManager {
     try {
       const AudioCtxClass = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (AudioCtxClass) {
-        this.audioContext = new AudioCtxClass();
+        if (!this.audioContext || this.audioContext.state === 'closed') {
+          this.audioContext = new AudioCtxClass();
+        }
         if (typeof (room as any).setAudioContext === 'function') {
           (room as any).setAudioContext(this.audioContext);
         }
@@ -481,12 +502,11 @@ class LiveKitManager {
     await room.connect(url, token, {
       autoSubscribe: true,
       maxRetries: 3,
-      peerConnectionTimeout: 30000,
-      websocketTimeout: 20000,
+      peerConnectionTimeout: 15000,
+      websocketTimeout: 15000,
       rtcConfig: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
         ],
         iceCandidatePoolSize: 2,
         iceTransportPolicy: 'all',
@@ -1310,6 +1330,7 @@ export function prewarmVoiceEngine(): void {
   // 3. Prewarm Web Audio Engine on first interaction
   const warmupAudio = () => {
     void audioProcessor.prewarm();
+    livekit.prewarmAudio();
     window.removeEventListener('pointerdown', warmupAudio);
     window.removeEventListener('keydown', warmupAudio);
   };
