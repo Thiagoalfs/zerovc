@@ -1509,6 +1509,28 @@ ipcMain.handle('get-streamer-software-status', () => {
   return { runningApps: lastRunningStreamerApps };
 });
 
+ipcMain.handle('is-process-running', async (_event, processNames: string[]) => {
+  if (!Array.isArray(processNames) || processNames.length === 0) return false;
+  return new Promise<boolean>((resolve) => {
+    const { exec } = require('child_process');
+    let cmd = '';
+    if (process.platform === 'win32') {
+      cmd = 'tasklist /FO CSV /NH';
+    } else if (process.platform === 'darwin' || process.platform === 'linux') {
+      cmd = 'ps -eo comm=';
+    } else {
+      return resolve(false);
+    }
+
+    exec(cmd, { maxBuffer: 1024 * 1024 * 4, windowsHide: true }, (err: any, stdout: string) => {
+      if (err || !stdout) return resolve(false);
+      const procSet = parseRunningProcesses(stdout);
+      const isRunning = processNames.some((p) => procSet.has(p.toLowerCase().trim()));
+      resolve(isRunning);
+    });
+  });
+});
+
 ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => {
   if (process.platform !== 'win32') {
     return { success: false, error: 'WASAPI capture is only supported on Windows' };

@@ -87,6 +87,7 @@ const electronAPI: ElectronAPI = {
   getHardwareAcceleration: () => ipcRenderer.invoke('get-hardware-acceleration'),
   relaunchApp: () => ipcRenderer.send('relaunch-app'),
   getScreenSources: (opts?: { thumbnail?: boolean; fetchWindowIcons?: boolean }) => ipcRenderer.invoke('get-screen-sources', opts),
+  isProcessRunning: (processes: string[]) => ipcRenderer.invoke('is-process-running', processes),
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),

@@ -15,6 +15,7 @@ export interface GameFamilyStage {
 export interface GameFamily {
   id: string;
   name: string;
+  processes: string[];
   stages: GameFamilyStage[];
 }
 
@@ -22,6 +23,7 @@ export const GAME_FAMILIES: GameFamily[] = [
   {
     id: 'league_of_legends',
     name: 'League of Legends',
+    processes: ['leagueclient.exe', 'leagueclientux.exe', 'league of legends.exe', 'riotclientservices.exe'],
     stages: [
       {
         stage: 'game',
@@ -38,6 +40,7 @@ export const GAME_FAMILIES: GameFamily[] = [
   {
     id: 'tft',
     name: 'Teamfight Tactics',
+    processes: ['leagueclient.exe', 'leagueclientux.exe', 'league of legends.exe', 'tftclient.exe', 'riotclientservices.exe'],
     stages: [
       {
         stage: 'game',
@@ -54,6 +57,7 @@ export const GAME_FAMILIES: GameFamily[] = [
   {
     id: 'valorant',
     name: 'VALORANT',
+    processes: ['valorant.exe', 'valorant-win64-shipping.exe', 'riotclientservices.exe'],
     stages: [
       {
         stage: 'game',
@@ -70,6 +74,7 @@ export const GAME_FAMILIES: GameFamily[] = [
   {
     id: 'minecraft',
     name: 'Minecraft',
+    processes: ['minecraft.exe', 'javaw.exe', 'minecraft.windows.exe'],
     stages: [
       {
         stage: 'game',
@@ -86,6 +91,7 @@ export const GAME_FAMILIES: GameFamily[] = [
   {
     id: 'gtav',
     name: 'Grand Theft Auto V',
+    processes: ['gta5.exe', 'fivem.exe', 'fivem_b2699_gtaprocess.exe', 'playgtav.exe'],
     stages: [
       {
         stage: 'game',
