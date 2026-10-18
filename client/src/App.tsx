@@ -29,7 +29,7 @@ const CreateServerModal = React.lazy(() => import('./components/Modals/CreateSer
 const CreateDMGroupModal = React.lazy(() => import('./components/Modals/CreateDMGroupModal').then(m => ({ default: m.CreateDMGroupModal })));
 const CreateChannelModal = React.lazy(() => import('./components/Modals/CreateChannelModal').then(m => ({ default: m.CreateChannelModal })));
 const CreateCategoryModal = React.lazy(() => import('./components/Modals/CreateCategoryModal').then(m => ({ default: m.CreateCategoryModal })));
-const ScreenShareModal = React.lazy(() => import('./components/Modals/ScreenShareModal').then(m => ({ default: m.ScreenShareModal })));
+import { ScreenShareModal } from './components/Modals/ScreenShareModal';
 const ProfileModal = React.lazy(() => import('./components/Modals/ProfileModal').then(m => ({ default: m.ProfileModal })));
 const ServerSettingsModal = React.lazy(() => import('./components/Modals/ServerSettingsModal').then(m => ({ default: m.ServerSettingsModal })));
 const ChannelSettingsModal = React.lazy(() => import('./components/Modals/ChannelSettingsModal').then(m => ({ default: m.ChannelSettingsModal })));
@@ -2384,10 +2384,12 @@ export const App: React.FC = () => {
           onClose={() => setIsCreateCategoryOpen(false)}
         />
 
-        <ScreenShareModal
-          isOpen={isScreenShareOpen}
-          onClose={() => setIsScreenShareOpen(false)}
-        />
+        <ErrorBoundary>
+          <ScreenShareModal
+            isOpen={isScreenShareOpen}
+            onClose={() => setIsScreenShareOpen(false)}
+          />
+        </ErrorBoundary>
 
         <ProfileModal
           isOpen={isProfileModalOpen}

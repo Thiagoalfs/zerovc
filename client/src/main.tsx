@@ -21,3 +21,9 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.loca
     });
   });
 }
+
+// Auto-reload on stale/outdated dynamic chunk loading errors (e.g. after deploy or updates)
+window.addEventListener('vite:preloadError', (event) => {
+  console.warn('[Vite] Preload error detected, reloading page:', event);
+  window.location.reload();
+});

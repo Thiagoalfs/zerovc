@@ -51,14 +51,17 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
       if (isElectron) {
         try {
           const res = await (window as any).electronAPI.getScreenSources();
-          setSources(res);
-          if (res.length > 0) {
+          const validSources = Array.isArray(res) ? res.filter((s: any) => s && s.id) : [];
+          setSources(validSources);
+          if (validSources.length > 0) {
             // Prioritize active game window (match > launcher) if available
             const gameMatch =
-              res.find((s: any) => s.id.startsWith('window:') && matchWindowToGameFamily(s.name, res, s.id)?.stage === 'game') ||
-              res.find((s: any) => s.id.startsWith('window:') && matchWindowToGameFamily(s.name, res, s.id)) ||
-              res[0];
-            setSelectedSourceId(gameMatch.id);
+              validSources.find((s: any) => s.id?.startsWith('window:') && matchWindowToGameFamily(s.name, validSources, s.id)?.stage === 'game') ||
+              validSources.find((s: any) => s.id?.startsWith('window:') && matchWindowToGameFamily(s.name, validSources, s.id)) ||
+              validSources[0];
+            if (gameMatch?.id) {
+              setSelectedSourceId(gameMatch.id);
+            }
           }
         } catch (err) {
           console.error('Failed to get sources:', err);
@@ -92,9 +95,12 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
   const handleShare = async () => {
     if (!selectedSourceId) return;
     const selectedSource = sources.find((s) => s.id === selectedSourceId);
-    const matchedFamily = selectedSource
-      ? matchWindowToGameFamily(selectedSource.name, sources, selectedSource.id)?.family
-      : undefined;
+    let matchedFamily;
+    try {
+      matchedFamily = selectedSource
+        ? matchWindowToGameFamily(selectedSource.name, sources, selectedSource.id)?.family
+        : undefined;
+    } catch {}
 
     if (callState === 'connected' || callState === 'calling') {
       await startCallScreenShare(selectedSourceId, { resolution, fps, includeAudio }, matchedFamily);
@@ -105,7 +111,8 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
   };
 
   const filteredSources = useMemo(() => {
-    let list = sources.filter((s) => {
+    let list = (sources || []).filter((s) => {
+      if (!s || !s.id) return false;
       if (activeTab === 'screens') return s.id.startsWith('screen:');
       if (activeTab === 'windows') return s.id.startsWith('window:');
       return true;
@@ -114,11 +121,15 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
     if (activeTab === 'windows') {
       // Sort game windows to the top (in-game match first, then launcher)
       list = [...list].sort((a, b) => {
-        const matchA = matchWindowToGameFamily(a.name, sources, a.id);
-        const matchB = matchWindowToGameFamily(b.name, sources, b.id);
-        const rankA = matchA ? (matchA.stage === 'game' ? 2 : 1) : 0;
-        const rankB = matchB ? (matchB.stage === 'game' ? 2 : 1) : 0;
-        return rankB - rankA;
+        try {
+          const matchA = matchWindowToGameFamily(a?.name, sources, a?.id);
+          const matchB = matchWindowToGameFamily(b?.name, sources, b?.id);
+          const rankA = matchA ? (matchA.stage === 'game' ? 2 : 1) : 0;
+          const rankB = matchB ? (matchB.stage === 'game' ? 2 : 1) : 0;
+          return rankB - rankA;
+        } catch {
+          return 0;
+        }
       });
     }
 
@@ -256,19 +267,23 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
                         <span className="text-xs font-semibold text-gray-200 truncate">{source.name}</span>
                       </div>
                       {(() => {
-                        const match = matchWindowToGameFamily(source.name, sources, source.id);
-                        if (!match) return null;
-                        return (
-                          <span
-                            className={`text-[9.5px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider flex-shrink-0 ${
-                              match.stage === 'game'
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-brand-500/20 text-brand-300 border border-brand-500/30'
-                            }`}
-                          >
-                            {match.label}
-                          </span>
-                        );
+                        try {
+                          const match = matchWindowToGameFamily(source.name, sources, source.id);
+                          if (!match) return null;
+                          return (
+                            <span
+                              className={`text-[9.5px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider flex-shrink-0 ${
+                                match.stage === 'game'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-brand-500/20 text-brand-300 border border-brand-500/30'
+                              }`}
+                            >
+                              {match.label}
+                            </span>
+                          );
+                        } catch {
+                          return null;
+                        }
                       })()}
                     </div>
                   </div>
