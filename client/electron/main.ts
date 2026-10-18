@@ -127,7 +127,7 @@ if (!hardwareAccelerationEnabled) {
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
   app.commandLine.appendSwitch(
     'enable-features',
-    'WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,MediaFoundationVideoEncodeAcceleration,VaapiVideoEncoder'
+    'WebRTCPipeWireCapturer,WebRtcHideLocalIpsWithMdns,MediaFoundationVideoEncodeAcceleration,VaapiVideoEncoder,WebRtcAllowWgcWindowCapturer,WebRtcAllowWgcScreenCapturer'
   );
 }
 
@@ -879,19 +879,21 @@ ipcMain.on('reload-app', () => {
 });
 
 // IPC: Get Screen Sources for Screen Sharing in WebRTC
-ipcMain.handle('get-screen-sources', async () => {
+ipcMain.handle('get-screen-sources', async (_event, opts?: { thumbnail?: boolean; fetchWindowIcons?: boolean }) => {
   try {
+    const shouldFetchThumbnail = opts?.thumbnail !== false;
+    const shouldFetchIcons = opts?.fetchWindowIcons !== false;
     const sources = await desktopCapturer.getSources({
       types: ['window', 'screen'],
-      thumbnailSize: { width: 400, height: 225 },
-      fetchWindowIcons: true,
+      thumbnailSize: shouldFetchThumbnail ? { width: 400, height: 225 } : { width: 1, height: 1 },
+      fetchWindowIcons: shouldFetchIcons,
     });
 
     return sources.map((source) => ({
       id: source.id,
       name: source.name,
-      thumbnail: source.thumbnail.toDataURL(),
-      appIcon: source.appIcon ? source.appIcon.toDataURL() : null,
+      thumbnail: shouldFetchThumbnail ? source.thumbnail.toDataURL() : '',
+      appIcon: shouldFetchIcons && source.appIcon ? source.appIcon.toDataURL() : null,
     }));
   } catch (err) {
     console.error('Failed to get screen sources:', err);

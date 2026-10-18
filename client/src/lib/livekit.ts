@@ -809,19 +809,29 @@ class LiveKitManager {
 
         // Electron Screen Capture API with Hardware Accelerated capture & Flexible Framerate constraints
         // Capture clean video stream from desktopCapturer sourceId
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            // @ts-ignore
-            mandatory: {
-              chromeMediaSource: 'desktop',
-              chromeMediaSourceId: resolvedSourceId,
-              maxWidth: dims.width,
-              maxHeight: dims.height,
-              maxFrameRate: frameRate,
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              // @ts-ignore
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: resolvedSourceId,
+                maxWidth: dims.width,
+                maxHeight: dims.height,
+                maxFrameRate: frameRate,
+              },
             },
-          },
-        });
+          });
+        } catch (captureErr) {
+          console.error('[LiveKit] Failed to capture window/screen stream for source:', resolvedSourceId, captureErr);
+          this.stopGameFamilyWindowWatcher();
+          this.activeGameFamily = null;
+          this.currentScreenShareSourceId = null;
+          this.currentScreenShareConfig = undefined;
+          throw captureErr;
+        }
 
         // Register video tracks for cleanup
         stream.getTracks().forEach((t) => this.activeMediaStreamTracks.add(t));
@@ -1026,7 +1036,10 @@ class LiveKitManager {
       if (!this.activeGameFamily || !this.currentScreenShareSourceId || this.isSwitchingScreenSource) return;
 
       try {
-        const sources = await (window as any).electronAPI.getScreenSources();
+        const sources = await (window as any).electronAPI.getScreenSources({
+          thumbnail: false,
+          fetchWindowIcons: false,
+        });
         if (!Array.isArray(sources) || sources.length === 0) return;
 
         const currentStillExists = sources.some((s: any) => s.id === this.currentScreenShareSourceId);
@@ -1047,7 +1060,7 @@ class LiveKitManager {
           } else {
             // No companion window found; cleanly end screen share
             console.log('[LiveKit] Captured game window closed and no companion found. Stopping share.');
-            this.setScreenShareEnabled(false);
+            await this.setScreenShareEnabled(false);
             this.onScreenShareEnded?.();
             return;
           }
@@ -1063,7 +1076,7 @@ class LiveKitManager {
       } catch (err) {
         console.debug('[LiveKit] GameFamilyWatcher check notice:', err);
       }
-    }, 1500);
+    }, 2500);
   }
 
   private stopGameFamilyWindowWatcher() {
@@ -1082,7 +1095,10 @@ class LiveKitManager {
 
     if (this.activeGameFamily && typeof window !== 'undefined' && (window as any).electronAPI?.getScreenSources) {
       try {
-        const sources = await (window as any).electronAPI.getScreenSources();
+        const sources = await (window as any).electronAPI.getScreenSources({
+          thumbnail: false,
+          fetchWindowIcons: false,
+        });
         const best = findBestSourceForGameFamily(
           this.activeGameFamily,
           sources,
@@ -1111,7 +1127,6 @@ class LiveKitManager {
   async switchScreenShareSource(newSourceId: string): Promise<boolean> {
     if (!this.room || !this.currentScreenShareSourceId || this.isSwitchingScreenSource) return false;
     this.isSwitchingScreenSource = true;
-    this.currentScreenShareSourceId = newSourceId;
 
     try {
       const config = this.currentScreenShareConfig;
@@ -1136,19 +1151,27 @@ class LiveKitManager {
       await processAudioBridge.stopCapture();
 
       // Acquire new desktop media stream
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          // @ts-ignore
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: newSourceId,
-            maxWidth: dims.width,
-            maxHeight: dims.height,
-            maxFrameRate: frameRate,
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            // @ts-ignore
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: newSourceId,
+              maxWidth: dims.width,
+              maxHeight: dims.height,
+              maxFrameRate: frameRate,
+            },
           },
-        },
-      });
+        });
+      } catch (streamErr) {
+        console.warn('[LiveKit] switchScreenShareSource getUserMedia failed for:', newSourceId, streamErr);
+        return false;
+      }
+
+      this.currentScreenShareSourceId = newSourceId;
 
       const newVideoTrack = stream.getVideoTracks()[0];
       newVideoTrack.contentHint = frameRate >= 60 ? 'motion' : 'detail';

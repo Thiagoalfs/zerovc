@@ -22,7 +22,7 @@ export interface UpdateProgress {
 export interface ElectronAPI {
   isElectron: boolean;
   platform: string;
-  getScreenSources: () => Promise<ScreenSource[]>;
+  getScreenSources: (opts?: { thumbnail?: boolean; fetchWindowIcons?: boolean }) => Promise<ScreenSource[]>;
   minimize: () => void;
   maximize: () => void;
   close: () => void;
@@ -86,7 +86,7 @@ const electronAPI: ElectronAPI = {
   setHardwareAcceleration: (enabled: boolean) => ipcRenderer.send('set-hardware-acceleration', enabled),
   getHardwareAcceleration: () => ipcRenderer.invoke('get-hardware-acceleration'),
   relaunchApp: () => ipcRenderer.send('relaunch-app'),
-  getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
+  getScreenSources: (opts?: { thumbnail?: boolean; fetchWindowIcons?: boolean }) => ipcRenderer.invoke('get-screen-sources', opts),
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),

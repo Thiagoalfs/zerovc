@@ -261,15 +261,19 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
     if (isElectron && gameName) {
       try {
-        const sources = await (window as any).electronAPI.getScreenSources();
+        const sources = await (window as any).electronAPI.getScreenSources({ thumbnail: false, fetchWindowIcons: false });
         const windowSources = sources.filter((s: any) => s.id?.startsWith('window:'));
 
         // 1. Intelligent Game Family Priority (Partida in-game > Launcher/Lobby)
         const familyMatch = findBestSourceForGameFamily(gameName, sources);
         if (familyMatch) {
           console.log('[UserBar] Auto-streaming game family prioritized window:', familyMatch.source.name, familyMatch.source.id);
-          await startScreenShare(familyMatch.source.id, { resolution: '720p', fps: 30, includeAudio: true }, familyMatch.family);
-          return;
+          try {
+            await startScreenShare(familyMatch.source.id, { resolution: '720p', fps: 30, includeAudio: true }, familyMatch.family);
+            return;
+          } catch (shareErr) {
+            console.warn('[UserBar] Direct window screen share failed, falling back to modal:', shareErr);
+          }
         }
 
         const cleanGame = gameName.toLowerCase().trim();
@@ -280,7 +284,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           return sName.includes(cleanGame) || cleanGame.includes(sName);
         });
 
-        // 2. Word-based match fallback
+        // 3. Word-based match fallback
         if (!matched) {
           const gameWords = cleanGame.split(/\s+/).filter((w: string) => w.length > 2);
           if (gameWords.length > 0) {
@@ -293,8 +297,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
         if (matched) {
           console.log('[UserBar] Auto-streaming detected game window with audio:', matched.name, matched.id);
-          await startScreenShare(matched.id, { resolution: '720p', fps: 30, includeAudio: true });
-          return;
+          try {
+            await startScreenShare(matched.id, { resolution: '720p', fps: 30, includeAudio: true });
+            return;
+          } catch (shareErr) {
+            console.warn('[UserBar] Direct matched window screen share failed, falling back to modal:', shareErr);
+          }
         }
       } catch (err) {
         console.warn('[UserBar] Error auto-detecting game window source:', err);

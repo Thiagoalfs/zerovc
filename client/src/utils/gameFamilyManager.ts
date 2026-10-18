@@ -249,22 +249,25 @@ export function findBestSourceForGameFamily<T extends { id: string; name: string
     return { source: candidates[0], stage: 'game', family };
   }
 
-  // 3. If currentSourceId was streaming one of these windows:
+  // 3. If currently streaming one of the candidates, retain it steadily
   if (currentSourceId) {
-    const currentIndex = candidates.findIndex((s) => s.id === currentSourceId);
-    if (currentIndex !== -1) {
-      // User was sharing one of the windows (likely the lobby) and a new window appeared (the match!)
-      const other = candidates.find((s) => s.id !== currentSourceId);
-      if (other) {
-        return { source: other, stage: 'game', family };
-      }
+    const currentCandidate = candidates.find((s) => s.id === currentSourceId);
+    if (currentCandidate) {
+      const match = matchWindowToGameFamily(currentCandidate.name, candidates, currentCandidate.id);
+      return {
+        source: currentCandidate,
+        stage: match?.stage || 'launcher',
+        family,
+      };
     }
   }
 
-  // 4. Default: First in Z-order is the active foreground window (match)
+  // 4. Default: First in Z-order is the active foreground window
+  const defaultSource = candidates[0];
+  const defaultMatch = matchWindowToGameFamily(defaultSource.name, candidates, defaultSource.id);
   return {
-    source: candidates[0],
-    stage: 'game',
+    source: defaultSource,
+    stage: defaultMatch?.stage || 'game',
     family,
   };
 }

@@ -2201,17 +2201,19 @@ export const App: React.FC = () => {
           </div>
 
           {/* Unified UserBar Footer extending across ServerList and ChannelList */}
-          <UserBar
-            onOpenSettings={() => setIsProfileModalOpen(true)}
-            onOpenScreenShare={() => setIsScreenShareOpen(true)}
-            onOpenUserProfile={(targetUser, pos, g) =>
-              setSelectedUserForProfile({
-                user: targetUser,
-                position: pos,
-                guild: g !== undefined ? g : (!isHomeActive ? activeGuild : null),
-              })
-            }
-          />
+          <ErrorBoundary>
+            <UserBar
+              onOpenSettings={() => setIsProfileModalOpen(true)}
+              onOpenScreenShare={() => setIsScreenShareOpen(true)}
+              onOpenUserProfile={(targetUser, pos, g) =>
+                setSelectedUserForProfile({
+                  user: targetUser,
+                  position: pos,
+                  guild: g !== undefined ? g : (!isHomeActive ? activeGuild : null),
+                })
+              }
+            />
+          </ErrorBoundary>
         </div>
 
       {/* 3. Main Stage */}
@@ -2327,18 +2329,20 @@ export const App: React.FC = () => {
 
         {/* Floating Live Screen PiP (Shown ONLY when someone in the call is actively sharing screen) */}
         {isConnected && (isHomeActive || activeChannel?.type !== 'voice' || activeChannel?.id !== currentChannelId) && (
-          <VoiceFloatingPiP
-            onNavigateToVoiceChannel={async (chId, gId) => {
-              setIsHomeActive(false);
-              if (gId && chId) {
-                await useGuildStore.getState().selectGuild(gId, chId);
-                navigateTo(`/${gId}/${chId}`);
-              }
-            }}
-            onOpenUserProfile={(targetUser, pos) => {
-              setSelectedUserForProfile({ user: targetUser, position: pos, guild: !isHomeActive ? activeGuild : null });
-            }}
-          />
+          <ErrorBoundary>
+            <VoiceFloatingPiP
+              onNavigateToVoiceChannel={async (chId, gId) => {
+                setIsHomeActive(false);
+                if (gId && chId) {
+                  await useGuildStore.getState().selectGuild(gId, chId);
+                  navigateTo(`/${gId}/${chId}`);
+                }
+              }}
+              onOpenUserProfile={(targetUser, pos) => {
+                setSelectedUserForProfile({ user: targetUser, position: pos, guild: !isHomeActive ? activeGuild : null });
+              }}
+            />
+          </ErrorBoundary>
         )}
       </div>
 
