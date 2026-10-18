@@ -597,6 +597,21 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		isMuted = true
 	}
 
+	var oldChannelID *uuid.UUID
+	var oldGuildID *uuid.UUID
+	var currChID uuid.UUID
+	var currGldID uuid.UUID
+	errOld := h.db.Pool.QueryRow(r.Context(), `
+		SELECT vs.channel_id, c.guild_id
+		FROM voice_sessions vs
+		JOIN channels c ON c.id = vs.channel_id
+		WHERE vs.user_id = $1
+	`, userID).Scan(&currChID, &currGldID)
+	if errOld == nil && currChID != channelID {
+		oldChannelID = &currChID
+		oldGuildID = &currGldID
+	}
+
 	voiceSessionQuery := `
 		INSERT INTO voice_sessions (channel_id, user_id, is_muted, is_deafened, is_screensharing)
 		VALUES ($1, $2, $3, $4, false)
@@ -624,6 +639,17 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate voice token"}`, http.StatusInternalServerError)
 		return
+	}
+
+	if oldChannelID != nil && oldGuildID != nil {
+		h.hub.BroadcastToGuild(*oldGuildID, models.WSEvent{
+			Type: models.EventVoiceStateUpdate,
+			Data: map[string]any{
+				"action":     "leave",
+				"channel_id": *oldChannelID,
+				"user_id":    userID,
+			},
+		})
 	}
 
 	h.hub.BroadcastToGuild(guildID, models.WSEvent{
@@ -660,13 +686,13 @@ func (h *ChannelHandler) LeaveVoice(w http.ResponseWriter, r *http.Request) {
 	var guildID uuid.UUID
 	h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
 
-	_, err = h.db.Pool.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", userID)
+	tag, err := h.db.Pool.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1 AND channel_id = $2", userID, channelID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to leave voice"}`, http.StatusInternalServerError)
 		return
 	}
 
-	if guildID != uuid.Nil {
+	if tag.RowsAffected() > 0 && guildID != uuid.Nil {
 		h.hub.BroadcastToGuild(guildID, models.WSEvent{
 			Type: models.EventVoiceStateUpdate,
 			Data: map[string]any{

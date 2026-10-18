@@ -165,6 +165,8 @@ const extractParticipantDeviceId = (participant: Participant): string => {
   return participant.identity;
 };
 
+let activeConnectionEpoch = 0;
+
 export const useVoiceStore = create<VoiceState>((set, get) => {
   // Helper to attach LiveKit room connection listeners and sync state
   const connectLiveKitRoom = async (
@@ -173,7 +175,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     shouldMute: boolean,
     shouldDeafen: boolean,
     isE2EERoom: boolean = false,
-    callId?: string
+    callId?: string,
+    sessionEpoch: number = 0
   ) => {
     let e2eeSetup = undefined;
     if (isE2EERoom) {
@@ -303,6 +306,12 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         callKeyManager.handleParticipantLeft(deviceId);
       },
       onDisconnected: (reason) => {
+        // If this disconnect event is from an older room/session that was superseded by switching calls, ignore it
+        if (sessionEpoch !== activeConnectionEpoch) {
+          console.warn('[Voice] Ignored onDisconnected from stale epoch:', sessionEpoch, 'current:', activeConnectionEpoch);
+          return;
+        }
+
         participantDeviceMap.clear();
         callKeyManager.endCall();
         livekitE2EEManager.cleanup();
@@ -339,6 +348,12 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         }
       },
     }, e2eeSetup);
+
+    if (sessionEpoch !== activeConnectionEpoch) {
+      console.warn('[Voice] connectLiveKitRoom finished but epoch was superseded. Disconnecting room for epoch:', sessionEpoch);
+      livekit.disconnect().catch(() => {});
+      return;
+    }
 
     // Sync pre-existing room participants into CallKeyManager immediately after connect
     if (isE2EERoom && callId) {
@@ -380,19 +395,32 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     }, 500);
   };
 
-  const cleanupPreviousConnection = async () => {
+  const cleanupPreviousConnection = async (prev?: {
+    voiceType: VoiceType | null;
+    channelId: string | null;
+    guildId: string | null;
+    dmRoomId: string | null;
+    dmGroupId: string | null;
+    isScreensharing: boolean;
+  }) => {
     callKeyManager.endCall();
     livekitE2EEManager.cleanup();
-    const { voiceType, currentChannelId, dmRoomId, isScreensharing } = get();
-    if (isScreensharing) {
+
+    if (prev?.isScreensharing) {
       try {
         await livekit.setScreenShareEnabled(false);
       } catch {}
     }
-    if (voiceType === 'guild' && currentChannelId) {
-      api.channels.leaveVoice(currentChannelId).catch(() => {});
-    } else if (voiceType === 'dm' && dmRoomId) {
-      api.dms.leaveCall(dmRoomId).catch(() => {});
+
+    const currentUserId = useAuthStore.getState().user?.id;
+    if (currentUserId && prev?.voiceType === 'guild' && prev.channelId) {
+      useGuildStore.getState().updateVoiceState('leave', undefined, prev.channelId, currentUserId);
+    }
+
+    if (prev?.voiceType === 'guild' && prev.channelId) {
+      api.channels.leaveVoice(prev.channelId).catch(() => {});
+    } else if (prev?.voiceType === 'dm' && prev.dmRoomId) {
+      api.dms.leaveCall(prev.dmRoomId).catch(() => {});
     }
     await livekit.disconnect().catch(() => {});
   };
@@ -492,6 +520,19 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return;
       }
 
+      // Snapshot previous connection state BEFORE setting new state
+      const prev = {
+        voiceType: get().voiceType,
+        channelId: get().currentChannelId,
+        guildId: get().currentGuildId,
+        dmRoomId: get().dmRoomId,
+        dmGroupId: get().dmGroupId,
+        isScreensharing: get().isScreensharing,
+      };
+
+      activeConnectionEpoch++;
+      const currentEpoch = activeConnectionEpoch;
+
       // Update UI state immediately for instant feedback
       set({
         voiceType: 'guild',
@@ -515,11 +556,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             is_muted: shouldMute,
             is_deafened: shouldDeafen,
           }),
-          cleanupPreviousConnection(),
+          cleanupPreviousConnection(prev),
         ]);
 
-        // Check if user changed mind or joined another channel while requesting
-        if (get().currentChannelId !== channelId || get().voiceType !== 'guild') return;
+        // Check if superseded by a newer join attempt
+        if (currentEpoch !== activeConnectionEpoch) return;
 
         await connectLiveKitRoom(
           res.livekit_url,
@@ -527,8 +568,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           shouldMute,
           shouldDeafen,
           Boolean((res as any)?.e2ee_enabled),
-          channelId
+          channelId,
+          currentEpoch
         );
+
+        if (currentEpoch !== activeConnectionEpoch) return;
 
         // Sync initial voice state with backend
         if (shouldMute || shouldDeafen) {
@@ -540,6 +584,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             .catch(() => {});
         }
       } catch (err) {
+        if (currentEpoch !== activeConnectionEpoch) return;
         callKeyManager.endCall();
         livekitE2EEManager.cleanup();
         console.error('[Voice] Failed to join guild voice:', err);
@@ -561,6 +606,18 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       ) {
         return;
       }
+
+      const prev = {
+        voiceType: get().voiceType,
+        channelId: get().currentChannelId,
+        guildId: get().currentGuildId,
+        dmRoomId: get().dmRoomId,
+        dmGroupId: get().dmGroupId,
+        isScreensharing: get().isScreensharing,
+      };
+
+      activeConnectionEpoch++;
+      const currentEpoch = activeConnectionEpoch;
 
       // Update UI state immediately for instant feedback
       set({
@@ -593,10 +650,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
 
         const [res] = await Promise.all([
           fetchTokenPromise,
-          cleanupPreviousConnection(),
+          cleanupPreviousConnection(prev),
         ]);
 
-        if (get().dmRoomId !== roomId || get().voiceType !== 'dm') return;
+        if (currentEpoch !== activeConnectionEpoch) return;
 
         await connectLiveKitRoom(
           res.livekit_url,
@@ -604,9 +661,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           shouldMute,
           shouldDeafen,
           Boolean(res.e2ee_enabled),
-          roomId
+          roomId,
+          currentEpoch
         );
       } catch (err) {
+        if (currentEpoch !== activeConnectionEpoch) return;
         callKeyManager.endCall();
         livekitE2EEManager.cleanup();
         console.error('[Voice] Failed to join DM call:', err);
@@ -630,6 +689,18 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return;
       }
 
+      const prev = {
+        voiceType: get().voiceType,
+        channelId: get().currentChannelId,
+        guildId: get().currentGuildId,
+        dmRoomId: get().dmRoomId,
+        dmGroupId: get().dmGroupId,
+        isScreensharing: get().isScreensharing,
+      };
+
+      activeConnectionEpoch++;
+      const currentEpoch = activeConnectionEpoch;
+
       // Update UI state immediately for instant feedback
       set({
         voiceType: 'group',
@@ -649,10 +720,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       try {
         const [res] = await Promise.all([
           api.dmGroups.getVoiceToken(groupId),
-          cleanupPreviousConnection(),
+          cleanupPreviousConnection(prev),
         ]);
 
-        if (get().dmGroupId !== groupId || get().voiceType !== 'group') return;
+        if (currentEpoch !== activeConnectionEpoch) return;
 
         await connectLiveKitRoom(
           res.livekit_url,
@@ -660,9 +731,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           shouldMute,
           shouldDeafen,
           Boolean((res as any)?.e2ee_enabled),
-          groupId
+          groupId,
+          currentEpoch
         );
       } catch (err) {
+        if (currentEpoch !== activeConnectionEpoch) return;
         callKeyManager.endCall();
         livekitE2EEManager.cleanup();
         console.error('[Voice] Failed to join DM group voice:', err);
@@ -678,10 +751,15 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     },
 
     leaveVoice: async () => {
+      activeConnectionEpoch++;
       callKeyManager.endCall();
       livekitE2EEManager.cleanup();
-      const { voiceType, currentChannelId, dmRoomId } = get();
+      const { voiceType, currentChannelId, dmRoomId, isConnected, isConnecting } = get();
       if (!voiceType && !currentChannelId && !dmRoomId) return;
+
+      if (isConnected || isConnecting) {
+        playLeaveVoiceSound();
+      }
 
       const currentUserId = useAuthStore.getState().user?.id;
       if (currentUserId && currentChannelId) {
