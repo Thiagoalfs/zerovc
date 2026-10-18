@@ -261,6 +261,7 @@ class LiveKitManager {
   private gameFamilyWatcherTimer: any = null;
   private isSwitchingScreenSource: boolean = false;
   private isGameFamilyTransitioning: boolean = false;
+  private activityListenerUnsubscribe?: () => void;
 
   getRoom(): Room | null {
     return this.room;
@@ -1040,6 +1041,23 @@ class LiveKitManager {
     this.stopGameFamilyWindowWatcher();
     if (!this.activeGameFamily || typeof window === 'undefined' || !(window as any).electronAPI?.getScreenSources) return;
 
+    // Immediately react to Electron's real-time process close watcher
+    if ((window as any).electronAPI?.onActivityDetected && !this.activityListenerUnsubscribe) {
+      this.activityListenerUnsubscribe = (window as any).electronAPI.onActivityDetected((detected: any) => {
+        if (!detected && this.activeGameFamily) {
+          if ((window as any).electronAPI?.isProcessRunning && this.activeGameFamily.processes?.length) {
+            (window as any).electronAPI.isProcessRunning(this.activeGameFamily.processes).then((isRunning: boolean) => {
+              if (!isRunning && this.activeGameFamily) {
+                console.log(`[LiveKit] Activity watcher detected game closed: ${this.activeGameFamily.name}. Ending screen share immediately.`);
+                void this.setScreenShareEnabled(false);
+                this.onScreenShareEnded?.();
+              }
+            }).catch(() => {});
+          }
+        }
+      });
+    }
+
     this.gameFamilyWatcherTimer = setInterval(async () => {
       if (!this.activeGameFamily || !this.currentScreenShareSourceId || this.isSwitchingScreenSource || this.isGameFamilyTransitioning) return;
 
@@ -1103,6 +1121,10 @@ class LiveKitManager {
     if (this.gameFamilyWatcherTimer) {
       clearInterval(this.gameFamilyWatcherTimer);
       this.gameFamilyWatcherTimer = null;
+    }
+    if (this.activityListenerUnsubscribe) {
+      try { this.activityListenerUnsubscribe(); } catch {}
+      this.activityListenerUnsubscribe = undefined;
     }
   }
 

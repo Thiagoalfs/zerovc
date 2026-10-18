@@ -23,7 +23,7 @@ export const GAME_FAMILIES: GameFamily[] = [
   {
     id: 'league_of_legends',
     name: 'League of Legends',
-    processes: ['leagueclient.exe', 'leagueclientux.exe', 'league of legends.exe', 'riotclientservices.exe'],
+    processes: ['leagueclient.exe', 'leagueclientux.exe', 'league of legends.exe'],
     stages: [
       {
         stage: 'game',
@@ -40,7 +40,7 @@ export const GAME_FAMILIES: GameFamily[] = [
   {
     id: 'tft',
     name: 'Teamfight Tactics',
-    processes: ['leagueclient.exe', 'leagueclientux.exe', 'league of legends.exe', 'tftclient.exe', 'riotclientservices.exe'],
+    processes: ['leagueclient.exe', 'leagueclientux.exe', 'league of legends.exe', 'tftclient.exe'],
     stages: [
       {
         stage: 'game',
@@ -57,7 +57,7 @@ export const GAME_FAMILIES: GameFamily[] = [
   {
     id: 'valorant',
     name: 'VALORANT',
-    processes: ['valorant.exe', 'valorant-win64-shipping.exe', 'riotclientservices.exe'],
+    processes: ['valorant.exe', 'valorant-win64-shipping.exe'],
     stages: [
       {
         stage: 'game',
