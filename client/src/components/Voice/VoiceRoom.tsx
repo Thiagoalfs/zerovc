@@ -308,14 +308,6 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
         ref={stageRef}
         className="flex-1 min-h-0 min-w-0 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative"
       >
-        {/* Floating Connecting Pill Badge */}
-        {isConnectingToThisChannel && displayedParticipants.length > 0 && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-brand-500/90 text-white text-xs font-semibold px-4 py-1.5 rounded-full shadow-lg backdrop-blur-md animate-pulse">
-            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            <span>Conectando à voz...</span>
-          </div>
-        )}
-
         {displayedParticipants.length === 0 ? (
           <div className="flex flex-col items-center gap-4 text-gray-500 animate-in fade-in">
             <div className="flex flex-col items-center gap-2">
