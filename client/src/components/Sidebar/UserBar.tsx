@@ -10,6 +10,7 @@ import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
 import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
 import { useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { getFormattedUsername } from '../../stores/streamerModeStore';
+import { findBestSourceForGameFamily } from '../../utils/gameFamilyManager';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { User, UserProfilePosition, Guild } from '../../types';
 import { UserBarContextMenuControls } from './UserBarContextMenu';
@@ -262,9 +263,18 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       try {
         const sources = await (window as any).electronAPI.getScreenSources();
         const windowSources = sources.filter((s: any) => s.id?.startsWith('window:'));
+
+        // 1. Intelligent Game Family Priority (Partida in-game > Launcher/Lobby)
+        const familyMatch = findBestSourceForGameFamily(gameName, sources);
+        if (familyMatch) {
+          console.log('[UserBar] Auto-streaming game family prioritized window:', familyMatch.source.name, familyMatch.source.id);
+          await startScreenShare(familyMatch.source.id, { resolution: '720p', fps: 30, includeAudio: true }, familyMatch.family);
+          return;
+        }
+
         const cleanGame = gameName.toLowerCase().trim();
 
-        // 1. Direct or partial window title match
+        // 2. Direct or partial window title match
         let matched = windowSources.find((s: any) => {
           const sName = (s.name || '').toLowerCase().trim();
           return sName.includes(cleanGame) || cleanGame.includes(sName);

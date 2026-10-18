@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Monitor, AppWindow, Sparkles, Volume2, Check } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
+import { matchWindowToGameFamily } from '../../utils/gameFamilyManager';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_TITLE_CLASS,
@@ -51,7 +52,14 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
         try {
           const res = await (window as any).electronAPI.getScreenSources();
           setSources(res);
-          if (res.length > 0) setSelectedSourceId(res[0].id);
+          if (res.length > 0) {
+            // Prioritize active game window (match > launcher) if available
+            const gameMatch =
+              res.find((s: any) => s.id.startsWith('window:') && matchWindowToGameFamily(s.name, res, s.id)?.stage === 'game') ||
+              res.find((s: any) => s.id.startsWith('window:') && matchWindowToGameFamily(s.name, res, s.id)) ||
+              res[0];
+            setSelectedSourceId(gameMatch.id);
+          }
         } catch (err) {
           console.error('Failed to get sources:', err);
         }
@@ -83,19 +91,39 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
 
   const handleShare = async () => {
     if (!selectedSourceId) return;
+    const selectedSource = sources.find((s) => s.id === selectedSourceId);
+    const matchedFamily = selectedSource
+      ? matchWindowToGameFamily(selectedSource.name, sources, selectedSource.id)?.family
+      : undefined;
+
     if (callState === 'connected' || callState === 'calling') {
-      await startCallScreenShare(selectedSourceId, { resolution, fps, includeAudio });
+      await startCallScreenShare(selectedSourceId, { resolution, fps, includeAudio }, matchedFamily);
     } else {
-      await startVoiceScreenShare(selectedSourceId, { resolution, fps, includeAudio });
+      await startVoiceScreenShare(selectedSourceId, { resolution, fps, includeAudio }, matchedFamily);
     }
     onClose();
   };
 
-  const filteredSources = sources.filter((s) => {
-    if (activeTab === 'screens') return s.id.startsWith('screen:');
-    if (activeTab === 'windows') return s.id.startsWith('window:');
-    return true;
-  });
+  const filteredSources = useMemo(() => {
+    let list = sources.filter((s) => {
+      if (activeTab === 'screens') return s.id.startsWith('screen:');
+      if (activeTab === 'windows') return s.id.startsWith('window:');
+      return true;
+    });
+
+    if (activeTab === 'windows') {
+      // Sort game windows to the top (in-game match first, then launcher)
+      list = [...list].sort((a, b) => {
+        const matchA = matchWindowToGameFamily(a.name, sources, a.id);
+        const matchB = matchWindowToGameFamily(b.name, sources, b.id);
+        const rankA = matchA ? (matchA.stage === 'game' ? 2 : 1) : 0;
+        const rankB = matchB ? (matchB.stage === 'game' ? 2 : 1) : 0;
+        return rankB - rankA;
+      });
+    }
+
+    return list;
+  }, [sources, activeTab]);
 
   return (
     <div
@@ -218,13 +246,30 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
                         </div>
                       )}
                     </div>
-                    <div className="p-2 flex items-center gap-2 bg-background-darkest">
-                      {source.appIcon ? (
-                        <img src={source.appIcon} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0" />
-                      ) : (
-                        <AppWindow className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                      )}
-                      <span className="text-xs font-semibold text-gray-200 truncate">{source.name}</span>
+                    <div className="p-2 flex items-center justify-between gap-2 bg-background-darkest min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {source.appIcon ? (
+                          <img src={source.appIcon} alt="" className="w-3.5 h-3.5 rounded flex-shrink-0" />
+                        ) : (
+                          <AppWindow className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        )}
+                        <span className="text-xs font-semibold text-gray-200 truncate">{source.name}</span>
+                      </div>
+                      {(() => {
+                        const match = matchWindowToGameFamily(source.name, sources, source.id);
+                        if (!match) return null;
+                        return (
+                          <span
+                            className={`text-[9.5px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider flex-shrink-0 ${
+                              match.stage === 'game'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-brand-500/20 text-brand-300 border border-brand-500/30'
+                            }`}
+                          >
+                            {match.label}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 );

@@ -10,6 +10,7 @@ import {
 } from 'livekit-client';
 import { processAudioBridge } from './processAudioBridge';
 import { audioProcessor } from './audioProcessor';
+import { GameFamily, GAME_FAMILIES, matchWindowToGameFamily, findBestSourceForGameFamily } from '../utils/gameFamilyManager';
 
 export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
 
@@ -252,6 +253,11 @@ class LiveKitManager {
     }
   })();
   private currentE2EEOptions?: E2EEOptions;
+  private currentScreenShareSourceId: string | null = null;
+  private currentScreenShareConfig?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean };
+  private activeGameFamily: GameFamily | null = null;
+  private gameFamilyWatcherTimer: any = null;
+  private isSwitchingScreenSource: boolean = false;
 
   getRoom(): Room | null {
     return this.room;
@@ -715,7 +721,8 @@ class LiveKitManager {
   async setScreenShareEnabled(
     enabled: boolean,
     sourceId?: string,
-    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean },
+    gameFamily?: GameFamily | string
   ) {
     if (!this.room) return;
 
@@ -743,9 +750,7 @@ class LiveKitManager {
 
       // Fluxo sem sourceId (ex.: botão "compartilhar tela" das chamadas DM): no Electron,
       // resolver automaticamente a tela principal e usar a MESMA ponte nativa WASAPI do
-      // compartilhamento por canal. Isso evita cair no branch getDisplayMedia, cujo handler
-      // (setDisplayMediaRequestHandler no main.ts) devolvia audio:'loopback' = mix do PC
-      // inteiro SEM exclusão de árvore - a causa do eco das vozes da call nas DMs.
+      // compartilhamento por canal.
       let resolvedSourceId = sourceId;
       if (!resolvedSourceId && (window as any).electronAPI?.getScreenSources) {
         try {
@@ -758,6 +763,42 @@ class LiveKitManager {
         } catch (err) {
           console.warn('[LiveKit] Failed to auto-select primary screen source:', err);
         }
+      }
+
+      this.currentScreenShareSourceId = resolvedSourceId || null;
+      this.currentScreenShareConfig = config;
+
+      // Identify Game Family for intelligent auto-switching (e.g. League of Legends Lobby <-> Match)
+      if (resolvedSourceId && (window as any).electronAPI?.getScreenSources) {
+        const explicitFamily =
+          typeof gameFamily === 'object'
+            ? gameFamily
+            : typeof gameFamily === 'string'
+            ? GAME_FAMILIES.find((f) => f.id === gameFamily || f.name.toLowerCase() === gameFamily.toLowerCase())
+            : null;
+
+        if (explicitFamily) {
+          this.activeGameFamily = explicitFamily;
+          this.startGameFamilyWindowWatcher();
+        } else {
+          (window as any).electronAPI.getScreenSources().then((sources: any[]) => {
+            const curSource = sources.find((s: any) => s.id === resolvedSourceId);
+            const matched = curSource ? matchWindowToGameFamily(curSource.name, sources, curSource.id) : null;
+            if (matched) {
+              this.activeGameFamily = matched.family;
+              this.startGameFamilyWindowWatcher();
+            } else {
+              this.activeGameFamily = null;
+              this.stopGameFamilyWindowWatcher();
+            }
+          }).catch(() => {
+            this.activeGameFamily = null;
+            this.stopGameFamilyWindowWatcher();
+          });
+        }
+      } else {
+        this.activeGameFamily = null;
+        this.stopGameFamilyWindowWatcher();
       }
 
       if (resolvedSourceId && (window as any).electronAPI) {
@@ -788,8 +829,7 @@ class LiveKitManager {
         const videoTrack = stream.getVideoTracks()[0];
         videoTrack.contentHint = frameRate >= 60 ? 'motion' : 'detail';
         videoTrack.onended = () => {
-          this.setScreenShareEnabled(false);
-          this.onScreenShareEnded?.();
+          void this.handleScreenShareTrackEnded();
         };
 
         // Cleanly stop and unpublish previous screen/audio tracks before publishing new ones (seamless switch)
@@ -948,6 +988,11 @@ class LiveKitManager {
         }
       }
     } else {
+      this.stopGameFamilyWindowWatcher();
+      this.activeGameFamily = null;
+      this.currentScreenShareSourceId = null;
+      this.currentScreenShareConfig = undefined;
+
       await this.room.localParticipant.setScreenShareEnabled(false);
       const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
       if (screenPub && screenPub.track) {
@@ -967,6 +1012,237 @@ class LiveKitManager {
     }
 
     this.onTrackUpdated?.();
+  }
+
+  /**
+   * Background watcher that detects window transitions for known game families
+   * (e.g. automatically moving from LeagueClientUx lobby to League of Legends.exe match).
+   */
+  private startGameFamilyWindowWatcher() {
+    this.stopGameFamilyWindowWatcher();
+    if (!this.activeGameFamily || typeof window === 'undefined' || !(window as any).electronAPI?.getScreenSources) return;
+
+    this.gameFamilyWatcherTimer = setInterval(async () => {
+      if (!this.activeGameFamily || !this.currentScreenShareSourceId || this.isSwitchingScreenSource) return;
+
+      try {
+        const sources = await (window as any).electronAPI.getScreenSources();
+        if (!Array.isArray(sources) || sources.length === 0) return;
+
+        const currentStillExists = sources.some((s: any) => s.id === this.currentScreenShareSourceId);
+        const best = findBestSourceForGameFamily(
+          this.activeGameFamily,
+          sources,
+          this.currentScreenShareSourceId
+        );
+
+        if (!currentStillExists) {
+          // The window being captured was closed or hidden!
+          if (best && best.source.id !== this.currentScreenShareSourceId) {
+            console.log(
+              `[LiveKit] Captured window was closed, auto-switching to active game window: ${best.source.id} (${best.source.name})`
+            );
+            await this.switchScreenShareSource(best.source.id);
+            return;
+          } else {
+            // No companion window found; cleanly end screen share
+            console.log('[LiveKit] Captured game window closed and no companion found. Stopping share.');
+            this.setScreenShareEnabled(false);
+            this.onScreenShareEnded?.();
+            return;
+          }
+        }
+
+        // Current window still exists, but a higher priority window appeared (e.g. match started while lobby is open)
+        if (best && best.source.id !== this.currentScreenShareSourceId) {
+          console.log(
+            `[LiveKit] Game family auto-switch: transitioning from ${this.currentScreenShareSourceId} to ${best.source.id} (${best.source.name})`
+          );
+          await this.switchScreenShareSource(best.source.id);
+        }
+      } catch (err) {
+        console.debug('[LiveKit] GameFamilyWatcher check notice:', err);
+      }
+    }, 1500);
+  }
+
+  private stopGameFamilyWindowWatcher() {
+    if (this.gameFamilyWatcherTimer) {
+      clearInterval(this.gameFamilyWatcherTimer);
+      this.gameFamilyWatcherTimer = null;
+    }
+  }
+
+  /**
+   * Handles track ending (e.g. when the match window closes at the end of a game).
+   * Automatically attempts to recover and switch back to the launcher window before tearing down the stream.
+   */
+  private async handleScreenShareTrackEnded() {
+    if (this.isSwitchingScreenSource) return;
+
+    if (this.activeGameFamily && typeof window !== 'undefined' && (window as any).electronAPI?.getScreenSources) {
+      try {
+        const sources = await (window as any).electronAPI.getScreenSources();
+        const best = findBestSourceForGameFamily(
+          this.activeGameFamily,
+          sources,
+          this.currentScreenShareSourceId
+        );
+        if (best && best.source.id !== this.currentScreenShareSourceId) {
+          console.log(
+            `[LiveKit] Match window closed, seamlessly switching stream back to companion launcher: ${best.source.name}`
+          );
+          const switched = await this.switchScreenShareSource(best.source.id);
+          if (switched) return;
+        }
+      } catch (err) {
+        console.warn('[LiveKit] Error in handleScreenShareTrackEnded auto-recovery:', err);
+      }
+    }
+
+    // No companion window available or game completely closed
+    this.setScreenShareEnabled(false);
+    this.onScreenShareEnded?.();
+  }
+
+  /**
+   * Seamlessly switches the active screen share source track without dropping the call or stream.
+   */
+  async switchScreenShareSource(newSourceId: string): Promise<boolean> {
+    if (!this.room || !this.currentScreenShareSourceId || this.isSwitchingScreenSource) return false;
+    this.isSwitchingScreenSource = true;
+    this.currentScreenShareSourceId = newSourceId;
+
+    try {
+      const config = this.currentScreenShareConfig;
+      const res = config?.resolution || '720p';
+      const frameRate = config?.fps || 30;
+
+      const dims = (() => {
+        switch (res) {
+          case '480p': return { width: 854, height: 480 };
+          case '1080p': return { width: 1920, height: 1080 };
+          default: return { width: 1280, height: 720 };
+        }
+      })();
+
+      const maxBitrate = (() => {
+        if (res === '480p') return frameRate === 15 ? 500_000 : frameRate === 30 ? 1_000_000 : 1_800_000;
+        if (res === '1080p') return frameRate === 15 ? 2_500_000 : frameRate === 30 ? 3_500_000 : 6_000_000;
+        return frameRate === 15 ? 1_200_000 : frameRate === 30 ? 1_800_000 : 3_500_000;
+      })();
+
+      // Stop previous audio capture before switching
+      await processAudioBridge.stopCapture();
+
+      // Acquire new desktop media stream
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          // @ts-ignore
+          mandatory: {
+            chromeMediaSource: 'desktop',
+            chromeMediaSourceId: newSourceId,
+            maxWidth: dims.width,
+            maxHeight: dims.height,
+            maxFrameRate: frameRate,
+          },
+        },
+      });
+
+      const newVideoTrack = stream.getVideoTracks()[0];
+      newVideoTrack.contentHint = frameRate >= 60 ? 'motion' : 'detail';
+      newVideoTrack.onended = () => {
+        void this.handleScreenShareTrackEnded();
+      };
+
+      this.activeMediaStreamTracks.add(newVideoTrack);
+
+      // Clean up previous video track safely without triggering teardown
+      const oldScreenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+      const oldTrack = oldScreenPub?.track;
+      if (oldTrack) {
+        oldTrack.mediaStreamTrack.onended = null;
+        try { (oldTrack as any).stop?.(); } catch {}
+        this.activeMediaStreamTracks.delete(oldTrack.mediaStreamTrack);
+        await this.room.localParticipant.unpublishTrack(oldTrack);
+      }
+
+      // Clean up previous audio track safely
+      const oldAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+      const oldAudioTrack = oldAudioPub?.track;
+      if (oldAudioTrack) {
+        oldAudioTrack.mediaStreamTrack.onended = null;
+        try { (oldAudioTrack as any).stop?.(); } catch {}
+        this.activeMediaStreamTracks.delete(oldAudioTrack.mediaStreamTrack);
+        await this.room.localParticipant.unpublishTrack(oldAudioTrack);
+      }
+
+      // Publish new video track
+      const pub = await this.room.localParticipant.publishTrack(newVideoTrack, {
+        name: 'screen_share',
+        source: Track.Source.ScreenShare,
+        simulcast: false,
+        videoCodec: 'vp8',
+        backupCodec: false,
+        videoEncoding: {
+          maxBitrate: maxBitrate,
+          maxFramerate: frameRate,
+          priority: 'high',
+        },
+      });
+
+      // Reconnect process audio bridge with new HWND
+      const nativeIncludeAudio = config?.includeAudio !== false;
+      if (nativeIncludeAudio) {
+        try {
+          const processAudioTrack = await processAudioBridge.startCapture(newSourceId);
+          if (processAudioTrack) {
+            this.activeMediaStreamTracks.add(processAudioTrack);
+            processAudioTrack.onended = () => {
+              const audioPub = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+              if (audioPub?.track) {
+                this.room?.localParticipant.unpublishTrack(audioPub.track);
+              }
+            };
+            await this.room.localParticipant.publishTrack(processAudioTrack, {
+              name: 'screen_share_audio',
+              source: Track.Source.ScreenShareAudio,
+              audioPreset: AudioPresets.musicHighQualityStereo,
+              dtx: false,
+              red: false,
+            });
+          }
+        } catch (audioErr) {
+          console.error('[LiveKit] Error publishing screen share audio track on auto-switch:', audioErr);
+        }
+      }
+
+      // Set degradationPreference
+      try {
+        const sender = (pub?.track as any)?.sender as RTCRtpSender | undefined;
+        if (sender && typeof sender.getParameters === 'function') {
+          const params = sender.getParameters();
+          if (params) {
+            params.degradationPreference = 'maintain-resolution';
+            if (params.encodings && params.encodings.length > 0) {
+              params.encodings[0].maxBitrate = maxBitrate;
+              params.encodings[0].maxFramerate = frameRate;
+              params.encodings[0].networkPriority = 'high';
+            }
+            await sender.setParameters(params);
+          }
+        }
+      } catch {}
+
+      this.onTrackUpdated?.();
+      return true;
+    } catch (err) {
+      console.error('[LiveKit] Failed to switch screen share source:', err);
+      return false;
+    } finally {
+      this.isSwitchingScreenSource = false;
+    }
   }
 
   async setCameraEnabled(enabled: boolean) {

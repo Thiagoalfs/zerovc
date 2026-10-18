@@ -32,7 +32,8 @@ interface CallStoreState {
   toggleCamera: () => Promise<void>;
   startScreenShare: (
     sourceId?: string,
-    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean },
+    gameFamily?: any
   ) => Promise<void>;
   stopScreenShare: () => Promise<void>;
 }
@@ -235,8 +236,12 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     await useVoiceStore.getState().toggleCamera();
   },
 
-  startScreenShare: async (sourceId?: string, config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }) => {
-    await useVoiceStore.getState().startScreenShare(sourceId, config);
+  startScreenShare: async (
+    sourceId?: string,
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean },
+    gameFamily?: any
+  ) => {
+    await useVoiceStore.getState().startScreenShare(sourceId, config, gameFamily);
   },
 
   stopScreenShare: async () => {

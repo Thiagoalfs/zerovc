@@ -65,7 +65,8 @@ interface VoiceState {
   setParticipantVolume: (userId: string, volume: number) => void;
   startScreenShare: (
     sourceId?: string,
-    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }
+    config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean },
+    gameFamily?: any
   ) => Promise<void>;
   stopScreenShare: () => Promise<void>;
 }
@@ -911,11 +912,12 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
 
     startScreenShare: async (
       sourceId?: string,
-      config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean }
+      config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean },
+      gameFamily?: any
     ) => {
       const { currentChannelId, voiceType } = get();
       try {
-        await livekit.setScreenShareEnabled(true, sourceId, config);
+        await livekit.setScreenShareEnabled(true, sourceId, config, gameFamily);
         set({ isScreensharing: true });
 
         if (voiceType === 'guild' && currentChannelId) {
