@@ -452,10 +452,17 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           </div>
         ) : (
           /* 4. Default Voice Participant Avatar View */
-          <div className="flex flex-col items-center justify-center">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-xl sm:text-2xl shadow-xl select-none bg-black/20">
+          <div className="flex flex-col items-center justify-center pointer-events-none select-none">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-xl sm:text-2xl shadow-xl select-none bg-black/20 pointer-events-none">
               {avatarUrl ? (
-                <img src={formatAssetUrl(avatarUrl)} alt={displayName} className="w-full h-full object-cover" />
+                <img
+                  src={formatAssetUrl(avatarUrl)}
+                  alt={displayName}
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
+                  style={{ userSelect: 'none' }}
+                  className="w-full h-full object-cover pointer-events-none select-none"
+                />
               ) : (
                 <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
               )}
@@ -477,59 +484,41 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           )}
         </div>
 
-        {/* Top Right Unified Action Controls Bar (Hover) */}
-        {((isScreenSharing && isWatching) || hasCameraVideoTrack || !isLocal) && (
+        {/* Top Right Unified Action Controls Bar (Hover, only for remote participants) */}
+        {!isLocal && (
           <div className={`absolute top-3 right-3 flex items-center gap-1.5 z-30 transition-opacity bg-black/75 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 shadow-lg ${showVolumeSlider ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-          {/* Watch / Stop Live Controls */}
-          {isScreenSharing && isWatching && (
-            <>
-              {!isLocal ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleWatch(false);
-                  }}
-                  className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
-                  title="Parar de assistir transmissão"
-                >
-                  <EyeOff className="w-3.5 h-3.5" />
-                  <span className="text-[11px] hidden sm:inline">Parar de Ver</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    stopScreenShare();
-                  }}
-                  className="p-1 text-dnd hover:bg-dnd/20 rounded text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
-                  title="Encerrar compartilhamento"
-                >
-                  <Monitor className="w-3.5 h-3.5" />
-                  <span className="text-[11px] hidden sm:inline">Parar Live</span>
-                </button>
-              )}
-            </>
-          )}
+            {/* Watch / Stop Live Controls */}
+            {isScreenSharing && isWatching && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleWatch(false);
+                }}
+                className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                title="Parar de assistir transmissão"
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+                <span className="text-[11px] hidden sm:inline">Parar de Ver</span>
+              </button>
+            )}
 
-          {/* Fullscreen Button for Screen Share OR Camera Stream */}
-          {((isScreenSharing && isWatching) || hasCameraVideoTrack) && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleFullscreen();
-              }}
-              className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 transition-colors cursor-pointer"
-              title="Tela cheia"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
-          )}
+            {/* Fullscreen Button for Screen Share OR Camera Stream */}
+            {((isScreenSharing && isWatching) || hasCameraVideoTrack) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFullscreen();
+                }}
+                className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 transition-colors cursor-pointer"
+                title="Tela cheia"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+            )}
 
-          {/* Volume Sliders for Remote participants */}
-          {!isLocal && (
+            {/* Volume Sliders for Remote participants */}
             <div className="relative flex items-center">
               <button
                 type="button"
@@ -575,8 +564,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                 </>
               )}
             </div>
-          )}
-        </div>
+          </div>
         )}
 
         {/* Bottom-left Name Pill */}

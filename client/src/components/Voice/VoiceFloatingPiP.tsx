@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Track, RemoteTrackPublication } from 'livekit-client';
 import {
+  ArrowLeft,
+  Play,
   Monitor,
   Maximize2,
   Minimize2,
@@ -119,6 +121,20 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     return 'bottom-right';
   });
 
+  // PiP Resize state
+  const MIN_WIDTH = 240;
+  const MAX_WIDTH = 600;
+  const [pipWidth, setPipWidth] = useState<number>(() => {
+    try {
+      const saved = parseInt(localStorage.getItem('zerovc_pip_width') || '320', 10);
+      if (!isNaN(saved) && saved >= MIN_WIDTH && saved <= MAX_WIDTH) {
+        return saved;
+      }
+    } catch {}
+    return 320;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ startX: number; startY: number; initX: number; initY: number }>({
@@ -128,6 +144,62 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     initY: 0,
   });
   const hasMovedSignificantlyRef = useRef(false);
+
+  // Resize handler
+  const handleResizePointerDown = useCallback(
+    (handleType: 'left' | 'right' | 'bottom-left' | 'bottom-right', e: React.PointerEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      setIsResizing(true);
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startWidth = pipWidth;
+
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        let delta = 0;
+        if (handleType === 'left' || handleType === 'bottom-left') {
+          const dx = startX - moveEvent.clientX;
+          const dy =
+            (corner === 'bottom-right'
+              ? startY - moveEvent.clientY
+              : moveEvent.clientY - startY) *
+            (16 / 9);
+          delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+        } else {
+          const dx = moveEvent.clientX - startX;
+          const dy =
+            (corner === 'bottom-left'
+              ? startY - moveEvent.clientY
+              : moveEvent.clientY - startY) *
+            (16 / 9);
+          delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+        }
+
+        const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(startWidth + delta)));
+        setPipWidth(newWidth);
+      };
+
+      const onPointerUp = () => {
+        setIsResizing(false);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerUp);
+
+        setPipWidth((curr) => {
+          try {
+            localStorage.setItem('zerovc_pip_width', curr.toString());
+          } catch {}
+          return curr;
+        });
+      };
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerUp);
+    },
+    [pipWidth, corner]
+  );
 
   // Check if any participant is actively sharing screen
   const activeScreenSharer = participants.find((p) => {
@@ -147,19 +219,8 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
   const isWatchingStream = !!streamParticipant;
 
-  // Active Speaker resolution (when not watching a video stream)
-  const speakingParticipant = participants.find((p) => {
-    const isSpeaking = speakingUserIds.includes(p.identity);
-    const isMicOn = p.isMicrophoneEnabled;
-    return isSpeaking && isMicOn;
-  });
-
-  const activeSpeaker =
-    speakingParticipant ||
-    participants.find((p) => !p.isLocal) ||
-    participants.find((p) => p.isLocal);
-
-  const targetParticipant = isWatchingStream ? streamParticipant : activeSpeaker;
+  // Target participant is activeScreenSharer (when previewing) or streamParticipant (when watching)
+  const targetParticipant = isWatchingStream ? streamParticipant : activeScreenSharer;
   const screenPub = streamParticipant?.getTrackPublication(Track.Source.ScreenShare);
   const hasScreenVideoTrack = !!screenPub?.track && !screenPub.isMuted;
   const isLocal = targetParticipant?.isLocal;
@@ -336,8 +397,8 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
       const newY = dragStartRef.current.initY + dy;
 
       const container = containerRef.current;
-      const width = container?.offsetWidth || 320;
-      const height = container?.offsetHeight || 220;
+      const width = container?.offsetWidth || pipWidth;
+      const height = container?.offsetHeight || Math.round((pipWidth * 9) / 16);
 
       const TOP_BOUNDARY = 44; // TitleBar (32px) + 12px margin
       const clampedX = Math.max(10, Math.min(window.innerWidth - width - 10, newX));
@@ -345,15 +406,15 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
       setDragPos({ x: clampedX, y: clampedY });
     }
-  }, [isDragging]);
+  }, [isDragging, pipWidth]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (isDragging) {
       setIsDragging(false);
 
       const container = containerRef.current;
-      const width = container?.offsetWidth || 320;
-      const height = container?.offsetHeight || 220;
+      const width = container?.offsetWidth || pipWidth;
+      const height = container?.offsetHeight || Math.round((pipWidth * 9) / 16);
 
       const currentX = dragPos?.x ?? dragStartRef.current.initX;
       const currentY = dragPos?.y ?? dragStartRef.current.initY;
@@ -380,9 +441,9 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     }
 
     dragStartRef.current = { startX: 0, startY: 0, initX: 0, initY: 0 };
-  }, [isDragging, dragPos]);
+  }, [isDragging, dragPos, pipWidth]);
 
-  if (!isConnected || !currentChannelId || !targetParticipant) {
+  if (!isConnected || !currentChannelId || !activeScreenSharer || !targetParticipant) {
     return null;
   }
 
@@ -417,6 +478,17 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
           await selectGuild(activeG.id, curChId);
         }
       }
+    }
+  };
+
+  const channelDisplayName =
+    voiceChannel?.name ||
+    (voiceType === 'dm' ? dmUser?.display_name || 'Chamada' : 'Voz');
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (hasMovedSignificantlyRef.current) return;
+    if (activeScreenSharer) {
+      watchParticipant(activeScreenSharer.identity, 'exclusive');
     }
   };
 
@@ -479,84 +551,82 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
     <>
       <div
         ref={containerRef}
-      onContextMenu={handleContextMenu}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      style={
-        dragPos
-          ? {
-              position: 'fixed',
-              top: `${dragPos.y}px`,
-              left: `${dragPos.x}px`,
-            }
-          : undefined
-      }
-      className={`fixed z-40 w-72 sm:w-80 rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-background-darkest/95 backdrop-blur-md select-none group ${getCornerClass()} ${
-        isDragging
-          ? 'scale-105 cursor-grabbing shadow-brand-500/20 border-brand-500/40'
-          : 'transition-all duration-300 ease-out cursor-grab'
-      }`}
-    >
-      {/* Drag Grip Handle Bar on Top */}
-      <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-30 opacity-40 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <GripHorizontal className="w-5 h-3 text-white/60" />
-      </div>
-
-      {/* PiP Stage: Video Stream OR Active Speaker */}
-      {isWatchingStream ? (
-        <div
-          onClick={handleOpenVoiceRoom}
-          className="relative aspect-video bg-black cursor-pointer overflow-hidden flex items-center justify-center"
-        >
-          <video
-            ref={(el) => {
-              videoRef.current = el;
-              if (el && screenPub?.track && !screenPub.isMuted) {
-                try {
-                  screenPub.track.attach(el);
-                  el.play().catch(() => {});
-                } catch {}
+        onContextMenu={handleContextMenu}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        style={{
+          width: `${pipWidth}px`,
+          ...(dragPos
+            ? {
+                position: 'fixed',
+                top: `${dragPos.y}px`,
+                left: `${dragPos.x}px`,
               }
+            : {}),
+        }}
+        className={`fixed z-40 rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-background-darkest/95 backdrop-blur-md select-none group ${getCornerClass()} ${
+          isDragging
+            ? 'scale-105 cursor-grabbing shadow-brand-500/20 border-brand-500/40'
+            : isResizing
+            ? 'shadow-brand-500/20'
+            : 'transition-all duration-300 ease-out cursor-grab'
+        }`}
+      >
+        {/* Drag Grip Handle Bar on Top */}
+        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-30 opacity-40 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <GripHorizontal className="w-5 h-3 text-white/60" />
+        </div>
+
+        {/* PiP Stage: Video Stream OR Live Screen Sharer Preview */}
+        {isWatchingStream ? (
+          <div
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              toggleFullscreen();
             }}
-            autoPlay
-            playsInline
-            className={`w-full h-full object-contain bg-black pointer-events-none transition-opacity duration-200 ${
-              hasScreenVideoTrack ? 'opacity-100' : 'opacity-0 absolute inset-0'
-            }`}
-          />
+            className="relative aspect-video bg-black overflow-hidden flex items-center justify-center select-none"
+          >
+            <video
+              ref={(el) => {
+                videoRef.current = el;
+                if (el && screenPub?.track && !screenPub.isMuted) {
+                  try {
+                    screenPub.track.attach(el);
+                    el.play().catch(() => {});
+                  } catch {}
+                }
+              }}
+              autoPlay
+              playsInline
+              className={`w-full h-full object-contain bg-black pointer-events-none transition-opacity duration-200 ${
+                hasScreenVideoTrack ? 'opacity-100' : 'opacity-0 absolute inset-0'
+              }`}
+            />
 
-          {!hasScreenVideoTrack && (
-            <div className="flex flex-col items-center justify-center gap-2 p-3 text-center pointer-events-none">
-              <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-              <span className="text-[11px] font-medium text-gray-300">Carregando...</span>
-            </div>
-          )}
-
-          {/* Top Floating Bar */}
-          <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-20">
-            {/* User Profile Badge (Click to open profile modal) */}
-            <button
-              type="button"
-              onClick={handleOpenUserProfile}
-              className="flex items-center gap-1.5 bg-black/75 hover:bg-black/95 active:scale-95 border border-white/10 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow transition-all cursor-pointer z-30"
-              title="Ver perfil do participante"
-            >
-              <div className="w-3.5 h-3.5 rounded-full bg-brand-500 flex items-center justify-center text-[8px] font-bold overflow-hidden">
-                {targetUser.avatar_url ? (
-                  <img src={formatAssetUrl(targetUser.avatar_url)} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  displayName?.[0]?.toUpperCase() || 'U'
-                )}
+            {!hasScreenVideoTrack && (
+              <div className="flex flex-col items-center justify-center gap-2 p-3 text-center pointer-events-none">
+                <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-[11px] font-medium text-gray-300">Carregando...</span>
               </div>
-              <span className="truncate max-w-[90px]">{displayName}</span>
-              <span className="bg-brand-500 text-white text-[8px] px-1 py-0.2 rounded uppercase font-bold">
-                Ao Vivo
-              </span>
-            </button>
+            )}
 
-            <div className="flex items-center gap-1">
+            {/* Top Left Navigation: <- #channelName */}
+            <div className="absolute top-2.5 left-2.5 z-30">
+              <button
+                type="button"
+                onClick={handleOpenVoiceRoom}
+                className="flex items-center gap-1.5 bg-black/70 hover:bg-black/90 active:scale-95 text-gray-200 hover:text-white px-2 py-1 rounded-lg text-xs font-semibold backdrop-blur-md border border-white/10 transition-all cursor-pointer shadow-md"
+                title="Voltar para a sala de voz"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate max-w-[120px]">#{channelDisplayName}</span>
+              </button>
+            </div>
+
+            {/* Top Right Controls: Fullscreen and Stop Watching */}
+            <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-30">
               <button
                 type="button"
                 onClick={(e) => {
@@ -564,7 +634,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                   if (hasMovedSignificantlyRef.current) return;
                   toggleFullscreen(e);
                 }}
-                className="p-1 rounded-lg bg-black/60 hover:bg-white/20 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg bg-black/60 hover:bg-white/20 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
                 title="Tela cheia do vídeo"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
@@ -580,222 +650,150 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                       unwatchParticipant(streamParticipant.identity);
                     }
                   }}
-                  className="p-1 rounded-lg bg-black/60 hover:bg-dnd/80 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg bg-black/60 hover:bg-dnd/80 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
                   title="Fechar transmissão"
                 >
                   <EyeOff className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
-          </div>
 
-          {/* Center Hover Click Overlay */}
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-            <div className="bg-background-darkest/95 border border-white/10 px-3.5 py-2 rounded-xl text-xs font-semibold text-white flex items-center gap-2 shadow-2xl backdrop-blur-md">
-              <Monitor className="w-4 h-4 text-brand-400" />
-              <span>Clique aqui para voltar para a call</span>
-            </div>
+            {/* Bottom-left Streamer Badge */}
+            <button
+              type="button"
+              onClick={handleOpenUserProfile}
+              className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 bg-black/75 hover:bg-black/95 active:scale-95 border border-white/10 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow transition-all cursor-pointer z-20"
+              title="Ver perfil do participante"
+            >
+              <div className="w-3.5 h-3.5 rounded-full bg-brand-500 flex items-center justify-center text-[8px] font-bold overflow-hidden">
+                {targetUser.avatar_url ? (
+                  <img
+                    src={formatAssetUrl(targetUser.avatar_url)}
+                    alt=""
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
+                    style={{ userSelect: 'none' }}
+                    className="w-full h-full object-cover pointer-events-none select-none"
+                  />
+                ) : (
+                  displayName?.[0]?.toUpperCase() || 'U'
+                )}
+              </div>
+              <span className="truncate max-w-[90px]">{displayName}</span>
+            </button>
           </div>
-        </div>
-      ) : (
-        <div
-          onClick={handleOpenVoiceRoom}
-          style={{ backgroundColor: dominantBg }}
-          className={`relative aspect-video w-full cursor-pointer overflow-hidden flex flex-col items-center justify-center border-2 transition-all duration-150 group/stage ${
-            isParticipantSpeaking
-              ? 'border-[#23a55a] shadow-[0_0_12px_rgba(35,165,90,0.35)] ring-1 ring-[#23a55a]'
-              : 'border-transparent'
-          }`}
-        >
-          {/* Avatar in Center */}
-          <div className="flex flex-col items-center justify-center">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-xl sm:text-2xl shadow-xl select-none bg-black/20">
-              {avatarUrl ? (
-                <img src={formatAssetUrl(avatarUrl)} alt={displayName} className="w-full h-full object-cover" />
-              ) : (
-                <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Watch Stream Button (If another member is streaming) */}
-          {activeScreenSharer && !activeScreenSharer.isLocal && (
-            <div className="absolute top-2.5 left-2.5 z-20">
+        ) : (
+          <div
+            onClick={handleCardClick}
+            style={{ backgroundColor: dominantBg }}
+            className={`relative aspect-video w-full cursor-pointer overflow-hidden flex flex-col items-center justify-center border-2 transition-all duration-150 ${
+              isParticipantSpeaking
+                ? 'border-[#23a55a] shadow-[0_0_12px_rgba(35,165,90,0.35)] ring-1 ring-[#23a55a]'
+                : 'border-transparent'
+            }`}
+          >
+            {/* Top Left Navigation: <- #channelName */}
+            <div className="absolute top-2.5 left-2.5 z-30">
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (hasMovedSignificantlyRef.current) return;
-                  watchParticipant(activeScreenSharer.identity, 'exclusive');
-                }}
-                className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg backdrop-blur-md shadow-lg flex items-center gap-1.5 cursor-pointer transition-all"
+                onClick={handleOpenVoiceRoom}
+                className="flex items-center gap-1.5 bg-black/70 hover:bg-black/90 active:scale-95 text-gray-200 hover:text-white px-2 py-1 rounded-lg text-xs font-semibold backdrop-blur-md border border-white/10 transition-all cursor-pointer shadow-md"
+                title="Voltar para a sala de voz"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate max-w-[120px]">#{channelDisplayName}</span>
+              </button>
+            </div>
+
+            {/* Top Right Live Tag */}
+            <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
+              <span className="bg-brand-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm">
+                <Monitor className="w-3 h-3" /> AO VIVO
+              </span>
+            </div>
+
+            {/* Avatar in Center */}
+            <div className="flex flex-col items-center justify-center pointer-events-none select-none">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-xl sm:text-2xl shadow-xl select-none bg-black/20 pointer-events-none">
+                {avatarUrl ? (
+                  <img
+                    src={formatAssetUrl(avatarUrl)}
+                    alt={displayName}
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
+                    style={{ userSelect: 'none' }}
+                    className="w-full h-full object-cover pointer-events-none select-none"
+                  />
+                ) : (
+                  <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Watch Stream Button */}
+            <div className="mt-2.5 z-20">
+              <button
+                type="button"
+                onClick={handleCardClick}
+                className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-[11px] font-semibold px-3 py-1.5 rounded-xl backdrop-blur-md shadow-lg flex items-center gap-1.5 cursor-pointer transition-all"
                 title="Assistir Transmissão"
               >
-                <Monitor className="w-3.5 h-3.5" />
-                <span className="truncate max-w-[140px]">Ver Live ({activeScreenSharer.name || 'Usuário'})</span>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Assistir Transmissão</span>
               </button>
             </div>
-          )}
 
-          {/* Bottom-left Name Pill */}
-          <div className="absolute bottom-2.5 left-2.5 bg-[#111214]/85 backdrop-blur-md px-2.5 py-1 rounded-md flex items-center gap-1.5 text-xs font-semibold text-white shadow-md max-w-[85%] z-20 pointer-events-none">
-            <span className="truncate">{displayName} {isLocal && '(Você)'}</span>
-            {isParticipantMuted && (
-              <MicOff className="w-3.5 h-3.5 text-dnd flex-shrink-0" />
-            )}
-          </div>
-
-          {/* Center Hover Click Overlay */}
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/stage:opacity-100 transition-opacity flex items-center justify-center pointer-events-none z-30">
-            <div className="bg-background-darkest/95 border border-white/10 px-3 py-1.5 rounded-xl text-xs font-semibold text-white flex items-center gap-2 shadow-2xl backdrop-blur-md">
-              <Volume2 className="w-4 h-4 text-brand-400" />
-              <span>Voltar para a call</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bottom Voice Control Bar */}
-      <div className="p-2.5 px-3 bg-background-darker/90 border-t border-white/5 flex items-center justify-between">
-        <div
-          onClick={handleOpenVoiceRoom}
-          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0 text-left flex-1 mr-2 select-none"
-          title="Clique aqui para voltar para a call"
-        >
-          <div className="w-2 h-2 rounded-full bg-online animate-pulse flex-shrink-0" />
-          <span className="text-xs font-semibold text-gray-200 truncate hover:underline hover:text-white">
-            #{voiceChannel?.name || 'Voz'}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {!isLocal && targetParticipant && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (hasMovedSignificantlyRef.current) return;
-                  setShowVolume(!showVolume);
-                }}
-                className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                title="Ajustar volumes"
-              >
-                {currentUVol === 0 ? (
-                  <VolumeX className="w-3.5 h-3.5 text-dnd" />
-                ) : (
-                  <Volume2 className="w-3.5 h-3.5" />
-                )}
-              </button>
-
-              {showVolume && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowVolume(false)} />
-                  <div
-                    data-no-drag="true"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="absolute right-0 bottom-full mb-2 z-50 bg-background-darkest border border-white/10 p-3 rounded-2xl shadow-2xl w-44 flex flex-col gap-2.5 animate-in fade-in zoom-in-95"
-                  >
-                    {/* User Voice Volume */}
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between text-[11px] font-semibold text-gray-300">
-                        <div className="flex items-center gap-1">
-                          <Volume2 className="w-3 h-3 text-gray-400" />
-                          <span>Voz</span>
-                        </div>
-                        <span className="text-brand-400 font-mono text-[10px] font-bold">{Math.round(currentUVol * 100)}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={2}
-                        step={0.05}
-                        value={currentUVol}
-                        onChange={(e) =>
-                          setUserVolume(targetParticipant.identity, parseFloat(e.target.value))
-                        }
-                        className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-                      />
-                    </div>
-
-                    {/* Stream Audio Volume */}
-                    {hasScreenVideoTrack && (
-                      <div className="flex flex-col gap-1 pt-2 border-t border-white/10">
-                        <div className="flex items-center justify-between text-[11px] font-semibold text-gray-300">
-                          <div className="flex items-center gap-1">
-                            <Monitor className="w-3 h-3 text-brand-400" />
-                            <span>Transmissão</span>
-                          </div>
-                          <span className="text-brand-400 font-mono text-[10px] font-bold">{Math.round(currentSVol * 100)}%</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={2}
-                          step={0.05}
-                          value={currentSVol}
-                          onChange={(e) =>
-                            setStreamVolume(targetParticipant.identity, parseFloat(e.target.value))
-                          }
-                          className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </>
+            {/* Bottom-left Name Pill */}
+            <div className="absolute bottom-2.5 left-2.5 bg-[#111214]/85 backdrop-blur-md px-2.5 py-1 rounded-md flex items-center gap-1.5 text-xs font-semibold text-white shadow-md max-w-[70%] z-20 pointer-events-none">
+              <span className="truncate">{displayName} {isLocal && '(Você)'}</span>
+              {isParticipantMuted && (
+                <MicOff className="w-3.5 h-3.5 text-dnd flex-shrink-0" />
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (hasMovedSignificantlyRef.current) return;
-              toggleMute();
-            }}
-            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isMuted
-                ? 'bg-dnd text-white hover:bg-rose-700'
-                : 'text-gray-300 hover:text-white hover:bg-white/10'
-            }`}
-            title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
-          >
-            {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (hasMovedSignificantlyRef.current) return;
-              toggleDeafen();
-            }}
-            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isDeafened
-                ? 'bg-dnd text-white hover:bg-rose-700'
-                : 'text-gray-300 hover:text-white hover:bg-white/10'
-            }`}
-            title={isDeafened ? 'Desativar Áudio' : 'Ensurdecer'}
-          >
-            <Headphones className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (hasMovedSignificantlyRef.current) return;
-              leaveVoice();
-            }}
-            className="p-1.5 rounded-lg text-dnd hover:bg-dnd/20 transition-colors cursor-pointer"
-            title="Desconectar da call"
-          >
-            <PhoneOff className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        {/* Edge & Corner Resize Handles */}
+        {corner === 'bottom-right' || corner === 'top-right' ? (
+          <>
+            {/* Left Edge Handle */}
+            <div
+              onPointerDown={(e) => handleResizePointerDown('left', e)}
+              className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize z-40 hover:bg-brand-500/20 transition-colors"
+              title="Redimensionar"
+            />
+            {/* Bottom-left Corner Grip */}
+            <div
+              onPointerDown={(e) => handleResizePointerDown('bottom-left', e)}
+              className="absolute bottom-0 left-0 w-6 h-6 cursor-nesw-resize z-40 flex items-end justify-start p-1 text-white/40 hover:text-white group-hover:opacity-100 opacity-0 transition-opacity"
+              title="Redimensionar"
+            >
+              <svg className="w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
+                <path d="M2 2L10 10M2 6L6 10M2 10L2 10.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Right Edge Handle */}
+            <div
+              onPointerDown={(e) => handleResizePointerDown('right', e)}
+              className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize z-40 hover:bg-brand-500/20 transition-colors"
+              title="Redimensionar"
+            />
+            {/* Bottom-right Corner Grip */}
+            <div
+              onPointerDown={(e) => handleResizePointerDown('bottom-right', e)}
+              className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-40 flex items-end justify-end p-1 text-white/40 hover:text-white group-hover:opacity-100 opacity-0 transition-opacity"
+              title="Redimensionar"
+            >
+              <svg className="w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
+                <path d="M10 2L2 10M10 6L6 10M10 10L10 10.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+          </>
+        )}
       </div>
-    </div>
 
     <ContextMenu menu={menu} onClose={closeContextMenu} />
 
@@ -830,7 +828,14 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 shadow-lg pointer-events-auto">
               <div className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white overflow-hidden">
                 {targetUser.avatar_url ? (
-                  <img src={formatAssetUrl(targetUser.avatar_url)} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={formatAssetUrl(targetUser.avatar_url)}
+                    alt=""
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
+                    style={{ userSelect: 'none' }}
+                    className="w-full h-full object-cover pointer-events-none select-none"
+                  />
                 ) : (
                   displayName?.[0]?.toUpperCase() || 'U'
                 )}
