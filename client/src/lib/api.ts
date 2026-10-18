@@ -238,6 +238,8 @@ export const api = {
         method: 'POST',
       }),
     me: () => request<User>('/auth/me'),
+    getTurnstileConfig: () =>
+      request<{ enabled: boolean; site_key: string }>('/auth/turnstile-config'),
     generate2FA: () =>
       request<{ secret: string; otpauth_uri: string }>('/auth/2fa/generate', {
         method: 'POST',
@@ -324,6 +326,13 @@ export const api = {
         method: 'DELETE',
       }),
     listBlocks: () => request<User[]>('/users/me/blocks'),
+    getProfile: (userId: string, guildId?: string) =>
+      request<{
+        user: User;
+        joined_at?: string;
+        mutual_guilds: Array<{ id: string; name: string; icon_url?: string }>;
+        mutual_friends: Array<{ id: string; username: string; display_name?: string; avatar_url?: string }>;
+      }>(`/users/${userId}/profile${guildId ? `?guild_id=${guildId}` : ''}`),
   },
 
   guilds: {

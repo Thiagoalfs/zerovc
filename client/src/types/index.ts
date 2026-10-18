@@ -80,6 +80,7 @@ export interface User {
   csrf_token?: string;
   muted_until?: string;
   created_at?: string;
+  joined_at?: string;
 }
 
 export interface UserProfilePosition {

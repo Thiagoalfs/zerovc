@@ -121,6 +121,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const { user, updateProfile, logout, setUser } = useAuthStore();
   const reducedMotion = useSettingsStore((state) => state.reducedMotion);
 
+  const handleLogout = async () => {
+    onClose();
+    await logout();
+  };
+
   const [activeTab, setActiveTab] = useState<
     | 'account'
     | 'profile'
@@ -1391,7 +1396,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 <div className="bg-background-darker rounded-2xl border border-white/5 overflow-hidden">
                   <button
                     type="button"
-                    onClick={logout}
+                    onClick={handleLogout}
                     className="w-full flex items-center justify-between p-3.5 text-left hover:bg-red-500/10 active:bg-red-500/20 text-red-400 transition-colors"
                   >
                     <div className="min-w-0">
@@ -1595,7 +1600,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
           <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
             <button
               type="button"
-              onClick={logout}
+              onClick={handleLogout}
               className="flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
             >
               <span>Sair da Conta</span>

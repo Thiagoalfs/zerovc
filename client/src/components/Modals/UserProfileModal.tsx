@@ -19,6 +19,7 @@ import {
 import { User, UserProfilePosition, Guild } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
+import { useVoiceStore } from '../../stores/voiceStore';
 import { useDMStore } from '../../stores/dmStore';
 import { formatAssetUrl } from '../../lib/api';
 import { getUserActivity, useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
@@ -49,6 +50,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 }) => {
   const { user: currentUser } = useAuthStore();
   const guilds = useGuildStore((s) => s.guilds);
+  const guildVoiceStates = useGuildStore((s) => s.guildVoiceStates);
+  const isVoiceConnected = useVoiceStore((s) => s.isConnected);
+  const currentVoiceChannelId = useVoiceStore((s) => s.currentChannelId);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -62,8 +66,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   }, [isOpen, onClose]);
 
   const activity = useMemo(() => {
-    return getUserActivity(user, currentUser, guilds);
-  }, [user, currentUser, guilds]);
+    return getUserActivity(user, currentUser, guilds, guildVoiceStates);
+  }, [user, currentUser, guilds, guildVoiceStates, isVoiceConnected, currentVoiceChannelId]);
 
   const elapsedTime = useActivityElapsedTime(activity, user?.id);
 

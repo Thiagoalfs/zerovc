@@ -18,6 +18,8 @@ import {
   playUndeafenSound,
 } from '../utils/audio';
 import { showAlert } from './confirmModalStore';
+import { useAuthStore } from './authStore';
+import { useGuildStore } from './guildStore';
 
 export type VoiceType = 'guild' | 'dm' | 'group';
 
@@ -680,6 +682,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       livekitE2EEManager.cleanup();
       const { voiceType, currentChannelId, dmRoomId } = get();
       if (!voiceType && !currentChannelId && !dmRoomId) return;
+
+      const currentUserId = useAuthStore.getState().user?.id;
+      if (currentUserId && currentChannelId) {
+        useGuildStore.getState().updateVoiceState('leave', undefined, currentChannelId, currentUserId);
+      }
 
       try {
         if (voiceType === 'guild' && currentChannelId) {

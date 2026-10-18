@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -394,4 +395,146 @@ func (h *UserHandler) UnblockUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"success": true, "unblocked_user_id": targetID})
 }
+
+type MutualGuild struct {
+	ID      uuid.UUID `json:"id"`
+	Name    string    `json:"name"`
+	IconURL string    `json:"icon_url"`
+}
+
+type MutualFriend struct {
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	AvatarURL   string    `json:"avatar_url"`
+}
+
+type UserProfileResponse struct {
+	User          models.UserPublic `json:"user"`
+	JoinedAt      *time.Time        `json:"joined_at,omitempty"`
+	MutualGuilds  []MutualGuild     `json:"mutual_guilds"`
+	MutualFriends []MutualFriend    `json:"mutual_friends"`
+}
+
+func (h *UserHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
+	callerID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	targetIDStr := chi.URLParam(r, "id")
+	targetID, err := uuid.Parse(targetIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid user id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var u models.UserPublic
+	var showAct bool
+	var createdAt time.Time
+	queryUser := `
+		SELECT u.id, u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''),
+		       COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, ''),
+		       COALESCE(u.custom_activity, 'null'::jsonb), COALESCE(u.show_activity_status, true),
+		       u.created_at
+		FROM users u
+		WHERE u.id = $1
+	`
+	err = h.db.Pool.QueryRow(r.Context(), queryUser, targetID).Scan(
+		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL,
+		&u.Bio, &u.Status, &u.CustomStatus,
+		&u.CustomActivity, &showAct,
+		&createdAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
+		return
+	}
+
+	u.CreatedAt = &createdAt
+	if !h.hub.IsUserOnline(u.ID) {
+		u.Status = "offline"
+	}
+	if !showAct || u.Status == "offline" || string(u.CustomActivity) == "null" {
+		u.CustomActivity = nil
+	}
+
+	var joinedAt *time.Time
+	guildIDStr := r.URL.Query().Get("guild_id")
+	if guildIDStr != "" {
+		if gID, err := uuid.Parse(guildIDStr); err == nil {
+			var ja time.Time
+			errJoin := h.db.Pool.QueryRow(r.Context(), `
+				SELECT joined_at FROM guild_members WHERE guild_id = $1 AND user_id = $2
+			`, gID, targetID).Scan(&ja)
+			if errJoin == nil {
+				joinedAt = &ja
+				u.JoinedAt = &ja
+			}
+		}
+	}
+
+	mutualGuilds := make([]MutualGuild, 0)
+	mutualFriends := make([]MutualFriend, 0)
+
+	if callerID != targetID {
+		// Mutual Guilds
+		gRows, err := h.db.Pool.Query(r.Context(), `
+			SELECT g.id, g.name, COALESCE(g.icon_url, '')
+			FROM guilds g
+			INNER JOIN guild_members gm1 ON gm1.guild_id = g.id AND gm1.user_id = $1
+			INNER JOIN guild_members gm2 ON gm2.guild_id = g.id AND gm2.user_id = $2
+			ORDER BY g.name ASC
+		`, callerID, targetID)
+		if err == nil {
+			defer gRows.Close()
+			for gRows.Next() {
+				var mg MutualGuild
+				if err := gRows.Scan(&mg.ID, &mg.Name, &mg.IconURL); err == nil {
+					mutualGuilds = append(mutualGuilds, mg)
+				}
+			}
+		}
+
+		// Mutual Friends
+		fRows, err := h.db.Pool.Query(r.Context(), `
+			WITH u1_friends AS (
+				SELECT CASE WHEN user_id = $1 THEN friend_id ELSE user_id END AS fid
+				FROM friendships
+				WHERE (user_id = $1 OR friend_id = $1) AND status = 'accepted'
+			),
+			u2_friends AS (
+				SELECT CASE WHEN user_id = $2 THEN friend_id ELSE user_id END AS fid
+				FROM friendships
+				WHERE (user_id = $2 OR friend_id = $2) AND status = 'accepted'
+			)
+			SELECT u.id, u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, '')
+			FROM users u
+			INNER JOIN u1_friends f1 ON f1.fid = u.id
+			INNER JOIN u2_friends f2 ON f2.fid = u.id
+			ORDER BY u.username ASC
+		`, callerID, targetID)
+		if err == nil {
+			defer fRows.Close()
+			for fRows.Next() {
+				var mf MutualFriend
+				if err := fRows.Scan(&mf.ID, &mf.Username, &mf.DisplayName, &mf.AvatarURL); err == nil {
+					mutualFriends = append(mutualFriends, mf)
+				}
+			}
+		}
+	}
+
+	resp := UserProfileResponse{
+		User:          u,
+		JoinedAt:      joinedAt,
+		MutualGuilds:  mutualGuilds,
+		MutualFriends: mutualFriends,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
 

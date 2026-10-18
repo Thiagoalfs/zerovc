@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import {
   Crown,
   VolumeX,
+  Volume2,
   Hash,
   ArrowLeft,
   Search,
@@ -20,7 +21,7 @@ import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu } from '../ContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
-import { getActivityColorClass } from '../../utils/userActivity';
+import { getUserActivity, getActivityColorClass } from '../../utils/userActivity';
 import { getFormattedUsername } from '../../stores/streamerModeStore';
 
 interface MemberListProps {
@@ -46,7 +47,7 @@ export const MemberList: React.FC<MemberListProps> = ({
   dragOffset = null,
   dragProgress = null,
 }) => {
-  const { activeGuild, activeChannel } = useGuildStore();
+  const { activeGuild, activeChannel, guilds, guildVoiceStates } = useGuildStore();
   const { user: currentUser } = useAuthStore();
   const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
   const memberListWidth = useSettingsStore((s) => s.memberListWidth);
@@ -240,28 +241,52 @@ export const MemberList: React.FC<MemberListProps> = ({
 
           {/* Activity / Custom Status / Roles Badges */}
           {(() => {
-            const rawAct = isMe && currentUser ? currentUser.custom_activity : member.custom_activity;
-            const showAct = isMe && currentUser ? currentUser.show_activity_status !== false : member.status !== 'offline' && member.show_activity_status !== false;
-            const act = rawAct && rawAct.name !== 'OBS Studio' && !rawAct.name.toLowerCase().includes('obs') ? rawAct : null;
+            const isMemberMe = member.id === currentUser?.id;
+            const targetMember = isMemberMe && currentUser ? currentUser : member;
+            const showAct = isMemberMe
+              ? currentUser.show_activity_status !== false
+              : member.status !== 'offline' && member.show_activity_status !== false;
 
-            if (showAct && act) {
-              return (
-                <p className={`text-[11px] font-medium truncate flex items-center gap-1 ${getActivityColorClass({ type: act.type })}`}>
-                  {act.type === 'playing' ? <Gamepad2 className="w-3 h-3 flex-shrink-0" /> :
-                   act.type === 'listening' ? <Music className="w-3 h-3 flex-shrink-0" /> :
-                   act.type === 'watching' ? <Tv className="w-3 h-3 flex-shrink-0" /> :
-                   act.type === 'streaming' ? <Radio className="w-3 h-3 flex-shrink-0" /> :
-                   <Sparkles className="w-3 h-3 flex-shrink-0" />}
-                  <span className="truncate">
-                    {act.type === 'playing' ? 'Jogando ' :
-                     act.type === 'listening' ? 'Ouvindo ' :
-                     act.type === 'watching' ? 'Assistindo ' :
-                     act.type === 'streaming' ? 'Transmitindo ' : ''}
-                    {act.name}
-                  </span>
-                </p>
-              );
+            if (showAct) {
+              const activity = getUserActivity(targetMember, currentUser, guilds, guildVoiceStates);
+              if (activity) {
+                return (
+                  <p
+                    className={`text-[11px] font-medium truncate flex items-center gap-1 ${getActivityColorClass(
+                      activity
+                    )}`}
+                  >
+                    {activity.kind === 'call' ? (
+                      <Volume2 className="w-3 h-3 flex-shrink-0 animate-pulse text-emerald-400" />
+                    ) : activity.type === 'playing' ? (
+                      <Gamepad2 className="w-3 h-3 flex-shrink-0" />
+                    ) : activity.type === 'listening' ? (
+                      <Music className="w-3 h-3 flex-shrink-0" />
+                    ) : activity.type === 'watching' ? (
+                      <Tv className="w-3 h-3 flex-shrink-0" />
+                    ) : activity.type === 'streaming' ? (
+                      <Radio className="w-3 h-3 flex-shrink-0" />
+                    ) : (
+                      <Sparkles className="w-3 h-3 flex-shrink-0" />
+                    )}
+                    <span className="truncate">
+                      {activity.kind === 'call'
+                        ? `Em chamada #${activity.name}`
+                        : activity.type === 'playing'
+                        ? `Jogando ${activity.name}`
+                        : activity.type === 'listening'
+                        ? `Ouvindo ${activity.name}`
+                        : activity.type === 'watching'
+                        ? `Assistindo ${activity.name}`
+                        : activity.type === 'streaming'
+                        ? `Transmitindo ${activity.name}`
+                        : activity.name}
+                    </span>
+                  </p>
+                );
+              }
             }
+
             if (member.custom_status) {
               return <p className="text-[11px] text-gray-400 truncate">{member.custom_status}</p>;
             }

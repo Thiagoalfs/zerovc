@@ -18,13 +18,15 @@ import {
   Copy,
   Check,
   UserPlus,
+  ChevronRight,
 } from 'lucide-react';
 import { User, Guild } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
+import { useVoiceStore } from '../../stores/voiceStore';
 import { useFriendStore } from '../../stores/friendStore';
 import { copyToClipboard } from '../../utils/clipboard';
-import { formatAssetUrl } from '../../lib/api';
+import { api, formatAssetUrl } from '../../lib/api';
 import { getUserActivity, useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
 
@@ -49,14 +51,60 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 }) => {
   const { user: currentUser } = useAuthStore();
   const guilds = useGuildStore((s) => s.guilds);
+  const selectGuild = useGuildStore((s) => s.selectGuild);
+  const guildVoiceStates = useGuildStore((s) => s.guildVoiceStates);
+  const isVoiceConnected = useVoiceStore((s) => s.isConnected);
+  const currentVoiceChannelId = useVoiceStore((s) => s.currentChannelId);
   const { friends, pending, sendRequest } = useFriendStore();
   const [copied, setCopied] = useState(false);
   const [isSendingRequest, setIsSendingRequest] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
 
+  const [profileData, setProfileData] = useState<{
+    user?: User;
+    joined_at?: string;
+    mutual_guilds: Array<{ id: string; name: string; icon_url?: string }>;
+    mutual_friends: Array<{ id: string; username: string; display_name?: string; avatar_url?: string }>;
+  } | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isServersExpanded, setIsServersExpanded] = useState(false);
+  const [isFriendsExpanded, setIsFriendsExpanded] = useState(false);
+
   useEffect(() => {
     setRequestSent(false);
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!isOpen || !user?.id) {
+      setProfileData(null);
+      setIsServersExpanded(false);
+      setIsFriendsExpanded(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingProfile(true);
+
+    api.users
+      .getProfile(user.id, guild?.id)
+      .then((data) => {
+        if (isMounted) {
+          setProfileData(data);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load user profile details:', err);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingProfile(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, user?.id, guild?.id]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -85,8 +133,8 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
   }, [pending, user]);
 
   const activity = useMemo(() => {
-    return getUserActivity(user, currentUser, guilds);
-  }, [user, currentUser, guilds]);
+    return getUserActivity(user, currentUser, guilds, guildVoiceStates);
+  }, [user, currentUser, guilds, guildVoiceStates, isVoiceConnected, currentVoiceChannelId]);
 
   const elapsedTime = useActivityElapsedTime(activity, user?.id);
 
@@ -121,14 +169,51 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
     }
   };
 
-  const joinDateStr = (() => {
-    if (!user.created_at) return '';
+  const mutualGuilds = useMemo(() => {
+    if (profileData?.mutual_guilds) {
+      return profileData.mutual_guilds;
+    }
+    if (!user || isMe) return [];
+    return guilds
+      .filter((g) => g.members?.some((m) => m.id === user.id))
+      .map((g) => ({ id: g.id, name: g.name, icon_url: g.icon_url }));
+  }, [profileData?.mutual_guilds, guilds, user?.id, isMe]);
+
+  const mutualFriends = useMemo(() => {
+    return profileData?.mutual_friends || [];
+  }, [profileData?.mutual_friends]);
+
+  const createdDateStr = useMemo(() => {
+    const raw = profileData?.user?.created_at || user?.created_at;
+    if (!raw) return '';
     try {
-      return format(new Date(user.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+      return format(new Date(raw), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
     } catch {
       return '';
     }
-  })();
+  }, [profileData?.user?.created_at, user?.created_at]);
+
+  const joinedDateStr = useMemo(() => {
+    const raw = profileData?.joined_at || user?.joined_at;
+    if (!raw) return '';
+    try {
+      return format(new Date(raw), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    } catch {
+      return '';
+    }
+  }, [profileData?.joined_at, user?.joined_at]);
+
+  const handleSelectMutualGuild = async (guildId: string) => {
+    onClose();
+    await selectGuild(guildId);
+  };
+
+  const handleSelectMutualFriend = (friendId: string) => {
+    onClose();
+    if (onOpenDM) {
+      onOpenDM(friendId);
+    }
+  };
 
   const handleStartChat = () => {
     onClose();
@@ -402,13 +487,229 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
               {/* Server Roles with Dropdown */}
               <UserRolesSection user={user} guild={guild} size="md" />
 
-              {/* Account Created Date */}
-              {joinDateStr && (
-                <div className="pt-2 border-t border-white/5 flex items-center gap-2 text-xs text-gray-400">
-                  <Calendar className="w-4 h-4 text-gray-500" />
-                  <span>Membro do ZeroVC desde {joinDateStr}</span>
-                </div>
-              )}
+              {/* Servidores em comum, Amigos em comum, Membro desde */}
+              <div className="pt-2 border-t border-white/5 space-y-2.5">
+                {/* 1. Servidores em comum */}
+                {!isMe && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setIsServersExpanded((prev) => !prev)}
+                      className="w-full flex items-center justify-between py-2 px-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 transition-all cursor-pointer group text-left"
+                    >
+                      <span className="text-xs font-semibold text-gray-300 group-hover:text-white transition-colors">
+                        Servidores em comum
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {mutualGuilds.length > 0 ? (
+                          <div className="flex items-center -space-x-1.5 shrink-0">
+                            {mutualGuilds.slice(0, 3).map((item, idx) => (
+                              <div
+                                key={item.id}
+                                className="w-6 h-6 rounded-full border-2 border-background-darkest bg-background-darker overflow-hidden shadow-sm relative shrink-0"
+                                style={{ zIndex: 10 - idx }}
+                                title={item.name}
+                              >
+                                {item.icon_url ? (
+                                  <img
+                                    src={formatAssetUrl(item.icon_url)}
+                                    alt={item.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-white/10 text-gray-200 text-[10px] font-bold flex items-center justify-center">
+                                    {item.name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {mutualGuilds.length > 3 && (
+                              <div
+                                className="w-6 h-6 rounded-full border-2 border-background-darkest bg-white/10 text-gray-300 text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm relative"
+                                style={{ zIndex: 6 }}
+                                title={`Mais ${mutualGuilds.length - 3}`}
+                              >
+                                +{mutualGuilds.length - 3}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500 font-medium">0</span>
+                        )}
+                        <ChevronRight
+                          className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 shrink-0 ${
+                            isServersExpanded ? 'rotate-90 text-white' : ''
+                          }`}
+                        />
+                      </div>
+                    </button>
+
+                    {isServersExpanded && (
+                      <div className="mt-1.5 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1 max-h-44 overflow-y-auto no-scrollbar animate-in fade-in duration-150">
+                        {mutualGuilds.length > 0 ? (
+                          mutualGuilds.map((g) => (
+                            <button
+                              key={g.id}
+                              type="button"
+                              onClick={() => handleSelectMutualGuild(g.id)}
+                              className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer text-left"
+                            >
+                              <div className="w-7 h-7 rounded-full overflow-hidden bg-background-darker border border-white/10 shrink-0">
+                                {g.icon_url ? (
+                                  <img src={formatAssetUrl(g.icon_url)} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full bg-white/10 text-gray-300 text-xs font-bold flex items-center justify-center">
+                                    {g.name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-xs font-medium text-gray-200 truncate flex-1">{g.name}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="text-xs text-gray-400 py-1 px-2">Nenhum servidor em comum</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. Amigos em comum */}
+                {!isMe && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setIsFriendsExpanded((prev) => !prev)}
+                      className="w-full flex items-center justify-between py-2 px-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 transition-all cursor-pointer group text-left"
+                    >
+                      <span className="text-xs font-semibold text-gray-300 group-hover:text-white transition-colors">
+                        Amigos em comum
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {mutualFriends.length > 0 ? (
+                          <div className="flex items-center -space-x-1.5 shrink-0">
+                            {mutualFriends.slice(0, 3).map((item, idx) => (
+                              <div
+                                key={item.id}
+                                className="w-6 h-6 rounded-full border-2 border-background-darkest bg-background-darker overflow-hidden shadow-sm relative shrink-0"
+                                style={{ zIndex: 10 - idx }}
+                                title={item.display_name || item.username}
+                              >
+                                {item.avatar_url ? (
+                                  <img
+                                    src={formatAssetUrl(item.avatar_url)}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-brand-500/20 text-brand-300 text-[10px] font-bold flex items-center justify-center">
+                                    {(item.display_name || item.username || '?').charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {mutualFriends.length > 3 && (
+                              <div
+                                className="w-6 h-6 rounded-full border-2 border-background-darkest bg-white/10 text-gray-300 text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm relative"
+                                style={{ zIndex: 6 }}
+                                title={`Mais ${mutualFriends.length - 3}`}
+                              >
+                                +{mutualFriends.length - 3}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500 font-medium">0</span>
+                        )}
+                        <ChevronRight
+                          className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 shrink-0 ${
+                            isFriendsExpanded ? 'rotate-90 text-white' : ''
+                          }`}
+                        />
+                      </div>
+                    </button>
+
+                    {isFriendsExpanded && (
+                      <div className="mt-1.5 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1 max-h-44 overflow-y-auto no-scrollbar animate-in fade-in duration-150">
+                        {mutualFriends.length > 0 ? (
+                          mutualFriends.map((f) => (
+                            <button
+                              key={f.id}
+                              type="button"
+                              onClick={() => handleSelectMutualFriend(f.id)}
+                              className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer text-left"
+                            >
+                              <div className="w-7 h-7 rounded-full overflow-hidden bg-background-darker border border-white/10 shrink-0">
+                                {f.avatar_url ? (
+                                  <img src={formatAssetUrl(f.avatar_url)} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full bg-brand-500/20 text-brand-300 text-xs font-bold flex items-center justify-center">
+                                    {(f.display_name || f.username || '?').charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-semibold text-gray-200 truncate">{f.display_name || f.username}</div>
+                                <div className="text-[11px] text-gray-400 truncate">@{f.username}</div>
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="text-xs text-gray-400 py-1 px-2">Nenhum amigo em comum</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. Membro desde */}
+                {(createdDateStr || (guild && (joinedDateStr || isLoadingProfile))) && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+                      Membro desde
+                    </span>
+                    <div className={`grid gap-2 ${guild ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                      {/* Data de criação da conta */}
+                      <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center shrink-0">
+                          <Calendar className="w-4 h-4 text-brand-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">No ZeroVC</div>
+                          <div className="text-xs font-semibold text-gray-200 truncate" title={createdDateStr}>
+                            {createdDateStr || 'Desconhecido'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Data de quando entrou no servidor (ao lado, somente quando dentro de um servidor) */}
+                      {guild && (
+                        <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 min-w-0">
+                          {guild.icon_url ? (
+                            <img
+                              src={formatAssetUrl(guild.icon_url)}
+                              alt=""
+                              className="w-8 h-8 rounded-lg object-cover border border-white/10 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 text-xs font-bold text-emerald-400">
+                              {guild.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider truncate" title={guild.name}>
+                              {guild.name}
+                            </div>
+                            <div className="text-xs font-semibold text-gray-200 truncate" title={joinedDateStr}>
+                              {joinedDateStr || (isLoadingProfile ? 'Carregando...' : 'Desconhecido')}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
         </div>
       </div>

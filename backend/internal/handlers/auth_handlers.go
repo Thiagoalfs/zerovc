@@ -101,11 +101,44 @@ type TurnstileVerifyResponse struct {
 	CData       string    `json:"cdata,omitempty"`
 }
 
+func (h *AuthHandler) GetTurnstileConfig(w http.ResponseWriter, r *http.Request) {
+	secretKey := strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY"))
+	siteKey := strings.TrimSpace(os.Getenv("TURNSTILE_SITE_KEY"))
+
+	isConfigured := secretKey != "" &&
+		secretKey != "sua_turnstile_secret_key_aqui" &&
+		secretKey != "your_turnstile_secret_key_here" &&
+		!strings.HasPrefix(secretKey, "sua_") &&
+		!strings.HasPrefix(secretKey, "your_") &&
+		siteKey != "" &&
+		siteKey != "sua_turnstile_site_key_aqui" &&
+		!strings.HasPrefix(siteKey, "sua_")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"enabled":  isConfigured,
+		"site_key": siteKey,
+	})
+}
+
 func verifyTurnstileToken(token string, remoteIP string) bool {
 	secretKey := strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY"))
-	if secretKey == "" {
-		// Se nenhuma chave secreta foi configurada no ambiente (.env),
-		// permite passar (modo de compatibilidade/desenvolvimento local).
+	siteKey := strings.TrimSpace(os.Getenv("TURNSTILE_SITE_KEY"))
+
+	// Se nenhuma chave secreta foi configurada no ambiente (.env) ou está com o placeholder de exemplo,
+	// permite passar (modo de compatibilidade/desenvolvimento local).
+	if secretKey == "" ||
+		secretKey == "sua_turnstile_secret_key_aqui" ||
+		secretKey == "your_turnstile_secret_key_here" ||
+		strings.HasPrefix(secretKey, "sua_") ||
+		strings.HasPrefix(secretKey, "your_") {
+		return true
+	}
+
+	// Se a chave pública (site key) não foi configurada no servidor e o token veio em branco,
+	// significa que o widget não pôde ser renderizado para o usuário; libera o acesso sem bloquear.
+	if (siteKey == "" || siteKey == "sua_turnstile_site_key_aqui" || strings.HasPrefix(siteKey, "sua_")) && strings.TrimSpace(token) == "" {
+		log.Printf("[Turnstile] TURNSTILE_SITE_KEY não configurada no servidor e token vazio; liberando autenticação.")
 		return true
 	}
 
@@ -117,9 +150,8 @@ func verifyTurnstileToken(token string, remoteIP string) bool {
 	formData := url.Values{}
 	formData.Set("secret", secretKey)
 	formData.Set("response", token)
-	if remoteIP != "" {
-		formData.Set("remoteip", remoteIP)
-	}
+	// Nota: não enviamos 'remoteip' pois em redes com Docker/Traefik/Cloudflare proxy
+	// o IP interno pode divergir do IP do visitante e causar erro 'invalid-remoteip' na Cloudflare.
 
 	client := &http.Client{
 		Timeout: 6 * time.Second,

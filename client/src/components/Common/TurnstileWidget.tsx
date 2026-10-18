@@ -27,6 +27,7 @@ export interface TurnstileWidgetRef {
 }
 
 interface TurnstileWidgetProps {
+  siteKey?: string;
   onSuccess: (token: string) => void;
   onError?: () => void;
   onExpire?: () => void;
@@ -35,12 +36,12 @@ interface TurnstileWidgetProps {
 }
 
 export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetProps>(
-  ({ onSuccess, onError, onExpire, action, className = '' }, ref) => {
+  ({ siteKey: propSiteKey, onSuccess, onError, onExpire, action, className = '' }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetIdRef = useRef<string | null>(null);
 
-    // Obtém a site key exclusivamente da variável de ambiente VITE_TURNSTILE_SITE_KEY
-    const siteKey = (import.meta as any).env?.VITE_TURNSTILE_SITE_KEY as string | undefined;
+    // Obtém a site key via prop ou da variável de ambiente VITE_TURNSTILE_SITE_KEY
+    const siteKey = propSiteKey || ((import.meta as any).env?.VITE_TURNSTILE_SITE_KEY as string | undefined);
 
     useImperativeHandle(ref, () => ({
       reset: () => {

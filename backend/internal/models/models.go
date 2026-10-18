@@ -56,6 +56,8 @@ type UserPublic struct {
 	RiotRegion         string          `json:"riot_region,omitempty"`
 	CSRFToken          string          `json:"csrf_token,omitempty"`
 	Roles              []Role          `json:"roles,omitempty"`
+	CreatedAt          *time.Time      `json:"created_at,omitempty"`
+	JoinedAt           *time.Time      `json:"joined_at,omitempty"`
 }
 
 type FavoriteGIF struct {
@@ -90,6 +92,7 @@ func (u *User) ToPublic() UserPublic {
 		RiotGameName:       u.RiotGameName,
 		RiotTagLine:        u.RiotTagLine,
 		RiotRegion:         u.RiotRegion,
+		CreatedAt:          &u.CreatedAt,
 	}
 }
 

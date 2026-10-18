@@ -258,6 +258,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     await cleanupAllStoresAndConnections();
     set({ user: null, token: null, isCheckingAuth: false, isLoading: false });
+
+    // Clean URL completely on logout: remove any /@me/... or channel IDs
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem('pending_redirect_path');
+        if (window.location.protocol === 'file:') {
+          window.history.replaceState(null, '', '#/');
+        } else {
+          window.history.replaceState(null, '', '/');
+        }
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      } catch {}
+    }
   },
 
   checkAuth: async () => {

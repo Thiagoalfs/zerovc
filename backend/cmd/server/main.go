@@ -271,6 +271,9 @@ func main() {
 	// Public E2EE Protocol Discovery & Capability Config
 	r.Get("/api/e2ee/config", e2eeHandler.GetConfig)
 
+	// Public Turnstile Config
+	r.Get("/api/auth/turnstile-config", authHandler.GetTurnstileConfig)
+
 	// Protected API Routes
 	r.Group(func(r chi.Router) {
 		r.Use(authService.Middleware)
@@ -312,6 +315,7 @@ func main() {
 		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/change-email", authHandler.ChangeEmail)
 		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/change-phone", authHandler.ChangePhone)
 		r.With(profileUpdateLimiter.Middleware).Patch("/api/users/@me", userHandler.UpdateProfile)
+		r.Get("/api/users/{id}/profile", userHandler.GetUserProfile)
 		r.Get("/api/users/me/blocks", userHandler.ListBlockedUsers)
 		r.Post("/api/users/{id}/block", userHandler.BlockUser)
 		r.Delete("/api/users/{id}/block", userHandler.UnblockUser)

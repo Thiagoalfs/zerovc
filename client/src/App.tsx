@@ -766,6 +766,18 @@ export const App: React.FC = () => {
     };
   }, [handleRoute, selectGuild]);
 
+  // Clean URL on logout/unauthenticated state (e.g. remove /@me/... or conversation IDs)
+  useEffect(() => {
+    if (!user && !isCheckingAuth) {
+      const cur = getCurrentRoute();
+      const raw = cur.split('?')[0].split('#')[0];
+      const clean = raw.replace(/^\/+|\/+$/g, '');
+      if (clean.startsWith('@me') || clean.startsWith('channels/')) {
+        navigateTo(isElectron ? '/signin' : '/', true);
+      }
+    }
+  }, [user, isCheckingAuth, isElectron]);
+
   // Initialize desktop preferences & apply DOM themes / accessibility
   useEffect(() => {
     useSettingsStore.getState().applyThemeToDOM();

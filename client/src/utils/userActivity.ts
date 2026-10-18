@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Guild, Channel, Permissions } from '../types';
+import { User, Guild, Channel, Permissions, VoiceSession } from '../types';
+import { useVoiceStore } from '../stores/voiceStore';
+import { useGuildStore } from '../stores/guildStore';
 
 export interface DisplayedActivity {
   kind: 'game' | 'music' | 'other' | 'call';
@@ -252,7 +254,8 @@ export function findFirstAccessibleChannel(
 export function getUserActivity(
   targetUser: User | null,
   currentUser: User | null,
-  guilds: Guild[]
+  guilds: Guild[],
+  guildVoiceStates?: Record<string, VoiceSession[]>
 ): DisplayedActivity | null {
   if (!targetUser) return null;
 
@@ -326,30 +329,54 @@ export function getUserActivity(
   // Check if targetUser is in any voice channel in a guild that currentUser is in and has access to
   if (!currentUser) return null;
 
-  for (const guild of guilds) {
-    if (!guild.channels || guild.channels.length === 0) continue;
+  // If checking the local user, verify local voice connection
+  if (isMe) {
+    const { isConnected, currentChannelId, dmRoomId, dmGroupId } = useVoiceStore.getState();
+    if (!isConnected || (!currentChannelId && !dmRoomId && !dmGroupId)) {
+      return null;
+    }
+  }
 
-    for (const ch of guild.channels) {
+  const voiceStatesMap = guildVoiceStates || useGuildStore.getState().guildVoiceStates;
+  const currentActiveGuild = useGuildStore.getState().activeGuild;
+  const allGuilds = guilds && guilds.length > 0 ? guilds : (currentActiveGuild ? [currentActiveGuild] : []);
+
+  for (const guild of allGuilds) {
+    const effectiveGuild = currentActiveGuild && currentActiveGuild.id === guild.id ? currentActiveGuild : guild;
+    if (!effectiveGuild.channels || effectiveGuild.channels.length === 0) continue;
+
+    const guildSessions = voiceStatesMap?.[effectiveGuild.id];
+
+    for (const ch of effectiveGuild.channels) {
       if (ch.type !== 'voice') continue;
 
-      const session = ch.voice_sessions?.find((s) => s.user_id === targetUser.id);
+      let session: VoiceSession | undefined;
+
+      if (guildSessions !== undefined) {
+        session = guildSessions.find((s) => s.user_id === targetUser.id && s.channel_id === ch.id);
+      } else {
+        session = ch.voice_sessions?.find((s) => s.user_id === targetUser.id);
+      }
+
       if (!session) continue;
 
       // Verify if currentUser has permission to see and join this voice channel
-      const hasAccess = canUserViewChannel(ch, guild, currentUser);
+      const hasAccess = canUserViewChannel(ch, effectiveGuild, currentUser);
 
       if (hasAccess) {
-        const participantCount = ch.voice_sessions?.length || 1;
+        const participantCount = guildSessions
+          ? guildSessions.filter((s) => s.channel_id === ch.id).length
+          : ch.voice_sessions?.length || 1;
         const joinedAtMs = session.joined_at ? new Date(session.joined_at).getTime() : undefined;
         return {
           kind: 'call',
           type: 'call',
           header: 'Em chamada',
           name: ch.name,
-          details: guild.name,
+          details: effectiveGuild.name,
           state: `${participantCount} ${participantCount === 1 ? 'membro' : 'membros'} no canal`,
-          guildName: guild.name,
-          guildIcon: guild.icon_url,
+          guildName: effectiveGuild.name,
+          guildIcon: effectiveGuild.icon_url,
           participantCount,
           start_time: joinedAtMs,
         };
@@ -429,6 +456,15 @@ export function getActivityStartTime(userId?: string, activityName?: string, raw
   return sessionActivityStartTimes.get(key)!;
 }
 
+export function clearActivityStartTime(userId?: string) {
+  if (!userId) return;
+  for (const key of sessionActivityStartTimes.keys()) {
+    if (key.startsWith(`${userId}:`)) {
+      sessionActivityStartTimes.delete(key);
+    }
+  }
+}
+
 /**
  * Formats elapsed time into clean digital format:
  * e.g. "04:32 decorridos" or "01:15:20 decorridos"
@@ -462,13 +498,18 @@ export function useActivityElapsedTime(
   }, [activity?.name, activity?.start_time, userId]);
 
   useEffect(() => {
-    if (!startTimeMs) return;
+    if (!startTimeMs) {
+      if (userId && !activity) {
+        clearActivityStartTime(userId);
+      }
+      return;
+    }
     setNow(Date.now());
     const timer = setInterval(() => {
       setNow(Date.now());
     }, 1000);
     return () => clearInterval(timer);
-  }, [startTimeMs]);
+  }, [startTimeMs, userId, activity]);
 
   if (!activity || !startTimeMs) return null;
   return formatElapsedTime(startTimeMs, now);

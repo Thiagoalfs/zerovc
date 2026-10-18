@@ -84,6 +84,7 @@ services:
       APP_URL: "${APP_URL}"
       RAWG_API_KEY: "${RAWG_API_KEY}"
       TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY}"
+      TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY}"
     volumes:
       - assets_data:/app/assets
       - ../backend/web:/app/web

@@ -441,7 +441,7 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 	// 6.1 Get Members and map roles in-memory
 	memQuery := `
 		SELECT u.id, u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, ''),
-		       COALESCE(u.custom_activity, 'null'::jsonb), COALESCE(u.show_activity_status, true)
+		       COALESCE(u.custom_activity, 'null'::jsonb), COALESCE(u.show_activity_status, true), u.created_at, gm.joined_at
 		FROM users u
 		INNER JOIN guild_members gm ON gm.user_id = u.id
 		WHERE gm.guild_id = $1
@@ -453,7 +453,10 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		for mRows.Next() {
 			var u models.UserPublic
 			var showAct bool
-			if err := mRows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus, &u.CustomActivity, &showAct); err == nil {
+			var createdAt, joinedAt time.Time
+			if err := mRows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus, &u.CustomActivity, &showAct, &createdAt, &joinedAt); err == nil {
+				u.CreatedAt = &createdAt
+				u.JoinedAt = &joinedAt
 				if !showAct || string(u.CustomActivity) == "null" {
 					u.CustomActivity = nil
 				}

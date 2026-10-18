@@ -18,10 +18,26 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Turnstile state (lê exclusivamente da variável de ambiente VITE_TURNSTILE_SITE_KEY)
+  // Turnstile state (lê via API /api/auth/turnstile-config com fallback para VITE_TURNSTILE_SITE_KEY)
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileWidgetRef>(null);
-  const hasTurnstileSiteKey = Boolean((import.meta as any).env?.VITE_TURNSTILE_SITE_KEY);
+  const [turnstileConfig, setTurnstileConfig] = useState<{ enabled: boolean; site_key?: string } | null>(null);
+
+  useEffect(() => {
+    api.auth.getTurnstileConfig?.()
+      .then((cfg) => {
+        if (cfg) setTurnstileConfig(cfg);
+      })
+      .catch(() => {});
+  }, []);
+
+  const activeSiteKey =
+    turnstileConfig?.site_key ||
+    ((import.meta as any).env?.VITE_TURNSTILE_SITE_KEY as string | undefined);
+
+  const hasTurnstileSiteKey = Boolean(
+    activeSiteKey && (turnstileConfig !== null ? turnstileConfig.enabled : true)
+  );
 
   // 2FA in Login and Reset
   const [twoFactorCode, setTwoFactorCode] = useState('');
@@ -728,10 +744,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                 </>
               )}
 
-              {/* Cloudflare Turnstile Verification (ativo quando VITE_TURNSTILE_SITE_KEY estiver configurada) */}
+              {/* Cloudflare Turnstile Verification (ativo quando configurada no servidor ou no .env) */}
               {!requires2FA && hasTurnstileSiteKey && (
                 <TurnstileWidget
                   ref={turnstileRef}
+                  siteKey={activeSiteKey}
                   action={mode}
                   onSuccess={(token) => setTurnstileToken(token)}
                   onExpire={() => setTurnstileToken(null)}

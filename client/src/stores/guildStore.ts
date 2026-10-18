@@ -1453,24 +1453,42 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         : undefined;
 
       // Update guildVoiceStates
-      const nextGuildVoiceStates = { ...state.guildVoiceStates };
+      const nextGuildVoiceStates: Record<string, VoiceSession[]> = { ...state.guildVoiceStates };
+
+      // Ensure target guild entry exists in nextGuildVoiceStates
+      const matchedGuildId =
+        Object.keys(nextGuildVoiceStates).find((gid) =>
+          nextGuildVoiceStates[gid]?.some((s: VoiceSession) => s.channel_id === (enhancedSession?.channel_id || targetChannelId))
+        ) ||
+        state.guilds.find((g) =>
+          g.channels?.some((c) => c.id === (enhancedSession?.channel_id || targetChannelId))
+        )?.id ||
+        (state.activeGuild?.channels?.some((c) => c.id === (enhancedSession?.channel_id || targetChannelId))
+          ? state.activeGuild.id
+          : undefined);
+
+      if (matchedGuildId && !nextGuildVoiceStates[matchedGuildId]) {
+        nextGuildVoiceStates[matchedGuildId] = [];
+      }
+
       Object.keys(nextGuildVoiceStates).forEach((gid) => {
         let sessions = nextGuildVoiceStates[gid] || [];
         if ((action === 'join' || action === 'move') && enhancedSession) {
           const isThisGuildChannel =
-            sessions.some((s) => s.channel_id === enhancedSession.channel_id) ||
-            (state.activeGuild?.id === gid && state.activeGuild?.channels?.some((c) => c.id === enhancedSession.channel_id));
+            sessions.some((s: VoiceSession) => s.channel_id === enhancedSession.channel_id) ||
+            (state.activeGuild?.id === gid && state.activeGuild?.channels?.some((c) => c.id === enhancedSession.channel_id)) ||
+            (matchedGuildId === gid);
 
           if (isThisGuildChannel) {
-            sessions = sessions.filter((s) => s.user_id !== targetUserId);
+            sessions = sessions.filter((s: VoiceSession) => s.user_id !== targetUserId);
             sessions.push(enhancedSession as VoiceSession);
           } else {
-            sessions = sessions.filter((s) => s.user_id !== targetUserId);
+            sessions = sessions.filter((s: VoiceSession) => s.user_id !== targetUserId);
           }
         } else if (action === 'leave') {
-          sessions = sessions.filter((s) => s.user_id !== targetUserId);
+          sessions = sessions.filter((s: VoiceSession) => s.user_id !== targetUserId);
         } else if ((action === 'update' || action === 'state') && enhancedSession) {
-          sessions = sessions.map((s) =>
+          sessions = sessions.map((s: VoiceSession) =>
             s.user_id === targetUserId
               ? { ...s, ...enhancedSession, user: enhancedSession.user || s.user }
               : s
@@ -1479,53 +1497,58 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         nextGuildVoiceStates[gid] = sessions;
       });
 
-      if (!state.activeGuild || !state.activeGuild.channels) {
-        return { guildVoiceStates: nextGuildVoiceStates };
-      }
+      const updateChannelList = (channelList: Channel[] = []): Channel[] => {
+        return channelList.map((channel) => {
+          if (channel.type !== 'voice') return channel;
 
-      const channels = state.activeGuild.channels.map((channel) => {
-        if (channel.type !== 'voice') return channel;
-
-        if ((action === 'join' || action === 'move') && enhancedSession) {
-          if (channel.id === enhancedSession.channel_id) {
-            const currentSessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
-            return {
-              ...channel,
-              voice_sessions: [...currentSessions, enhancedSession as VoiceSession],
-            };
-          } else {
-            // Remove user from any other voice channels in the same guild
-            const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
-            return { ...channel, voice_sessions: sessions };
-          }
-        } else if (action === 'leave') {
-          if (!targetChannelId || channel.id === targetChannelId) {
-            const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
-            return { ...channel, voice_sessions: sessions };
-          }
-          return channel;
-        } else if ((action === 'update' || action === 'state') && enhancedSession) {
-          if (channel.id === enhancedSession.channel_id) {
-            const sessions = channel.voice_sessions || [];
-            const exists = sessions.some((s) => s.user_id === targetUserId);
-            if (exists) {
+          if ((action === 'join' || action === 'move') && enhancedSession) {
+            if (channel.id === enhancedSession.channel_id) {
+              const currentSessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
               return {
                 ...channel,
-                voice_sessions: sessions.map((s) =>
-                  s.user_id === targetUserId ? { ...s, ...enhancedSession, user: enhancedSession.user || s.user } : s
-                ),
+                voice_sessions: [...currentSessions, enhancedSession as VoiceSession],
               };
+            } else {
+              // Remove user from any other voice channels in the same guild
+              const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
+              return { ...channel, voice_sessions: sessions };
             }
-            return { ...channel, voice_sessions: [...sessions, enhancedSession as VoiceSession] };
+          } else if (action === 'leave') {
+            const sessions = (channel.voice_sessions || []).filter((s) => s.user_id !== targetUserId);
+            return { ...channel, voice_sessions: sessions };
+          } else if ((action === 'update' || action === 'state') && enhancedSession) {
+            if (channel.id === enhancedSession.channel_id) {
+              const sessions = channel.voice_sessions || [];
+              const exists = sessions.some((s) => s.user_id === targetUserId);
+              if (exists) {
+                return {
+                  ...channel,
+                  voice_sessions: sessions.map((s) =>
+                    s.user_id === targetUserId ? { ...s, ...enhancedSession, user: enhancedSession.user || s.user } : s
+                  ),
+                };
+              }
+              return { ...channel, voice_sessions: [...sessions, enhancedSession as VoiceSession] };
+            }
+            return channel;
           }
           return channel;
-        }
-        return channel;
-      });
+        });
+      };
+
+      const nextActiveGuild = state.activeGuild
+        ? { ...state.activeGuild, channels: updateChannelList(state.activeGuild.channels) }
+        : null;
+
+      const nextGuilds = state.guilds.map((g) => ({
+        ...g,
+        channels: updateChannelList(g.channels),
+      }));
 
       return {
         guildVoiceStates: nextGuildVoiceStates,
-        activeGuild: { ...state.activeGuild, channels },
+        activeGuild: nextActiveGuild,
+        guilds: nextGuilds,
       };
     });
   },
