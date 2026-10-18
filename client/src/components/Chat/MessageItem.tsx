@@ -229,6 +229,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const replyAuthorId = replyAuthor?.id || message.reply_to?.author?.id;
   const replyAuthorMember = contextType === 'channel' && activeGuild && replyAuthorId ? activeGuild.members?.find((m) => m.id === replyAuthorId) : null;
   const effectiveReplyAuthor = replyAuthorMember || replyAuthor;
+  const replyAvatarUrl = effectiveReplyAuthor?.avatar_url || message.reply_to?.author?.avatar_url;
   const replyRoleColor =
     replyAuthorMember?.roles?.find((r) => r.color && r.color !== '#99aab5' && r.color !== '#99AAB5')?.color ||
     message.reply_to?.author?.roles?.find((r: Role) => r.color && r.color !== '#99aab5' && r.color !== '#99AAB5')?.color;
@@ -710,7 +711,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             title="Clique na mensagem para ir até ela"
           >
             <CornerDownRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 group-hover/reply:text-brand-400 transition-colors" />
-            <span
+            <div
               onClick={(e) => {
                 e.stopPropagation();
                 if (effectiveReplyAuthor) {
@@ -723,12 +724,29 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   handleUserContextMenu(e, effectiveReplyAuthor);
                 }
               }}
-              className={`font-semibold hover:underline cursor-pointer transition-colors ${!replyRoleColor ? 'text-brand-400 hover:text-brand-300' : 'hover:opacity-80'}`}
+              className={`inline-flex items-center gap-1 font-semibold cursor-pointer transition-colors group/replyauthor ${!replyRoleColor ? 'text-brand-400 hover:text-brand-300' : 'hover:opacity-80'}`}
               style={replyRoleColor ? { color: replyRoleColor } : undefined}
               title={effectiveReplyAuthor ? `Ver perfil de @${effectiveReplyAuthor.username || 'usuário'}` : undefined}
             >
-              @{getFormattedUsername(effectiveReplyAuthor?.display_name || effectiveReplyAuthor?.username || 'Usuário')}
-            </span>
+              <div className="w-4 h-4 rounded-full bg-brand-500 text-white text-[8px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm transition-transform group-hover/replyauthor:scale-105">
+                {replyAvatarUrl ? (
+                  <img
+                    src={formatAssetUrl(replyAvatarUrl)}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <span>{(effectiveReplyAuthor?.display_name || effectiveReplyAuthor?.username || 'U')[0]?.toUpperCase()}</span>
+                )}
+              </div>
+              <span className="group-hover/replyauthor:underline">
+                @{getFormattedUsername(effectiveReplyAuthor?.display_name || effectiveReplyAuthor?.username || 'Usuário')}
+              </span>
+            </div>
             <span
               className="truncate text-gray-400 max-w-sm italic group-hover/reply:text-gray-200 group-hover/reply:underline"
               title="Clique para ir até a mensagem respondida"
