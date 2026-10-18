@@ -1396,40 +1396,78 @@ func (h *AuthHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 
 	// 1. User profile
 	var user models.User
-	queryUser := `SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, created_at, updated_at FROM users WHERE id = $1`
+	var twoFactorSecret string
+	queryUser := `
+		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio,
+		       status, custom_status, COALESCE(two_factor_secret, ''), email_verified,
+		       COALESCE(riot_game_name, ''), COALESCE(riot_tag_line, ''), COALESCE(riot_region, ''),
+		       created_at, updated_at
+		FROM users WHERE id = $1
+	`
 	err := h.db.Pool.QueryRow(ctx, queryUser, userID).Scan(
-		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio,
+		&user.Status, &user.CustomStatus, &twoFactorSecret, &user.EmailVerified,
+		&user.RiotGameName, &user.RiotTagLine, &user.RiotRegion,
+		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
 		return
 	}
+	user.TwoFactorEnabled = (twoFactorSecret != "")
 
 	// 2. Guilds joined
 	type GuildSummary struct {
 		ID       uuid.UUID `json:"id"`
 		Name     string    `json:"name"`
 		Role     string    `json:"role"`
+		Nickname string    `json:"nickname,omitempty"`
 		JoinedAt time.Time `json:"joined_at"`
 	}
 	guilds := make([]GuildSummary, 0)
 	gRows, err := h.db.Pool.Query(ctx, `
-		SELECT g.id, g.name, gm.role, gm.joined_at
+		SELECT g.id, g.name, gm.role, COALESCE(gm.nickname, ''), gm.joined_at
 		FROM guilds g
 		JOIN guild_members gm ON gm.guild_id = g.id
 		WHERE gm.user_id = $1
+		ORDER BY gm.joined_at DESC
 	`, userID)
 	if err == nil {
 		defer gRows.Close()
 		for gRows.Next() {
 			var gs GuildSummary
-			if err := gRows.Scan(&gs.ID, &gs.Name, &gs.Role, &gs.JoinedAt); err == nil {
+			if err := gRows.Scan(&gs.ID, &gs.Name, &gs.Role, &gs.Nickname, &gs.JoinedAt); err == nil {
 				guilds = append(guilds, gs)
 			}
 		}
 	}
 
-	// 3. Friends
+	// 3. DM Groups joined
+	type DMGroupSummary struct {
+		ID       uuid.UUID `json:"id"`
+		Name     string    `json:"name"`
+		IsOwner  bool      `json:"is_owner"`
+		JoinedAt time.Time `json:"joined_at"`
+	}
+	dmGroups := make([]DMGroupSummary, 0)
+	dmgRows, err := h.db.Pool.Query(ctx, `
+		SELECT g.id, COALESCE(g.name, ''), (g.owner_id = $1), gm.joined_at
+		FROM dm_groups g
+		JOIN dm_group_members gm ON gm.group_id = g.id
+		WHERE gm.user_id = $1
+		ORDER BY gm.joined_at DESC
+	`, userID)
+	if err == nil {
+		defer dmgRows.Close()
+		for dmgRows.Next() {
+			var dmg DMGroupSummary
+			if err := dmgRows.Scan(&dmg.ID, &dmg.Name, &dmg.IsOwner, &dmg.JoinedAt); err == nil {
+				dmGroups = append(dmGroups, dmg)
+			}
+		}
+	}
+
+	// 4. Friends & Relationships
 	type FriendSummary struct {
 		FriendID uuid.UUID `json:"friend_id"`
 		Username string    `json:"username"`
@@ -1453,22 +1491,188 @@ func (h *AuthHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 5. Blocked Users
+	type BlockSummary struct {
+		BlockedUserID uuid.UUID `json:"blocked_user_id"`
+		Username      string    `json:"username"`
+		BlockedAt     time.Time `json:"blocked_at"`
+	}
+	blocks := make([]BlockSummary, 0)
+	bRows, err := h.db.Pool.Query(ctx, `
+		SELECT ub.blocked_user_id, COALESCE(u.username, ''), ub.created_at
+		FROM user_blocks ub
+		LEFT JOIN users u ON u.id = ub.blocked_user_id
+		WHERE ub.user_id = $1
+		ORDER BY ub.created_at DESC
+	`, userID)
+	if err == nil {
+		defer bRows.Close()
+		for bRows.Next() {
+			var bs BlockSummary
+			if err := bRows.Scan(&bs.BlockedUserID, &bs.Username, &bs.BlockedAt); err == nil {
+				blocks = append(blocks, bs)
+			}
+		}
+	}
+
+	// 6. Security Sessions & Device Logs
+	type SessionSummary struct {
+		ID           uuid.UUID `json:"id"`
+		IPAddress    string    `json:"ip_address"`
+		UserAgent    string    `json:"user_agent"`
+		DeviceType   string    `json:"device_type"`
+		OS           string    `json:"os"`
+		Browser      string    `json:"browser"`
+		LastActiveAt time.Time `json:"last_active_at"`
+		CreatedAt    time.Time `json:"created_at"`
+	}
+	sessions := make([]SessionSummary, 0)
+	sRows, err := h.db.Pool.Query(ctx, `
+		SELECT id, COALESCE(ip_address, ''), COALESCE(user_agent, ''), COALESCE(device_type, ''), COALESCE(os, ''), COALESCE(browser, ''), last_active_at, created_at
+		FROM user_sessions
+		WHERE user_id = $1
+		ORDER BY last_active_at DESC
+	`, userID)
+	if err == nil {
+		defer sRows.Close()
+		for sRows.Next() {
+			var ss SessionSummary
+			if err := sRows.Scan(&ss.ID, &ss.IPAddress, &ss.UserAgent, &ss.DeviceType, &ss.OS, &ss.Browser, &ss.LastActiveAt, &ss.CreatedAt); err == nil {
+				sessions = append(sessions, ss)
+			}
+		}
+	}
+
+	// 7. Registered E2EE Devices
+	type E2EEDeviceSummary struct {
+		ID        uuid.UUID  `json:"id"`
+		CreatedAt time.Time  `json:"created_at"`
+		RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	}
+	e2eeDevices := make([]E2EEDeviceSummary, 0)
+	edRows, err := h.db.Pool.Query(ctx, `
+		SELECT id, created_at, revoked_at
+		FROM e2ee_devices
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+	`, userID)
+	if err == nil {
+		defer edRows.Close()
+		for edRows.Next() {
+			var ed E2EEDeviceSummary
+			if err := edRows.Scan(&ed.ID, &ed.CreatedAt, &ed.RevokedAt); err == nil {
+				e2eeDevices = append(e2eeDevices, ed)
+			}
+		}
+	}
+
+	// 8. Messages authored by user (Channel, Direct, and Group Messages)
+	type ExportedMessage struct {
+		ID        uuid.UUID `json:"id"`
+		TargetID  uuid.UUID `json:"target_id"`
+		Content   string    `json:"content"`
+		Encrypted bool      `json:"encrypted"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
+	channelMessages := make([]ExportedMessage, 0)
+	cmRows, err := h.db.Pool.Query(ctx, `
+		SELECT id, channel_id, content, COALESCE(encrypted, false), created_at
+		FROM messages
+		WHERE author_id = $1
+		ORDER BY created_at DESC
+		LIMIT 5000
+	`, userID)
+	if err == nil {
+		defer cmRows.Close()
+		for cmRows.Next() {
+			var em ExportedMessage
+			if err := cmRows.Scan(&em.ID, &em.TargetID, &em.Content, &em.Encrypted, &em.CreatedAt); err == nil {
+				if em.Encrypted {
+					em.Content = "[Mensagem Criptografada de Ponta a Ponta]"
+				}
+				channelMessages = append(channelMessages, em)
+			}
+		}
+	}
+
+	dmMessages := make([]ExportedMessage, 0)
+	dmRows, err := h.db.Pool.Query(ctx, `
+		SELECT id, dm_room_id, content, COALESCE(encrypted, false), created_at
+		FROM dm_messages
+		WHERE author_id = $1
+		ORDER BY created_at DESC
+		LIMIT 5000
+	`, userID)
+	if err == nil {
+		defer dmRows.Close()
+		for dmRows.Next() {
+			var em ExportedMessage
+			if err := dmRows.Scan(&em.ID, &em.TargetID, &em.Content, &em.Encrypted, &em.CreatedAt); err == nil {
+				if em.Encrypted {
+					em.Content = "[Mensagem Criptografada de Ponta a Ponta]"
+				}
+				dmMessages = append(dmMessages, em)
+			}
+		}
+	}
+
+	dmGroupMessages := make([]ExportedMessage, 0)
+	dmgmRows, err := h.db.Pool.Query(ctx, `
+		SELECT id, group_id, content, COALESCE(encrypted, false), created_at
+		FROM dm_group_messages
+		WHERE author_id = $1
+		ORDER BY created_at DESC
+		LIMIT 5000
+	`, userID)
+	if err == nil {
+		defer dmgmRows.Close()
+		for dmgmRows.Next() {
+			var em ExportedMessage
+			if err := dmgmRows.Scan(&em.ID, &em.TargetID, &em.Content, &em.Encrypted, &em.CreatedAt); err == nil {
+				if em.Encrypted {
+					em.Content = "[Mensagem Criptografada de Ponta a Ponta]"
+				}
+				dmGroupMessages = append(dmGroupMessages, em)
+			}
+		}
+	}
+
 	exportPayload := map[string]any{
-		"exported_at": time.Now().UTC(),
+		"exported_at":     time.Now().UTC(),
+		"lgpd_compliance": "Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - Art. 18)",
 		"profile": map[string]any{
-			"id":            user.ID,
-			"username":      user.Username,
-			"email":         user.Email,
-			"phone_number":  user.PhoneNumber,
-			"display_name":  user.DisplayName,
-			"avatar_url":    user.AvatarURL,
-			"banner_url":    user.BannerURL,
-			"bio":           user.Bio,
-			"custom_status": user.CustomStatus,
-			"created_at":    user.CreatedAt,
+			"id":                 user.ID,
+			"username":           user.Username,
+			"email":              user.Email,
+			"email_verified":     user.EmailVerified,
+			"phone_number":       user.PhoneNumber,
+			"display_name":       user.DisplayName,
+			"avatar_url":         user.AvatarURL,
+			"banner_url":         user.BannerURL,
+			"bio":                user.Bio,
+			"status":             user.Status,
+			"custom_status":      user.CustomStatus,
+			"two_factor_enabled": user.TwoFactorEnabled,
+			"created_at":         user.CreatedAt,
+			"updated_at":         user.UpdatedAt,
 		},
-		"guilds":  guilds,
-		"friends": friends,
+		"riot_integration": map[string]any{
+			"game_name": user.RiotGameName,
+			"tag_line":  user.RiotTagLine,
+			"region":    user.RiotRegion,
+		},
+		"guilds":        guilds,
+		"dm_groups":     dmGroups,
+		"friends":       friends,
+		"blocked_users": blocks,
+		"sessions":      sessions,
+		"e2ee_devices":  e2eeDevices,
+		"messages": map[string]any{
+			"channel_messages":  channelMessages,
+			"direct_messages":   dmMessages,
+			"dm_group_messages": dmGroupMessages,
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
