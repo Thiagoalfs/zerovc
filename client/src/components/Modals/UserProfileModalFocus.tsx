@@ -138,36 +138,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 
   const elapsedTime = useActivityElapsedTime(activity, user?.id);
 
-  if (!isOpen || !user) return null;
-
-  const isMe = currentUser?.id === user.id;
-  const isBot = Boolean(user.is_bot);
-
-  const getStatusColor = (s?: string) => {
-    switch (s) {
-      case 'online':
-        return 'bg-online';
-      case 'idle':
-        return 'bg-idle';
-      case 'dnd':
-        return 'bg-dnd';
-      default:
-        return 'bg-offline';
-    }
-  };
-
-  const getStatusLabel = (s?: string) => {
-    switch (s) {
-      case 'online':
-        return 'Disponível';
-      case 'idle':
-        return 'Ausente';
-      case 'dnd':
-        return 'Não Perturbe';
-      default:
-        return 'Invisível / Offline';
-    }
-  };
+  const isMe = currentUser?.id === user?.id;
 
   const mutualGuilds = useMemo(() => {
     if (profileData?.mutual_guilds) {
@@ -202,6 +173,36 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
       return '';
     }
   }, [profileData?.joined_at, user?.joined_at]);
+
+  if (!isOpen || !user) return null;
+
+  const isBot = Boolean(user.is_bot);
+
+  const getStatusColor = (s?: string) => {
+    switch (s) {
+      case 'online':
+        return 'bg-online';
+      case 'idle':
+        return 'bg-idle';
+      case 'dnd':
+        return 'bg-dnd';
+      default:
+        return 'bg-offline';
+    }
+  };
+
+  const getStatusLabel = (s?: string) => {
+    switch (s) {
+      case 'online':
+        return 'Disponível';
+      case 'idle':
+        return 'Ausente';
+      case 'dnd':
+        return 'Não Perturbe';
+      default:
+        return 'Invisível / Offline';
+    }
+  };
 
   const handleSelectMutualGuild = async (guildId: string) => {
     onClose();
