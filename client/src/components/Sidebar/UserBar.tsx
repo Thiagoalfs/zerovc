@@ -652,17 +652,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           </div>
 
           {/* Action Buttons */}
-          <div className="hidden md:flex items-center gap-1 text-gray-400 flex-shrink-0 select-none">
+          <div className="hidden md:flex items-center gap-0.5 text-gray-400 flex-shrink-0 select-none">
             {/* 1. Microphone Split Button */}
             <div
               ref={micAnchorRef}
               draggable={false}
               onDragStart={(e) => e.preventDefault()}
-              className={`flex items-center h-8 rounded-lg overflow-hidden select-none transition-colors ${
-                isMuted
-                  ? 'bg-dnd/10 border border-dnd/20 text-dnd'
-                  : 'bg-white/5 hover:bg-white/10 border border-white/5 text-gray-300'
-              }`}
+              className="flex items-center select-none"
             >
               <button
                 type="button"
@@ -672,15 +668,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   e.stopPropagation();
                   toggleMute();
                 }}
-                className={`h-full px-2 flex items-center justify-center transition-colors cursor-pointer select-none ${
-                  isMuted ? 'text-dnd hover:text-red-400' : 'text-gray-300 hover:text-white'
+                className={`p-1.5 rounded-md hover:bg-white/10 transition-colors cursor-pointer select-none flex items-center justify-center ${
+                  isMuted ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
                 }`}
                 title={isMuted ? 'Desmutar' : 'Mutar'}
               >
-                {isMuted ? <MicOff className="w-4 h-4 md:w-[17px] md:h-[17px]" /> : <Mic className="w-4 h-4 md:w-[17px] md:h-[17px]" />}
+                {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
               </button>
-
-              <div className={`w-[1px] h-3.5 ${isMuted ? 'bg-dnd/30' : 'bg-white/10'}`} />
 
               <button
                 type="button"
@@ -691,12 +685,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   setShowDeafenDropup(false);
                   setShowMicDropup((prev) => !prev);
                 }}
-                className={`h-full px-1.5 flex items-center justify-center transition-colors cursor-pointer select-none ${
-                  isMuted ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
+                className={`p-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer select-none flex items-center justify-center -ml-0.5 text-gray-400 hover:text-white ${
+                  showMicDropup ? 'text-white bg-white/10' : ''
                 }`}
                 title="Dispositivos de Entrada de Áudio"
               >
-                <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${showMicDropup ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${showMicDropup ? 'rotate-180' : ''}`} />
               </button>
             </div>
 
@@ -705,11 +699,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               ref={deafenAnchorRef}
               draggable={false}
               onDragStart={(e) => e.preventDefault()}
-              className={`flex items-center h-8 rounded-lg overflow-hidden select-none transition-colors ${
-                isDeafened
-                  ? 'bg-dnd/10 border border-dnd/20 text-dnd'
-                  : 'bg-white/5 hover:bg-white/10 border border-white/5 text-gray-300'
-              }`}
+              className="flex items-center select-none"
             >
               <button
                 type="button"
@@ -719,19 +709,17 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   e.stopPropagation();
                   toggleDeafen();
                 }}
-                className={`h-full px-2 flex items-center justify-center transition-colors cursor-pointer select-none ${
-                  isDeafened ? 'text-dnd hover:text-red-400' : 'text-gray-300 hover:text-white'
+                className={`p-1.5 rounded-md hover:bg-white/10 transition-colors cursor-pointer select-none flex items-center justify-center ${
+                  isDeafened ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
                 }`}
                 title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
               >
                 {isDeafened ? (
-                  <HeadphonesOff className="w-4 h-4 md:w-[17px] md:h-[17px]" />
+                  <HeadphonesOff className="w-5 h-5" />
                 ) : (
-                  <Headphones className="w-4 h-4 md:w-[17px] md:h-[17px]" />
+                  <Headphones className="w-5 h-5" />
                 )}
               </button>
-
-              <div className={`w-[1px] h-3.5 ${isDeafened ? 'bg-dnd/30' : 'bg-white/10'}`} />
 
               <button
                 type="button"
@@ -742,12 +730,12 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   setShowMicDropup(false);
                   setShowDeafenDropup((prev) => !prev);
                 }}
-                className={`h-full px-1.5 flex items-center justify-center transition-colors cursor-pointer select-none ${
-                  isDeafened ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
+                className={`p-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer select-none flex items-center justify-center -ml-0.5 text-gray-400 hover:text-white ${
+                  showDeafenDropup ? 'text-white bg-white/10' : ''
                 }`}
                 title="Dispositivos de Saída de Áudio"
               >
-                <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${showDeafenDropup ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${showDeafenDropup ? 'rotate-180' : ''}`} />
               </button>
             </div>
 
@@ -760,10 +748,10 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 e.stopPropagation();
                 onOpenSettings();
               }}
-              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/5 hover:bg-white/10 hover:text-gray-200 border border-white/5 text-gray-400 transition-colors cursor-pointer select-none"
+              className="p-1.5 rounded-md hover:bg-white/10 hover:text-white text-gray-400 transition-colors cursor-pointer select-none flex items-center justify-center flex-shrink-0"
               title="Configurações de Usuário"
             >
-              <Settings className="w-4 h-4 md:w-[17px] md:h-[17px]" />
+              <Settings className="w-5 h-5" />
             </button>
           </div>
         </div>
