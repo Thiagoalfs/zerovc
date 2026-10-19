@@ -4,7 +4,6 @@ import {
   Trash2,
   Check,
   Shield,
-  GripVertical,
 } from 'lucide-react';
 import { Role, User, Permissions } from '../../../types';
 import { PRESET_ROLE_COLORS, PERMISSION_GROUPS } from './constants';
@@ -236,10 +235,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                       : 'text-gray-300 hover:bg-white/5'
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    {canManageRoles && !isEveryone && (
-                      <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-70 flex-shrink-0 -ml-1 transition-opacity pointer-events-none" />
-                    )}
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <span
                       className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm"
                       style={{ backgroundColor: role.color || '#99AAB5' }}
