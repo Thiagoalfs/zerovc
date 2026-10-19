@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useLayoutEffect, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Mic, Headphones, Check, Settings, Loader2 } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -11,6 +11,26 @@ interface AudioDeviceDropupProps {
   anchorRef: React.RefObject<HTMLElement>;
 }
 
+const calculateCoords = (anchor: HTMLElement | null): { bottom: number; left: number } | null => {
+  if (!anchor) return null;
+  const rect = anchor.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return null;
+
+  const popoutWidth = 270;
+  const spacing = 8;
+  const bottom = Math.max(10, window.innerHeight - rect.top + spacing);
+
+  let left = rect.left - 40;
+  if (left + popoutWidth > window.innerWidth - 12) {
+    left = window.innerWidth - popoutWidth - 12;
+  }
+  if (left < 12) {
+    left = 12;
+  }
+
+  return { bottom, left };
+};
+
 export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
   type,
   isOpen,
@@ -20,8 +40,12 @@ export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
 }) => {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [coords, setCoords] = useState<{ bottom: number; left: number }>({ bottom: 60, left: 10 });
   const popoutRef = useRef<HTMLDivElement>(null);
+
+  // Synchronous calculation: Never start with arbitrary default coordinates
+  const [coords, setCoords] = useState<{ bottom: number; left: number } | null>(() => {
+    return calculateCoords(anchorRef.current);
+  });
 
   const {
     audioInputDeviceId,
@@ -32,41 +56,33 @@ export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
 
   const activeDeviceId = type === 'input' ? audioInputDeviceId : audioOutputDeviceId;
 
-  // Calculate position relative to anchor element
-  useEffect(() => {
-    if (!isOpen || !anchorRef.current) return;
-
-    const updatePosition = () => {
-      if (!anchorRef.current) return;
-      const rect = anchorRef.current.getBoundingClientRect();
-      const popoutWidth = 270;
-      const spacing = 8;
-
-      const bottom = Math.max(10, window.innerHeight - rect.top + spacing);
-      
-      // Center roughly over the anchor button, keeping within screen bounds
-      let left = rect.left - 40;
-      if (left + popoutWidth > window.innerWidth - 12) {
-        left = window.innerWidth - popoutWidth - 12;
-      }
-      if (left < 12) {
-        left = 12;
-      }
-
-      setCoords({ bottom, left });
-    };
-
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-
-    return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
+  // Immediate synchronous layout effect before DOM paint
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const initialCoords = calculateCoords(anchorRef.current);
+    if (initialCoords) {
+      setCoords(initialCoords);
+    }
   }, [isOpen, anchorRef]);
 
-  // Load available devices
+  // Close immediately if page scrolls or window resizes (never animate or drag along)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleImmediateClose = () => {
+      onClose();
+    };
+
+    window.addEventListener('resize', handleImmediateClose);
+    window.addEventListener('scroll', handleImmediateClose, true);
+
+    return () => {
+      window.removeEventListener('resize', handleImmediateClose);
+      window.removeEventListener('scroll', handleImmediateClose, true);
+    };
+  }, [isOpen, onClose]);
+
+  // Load available audio devices
   useEffect(() => {
     if (!isOpen) return;
 
@@ -131,7 +147,8 @@ export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  // Strict check: if closed or coordinates not ready yet, never render to prevent visual jumps
+  if (!isOpen || !coords) return null;
 
   const handleSelectDevice = async (deviceId: string) => {
     if (type === 'input') {
@@ -153,7 +170,6 @@ export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
     if (activeDeviceId) {
       return device.deviceId === activeDeviceId;
     }
-    // Fallback: if no device selected in store/localStorage yet
     if (device.deviceId === 'default') return true;
     return index === 0;
   };
@@ -174,18 +190,20 @@ export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
         }}
       />
 
-      {/* Dropup Container */}
+      {/* Dropup Container: explicitly transition-none, non-draggable, non-selectable */}
       <div
         ref={popoutRef}
+        draggable={false}
+        onDragStart={(e) => e.preventDefault()}
         style={{
           bottom: `${coords.bottom}px`,
           left: `${coords.left}px`,
         }}
         onClick={(e) => e.stopPropagation()}
-        className="fixed z-[130] w-64 sm:w-72 bg-background-darkest/95 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100 select-none text-gray-200"
+        className="fixed z-[130] w-64 sm:w-72 bg-background-darkest/95 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100 select-none text-gray-200 transition-none pointer-events-auto"
       >
         {/* Header */}
-        <div className="flex items-center gap-2 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 pb-2 mb-1">
+        <div className="flex items-center gap-2 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 pb-2 mb-1 select-none">
           {type === 'input' ? (
             <>
               <Mic className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
@@ -200,7 +218,7 @@ export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
         </div>
 
         {/* Device List */}
-        <div className="max-h-56 overflow-y-auto space-y-0.5 custom-scrollbar py-0.5">
+        <div className="max-h-56 overflow-y-auto space-y-0.5 custom-scrollbar py-0.5 select-none">
           {isLoading && devices.length === 0 ? (
             <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -219,14 +237,16 @@ export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
                 <button
                   key={`${device.deviceId}-${idx}`}
                   type="button"
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
                   onClick={() => handleSelectDevice(device.deviceId)}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors text-left group cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors text-left group cursor-pointer select-none ${
                     selected
                       ? 'bg-brand-500/15 text-white font-semibold'
                       : 'text-gray-300 hover:bg-white/5 hover:text-white'
                   }`}
                 >
-                  <span className="truncate flex-1 pr-2" title={label}>
+                  <span className="truncate flex-1 pr-2 select-none" title={label}>
                     {label}
                   </span>
                   {selected && (
@@ -244,14 +264,16 @@ export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
         {/* Quick Link to Voice & Video Settings */}
         <button
           type="button"
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
           onClick={() => {
             onClose();
             onOpenSettings('audio');
           }}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer select-none"
         >
           <Settings className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-          <span className="truncate">Configurações de Voz & Vídeo...</span>
+          <span className="truncate select-none">Configurações de Voz & Vídeo...</span>
         </button>
       </div>
     </>,

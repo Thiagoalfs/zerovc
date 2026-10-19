@@ -651,11 +651,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           </div>
 
           {/* Action Buttons */}
-          <div className="hidden md:flex items-center gap-1 text-gray-400 flex-shrink-0">
+          <div className="hidden md:flex items-center gap-1 text-gray-400 flex-shrink-0 select-none">
             {/* 1. Microphone Split Button */}
             <div
               ref={micAnchorRef}
-              className={`flex items-center h-8 rounded-lg overflow-hidden transition-all ${
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+              className={`flex items-center h-8 rounded-lg overflow-hidden select-none transition-colors ${
                 isMuted
                   ? 'bg-dnd/10 border border-dnd/20 text-dnd'
                   : 'bg-white/5 hover:bg-white/10 border border-white/5 text-gray-300'
@@ -663,11 +665,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             >
               <button
                 type="button"
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleMute();
                 }}
-                className={`h-full px-2 flex items-center justify-center transition-colors cursor-pointer ${
+                className={`h-full px-2 flex items-center justify-center transition-colors cursor-pointer select-none ${
                   isMuted ? 'text-dnd hover:text-red-400' : 'text-gray-300 hover:text-white'
                 }`}
                 title={isMuted ? 'Desmutar' : 'Mutar'}
@@ -679,12 +683,14 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
               <button
                 type="button"
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowDeafenDropup(false);
                   setShowMicDropup((prev) => !prev);
                 }}
-                className={`h-full px-1.5 flex items-center justify-center transition-colors cursor-pointer ${
+                className={`h-full px-1.5 flex items-center justify-center transition-colors cursor-pointer select-none ${
                   isMuted ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
                 }`}
                 title="Dispositivos de Entrada de Áudio"
@@ -696,7 +702,9 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             {/* 2. Deafen Split Button */}
             <div
               ref={deafenAnchorRef}
-              className={`flex items-center h-8 rounded-lg overflow-hidden transition-all ${
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+              className={`flex items-center h-8 rounded-lg overflow-hidden select-none transition-colors ${
                 isDeafened
                   ? 'bg-dnd/10 border border-dnd/20 text-dnd'
                   : 'bg-white/5 hover:bg-white/10 border border-white/5 text-gray-300'
@@ -704,11 +712,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             >
               <button
                 type="button"
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleDeafen();
                 }}
-                className={`h-full px-2 flex items-center justify-center transition-colors cursor-pointer ${
+                className={`h-full px-2 flex items-center justify-center transition-colors cursor-pointer select-none ${
                   isDeafened ? 'text-dnd hover:text-red-400' : 'text-gray-300 hover:text-white'
                 }`}
                 title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
@@ -720,12 +730,14 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
               <button
                 type="button"
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowMicDropup(false);
                   setShowDeafenDropup((prev) => !prev);
                 }}
-                className={`h-full px-1.5 flex items-center justify-center transition-colors cursor-pointer ${
+                className={`h-full px-1.5 flex items-center justify-center transition-colors cursor-pointer select-none ${
                   isDeafened ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
                 }`}
                 title="Dispositivos de Saída de Áudio"
@@ -737,11 +749,13 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
             {/* 3. Settings Button */}
             <button
               type="button"
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenSettings();
               }}
-              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/5 hover:bg-white/10 hover:text-gray-200 border border-white/5 text-gray-400 transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/5 hover:bg-white/10 hover:text-gray-200 border border-white/5 text-gray-400 transition-colors cursor-pointer select-none"
               title="Configurações de Usuário"
             >
               <Settings className="w-4 h-4 md:w-[17px] md:h-[17px]" />
