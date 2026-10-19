@@ -38,6 +38,7 @@ import { useGuildStore } from '../../stores/guildStore';
 import { TypingIndicator } from '../Chat/TypingIndicator';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
+import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
 import { setActiveChat, getActiveChat } from '../../utils/activeChat';
@@ -751,7 +752,11 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 }`}
                 title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
               >
-                <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
+                {isDeafened ? (
+                  <HeadphonesOff className="w-4 h-4 sm:w-5 sm:h-5" />
+                ) : (
+                  <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
+                )}
               </button>
 
               <button

@@ -18,6 +18,7 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
 import { User } from '../../types';
+import { HeadphonesOff } from '../Common/HeadphonesOff';
 
 interface ActiveCallOverlayProps {
   onOpenScreenShare?: () => void;
@@ -316,7 +317,11 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
               }`}
               title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
             >
-              <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
+              {isDeafened ? (
+                <HeadphonesOff className="w-4 h-4 sm:w-5 sm:h-5" />
+              ) : (
+                <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
+              )}
             </button>
 
             {/* Toggle Camera / Video */}

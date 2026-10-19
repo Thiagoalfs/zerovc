@@ -15,6 +15,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { User, UserProfilePosition, Guild } from '../../types';
 import { UserBarContextMenuControls } from './UserBarContextMenu';
 import { AudioDeviceDropup } from './AudioDeviceDropup';
+import { HeadphonesOff } from '../Common/HeadphonesOff';
 
 interface UserBarProps {
   onOpenSettings: (tab?: string) => void;
@@ -723,7 +724,11 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 }`}
                 title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
               >
-                <Headphones className="w-4 h-4 md:w-[17px] md:h-[17px]" />
+                {isDeafened ? (
+                  <HeadphonesOff className="w-4 h-4 md:w-[17px] md:h-[17px]" />
+                ) : (
+                  <Headphones className="w-4 h-4 md:w-[17px] md:h-[17px]" />
+                )}
               </button>
 
               <div className={`w-[1px] h-3.5 ${isDeafened ? 'bg-dnd/30' : 'bg-white/10'}`} />

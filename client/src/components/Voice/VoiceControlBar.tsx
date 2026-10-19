@@ -2,6 +2,7 @@ import React from 'react';
 import { Mic, MicOff, Headphones, Monitor, PhoneOff, Video, VideoOff } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
+import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
 
@@ -116,7 +117,11 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
           }`}
           title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
         >
-          <Headphones className="w-5 h-5" />
+          {isDeafened ? (
+            <HeadphonesOff className="w-5 h-5" />
+          ) : (
+            <Headphones className="w-5 h-5" />
+          )}
         </button>
 
         {/* Camera WebCam */}

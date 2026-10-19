@@ -43,6 +43,7 @@ import { UserBar } from './UserBar';
 import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
+import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { getFormattedUsername } from '../../stores/streamerModeStore';
 import { DeleteChannelModal } from '../Modals/DeleteChannelModal';
 
@@ -494,7 +495,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
         items.push({
           label: vs.is_deafened ? 'Desativar Ensurdecimento' : 'Ensurdecer na Call',
-          icon: <Headphones className={`w-4 h-4 ${vs.is_deafened ? 'text-online' : 'text-amber-400'}`} />,
+          icon: vs.is_deafened ? (
+            <Headphones className="w-4 h-4 text-online" />
+          ) : (
+            <HeadphonesOff className="w-4 h-4 text-amber-400" />
+          ),
           onClick: async () => {
             await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
               is_deafened: !vs.is_deafened,
@@ -1004,7 +1009,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                       )}
                       {vs.is_deafened && (
                         <span title="Áudio Desativado">
-                          <Headphones className="w-3 h-3 text-dnd" />
+                          <HeadphonesOff className="w-3 h-3 text-dnd" />
                         </span>
                       )}
                     </div>
