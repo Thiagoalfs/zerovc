@@ -1,8 +1,8 @@
-version: 1.0.18
+version: 1.0.19
 files:
   - url: ZeroVC-Setup.exe
-    sha512: jD06o91NVJz8LypcQZugHFllIsZPQKM8AGJIHoVfAhHhb/zJpuM9p+ExsRyrAa2P2bZuZ7n7yv3cLVmmZqP5UQ==
-    size: 78242751
+    sha512: WLenc+3l4Esc9qHTZEiN55L7ZQEpb3MwT5Z3gWe5VLWl60y8HGfDJE14Nmdex7tsipculKxee2YpJhFfGiXQ8A==
+    size: 75843767
 path: ZeroVC-Setup.exe
-sha512: jD06o91NVJz8LypcQZugHFllIsZPQKM8AGJIHoVfAhHhb/zJpuM9p+ExsRyrAa2P2bZuZ7n7yv3cLVmmZqP5UQ==
-releaseDate: '2026-10-18T15:26:38.730Z'
+sha512: WLenc+3l4Esc9qHTZEiN55L7ZQEpb3MwT5Z3gWe5VLWl60y8HGfDJE14Nmdex7tsipculKxee2YpJhFfGiXQ8A==
+releaseDate: '2026-10-19T16:13:50.628Z'
