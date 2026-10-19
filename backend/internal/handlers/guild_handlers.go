@@ -189,12 +189,28 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 
 		chanQuery := `
-			SELECT id, guild_id, name, type, position, is_private, category_id, topic, created_at
-			FROM channels
-			WHERE guild_id = ANY($1)
-			ORDER BY position ASC, created_at ASC
+			SELECT c.id, c.guild_id, c.name, c.type, c.position, c.is_private, c.category_id, c.topic, c.created_at
+			FROM channels c
+			INNER JOIN guilds g ON g.id = c.guild_id
+			WHERE c.guild_id = ANY($1)
+			  AND (
+				NOT c.is_private
+				OR g.owner_id = $2
+				OR EXISTS (
+					SELECT 1 FROM guild_roles gr
+					INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+					WHERE gmr.guild_id = c.guild_id AND gmr.user_id = $2
+					  AND (gr.permissions & $3) != 0
+				)
+				OR EXISTS (
+					SELECT 1 FROM channel_role_access cra
+					INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+					WHERE cra.channel_id = c.id AND gmr.guild_id = c.guild_id AND gmr.user_id = $2
+				)
+			  )
+			ORDER BY c.position ASC, c.created_at ASC
 		`
-		chanRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildIDs)
+		chanRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildIDs, userID, models.PermAdministrator)
 		if err == nil {
 			defer chanRows.Close()
 			for chanRows.Next() {
@@ -597,7 +613,7 @@ func (h *GuildHandler) KickMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Remove from voice_sessions
-	if _, err := tx.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", targetUserID); err != nil {
+	if _, err := tx.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1 AND channel_id IN (SELECT id FROM channels WHERE guild_id = $2)", targetUserID, guildID); err != nil {
 		http.Error(w, `{"error":"failed to remove voice session"}`, http.StatusInternalServerError)
 		return
 	}
@@ -682,7 +698,7 @@ func (h *GuildHandler) BanMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Terminate voice session if user is connected to a channel in this guild
-	if _, err := tx.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1", req.UserID); err != nil {
+	if _, err := tx.Exec(r.Context(), "DELETE FROM voice_sessions WHERE user_id = $1 AND channel_id IN (SELECT id FROM channels WHERE guild_id = $2)", req.UserID, guildID); err != nil {
 		http.Error(w, `{"error":"failed to terminate voice session"}`, http.StatusInternalServerError)
 		return
 	}
@@ -888,6 +904,15 @@ func (h *GuildHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
+	}
+
+	if req.SystemChannelID != nil && (req.ClearSystemChannel == nil || !*req.ClearSystemChannel) {
+		var chanExists bool
+		err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channels WHERE id = $1 AND guild_id = $2)", *req.SystemChannelID, guildID).Scan(&chanExists)
+		if err != nil || !chanExists {
+			http.Error(w, `{"error":"invalid system channel id for this server"}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	var guild models.Guild
@@ -1813,7 +1838,8 @@ func (h *GuildHandler) GetGuildVoiceStates(w http.ResponseWriter, r *http.Reques
 	voiceStates := make(map[string][]models.VoiceSession)
 	vQuery := `
 		SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, vs.is_screensharing, vs.joined_at,
-		       u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, '')
+		       u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, ''),
+		       c.is_private
 		FROM voice_sessions vs
 		INNER JOIN channels c ON c.id = vs.channel_id
 		INNER JOIN users u ON u.id = vs.user_id
@@ -1827,12 +1853,29 @@ func (h *GuildHandler) GetGuildVoiceStates(w http.ResponseWriter, r *http.Reques
 	}
 	defer rows.Close()
 
+	channelAccessMap := make(map[uuid.UUID]bool)
 	for rows.Next() {
 		var vs models.VoiceSession
+		var isPrivate bool
 		if scanErr := rows.Scan(
 			&vs.ID, &vs.ChannelID, &vs.UserID, &vs.IsMuted, &vs.IsDeafened, &vs.IsScreensharing, &vs.JoinedAt,
 			&vs.User.Username, &vs.User.DisplayName, &vs.User.AvatarURL, &vs.User.BannerURL, &vs.User.Bio, &vs.User.Status, &vs.User.CustomStatus,
+			&isPrivate,
 		); scanErr == nil {
+			if isPrivate {
+				canAccess, cached := channelAccessMap[vs.ChannelID]
+				if !cached {
+					var err error
+					canAccess, err = canUserAccessChannel(r.Context(), h.db, guildID, vs.ChannelID, userID)
+					if err != nil {
+						canAccess = false
+					}
+					channelAccessMap[vs.ChannelID] = canAccess
+				}
+				if !canAccess {
+					continue
+				}
+			}
 			vs.User.ID = vs.UserID
 			chKey := vs.ChannelID.String()
 			voiceStates[chKey] = append(voiceStates[chKey], vs)

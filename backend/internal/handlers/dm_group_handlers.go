@@ -958,6 +958,11 @@ func (h *DMGroupHandler) EnableE2EE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if ownerID != uuid.Nil && ownerID != userID {
+		http.Error(w, `{"error":"forbidden: apenas o dono do grupo pode ativar E2EE"}`, http.StatusForbidden)
+		return
+	}
+
 	var isMember bool
 	h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2)", groupID, userID).Scan(&isMember)
 	if !isMember {

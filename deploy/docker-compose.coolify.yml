@@ -6,6 +6,8 @@ services:
     container_name: zerovc-livekit
     restart: unless-stopped
     command: --config /etc/livekit.yaml
+    environment:
+      - LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
     ports:

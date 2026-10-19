@@ -762,34 +762,47 @@ function renderInlineFormatting(
       const matchLink = token.match(/^\[([^\]\n]+)\]\((https?:\/\/[^\s<)]+|\/assets\/[^\s<)]+|[^\s<)]+)\)$/);
       if (matchLink) {
         const linkText = matchLink[1];
-        const linkUrl = matchLink[2];
-        const formattedUrl = formatAssetUrl(linkUrl);
-        elements.push(
-          <a
-            key={k}
-            href={formattedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            download
-            onClick={(e) => e.stopPropagation()}
-            className="text-brand-400 hover:text-brand-300 font-semibold underline decoration-brand-500/50 hover:decoration-brand-400 inline-flex items-center gap-0.5 break-all cursor-pointer transition-colors"
-          >
-            {renderInlineFormatting(
-              linkText,
-              `${k}-lt`,
-              isJumboji,
-              guildEmojis,
-              guildMembers,
-              guildRoles,
-              currentUser,
-              onOpenUserProfile,
-              onOpenUserContextMenu,
-              activeGuildChannels,
-              allGuilds,
-              onChannelClick
-            )}
-          </a>
-        );
+        const linkUrl = matchLink[2].trim();
+        const lowerUrl = linkUrl.toLowerCase();
+        const isBlockedProtocol = /^(javascript|data|blob|vbscript|file):/i.test(lowerUrl);
+        const isAllowedProtocol =
+          lowerUrl.startsWith('http://') ||
+          lowerUrl.startsWith('https://') ||
+          linkUrl.startsWith('/assets/');
+        const isSafeUrl = !isBlockedProtocol && isAllowedProtocol;
+
+        if (!isSafeUrl) {
+          elements.push(<React.Fragment key={k}>{token}</React.Fragment>);
+        } else {
+          const formattedUrl = formatAssetUrl(linkUrl);
+          const isAsset = linkUrl.startsWith('/assets/');
+          elements.push(
+            <a
+              key={k}
+              href={formattedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              {...(isAsset ? { download: true } : {})}
+              onClick={(e) => e.stopPropagation()}
+              className="text-brand-400 hover:text-brand-300 font-semibold underline decoration-brand-500/50 hover:decoration-brand-400 inline-flex items-center gap-0.5 break-all cursor-pointer transition-colors"
+            >
+              {renderInlineFormatting(
+                linkText,
+                `${k}-lt`,
+                isJumboji,
+                guildEmojis,
+                guildMembers,
+                guildRoles,
+                currentUser,
+                onOpenUserProfile,
+                onOpenUserContextMenu,
+                activeGuildChannels,
+                allGuilds,
+                onChannelClick
+              )}
+            </a>
+          );
+        }
       } else {
         elements.push(token);
       }

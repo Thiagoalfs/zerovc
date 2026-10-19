@@ -48,13 +48,35 @@ func mustGetEnv(key string) string {
 	return val
 }
 
+func validateSecret(key, val string) {
+	if len(val) < 32 {
+		log.Fatalf("[FATAL] %s é muito curto (mínimo de 32 caracteres obrigatório para segurança)", key)
+	}
+	lower := strings.ToLower(val)
+	placeholders := []string{
+		"sua_",
+		"your_",
+		"gere_um_",
+		"zerovc_super_secret_jwt_key_32bytes_long",
+		"secret_livekit_key_change_in_production",
+		"super_secret_jwt_production_key_change_in_coolify",
+	}
+	for _, p := range placeholders {
+		if strings.HasPrefix(lower, p) || strings.Contains(lower, p) {
+			log.Fatalf("[FATAL] %s usa placeholder inseguro '%s'. Defina um segredo criptograficamente seguro com pelo menos 32 caracteres.", key, p)
+		}
+	}
+}
+
 func main() {
 	port := getEnv("PORT", "8080")
 	dbURL := mustGetEnv("DATABASE_URL")
 	jwtSecret := mustGetEnv("JWT_SECRET")
+	validateSecret("JWT_SECRET", jwtSecret)
 	livekitPublicURL := getEnv("LIVEKIT_PUBLIC_URL", "ws://localhost:7880")
 	livekitKey := mustGetEnv("LIVEKIT_API_KEY")
 	livekitSecret := mustGetEnv("LIVEKIT_API_SECRET")
+	validateSecret("LIVEKIT_API_SECRET", livekitSecret)
 	webDir := getEnv("WEB_DIR", "./web")
 
 	log.Printf("[ZeroVC] Starting backend on port %s...", port)
@@ -73,6 +95,11 @@ func main() {
 
 	// 3. Initialize Services
 	authService := auth.NewService(jwtSecret)
+	authService.SessionValidator = func(ctx context.Context, userID uuid.UUID, tokenHash string) bool {
+		var exists bool
+		err := db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM user_sessions WHERE user_id = $1 AND token_hash = $2)", userID, tokenHash).Scan(&exists)
+		return err == nil && exists
+	}
 	csrfService := appMiddleware.NewCSRFService(jwtSecret)
 	livekitService := voice.NewLiveKitService(livekitKey, livekitSecret, livekitPublicURL)
 	hub := gateway.NewHub()
@@ -474,6 +501,7 @@ func main() {
 		// Messages (Protected)
 		r.Get("/api/channels/{channelID}/messages", messageHandler.List)
 		r.Get("/api/channels/{channelID}/pins", messageHandler.ListPinned)
+		r.With(pinLimiter.Middleware).Post("/api/channels/{channelID}/messages/{messageID}/pin", messageHandler.TogglePin)
 		r.With(messageLimiter.Middleware).Post("/api/channels/{channelID}/messages", messageHandler.Send)
 		r.With(messageMutationLimiter.Middleware).Patch("/api/channels/{channelID}/messages/{messageID}", messageHandler.Update)
 		r.With(messageMutationLimiter.Middleware).Delete("/api/channels/{channelID}/messages/{messageID}", messageHandler.Delete)

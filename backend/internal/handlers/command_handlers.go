@@ -1072,6 +1072,18 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	canAccess, err := canUserAccessChannel(ctx, h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: você não tem acesso a este canal"}`, http.StatusForbidden)
+		return
+	}
+
+	canSend, err := canUserSendMessages(ctx, h.db, guildID, channelID, userID)
+	if err != nil || !canSend {
+		http.Error(w, `{"error":"forbidden: você não tem permissão para enviar mensagens neste canal"}`, http.StatusForbidden)
+		return
+	}
+
 	// Verify command permissions in this channel
 	canUse, err := canUserUseCommands(ctx, h.db, guildID, channelID, userID)
 	if err != nil {
@@ -1130,7 +1142,37 @@ func (h *CommandHandler) ExecuteGuildCommand(w http.ResponseWriter, r *http.Requ
 	if !isPrivate {
 		h.hub.BroadcastToGuild(guildID, wsEvent)
 	} else {
-		h.hub.BroadcastToGuild(guildID, wsEvent)
+		query := `
+			SELECT DISTINCT gm.user_id
+			FROM guild_members gm
+			INNER JOIN guilds g ON g.id = gm.guild_id
+			WHERE g.id = $1 AND (
+				g.owner_id = gm.user_id
+				OR EXISTS (
+					SELECT 1 FROM guild_roles gr
+					INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+					WHERE gmr.guild_id = $1 AND gmr.user_id = gm.user_id
+					  AND (gr.permissions & $3) != 0
+				)
+				OR EXISTS (
+					SELECT 1 FROM channel_role_access cra
+					INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+					WHERE cra.channel_id = $2 AND gmr.guild_id = $1 AND gmr.user_id = gm.user_id
+				)
+			)
+		`
+		rows, err := h.db.Pool.Query(ctx, query, guildID, channelID, models.PermAdministrator)
+		if err == nil {
+			defer rows.Close()
+			allowedUserIDs := make([]uuid.UUID, 0)
+			for rows.Next() {
+				var uid uuid.UUID
+				if err := rows.Scan(&uid); err == nil {
+					allowedUserIDs = append(allowedUserIDs, uid)
+				}
+			}
+			h.hub.BroadcastToUsers(allowedUserIDs, wsEvent)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

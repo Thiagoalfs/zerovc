@@ -25,6 +25,7 @@ import {
 import { Channel, Role, Permissions, ChannelPermissionOverwrite } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { DropdownSelect } from '../Common/DropdownSelect';
 import { DeleteChannelModal } from './DeleteChannelModal';
 import {
@@ -57,6 +58,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   onClose,
 }) => {
   const { activeGuild, updateChannel, deleteChannel } = useGuildStore();
+  const perms = useGuildPermissions(activeGuild);
+  const hasChannelPermission = perms.isCurrentOwner || perms.hasAdmin || perms.canManageChannels;
   const reducedMotion = useSettingsStore((state) => state.reducedMotion);
 
   // Tab & View state
@@ -116,7 +119,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen || !channel || !activeGuild) return null;
+  if (!isOpen || !channel || !activeGuild || !hasChannelPermission) return null;
 
   const isCategory = channel.type === 'category';
   const isText = channel.type === 'text';
@@ -287,6 +290,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   // Save all changes (Overview + Permissions)
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!hasChannelPermission) return;
     if (!name.trim()) return;
 
     setIsSaving(true);
@@ -329,6 +333,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   };
 
   const handleConfirmDelete = async () => {
+    if (!hasChannelPermission) return;
     setIsDeleting(true);
     try {
       await deleteChannel(channel.id);

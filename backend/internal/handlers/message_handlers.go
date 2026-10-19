@@ -429,6 +429,28 @@ func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if urlChanStr := chi.URLParam(r, "channelID"); urlChanStr != "" {
+		if parsedChanID, parseErr := uuid.Parse(urlChanStr); parseErr == nil {
+			if parsedChanID != channelID {
+				http.Error(w, `{"error":"channel id mismatch"}`, http.StatusBadRequest)
+				return
+			}
+		}
+	}
+
+	var isMember bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, userID).Scan(&isMember)
+	if err != nil || !isMember {
+		http.Error(w, `{"error":"forbidden: you are not a member of this server"}`, http.StatusForbidden)
+		return
+	}
+
+	canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: você não tem acesso a este canal"}`, http.StatusForbidden)
+		return
+	}
+
 	now := time.Now().UTC()
 	query := `
 		UPDATE messages
@@ -1343,7 +1365,14 @@ func (h *MessageHandler) AckChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var lastMsgID *uuid.UUID = req.MessageID
-	if lastMsgID == nil {
+	if lastMsgID != nil {
+		var msgExists bool
+		err := h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1 AND channel_id = $2)", *req.MessageID, channelID).Scan(&msgExists)
+		if err != nil || !msgExists {
+			http.Error(w, `{"error":"invalid message id for this channel"}`, http.StatusBadRequest)
+			return
+		}
+	} else {
 		// Get newest message id in channel
 		var newest uuid.UUID
 		err := h.db.Pool.QueryRow(r.Context(), `SELECT id FROM messages WHERE channel_id = $1 ORDER BY created_at DESC LIMIT 1`, channelID).Scan(&newest)

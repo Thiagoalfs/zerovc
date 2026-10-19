@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -94,6 +95,7 @@ func (s *Service) sendEmail(ctx context.Context, toEmail, subject, htmlContent s
 
 // SendVerificationEmail envia o código de 6 dígitos para confirmação de conta
 func (s *Service) SendVerificationEmail(ctx context.Context, toEmail, username, code string) error {
+	escapedUsername := html.EscapeString(username)
 	subject := fmt.Sprintf("%s é o seu código de verificação do ZeroVC", code)
 
 	html := fmt.Sprintf(`
@@ -152,13 +154,14 @@ func (s *Service) SendVerificationEmail(ctx context.Context, toEmail, username, 
   </table>
 </body>
 </html>
-`, username, code)
+`, escapedUsername, code)
 
 	return s.sendEmail(ctx, toEmail, subject, html)
 }
 
 // SendPasswordResetEmail envia o link seguro para redefinição de senha
 func (s *Service) SendPasswordResetEmail(ctx context.Context, toEmail, username, token string) error {
+	escapedUsername := html.EscapeString(username)
 	resetLink := fmt.Sprintf("%s/reset-password?token=%s", s.appURL, token)
 	subject := "Redefinição de Senha - ZeroVC"
 
@@ -229,13 +232,15 @@ func (s *Service) SendPasswordResetEmail(ctx context.Context, toEmail, username,
   </table>
 </body>
 </html>
-`, username, resetLink, resetLink, resetLink)
+`, escapedUsername, resetLink, resetLink, resetLink)
 
 	return s.sendEmail(ctx, toEmail, subject, html)
 }
 
 // SendEmailChangedNotice envia um aviso para o e-mail antigo informando que o e-mail da conta foi alterado
 func (s *Service) SendEmailChangedNotice(ctx context.Context, toEmail, username, newEmail string) error {
+	escapedUsername := html.EscapeString(username)
+	escapedNewEmail := html.EscapeString(newEmail)
 	subject := "Aviso de Segurança: E-mail da sua conta ZeroVC foi alterado"
 
 	html := fmt.Sprintf(`
@@ -294,7 +299,7 @@ func (s *Service) SendEmailChangedNotice(ctx context.Context, toEmail, username,
   </table>
 </body>
 </html>
-`, username, newEmail)
+`, escapedUsername, escapedNewEmail)
 
 	return s.sendEmail(ctx, toEmail, subject, html)
 }

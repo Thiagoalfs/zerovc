@@ -187,7 +187,8 @@ func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var guildID uuid.UUID
 	var rolePosition int
 	var currentPerms int64
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, position, permissions FROM guild_roles WHERE id = $1", roleID).Scan(&guildID, &rolePosition, &currentPerms)
+	var targetName string
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, position, permissions, name FROM guild_roles WHERE id = $1", roleID).Scan(&guildID, &rolePosition, &currentPerms, &targetName)
 	if err != nil {
 		http.Error(w, `{"error":"role not found"}`, http.StatusNotFound)
 		return
@@ -207,6 +208,14 @@ func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
 		return
+	}
+
+	if targetName == "@everyone" {
+		if req.Name != nil && *req.Name != "@everyone" {
+			http.Error(w, `{"error":"cannot rename @everyone role"}`, http.StatusBadRequest)
+			return
+		}
+		req.Position = nil
 	}
 
 	// If updating permissions, cannot grant PermAdministrator or unheld permissions if not owner/admin
@@ -488,6 +497,13 @@ func (h *RoleHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+
+	var isMember bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, targetUserID).Scan(&isMember)
+	if err != nil || !isMember {
+		http.Error(w, `{"error":"member not found in guild"}`, http.StatusNotFound)
+		return
 	}
 
 	_, err = h.db.Pool.Exec(r.Context(), "INSERT INTO guild_member_roles (guild_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", guildID, targetUserID, roleID)

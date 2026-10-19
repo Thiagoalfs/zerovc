@@ -193,10 +193,16 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Insert role access if private
 	if req.IsPrivate && len(req.RoleIDs) > 0 {
+		validRoleIDs := make([]uuid.UUID, 0, len(req.RoleIDs))
 		for _, roleID := range req.RoleIDs {
-			h.db.Pool.Exec(r.Context(), "INSERT INTO channel_role_access (channel_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", channel.ID, roleID)
+			var roleBelongs bool
+			_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_roles WHERE id = $1 AND guild_id = $2)", roleID, guildID).Scan(&roleBelongs)
+			if roleBelongs {
+				h.db.Pool.Exec(r.Context(), "INSERT INTO channel_role_access (channel_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", channel.ID, roleID)
+				validRoleIDs = append(validRoleIDs, roleID)
+			}
 		}
-		channel.RoleIDs = req.RoleIDs
+		channel.RoleIDs = validRoleIDs
 	}
 
 	h.broadcastChannelEvent(r.Context(), guildID, channel.ID, channel.IsPrivate, models.WSEvent{
@@ -481,6 +487,12 @@ func (h *ChannelHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			} else if item.CategoryID != nil {
+				var catExists bool
+				err := tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channels WHERE id = $1 AND guild_id = $2 AND type = 'category')", *item.CategoryID, guildID).Scan(&catExists)
+				if err != nil || !catExists {
+					http.Error(w, `{"error":"invalid category id for this server"}`, http.StatusBadRequest)
+					return
+				}
 				if _, err := tx.Exec(r.Context(), "UPDATE channels SET position = $1, category_id = $2 WHERE id = $3 AND guild_id = $4", item.Position, item.CategoryID, item.ID, guildID); err != nil {
 					http.Error(w, `{"error":"failed to update channel position"}`, http.StatusInternalServerError)
 					return
@@ -841,7 +853,7 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 	}
 
 	isOwner := adminID == ownerID
-	if !isOwner && adminID != targetUserID {
+	if !isOwner {
 		if targetUserID == ownerID {
 			http.Error(w, `{"error":"forbidden: não é possível moderar o dono do servidor"}`, http.StatusForbidden)
 			return
@@ -854,6 +866,13 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 		}
 
 		if req.TargetChannelID != nil {
+			var validTarget bool
+			err := h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channels WHERE id = $1 AND guild_id = $2 AND type = 'voice')", *req.TargetChannelID, guildID).Scan(&validTarget)
+			if err != nil || !validTarget {
+				http.Error(w, `{"error":"canal de voz de destino inválido"}`, http.StatusBadRequest)
+				return
+			}
+
 			hasMovePerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermMoveMembers) != 0
 			if !hasMovePerm {
 				http.Error(w, `{"error":"forbidden: você não tem permissão para mover membros"}`, http.StatusForbidden)
@@ -867,17 +886,19 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 			}
 		}
 
-		var targetHighestPos int = 999999
-		_ = h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(MIN(gr.position), 999999)
-			FROM guild_roles gr
-			INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
-			WHERE gmr.guild_id = $1 AND gmr.user_id = $2 AND gr.name != '@everyone'
-		`, guildID, targetUserID).Scan(&targetHighestPos)
+		if adminID != targetUserID {
+			var targetHighestPos int = 999999
+			_ = h.db.Pool.QueryRow(r.Context(), `
+				SELECT COALESCE(MIN(gr.position), 999999)
+				FROM guild_roles gr
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+				WHERE gmr.guild_id = $1 AND gmr.user_id = $2 AND gr.name != '@everyone'
+			`, guildID, targetUserID).Scan(&targetHighestPos)
 
-		if targetHighestPos <= actorCtx.MaxPos {
-			http.Error(w, `{"error":"forbidden: você não pode moderar um membro com cargo igual ou superior ao seu na hierarquia"}`, http.StatusForbidden)
-			return
+			if targetHighestPos <= actorCtx.MaxPos {
+				http.Error(w, `{"error":"forbidden: você não pode moderar um membro com cargo igual ou superior ao seu na hierarquia"}`, http.StatusForbidden)
+				return
+			}
 		}
 	}
 
@@ -1038,20 +1059,22 @@ func (h *ChannelHandler) UpdatePermissionOverwrite(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if ownerID != userID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
+	var roleBelongs bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_roles WHERE id = $1 AND guild_id = $2)", roleID, guildID).Scan(&roleBelongs)
+	if err != nil || !roleBelongs {
+		http.Error(w, `{"error":"role not found in guild"}`, http.StatusBadRequest)
+		return
+	}
 
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageChannels) == 0 && (perms&models.PermManageRoles) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar permissões do canal"}`, http.StatusForbidden)
-			return
-		}
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"actor not found in guild"}`, http.StatusForbidden)
+		return
+	}
+
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageChannels) == 0 && (actorCtx.Perms&models.PermManageRoles) == 0 {
+		http.Error(w, `{"error":"forbidden: sem permissão para gerenciar permissões do canal"}`, http.StatusForbidden)
+		return
 	}
 
 	var req SetPermissionOverwriteRequest
@@ -1060,7 +1083,13 @@ func (h *ChannelHandler) UpdatePermissionOverwrite(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if req.Allow == 0 && req.Deny == 0 {
+	allowClean := req.Allow & ^models.PermAdministrator
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (allowClean & ^actorCtx.Perms) != 0 {
+		http.Error(w, `{"error":"forbidden: você não pode conceder permissões que não possui"}`, http.StatusForbidden)
+		return
+	}
+
+	if allowClean == 0 && req.Deny == 0 {
 		h.db.Pool.Exec(r.Context(), "DELETE FROM channel_permission_overwrites WHERE channel_id = $1 AND role_id = $2", channelID, roleID)
 	} else {
 		query := `
@@ -1069,7 +1098,7 @@ func (h *ChannelHandler) UpdatePermissionOverwrite(w http.ResponseWriter, r *htt
 			ON CONFLICT (channel_id, role_id)
 			DO UPDATE SET allow = EXCLUDED.allow, deny = EXCLUDED.deny
 		`
-		_, err = h.db.Pool.Exec(r.Context(), query, channelID, roleID, req.Allow, req.Deny)
+		_, err = h.db.Pool.Exec(r.Context(), query, channelID, roleID, allowClean, req.Deny)
 		if err != nil {
 			http.Error(w, `{"error":"failed to update permission overwrite"}`, http.StatusInternalServerError)
 			return
@@ -1132,6 +1161,13 @@ func (h *ChannelHandler) DeletePermissionOverwrite(w http.ResponseWriter, r *htt
 	err = h.db.Pool.QueryRow(r.Context(), "SELECT c.guild_id, g.owner_id FROM channels c INNER JOIN guilds g ON g.id = c.guild_id WHERE c.id = $1", channelID).Scan(&guildID, &ownerID)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+
+	var roleBelongs bool
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_roles WHERE id = $1 AND guild_id = $2)", roleID, guildID).Scan(&roleBelongs)
+	if err != nil || !roleBelongs {
+		http.Error(w, `{"error":"role not found in guild"}`, http.StatusBadRequest)
 		return
 	}
 

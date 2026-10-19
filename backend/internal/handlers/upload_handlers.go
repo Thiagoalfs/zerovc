@@ -184,8 +184,12 @@ func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, fol
 	if n > 0 {
 		detectedType := http.DetectContentType(sniffBuf[:n])
 		if strings.Contains(detectedType, "text/html") || strings.Contains(detectedType, "image/svg+xml") {
-			if !imageOnly {
-				http.Error(w, `{"error":"Tipo de conteúdo de arquivo não permitido."}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"Tipo de conteúdo de arquivo não permitido."}`, http.StatusBadRequest)
+			return
+		}
+		if imageOnly {
+			if !strings.HasPrefix(detectedType, "image/") || strings.Contains(detectedType, "image/svg+xml") {
+				http.Error(w, `{"error":"Conteúdo de imagem inválido."}`, http.StatusBadRequest)
 				return
 			}
 		}
@@ -225,20 +229,14 @@ func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, fol
 }
 
 func getPublicBaseURL(r *http.Request) string {
-	cdn := os.Getenv("CDN_BASE_URL")
-	if cdn != "" {
+	if cdn := os.Getenv("CDN_BASE_URL"); cdn != "" {
 		return strings.TrimRight(cdn, "/")
 	}
-	scheme := "https"
-	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
-		if r.Header.Get("X-Forwarded-Proto") != "" {
-			scheme = r.Header.Get("X-Forwarded-Proto")
-		} else if strings.HasPrefix(r.Host, "localhost") {
-			scheme = "http"
-		}
+	if appURL := os.Getenv("APP_URL"); appURL != "" {
+		return strings.TrimRight(appURL, "/")
 	}
-	if r.Host != "" && !strings.HasPrefix(r.Host, "127.0.0.1") && !strings.HasPrefix(r.Host, "localhost") {
-		return fmt.Sprintf("%s://%s", scheme, r.Host)
+	if r != nil && (r.Host == "localhost" || strings.HasPrefix(r.Host, "localhost:") || r.Host == "127.0.0.1" || strings.HasPrefix(r.Host, "127.0.0.1:")) {
+		return fmt.Sprintf("http://%s", r.Host)
 	}
 	return "https://zerovc.safiroko.xyz"
 }

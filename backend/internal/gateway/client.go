@@ -125,10 +125,12 @@ func (c *Client) ReadPump() {
 						c.Hub.BroadcastToGuild(*typingData.GuildID, event)
 					}
 				} else if len(typingData.UserIDs) > 0 {
-					// Restrict to max 15 participants in a group DM, filter self/nil
+					// Restrict to max 15 unique participants in a group DM, filter self/nil
 					validTargets := make([]uuid.UUID, 0, 15)
+					seen := make(map[uuid.UUID]bool, 15)
 					for _, uid := range typingData.UserIDs {
-						if uid != uuid.Nil && uid != c.UserID {
+						if uid != uuid.Nil && uid != c.UserID && !seen[uid] {
+							seen[uid] = true
 							validTargets = append(validTargets, uid)
 							if len(validTargets) >= 15 {
 								break

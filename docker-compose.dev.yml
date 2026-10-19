@@ -1,4 +1,4 @@
-﻿version: '3.8'
+version: '3.8'
 
 services:
   postgres-dev:
@@ -6,10 +6,10 @@ services:
     container_name: zerovc-postgres-dev
     environment:
       POSTGRES_USER: zerovc
-      POSTGRES_PASSWORD: zerovc_dev_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zerovc_dev_password}
       POSTGRES_DB: zerovc
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata_dev:/var/lib/postgresql/data
     restart: unless-stopped

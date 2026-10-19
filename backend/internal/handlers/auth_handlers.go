@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"os"
 	"regexp"
@@ -686,7 +687,21 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Invalidate all active sessions on password reset
-	_, _ = h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1", userID)
+	rowsDel, errDel := h.db.Pool.Query(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1 RETURNING token_hash", userID)
+	if errDel == nil {
+		defer rowsDel.Close()
+		if h.auth != nil {
+			for rowsDel.Next() {
+				var th string
+				if err := rowsDel.Scan(&th); err == nil && th != "" {
+					h.auth.RevokeTokenHash(th)
+				}
+			}
+		}
+	}
+	if h.auth != nil {
+		h.auth.RevokeAllUserTokens(userID)
+	}
 
 	// Mark token as used
 	h.db.Pool.Exec(r.Context(), "UPDATE password_resets SET used_at = CURRENT_TIMESTAMP WHERE id = $1", resetID)
@@ -702,12 +717,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	turnstileVerified := false
 	if req.Code == "" || req.TurnstileToken != "" {
 		clientIP := getClientIP(r)
 		if !verifyTurnstileToken(req.TurnstileToken, clientIP) {
 			http.Error(w, `{"error":"Falha na verificação de segurança (Turnstile). Por favor, tente novamente."}`, http.StatusBadRequest)
 			return
 		}
+		turnstileVerified = true
 	}
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
@@ -735,6 +752,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			Email:                user.Email,
 		})
 		return
+	}
+
+	// ACHADO-10: Prevent Turnstile bypass when account does not have 2FA enabled
+	if !turnstileVerified && user.TwoFactorSecret == "" {
+		clientIP := getClientIP(r)
+		if !verifyTurnstileToken(req.TurnstileToken, clientIP) {
+			http.Error(w, `{"error":"Falha na verificação de segurança (Turnstile). Por favor, tente novamente."}`, http.StatusBadRequest)
+			return
+		}
+		turnstileVerified = true
 	}
 
 	// Check 2FA requirement
@@ -839,6 +866,9 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if currentToken != "" {
 		tokenHash := hashToken(currentToken)
 		h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE token_hash = $1", tokenHash)
+		if h.auth != nil {
+			h.auth.RevokeTokenHash(tokenHash)
+		}
 	}
 	clearAuthCookie(w)
 	if h.csrf != nil {
@@ -907,6 +937,9 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 // Session Helpers and Handlers
 
 func extractTokenFromRequest(r *http.Request) string {
+	if cookie, err := r.Cookie("token"); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
 	if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
 		return cookie.Value
 	}
@@ -1081,21 +1114,10 @@ func (h *AuthHandler) touchSession(ctx context.Context, userID uuid.UUID, token 
 	tokenHash := hashToken(token)
 	ip := getClientIP(r)
 
-	var rowsAffected int64
 	if ip != "" {
-		res, err := h.db.Pool.Exec(ctx, "UPDATE user_sessions SET last_active_at = CURRENT_TIMESTAMP, ip_address = $1 WHERE token_hash = $2", ip, tokenHash)
-		if err == nil {
-			rowsAffected = res.RowsAffected()
-		}
+		_, _ = h.db.Pool.Exec(ctx, "UPDATE user_sessions SET last_active_at = CURRENT_TIMESTAMP, ip_address = $1 WHERE token_hash = $2", ip, tokenHash)
 	} else {
-		res, err := h.db.Pool.Exec(ctx, "UPDATE user_sessions SET last_active_at = CURRENT_TIMESTAMP WHERE token_hash = $1", tokenHash)
-		if err == nil {
-			rowsAffected = res.RowsAffected()
-		}
-	}
-
-	if rowsAffected == 0 && userID != uuid.Nil {
-		h.recordSession(ctx, userID, token, r)
+		_, _ = h.db.Pool.Exec(ctx, "UPDATE user_sessions SET last_active_at = CURRENT_TIMESTAMP WHERE token_hash = $1", tokenHash)
 	}
 }
 
@@ -1161,6 +1183,10 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.auth != nil {
+		h.auth.RevokeTokenHash(tokenHash)
+	}
+
 	if h.hub != nil {
 		h.hub.SendToUser(userID, models.WSEvent{
 			Type: models.EventSessionRevoked,
@@ -1185,10 +1211,20 @@ func (h *AuthHandler) RevokeOtherSessions(w http.ResponseWriter, r *http.Request
 	currentToken := extractTokenFromRequest(r)
 	currentTokenHash := hashToken(currentToken)
 
-	_, err := h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1 AND token_hash != $2", userID, currentTokenHash)
+	rows, err := h.db.Pool.Query(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1 AND token_hash != $2 RETURNING token_hash", userID, currentTokenHash)
 	if err != nil {
 		http.Error(w, `{"error":"falha ao revogar outras sessões"}`, http.StatusInternalServerError)
 		return
+	}
+	defer rows.Close()
+
+	if h.auth != nil {
+		for rows.Next() {
+			var th string
+			if err := rows.Scan(&th); err == nil && th != "" {
+				h.auth.RevokeTokenHash(th)
+			}
+		}
 	}
 
 	if h.hub != nil {
@@ -1836,9 +1872,34 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	currentToken := extractTokenFromRequest(r)
 	currentTokenHash := hashToken(currentToken)
 	if currentTokenHash != "" {
-		_, _ = h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1 AND token_hash != $2", userID, currentTokenHash)
+		rowsDel, errDel := h.db.Pool.Query(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1 AND token_hash != $2 RETURNING token_hash", userID, currentTokenHash)
+		if errDel == nil {
+			defer rowsDel.Close()
+			if h.auth != nil {
+				for rowsDel.Next() {
+					var th string
+					if err := rowsDel.Scan(&th); err == nil && th != "" {
+						h.auth.RevokeTokenHash(th)
+					}
+				}
+			}
+		}
 	} else {
-		_, _ = h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1", userID)
+		rowsDel, errDel := h.db.Pool.Query(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1 RETURNING token_hash", userID)
+		if errDel == nil {
+			defer rowsDel.Close()
+			if h.auth != nil {
+				for rowsDel.Next() {
+					var th string
+					if err := rowsDel.Scan(&th); err == nil && th != "" {
+						h.auth.RevokeTokenHash(th)
+					}
+				}
+			}
+		}
+		if h.auth != nil {
+			h.auth.RevokeAllUserTokens(userID)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1863,7 +1924,8 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newEmail := strings.TrimSpace(strings.ToLower(req.NewEmail))
-	if newEmail == "" || !strings.Contains(newEmail, "@") {
+	parsed, err := mail.ParseAddress(newEmail)
+	if err != nil || parsed.Address != newEmail || strings.ContainsAny(newEmail, `<>"'`) {
 		http.Error(w, `{"error":"e-mail inválido"}`, http.StatusBadRequest)
 		return
 	}

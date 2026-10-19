@@ -139,7 +139,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const { openDMWithUser } = useDMStore();
   const { isFavorited, toggleFavorite } = useFavoriteGifStore();
   const { menu, openContextMenu, closeContextMenu, handleUserContextMenu: openUserMenu } = useUserContextMenu();
-  const perms = useGuildPermissions();
+  const guildPerms = useGuildPermissions(contextType === 'channel' ? activeGuild : null);
   const chatDensity = useSettingsStore((s) => s.chatDensity);
   const isDensityCompact = chatDensity === 'compact';
 
@@ -219,7 +219,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const isAuthor = user?.id === message.author_id;
   const isOwner = contextType === 'channel' && activeGuild ? activeGuild.owner_id === user?.id : false;
-  const canDelete = isAuthor || isOwner;
+  const canManageChannelMessages = contextType === 'channel' && (isOwner || guildPerms.hasAdmin || guildPerms.canManageMessages);
+  const canDelete = isAuthor || canManageChannelMessages;
+  const canPin = contextType !== 'channel' || canManageChannelMessages;
 
   const currentUserRoles = contextType === 'channel' ? (activeGuild?.members?.find((m) => m.id === user?.id)?.roles || []) : [];
   const authorMember = contextType === 'channel' && activeGuild ? activeGuild.members?.find((m) => m.id === message.author_id) : null;
@@ -327,12 +329,15 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         icon: <Reply className="w-4 h-4" />,
         onClick: () => onReply?.(message),
       },
-      {
+    ];
+
+    if (canPin) {
+      items.push({
         label: message.is_pinned ? 'Desafixar Mensagem' : 'Fixar Mensagem',
         icon: <Pin className="w-4 h-4" />,
         onClick: () => handleActionTogglePin(message.id),
-      },
-    ];
+      });
+    }
 
     if (message.content) {
       items.push({
@@ -800,17 +805,19 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 <Reply className="w-3.5 h-3.5" />
               </button>
 
-              <button
-                onClick={() => handleActionTogglePin(message.id)}
-                className={`p-1 rounded transition-colors cursor-pointer ${
-                  message.is_pinned
-                    ? 'text-amber-400 hover:bg-amber-400/20'
-                    : 'text-gray-400 hover:text-white hover:bg-white/10'
-                }`}
-                title={message.is_pinned ? 'Desafixar' : 'Fixar'}
-              >
-                <Pin className="w-3.5 h-3.5" />
-              </button>
+              {canPin && (
+                <button
+                  onClick={() => handleActionTogglePin(message.id)}
+                  className={`p-1 rounded transition-colors cursor-pointer ${
+                    message.is_pinned
+                      ? 'text-amber-400 hover:bg-amber-400/20'
+                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                  title={message.is_pinned ? 'Desafixar' : 'Fixar'}
+                >
+                  <Pin className="w-3.5 h-3.5" />
+                </button>
+              )}
 
               {isAuthor && (
                 <button

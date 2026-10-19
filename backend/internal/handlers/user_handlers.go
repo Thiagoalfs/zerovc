@@ -471,13 +471,17 @@ func (h *UserHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	guildIDStr := r.URL.Query().Get("guild_id")
 	if guildIDStr != "" {
 		if gID, err := uuid.Parse(guildIDStr); err == nil {
-			var ja time.Time
-			errJoin := h.db.Pool.QueryRow(r.Context(), `
-				SELECT joined_at FROM guild_members WHERE guild_id = $1 AND user_id = $2
-			`, gID, targetID).Scan(&ja)
-			if errJoin == nil {
-				joinedAt = &ja
-				u.JoinedAt = &ja
+			var callerIsMember bool
+			errMember := h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", gID, callerID).Scan(&callerIsMember)
+			if errMember == nil && callerIsMember {
+				var ja time.Time
+				errJoin := h.db.Pool.QueryRow(r.Context(), `
+					SELECT joined_at FROM guild_members WHERE guild_id = $1 AND user_id = $2
+				`, gID, targetID).Scan(&ja)
+				if errJoin == nil {
+					joinedAt = &ja
+					u.JoinedAt = &ja
+				}
 			}
 		}
 	}
