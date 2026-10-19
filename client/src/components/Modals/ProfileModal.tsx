@@ -1197,7 +1197,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-0 md:p-4 overflow-hidden animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-0 md:p-4 md:pt-10 overflow-hidden animate-in fade-in"
     >
       {/* Unified Container (Full-screen on mobile, matching ServerSettingsModal on desktop) */}
       <div className={`flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-background-dark rounded-none md:rounded-xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200 ${reducedMotion ? '' : 'animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none'}`}>

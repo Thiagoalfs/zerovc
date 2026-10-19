@@ -352,7 +352,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen bg-background-dark overflow-hidden text-gray-200 select-none ${
+      className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen md:pt-8 bg-background-dark overflow-hidden text-gray-200 select-none ${
         reducedMotion ? '' : 'animate-in fade-in duration-150'
       }`}
     >
@@ -706,14 +706,14 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
           {/* TAB 2: Permissões de Cargos */}
           {activeTab === 'permissions' && (
-            <div className="flex flex-col md:flex-row gap-6 min-h-0 h-auto md:h-[calc(100vh-140px)] py-4 md:py-6">
+            <div className="flex flex-col md:flex-row gap-6 min-h-0 h-auto md:h-[calc(100vh-175px)] py-4 md:py-6">
               {/* Left Column: Roles list selector */}
               <div className="w-full md:w-64 flex flex-col gap-2 shrink-0 md:pr-6 md:border-r border-white/10 border-b md:border-b-0 pb-4 md:pb-0">
                 <span className={`${MODAL_SECTION_HEADER_CLASS} pb-2 mb-1 border-b border-white/10 px-1 block`}>
                   Cargos do Servidor
                 </span>
 
-                <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto max-h-none md:max-h-[calc(100vh-210px)] gap-1.5 md:gap-1 no-scrollbar">
+                <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto max-h-none md:max-h-[calc(100vh-245px)] gap-1.5 md:gap-1 no-scrollbar">
                   {roles.map((role) => {
                     const isSelected = selectedRole?.id === role.id;
                     const hasCustomOw =
@@ -753,7 +753,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               </div>
 
               {/* Right Column: Permissions for selected role */}
-              <div className="flex-1 space-y-6 overflow-y-auto max-h-[calc(100vh-220px)] no-scrollbar md:pl-2 max-w-3xl pr-4 md:pr-6">
+              <div className="flex-1 space-y-6 overflow-y-auto max-h-[calc(100vh-255px)] no-scrollbar md:pl-2 max-w-3xl pr-4 md:pr-6">
                 {selectedRole && (
                   <>
                     {/* Header info of selected role */}

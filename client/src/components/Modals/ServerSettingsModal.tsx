@@ -736,7 +736,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   return (
     <>
       <div
-        className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen bg-background-dark overflow-hidden text-gray-200 select-none ${reducedMotion ? '' : 'animate-in fade-in duration-150'}`}
+        className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen md:pt-8 bg-background-dark overflow-hidden text-gray-200 select-none ${reducedMotion ? '' : 'animate-in fade-in duration-150'}`}
       >
         {/* MOBILE MENU VIEW */}
           {mobileView === 'menu' && (
