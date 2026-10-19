@@ -114,12 +114,16 @@ function loadSplashColors(): { accent: string; bg: string } {
   return { accent: '99,102,241', bg: '13,17,23' };
 }
 
+// V8 Memory Heap Optimization (prevents unbounded memory growth before GC)
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256');
+
 if (!hardwareAccelerationEnabled) {
   console.log('[Electron] Hardware acceleration is DISABLED by user preference.');
   app.disableHardwareAcceleration();
 } else {
   // Enable Hardware Acceleration & High-Performance Screen Capture
   app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('enable-zero-copy');
   app.commandLine.appendSwitch('ignore-gpu-blocklist');
   app.commandLine.appendSwitch('enable-accelerated-video-decode');
   app.commandLine.appendSwitch('enable-accelerated-video-encode');
@@ -547,7 +551,7 @@ function finalizeStartupSplash() {
   startActivityScanner();
 
   if (splashWindow && !splashWindow.isDestroyed()) {
-    splashWindow.close();
+    splashWindow.destroy();
   }
   splashWindow = null;
 

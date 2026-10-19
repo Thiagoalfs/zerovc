@@ -57,6 +57,10 @@
   "build": {
     "appId": "com.zerovc.app",
     "productName": "ZeroVC",
+    "electronLanguages": [
+      "pt-BR",
+      "en-US"
+    ],
     "compression": "maximum",
     "asar": true,
     "asarUnpack": [
