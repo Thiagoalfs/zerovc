@@ -115,9 +115,23 @@ const FONT_SIZE_STEPS = [
 interface ProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?:
+    | 'account'
+    | 'profile'
+    | 'privacy'
+    | 'sessions'
+    | 'registered_games'
+    | 'activity_privacy'
+    | 'appearance'
+    | 'accessibility'
+    | 'audio'
+    | 'notifications'
+    | 'streamer_mode'
+    | 'preferences'
+    | 'keybinds';
 }
 
-export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
+export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, initialTab }) => {
   const { user, updateProfile, logout, setUser } = useAuthStore();
   const reducedMotion = useSettingsStore((state) => state.reducedMotion);
 
@@ -152,10 +166,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
   useEffect(() => {
     if (isOpen) {
-      setMobileView('menu');
+      if (initialTab) {
+        setActiveTab(initialTab);
+        setMobileView('content');
+      } else {
+        setMobileView('menu');
+      }
       initialHwAccelRef.current = hardwareAcceleration;
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
 
   // Crop Modal State
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -506,7 +525,28 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     setOutputVolume,
     setShowVoiceUsersInBar,
     setChatFontSize,
+    setAudioInputDevice,
+    setAudioOutputDevice,
   } = useSettingsStore();
+
+  useEffect(() => {
+    const handleInputChanged = (e: any) => {
+      if (e.detail?.deviceId !== undefined) {
+        setSelectedInput(e.detail.deviceId);
+      }
+    };
+    const handleOutputChanged = (e: any) => {
+      if (e.detail?.deviceId !== undefined) {
+        setSelectedOutput(e.detail.deviceId);
+      }
+    };
+    window.addEventListener('zerovc:audio-input-device-changed', handleInputChanged);
+    window.addEventListener('zerovc:audio-output-device-changed', handleOutputChanged);
+    return () => {
+      window.removeEventListener('zerovc:audio-input-device-changed', handleInputChanged);
+      window.removeEventListener('zerovc:audio-output-device-changed', handleOutputChanged);
+    };
+  }, []);
 
   useEffect(() => {
     if (liveGainNodeRef.current) {
@@ -1122,20 +1162,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const handleDeviceChange = async (type: 'input' | 'output' | 'video', deviceId: string) => {
     if (type === 'input') {
       setSelectedInput(deviceId);
-      try {
-        localStorage.setItem('zerovc_audio_input_device', deviceId);
-      } catch {}
-      await livekit.setAudioInputDevice(deviceId);
+      await setAudioInputDevice(deviceId);
       if (isTestingMic) {
         stopMicTest();
         setTimeout(startMicTest, 100);
       }
     } else if (type === 'output') {
       setSelectedOutput(deviceId);
-      try {
-        localStorage.setItem('zerovc_audio_output_device', deviceId);
-      } catch {}
-      await livekit.setAudioOutputDevice(deviceId);
+      await setAudioOutputDevice(deviceId);
     } else if (type === 'video') {
       setSelectedVideoDevice(deviceId);
       try {

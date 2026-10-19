@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, Video, VideoOff, Gamepad2 } from 'lucide-react';
+import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, Video, VideoOff, Gamepad2, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -14,9 +14,10 @@ import { findBestSourceForGameFamily } from '../../utils/gameFamilyManager';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { User, UserProfilePosition, Guild } from '../../types';
 import { UserBarContextMenuControls } from './UserBarContextMenu';
+import { AudioDeviceDropup } from './AudioDeviceDropup';
 
 interface UserBarProps {
-  onOpenSettings: () => void;
+  onOpenSettings: (tab?: string) => void;
   onOpenScreenShare: () => void;
   onOpenUserProfile?: (user: User, position?: UserProfilePosition, guild?: Guild | null) => void;
 }
@@ -26,7 +27,11 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showVoicePopout, setShowVoicePopout] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const [showMicDropup, setShowMicDropup] = useState(false);
+  const [showDeafenDropup, setShowDeafenDropup] = useState(false);
   const voiceBarRef = useRef<HTMLDivElement>(null);
+  const micAnchorRef = useRef<HTMLDivElement>(null);
+  const deafenAnchorRef = useRef<HTMLDivElement>(null);
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const {
     voiceType,
@@ -646,46 +651,120 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           </div>
 
           {/* Action Buttons */}
-          <div className="hidden md:flex items-center gap-0.5 text-gray-400 flex-shrink-0">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleMute();
-              }}
-              className={`w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
-                isMuted ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
+          <div className="hidden md:flex items-center gap-1 text-gray-400 flex-shrink-0">
+            {/* 1. Microphone Split Button */}
+            <div
+              ref={micAnchorRef}
+              className={`flex items-center h-8 rounded-lg overflow-hidden transition-all ${
+                isMuted
+                  ? 'bg-dnd/10 border border-dnd/20 text-dnd'
+                  : 'bg-white/5 hover:bg-white/10 border border-white/5 text-gray-300'
               }`}
-              title={isMuted ? 'Desmutar' : 'Mutar'}
             >
-              {isMuted ? <MicOff className="w-4 h-4 md:w-[18px] md:h-[18px]" /> : <Mic className="w-4 h-4 md:w-[18px] md:h-[18px]" />}
-            </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMute();
+                }}
+                className={`h-full px-2 flex items-center justify-center transition-colors cursor-pointer ${
+                  isMuted ? 'text-dnd hover:text-red-400' : 'text-gray-300 hover:text-white'
+                }`}
+                title={isMuted ? 'Desmutar' : 'Mutar'}
+              >
+                {isMuted ? <MicOff className="w-4 h-4 md:w-[17px] md:h-[17px]" /> : <Mic className="w-4 h-4 md:w-[17px] md:h-[17px]" />}
+              </button>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleDeafen();
-              }}
-              className={`w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer ${
-                isDeafened ? 'text-dnd hover:text-dnd bg-dnd/10' : ''
+              <div className={`w-[1px] h-3.5 ${isMuted ? 'bg-dnd/30' : 'bg-white/10'}`} />
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeafenDropup(false);
+                  setShowMicDropup((prev) => !prev);
+                }}
+                className={`h-full px-1.5 flex items-center justify-center transition-colors cursor-pointer ${
+                  isMuted ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
+                }`}
+                title="Dispositivos de Entrada de Áudio"
+              >
+                <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${showMicDropup ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+
+            {/* 2. Deafen Split Button */}
+            <div
+              ref={deafenAnchorRef}
+              className={`flex items-center h-8 rounded-lg overflow-hidden transition-all ${
+                isDeafened
+                  ? 'bg-dnd/10 border border-dnd/20 text-dnd'
+                  : 'bg-white/5 hover:bg-white/10 border border-white/5 text-gray-300'
               }`}
-              title={isDeafened ? 'Ensurdecer' : 'Desensurdecer'}
             >
-              <Headphones className="w-4 h-4 md:w-[18px] md:h-[18px]" />
-            </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleDeafen();
+                }}
+                className={`h-full px-2 flex items-center justify-center transition-colors cursor-pointer ${
+                  isDeafened ? 'text-dnd hover:text-red-400' : 'text-gray-300 hover:text-white'
+                }`}
+                title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
+              >
+                <Headphones className="w-4 h-4 md:w-[17px] md:h-[17px]" />
+              </button>
 
+              <div className={`w-[1px] h-3.5 ${isDeafened ? 'bg-dnd/30' : 'bg-white/10'}`} />
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMicDropup(false);
+                  setShowDeafenDropup((prev) => !prev);
+                }}
+                className={`h-full px-1.5 flex items-center justify-center transition-colors cursor-pointer ${
+                  isDeafened ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
+                }`}
+                title="Dispositivos de Saída de Áudio"
+              >
+                <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${showDeafenDropup ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+
+            {/* 3. Settings Button */}
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenSettings();
               }}
-              className="w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/5 hover:bg-white/10 hover:text-gray-200 border border-white/5 text-gray-400 transition-colors cursor-pointer"
               title="Configurações de Usuário"
             >
-              <Settings className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+              <Settings className="w-4 h-4 md:w-[17px] md:h-[17px]" />
             </button>
           </div>
         </div>
       </div>
+
+      {/* Audio Device Dropups */}
+      <AudioDeviceDropup
+        type="input"
+        isOpen={showMicDropup}
+        onClose={() => setShowMicDropup(false)}
+        onOpenSettings={onOpenSettings}
+        anchorRef={micAnchorRef}
+      />
+      <AudioDeviceDropup
+        type="output"
+        isOpen={showDeafenDropup}
+        onClose={() => setShowDeafenDropup(false)}
+        onOpenSettings={onOpenSettings}
+        anchorRef={deafenAnchorRef}
+      />
 
       {/* Context Menu Component */}
       <ContextMenu menu={menu} onClose={closeContextMenu} />

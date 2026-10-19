@@ -147,6 +147,7 @@ export const App: React.FC = () => {
   const [createChannelCategoryId, setCreateChannelCategoryId] = useState<string | undefined>(undefined);
   const [isScreenShareOpen, setIsScreenShareOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileModalInitialTab, setProfileModalInitialTab] = useState<any>(undefined);
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<{
     user: User;
     position?: UserProfilePosition;
@@ -2209,7 +2210,10 @@ export const App: React.FC = () => {
           {/* Unified UserBar Footer extending across ServerList and ChannelList */}
           <ErrorBoundary>
             <UserBar
-              onOpenSettings={() => setIsProfileModalOpen(true)}
+              onOpenSettings={(tab) => {
+                setProfileModalInitialTab(tab);
+                setIsProfileModalOpen(true);
+              }}
               onOpenScreenShare={() => setIsScreenShareOpen(true)}
               onOpenUserProfile={(targetUser, pos, g) =>
                 setSelectedUserForProfile({
@@ -2399,7 +2403,11 @@ export const App: React.FC = () => {
 
         <ProfileModal
           isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
+          initialTab={profileModalInitialTab}
+          onClose={() => {
+            setIsProfileModalOpen(false);
+            setProfileModalInitialTab(undefined);
+          }}
         />
 
         <ErrorBoundary>

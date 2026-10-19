@@ -58,6 +58,8 @@ interface SettingsState {
   inputVolume: number;
   outputVolume: number;
   showVoiceUsersInBar: boolean;
+  audioInputDeviceId: string;
+  audioOutputDeviceId: string;
 
   // Actions
   setTheme: (theme: ThemeMode) => void;
@@ -96,6 +98,8 @@ interface SettingsState {
   setInputVolume: (vol: number) => void;
   setOutputVolume: (vol: number) => void;
   setShowVoiceUsersInBar: (enabled: boolean) => void;
+  setAudioInputDevice: (deviceId: string) => Promise<void>;
+  setAudioOutputDevice: (deviceId: string) => Promise<void>;
   applyThemeToDOM: () => void;
 }
 
@@ -237,6 +241,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   inputVolume: Math.max(0, Math.min(100, getStoredNumber('zerovc_input_volume', 100))),
   outputVolume: Math.max(0, Math.min(100, getStoredNumber('zerovc_output_volume', 100))),
   showVoiceUsersInBar: getStoredBoolean('zerovc_show_voice_users_bar', true),
+  audioInputDeviceId: getStoredString('zerovc_audio_input_device', ''),
+  audioOutputDeviceId: getStoredString('zerovc_audio_output_device', ''),
 
   setTheme: (theme) => {
     localStorage.setItem('zerovc_theme', theme);
@@ -442,6 +448,38 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setShowVoiceUsersInBar: (showVoiceUsersInBar) => {
     localStorage.setItem('zerovc_show_voice_users_bar', String(showVoiceUsersInBar));
     set({ showVoiceUsersInBar });
+  },
+
+  setAudioInputDevice: async (deviceId: string) => {
+    try {
+      localStorage.setItem('zerovc_audio_input_device', deviceId);
+    } catch {}
+    set({ audioInputDeviceId: deviceId });
+    try {
+      const { livekit } = await import('../lib/livekit');
+      await livekit.setAudioInputDevice(deviceId);
+    } catch (err) {
+      console.warn('[settingsStore] Error switching audio input device:', err);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zerovc:audio-input-device-changed', { detail: { deviceId } }));
+    }
+  },
+
+  setAudioOutputDevice: async (deviceId: string) => {
+    try {
+      localStorage.setItem('zerovc_audio_output_device', deviceId);
+    } catch {}
+    set({ audioOutputDeviceId: deviceId });
+    try {
+      const { livekit } = await import('../lib/livekit');
+      await livekit.setAudioOutputDevice(deviceId);
+    } catch (err) {
+      console.warn('[settingsStore] Error switching audio output device:', err);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zerovc:audio-output-device-changed', { detail: { deviceId } }));
+    }
   },
 
   applyThemeToDOM: () => {
