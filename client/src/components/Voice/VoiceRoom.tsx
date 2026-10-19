@@ -9,6 +9,7 @@ import { ParticipantCard } from './ParticipantCard';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
+import { VoiceControlBar } from './VoiceControlBar';
 
 interface VoiceRoomProps {
   channel: Channel;
@@ -367,6 +368,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                         participant={p}
                         onOpenUserProfile={onOpenUserProfile}
                         onOpenDM={onOpenDM}
+                        onOpenScreenShare={onOpenScreenShare}
                       />
                     </div>
                   ))}
@@ -409,82 +411,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
           className="p-3 md:p-4 flex justify-center bg-background-darker/80 backdrop-blur-md border-t border-black/20 select-none z-10 flex-shrink-0 animate-in slide-in-from-bottom-2 duration-200"
         >
-          <div className="bg-background-darkest/95 px-4 md:px-6 py-2 rounded-2xl shadow-2xl flex items-center gap-3 md:gap-4 border border-white/10">
-            {/* Mute Mic */}
-            <button
-              onClick={() => {
-                hapticMedium();
-                toggleMute();
-              }}
-              className={`p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
-                isMuted
-                  ? 'bg-dnd text-white hover:bg-dnd/80'
-                  : 'bg-background-light text-gray-200 hover:bg-white/20'
-              }`}
-              title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
-            >
-              {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-
-            {/* Deafen */}
-            <button
-              onClick={() => {
-                hapticMedium();
-                toggleDeafen();
-              }}
-              className={`p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
-                isDeafened
-                  ? 'bg-dnd text-white hover:bg-dnd/80'
-                  : 'bg-background-light text-gray-200 hover:bg-white/20'
-              }`}
-              title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
-            >
-              <Headphones className="w-5 h-5" />
-            </button>
-
-            {/* Camera WebCam */}
-            <button
-              onClick={() => {
-                hapticMedium();
-                toggleCamera();
-              }}
-              className={`p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
-                isCameraOn
-                  ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
-                  : 'bg-background-light text-gray-200 hover:bg-white/20'
-              }`}
-              title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
-            >
-              {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-            </button>
-
-            {/* Screen Share */}
-            <button
-              onClick={handleScreenShareClick}
-              className={`hidden md:flex p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
-                isScreensharing
-                  ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
-                  : 'bg-background-light text-gray-200 hover:bg-white/20'
-              }`}
-              title={isScreensharing ? 'Opções de Compartilhamento de Tela' : 'Compartilhar Tela'}
-            >
-              <Monitor className="w-5 h-5" />
-            </button>
-
-            <div className="w-[1px] h-7 bg-white/10 mx-0.5" />
-
-            {/* Disconnect */}
-            <button
-              onClick={() => {
-                hapticWarning();
-                leaveVoice();
-              }}
-              className="p-2.5 md:p-3 rounded-full bg-dnd/20 text-dnd hover:bg-dnd hover:text-white transition-all cursor-pointer active:scale-95"
-              title="Desconectar da Sala"
-            >
-              <PhoneOff className="w-5 h-5" />
-            </button>
-          </div>
+          <VoiceControlBar onOpenScreenShare={onOpenScreenShare} />
         </div>
       )}
 

@@ -275,6 +275,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                           participant={p}
                           onOpenUserProfile={onOpenUserProfile}
                           onOpenDM={onOpenDM}
+                          onOpenScreenShare={onOpenScreenShare}
                         />
                       </div>
                     ))}

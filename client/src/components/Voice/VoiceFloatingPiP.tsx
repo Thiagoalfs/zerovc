@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from './VolumeSliders';
+import { VoiceControlBar } from './VoiceControlBar';
 import { Permissions } from '../../types';
 import { api } from '../../lib/api';
 import { useDMStore } from '../../stores/dmStore';
@@ -97,6 +98,58 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
+
+  // Fullscreen inactivity auto-hide controls (10 seconds timeout)
+  const [areFullscreenControlsVisible, setAreFullscreenControlsVisible] = useState(true);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const resetControlsInactivityTimer = useCallback(() => {
+    setAreFullscreenControlsVisible(true);
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    controlsTimeoutRef.current = setTimeout(() => {
+      setAreFullscreenControlsVisible(false);
+    }, 10000);
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    resetControlsInactivityTimer();
+
+    const handleActivity = () => {
+      resetControlsInactivityTimer();
+    };
+
+    window.addEventListener('mousemove', handleActivity, { passive: true });
+    window.addEventListener('pointermove', handleActivity, { passive: true });
+    window.addEventListener('touchstart', handleActivity, { passive: true });
+    window.addEventListener('keydown', handleActivity, { passive: true });
+
+    return () => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
+      }
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('pointermove', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+    };
+  }, [isFullscreen, resetControlsInactivityTimer]);
+
+  useEffect(() => {
+    if (!isConnected && isFullscreen) {
+      setIsFullscreen(false);
+    }
+  }, [isConnected, isFullscreen]);
 
   // Keep fullscreen state in sync with ESC key
   useEffect(() => {
@@ -806,7 +859,10 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             e.stopPropagation();
             toggleFullscreen();
           }}
-          className={`fixed ${isElectron ? 'top-8' : 'top-0'} inset-x-0 bottom-0 z-[45] bg-black flex items-center justify-center select-none`}
+          onMouseMove={resetControlsInactivityTimer}
+          className={`fixed ${isElectron ? 'top-8' : 'top-0'} inset-x-0 bottom-0 z-[45] bg-black flex items-center justify-center select-none ${
+            areFullscreenControlsVisible ? 'cursor-default' : 'cursor-none'
+          }`}
         >
           <video
             ref={(el) => {
@@ -820,11 +876,17 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             onContextMenu={handleContextMenu}
             autoPlay
             playsInline
-            className="w-full h-full object-contain bg-black cursor-default"
+            className="w-full h-full object-contain bg-black"
           />
 
           {/* Top Fullscreen Controls Overlay */}
-          <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
+          <div
+            className={`absolute top-4 left-4 right-4 flex items-center justify-between z-10 transition-all duration-500 ease-out transform pointer-events-none ${
+              areFullscreenControlsVisible
+                ? 'translate-y-0 opacity-100'
+                : '-translate-y-16 opacity-0'
+            }`}
+          >
             <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 shadow-lg pointer-events-auto">
               <div className="w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold text-white overflow-hidden">
                 {targetUser.avatar_url ? (
@@ -925,6 +987,19 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Bottom Floating Voice Control Bar */}
+          <div
+            className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-20 transition-all duration-500 ease-out transform ${
+              areFullscreenControlsVisible
+                ? 'translate-y-0 opacity-100 pointer-events-auto'
+                : 'translate-y-24 opacity-0 pointer-events-none'
+            }`}
+          >
+            <VoiceControlBar
+              onDisconnect={() => setIsFullscreen(false)}
+            />
           </div>
         </div>,
         document.body

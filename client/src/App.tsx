@@ -239,6 +239,12 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleOpenScreenShareEvent = () => setIsScreenShareOpen(true);
+    window.addEventListener('zerovc:open-screenshare', handleOpenScreenShareEvent);
+    return () => window.removeEventListener('zerovc:open-screenshare', handleOpenScreenShareEvent);
+  }, []);
+
   // Back button stack for modals and mobile drawers in App.tsx
   useEffect(() => {
     if (!previewImageUrl) return;

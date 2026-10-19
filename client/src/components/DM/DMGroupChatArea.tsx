@@ -712,6 +712,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                             participant={p}
                             onOpenUserProfile={onOpenUserProfile}
                             onOpenDM={onOpenDM}
+                            onOpenScreenShare={onOpenScreenShare}
                           />
                         </div>
                       ))}
