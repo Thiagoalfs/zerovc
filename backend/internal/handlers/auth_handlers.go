@@ -1933,7 +1933,7 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 	var currentHash, twoFactorSecret string
 	var oldEmail string
 	var username string
-	err := h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, email, username, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&currentHash, &oldEmail, &username, &twoFactorSecret)
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT password_hash, email, username, COALESCE(two_factor_secret, '') FROM users WHERE id = $1", userID).Scan(&currentHash, &oldEmail, &username, &twoFactorSecret)
 	if err != nil || !h.auth.CheckPassword(req.Password, currentHash) {
 		http.Error(w, `{"error":"senha incorreta"}`, http.StatusUnauthorized)
 		return
