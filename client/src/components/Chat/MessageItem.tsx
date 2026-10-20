@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Pencil,
@@ -13,7 +13,7 @@ import {
   Copy,
   Shield,
   ShieldAlert,
-  Lock,
+
   Volume2,
   VolumeX,
   UserMinus,
@@ -246,7 +246,18 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const formattedTime = (() => {
     try {
-      return format(new Date(message.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+      const d = new Date(message.created_at);
+      const timeStr = format(d, 'HH:mm', { locale: ptBR });
+      if (isToday(d)) {
+        return timeStr;
+      }
+      if (isYesterday(d)) {
+        return `Ontem às ${timeStr}`;
+      }
+      if (isTomorrow(d)) {
+        return `Amanhã às ${timeStr}`;
+      }
+      return `${format(d, 'dd/MM/yyyy', { locale: ptBR })} às ${timeStr}`;
     } catch {
       return '';
     }
@@ -899,6 +910,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         <span className="bg-brand-500 text-white text-[9px] font-bold px-1 py-0.5 rounded leading-none uppercase tracking-wider select-none shadow-sm ml-1 inline-block align-middle">
                           BOT
                         </span>
+
+
                       )}
                       <span>:</span>
                     </button>
@@ -1055,13 +1068,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         BOT
                       </span>
                     )}
-                    <span className="text-[10px] md:text-[11px] text-gray-400 font-normal inline-flex items-center gap-1">
+                    <span className="text-[10px] md:text-[11px] text-gray-400 font-normal">
                       {formattedTime}
-                      {message.encrypted && (
-                        <span title="Criptografada ponta a ponta" className="inline-flex items-center">
-                          <Lock className="w-2.5 h-2.5 text-emerald-400" />
-                        </span>
-                      )}
+
+
+
+
+
                     </span>
                     {message.is_edited && (
                       <span className="text-[10px] text-gray-500 font-normal">(editado)</span>
