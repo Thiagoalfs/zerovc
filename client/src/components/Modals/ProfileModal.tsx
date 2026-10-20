@@ -2275,7 +2275,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
                     return (
                       <div
-                        className={`rounded-2xl border transition-all duration-200 overflow-hidden shadow-2xl relative ${
+                        className={`border transition-all duration-200 overflow-hidden relative ${
                           isLight
                             ? 'bg-[#ffffff] border-black/10 text-gray-800'
                             : isOled
