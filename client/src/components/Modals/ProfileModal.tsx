@@ -3164,15 +3164,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
                 {/* Webcam & Video Section with Live Preview */}
                 <div>
-                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                    Configuração de Vídeo / Câmera
-                  </h4>
                   <div className="space-y-3">
                     <div>
                       <label className={MODAL_FIELD_LABEL_CLASS}>
-                        Dispositivo de Câmera / Webcam
+                        Dispositivo de Vídeo
                       </label>
                       <DropdownSelect
+                        prefixIcon={<Video className="w-4 h-4" />}
                         value={selectedVideoDevice}
                         onChange={(val) => handleDeviceChange('video', val)}
                         options={
