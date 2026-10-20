@@ -40,6 +40,16 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetIdRef = useRef<string | null>(null);
 
+    // Mantém referências estáveis para as callbacks para evitar recriar o widget a cada re-render do componente pai
+    const onSuccessRef = useRef(onSuccess);
+    onSuccessRef.current = onSuccess;
+
+    const onErrorRef = useRef(onError);
+    onErrorRef.current = onError;
+
+    const onExpireRef = useRef(onExpire);
+    onExpireRef.current = onExpire;
+
     // Obtém a site key via prop ou da variável de ambiente VITE_TURNSTILE_SITE_KEY
     const siteKey = propSiteKey || ((import.meta as any).env?.VITE_TURNSTILE_SITE_KEY as string | undefined);
 
@@ -69,13 +79,13 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
             theme: 'dark',
             action,
             callback: (token: string) => {
-              if (isMounted) onSuccess(token);
+              if (isMounted) onSuccessRef.current(token);
             },
             'error-callback': () => {
-              if (isMounted) onError?.();
+              if (isMounted) onErrorRef.current?.();
             },
             'expired-callback': () => {
-              if (isMounted) onExpire?.();
+              if (isMounted) onExpireRef.current?.();
             },
           });
         } catch (err) {
@@ -127,7 +137,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
           } catch {}
         }
       };
-    }, [siteKey, action, onSuccess, onError, onExpire]);
+    }, [siteKey, action]);
 
     if (!siteKey) {
       return null;

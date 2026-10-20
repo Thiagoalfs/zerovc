@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageSquare, Shield, ArrowLeft, KeyRound, Mail, CheckCircle, RefreshCw, Lock, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -38,6 +38,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   const hasTurnstileSiteKey = Boolean(
     activeSiteKey && (turnstileConfig !== null ? turnstileConfig.enabled : true)
   );
+
+  const handleTurnstileSuccess = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
+
+  const handleTurnstileExpire = useCallback(() => {
+    setTurnstileToken(null);
+  }, []);
+
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileToken(null);
+  }, []);
 
   // 2FA in Login and Reset
   const [twoFactorCode, setTwoFactorCode] = useState('');
@@ -750,9 +762,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                   ref={turnstileRef}
                   siteKey={activeSiteKey}
                   action={mode}
-                  onSuccess={(token) => setTurnstileToken(token)}
-                  onExpire={() => setTurnstileToken(null)}
-                  onError={() => setTurnstileToken(null)}
+                  onSuccess={handleTurnstileSuccess}
+                  onExpire={handleTurnstileExpire}
+                  onError={handleTurnstileError}
                 />
               )}
 
