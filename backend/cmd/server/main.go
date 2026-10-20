@@ -103,6 +103,7 @@ func main() {
 	csrfService := appMiddleware.NewCSRFService(jwtSecret)
 	livekitService := voice.NewLiveKitService(livekitKey, livekitSecret, livekitPublicURL)
 	hub := gateway.NewHub()
+	userGuildsCache := gateway.NewUserGuildsCache(5 * time.Minute)
 	hub.DeviceValidator = func(ctx context.Context, userID, deviceID uuid.UUID) bool {
 		var exists bool
 		err := db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM e2ee_devices WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL)", deviceID, userID).Scan(&exists)
@@ -580,15 +581,27 @@ func main() {
 				return
 			}
 
-			rows, err := db.Pool.Query(r.Context(), "SELECT guild_id FROM guild_members WHERE user_id = $1", userID)
-			if err == nil {
-				defer rows.Close()
-				for rows.Next() {
-					var gID uuid.UUID
-					if scanErr := rows.Scan(&gID); scanErr == nil {
-						hub.AddGuildMember(gID, userID)
-					}
+			// Otimização de Concorrência: Cache em memória de guildas do usuário para evitar sobrecarga no PostgreSQL
+			if cachedGuilds, found := userGuildsCache.Get(userID); found {
+				for _, gID := range cachedGuilds {
+					hub.AddGuildMember(gID, userID)
 				}
+			} else {
+				queryCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+				rows, err := db.Pool.Query(queryCtx, "SELECT guild_id FROM guild_members WHERE user_id = $1", userID)
+				if err == nil {
+					var gIDs []uuid.UUID
+					for rows.Next() {
+						var gID uuid.UUID
+						if scanErr := rows.Scan(&gID); scanErr == nil {
+							gIDs = append(gIDs, gID)
+							hub.AddGuildMember(gID, userID)
+						}
+					}
+					rows.Close()
+					userGuildsCache.Set(userID, gIDs)
+				}
+				cancel()
 			}
 
 			gateway.ServeWs(hub, w, r, userID)

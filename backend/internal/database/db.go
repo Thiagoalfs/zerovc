@@ -26,11 +26,11 @@ func Connect(databaseURL string) (*DB, error) {
 		return nil, fmt.Errorf("failed to parse database config: %w", err)
 	}
 
-	// Memory & pool tuning for 1 vCore / 2GB RAM
-	config.MaxConns = 25
-	config.MinConns = 5
-	config.MaxConnLifetime = 1 * time.Hour
-	config.MaxConnIdleTime = 15 * time.Minute
+	// Memory & pool tuning for 1 vCore / 2GB RAM (High concurrency optimized)
+	config.MaxConns = 50
+	config.MinConns = 10
+	config.MaxConnLifetime = 30 * time.Minute
+	config.MaxConnIdleTime = 5 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
