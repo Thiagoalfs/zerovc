@@ -59,6 +59,10 @@ services:
       resources:
         limits:
           memory: 300M
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
 
   backend:
     build:
@@ -107,6 +111,10 @@ services:
       resources:
         limits:
           memory: 150M
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
 
 volumes:
   pgdata:

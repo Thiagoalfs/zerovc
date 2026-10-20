@@ -19,6 +19,10 @@ services:
       resources:
         limits:
           memory: 250M
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
 
   backend:
     build:
@@ -45,3 +49,7 @@ services:
       resources:
         limits:
           memory: 120M
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
