@@ -226,7 +226,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       >
         {/* Banner with expand action */}
         <div
-          className="h-20 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-cover bg-center relative group/banner cursor-pointer"
+          className="w-full aspect-[2.5/1] bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-cover bg-center relative group/banner cursor-pointer flex-shrink-0"
           style={user.banner_url ? { backgroundImage: `url(${formatAssetUrl(user.banner_url)})` } : {}}
           onClick={handleAvatarClick}
           title="Clique para abrir perfil completo no centro da tela"

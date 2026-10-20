@@ -1769,7 +1769,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <div className="rounded-3xl overflow-hidden bg-background-darker border border-white/5 shadow-lg relative">
                   {/* Banner (Interactive / Click to Upload) */}
                   <div
-                    className="h-32 w-full bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center"
+                    className="w-full aspect-[2.5/1] bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center flex-shrink-0"
                     style={{ backgroundImage: user.banner_url ? `url(${formatAssetUrl(user.banner_url)})` : undefined }}
                     onClick={() => bannerFileInputRef.current?.click()}
                     title="Clique para alterar seu banner"

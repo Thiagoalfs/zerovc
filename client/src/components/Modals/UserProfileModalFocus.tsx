@@ -284,7 +284,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
         {/* Top Banner with Close Button */}
         <div
           onClick={user.banner_url ? handleBannerClick : undefined}
-          className={`h-36 sm:h-44 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-cover bg-center relative flex-shrink-0 ${
+          className={`w-full aspect-[2.5/1] bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-cover bg-center relative flex-shrink-0 ${
             user.banner_url ? 'cursor-pointer group/banner' : ''
           }`}
           style={user.banner_url ? { backgroundImage: `url(${formatAssetUrl(user.banner_url)})` } : {}}
