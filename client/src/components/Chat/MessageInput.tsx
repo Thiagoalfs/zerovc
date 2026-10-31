@@ -11,7 +11,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
-import { canUserSendTTS, canUserUseCommands } from '../../utils/userActivity';
+import { canUserSendTTS, canUserUseCommands, canUserSendMessages, canUserAttachFiles } from '../../utils/userActivity';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
 import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand, validateSlashOption } from '../../lib/slashCommands';
 
@@ -101,6 +101,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const canUseCommands = useMemo(() => {
     if (contextType !== 'channel') return true;
     return canUserUseCommands(channel as any, activeGuild, user);
+  }, [contextType, channel, activeGuild, user]);
+
+  const canSendMessages = useMemo(() => {
+    if (contextType !== 'channel') return true;
+    return canUserSendMessages(channel as any, activeGuild, user);
+  }, [contextType, channel, activeGuild, user]);
+
+  const canAttachFiles = useMemo(() => {
+    if (contextType !== 'channel') return true;
+    return canUserAttachFiles(channel as any, activeGuild, user);
   }, [contextType, channel, activeGuild, user]);
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -2042,7 +2052,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
+              disabled={isUploading || !canAttachFiles || !canSendMessages}
               className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
               title="Anexar Arquivo ou Imagem (até 20 MB)"
             >
@@ -2224,15 +2234,17 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               placeholder={
-                replyingTo
+                !canSendMessages
+                  ? 'Você não tem permissão para enviar mensagens neste canal.'
+                  : replyingTo
                   ? (replyingTo.author?.display_name || replyingTo.author?.username
                       ? `Respondendo a @${replyingTo.author.display_name || replyingTo.author.username}...`
                       : 'Respondendo à mensagem...')
                   : (placeholder || (channel?.name ? `Conversar em #${channel.name}` : 'Conversar...'))
               }
               rows={1}
-              disabled={isUploading}
-              className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1.5 min-h-[26px] max-h-40 leading-relaxed font-normal no-scrollbar"
+              disabled={isUploading || !canSendMessages}
+              className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1.5 min-h-[26px] max-h-40 leading-relaxed font-normal no-scrollbar disabled:opacity-60 disabled:cursor-not-allowed"
             />
           )}
 

@@ -169,6 +169,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           backupManager.setVaultKey(key, res.user.id);
           await backupManager.saveVaultKeyToStore(rawBytes);
           await backupManager.autoRestore(key);
+          if (res.user.e2ee_backup_enabled !== false) {
+            backupManager.ensureActiveBackup(true).catch((err) => {
+              console.warn('[authStore] Initial backup on login failed:', err);
+            });
+          }
         } catch (vaultErr) {
           console.warn('[authStore] Failed to derive or autoRestore account vault key:', vaultErr);
         }
@@ -207,6 +212,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const { key, rawBytes } = await deriveAccountVaultKey(password, res.user.id);
           backupManager.setVaultKey(key, res.user.id);
           await backupManager.saveVaultKeyToStore(rawBytes);
+          if (res.user.e2ee_backup_enabled !== false) {
+            backupManager.ensureActiveBackup(true).catch((err) => {
+              console.warn('[authStore] Initial backup on register failed:', err);
+            });
+          }
         } catch (vaultErr) {
           console.warn('[authStore] Failed to initialize account vault key on register:', vaultErr);
         }
@@ -287,6 +297,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             backupManager.autoRestore(key).catch((err) => {
               console.warn('[checkAuth] autoRestore error in background:', err);
             });
+            if (user.e2ee_backup_enabled !== false) {
+              backupManager.ensureActiveBackup().catch((err) => {
+                console.warn('[checkAuth] ensureActiveBackup error in background:', err);
+              });
+            }
           }
         } catch (vaultErr) {
           console.warn('[checkAuth] Failed to load vault key from store:', vaultErr);

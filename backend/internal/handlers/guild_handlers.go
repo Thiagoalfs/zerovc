@@ -86,7 +86,7 @@ func (h *GuildHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var everyoneRoleID uuid.UUID
 	everyoneRoleQuery := `
 		INSERT INTO guild_roles (guild_id, name, color, position, permissions)
-		VALUES ($1, '@everyone', '#99aab5', 9999, 528000)
+		VALUES ($1, '@everyone', '#99aab5', 9999, 642688)
 		RETURNING id
 	`
 	if err := tx.QueryRow(r.Context(), everyoneRoleQuery, guild.ID).Scan(&everyoneRoleID); err != nil {
@@ -884,20 +884,14 @@ func (h *GuildHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userID != ownerID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar servidor"}`, http.StatusForbidden)
-			return
-		}
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden: você não é membro deste servidor"}`, http.StatusForbidden)
+		return
+	}
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageGuild) == 0 {
+		http.Error(w, `{"error":"forbidden: sem permissão para gerenciar servidor"}`, http.StatusForbidden)
+		return
 	}
 
 	var req UpdateGuildRequest
@@ -1576,20 +1570,14 @@ func (h *GuildHandler) CreateEmoji(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userID != ownerID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar emojis"}`, http.StatusForbidden)
-			return
-		}
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden: você não é membro deste servidor"}`, http.StatusForbidden)
+		return
+	}
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageGuild) == 0 {
+		http.Error(w, `{"error":"forbidden: sem permissão para gerenciar emojis"}`, http.StatusForbidden)
+		return
 	}
 
 	var req CreateEmojiRequest
@@ -1678,20 +1666,14 @@ func (h *GuildHandler) DeleteEmoji(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userID != ownerID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar emojis"}`, http.StatusForbidden)
-			return
-		}
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden: você não é membro deste servidor"}`, http.StatusForbidden)
+		return
+	}
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageGuild) == 0 {
+		http.Error(w, `{"error":"forbidden: sem permissão para gerenciar emojis"}`, http.StatusForbidden)
+		return
 	}
 
 	var emojiName string
@@ -1745,20 +1727,14 @@ func (h *GuildHandler) UpdateEmoji(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userID != ownerID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
-
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageGuild) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar emojis"}`, http.StatusForbidden)
-			return
-		}
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden: você não é membro deste servidor"}`, http.StatusForbidden)
+		return
+	}
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageGuild) == 0 {
+		http.Error(w, `{"error":"forbidden: sem permissão para gerenciar emojis"}`, http.StatusForbidden)
+		return
 	}
 
 	var req UpdateEmojiRequest

@@ -104,12 +104,61 @@ export class BackupManager {
   }
 
   /**
+   * Checks whether the user has opted out of cloud backup.
+   * Default is true (opt-out model).
+   */
+  isBackupEnabled(user?: any): boolean {
+    if (user && typeof user.e2ee_backup_enabled === 'boolean') {
+      return user.e2ee_backup_enabled;
+    }
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('zerovc_e2ee_backup_enabled');
+      if (stored === 'false') return false;
+    }
+    return true;
+  }
+
+  setBackupEnabledLocally(enabled: boolean): void {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('zerovc_e2ee_backup_enabled', enabled ? 'true' : 'false');
+    }
+  }
+
+  /**
+   * Ensures an active, up-to-date backup exists on the server.
+   * Runs immediately on login, registration or startup for all accounts (opt-out).
+   */
+  async ensureActiveBackup(force = false): Promise<BackupUploadResult | null> {
+    if (!force && !this.isBackupEnabled()) {
+      return null;
+    }
+
+    let key = this.activeVaultKey;
+    if (!key) {
+      key = await this.loadVaultKeyFromStore();
+    }
+    if (!key) {
+      return null;
+    }
+
+    try {
+      return await this.createBackup(key);
+    } catch (err) {
+      console.warn('[BackupManager] ensureActiveBackup failed:', err);
+      return null;
+    }
+  }
+
+  /**
    * Triggers an automatic backup debounced by 2 seconds.
-   * If activeVaultKey is present, gathers inbound and outbound Megolm sessions
+   * If activeVaultKey is present and backup is enabled (opt-out), gathers sessions
    * and safely uploads the encrypted backup envelope to the server.
    * Completely resilient: never throws or crashes the UI.
    */
   triggerAutoBackup(): void {
+    if (!this.isBackupEnabled()) {
+      return;
+    }
     if (!this.activeVaultKey) {
       return;
     }
@@ -120,7 +169,7 @@ export class BackupManager {
 
     this.autoBackupTimer = setTimeout(async () => {
       this.autoBackupTimer = null;
-      if (!this.activeVaultKey) return;
+      if (!this.activeVaultKey || !this.isBackupEnabled()) return;
       try {
         await this.createBackup(this.activeVaultKey);
       } catch (err) {

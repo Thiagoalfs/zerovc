@@ -30,6 +30,7 @@ type User struct {
 	CustomActivity     json.RawMessage `json:"custom_activity"`
 	ShowActivityStatus bool            `json:"show_activity_status"`
 	AutoDetectActivity bool            `json:"auto_detect_activity"`
+	E2EEBackupEnabled  bool            `json:"e2ee_backup_enabled"`
 	ServerFolders      json.RawMessage `json:"server_folders,omitempty"`
 	GuildPositions     json.RawMessage `json:"guild_positions,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
@@ -48,6 +49,7 @@ type UserPublic struct {
 	CustomActivity     json.RawMessage `json:"custom_activity"`
 	ShowActivityStatus bool            `json:"show_activity_status"`
 	AutoDetectActivity bool            `json:"auto_detect_activity"`
+	E2EEBackupEnabled  bool            `json:"e2ee_backup_enabled"`
 	TwoFactorEnabled   bool            `json:"two_factor_enabled"`
 	EmailVerified      bool            `json:"email_verified"`
 	IsBot              bool            `json:"is_bot"`
@@ -86,6 +88,7 @@ func (u *User) ToPublic() UserPublic {
 		CustomActivity:     act,
 		ShowActivityStatus: u.ShowActivityStatus,
 		AutoDetectActivity: u.AutoDetectActivity,
+		E2EEBackupEnabled:  u.E2EEBackupEnabled,
 		TwoFactorEnabled:   u.TwoFactorSecret != "",
 		EmailVerified:      u.EmailVerified,
 		IsBot:              u.IsBot,

@@ -68,6 +68,8 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	db.Pool.Exec(ctx, "ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS mentionable BOOLEAN DEFAULT FALSE")
 	// Backfill PermUseCommands (524288) for existing roles that already have PermSendMessages (128)
 	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 524288 WHERE (permissions & 128) != 0 AND (permissions & 524288) = 0")
+	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 16384 | 32768 | 65536 WHERE name = '@everyone'")
+	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 16384 WHERE (permissions & 128) != 0 AND (permissions & 16384) = 0")
 
 	// Ensure guild_invites columns exist
 	db.Pool.Exec(ctx, "ALTER TABLE guild_invites ADD COLUMN IF NOT EXISTS max_uses INT DEFAULT 0")
@@ -79,6 +81,9 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 
 	// Ensure email_verified column exists
 	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE")
+	// E2EE Backup Opt-out enforcement for all users (default true and force all existing accounts to true)
+	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_backup_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+	db.Pool.Exec(ctx, "UPDATE users SET e2ee_backup_enabled = TRUE WHERE e2ee_backup_enabled IS NOT TRUE")
 
 	// Ensure email_verifications attempts column exists
 	db.Pool.Exec(ctx, "ALTER TABLE email_verifications ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0")

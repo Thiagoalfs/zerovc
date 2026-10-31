@@ -281,12 +281,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	query := `
-		INSERT INTO users (username, email, password_hash, status, email_verified)
-		VALUES ($1, $2, $3, 'online', FALSE)
-		RETURNING id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), email_verified, created_at, updated_at
+		INSERT INTO users (username, email, password_hash, status, email_verified, e2ee_backup_enabled)
+		VALUES ($1, $2, $3, 'online', FALSE, TRUE)
+		RETURNING id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), email_verified, COALESCE(e2ee_backup_enabled, true), created_at, updated_at
 	`
 	err = h.db.Pool.QueryRow(r.Context(), query, req.Username, req.Email, hash).Scan(
-		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.EmailVerified, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.EmailVerified, &user.E2EEBackupEnabled, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"nome de usuário ou e-mail já cadastrado"}`, http.StatusConflict)
@@ -407,12 +407,12 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	// Fetch updated user
 	var user models.User
 	userQuery := `
-		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), email_verified, created_at, updated_at
+		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), email_verified, COALESCE(e2ee_backup_enabled, true), created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 	_ = h.db.Pool.QueryRow(r.Context(), userQuery, userID).Scan(
-		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.EmailVerified, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.EmailVerified, &user.E2EEBackupEnabled, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	user.TwoFactorEnabled = user.TwoFactorSecret != ""
@@ -731,12 +731,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	query := `
-		SELECT id, username, email, password_hash, display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), email_verified, created_at, updated_at
+		SELECT id, username, email, password_hash, display_name, avatar_url, banner_url, bio, status, custom_status, COALESCE(two_factor_secret, ''), email_verified, COALESCE(e2ee_backup_enabled, true), created_at, updated_at
 		FROM users
 		WHERE email = $1 OR username = $1
 	`
 	err := h.db.Pool.QueryRow(r.Context(), query, req.Email).Scan(
-		&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.EmailVerified, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.EmailVerified, &user.E2EEBackupEnabled, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil || !h.auth.CheckPassword(req.Password, user.PasswordHash) {
 		http.Error(w, `{"error":"e-mail ou senha incorretos"}`, http.StatusUnauthorized)
@@ -896,6 +896,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(two_factor_secret, ''), email_verified,
 		       COALESCE(custom_activity, 'null'::jsonb), COALESCE(show_activity_status, true), COALESCE(auto_detect_activity, true),
 		       COALESCE(server_folders, '[]'::jsonb), COALESCE(guild_positions, '[]'::jsonb),
+		       COALESCE(e2ee_backup_enabled, true),
 		       created_at, updated_at
 		FROM users
 		WHERE id = $1
@@ -905,6 +906,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		&user.TwoFactorSecret, &user.EmailVerified,
 		&user.CustomActivity, &user.ShowActivityStatus, &user.AutoDetectActivity,
 		&user.ServerFolders, &user.GuildPositions,
+		&user.E2EEBackupEnabled,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {

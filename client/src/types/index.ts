@@ -76,6 +76,7 @@ export interface User {
   guild_positions?: string[];
   roles?: Role[];
   two_factor_enabled?: boolean;
+  e2ee_backup_enabled?: boolean;
   email_verified?: boolean;
   csrf_token?: string;
   muted_until?: string;

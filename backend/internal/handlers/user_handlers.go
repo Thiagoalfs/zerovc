@@ -42,6 +42,7 @@ type UpdateProfileRequest struct {
 	CustomActivity     *json.RawMessage `json:"custom_activity,omitempty"`
 	ShowActivityStatus *bool            `json:"show_activity_status,omitempty"`
 	AutoDetectActivity *bool            `json:"auto_detect_activity,omitempty"`
+	E2EEBackupEnabled  *bool            `json:"e2ee_backup_enabled,omitempty"`
 	ServerFolders      *json.RawMessage `json:"server_folders,omitempty"`
 	GuildPositions     *json.RawMessage `json:"guild_positions,omitempty"`
 }
@@ -122,12 +123,13 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		    auto_detect_activity = COALESCE($12, auto_detect_activity),
 		    server_folders = CASE WHEN $13::boolean THEN $14::jsonb ELSE server_folders END,
 		    guild_positions = CASE WHEN $15::boolean THEN $16::jsonb ELSE guild_positions END,
+		    e2ee_backup_enabled = COALESCE($17, e2ee_backup_enabled),
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $17
+		WHERE id = $18
 		RETURNING id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status,
 		          COALESCE(custom_activity, 'null'::jsonb), COALESCE(show_activity_status, true), COALESCE(auto_detect_activity, true),
 		          COALESCE(server_folders, '[]'::jsonb), COALESCE(guild_positions, '[]'::jsonb),
-		          COALESCE(two_factor_secret, ''), email_verified,
+		          COALESCE(two_factor_secret, ''), email_verified, COALESCE(e2ee_backup_enabled, true),
 		          created_at, updated_at
 	`
 	_, hasCustomActivity := rawMap["custom_activity"]
@@ -156,13 +158,14 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		req.Username, req.PhoneNumber, req.DisplayName, req.AvatarURL, req.BannerURL, req.Bio, req.Status, req.CustomStatus,
 		hasCustomActivity, customActivityBytes, req.ShowActivityStatus, req.AutoDetectActivity,
 		hasServerFolders, serverFoldersBytes, hasGuildPositions, guildPositionsBytes,
+		req.E2EEBackupEnabled,
 		userID,
 	).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL,
 		&user.Bio, &user.Status, &user.CustomStatus,
 		&user.CustomActivity, &user.ShowActivityStatus, &user.AutoDetectActivity,
 		&user.ServerFolders, &user.GuildPositions,
-		&user.TwoFactorSecret, &user.EmailVerified,
+		&user.TwoFactorSecret, &user.EmailVerified, &user.E2EEBackupEnabled,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {

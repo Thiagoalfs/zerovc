@@ -44,6 +44,7 @@ import { hapticLight, hapticMedium, hapticSuccess } from '../../lib/haptics';
 import { UserAvatar } from '../Common/UserAvatar';
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
+import { canUserManageChannelMessages } from '../../utils/userActivity';
 import { speakText } from '../../utils/audio';
 import { copyToClipboard } from '../../utils/clipboard';
 
@@ -219,7 +220,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const isAuthor = user?.id === message.author_id;
   const isOwner = contextType === 'channel' && activeGuild ? activeGuild.owner_id === user?.id : false;
-  const canManageChannelMessages = contextType === 'channel' && (isOwner || guildPerms.hasAdmin || guildPerms.canManageMessages);
+  const canManageOverwrites = useMemo(() => {
+    if (contextType !== 'channel') return true;
+    return canUserManageChannelMessages(activeChannel, activeGuild, user);
+  }, [contextType, activeChannel, activeGuild, user]);
+
+  const canManageChannelMessages = contextType === 'channel' && (isOwner || guildPerms.hasAdmin || canManageOverwrites);
   const canDelete = isAuthor || canManageChannelMessages;
   const canPin = contextType !== 'channel' || canManageChannelMessages;
 

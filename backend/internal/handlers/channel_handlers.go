@@ -76,19 +76,14 @@ func (h *ChannelHandler) checkChannelPermissions(ctx context.Context, guildID, u
 		return true, ""
 	}
 
-	var perms int64
-	h.db.Pool.QueryRow(ctx, `
-		SELECT COALESCE(BIT_OR(r.permissions), 0)
-		FROM guild_members gm
-		JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-		JOIN guild_roles r ON r.id = gmr.role_id
-		WHERE gm.guild_id = $1 AND gm.user_id = $2
-	`, guildID, userID).Scan(&perms)
-
-	if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageChannels) == 0 {
-		return false, "você não tem permissão para gerenciar canais"
+	actorCtx, err := loadActorGuildContext(ctx, h.db, guildID, userID)
+	if err != nil {
+		return false, "membro não encontrado no servidor"
 	}
-	return true, ""
+	if actorCtx.IsOwner || actorCtx.HasAdmin || (actorCtx.Perms&models.PermManageChannels) != 0 {
+		return true, ""
+	}
+	return false, "você não tem permissão para gerenciar canais"
 }
 
 func (h *ChannelHandler) broadcastChannelEvent(ctx context.Context, guildID, channelID uuid.UUID, isPrivate bool, event models.WSEvent) {
@@ -596,12 +591,10 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isPrivate {
-		canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
-		if err != nil || !canAccess {
-			http.Error(w, `{"error":"forbidden: você não tem acesso a este canal privado"}`, http.StatusForbidden)
-			return
-		}
+	canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden: você não tem acesso a este canal"}`, http.StatusForbidden)
+		return
 	}
 
 	canConnect, err := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermConnectVoice)
@@ -611,6 +604,9 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	canSpeak, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermSpeakVoice)
+	if !canSpeak {
+		isMuted = true
+	}
 
 	var joinReq struct {
 		IsMuted    *bool `json:"is_muted,omitempty"`
@@ -768,6 +764,22 @@ func (h *ChannelHandler) UpdateVoiceState(w http.ResponseWriter, r *http.Request
 
 	var guildID uuid.UUID
 	h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
+
+	if req.IsMuted != nil && !*req.IsMuted {
+		canSpeak, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermSpeakVoice)
+		if !canSpeak {
+			http.Error(w, `{"error":"forbidden: você não tem permissão para falar neste canal de voz"}`, http.StatusForbidden)
+			return
+		}
+	}
+
+	if req.IsScreensharing != nil && *req.IsScreensharing {
+		canStream, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermStreamVoice)
+		if !canStream {
+			http.Error(w, `{"error":"forbidden: você não tem permissão para transmitir vídeo neste canal de voz"}`, http.StatusForbidden)
+			return
+		}
+	}
 
 	query := `
 		UPDATE voice_sessions
@@ -1171,20 +1183,15 @@ func (h *ChannelHandler) DeletePermissionOverwrite(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if ownerID != userID {
-		var perms int64
-		h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(r.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles r ON r.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"actor not found in guild"}`, http.StatusForbidden)
+		return
+	}
 
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageChannels) == 0 && (perms&models.PermManageRoles) == 0 {
-			http.Error(w, `{"error":"forbidden: sem permissão para gerenciar permissões do canal"}`, http.StatusForbidden)
-			return
-		}
+	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageChannels) == 0 && (actorCtx.Perms&models.PermManageRoles) == 0 {
+		http.Error(w, `{"error":"forbidden: sem permissão para gerenciar permissões do canal"}`, http.StatusForbidden)
+		return
 	}
 
 	h.db.Pool.Exec(r.Context(), "DELETE FROM channel_permission_overwrites WHERE channel_id = $1 AND role_id = $2", channelID, roleID)

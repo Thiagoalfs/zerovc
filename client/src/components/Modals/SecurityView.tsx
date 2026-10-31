@@ -33,7 +33,8 @@ interface DeviceItem {
 }
 
 export const SecurityView: React.FC = () => {
-  const { user } = useAuthStore();
+  const { user, updateProfile, setUser } = useAuthStore();
+  const [isSyncingBackup, setIsSyncingBackup] = useState(false);
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [verifiedIds, setVerifiedIds] = useState<Set<string>>(new Set());
   const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
@@ -123,6 +124,53 @@ export const SecurityView: React.FC = () => {
       setError(err?.message || 'Falha ao revogar o dispositivo.');
     } finally {
       setRevokingId(null);
+    }
+  };
+
+  const handleToggleBackup = async () => {
+    const current = user?.e2ee_backup_enabled !== false;
+    if (current) {
+      if (!confirm('Atenção: Ao desativar o backup de chaves na nuvem, você não poderá ler mensagens antigas cifradas se fizer login em outro computador ou navegador sem uma chave manual. Deseja realmente desativar (opt-out)?')) {
+        return;
+      }
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const nextVal = !current;
+      const updated = await updateProfile({ e2ee_backup_enabled: nextVal });
+      setUser(updated);
+      backupManager.setBackupEnabledLocally(nextVal);
+      if (nextVal) {
+        setIsSyncingBackup(true);
+        await backupManager.ensureActiveBackup(true);
+        const bStatus = await backupManager.getBackupStatus();
+        setBackupStatus(bStatus);
+        setSuccessMessage('Backup automático reativado e sincronizado com sucesso.');
+      } else {
+        setSuccessMessage('Backup automático de chaves desativado (opt-out).');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao alterar preferência de backup.');
+    } finally {
+      setIsSyncingBackup(false);
+    }
+  };
+
+  const handleSyncBackupNow = async () => {
+    setIsSyncingBackup(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const res = await backupManager.ensureActiveBackup(true);
+      const bStatus = await backupManager.getBackupStatus();
+      setBackupStatus(bStatus);
+      setSuccessMessage(`Backup sincronizado com sucesso! ${res?.key_count ?? bStatus.keyCount ?? 0} sessões protegidas na nuvem.`);
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao sincronizar o backup de chaves.');
+    } finally {
+      setIsSyncingBackup(false);
     }
   };
 
@@ -221,51 +269,81 @@ export const SecurityView: React.FC = () => {
           </button>
         </div>
 
-        {/* 2. Backup de Chaves na Nuvem (Opt-in) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white block">Backup de Chaves na Nuvem</span>
-              <span
-                className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
-                  backupStatus.exists
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                    : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                }`}
-              >
-                {backupStatus.exists ? 'ATIVADO' : 'DESATIVADO'}
-              </span>
+        {/* 2. Backup Automático de Chaves na Nuvem (Opt-out) */}
+        <div className="p-3.5 bg-background-dark/50 rounded-2xl border border-white/5 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5 pr-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-white block">Backup Automático de Chaves (Nuvem)</span>
+                {user?.e2ee_backup_enabled !== false ? (
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                    ATIVADO (PADRÃO)
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-red-500/20 text-red-400 border-red-500/30">
+                    DESATIVADO (OPT-OUT)
+                  </span>
+                )}
+              </div>
+              <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
+                {user?.e2ee_backup_enabled !== false
+                  ? (backupStatus.exists
+                      ? `Seu backup criptografado contém ${backupStatus.keyCount || 0} sessões protegidas com chave AES-GCM-256 derivada da sua conta.`
+                      : 'O backup automático está ativado por padrão. Suas chaves de sessões criptografadas são salvas na nuvem de ponta a ponta.')
+                  : 'Você optou por desativar o backup. Novas mensagens e conversas não poderão ser lidas em outros navegadores ou aparelhos sem exportação manual.'}
+              </p>
             </div>
-            <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
-              {backupStatus.exists
-                ? `Seu backup criptografado contém ${backupStatus.keyCount || 0} sessões salvas na nuvem com PBKDF2/AES-GCM de 256 bits.`
-                : 'Configure uma chave de segurança de 256 bits para salvar suas chaves de conversa na nuvem e lê-las em novos navegadores.'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={openRecoverySetup}
-            className="bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer self-start sm:self-auto shrink-0"
-          >
-            {backupStatus.exists ? 'Atualizar Backup' : 'Configurar Backup'}
-          </button>
-        </div>
 
-        {/* 3. Restaurar Mensagens de Backup */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <span className="text-xs font-bold text-white block">Restaurar Mensagens de Backup</span>
-            <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
-              Importe suas sessões anteriores inserindo sua Chave de Recuperação de 256 bits para ler conversas antigas.
-            </p>
+            {/* Opt-out Toggle Switch */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={user?.e2ee_backup_enabled !== false}
+              onClick={handleToggleBackup}
+              disabled={isSyncingBackup}
+              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 disabled:opacity-50 ${
+                user?.e2ee_backup_enabled !== false ? 'bg-brand-500' : 'bg-white/10'
+              }`}
+              title={user?.e2ee_backup_enabled !== false ? 'Clique para desativar (Opt-out)' : 'Clique para ativar o backup'}
+            >
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                  user?.e2ee_backup_enabled !== false ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={openRecoveryRestore}
-            className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer self-start sm:self-auto shrink-0"
-          >
-            Restaurar Chaves
-          </button>
+
+          {/* Action buttons row */}
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
+            {user?.e2ee_backup_enabled !== false && (
+              <button
+                type="button"
+                onClick={handleSyncBackupNow}
+                disabled={isSyncingBackup}
+                className="bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 border border-brand-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingBackup ? 'animate-spin' : ''}`} />
+                <span>{isSyncingBackup ? 'Sincronizando...' : 'Sincronizar Agora'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={openRecoverySetup}
+              className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+            >
+              Chave de Recuperação Offline
+            </button>
+
+            <button
+              type="button"
+              onClick={openRecoveryRestore}
+              className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+            >
+              Restaurar Manualmente
+            </button>
+          </div>
         </div>
 
         {/* 4. Excluir Backup de Chaves na Nuvem (apenas se existir) */}

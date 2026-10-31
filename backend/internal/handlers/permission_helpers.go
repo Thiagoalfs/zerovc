@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/zerovc/zerovc/backend/internal/database"
@@ -31,11 +32,25 @@ func loadActorGuildContext(ctx context.Context, db *database.DB, guildID, actorI
 		ac.MaxPos = 999999
 	}
 
+	// Verify member status if not owner
+	if !ac.IsOwner {
+		var isMember bool
+		_ = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, actorID).Scan(&isMember)
+		if !isMember {
+			return ac, errors.New("user is not a member of guild")
+		}
+	}
+
 	rows, err := db.Pool.Query(ctx, `
 		SELECT gr.name, gr.position, gr.permissions
 		FROM guild_roles gr
-		INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
-		WHERE gmr.guild_id = $1 AND gmr.user_id = $2
+		WHERE gr.guild_id = $1 AND (
+			gr.name = '@everyone'
+			OR gr.id IN (
+				SELECT role_id FROM guild_member_roles
+				WHERE guild_id = $1 AND user_id = $2
+			)
+		)
 	`, guildID, actorID)
 	if err == nil {
 		for rows.Next() {
