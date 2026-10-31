@@ -603,11 +603,6 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	canSpeak, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermSpeakVoice)
-	if !canSpeak {
-		isMuted = true
-	}
-
 	var joinReq struct {
 		IsMuted    *bool `json:"is_muted,omitempty"`
 		IsDeafened *bool `json:"is_deafened,omitempty"`
@@ -623,6 +618,11 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		isDeafened = *joinReq.IsDeafened
 	}
 	if isDeafened {
+		isMuted = true
+	}
+
+	canSpeak, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermSpeakVoice)
+	if !canSpeak {
 		isMuted = true
 	}
 

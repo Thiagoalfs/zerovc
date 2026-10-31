@@ -68,8 +68,23 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	db.Pool.Exec(ctx, "ALTER TABLE guild_roles ADD COLUMN IF NOT EXISTS mentionable BOOLEAN DEFAULT FALSE")
 	// Backfill PermUseCommands (524288) for existing roles that already have PermSendMessages (128)
 	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 524288 WHERE (permissions & 128) != 0 AND (permissions & 524288) = 0")
+	db.Pool.Exec(ctx, `
+		INSERT INTO guild_roles (guild_id, name, color, position, permissions)
+		SELECT g.id, '@everyone', '#99aab5', 9999, 642688
+		FROM guilds g
+		WHERE NOT EXISTS (
+			SELECT 1 FROM guild_roles r WHERE r.guild_id = g.id AND r.name = '@everyone'
+		)
+	`)
 	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 16384 | 32768 | 65536 WHERE name = '@everyone'")
 	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 16384 WHERE (permissions & 128) != 0 AND (permissions & 16384) = 0")
+	db.Pool.Exec(ctx, `
+		INSERT INTO guild_member_roles (guild_id, user_id, role_id)
+		SELECT gm.guild_id, gm.user_id, gr.id
+		FROM guild_members gm
+		JOIN guild_roles gr ON gr.guild_id = gm.guild_id AND gr.name = '@everyone'
+		ON CONFLICT (guild_id, user_id, role_id) DO NOTHING
+	`)
 
 	// Ensure guild_invites columns exist
 	db.Pool.Exec(ctx, "ALTER TABLE guild_invites ADD COLUMN IF NOT EXISTS max_uses INT DEFAULT 0")
