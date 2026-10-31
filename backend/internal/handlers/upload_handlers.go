@@ -78,6 +78,11 @@ var dangerousExtensions = map[string]bool{
 	".iso":   true,
 	".img":   true,
 	".dmg":   true,
+	".url":   true,
+	".appref-ms": true,
+	".desktop": true,
+	".xml":   true,
+	".svgz":  true,
 	".lnk":   true,
 	".inf":   true,
 	".reg":   true,
@@ -147,8 +152,9 @@ func (h *UploadHandler) UploadAttachment(w http.ResponseWriter, r *http.Request)
 func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, folder string, prefix string, imageOnly bool, userID uuid.UUID) {
 	maxSize := int64(20 << 20) // 20 MB padrão
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 	if err := r.ParseMultipartForm(maxSize); err != nil {
-		http.Error(w, `{"error":"O limite de arquivos é 20MB"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"O limite de arquivos é 20MB"}`, http.StatusRequestEntityTooLarge)
 		return
 	}
 
@@ -159,7 +165,8 @@ func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, fol
 	}
 	defer file.Close()
 
-	ext := strings.ToLower(filepath.Ext(header.Filename))
+	cleanFilename := strings.TrimRight(strings.TrimSpace(header.Filename), ". ")
+	ext := strings.ToLower(filepath.Ext(cleanFilename))
 
 	// If imageOnly (avatar, banner, icon)
 	if imageOnly {

@@ -217,13 +217,14 @@ type AuthResponse struct {
 }
 
 func setAuthCookie(w http.ResponseWriter, token string) {
+	isSecure := os.Getenv("APP_ENV") == "production" || strings.HasPrefix(os.Getenv("APP_URL"), "https://")
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    token,
 		Path:     "/",
 		MaxAge:   30 * 24 * 3600, // 30 days
 		HttpOnly: true,
-		Secure:   false, // Allows HTTP and HTTPS without breaking local/VPS setups
+		Secure:   isSecure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -663,6 +664,22 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 			if err == nil {
 				h.db.Pool.Exec(r.Context(), "UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1", backupID)
 			} else {
+				h.twoFAMutex.Lock()
+				att, ok := h.twoFAAttempts[userID]
+				if !ok {
+					att = &failed2FAAttempt{count: 0, lockedAt: time.Now()}
+					h.twoFAAttempts[userID] = att
+				}
+				att.count++
+				att.lockedAt = time.Now()
+				if att.count >= 5 {
+					h.twoFAMutex.Unlock()
+					h.db.Pool.Exec(r.Context(), "UPDATE password_resets SET used_at = CURRENT_TIMESTAMP WHERE id = $1", resetID)
+					http.Error(w, `{"error":"Muitas tentativas incorretas de 2FA. O link de redefinição foi cancelado por segurança."}`, http.StatusTooManyRequests)
+					return
+				}
+				h.twoFAMutex.Unlock()
+
 				http.Error(w, `{"error":"Código 2FA ou código de backup incorreto."}`, http.StatusUnauthorized)
 				return
 			}
@@ -717,14 +734,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	turnstileVerified := false
-	if req.Code == "" || req.TurnstileToken != "" {
-		clientIP := getClientIP(r)
-		if !verifyTurnstileToken(req.TurnstileToken, clientIP) {
-			http.Error(w, `{"error":"Falha na verificação de segurança (Turnstile). Por favor, tente novamente."}`, http.StatusBadRequest)
-			return
-		}
-		turnstileVerified = true
+	clientIP := getClientIP(r)
+	if !verifyTurnstileToken(req.TurnstileToken, clientIP) {
+		http.Error(w, `{"error":"Falha na verificação de segurança (Turnstile). Por favor, tente novamente."}`, http.StatusBadRequest)
+		return
 	}
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
@@ -754,15 +767,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ACHADO-10: Prevent Turnstile bypass when account does not have 2FA enabled
-	if !turnstileVerified && user.TwoFactorSecret == "" {
-		clientIP := getClientIP(r)
-		if !verifyTurnstileToken(req.TurnstileToken, clientIP) {
-			http.Error(w, `{"error":"Falha na verificação de segurança (Turnstile). Por favor, tente novamente."}`, http.StatusBadRequest)
-			return
-		}
-		turnstileVerified = true
-	}
+
 
 	// Check 2FA requirement
 	if user.TwoFactorSecret != "" {
@@ -1979,6 +1984,12 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to update email"}`, http.StatusInternalServerError)
 		return
 	}
+
+	h.db.Pool.Exec(r.Context(), "DELETE FROM user_sessions WHERE user_id = $1", userID)
+	if h.auth != nil {
+		h.auth.RevokeAllUserTokens(userID)
+	}
+	clearAuthCookie(w)
 
 	// Generate 6-digit verification code for new email
 	codeInt, err := rand.Int(rand.Reader, big.NewInt(900000))

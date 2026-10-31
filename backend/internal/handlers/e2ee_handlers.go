@@ -1631,6 +1631,16 @@ func (h *E2EEHandler) DownloadAttachment(w http.ResponseWriter, r *http.Request)
 						return
 					}
 				}
+			default:
+				if uploaderID != userID {
+					http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+					return
+				}
+			}
+		} else {
+			if uploaderID != userID {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
 			}
 		}
 	}

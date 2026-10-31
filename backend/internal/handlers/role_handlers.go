@@ -307,14 +307,24 @@ func (h *RoleHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If not owner, ensure actor cannot reorder roles at or above their max pos
-	if !actorCtx.IsOwner {
-		for _, item := range items {
-			var origPos int
-			if err := h.db.Pool.QueryRow(r.Context(), "SELECT position FROM guild_roles WHERE id = $1 AND guild_id = $2", item.ID, guildID).Scan(&origPos); err == nil {
-				if origPos <= actorCtx.MaxPos || item.Position <= actorCtx.MaxPos {
-					http.Error(w, `{"error":"forbidden: você não pode alterar a posição de cargos iguais ou superiores ao seu"}`, http.StatusForbidden)
-					return
-				}
+	for _, item := range items {
+		var origPos int
+		var roleName string
+		err := h.db.Pool.QueryRow(r.Context(), "SELECT position, name FROM guild_roles WHERE id = $1 AND guild_id = $2", item.ID, guildID).Scan(&origPos, &roleName)
+		if err != nil {
+			http.Error(w, `{"error":"cargo inválido para este servidor"}`, http.StatusBadRequest)
+			return
+		}
+
+		if roleName == "@everyone" {
+			http.Error(w, `{"error":"a posição do cargo @everyone não pode ser alterada"}`, http.StatusBadRequest)
+			return
+		}
+
+		if !actorCtx.IsOwner {
+			if origPos <= actorCtx.MaxPos || item.Position <= actorCtx.MaxPos {
+				http.Error(w, `{"error":"forbidden: você não pode alterar a posição de cargos iguais ou superiores ao seu"}`, http.StatusForbidden)
+				return
 			}
 		}
 	}

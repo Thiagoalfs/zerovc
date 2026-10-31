@@ -32,7 +32,6 @@ func NewUserHandler(db *database.DB, hub *gateway.Hub) *UserHandler {
 
 type UpdateProfileRequest struct {
 	Username           *string          `json:"username,omitempty"`
-	PhoneNumber        *string          `json:"phone_number,omitempty"`
 	DisplayName        *string          `json:"display_name,omitempty"`
 	AvatarURL          *string          `json:"avatar_url,omitempty"`
 	BannerURL          *string          `json:"banner_url,omitempty"`
@@ -106,26 +105,25 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	query := `
 		UPDATE users
 		SET username = COALESCE($1, username),
-		    phone_number = COALESCE($2, phone_number),
-		    display_name = COALESCE($3, display_name),
-		    avatar_url = COALESCE($4, avatar_url),
-		    banner_url = COALESCE($5, banner_url),
-		    bio = COALESCE($6, bio),
-		    status = COALESCE($7, status),
-		    saved_status = COALESCE($7, saved_status),
-		    custom_status = COALESCE($8, custom_status),
+		    display_name = COALESCE($2, display_name),
+		    avatar_url = COALESCE($3, avatar_url),
+		    banner_url = COALESCE($4, banner_url),
+		    bio = COALESCE($5, bio),
+		    status = COALESCE($6, status),
+		    saved_status = COALESCE($6, saved_status),
+		    custom_status = COALESCE($7, custom_status),
 		    custom_activity = CASE 
-		        WHEN $9::boolean THEN 
-		            CASE WHEN $10::text IS NULL OR $10::text = '' OR $10::text = 'null' THEN NULL ELSE $10::jsonb END
+		        WHEN $8::boolean THEN 
+		            CASE WHEN $9::text IS NULL OR $9::text = '' OR $9::text = 'null' THEN NULL ELSE $9::jsonb END
 		        ELSE custom_activity 
 		    END,
-		    show_activity_status = COALESCE($11, show_activity_status),
-		    auto_detect_activity = COALESCE($12, auto_detect_activity),
-		    server_folders = CASE WHEN $13::boolean THEN $14::jsonb ELSE server_folders END,
-		    guild_positions = CASE WHEN $15::boolean THEN $16::jsonb ELSE guild_positions END,
-		    e2ee_backup_enabled = COALESCE($17, e2ee_backup_enabled),
+		    show_activity_status = COALESCE($10, show_activity_status),
+		    auto_detect_activity = COALESCE($11, auto_detect_activity),
+		    server_folders = CASE WHEN $12::boolean THEN $13::jsonb ELSE server_folders END,
+		    guild_positions = CASE WHEN $14::boolean THEN $15::jsonb ELSE guild_positions END,
+		    e2ee_backup_enabled = COALESCE($16, e2ee_backup_enabled),
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $18
+		WHERE id = $17
 		RETURNING id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status,
 		          COALESCE(custom_activity, 'null'::jsonb), COALESCE(show_activity_status, true), COALESCE(auto_detect_activity, true),
 		          COALESCE(server_folders, '[]'::jsonb), COALESCE(guild_positions, '[]'::jsonb),
@@ -140,13 +138,11 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 			customActivityBytes = rawVal
 		}
 	}
-
 	_, hasServerFolders := rawMap["server_folders"]
 	var serverFoldersBytes []byte
 	if hasServerFolders {
 		serverFoldersBytes = rawMap["server_folders"]
 	}
-
 	_, hasGuildPositions := rawMap["guild_positions"]
 	var guildPositionsBytes []byte
 	if hasGuildPositions {
@@ -155,7 +151,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	err = h.db.Pool.QueryRow(r.Context(), query,
-		req.Username, req.PhoneNumber, req.DisplayName, req.AvatarURL, req.BannerURL, req.Bio, req.Status, req.CustomStatus,
+		req.Username, req.DisplayName, req.AvatarURL, req.BannerURL, req.Bio, req.Status, req.CustomStatus,
 		hasCustomActivity, customActivityBytes, req.ShowActivityStatus, req.AutoDetectActivity,
 		hasServerFolders, serverFoldersBytes, hasGuildPositions, guildPositionsBytes,
 		req.E2EEBackupEnabled,

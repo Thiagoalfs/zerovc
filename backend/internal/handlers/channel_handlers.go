@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -243,6 +244,14 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isPrivate {
+		canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+		if err != nil || !canAccess {
+			http.Error(w, `{"error":"forbidden: você não tem permissão para gerenciar este canal restrito"}`, http.StatusForbidden)
+			return
+		}
+	}
+
 	var req UpdateChannelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
@@ -323,12 +332,27 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Update permission overwrites if provided
 	if req.PermissionOverwrites != nil {
+		actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+		if err != nil {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+
+		if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageRoles) == 0 {
+			http.Error(w, `{"error":"forbidden: você não tem permissão para gerenciar permissões de canais"}`, http.StatusForbidden)
+			return
+		}
+
 		h.db.Pool.Exec(r.Context(), "DELETE FROM channel_permission_overwrites WHERE channel_id = $1", channelID)
 		for _, ow := range *req.PermissionOverwrites {
 			var roleBelongs bool
 			_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_roles WHERE id = $1 AND guild_id = $2)", ow.RoleID, guildID).Scan(&roleBelongs)
 			if roleBelongs && (ow.Allow != 0 || ow.Deny != 0) {
 				allowClean := ow.Allow & ^models.PermAdministrator
+				if !actorCtx.IsOwner && !actorCtx.HasAdmin && (allowClean & ^actorCtx.Perms) != 0 {
+					http.Error(w, `{"error":"forbidden: você não pode conceder permissões que não possui"}`, http.StatusForbidden)
+					return
+				}
 				h.db.Pool.Exec(r.Context(), `
 					INSERT INTO channel_permission_overwrites (channel_id, role_id, allow, deny)
 					VALUES ($1, $2, $3, $4)
@@ -395,6 +419,14 @@ func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !allowed {
 		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
 		return
+	}
+
+	if isPrivate {
+		canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+		if err != nil || !canAccess {
+			http.Error(w, `{"error":"forbidden: você não tem permissão para excluir este canal restrito"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	// Begin Atomic Transaction
@@ -621,9 +653,14 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		isMuted = true
 	}
 
+	var mutedUntil *time.Time
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT muted_until FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, userID).Scan(&mutedUntil)
+	isServerMuted := mutedUntil != nil && mutedUntil.After(time.Now().UTC())
+
 	canSpeak, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermSpeakVoice)
-	if !canSpeak {
+	if !canSpeak || isServerMuted {
 		isMuted = true
+		canSpeak = false
 	}
 
 	var oldChannelID *uuid.UUID
@@ -766,6 +803,13 @@ func (h *ChannelHandler) UpdateVoiceState(w http.ResponseWriter, r *http.Request
 	h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
 
 	if req.IsMuted != nil && !*req.IsMuted {
+		var mutedUntil *time.Time
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT muted_until FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, userID).Scan(&mutedUntil)
+		if mutedUntil != nil && mutedUntil.After(time.Now().UTC()) {
+			http.Error(w, `{"error":"forbidden: você foi silenciado pela moderação deste servidor"}`, http.StatusForbidden)
+			return
+		}
+
 		canSpeak, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermSpeakVoice)
 		if !canSpeak {
 			http.Error(w, `{"error":"forbidden: você não tem permissão para falar neste canal de voz"}`, http.StatusForbidden)
@@ -864,16 +908,15 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	isOwner := adminID == ownerID
-	if !isOwner {
+	actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, adminID)
+	if err != nil {
+		http.Error(w, `{"error":"actor not found in guild"}`, http.StatusForbidden)
+		return
+	}
+
+	if !actorCtx.IsOwner {
 		if targetUserID == ownerID {
 			http.Error(w, `{"error":"forbidden: não é possível moderar o dono do servidor"}`, http.StatusForbidden)
-			return
-		}
-
-		actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, adminID)
-		if err != nil {
-			http.Error(w, `{"error":"actor not found in guild"}`, http.StatusForbidden)
 			return
 		}
 
@@ -891,10 +934,26 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 				return
 			}
 		} else {
-			hasVoicePerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermMuteVoice) != 0 || (actorCtx.Perms&models.PermMuteMembers) != 0 || (actorCtx.Perms&models.PermDeafenVoice) != 0
-			if !hasVoicePerm {
-				http.Error(w, `{"error":"forbidden: sem permissão para moderar voz"}`, http.StatusForbidden)
-				return
+			if req.Disconnect != nil && *req.Disconnect {
+				hasMovePerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermMoveMembers) != 0
+				if !hasMovePerm {
+					http.Error(w, `{"error":"forbidden: você não tem permissão para desconectar membros de voz"}`, http.StatusForbidden)
+					return
+				}
+			}
+			if req.IsDeafened != nil {
+				hasDeafenPerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermDeafenVoice) != 0
+				if !hasDeafenPerm {
+					http.Error(w, `{"error":"forbidden: você não tem permissão para ensurdecer membros de voz"}`, http.StatusForbidden)
+					return
+				}
+			}
+			if req.IsMuted != nil {
+				hasMutePerm := actorCtx.HasAdmin || (actorCtx.Perms&(models.PermMuteVoice|models.PermMuteMembers)) != 0
+				if !hasMutePerm {
+					http.Error(w, `{"error":"forbidden: você não tem permissão para silenciar membros de voz"}`, http.StatusForbidden)
+					return
+				}
 			}
 		}
 
@@ -930,6 +989,14 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 		}
 
 		if isPrivate {
+			if !actorCtx.HasAdmin && !actorCtx.IsOwner {
+				actorHasAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, targetChannelID, adminID)
+				if err != nil || !actorHasAccess {
+					http.Error(w, `{"error":"forbidden: você não tem acesso ao canal privado de destino"}`, http.StatusForbidden)
+					return
+				}
+			}
+
 			var hasAccess bool
 			privateCheckQuery := `
 				SELECT EXISTS(
@@ -1225,4 +1292,4 @@ func (h *ChannelHandler) DeletePermissionOverwrite(w http.ResponseWriter, r *htt
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(channel)
-}
+}
