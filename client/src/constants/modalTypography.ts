@@ -56,14 +56,17 @@ export const MODAL_SUBTITLE_CLASS = MODAL_DESCRIPTION_CLASS;
 // 8. Botões e Ações Padrão de Modais
 // ==========================================
 
+// Botão Secundário padrão (com alvo de toque acessível e foco visível)
+export const MODAL_SECONDARY_BUTTON_CLASS = 'bg-background-dark hover:bg-white/10 active:scale-95 disabled:opacity-50 text-gray-200 hover:text-white px-4 py-2 sm:py-1.5 sm:px-3.5 rounded-xl text-xs font-semibold border border-white/10 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker';
+
 // Botão Cancelar padrão
-export const MODAL_CANCEL_BUTTON_CLASS = 'px-4 py-2 text-xs font-semibold text-gray-300 hover:text-white hover:underline transition-all cursor-pointer disabled:opacity-50';
+export const MODAL_CANCEL_BUTTON_CLASS = 'px-4 py-2 text-xs font-semibold text-gray-300 hover:text-white hover:underline transition-all cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker';
 
 // Botão Primário de Confirmação / Salvar
-export const MODAL_PRIMARY_BUTTON_CLASS = 'bg-brand-500 hover:bg-brand-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-brand-500/25 flex items-center justify-center gap-2 cursor-pointer';
+export const MODAL_PRIMARY_BUTTON_CLASS = 'bg-brand-500 hover:bg-brand-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-brand-500/25 flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker';
 
 // Botão Destrutivo / Excluir / Banir
-export const MODAL_DANGER_BUTTON_CLASS = 'bg-dnd hover:bg-red-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-2 cursor-pointer';
+export const MODAL_DANGER_BUTTON_CLASS = 'bg-dnd hover:bg-red-600 active:scale-95 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker';
 
 // ==========================================
 // 9. Backdrops e Switches Padrão de Modais
@@ -72,8 +75,8 @@ export const MODAL_DANGER_BUTTON_CLASS = 'bg-dnd hover:bg-red-600 active:scale-9
 // Backdrop padrão de sub-modais e caixas de diálogo
 export const MODAL_BACKDROP_CLASS = 'fixed inset-0 z-[999999] flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150';
 
-// Switch Toggle Container
-export const MODAL_SWITCH_CONTAINER_CLASS = 'w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0';
+// Switch Toggle Container (com foco visível para teclado)
+export const MODAL_SWITCH_CONTAINER_CLASS = 'w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker';
 
 // Switch Toggle Knob
 export const MODAL_SWITCH_KNOB_CLASS = 'bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200';

@@ -234,9 +234,10 @@ export const SessionsSettingsView: React.FC = () => {
                 </h4>
                 <button
                   type="button"
+                  aria-label="Atualizar lista de sessões ativas"
                   onClick={loadData}
                   disabled={isLoading}
-                  className="p-1.5 -mt-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                  className="p-1.5 -mt-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   title="Atualizar lista de sessões"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-brand-400' : ''}`} />
@@ -331,9 +332,10 @@ export const SessionsSettingsView: React.FC = () => {
 
                     <button
                       type="button"
+                      aria-label={`Desconectar sessão em ${session.os || 'dispositivo'} ${session.browser || ''}`}
                       onClick={() => setConfirmRevokeSingle(session)}
                       disabled={revokingId === session.id}
-                      className="p-2 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                      className="p-2 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                       title="Desconectar este dispositivo"
                     >
                       {revokingId === session.id ? (

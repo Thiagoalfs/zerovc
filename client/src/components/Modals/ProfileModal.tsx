@@ -92,6 +92,7 @@ import {
   MODAL_CARD_PADDING_CLASS,
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_SECONDARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 import { copyToClipboard } from '../../utils/clipboard';
 import { isElectron } from '../../lib/platform';
@@ -1737,7 +1738,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Fechar configurações"
+              className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               title="Fechar Configurações (ESC)"
             >
               <X className="w-5 h-5" />
@@ -1769,7 +1771,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <div className="rounded-3xl overflow-hidden bg-background-darker border border-white/5 shadow-lg relative">
                   {/* Banner (Interactive / Click to Upload) */}
                   <div
-                    className="w-full h-28 sm:h-32 bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center flex-shrink-0"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Alterar imagem de banner do perfil"
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') bannerFileInputRef.current?.click(); }}
+                    className="w-full h-28 sm:h-32 bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                     style={{ backgroundImage: user.banner_url ? `url(${formatAssetUrl(user.banner_url)})` : undefined }}
                     onClick={() => bannerFileInputRef.current?.click()}
                     title="Clique para alterar seu banner"
@@ -1785,12 +1791,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     <div className="flex items-end gap-4 -mt-12">
                       {/* Avatar (Interactive / Click to Upload) */}
                       <div
-                        className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex-shrink-0 flex items-center justify-center text-white font-bold text-3xl relative group cursor-pointer"
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Alterar imagem de avatar do perfil"
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') avatarFileInputRef.current?.click(); }}
+                        className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex-shrink-0 flex items-center justify-center text-white font-bold text-3xl relative group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                         onClick={() => avatarFileInputRef.current?.click()}
                         title="Clique para alterar seu avatar"
                       >
                         {user.avatar_url ? (
-                          <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
+                          <img
+                            src={formatAssetUrl(user.avatar_url)}
+                            alt={`Avatar de ${user.display_name || user.username}`}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           <span>{user.display_name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
                         )}
@@ -1828,11 +1842,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       </div>
                       <button
                         type="button"
+                        aria-label="Editar nome de exibição"
                         onClick={() => {
                           setNewDisplayName(user.display_name || '');
                           setIsEditDisplayNameOpen(true);
                         }}
-                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                        className={MODAL_SECONDARY_BUTTON_CLASS}
                       >
                         Editar
                       </button>
@@ -1848,12 +1863,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       </div>
                       <button
                         type="button"
+                        aria-label="Editar nome de usuário"
                         onClick={() => {
                           setNewUsername(user.username);
                           setUsernameError(null);
                           setIsEditUsernameOpen(true);
                         }}
-                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                        className={MODAL_SECONDARY_BUTTON_CLASS}
                       >
                         Editar
                       </button>
@@ -1883,12 +1899,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       </div>
                       <button
                         type="button"
+                        aria-label={user.phone_number ? 'Editar número de telefone' : 'Adicionar número de telefone'}
                         onClick={() => {
                           setNewPhone(user.phone_number || '');
                           setPhoneError(null);
                           setIsEditPhoneOpen(true);
                         }}
-                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                        className={MODAL_SECONDARY_BUTTON_CLASS}
                       >
                         {user.phone_number ? 'Editar' : 'Adicionar'}
                       </button>
@@ -1928,7 +1945,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         <label className={MODAL_FIELD_LABEL_CLASS}>
                           Sobre Mim (Bio)
                         </label>
-                        <span className="text-[10px] text-gray-500">{bio.length}/255</span>
+                        <span className="text-[10px] text-gray-400 font-medium">{bio.length}/255</span>
                       </div>
                       <textarea
                         value={bio}

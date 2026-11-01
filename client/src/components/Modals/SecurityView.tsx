@@ -194,9 +194,10 @@ export const SecurityView: React.FC = () => {
           </div>
           <button
             type="button"
+            aria-label="Copiar chave pública Ed25519"
             onClick={handleCopyKey}
             disabled={!identityKeys}
-            className="bg-background-dark hover:bg-white/10 disabled:opacity-50 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shrink-0"
+            className="bg-background-dark hover:bg-white/10 active:scale-95 disabled:opacity-50 text-gray-200 hover:text-white px-4 py-2 sm:py-1.5 sm:px-3.5 rounded-xl text-xs font-semibold border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker"
           >
             {copiedKey ? (
               <>
@@ -241,10 +242,11 @@ export const SecurityView: React.FC = () => {
             <button
               type="button"
               role="switch"
+              aria-label={user?.e2ee_backup_enabled !== false ? 'Desativar backup automático de chaves' : 'Ativar backup automático de chaves'}
               aria-checked={user?.e2ee_backup_enabled !== false}
               onClick={handleToggleBackup}
               disabled={isSyncingBackup}
-              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 disabled:opacity-50 ${
+              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker ${
                 user?.e2ee_backup_enabled !== false ? 'bg-brand-500' : 'bg-white/10'
               }`}
               title={user?.e2ee_backup_enabled !== false ? 'Clique para desativar (Opt-out)' : 'Clique para ativar o backup'}

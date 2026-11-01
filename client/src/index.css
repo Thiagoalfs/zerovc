@@ -90,13 +90,40 @@
 }
 
 /* Accessibility Suite: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin,
+  .transition-colors,
+  .transition-opacity {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+    transition-duration: 150ms !important;
+  }
+}
+
 html.reduced-motion *,
 html.reduced-motion *::before,
 html.reduced-motion *::after {
-  animation-duration: 0.001ms !important;
+  animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
-  transition-duration: 0.001ms !important;
+  transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
+}
+
+html.reduced-motion .animate-spin,
+html.reduced-motion .transition-colors,
+html.reduced-motion .transition-opacity {
+  animation-duration: 1.5s !important;
+  animation-iteration-count: infinite !important;
+  transition-duration: 150ms !important;
 }
 
 /* Accessibility Suite: High Contrast */
