@@ -15,7 +15,6 @@ import { RecoveryKeyModal } from './RecoveryKeyModal';
 import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_DIVIDER_CLASS,
 } from '../../constants/modalTypography';
 
 export const SecurityView: React.FC = () => {
@@ -213,8 +212,6 @@ export const SecurityView: React.FC = () => {
           </button>
         </div>
 
-        <div className={MODAL_DIVIDER_CLASS} />
-
         {/* 2. Backup Automático de Chaves na Nuvem (Opt-out) */}
         <div className="space-y-2.5">
           <div className="flex items-center justify-between gap-4">
@@ -294,38 +291,33 @@ export const SecurityView: React.FC = () => {
 
         {/* 3. Excluir Backup de Chaves na Nuvem (apenas se existir) */}
         {backupStatus.exists && (
-          <>
-            <div className={MODAL_DIVIDER_CLASS} />
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <span className="text-xs font-bold text-dnd block">Excluir Backup da Nuvem</span>
-                <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
-                  Apaga permanentemente o backup das suas chaves no servidor. Suas conversas continuarão salvas nos seus aparelhos atuais.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleDeleteBackup}
-                disabled={isDeletingBackup}
-                className="bg-dnd/10 hover:bg-dnd/20 text-dnd border border-dnd/30 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shrink-0 disabled:opacity-50"
-              >
-                {isDeletingBackup ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Excluindo...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Excluir Backup</span>
-                  </>
-                )}
-              </button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-dnd block">Excluir Backup da Nuvem</span>
+              <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
+                Apaga permanentemente o backup das suas chaves no servidor. Suas conversas continuarão salvas nos seus aparelhos atuais.
+              </p>
             </div>
-          </>
+            <button
+              type="button"
+              onClick={handleDeleteBackup}
+              disabled={isDeletingBackup}
+              className="bg-dnd/10 hover:bg-dnd/20 text-dnd border border-dnd/30 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shrink-0 disabled:opacity-50"
+            >
+              {isDeletingBackup ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Excluindo...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir Backup</span>
+                </>
+              )}
+            </button>
+          </div>
         )}
-
-        <div className={MODAL_DIVIDER_CLASS} />
 
         {/* 4. Integração com Sessões & Dispositivos */}
         <div className="flex items-center justify-between gap-3">

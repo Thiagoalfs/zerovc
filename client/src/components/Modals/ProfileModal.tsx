@@ -1780,53 +1780,42 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     </div>
                   </div>
 
-                  {/* Header Row: Avatar + Name + Status */}
+                  {/* Header Row: Avatar + Name */}
                   <div className="px-6 pb-4 pt-0 bg-background-darker">
-                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                      <div className="flex items-end gap-4 -mt-12">
-                        {/* Avatar (Interactive / Click to Upload) */}
-                        <div
-                          className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex-shrink-0 flex items-center justify-center text-white font-bold text-3xl relative group cursor-pointer"
-                          onClick={() => avatarFileInputRef.current?.click()}
-                          title="Clique para alterar seu avatar"
-                        >
-                          {user.avatar_url ? (
-                            <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <span>{user.display_name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
-                          )}
+                    <div className="flex items-end gap-4 -mt-12">
+                      {/* Avatar (Interactive / Click to Upload) */}
+                      <div
+                        className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex-shrink-0 flex items-center justify-center text-white font-bold text-3xl relative group cursor-pointer"
+                        onClick={() => avatarFileInputRef.current?.click()}
+                        title="Clique para alterar seu avatar"
+                      >
+                        {user.avatar_url ? (
+                          <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{user.display_name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
+                        )}
 
-                          {/* Camera Overlay on Hover */}
-                          <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-0.5">
-                            <Camera className="w-5 h-5" />
-                            <span className="text-[9px] font-bold uppercase tracking-wider">Mudar</span>
-                          </div>
-                        </div>
-
-                        {/* Name & Username tag cleanly aligned in dark area */}
-                        <div className="pt-2 pb-0.5">
-                          <h4 className="text-lg font-bold text-white leading-tight tracking-tight">
-                            {user.display_name || user.username}
-                          </h4>
-                          <span className="text-xs text-gray-400 font-mono font-medium block mt-0.5">
-                            @{user.username}
-                          </span>
+                        {/* Camera Overlay on Hover */}
+                        <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-0.5">
+                          <Camera className="w-5 h-5" />
+                          <span className="text-[9px] font-bold uppercase tracking-wider">{isUploadingAvatar ? '...' : 'Mudar'}</span>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => avatarFileInputRef.current?.click()}
-                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white text-xs font-semibold px-4 py-2 rounded-xl border border-white/10 shadow-sm transition-all cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
-                      >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>{isUploadingAvatar ? 'Enviando...' : 'Mudar Avatar'}</span>
-                      </button>
+                      {/* Name & Username tag cleanly aligned in dark area */}
+                      <div className="pt-2 pb-0.5 min-w-0">
+                        <h4 className="text-lg font-bold text-white leading-tight tracking-tight truncate">
+                          {user.display_name || user.username}
+                        </h4>
+                        <span className="text-xs text-gray-400 font-mono font-medium block mt-0.5">
+                          @{user.username}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Group 1: Informações da Conta */}
-                  <div className="m-4 mt-1 p-4 bg-background-darkest/60 rounded-2xl border border-white/5 divide-y divide-white/5">
+                  <div className="px-6 pb-4 pt-1 divide-y divide-white/5 border-t border-white/5">
                     {/* Display Name (Nome de Exibição) row */}
                     <div className="flex items-center justify-between pb-3 first:pt-0">
                       <div>
