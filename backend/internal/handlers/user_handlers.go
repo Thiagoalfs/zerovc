@@ -177,8 +177,9 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	publicUser := user.ToPublic()
 
-	// Broadcast user profile update globally or to guilds
-	h.hub.BroadcastGlobal(models.WSEvent{
+	// Broadcast user profile update to mutual guild members and self
+	targetIDs := h.hub.GetRelatedUserIDs(user.ID)
+	h.hub.BroadcastToUsers(targetIDs, models.WSEvent{
 		Type: models.EventUserUpdate,
 		Data: publicUser,
 	})

@@ -441,7 +441,8 @@ func (h *E2EEHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast device creation
 	if h.hub != nil {
-		h.hub.BroadcastGlobal(models.WSEvent{
+		targetIDs := h.hub.GetRelatedUserIDs(userID)
+		h.hub.BroadcastToUsers(targetIDs, models.WSEvent{
 			Type: models.EventE2EEDeviceListUpdate,
 			Data: map[string]any{
 				"action":    "create",
@@ -555,7 +556,8 @@ func (h *E2EEHandler) RevokeDevice(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast device revocation
 	if h.hub != nil {
-		h.hub.BroadcastGlobal(models.WSEvent{
+		targetIDs := h.hub.GetRelatedUserIDs(userID)
+		h.hub.BroadcastToUsers(targetIDs, models.WSEvent{
 			Type: models.EventE2EEDeviceListUpdate,
 			Data: map[string]any{
 				"action":    "revoke",

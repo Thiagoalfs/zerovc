@@ -123,8 +123,7 @@ func (h *Hub) Run() {
 							select {
 							case c.send <- payload:
 							default:
-								close(c.send)
-								delete(userClients, c)
+								go c.Conn.Close()
 							}
 						}
 					}
@@ -138,8 +137,7 @@ func (h *Hub) Run() {
 								select {
 								case c.send <- payload:
 								default:
-									close(c.send)
-									delete(userClients, c)
+									go c.Conn.Close()
 								}
 							}
 						}
@@ -152,8 +150,7 @@ func (h *Hub) Run() {
 						select {
 						case c.send <- payload:
 						default:
-							close(c.send)
-							delete(userClients, c)
+							go c.Conn.Close()
 						}
 					}
 				}
@@ -216,6 +213,27 @@ func (h *Hub) ShareAnyGuild(user1, user2 uuid.UUID) bool {
 	return false
 }
 
+// GetRelatedUserIDs returns all user IDs that share at least one guild with the given user, plus the user themselves.
+func (h *Hub) GetRelatedUserIDs(userID uuid.UUID) []uuid.UUID {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	related := map[uuid.UUID]bool{userID: true}
+	for _, members := range h.guildMembers {
+		if members[userID] {
+			for mID := range members {
+				related[mID] = true
+			}
+		}
+	}
+
+	out := make([]uuid.UUID, 0, len(related))
+	for id := range related {
+		out = append(out, id)
+	}
+	return out
+}
+
 func (h *Hub) BroadcastToGuild(guildID uuid.UUID, event models.WSEvent) {
 	h.Broadcast <- BroadcastMessage{
 		GuildID: &guildID,
@@ -251,6 +269,7 @@ func (h *Hub) SendToUser(userID uuid.UUID, event models.WSEvent) {
 			select {
 			case c.send <- payload:
 			default:
+				go c.Conn.Close()
 			}
 		}
 	}

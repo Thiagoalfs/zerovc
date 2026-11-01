@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Smartphone,
   Globe,
-  Shield,
+  ShieldCheck,
   Trash2,
   AlertTriangle,
   Loader2,
@@ -13,6 +13,7 @@ import {
   Laptop,
 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useAuthStore } from '../../stores/authStore';
 import { UserSession } from '../../types';
 import { fetchLocationFromIP } from '../../utils/location';
 import {
@@ -23,6 +24,15 @@ import {
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
+
+interface DeviceItem {
+  id: string;
+  user_id: string;
+  curve25519_key: string;
+  ed25519_key: string;
+  revoked_at?: string | null;
+  created_at: string;
+}
 
 const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip, isSmall }) => {
   const [location, setLocation] = useState<string>('Calculando localização...');
@@ -56,32 +66,46 @@ const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip,
 };
 
 export const SessionsSettingsView: React.FC = () => {
+  const { user } = useAuthStore();
   const [sessions, setSessions] = useState<UserSession[]>([]);
+  const [devices, setDevices] = useState<DeviceItem[]>([]);
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Revocation modals state
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [isRevokingOthers, setIsRevokingOthers] = useState(false);
   const [confirmRevokeOtherOpen, setConfirmRevokeOtherOpen] = useState(false);
   const [confirmRevokeSingle, setConfirmRevokeSingle] = useState<UserSession | null>(null);
 
-  const fetchSessions = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+
+    const cachedDevId = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : null;
+    setCurrentDeviceId(cachedDevId);
+
     try {
-      const data = await api.auth.getSessions();
-      setSessions(data);
+      const [sessionsData, devicesData] = await Promise.all([
+        api.auth.getSessions().catch(() => []),
+        user?.id ? api.e2ee.getUserDevices(user.id).catch(() => []) : Promise.resolve([]),
+      ]);
+
+      setSessions(sessionsData || []);
+      setDevices(devicesData || []);
     } catch (err: any) {
-      setError(err?.message || 'Não foi possível carregar as sessões ativas.');
+      setError(err?.message || 'Não foi possível carregar os dispositivos e sessões ativas.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
-    fetchSessions();
-  }, []);
+    loadData();
+  }, [loadData]);
 
   const handleRevokeSingle = async (session: UserSession) => {
     setRevokingId(session.id);
@@ -90,10 +114,25 @@ export const SessionsSettingsView: React.FC = () => {
     try {
       await api.auth.revokeSession(session.id);
       setSessions((prev) => prev.filter((s) => s.id !== session.id));
-      setSuccessMessage('Sessão remota encerrada com sucesso.');
+      setSuccessMessage('Sessão remota desconectada com sucesso.');
       setConfirmRevokeSingle(null);
     } catch (err: any) {
-      setError(err?.message || 'Falha ao encerrar a sessão.');
+      setError(err?.message || 'Falha ao desconectar a sessão.');
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleRevokeDeviceOnly = async (deviceId: string) => {
+    setRevokingId(deviceId);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await api.e2ee.revokeDevice(deviceId);
+      setDevices((prev) => prev.filter((d) => d.id !== deviceId));
+      setSuccessMessage('Aparelho desconectado com sucesso.');
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao revogar o aparelho.');
     } finally {
       setRevokingId(null);
     }
@@ -106,10 +145,22 @@ export const SessionsSettingsView: React.FC = () => {
     try {
       await api.auth.revokeOtherSessions();
       setSessions((prev) => prev.filter((s) => s.is_current));
-      setSuccessMessage('Todas as outras sessões foram encerradas com sucesso.');
+
+      // Also revoke remote E2EE devices if any
+      if (currentDeviceId) {
+        const others = devices.filter((d) => d.id !== currentDeviceId);
+        for (const dev of others) {
+          try {
+            await api.e2ee.revokeDevice(dev.id);
+          } catch {}
+        }
+        setDevices((prev) => prev.filter((d) => d.id === currentDeviceId));
+      }
+
+      setSuccessMessage('Todas as outras sessões foram desconectadas com sucesso.');
       setConfirmRevokeOtherOpen(false);
     } catch (err: any) {
-      setError(err?.message || 'Falha ao encerrar as outras sessões.');
+      setError(err?.message || 'Falha ao desconectar as outras sessões.');
     } finally {
       setIsRevokingOthers(false);
     }
@@ -135,10 +186,11 @@ export const SessionsSettingsView: React.FC = () => {
   };
 
   const getDeviceIcon = (deviceType: string, os: string) => {
-    if (deviceType === 'desktop' || os.toLowerCase().includes('windows') || os.toLowerCase().includes('mac') || os.toLowerCase().includes('linux')) {
+    const osLower = (os || '').toLowerCase();
+    if (deviceType === 'desktop' || osLower.includes('windows') || osLower.includes('mac') || osLower.includes('linux')) {
       return <Laptop className="w-5 h-5 text-brand-400" />;
     }
-    if (deviceType === 'mobile' || os.toLowerCase().includes('android') || os.toLowerCase().includes('ios')) {
+    if (deviceType === 'mobile' || osLower.includes('android') || osLower.includes('ios')) {
       return <Smartphone className="w-5 h-5 text-emerald-400" />;
     }
     return <Globe className="w-5 h-5 text-cyan-400" />;
@@ -146,6 +198,7 @@ export const SessionsSettingsView: React.FC = () => {
 
   const currentSession = sessions.find((s) => s.is_current);
   const otherSessions = sessions.filter((s) => !s.is_current);
+  const otherDevices = devices.filter((d) => d.id !== currentDeviceId);
 
   return (
     <div className="space-y-6">
@@ -168,7 +221,7 @@ export const SessionsSettingsView: React.FC = () => {
       {isLoading && sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-gray-400 space-y-3">
           <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
-          <span className="text-xs font-medium">Buscando dispositivos conectados...</span>
+          <span className="text-xs font-medium">Buscando dispositivos e sessões ativas...</span>
         </div>
       ) : (
         <div className="space-y-6">
@@ -181,7 +234,7 @@ export const SessionsSettingsView: React.FC = () => {
                 </h4>
                 <button
                   type="button"
-                  onClick={fetchSessions}
+                  onClick={loadData}
                   disabled={isLoading}
                   className="p-1.5 -mt-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
                   title="Atualizar lista de sessões"
@@ -189,12 +242,13 @@ export const SessionsSettingsView: React.FC = () => {
                   <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-brand-400' : ''}`} />
                 </button>
               </div>
-              <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-start justify-between gap-3`}>
+
+              <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-start justify-between gap-3 bg-white/[0.02] rounded-2xl border border-white/5`}>
                 <div className="flex items-start gap-3.5 min-w-0">
-                  <div className="p-2 rounded-xl bg-white/5 text-brand-300 shrink-0 mt-0.5">
+                  <div className="p-2.5 rounded-xl bg-white/5 text-brand-300 shrink-0 mt-0.5">
                     {getDeviceIcon(currentSession.device_type, currentSession.os)}
                   </div>
-                  <div className="min-w-0 space-y-1">
+                  <div className="min-w-0 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
                         {currentSession.os || 'Dispositivo'} • {currentSession.browser || 'Navegador'}
@@ -203,7 +257,12 @@ export const SessionsSettingsView: React.FC = () => {
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         Sessão Atual
                       </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-brand-400" />
+                        Criptografia de Ponta a Ponta Ativa
+                      </span>
                     </div>
+
                     <div className={`flex items-center gap-3 ${MODAL_DESCRIPTION_CLASS} flex-wrap`}>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5 text-gray-500" />
@@ -224,7 +283,7 @@ export const SessionsSettingsView: React.FC = () => {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                Outros Dispositivos ({otherSessions.length})
+                Outros Dispositivos Conectados ({otherSessions.length})
               </h4>
               {otherSessions.length > 0 && (
                 <button
@@ -240,7 +299,7 @@ export const SessionsSettingsView: React.FC = () => {
 
             {otherSessions.length === 0 ? (
               <div className="py-4 text-xs text-gray-500">
-                Nenhum outro dispositivo conectado no momento.
+                Nenhum outro computador ou celular conectado no momento.
               </div>
             ) : (
               <div className="divide-y divide-white/5">
@@ -253,10 +312,13 @@ export const SessionsSettingsView: React.FC = () => {
                       <div className="p-2 rounded-xl bg-white/5 text-gray-400 shrink-0 mt-0.5">
                         {getDeviceIcon(session.device_type, session.os)}
                       </div>
-                      <div className="min-w-0 space-y-0.5">
-                        <div className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
-                          {session.os || 'Dispositivo Remoto'} • {session.browser || 'Navegador'}
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
+                            {session.os || 'Dispositivo Remoto'} • {session.browser || 'Navegador'}
+                          </span>
                         </div>
+
                         <div className={`flex items-center gap-3 ${MODAL_DESCRIPTION_CLASS} flex-wrap`}>
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3 text-gray-500" />
@@ -272,7 +334,7 @@ export const SessionsSettingsView: React.FC = () => {
                       onClick={() => setConfirmRevokeSingle(session)}
                       disabled={revokingId === session.id}
                       className="p-2 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-                      title="Encerrar esta sessão"
+                      title="Desconectar este dispositivo"
                     >
                       {revokingId === session.id ? (
                         <Loader2 className="w-4 h-4 animate-spin text-red-400" />
@@ -285,6 +347,40 @@ export const SessionsSettingsView: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Additional Devices without active web session (e.g. background clients) */}
+          {otherDevices.length > otherSessions.length && (
+            <div className="space-y-3 pt-2">
+              <div className={MODAL_DIVIDER_CLASS} />
+              <h4 className={MODAL_SECTION_HEADER_CLASS}>
+                Aparelhos Adicionais
+              </h4>
+              <div className="divide-y divide-white/5">
+                {otherDevices.slice(otherSessions.length).map((dev) => (
+                  <div key={dev.id} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-semibold text-gray-200">
+                        Aparelho {dev.id.slice(0, 8)}...
+                      </span>
+                      <p className="text-[11px] text-gray-400">
+                        Dispositivo secundário registrado
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRevokeDeviceOnly(dev.id)}
+                      disabled={revokingId === dev.id}
+                      className="p-2 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                      title="Desconectar este aparelho"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -296,10 +392,10 @@ export const SessionsSettingsView: React.FC = () => {
               <div className="p-2.5 rounded-xl bg-red-500/10">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h4 className="text-sm font-bold text-white">Encerrar Sessão?</h4>
+              <h4 className="text-sm font-bold text-white">Desconectar Dispositivo?</h4>
             </div>
             <p className="text-xs text-gray-300 leading-relaxed">
-              O dispositivo <strong className="text-white">{confirmRevokeSingle.os} ({confirmRevokeSingle.browser})</strong> será desconectado imediatamente do ZeroVC.
+              O dispositivo <strong className="text-white">{confirmRevokeSingle.os} ({confirmRevokeSingle.browser})</strong> será desconectado imediatamente da sua conta.
             </p>
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
@@ -317,7 +413,7 @@ export const SessionsSettingsView: React.FC = () => {
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-600 text-white transition-colors flex items-center gap-1.5 shadow-md shadow-red-500/20"
               >
                 {revokingId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                <span>Encerrar</span>
+                <span>Desconectar</span>
               </button>
             </div>
           </div>
@@ -332,7 +428,7 @@ export const SessionsSettingsView: React.FC = () => {
               <div className="p-2.5 rounded-xl bg-red-500/10">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h4 className="text-sm font-bold text-white">Encerrar Todas as Outras Sessões?</h4>
+              <h4 className="text-sm font-bold text-white">Desconectar Todas as Outras Sessões?</h4>
             </div>
             <p className="text-xs text-gray-300 leading-relaxed">
               Todos os outros computadores, celulares e navegadores onde sua conta está conectada serão deslogados imediatamente. Apenas este dispositivo permanecerá conectado.
@@ -353,7 +449,7 @@ export const SessionsSettingsView: React.FC = () => {
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-600 text-white transition-colors flex items-center gap-1.5 shadow-md shadow-red-500/20"
               >
                 {isRevokingOthers ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                <span>Encerrar Todas</span>
+                <span>Desconectar Todos</span>
               </button>
             </div>
           </div>

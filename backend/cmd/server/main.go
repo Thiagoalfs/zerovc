@@ -163,7 +163,8 @@ func main() {
 		}
 		db.Pool.Exec(ctx, "UPDATE users SET status = $1 WHERE id = $2", savedStatus, userID)
 
-		hub.BroadcastGlobal(models.WSEvent{
+		targetIDs := hub.GetRelatedUserIDs(userID)
+		hub.BroadcastToUsers(targetIDs, models.WSEvent{
 			Type: models.EventUserUpdate,
 			Data: map[string]any{
 				"id":     userID,
@@ -201,7 +202,8 @@ func main() {
 
 		// Update database status to offline, clear activity and broadcast
 		db.Pool.Exec(ctx, "UPDATE users SET status = 'offline', custom_activity = NULL WHERE id = $1", userID)
-		hub.BroadcastGlobal(models.WSEvent{
+		targetIDs := hub.GetRelatedUserIDs(userID)
+		hub.BroadcastToUsers(targetIDs, models.WSEvent{
 			Type: models.EventUserUpdate,
 			Data: map[string]any{
 				"id":              userID,
