@@ -1815,9 +1815,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                   </div>
 
                   {/* Group 1: Informações da Conta */}
-                  <div className="px-6 pb-4 pt-1 divide-y divide-white/5 border-t border-white/5">
+                  <div className="px-6 pb-5 pt-3 space-y-3.5 border-t border-white/5">
                     {/* Display Name (Nome de Exibição) row */}
-                    <div className="flex items-center justify-between pb-3 first:pt-0">
+                    <div className="flex items-center justify-between">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                           Nome de Exibição
@@ -1839,7 +1839,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     </div>
 
                     {/* Username row */}
-                    <div className="flex items-center justify-between py-3">
+                    <div className="flex items-center justify-between">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                           Nome de Usuário
@@ -1860,7 +1860,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     </div>
 
                     {/* Phone row */}
-                    <div className="flex items-center justify-between pt-3">
+                    <div className="flex items-center justify-between">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                           Número de Telefone
