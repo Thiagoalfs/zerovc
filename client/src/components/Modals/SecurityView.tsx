@@ -82,7 +82,7 @@ export const SecurityView: React.FC = () => {
     setSuccessMessage(null);
     try {
       const nextVal = !current;
-      const updated = await updateProfile({ e2ee_backup_enabled: nextVal });
+      const updated = await updateProfile({ e2ee_backup_enabled: nextVal } as any);
       setUser(updated);
       backupManager.setBackupEnabledLocally(nextVal);
       if (nextVal) {

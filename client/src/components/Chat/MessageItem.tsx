@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { format, isToday, isYesterday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -125,6 +125,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const { user } = useAuthStore();
   const {
     activeGuild,
+    activeChannel,
     editMessage: guildEditMessage,
     deleteMessage: guildDeleteMessage,
     toggleReaction: guildToggleReaction,
