@@ -38,10 +38,10 @@ export const StreamerModeTab: React.FC = () => {
               Ativar Modo Streamer
             </span>
             <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+              className={`text-[10px] font-bold uppercase tracking-wider ${
                 enabled
-                  ? 'bg-brand-500/20 text-brand-300 border border-brand-500/40'
-                  : 'bg-white/10 text-gray-400'
+                  ? 'text-brand-400'
+                  : 'text-gray-400'
               }`}
             >
               {enabled ? 'Ativo' : 'Desativado'}

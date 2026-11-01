@@ -15,6 +15,7 @@ import { RecoveryKeyModal } from './RecoveryKeyModal';
 import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_DIVIDER_CLASS,
 } from '../../constants/modalTypography';
 
 export const SecurityView: React.FC = () => {
@@ -174,7 +175,7 @@ export const SecurityView: React.FC = () => {
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-white block">Identidade deste Aparelho</span>
-              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+              <span className="text-[10px] font-bold text-emerald-400">
                 VODOZEMAC ATIVO
               </span>
             </div>
@@ -212,18 +213,20 @@ export const SecurityView: React.FC = () => {
           </button>
         </div>
 
+        <div className={MODAL_DIVIDER_CLASS} />
+
         {/* 2. Backup Automático de Chaves na Nuvem (Opt-out) */}
-        <div className="p-3.5 bg-background-dark/50 rounded-2xl border border-white/5 space-y-3">
+        <div className="space-y-2.5">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 pr-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold text-white block">Backup Automático de Chaves (Nuvem)</span>
                 {user?.e2ee_backup_enabled !== false ? (
-                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                  <span className="text-[10px] font-bold text-emerald-400">
                     ATIVADO (PADRÃO)
                   </span>
                 ) : (
-                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-red-500/20 text-red-400 border-red-500/30">
+                  <span className="text-[10px] font-bold text-red-400">
                     DESATIVADO (OPT-OUT)
                   </span>
                 )}
@@ -258,13 +261,13 @@ export const SecurityView: React.FC = () => {
           </div>
 
           {/* Action buttons row */}
-          <div className="flex items-center gap-2 pt-1 flex-wrap">
+          <div className="flex items-center gap-2 pt-0.5 flex-wrap">
             {user?.e2ee_backup_enabled !== false && (
               <button
                 type="button"
                 onClick={handleSyncBackupNow}
                 disabled={isSyncingBackup}
-                className="bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 border border-brand-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 border border-brand-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncingBackup ? 'animate-spin' : ''}`} />
                 <span>{isSyncingBackup ? 'Sincronizando...' : 'Sincronizar Agora'}</span>
@@ -291,40 +294,45 @@ export const SecurityView: React.FC = () => {
 
         {/* 3. Excluir Backup de Chaves na Nuvem (apenas se existir) */}
         {backupStatus.exists && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <span className="text-xs font-bold text-dnd block">Excluir Backup da Nuvem</span>
-              <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
-                Apaga permanentemente o backup das suas chaves no servidor. Suas conversas continuarão salvas nos seus aparelhos atuais.
-              </p>
+          <>
+            <div className={MODAL_DIVIDER_CLASS} />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-dnd block">Excluir Backup da Nuvem</span>
+                <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
+                  Apaga permanentemente o backup das suas chaves no servidor. Suas conversas continuarão salvas nos seus aparelhos atuais.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDeleteBackup}
+                disabled={isDeletingBackup}
+                className="bg-dnd/10 hover:bg-dnd/20 text-dnd border border-dnd/30 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shrink-0 disabled:opacity-50"
+              >
+                {isDeletingBackup ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Excluir Backup</span>
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={handleDeleteBackup}
-              disabled={isDeletingBackup}
-              className="bg-dnd/10 hover:bg-dnd/20 text-dnd border border-dnd/30 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shrink-0 disabled:opacity-50"
-            >
-              {isDeletingBackup ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Excluindo...</span>
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Excluir Backup</span>
-                </>
-              )}
-            </button>
-          </div>
+          </>
         )}
 
+        <div className={MODAL_DIVIDER_CLASS} />
+
         {/* 4. Integração com Sessões & Dispositivos */}
-        <div className="p-3.5 bg-white/[0.03] rounded-2xl border border-white/5 flex items-center justify-between gap-3 mt-2">
+        <div className="flex items-center justify-between gap-3">
           <div className="space-y-0.5">
-            <span className="text-xs font-semibold text-gray-200 block">Gerenciamento de Aparelhos e Verificação</span>
-            <p className="text-[11px] text-gray-400 leading-relaxed">
-              Para verificar chaves com outros aparelhos, ver sessões ativas ou desconectar computadores remotos, acesse a aba <strong className="text-white">Sessões & Dispositivos</strong>.
+            <span className="text-xs font-bold text-white block">Gerenciamento de Aparelhos</span>
+            <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
+              Para verificar chaves com outros aparelhos, ver sessões ativas ou desconectar computadores remotos, acesse a aba <strong className="text-gray-200">Sessões & Dispositivos</strong>.
             </p>
           </div>
           <ShieldCheck className="w-5 h-5 text-brand-400 shrink-0" />

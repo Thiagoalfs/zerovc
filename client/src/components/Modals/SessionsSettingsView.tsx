@@ -227,7 +227,7 @@ export const SessionsSettingsView: React.FC = () => {
         <div className="space-y-6">
           {/* Current Device */}
           {currentSession && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className={MODAL_SECTION_HEADER_CLASS}>
                   Este Dispositivo
@@ -243,22 +243,22 @@ export const SessionsSettingsView: React.FC = () => {
                 </button>
               </div>
 
-              <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-start justify-between gap-3 bg-white/[0.02] rounded-2xl border border-white/5`}>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 py-1">
                 <div className="flex items-start gap-3.5 min-w-0">
                   <div className="p-2.5 rounded-xl bg-white/5 text-brand-300 shrink-0 mt-0.5">
                     {getDeviceIcon(currentSession.device_type, currentSession.os)}
                   </div>
-                  <div className="min-w-0 space-y-1.5">
+                  <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
                         {currentSession.os || 'Dispositivo'} • {currentSession.browser || 'Navegador'}
                       </span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                      <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         Sessão Atual
                       </span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3 text-brand-400" />
+                      <span className="text-[10px] font-bold text-brand-400 flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-brand-400" />
                         Criptografia de Ponta a Ponta Ativa
                       </span>
                     </div>

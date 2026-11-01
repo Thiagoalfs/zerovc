@@ -2004,7 +2004,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                               <span>{revealEmail ? 'Ocultar' : 'Revelar e-mail'}</span>
                             </button>
                           ) : (
-                            <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                            <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
                               <EyeOff className="w-2.5 h-2.5" />
                               <span>Oculto pelo Modo Streamer</span>
                             </span>
@@ -2055,10 +2055,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-white">Autenticação de Dois Fatores (2FA)</span>
                           <span
-                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                            className={`text-[10px] font-bold ${
                               user.two_factor_enabled
-                                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                                : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                                ? 'text-emerald-400'
+                                : 'text-yellow-400'
                             }`}
                           >
                             {user.two_factor_enabled ? 'ATIVADO' : 'DESATIVADO'}
@@ -3530,7 +3530,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           <span className={MODAL_TOGGLE_HEADER_CLASS}>
                             Manter na bandeja do sistema ao fechar
                           </span>
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-400">
                             Ativo por padrão
                           </span>
                         </div>
