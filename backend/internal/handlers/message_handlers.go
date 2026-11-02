@@ -36,41 +36,10 @@ func (h *MessageHandler) broadcastChannelEvent(ctx context.Context, guildID, cha
 		return
 	}
 
-	// Calculate allowed users for this private channel
-	query := `
-		SELECT DISTINCT gm.user_id
-		FROM guild_members gm
-		INNER JOIN guilds g ON g.id = gm.guild_id
-		WHERE g.id = $1 AND (
-			g.owner_id = gm.user_id
-			OR EXISTS (
-				SELECT 1 FROM guild_roles gr
-				INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
-				WHERE gmr.guild_id = $1 AND gmr.user_id = gm.user_id
-				  AND (gr.permissions & $3) != 0
-			)
-			OR EXISTS (
-				SELECT 1 FROM channel_role_access cra
-				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
-				WHERE cra.channel_id = $2 AND gmr.guild_id = $1 AND gmr.user_id = gm.user_id
-			)
-		)
-	`
-	rows, err := h.db.Pool.Query(ctx, query, guildID, channelID, models.PermAdministrator)
-	if err != nil {
-		return
+	allowedUserIDs, err := GetPrivateChannelAllowedUserIDs(ctx, h.db, guildID, channelID)
+	if err == nil && len(allowedUserIDs) > 0 {
+		h.hub.BroadcastToUsers(allowedUserIDs, event)
 	}
-	defer rows.Close()
-
-	allowedUserIDs := make([]uuid.UUID, 0)
-	for rows.Next() {
-		var uid uuid.UUID
-		if err := rows.Scan(&uid); err == nil {
-			allowedUserIDs = append(allowedUserIDs, uid)
-		}
-	}
-
-	h.hub.BroadcastToUsers(allowedUserIDs, event)
 }
 
 type SendMessageRequest struct {
@@ -1261,7 +1230,7 @@ func (h *MessageHandler) Search(w http.ResponseWriter, r *http.Request) {
 		    )
 		  )
 		  AND (m.encrypted IS FALSE OR m.encrypted IS NULL)
-		  AND (m.search_vector @@ plainto_tsquery('portuguese', $2) OR m.content ILIKE '%' || $2 || '%')
+		  AND (m.search_vector @@ plainto_tsquery('portuguese', $2))
 	`
 	args := []any{guildID, queryTerm, userID}
 

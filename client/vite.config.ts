@@ -35,7 +35,7 @@ export default defineConfig({
           'vendor-react': ['react', 'react-dom'],
           'vendor-livekit': ['livekit-client'],
           'vendor-icons': ['lucide-react'],
-          'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'zustand'],
+          'vendor-utils': ['clsx', 'tailwind-merge', 'zustand'],
         },
       },
     },

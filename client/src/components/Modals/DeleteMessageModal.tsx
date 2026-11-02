@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { formatDateWithTime } from '../../utils/date';
 import { X, Trash2, Loader2, FileText } from 'lucide-react';
 import { Message, DMMessage, DMGroupMessage } from '../../types';
 import { formatAssetUrl } from '../../lib/api';
@@ -51,7 +50,7 @@ export const DeleteMessageModal: React.FC<DeleteMessageModalProps> = ({
   const author = message.author;
   const timeStr = (() => {
     try {
-      return format(new Date(message.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+      return formatDateWithTime(new Date(message.created_at));
     } catch {
       return '';
     }

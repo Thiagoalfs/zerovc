@@ -23,7 +23,8 @@ type Hub struct {
 	Unregister chan *Client
 	Broadcast  chan BroadcastMessage
 
-	// Hooks
+	// Cache & Hooks
+	UserGuildsCache      *UserGuildsCache
 	OnUserConnected      func(userID uuid.UUID)
 	OnUserDisconnected   func(userID uuid.UUID)
 	DeviceValidator      func(ctx context.Context, userID, deviceID uuid.UUID) bool
@@ -188,6 +189,15 @@ func (h *Hub) RemoveGuildMember(guildID uuid.UUID, userID uuid.UUID) {
 
 	if members, ok := h.guildMembers[guildID]; ok {
 		delete(members, userID)
+	}
+	if h.UserGuildsCache != nil {
+		h.UserGuildsCache.Invalidate(userID)
+	}
+}
+
+func (h *Hub) InvalidateUserGuilds(userID uuid.UUID) {
+	if h.UserGuildsCache != nil {
+		h.UserGuildsCache.Invalidate(userID)
 	}
 }
 

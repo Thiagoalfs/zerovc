@@ -243,4 +243,39 @@ func canUserAccessChannel(ctx context.Context, db *database.DB, guildID, channel
 	}
 
 	return canUserPerformInChannel(ctx, db, guildID, channelID, userID, models.PermViewChannel)
-}
+}
+
+// GetPrivateChannelAllowedUserIDs returns all user IDs authorized to access a private channel.
+func GetPrivateChannelAllowedUserIDs(ctx context.Context, db *database.DB, guildID, channelID uuid.UUID) ([]uuid.UUID, error) {
+	query := 		SELECT DISTINCT gm.user_id
+		FROM guild_members gm
+		INNER JOIN guilds g ON g.id = gm.guild_id
+		WHERE g.id =  AND (
+			g.owner_id = gm.user_id
+			OR EXISTS (
+				SELECT 1 FROM guild_roles gr
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
+				WHERE gmr.guild_id =  AND gmr.user_id = gm.user_id
+				  AND (gr.permissions & ) != 0
+			)
+			OR EXISTS (
+				SELECT 1 FROM channel_role_access cra
+				INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
+				WHERE cra.channel_id =  AND gmr.guild_id =  AND gmr.user_id = gm.user_id
+			)
+		)
+		rows, err := db.Pool.Query(ctx, query, guildID, channelID, models.PermAdministrator)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var uids []uuid.UUID
+	for rows.Next() {
+		var uid uuid.UUID
+		if err := rows.Scan(&uid); err == nil {
+			uids = append(uids, uid)
+		}
+	}
+	return uids, nil
+}

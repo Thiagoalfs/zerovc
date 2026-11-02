@@ -1,6 +1,5 @@
 import React, { useMemo, useEffect, useState, useRef } from 'react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { formatDateLong } from '../../utils/date';
 import {
   Shield,
   Calendar,
@@ -158,7 +157,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const joinDateStr = (() => {
     if (!user.created_at) return '';
     try {
-      return format(new Date(user.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+      return formatDateLong(new Date(user.created_at));
     } catch {
       return '';
     }

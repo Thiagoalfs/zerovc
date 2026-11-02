@@ -751,7 +751,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	err := h.db.Pool.QueryRow(r.Context(), query, req.Email).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus, &user.TwoFactorSecret, &user.EmailVerified, &user.E2EEBackupEnabled, &user.CreatedAt, &user.UpdatedAt,
 	)
-	if err != nil || !h.auth.CheckPassword(req.Password, user.PasswordHash) {
+	hashToCheck := user.PasswordHash
+	if err != nil {
+		// Constant-time mitigation against user enumeration
+		hashToCheck = "$2a$10$wK1W6QWnLq0G7e.H0.e73u6m8l4uFmH3Q9G2O1S6E9D5N2R6K0X6C"
+	}
+	passwordMatches := h.auth.CheckPassword(req.Password, hashToCheck)
+	if err != nil || !passwordMatches {
 		http.Error(w, `{"error":"e-mail ou senha incorretos"}`, http.StatusUnauthorized)
 		return
 	}
@@ -1907,6 +1913,15 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		if h.auth != nil {
 			h.auth.RevokeAllUserTokens(userID)
 		}
+	}
+
+	if h.hub != nil {
+		h.hub.SendToUser(userID, models.WSEvent{
+			Type: models.EventSessionRevoked,
+			Data: map[string]any{
+				"except_token_hash": currentTokenHash,
+			},
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")

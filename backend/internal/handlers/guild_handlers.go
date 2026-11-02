@@ -142,6 +142,7 @@ func (h *GuildHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	guild.Channels = []models.Channel{textChan, voiceChan}
 	h.hub.AddGuildMember(guild.ID, userID)
+	h.hub.InvalidateUserGuilds(userID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

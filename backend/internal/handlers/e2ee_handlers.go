@@ -1523,17 +1523,6 @@ func (h *E2EEHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
 	// 50 MB limit
 	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
 
-	data, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, `{"error":"file too large or failed to read"}`, http.StatusBadRequest)
-		return
-	}
-
-	if len(data) == 0 {
-		http.Error(w, `{"error":"attachment cannot be empty"}`, http.StatusBadRequest)
-		return
-	}
-
 	attachmentID := uuid.New()
 	uploadDir := filepath.Join("uploads", "e2ee_attachments")
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
@@ -1542,12 +1531,19 @@ func (h *E2EEHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filePath := filepath.Join(uploadDir, attachmentID.String()+".bin")
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+	dst, err := os.Create(filePath)
+	if err != nil {
 		http.Error(w, `{"error":"failed to write attachment file"}`, http.StatusInternalServerError)
 		return
 	}
 
-	fileSize := int64(len(data))
+	fileSize, err := io.Copy(dst, r.Body)
+	_ = dst.Close()
+	if err != nil || fileSize == 0 {
+		_ = os.Remove(filePath)
+		http.Error(w, `{"error":"file too large, failed to read, or empty"}`, http.StatusBadRequest)
+		return
+	}
 	_, err = h.db.Pool.Exec(r.Context(), `
 		INSERT INTO e2ee_attachments (id, uploader_id, file_size)
 		VALUES ($1, $2, $3)
@@ -2014,6 +2010,7 @@ func (h *E2EEHandler) GetMyRoomKeys(w http.ResponseWriter, r *http.Request) {
 			)
 		)
 		ORDER BY rk.created_at ASC
+		LIMIT 500
 	`
 
 	rows, err := h.db.Pool.Query(ctx, query, userID, models.PermAdministrator)

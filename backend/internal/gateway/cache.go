@@ -21,10 +21,27 @@ type UserGuildsCache struct {
 }
 
 func NewUserGuildsCache(ttl time.Duration) *UserGuildsCache {
-	return &UserGuildsCache{
+	c := &UserGuildsCache{
 		entries: make(map[uuid.UUID]userGuildsCacheEntry),
 		ttl:     ttl,
 	}
+
+	// Purge expired cache entries every 10 minutes to prevent memory leak
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		for range ticker.C {
+			c.mu.Lock()
+			now := time.Now()
+			for id, entry := range c.entries {
+				if now.After(entry.expiresAt) {
+					delete(c.entries, id)
+				}
+			}
+			c.mu.Unlock()
+		}
+	}()
+
+	return c
 }
 
 // Get retorna as guildas em cache se a entrada existir e não estiver expirada

@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { formatDateLong } from '../../utils/date';
 import {
   MessageSquare,
   Shield,
@@ -158,7 +157,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
     const raw = profileData?.user?.created_at || user?.created_at;
     if (!raw) return '';
     try {
-      return format(new Date(raw), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+      return formatDateLong(new Date(raw));
     } catch {
       return '';
     }
@@ -168,7 +167,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
     const raw = profileData?.joined_at || user?.joined_at;
     if (!raw) return '';
     try {
-      return format(new Date(raw), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+      return formatDateLong(new Date(raw));
     } catch {
       return '';
     }

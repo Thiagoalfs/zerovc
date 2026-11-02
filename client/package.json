@@ -38,7 +38,6 @@
     "clsx": "^2.1.1",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "date-fns": "^3.6.0",
     "electron": "^30.0.1",
     "electron-builder": "^24.13.3",
     "livekit-client": "^2.1.2",

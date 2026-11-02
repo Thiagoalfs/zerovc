@@ -146,7 +146,10 @@ func (c *Client) ReadPump() {
 			}
 
 		case "PING":
-			c.send <- []byte(`{"type":"PONG"}`)
+			select {
+			case c.send <- []byte(`{"type":"PONG"}`):
+			default:
+			}
 		}
 	}
 }

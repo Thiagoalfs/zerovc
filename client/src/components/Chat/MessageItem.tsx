@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { format, isToday, isYesterday, isTomorrow } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { formatTime, formatDateShort, isToday, isYesterday, isTomorrow } from '../../utils/date';
 import {
   Pencil,
   Trash2,
@@ -254,7 +253,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const formattedTime = (() => {
     try {
       const d = new Date(message.created_at);
-      const timeStr = format(d, 'HH:mm', { locale: ptBR });
+      const timeStr = formatTime(d);
       if (isToday(d)) {
         return timeStr;
       }
@@ -264,7 +263,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       if (isTomorrow(d)) {
         return `Amanhã às ${timeStr}`;
       }
-      return `${format(d, 'dd/MM/yyyy', { locale: ptBR })} às ${timeStr}`;
+      return `${formatDateShort(d)} às ${timeStr}`;
     } catch {
       return '';
     }
@@ -272,7 +271,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const shortTime = (() => {
     try {
-      return format(new Date(message.created_at), 'HH:mm', { locale: ptBR });
+      return formatTime(new Date(message.created_at));
     } catch {
       return '';
     }

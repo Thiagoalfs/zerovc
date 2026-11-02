@@ -76,7 +76,7 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 			SELECT 1 FROM guild_roles r WHERE r.guild_id = g.id AND r.name = '@everyone'
 		)
 	`)
-	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 16384 | 32768 | 65536 WHERE name = '@everyone'")
+	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 16384 | 32768 | 65536 WHERE name = '@everyone' AND (permissions & (16384 | 32768 | 65536)) != (16384 | 32768 | 65536)")
 	db.Pool.Exec(ctx, "UPDATE guild_roles SET permissions = permissions | 16384 WHERE (permissions & 128) != 0 AND (permissions & 16384) = 0")
 	db.Pool.Exec(ctx, `
 		INSERT INTO guild_member_roles (guild_id, user_id, role_id)
@@ -91,7 +91,7 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	db.Pool.Exec(ctx, "ALTER TABLE guild_invites ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE")
 
 	// Ensure all usernames are lowercase and create unique index on LOWER(username)
-	db.Pool.Exec(ctx, "UPDATE users SET username = LOWER(username)")
+	db.Pool.Exec(ctx, "UPDATE users SET username = LOWER(username) WHERE username != LOWER(username)")
 	db.Pool.Exec(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))")
 
 	// Ensure email_verified column exists

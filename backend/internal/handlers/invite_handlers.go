@@ -466,6 +466,7 @@ func (h *InviteHandler) JoinByInvite(w http.ResponseWriter, r *http.Request) {
 
 	// Post-Commit: Register user in hub and broadcast
 	h.hub.AddGuildMember(guildID, userID)
+	h.hub.InvalidateUserGuilds(userID)
 
 	var newMem models.UserPublic
 	_ = h.db.Pool.QueryRow(r.Context(), `
