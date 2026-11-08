@@ -17,6 +17,7 @@ import {
   PlusSquare,
   HelpCircle,
   ExternalLink,
+  Terminal,
 } from 'lucide-react';
 import { ZeroVCLogo } from '../Common/ZeroVCLogo';
 
@@ -25,7 +26,7 @@ interface DownloadPageProps {
   user?: any;
 }
 
-type PlatformType = 'android' | 'windows' | 'ios' | 'web';
+type PlatformType = 'android' | 'windows' | 'linux' | 'ios' | 'web';
 
 export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) => {
   const [downloadStarted, setDownloadStarted] = useState(false);
@@ -39,6 +40,8 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
       detected = 'android';
     } else if (/iphone|ipad|ipod/i.test(ua)) {
       detected = 'ios';
+    } else if (/linux/i.test(ua)) {
+      detected = 'linux';
     } else if (/windows|win32|win64/i.test(ua)) {
       detected = 'windows';
     } else {
@@ -57,6 +60,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
     if (platform === 'android') {
       fileUrl = '/downloads/ZeroVC.apk';
       fileName = 'ZeroVC.apk';
+    } else if (platform === 'linux') {
+      fileUrl = '/downloads/ZeroVC.AppImage';
+      fileName = 'ZeroVC.AppImage';
     }
 
     const link = document.createElement('a');
@@ -157,6 +163,18 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
           >
             <Laptop className="w-4 h-4 flex-shrink-0" />
             <span>Windows (.exe)</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedPlatform('linux')}
+            className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex-shrink-0 ${
+              selectedPlatform === 'linux'
+                ? 'bg-brand-600 text-white'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Terminal className="w-4 h-4 flex-shrink-0" />
+            <span>Linux (.AppImage)</span>
           </button>
 
           <button
@@ -274,6 +292,68 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                   .
                 </p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* -------------------------------------------------------------
+            PLATFORM CARD: LINUX
+        ------------------------------------------------------------- */}
+        {selectedPlatform === 'linux' && (
+          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
+            <div className="flex flex-col items-center">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white mb-4 sm:mb-6 flex-shrink-0">
+                <Terminal className="w-8 h-8 sm:w-10 sm:h-10" />
+              </div>
+
+              <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">ZeroVC para Linux</h2>
+              <div className="flex items-center gap-2 text-xs text-gray-400 mb-6 sm:mb-8 font-mono">
+                <span>Linux x64 (Universal)</span>
+                <span>•</span>
+                <span>Pacote AppImage</span>
+              </div>
+
+              {/* Main Download Button */}
+              <button
+                onClick={() => handleDownload('linux')}
+                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-bold text-sm sm:text-lg transition-colors cursor-pointer group flex-shrink-0 ${
+                  downloadStarted
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-brand-600 hover:bg-brand-500 text-white'
+                }`}
+              >
+                {downloadStarted ? (
+                  <>
+                    <Check className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
+                    <span>Download Iniciado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
+                    <span>Baixar ZeroVC AppImage (.AppImage)</span>
+                  </>
+                )}
+              </button>
+
+              {downloadStarted && (
+                <p className="text-xs text-brand-400 mt-4 animate-in fade-in">
+                  O arquivo <code className="font-mono font-semibold">ZeroVC.AppImage</code> está sendo baixado. Se o download
+                  não começar,{' '}
+                  <a href="/downloads/ZeroVC.AppImage" className="underline font-semibold hover:text-white">
+                    clique aqui
+                  </a>
+                  .
+                </p>
+              )}
+
+              <div className="w-full h-px bg-white/10 my-6" />
+
+              <div className="w-full text-left space-y-2 text-xs text-gray-400">
+                <span className="font-semibold text-gray-300">Como executar no Linux:</span>
+                <p className="font-mono bg-white/5 p-2.5 rounded-xl border border-white/5 text-gray-300">
+                  chmod +x ZeroVC.AppImage && ./ZeroVC.AppImage
+                </p>
+              </div>
             </div>
           </div>
         )}

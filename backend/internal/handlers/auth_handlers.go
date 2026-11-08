@@ -735,7 +735,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientIP := getClientIP(r)
-	if !verifyTurnstileToken(req.TurnstileToken, clientIP) {
+	if strings.TrimSpace(req.Code) == "" && !verifyTurnstileToken(req.TurnstileToken, clientIP) {
 		http.Error(w, `{"error":"Falha na verificação de segurança (Turnstile). Por favor, tente novamente."}`, http.StatusBadRequest)
 		return
 	}
@@ -760,6 +760,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil || !passwordMatches {
 		http.Error(w, `{"error":"e-mail ou senha incorretos"}`, http.StatusUnauthorized)
 		return
+	}
+
+	// Enforce Turnstile if 2FA code was sent for an account without 2FA
+	if strings.TrimSpace(req.Code) != "" && user.TwoFactorSecret == "" {
+		if !verifyTurnstileToken(req.TurnstileToken, clientIP) {
+			http.Error(w, `{"error":"Falha na verificação de segurança (Turnstile). Por favor, tente novamente."}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Check if email is verified

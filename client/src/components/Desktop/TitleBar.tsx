@@ -94,9 +94,10 @@ export const TitleBar: React.FC = () => {
     return null;
   }
 
-  const downloadHref = '/downloads/ZeroVC-Setup.exe';
-  const downloadFileName = 'ZeroVC-Setup.exe';
-  const downloadTitle = 'Baixar ZeroVC para Computador (.exe)';
+  const isLinux = typeof navigator !== 'undefined' && /linux/i.test(navigator.userAgent);
+  const downloadHref = isLinux ? '/downloads/ZeroVC.AppImage' : '/downloads/ZeroVC-Setup.exe';
+  const downloadFileName = isLinux ? 'ZeroVC.AppImage' : 'ZeroVC-Setup.exe';
+  const downloadTitle = isLinux ? 'Baixar ZeroVC para Linux (.AppImage)' : 'Baixar ZeroVC para Computador (.exe)';
 
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault();
