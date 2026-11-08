@@ -45,6 +45,8 @@ interface ParticipantCardProps {
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   onOpenDM?: (userId: string) => void;
   onOpenScreenShare?: () => void;
+  onClick?: () => void;
+  isCompact?: boolean;
 }
 
 export const ParticipantCard: React.FC<ParticipantCardProps> = ({
@@ -52,6 +54,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   onOpenUserProfile,
   onOpenDM,
   onOpenScreenShare,
+  onClick,
+  isCompact = false,
 }) => {
   const { user } = useAuthStore();
   const {
@@ -406,6 +410,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
       <div
         ref={containerRef}
         onContextMenu={handleContextMenu}
+        onClick={() => {
+          if (onClick) {
+            onClick();
+          }
+        }}
         onDoubleClick={(e) => {
           e.stopPropagation();
           if ((isScreenSharing && isWatching) || hasCameraVideoTrack) {
@@ -460,55 +469,80 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               muted
               className="w-full h-full object-cover bg-black"
             />
-            <div className="absolute top-3 right-3 p-1 rounded-lg bg-black/60 backdrop-blur-sm text-brand-400 z-10">
-              <Video className="w-3.5 h-3.5" />
+            <div className={`absolute ${isCompact ? 'top-1 right-1' : 'top-3 right-3'} p-1 rounded-lg bg-black/60 backdrop-blur-sm text-brand-400 z-10`}>
+              <Video className={isCompact ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'} />
             </div>
           </>
         ) : isScreenSharing && !isWatching ? (
           /* 3. Screen sharing active but user is NOT watching */
-          <div className="flex flex-col items-center justify-center gap-3 p-4 text-center">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-2xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-400 shadow-xl">
-                <Radio className="w-8 h-8 animate-pulse text-brand-400" />
+          isCompact ? (
+            <div className="flex flex-col items-center justify-center gap-1 p-1 text-center pointer-events-none select-none">
+              <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-xs bg-black/40">
+                {avatarUrl ? (
+                  <img src={formatAssetUrl(avatarUrl)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
+                )}
               </div>
-              <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-500" />
+              <span className="text-[9px] text-brand-400 font-semibold flex items-center gap-0.5">
+                <Radio className="w-2.5 h-2.5 animate-pulse" /> Transmitindo
               </span>
             </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-3 p-4 text-center">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-2xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-400 shadow-xl">
+                  <Radio className="w-8 h-8 animate-pulse text-brand-400" />
+                </div>
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-500" />
+                </span>
+              </div>
 
-            <div>
-              <h3 className="text-sm font-bold text-white mb-0.5">{displayName}</h3>
-              <p className="text-xs text-brand-400 font-medium">está transmitindo tela</p>
-            </div>
+              <div>
+                <h3 className="text-sm font-bold text-white mb-0.5">{displayName}</h3>
+                <p className="text-xs text-brand-400 font-medium">está transmitindo tela</p>
+              </div>
 
-            <div className="mt-1 flex items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleToggleWatch(true, 'exclusive')}
-                className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-lg shadow-brand-500/30 flex items-center gap-1.5 cursor-pointer"
-                title="Assistir esta transmissão"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Assistir Transmissão</span>
-              </button>
-
-              {hasAnyActiveWatch && (
+              <div className="mt-1 flex items-center justify-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleToggleWatch(true, 'additive')}
-                  className="bg-[#2b2d31] hover:bg-[#383a40] active:scale-95 text-gray-200 hover:text-white border border-white/10 hover:border-brand-500/50 p-2 rounded-xl transition-all shadow-md flex items-center justify-center cursor-pointer group/eye"
-                  title="Assistir junto com as outras telas"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleWatch(true, 'exclusive');
+                  }}
+                  className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-lg shadow-brand-500/30 flex items-center gap-1.5 cursor-pointer"
+                  title="Assistir esta transmissão"
                 >
-                  <Eye className="w-4 h-4 text-brand-400 group-hover/eye:scale-110 transition-transform" />
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Assistir Transmissão</span>
                 </button>
-              )}
+
+                {hasAnyActiveWatch && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleWatch(true, 'additive');
+                    }}
+                    className="bg-[#2b2d31] hover:bg-[#383a40] active:scale-95 text-gray-200 hover:text-white border border-white/10 hover:border-brand-500/50 p-2 rounded-xl transition-all shadow-md flex items-center justify-center cursor-pointer group/eye"
+                    title="Assistir junto com as outras telas"
+                  >
+                    <Eye className="w-4 h-4 text-brand-400 group-hover/eye:scale-110 transition-transform" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )
         ) : (
           /* 4. Default Voice Participant Avatar View */
           <div className="flex flex-col items-center justify-center pointer-events-none select-none">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-xl sm:text-2xl shadow-xl select-none bg-black/20 pointer-events-none">
+            <div className={`${
+              isCompact
+                ? 'w-10 h-10 text-sm'
+                : 'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 text-xl sm:text-2xl'
+            } rounded-full overflow-hidden flex items-center justify-center font-bold text-white shadow-xl select-none bg-black/20 pointer-events-none`}>
               {avatarUrl ? (
                 <img
                   src={formatAssetUrl(avatarUrl)}
@@ -526,21 +560,21 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         )}
 
         {/* Top Left Indicators: Screen & Camera Tags */}
-        <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
+        <div className={`absolute ${isCompact ? 'top-1.5 left-1.5' : 'top-3 left-3'} flex items-center gap-1.5 z-10`}>
           {isScreenSharing && (
-            <span className="bg-brand-500/90 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm">
-              <Monitor className="w-3 h-3" /> AO VIVO
+            <span className={`bg-brand-500/90 backdrop-blur-md text-white ${isCompact ? 'text-[8px] px-1.5 py-0.2' : 'text-[10px] px-2 py-0.5'} font-bold rounded-md flex items-center gap-1 shadow-sm`}>
+              <Monitor className={isCompact ? 'w-2.5 h-2.5' : 'w-3 h-3'} /> AO VIVO
             </span>
           )}
-          {isScreenSharing && !isWatching && isMuted && (
+          {isScreenSharing && !isWatching && isMuted && !isCompact && (
             <span className="bg-dnd/90 backdrop-blur-md text-white text-[10px] font-bold p-1 rounded-md flex items-center shadow-sm" title="Microfone Mutado">
               <MicOff className="w-3 h-3" />
             </span>
           )}
         </div>
 
-        {/* Top Right Unified Action Controls Bar (Hover, only for remote participants) */}
-        {!isLocal && (
+        {/* Top Right Unified Action Controls Bar (Hover, only for remote participants and not compact) */}
+        {!isLocal && !isCompact && (
           <div className={`absolute top-3 right-3 flex items-center gap-1.5 z-30 transition-opacity bg-black/75 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 shadow-lg ${showVolumeSlider ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
             {/* Watch / Stop Live Controls */}
             {isScreenSharing && isWatching && (
@@ -623,11 +657,15 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         )}
 
         {/* Bottom-left Name Pill */}
-        {!(isScreenSharing && !isWatching) && (
-          <div className="absolute bottom-2.5 left-2.5 bg-[#111214]/85 backdrop-blur-md px-2.5 py-1 rounded-md flex items-center gap-1.5 text-xs font-semibold text-white shadow-md max-w-[85%] z-20 pointer-events-none">
+        {!(isScreenSharing && !isWatching && !isCompact) && (
+          <div className={`absolute ${
+            isCompact
+              ? 'bottom-1 left-1 px-1.5 py-0.5 text-[10px]'
+              : 'bottom-2.5 left-2.5 px-2.5 py-1 text-xs'
+          } bg-[#111214]/85 backdrop-blur-md rounded-md flex items-center gap-1.5 font-semibold text-white shadow-md max-w-[85%] z-20 pointer-events-none`}>
             <span className="truncate">{displayName} {isLocal && '(Você)'}</span>
             {isMuted && (
-              <MicOff className="w-3.5 h-3.5 text-dnd flex-shrink-0" />
+              <MicOff className={`${isCompact ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'} text-dnd flex-shrink-0`} />
             )}
           </div>
         )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff, MonitorOff } from 'lucide-react';
+import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff, MonitorOff, ChevronDown, ChevronUp, Users, LayoutGrid } from 'lucide-react';
 import { Channel, User, VoiceSession } from '../../types';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -56,6 +56,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
   const stageRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [spotlightParticipantId, setSpotlightParticipantId] = useState<string | null>(null);
+  const [isBottomStripCollapsed, setIsBottomStripCollapsed] = useState(false);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -207,6 +209,11 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     return result;
   }, [effectiveVoiceSessions, isConnectedToThisChannel, participants, user?.id, activeGuild]);
 
+  const spotlightParticipant = useMemo(() => {
+    if (!spotlightParticipantId) return null;
+    return displayedParticipants.find((p) => (p.sid || p.identity) === spotlightParticipantId) || null;
+  }, [spotlightParticipantId, displayedParticipants]);
+
   // Exact 16:9 adaptive grid calculator
   const stageLayout = useMemo(() => {
     const count = displayedParticipants.length;
@@ -341,6 +348,104 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
               </button>
             )}
           </div>
+        ) : spotlightParticipant ? (
+          /* Spotlight View (Focused card on top, participant filmstrip below - Anexo 1 & 2) */
+          <div className="w-full h-full flex flex-col items-center justify-between min-h-0 min-w-0 overflow-hidden relative">
+            {/* 1. Main Spotlight Card */}
+            <div className="flex-1 w-full min-h-0 min-w-0 flex items-center justify-center p-1.5 sm:p-2.5 relative overflow-hidden">
+              <div className="w-full h-full max-w-full max-h-full aspect-video flex items-center justify-center">
+                <ParticipantCard
+                  participant={spotlightParticipant}
+                  onOpenUserProfile={onOpenUserProfile}
+                  onOpenDM={onOpenDM}
+                  onOpenScreenShare={onOpenScreenShare}
+                  onClick={() => setSpotlightParticipantId(null)}
+                />
+              </div>
+
+              {/* Exit Spotlight / Return to Grid button (top-right overlay) */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSpotlightParticipantId(null);
+                }}
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/65 hover:bg-black/85 text-gray-300 hover:text-white border border-white/10 backdrop-blur-md text-xs font-semibold shadow-lg transition-all active:scale-95 cursor-pointer"
+                title="Restaurar visualização em grade"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Grade</span>
+              </button>
+
+              {/* Floating Expand Button at base of spotlight card when filmstrip is collapsed (Anexo 2) */}
+              {isBottomStripCollapsed && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsBottomStripCollapsed(false);
+                  }}
+                  className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1e1f22]/95 hover:bg-[#2b2d31] text-white border border-white/15 shadow-2xl backdrop-blur-md transition-all active:scale-95 cursor-pointer animate-in fade-in zoom-in-95 group"
+                  title="Mostrar participantes"
+                >
+                  <ChevronUp className="w-4 h-4 text-gray-300 group-hover:text-white transition-transform" />
+                  <Users className="w-4 h-4 text-gray-300 group-hover:text-white" />
+                </button>
+              )}
+            </div>
+
+            {/* 2. Bottom Filmstrip of Participants (Anexo 1 & 2) */}
+            {!isBottomStripCollapsed && (
+              <div className="w-full flex-shrink-0 relative pt-3 pb-1.5 px-2 border-t border-white/5 bg-background-darkest/50 backdrop-blur-sm flex flex-col items-center">
+                {/* Collapse Button (Anexo 2) placed on top center of the bottom filmstrip */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsBottomStripCollapsed(true);
+                  }}
+                  className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1e1f22] hover:bg-[#2b2d31] text-white border border-white/15 shadow-md backdrop-blur-md transition-all active:scale-95 cursor-pointer group"
+                  title="Ocultar participantes"
+                >
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-300 group-hover:text-white transition-transform" />
+                  <Users className="w-3.5 h-3.5 text-gray-300 group-hover:text-white" />
+                </button>
+
+                {/* Horizontal scrollable row of participant thumbnails */}
+                <div className="w-full flex items-center justify-center gap-2 overflow-x-auto py-1 px-1 no-scrollbar max-w-full">
+                  {displayedParticipants.map((p) => {
+                    const pId = p.sid || p.identity;
+                    const isSelected = pId === (spotlightParticipant.sid || spotlightParticipant.identity);
+                    return (
+                      <div
+                        key={pId}
+                        className={`h-18 sm:h-22 aspect-video flex-shrink-0 rounded-xl overflow-hidden transition-all duration-150 cursor-pointer ${
+                          isSelected
+                            ? 'ring-2 ring-brand-500 scale-[1.02] shadow-lg shadow-brand-500/20'
+                            : 'opacity-85 hover:opacity-100 hover:scale-[1.02]'
+                        }`}
+                      >
+                        <ParticipantCard
+                          participant={p}
+                          onOpenUserProfile={onOpenUserProfile}
+                          onOpenDM={onOpenDM}
+                          onOpenScreenShare={onOpenScreenShare}
+                          isCompact
+                          onClick={() => {
+                            if (isSelected) {
+                              setSpotlightParticipantId(null);
+                            } else {
+                              setSpotlightParticipantId(pId);
+                            }
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-3 overflow-hidden">
             {/* Participant Cards Grid */}
@@ -369,6 +474,9 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                         onOpenUserProfile={onOpenUserProfile}
                         onOpenDM={onOpenDM}
                         onOpenScreenShare={onOpenScreenShare}
+                        onClick={() => {
+                          setSpotlightParticipantId(p.sid || p.identity);
+                        }}
                       />
                     </div>
                   ))}

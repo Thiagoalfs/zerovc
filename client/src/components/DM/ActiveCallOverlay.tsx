@@ -8,6 +8,10 @@ import {
   VideoOff,
   Monitor,
   Volume2,
+  ChevronDown,
+  ChevronUp,
+  Users,
+  LayoutGrid,
 } from 'lucide-react';
 import { useCallStore } from '../../stores/callStore';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -57,6 +61,8 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
+  const [spotlightParticipantId, setSpotlightParticipantId] = useState<string | null>(null);
+  const [isBottomStripCollapsed, setIsBottomStripCollapsed] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -152,6 +158,11 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
       rows,
     };
   }, [participants, containerDimensions]);
+
+  const spotlightParticipant = useMemo(() => {
+    if (!spotlightParticipantId) return null;
+    return participants.find((p) => (p.sid || p.identity) === spotlightParticipantId) || null;
+  }, [spotlightParticipantId, participants]);
 
   if (!isCalling && !isDMVoiceActive) return null;
 
@@ -253,6 +264,104 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                 <Volume2 className="w-8 h-8 text-gray-500 animate-pulse" />
                 <span className="text-xs">Aguardando conexão...</span>
               </div>
+            ) : spotlightParticipant ? (
+              /* Spotlight View (Focused card on top, participant filmstrip below - Anexo 1 & 2) */
+              <div className="w-full h-full flex flex-col items-center justify-between min-h-0 min-w-0 overflow-hidden relative">
+                {/* 1. Main Spotlight Card */}
+                <div className="flex-1 w-full min-h-0 min-w-0 flex items-center justify-center p-1 relative overflow-hidden">
+                  <div className="w-full h-full max-w-full max-h-full aspect-video flex items-center justify-center">
+                    <ParticipantCard
+                      participant={spotlightParticipant}
+                      onOpenUserProfile={onOpenUserProfile}
+                      onOpenDM={onOpenDM}
+                      onOpenScreenShare={onOpenScreenShare}
+                      onClick={() => setSpotlightParticipantId(null)}
+                    />
+                  </div>
+
+                  {/* Exit Spotlight / Return to Grid button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSpotlightParticipantId(null);
+                    }}
+                    className="absolute top-2 right-2 z-20 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/60 hover:bg-black/80 text-gray-300 hover:text-white border border-white/10 backdrop-blur-md text-[11px] font-semibold shadow transition-all active:scale-95 cursor-pointer"
+                    title="Restaurar visualização em grade"
+                  >
+                    <LayoutGrid className="w-3 h-3" />
+                    <span>Grade</span>
+                  </button>
+
+                  {/* Floating Expand Button at base of spotlight card when collapsed (Anexo 2) */}
+                  {isBottomStripCollapsed && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsBottomStripCollapsed(false);
+                      }}
+                      className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1e1f22]/95 hover:bg-[#2b2d31] text-white border border-white/15 shadow-xl backdrop-blur-md transition-all active:scale-95 cursor-pointer animate-in fade-in zoom-in-95 group"
+                      title="Mostrar participantes"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5 text-gray-300 group-hover:text-white transition-transform" />
+                      <Users className="w-3.5 h-3.5 text-gray-300 group-hover:text-white" />
+                    </button>
+                  )}
+                </div>
+
+                {/* 2. Bottom Filmstrip of Participants (Anexo 1 & 2) */}
+                {!isBottomStripCollapsed && (
+                  <div className="w-full flex-shrink-0 relative pt-2.5 pb-0.5 px-1 border-t border-white/5 bg-background-darkest/50 backdrop-blur-sm flex flex-col items-center">
+                    {/* Collapse Button (Anexo 2) placed on top center of the bottom filmstrip */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsBottomStripCollapsed(true);
+                      }}
+                      className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1e1f22] hover:bg-[#2b2d31] text-white border border-white/15 shadow-md backdrop-blur-md transition-all active:scale-95 cursor-pointer group"
+                      title="Ocultar participantes"
+                    >
+                      <ChevronDown className="w-3 h-3 text-gray-300 group-hover:text-white transition-transform" />
+                      <Users className="w-3 h-3 text-gray-300 group-hover:text-white" />
+                    </button>
+
+                    {/* Horizontal scrollable row of participant thumbnails */}
+                    <div className="w-full flex items-center justify-center gap-1.5 overflow-x-auto py-0.5 px-1 no-scrollbar max-w-full">
+                      {participants.map((p) => {
+                        const pId = p.sid || p.identity;
+                        const isSelected = pId === (spotlightParticipant.sid || spotlightParticipant.identity);
+                        return (
+                          <div
+                            key={pId}
+                            className={`h-14 sm:h-16 aspect-video flex-shrink-0 rounded-lg overflow-hidden transition-all duration-150 cursor-pointer ${
+                              isSelected
+                                ? 'ring-2 ring-brand-500 scale-[1.02] shadow'
+                                : 'opacity-85 hover:opacity-100 hover:scale-[1.02]'
+                            }`}
+                          >
+                            <ParticipantCard
+                              participant={p}
+                              onOpenUserProfile={onOpenUserProfile}
+                              onOpenDM={onOpenDM}
+                              onOpenScreenShare={onOpenScreenShare}
+                              isCompact
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSpotlightParticipantId(null);
+                                } else {
+                                  setSpotlightParticipantId(pId);
+                                }
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-2 overflow-hidden">
                 {stageLayout.rows.map((row, rIdx) => (
@@ -277,6 +386,9 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                           onOpenUserProfile={onOpenUserProfile}
                           onOpenDM={onOpenDM}
                           onOpenScreenShare={onOpenScreenShare}
+                          onClick={() => {
+                            setSpotlightParticipantId(p.sid || p.identity);
+                          }}
                         />
                       </div>
                     ))}
