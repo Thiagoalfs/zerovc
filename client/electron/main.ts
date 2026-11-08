@@ -4,6 +4,20 @@ import fs from 'fs';
 import os from 'os';
 import { spawn, execSync, ChildProcess } from 'child_process';
 
+// Prevent unhandled EPIPE crashes when stdout/stderr is closed (common in Linux AppImage/GUI launch)
+process.stdout?.on('error', (err: any) => {
+  if (err?.code === 'EPIPE') return;
+});
+process.stderr?.on('error', (err: any) => {
+  if (err?.code === 'EPIPE') return;
+});
+process.on('uncaughtException', (err: any) => {
+  if (err?.code === 'EPIPE') return;
+  try {
+    console.error('[UncaughtException]', err);
+  } catch {}
+});
+
 app.name = 'ZeroVC';
 process.title = 'ZeroVC';
 app.setAppUserModelId('com.zerovc.app');
@@ -11,6 +25,14 @@ app.setAppUserModelId('com.zerovc.app');
 let autoUpdater: any = null;
 try {
   autoUpdater = require('electron-updater').autoUpdater;
+  if (autoUpdater) {
+    autoUpdater.logger = {
+      info: (...args: any[]) => { try { console.log(...args); } catch {} },
+      warn: (...args: any[]) => { try { console.warn(...args); } catch {} },
+      error: (...args: any[]) => { try { console.error(...args); } catch {} },
+      debug: () => {},
+    };
+  }
 } catch (err) {
   console.warn('[AutoUpdater] electron-updater could not be loaded:', err);
 }
