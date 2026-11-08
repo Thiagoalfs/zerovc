@@ -20,15 +20,38 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) => {
-  const [os, setOs] = React.useState<'android' | 'windows' | 'ios' | 'other'>('windows');
+  const [os, setOs] = React.useState<'android' | 'windows' | 'linux' | 'ios' | 'other'>('windows');
 
   React.useEffect(() => {
     const ua = (navigator.userAgent || '').toLowerCase();
     if (/android/i.test(ua)) setOs('android');
     else if (/iphone|ipad|ipod/i.test(ua)) setOs('ios');
+    else if (/linux/i.test(ua)) setOs('linux');
     else if (/windows|win32|win64/i.test(ua)) setOs('windows');
     else setOs('other');
   }, []);
+
+  const handleDownload = () => {
+    if (os === 'ios' || os === 'other') {
+      onNavigate('/download');
+      return;
+    }
+    let fileUrl = '/downloads/ZeroVC-Setup.exe';
+    let fileName = 'ZeroVC-Setup.exe';
+    if (os === 'android') {
+      fileUrl = '/downloads/ZeroVC.apk';
+      fileName = 'ZeroVC.apk';
+    } else if (os === 'linux') {
+      fileUrl = '/downloads/ZeroVC.AppImage';
+      fileName = 'ZeroVC.AppImage';
+    }
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="min-h-screen w-full bg-background-darkest text-gray-100 flex flex-col font-sans selection:bg-brand-500/30 selection:text-white">
@@ -111,14 +134,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
         {/* CTA Button Group */}
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto justify-center mb-16">
           <button
-            onClick={() => onNavigate('/download')}
+            onClick={handleDownload}
             className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-base transition-colors cursor-pointer group"
           >
             <Download className="w-5 h-5" />
             <span>
-              {os === 'android' && 'Baixar para Android (.apk)'}
-              {os === 'windows' && 'Baixar para Windows (Setup)'}
-              {os === 'ios' && 'Instalar no iOS (PWA)'}
+              {os === 'android' && 'Baixar para Android'}
+              {os === 'windows' && 'Baixar para Windows'}
+              {os === 'linux' && 'Baixar para Linux'}
+              {os === 'ios' && 'Instalar no iOS'}
               {os === 'other' && 'Baixar o Aplicativo'}
             </span>
           </button>
@@ -401,15 +425,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
               Pronto para elevar suas conversas a outro nível?
             </h2>
             <p className="text-white/80 text-base leading-relaxed">
-              Baixe o aplicativo para Windows ou entre diretamente pelo navegador em menos de 10 segundos.
+              {os === 'linux' && 'Baixe o aplicativo para Linux ou entre diretamente pelo navegador em menos de 10 segundos.'}
+              {os === 'android' && 'Baixe o aplicativo para Android ou entre diretamente pelo navegador em menos de 10 segundos.'}
+              {os === 'windows' && 'Baixe o aplicativo para Windows ou entre diretamente pelo navegador em menos de 10 segundos.'}
+              {(os === 'ios' || os === 'other') && 'Baixe o aplicativo ou entre diretamente pelo navegador em menos de 10 segundos.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
               <button
-                onClick={() => onNavigate('/download')}
+                onClick={handleDownload}
                 className="px-8 py-3.5 rounded-2xl bg-white text-gray-900 font-bold hover:bg-gray-100 transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <Download className="w-5 h-5 text-brand-600" />
-                <span>Baixar Instalador Windows</span>
+                <span>
+                  {os === 'linux' && 'Baixar Instalador Linux'}
+                  {os === 'windows' && 'Baixar Instalador Windows'}
+                  {os === 'android' && 'Baixar para Android'}
+                  {os === 'ios' && 'Instalar no iOS'}
+                  {os === 'other' && 'Baixar o Aplicativo'}
+                </span>
               </button>
               <button
                 onClick={() => onNavigate(user ? '/@me' : '/signup')}

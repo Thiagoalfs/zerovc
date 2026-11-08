@@ -1539,64 +1539,77 @@ let activeAudioProcess: ChildProcess | null = null;
 let activeAudioBuffer = Buffer.alloc(0);
 const AUDIO_CHUNK_BYTES = 3840; // 480 frames * 2 channels * 4 bytes (Float32) = 10ms at 48kHz
 
-interface LinuxAudioState {
-  realSink: string;
-  sinkModuleId: string | null;
-  loopModuleId: string | null;
-  isolateInterval: NodeJS.Timeout | null;
+let linuxLinkInterval: NodeJS.Timeout | null = null;
+
+function isZeroVCPid(pid: number): boolean {
+  let cur = pid;
+  for (let i = 0; i < 8 && cur > 1; i++) {
+    if (cur === process.pid) return true;
+    try {
+      const stat = fs.readFileSync(`/proc/${cur}/stat`, 'utf8');
+      const afterComm = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+      cur = Number(afterComm[1]) || 0;
+    } catch {
+      break;
+    }
+  }
+  return false;
 }
-let linuxAudioState: LinuxAudioState | null = null;
 
-function isolateZeroVCSinkInputs(realSink: string) {
+function syncLinuxAudioLinks() {
   try {
-    const out = execSync('pactl list sink-inputs', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    const blocks = out.split(/(?=Entrada do destino #|Sink Input #)/i);
-    for (const block of blocks) {
-      const idMatch = block.match(/(?:Entrada do destino #|Sink Input #)(\d+)/i);
-      const pidMatch = block.match(/application\.process\.id\s*=\s*"(\d+)"/);
-      const binMatch = block.match(/application\.process\.binary\s*=\s*"([^"]+)"/);
-      const nameMatch = block.match(/application\.name\s*=\s*"([^"]+)"/);
-      if (!idMatch) continue;
-      const inputId = idMatch[1];
-      const pid = pidMatch ? pidMatch[1] : '';
-      const bin = binMatch ? binMatch[1] : '';
-      const name = nameMatch ? nameMatch[1] : '';
+    const raw = execSync('pw-dump', { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+    const dump = JSON.parse(raw) as any[];
 
-      const isZeroVC = (
-        pid === String(process.pid) ||
-        /^(zerovc|electron)$/i.test(bin) ||
-        /zerovc/i.test(name)
-      );
+    const capNode = dump.find(
+      (o) => o.type === 'PipeWire:Interface:Node' && o.info?.props?.['node.name'] === 'zerovc_capture'
+    );
+    if (!capNode) return;
 
-      if (isZeroVC) {
-        try {
-          execSync(`pactl move-sink-input ${inputId} "${realSink}"`, { stdio: 'ignore' });
-        } catch {}
+    const ports = dump.filter((o) => o.type === 'PipeWire:Interface:Port');
+    const capFL = ports.find((p) => p.info?.props?.['node.id'] === capNode.id && p.info?.props?.['audio.channel'] === 'FL');
+    const capFR = ports.find((p) => p.info?.props?.['node.id'] === capNode.id && p.info?.props?.['audio.channel'] === 'FR');
+    if (!capFL || !capFR) return;
+
+    const existingLinks = new Set(
+      dump
+        .filter((o) => o.type === 'PipeWire:Interface:Link')
+        .map((l) => `${l.info?.['output-port-id']}->${l.info?.['input-port-id']}`)
+    );
+
+    const outNodes = dump.filter(
+      (o) => o.type === 'PipeWire:Interface:Node' && o.info?.props?.['media.class'] === 'Stream/Output/Audio'
+    );
+
+    for (const node of outNodes) {
+      const props = node.info?.props || {};
+      const pid = Number(props['application.process.id']) || 0;
+      const bin = String(props['application.process.binary'] || '');
+      const appName = String(props['application.name'] || '');
+
+      if (/zerovc/i.test(bin) || /zerovc/i.test(appName) || (pid > 0 && isZeroVCPid(pid))) {
+        continue;
+      }
+
+      const nodePorts = ports.filter((p) => p.info?.props?.['node.id'] === node.id && p.info?.direction === 'output');
+      for (const pt of nodePorts) {
+        const ch = pt.info?.props?.['audio.channel'];
+        if ((ch === 'FL' || ch === 'MONO') && !existingLinks.has(`${pt.id}->${capFL.id}`)) {
+          try { execSync(`pw-link ${pt.id} ${capFL.id}`, { stdio: 'ignore' }); } catch {}
+        }
+        if ((ch === 'FR' || ch === 'MONO') && !existingLinks.has(`${pt.id}->${capFR.id}`)) {
+          try { execSync(`pw-link ${pt.id} ${capFR.id}`, { stdio: 'ignore' }); } catch {}
+        }
       }
     }
   } catch {}
 }
 
 function cleanupLinuxAudioState() {
-  if (!linuxAudioState) return;
-  const { realSink, sinkModuleId, loopModuleId, isolateInterval } = linuxAudioState;
-  if (isolateInterval) clearInterval(isolateInterval);
-  try {
-    if (realSink) {
-      execSync(`pactl set-default-sink "${realSink}"`, { stdio: 'ignore' });
-    }
-  } catch {}
-  try {
-    if (loopModuleId) {
-      execSync(`pactl unload-module ${loopModuleId}`, { stdio: 'ignore' });
-    }
-  } catch {}
-  try {
-    if (sinkModuleId) {
-      execSync(`pactl unload-module ${sinkModuleId}`, { stdio: 'ignore' });
-    }
-  } catch {}
-  linuxAudioState = null;
+  if (linuxLinkInterval) {
+    clearInterval(linuxLinkInterval);
+    linuxLinkInterval = null;
+  }
 }
 
 ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => {
@@ -1609,69 +1622,28 @@ ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceI
   activeAudioBuffer = Buffer.alloc(0);
   cleanupLinuxAudioState();
 
-  // Linux: captura de áudio com isolamento do ZeroVC via PipeWire/PulseAudio
+  // Linux: captura de streams via PipeWire (pw-record + pw-link) sem alterar o dispositivo de saída padrão
   if (process.platform === 'linux') {
     try {
-      let captureTarget = 'ZeroVC_Share';
-      let realSink = '';
+      execSync('which pw-record pw-link pw-dump', { stdio: 'ignore' });
+      const recordArgs = [
+        '--target', '0',
+        '-P', 'node.name=zerovc_capture',
+        '--raw',
+        '--format', 'f32',
+        '--rate', '48000',
+        '--channels', '2',
+        '-',
+      ];
 
-      try {
-        realSink = execSync('pactl get-default-sink', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-      } catch {}
-
-      if (realSink) {
-        let sinkModuleId: string | null = null;
-        let loopModuleId: string | null = null;
-        try {
-          sinkModuleId = execSync('pactl load-module module-null-sink sink_name=ZeroVC_Share sink_properties=device.description="ZeroVC_Share"', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-          loopModuleId = execSync(`pactl load-module module-loopback source=ZeroVC_Share.monitor sink="${realSink}" latency_msec=20`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-          execSync('pactl set-default-sink ZeroVC_Share', { stdio: 'ignore' });
-
-          isolateZeroVCSinkInputs(realSink);
-          const isolateInterval = setInterval(() => {
-            isolateZeroVCSinkInputs(realSink);
-          }, 1000);
-
-          linuxAudioState = {
-            realSink,
-            sinkModuleId,
-            loopModuleId,
-            isolateInterval,
-          };
-        } catch (setupErr) {
-          console.warn('[AudioCapture Linux] Falha ao configurar virtual sink, usando captura direta:', setupErr);
-          cleanupLinuxAudioState();
-          captureTarget = realSink;
-        }
-      }
-
-      let bin = '';
-      let recordArgs: string[] = [];
-
-      try {
-        execSync('which pw-record', { stdio: 'ignore' });
-        bin = 'pw-record';
-        recordArgs = captureTarget
-          ? ['--target', captureTarget, '--raw', '--format', 'f32', '--rate', '48000', '--channels', '2', '-']
-          : ['--raw', '--format', 'f32', '--rate', '48000', '--channels', '2', '-'];
-      } catch {
-        try {
-          execSync('which parec', { stdio: 'ignore' });
-          bin = 'parec';
-          const dev = captureTarget ? `${captureTarget}.monitor` : '@DEFAULT_MONITOR@';
-          recordArgs = ['-d', dev, '--format=float32le', '--rate=48000', '--channels=2'];
-        } catch {
-          cleanupLinuxAudioState();
-          return { success: false, error: 'pw-record ou parec nao encontrado no Linux' };
-        }
-      }
-
-      console.log('[AudioCapture Linux] Iniciando captura de audio:', bin, recordArgs);
-      const child = spawn(bin, recordArgs, {
+      console.log('[AudioCapture Linux] Iniciando captura PipeWire sem alterar sink padrao');
+      const child = spawn('pw-record', recordArgs, {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
       activeAudioProcess = child;
+      setTimeout(syncLinuxAudioLinks, 300);
+      linuxLinkInterval = setInterval(syncLinuxAudioLinks, 1000);
 
       child.stdout.on('data', (chunk: Buffer) => {
         activeAudioBuffer = Buffer.concat([activeAudioBuffer, chunk]);
