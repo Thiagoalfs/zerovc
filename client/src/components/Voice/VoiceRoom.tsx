@@ -363,20 +363,6 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                 />
               </div>
 
-              {/* Exit Spotlight / Return to Grid button (top-right overlay) */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSpotlightParticipantId(null);
-                }}
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/65 hover:bg-black/85 text-gray-300 hover:text-white border border-white/10 backdrop-blur-md text-xs font-semibold shadow-lg transition-all active:scale-95 cursor-pointer"
-                title="Restaurar visualização em grade"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Grade</span>
-              </button>
-
               {/* Floating Expand Button at base of spotlight card when filmstrip is collapsed (Anexo 2) */}
               {isBottomStripCollapsed && (
                 <button
@@ -422,8 +408,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                         onClick={() => setSpotlightParticipantId(pId)}
                         className={`h-28 sm:h-32 md:h-36 aspect-video flex-shrink-0 rounded-2xl overflow-hidden transition-all duration-150 cursor-pointer ${
                           isSelected
-                            ? 'ring-2 ring-brand-500 scale-[1.02] shadow-lg shadow-brand-500/20'
-                            : 'opacity-90 hover:opacity-100 hover:scale-[1.02]'
+                            ? 'ring-2 ring-brand-500 shadow-md'
+                            : 'border border-white/5 hover:border-white/20'
                         }`}
                       >
                         <ParticipantCard

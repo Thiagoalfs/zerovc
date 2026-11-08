@@ -279,20 +279,6 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                     />
                   </div>
 
-                  {/* Exit Spotlight / Return to Grid button */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSpotlightParticipantId(null);
-                    }}
-                    className="absolute top-2 right-2 z-20 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/60 hover:bg-black/80 text-gray-300 hover:text-white border border-white/10 backdrop-blur-md text-[11px] font-semibold shadow transition-all active:scale-95 cursor-pointer"
-                    title="Restaurar visualização em grade"
-                  >
-                    <LayoutGrid className="w-3 h-3" />
-                    <span>Grade</span>
-                  </button>
-
                   {/* Floating Expand Button at base of spotlight card when collapsed (Anexo 2) */}
                   {isBottomStripCollapsed && (
                     <button
@@ -338,8 +324,8 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                             onClick={() => setSpotlightParticipantId(pId)}
                             className={`h-20 sm:h-24 aspect-video flex-shrink-0 rounded-xl overflow-hidden transition-all duration-150 cursor-pointer ${
                               isSelected
-                                ? 'ring-2 ring-brand-500 scale-[1.02] shadow'
-                                : 'opacity-85 hover:opacity-100 hover:scale-[1.02]'
+                                ? 'ring-2 ring-brand-500 shadow-md'
+                                : 'border border-white/5 hover:border-white/20'
                             }`}
                           >
                             <ParticipantCard
