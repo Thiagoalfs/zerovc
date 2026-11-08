@@ -211,7 +211,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
   const spotlightParticipant = useMemo(() => {
     if (!spotlightParticipantId) return null;
-    return displayedParticipants.find((p) => (p.sid || p.identity) === spotlightParticipantId) || null;
+    return displayedParticipants.find((p) => (p.identity || p.sid) === spotlightParticipantId) || null;
   }, [spotlightParticipantId, displayedParticipants]);
 
   // Exact 16:9 adaptive grid calculator
@@ -396,7 +396,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
             {/* 2. Bottom Filmstrip of Participants (Anexo 1 & 2) */}
             {!isBottomStripCollapsed && (
-              <div className="w-full flex-shrink-0 relative pt-3 pb-1.5 px-2 border-t border-white/5 bg-background-darkest/50 backdrop-blur-sm flex flex-col items-center">
+              <div className="w-full flex-shrink-0 relative pt-4 pb-2 px-3 flex flex-col items-center">
                 {/* Collapse Button (Anexo 2) placed on top center of the bottom filmstrip */}
                 <button
                   type="button"
@@ -412,17 +412,18 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                 </button>
 
                 {/* Horizontal scrollable row of participant thumbnails */}
-                <div className="w-full flex items-center justify-center gap-2 overflow-x-auto py-1 px-1 no-scrollbar max-w-full">
+                <div className="w-full flex items-center justify-center gap-2.5 overflow-x-auto py-1 px-1 no-scrollbar max-w-full">
                   {displayedParticipants.map((p) => {
-                    const pId = p.sid || p.identity;
-                    const isSelected = pId === (spotlightParticipant.sid || spotlightParticipant.identity);
+                    const pId = p.identity || p.sid;
+                    const isSelected = (spotlightParticipant.identity || spotlightParticipant.sid) === pId;
                     return (
                       <div
                         key={pId}
-                        className={`h-18 sm:h-22 aspect-video flex-shrink-0 rounded-xl overflow-hidden transition-all duration-150 cursor-pointer ${
+                        onClick={() => setSpotlightParticipantId(pId)}
+                        className={`h-28 sm:h-32 md:h-36 aspect-video flex-shrink-0 rounded-2xl overflow-hidden transition-all duration-150 cursor-pointer ${
                           isSelected
                             ? 'ring-2 ring-brand-500 scale-[1.02] shadow-lg shadow-brand-500/20'
-                            : 'opacity-85 hover:opacity-100 hover:scale-[1.02]'
+                            : 'opacity-90 hover:opacity-100 hover:scale-[1.02]'
                         }`}
                       >
                         <ParticipantCard
@@ -431,13 +432,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                           onOpenDM={onOpenDM}
                           onOpenScreenShare={onOpenScreenShare}
                           isCompact
-                          onClick={() => {
-                            if (isSelected) {
-                              setSpotlightParticipantId(null);
-                            } else {
-                              setSpotlightParticipantId(pId);
-                            }
-                          }}
+                          onClick={() => setSpotlightParticipantId(pId)}
                         />
                       </div>
                     );
@@ -475,7 +470,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                         onOpenDM={onOpenDM}
                         onOpenScreenShare={onOpenScreenShare}
                         onClick={() => {
-                          setSpotlightParticipantId(p.sid || p.identity);
+                          setSpotlightParticipantId(p.identity || p.sid);
                         }}
                       />
                     </div>
@@ -517,7 +512,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
       {isConnectedToThisChannel && (
         <div 
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
-          className="p-3 md:p-4 flex justify-center bg-background-darker/80 backdrop-blur-md border-t border-black/20 select-none z-10 flex-shrink-0 animate-in slide-in-from-bottom-2 duration-200"
+          className="pt-1 pb-3 px-3 md:pt-1.5 md:pb-4 md:px-4 flex justify-center bg-background-dark select-none z-10 flex-shrink-0 animate-in slide-in-from-bottom-2 duration-200"
         >
           <VoiceControlBar onOpenScreenShare={onOpenScreenShare} />
         </div>

@@ -1,9 +1,9 @@
 version: 1.0.20
 files:
   - url: ZeroVC.AppImage
-    sha512: cnp22uM8aALN3KGOJUaRnGergcd8ilDWh4UT3R685jec8cTNFmdh5HfYmJMQ04v9YgTOFIn+IS6BHui7LKbKTQ==
-    size: 77939830
-    blockMapSize: 83082
+    sha512: +A4RuxQIeZMsi+xYh5oYmKF2amdbbAk8QyoGb4+NKHlIzBeltzSq3kzLVVfB7cL/EU4l6BU4BawTIpBvnxO5tg==
+    size: 77939382
+    blockMapSize: 82634
 path: ZeroVC.AppImage
-sha512: cnp22uM8aALN3KGOJUaRnGergcd8ilDWh4UT3R685jec8cTNFmdh5HfYmJMQ04v9YgTOFIn+IS6BHui7LKbKTQ==
-releaseDate: '2026-11-08T18:20:43.747Z'
+sha512: +A4RuxQIeZMsi+xYh5oYmKF2amdbbAk8QyoGb4+NKHlIzBeltzSq3kzLVVfB7cL/EU4l6BU4BawTIpBvnxO5tg==
+releaseDate: '2026-11-08T18:37:36.455Z'

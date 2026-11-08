@@ -476,16 +476,16 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         ) : isScreenSharing && !isWatching ? (
           /* 3. Screen sharing active but user is NOT watching */
           isCompact ? (
-            <div className="flex flex-col items-center justify-center gap-1 p-1 text-center pointer-events-none select-none">
-              <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-xs bg-black/40">
+            <div className="flex flex-col items-center justify-center gap-1.5 p-1 text-center pointer-events-none select-none">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-sm bg-black/40">
                 {avatarUrl ? (
                   <img src={formatAssetUrl(avatarUrl)} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
                 )}
               </div>
-              <span className="text-[9px] text-brand-400 font-semibold flex items-center gap-0.5">
-                <Radio className="w-2.5 h-2.5 animate-pulse" /> Transmitindo
+              <span className="text-[10px] text-brand-400 font-semibold flex items-center gap-0.5">
+                <Radio className="w-3 h-3 animate-pulse" /> Ao Vivo
               </span>
             </div>
           ) : (
@@ -540,7 +540,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           <div className="flex flex-col items-center justify-center pointer-events-none select-none">
             <div className={`${
               isCompact
-                ? 'w-10 h-10 text-sm'
+                ? 'w-12 h-12 sm:w-14 sm:h-14 text-base sm:text-lg'
                 : 'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 text-xl sm:text-2xl'
             } rounded-full overflow-hidden flex items-center justify-center font-bold text-white shadow-xl select-none bg-black/20 pointer-events-none`}>
               {avatarUrl ? (
@@ -660,12 +660,12 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         {!(isScreenSharing && !isWatching && !isCompact) && (
           <div className={`absolute ${
             isCompact
-              ? 'bottom-1 left-1 px-1.5 py-0.5 text-[10px]'
+              ? 'bottom-1.5 left-1.5 px-2 py-0.5 text-[11px]'
               : 'bottom-2.5 left-2.5 px-2.5 py-1 text-xs'
           } bg-[#111214]/85 backdrop-blur-md rounded-md flex items-center gap-1.5 font-semibold text-white shadow-md max-w-[85%] z-20 pointer-events-none`}>
             <span className="truncate">{displayName} {isLocal && '(Você)'}</span>
             {isMuted && (
-              <MicOff className={`${isCompact ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'} text-dnd flex-shrink-0`} />
+              <MicOff className={`${isCompact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-dnd flex-shrink-0`} />
             )}
           </div>
         )}

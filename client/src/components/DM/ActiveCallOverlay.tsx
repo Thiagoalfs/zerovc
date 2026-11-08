@@ -161,7 +161,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
 
   const spotlightParticipant = useMemo(() => {
     if (!spotlightParticipantId) return null;
-    return participants.find((p) => (p.sid || p.identity) === spotlightParticipantId) || null;
+    return participants.find((p) => (p.identity || p.sid) === spotlightParticipantId) || null;
   }, [spotlightParticipantId, participants]);
 
   if (!isCalling && !isDMVoiceActive) return null;
@@ -330,12 +330,13 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                     {/* Horizontal scrollable row of participant thumbnails */}
                     <div className="w-full flex items-center justify-center gap-1.5 overflow-x-auto py-0.5 px-1 no-scrollbar max-w-full">
                       {participants.map((p) => {
-                        const pId = p.sid || p.identity;
-                        const isSelected = pId === (spotlightParticipant.sid || spotlightParticipant.identity);
+                        const pId = p.identity || p.sid;
+                        const isSelected = (spotlightParticipant.identity || spotlightParticipant.sid) === pId;
                         return (
                           <div
                             key={pId}
-                            className={`h-14 sm:h-16 aspect-video flex-shrink-0 rounded-lg overflow-hidden transition-all duration-150 cursor-pointer ${
+                            onClick={() => setSpotlightParticipantId(pId)}
+                            className={`h-20 sm:h-24 aspect-video flex-shrink-0 rounded-xl overflow-hidden transition-all duration-150 cursor-pointer ${
                               isSelected
                                 ? 'ring-2 ring-brand-500 scale-[1.02] shadow'
                                 : 'opacity-85 hover:opacity-100 hover:scale-[1.02]'
@@ -347,13 +348,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                               onOpenDM={onOpenDM}
                               onOpenScreenShare={onOpenScreenShare}
                               isCompact
-                              onClick={() => {
-                                if (isSelected) {
-                                  setSpotlightParticipantId(null);
-                                } else {
-                                  setSpotlightParticipantId(pId);
-                                }
-                              }}
+                              onClick={() => setSpotlightParticipantId(pId)}
                             />
                           </div>
                         );
