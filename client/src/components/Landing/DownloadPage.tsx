@@ -150,7 +150,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             }`}
           >
             <Smartphone className="w-4 h-4 flex-shrink-0" />
-            <span>Android (.apk)</span>
+            <span>Android</span>
           </button>
 
           <button
@@ -162,7 +162,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             }`}
           >
             <Laptop className="w-4 h-4 flex-shrink-0" />
-            <span>Windows (.exe)</span>
+            <span>Windows</span>
           </button>
 
           <button
@@ -174,7 +174,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             }`}
           >
             <Terminal className="w-4 h-4 flex-shrink-0" />
-            <span>Linux (.AppImage)</span>
+            <span>Linux</span>
           </button>
 
           <button
@@ -186,7 +186,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             }`}
           >
             <Apple className="w-4 h-4 flex-shrink-0" />
-            <span>iOS (PWA)</span>
+            <span>iOS</span>
           </button>
         </div>
 
