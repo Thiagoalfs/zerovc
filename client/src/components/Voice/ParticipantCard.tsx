@@ -267,6 +267,26 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     (watchedParticipantIds && watchedParticipantIds.length > 0) || !!watchedParticipantId;
 
   const fullscreenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [isAppFocused, setIsAppFocused] = useState(() =>
+    typeof document === 'undefined' ? true : document.hasFocus() && !document.hidden
+  );
+
+  // Keep local screen preview active only while ZeroVC has OS window focus
+  useEffect(() => {
+    if (!isLocal || !isScreenSharing) return;
+    const syncFocus = () => setIsAppFocused(document.hasFocus() && !document.hidden);
+    syncFocus();
+    window.addEventListener('focus', syncFocus);
+    window.addEventListener('blur', syncFocus);
+    document.addEventListener('visibilitychange', syncFocus);
+    return () => {
+      window.removeEventListener('focus', syncFocus);
+      window.removeEventListener('blur', syncFocus);
+      document.removeEventListener('visibilitychange', syncFocus);
+    };
+  }, [isLocal, isScreenSharing]);
+
+  const isLocalPreviewPaused = isLocal && isScreenSharing && !isAppFocused;
 
   // Helper to safely attach track to HTMLVideoElement
   const attachVideoTrack = (el: HTMLVideoElement | null, track: any) => {
@@ -282,7 +302,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   // Handle Screen Share video track attachment and LiveKit subscription
   useEffect(() => {
     const el = videoRef.current;
-    if (isWatching && hasScreenVideoTrack && screenPub?.track && el) {
+    if (isWatching && !isLocalPreviewPaused && hasScreenVideoTrack && screenPub?.track && el) {
       attachVideoTrack(el, screenPub.track);
     }
 
@@ -301,7 +321,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         } catch {}
       }
     };
-  }, [screenPub?.track, hasScreenVideoTrack, isWatching, screenPub]);
+  }, [screenPub?.track, screenPub?.trackSid, hasScreenVideoTrack, isWatching, isLocalPreviewPaused]);
 
   // Handle Camera track attachment
   useEffect(() => {
@@ -430,30 +450,41 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             : 'border-transparent hover:border-white/10'
         }`}
       >
-        {/* 1. If screen sharing and watching: render live screen video container */}
+        {/* 1. If screen sharing and watching: render live screen video container (or paused gray notice when local app is unfocused) */}
         {isScreenSharing && isWatching ? (
-          <div className="relative w-full h-full flex items-center justify-center bg-black">
-            <video
-              ref={(el) => {
-                videoRef.current = el;
-                if (el && screenPub?.track && !screenPub.isMuted) {
-                  attachVideoTrack(el, screenPub.track);
-                }
-              }}
-              autoPlay
-              playsInline
-              muted
-              className={`w-full h-full object-contain bg-black transition-opacity duration-200 ${
-                hasScreenVideoTrack ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'
-              }`}
-            />
-            {!hasScreenVideoTrack && (
-              <div className="flex flex-col items-center justify-center gap-2.5 p-4 text-center">
-                <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs font-medium text-gray-300">Carregando transmissão...</span>
+          isLocalPreviewPaused ? (
+            <div className="relative w-full h-full flex flex-col items-center justify-center gap-2.5 p-4 text-center bg-neutral-800/95 select-none">
+              <div className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-300">
+                <Monitor className="w-5 h-5" />
               </div>
-            )}
-          </div>
+              <span className="text-xs sm:text-sm font-medium text-gray-200">
+                Compartilhamento de tela em andamento
+              </span>
+            </div>
+          ) : (
+            <div className="relative w-full h-full flex items-center justify-center bg-black">
+              <video
+                ref={(el) => {
+                  videoRef.current = el;
+                  if (el && screenPub?.track && !screenPub.isMuted) {
+                    attachVideoTrack(el, screenPub.track);
+                  }
+                }}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-contain bg-black transition-opacity duration-200 ${
+                  hasScreenVideoTrack ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'
+                }`}
+              />
+              {!hasScreenVideoTrack && (
+                <div className="flex flex-col items-center justify-center gap-2.5 p-4 text-center">
+                  <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs font-medium text-gray-300">Carregando transmissão...</span>
+                </div>
+              )}
+            </div>
+          )
         ) : hasCameraVideoTrack ? (
           /* 2. WebCam Video Stream */
           <>

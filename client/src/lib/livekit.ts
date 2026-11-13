@@ -793,6 +793,26 @@ class LiveKitManager {
     }
   }
 
+  private async applyScreenShareSenderParams(track: any, maxBitrate: number, frameRate: number): Promise<void> {
+    try {
+      const sender = track?.sender as RTCRtpSender | undefined;
+      if (!sender || typeof sender.getParameters !== 'function') return;
+      const params = sender.getParameters();
+      if (!params) return;
+
+      // Prefer smooth FPS instead of freezing framerate under load
+      params.degradationPreference = frameRate >= 60 ? 'maintain-framerate' : 'balanced';
+      if (params.encodings && params.encodings.length > 0) {
+        params.encodings[0].maxBitrate = maxBitrate;
+        params.encodings[0].maxFramerate = frameRate;
+        params.encodings[0].networkPriority = 'high';
+      }
+      await sender.setParameters(params);
+    } catch (e) {
+      console.warn('[LiveKit] Could not set sender parameters on screen share:', e);
+    }
+  }
+
   async setScreenShareEnabled(
     enabled: boolean,
     sourceId?: string,
@@ -813,10 +833,10 @@ class LiveKitManager {
         }
       })();
 
-      // Optimized bitrate curves
+      // Optimized bitrate curves (capped at 4.5 Mbps on 1080p60 to avoid saturating E2EE worker/uplink)
       const maxBitrate = (() => {
         if (res === '480p') return frameRate === 15 ? 500_000 : frameRate === 30 ? 1_000_000 : 1_800_000;
-        if (res === '1080p') return frameRate === 15 ? 2_500_000 : frameRate === 30 ? 3_500_000 : 6_000_000;
+        if (res === '1080p') return frameRate === 15 ? 2_500_000 : frameRate === 30 ? 3_500_000 : 4_500_000;
         return frameRate === 15 ? 1_200_000 : frameRate === 30 ? 1_800_000 : 3_500_000;
       })();
 
@@ -929,15 +949,15 @@ class LiveKitManager {
           await this.room.localParticipant.unpublishTrack(oldAudioPub.track);
         }
 
-        // Publish track using standard VP8 (universal compatibility across Android, iOS, Web and Desktop)
+        // Publish using hardware-accelerated preferred codec (e.g. h264) with vp8 fallback
         let pub;
         try {
           pub = await this.room.localParticipant.publishTrack(videoTrack, {
             name: 'screen_share',
             source: Track.Source.ScreenShare,
             simulcast: false,
-            videoCodec: 'vp8',
-            backupCodec: false,
+            videoCodec: selectedCodec,
+            backupCodec: true,
             videoEncoding: {
               maxBitrate: maxBitrate,
               maxFramerate: frameRate,
@@ -976,24 +996,7 @@ class LiveKitManager {
           }
         }
 
-        // Set WebRTC degradationPreference to maintain-resolution with smooth adaptive framerate
-        try {
-          const sender = (pub?.track as any)?.sender as RTCRtpSender | undefined;
-          if (sender && typeof sender.getParameters === 'function') {
-            const params = sender.getParameters();
-            if (params) {
-              params.degradationPreference = 'maintain-resolution';
-              if (params.encodings && params.encodings.length > 0) {
-                params.encodings[0].maxBitrate = maxBitrate;
-                params.encodings[0].maxFramerate = frameRate;
-                params.encodings[0].networkPriority = 'high';
-              }
-              await sender.setParameters(params);
-            }
-          }
-        } catch (e) {
-          console.warn('[LiveKit] Could not set degradationPreference on sender:', e);
-        }
+        await this.applyScreenShareSenderParams(pub?.track, maxBitrate, frameRate);
       } else {
         // Native W3C getDisplayMedia for Web Browsers (excluding own surface to avoid infinite audio loop)
         const shouldIncludeAudio = config?.includeAudio !== false;
@@ -1036,23 +1039,7 @@ class LiveKitManager {
         );
 
         if (pub && pub.track) {
-          try {
-            const sender = (pub.track as any)?.sender as RTCRtpSender | undefined;
-            if (sender && typeof sender.getParameters === 'function') {
-              const params = sender.getParameters();
-              if (params) {
-                params.degradationPreference = 'maintain-resolution';
-                if (params.encodings && params.encodings.length > 0) {
-                  params.encodings[0].maxBitrate = maxBitrate;
-                  params.encodings[0].maxFramerate = frameRate;
-                  params.encodings[0].networkPriority = 'high';
-                }
-                await sender.setParameters(params);
-              }
-            }
-          } catch (e) {
-            console.warn('[LiveKit] Could not set degradationPreference on sender:', e);
-          }
+          await this.applyScreenShareSenderParams(pub.track, maxBitrate, frameRate);
 
           const mediaStreamTrack = pub.track.mediaStreamTrack;
           if (mediaStreamTrack) {
@@ -1185,7 +1172,7 @@ class LiveKitManager {
       } catch (err) {
         console.debug('[LiveKit] GameFamilyWatcher check notice:', err);
       }
-    }, 1500);
+    }, 4000);
   }
 
   private stopGameFamilyWindowWatcher() {
@@ -1340,7 +1327,7 @@ class LiveKitManager {
 
       const maxBitrate = (() => {
         if (res === '480p') return frameRate === 15 ? 500_000 : frameRate === 30 ? 1_000_000 : 1_800_000;
-        if (res === '1080p') return frameRate === 15 ? 2_500_000 : frameRate === 30 ? 3_500_000 : 6_000_000;
+        if (res === '1080p') return frameRate === 15 ? 2_500_000 : frameRate === 30 ? 3_500_000 : 4_500_000;
         return frameRate === 15 ? 1_200_000 : frameRate === 30 ? 1_800_000 : 3_500_000;
       })();
 
@@ -1377,6 +1364,7 @@ class LiveKitManager {
       this.activeMediaStreamTracks.add(newVideoTrack);
 
       // IN-PLACE VIDEO REPLACEMENT: Use replaceTrack on existing publication
+      const gpu = await detectGpuVendor();
       const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
       if (screenPub?.track) {
         await (screenPub.track as LocalVideoTrack).replaceTrack(newVideoTrack);
@@ -1385,8 +1373,8 @@ class LiveKitManager {
           name: 'screen_share',
           source: Track.Source.ScreenShare,
           simulcast: false,
-          videoCodec: 'vp8',
-          backupCodec: false,
+          videoCodec: gpu.preferredCodec,
+          backupCodec: true,
           videoEncoding: {
             maxBitrate: maxBitrate,
             maxFramerate: frameRate,
@@ -1420,23 +1408,8 @@ class LiveKitManager {
         }
       }
 
-      // Set degradationPreference
-      try {
-        const targetTrack = screenPub?.track || this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track;
-        const sender = (targetTrack as any)?.sender as RTCRtpSender | undefined;
-        if (sender && typeof sender.getParameters === 'function') {
-          const params = sender.getParameters();
-          if (params) {
-            params.degradationPreference = 'maintain-resolution';
-            if (params.encodings && params.encodings.length > 0) {
-              params.encodings[0].maxBitrate = maxBitrate;
-              params.encodings[0].maxFramerate = frameRate;
-              params.encodings[0].networkPriority = 'high';
-            }
-            await sender.setParameters(params);
-          }
-        }
-      } catch {}
+      const targetTrack = screenPub?.track || this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track;
+      await this.applyScreenShareSenderParams(targetTrack, maxBitrate, frameRate);
 
       this.onTrackUpdated?.();
       return true;
