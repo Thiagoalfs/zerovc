@@ -31,10 +31,8 @@ jobs:
             git pull origin main
             
             echo "🐳 Reconstruindo e reiniciando os containers..."
-            if [ -f "deploy/docker-compose.coolify.yml" ]; then
-              docker compose -f deploy/docker-compose.coolify.yml up -d --build
-            elif [ -f "deploy/docker-compose.yml" ]; then
-              docker compose -f deploy/docker-compose.yml up -d --build
+            if [ -f "deploy/docker-compose.yml" ]; then
+              cd deploy && docker compose up -d --build
             else
               docker compose up -d --build
             fi
