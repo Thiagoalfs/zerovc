@@ -19,10 +19,13 @@ import { fetchLocationFromIP } from '../../utils/location';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_SECTION_HEADER_CLASS,
+  MODAL_DIALOG_TITLE_CLASS,
   MODAL_CARD_PADDING_CLASS,
   MODAL_ITEM_ROW_PADDING_CLASS,
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_SECONDARY_BUTTON_CLASS,
+  MODAL_DANGER_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface DeviceItem {
@@ -254,11 +257,11 @@ export const SessionsSettingsView: React.FC = () => {
                       <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
                         {currentSession.os || 'Dispositivo'} • {currentSession.browser || 'Navegador'}
                       </span>
-                      <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                      <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         Sessão Atual
                       </span>
-                      <span className="text-[10px] font-bold text-brand-400 flex items-center gap-1">
+                      <span className="text-xs font-semibold text-brand-400 flex items-center gap-1">
                         <ShieldCheck className="w-3.5 h-3.5 text-brand-400" />
                         Criptografia de Ponta a Ponta Ativa
                       </span>
@@ -359,12 +362,12 @@ export const SessionsSettingsView: React.FC = () => {
               </h4>
               <div className="divide-y divide-white/5">
                 {otherDevices.slice(otherSessions.length).map((dev) => (
-                  <div key={dev.id} className="py-2.5 flex items-center justify-between gap-3">
+                  <div key={dev.id} className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-3`}>
                     <div className="space-y-0.5">
-                      <span className="text-xs font-semibold text-gray-200">
+                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                         Aparelho {dev.id.slice(0, 8)}...
                       </span>
-                      <p className="text-[11px] text-gray-400">
+                      <p className={MODAL_DESCRIPTION_CLASS}>
                         Dispositivo secundário registrado
                       </p>
                     </div>
@@ -394,9 +397,9 @@ export const SessionsSettingsView: React.FC = () => {
               <div className="p-2.5 rounded-xl bg-red-500/10">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h4 className="text-sm font-bold text-white">Desconectar Dispositivo?</h4>
+              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Desconectar Dispositivo?</h4>
             </div>
-            <p className="text-xs text-gray-300 leading-relaxed">
+            <p className={`${MODAL_DESCRIPTION_CLASS} text-gray-300`}>
               O dispositivo <strong className="text-white">{confirmRevokeSingle.os} ({confirmRevokeSingle.browser})</strong> será desconectado imediatamente da sua conta.
             </p>
             <div className="flex items-center justify-end gap-2 pt-2">
@@ -404,7 +407,7 @@ export const SessionsSettingsView: React.FC = () => {
                 type="button"
                 onClick={() => setConfirmRevokeSingle(null)}
                 disabled={Boolean(revokingId)}
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                className={MODAL_SECONDARY_BUTTON_CLASS}
               >
                 Cancelar
               </button>
@@ -412,7 +415,7 @@ export const SessionsSettingsView: React.FC = () => {
                 type="button"
                 onClick={() => handleRevokeSingle(confirmRevokeSingle)}
                 disabled={Boolean(revokingId)}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-600 text-white transition-colors flex items-center gap-1.5 shadow-md shadow-red-500/20"
+                className={MODAL_DANGER_BUTTON_CLASS}
               >
                 {revokingId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 <span>Desconectar</span>
@@ -430,9 +433,9 @@ export const SessionsSettingsView: React.FC = () => {
               <div className="p-2.5 rounded-xl bg-red-500/10">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h4 className="text-sm font-bold text-white">Desconectar Todas as Outras Sessões?</h4>
+              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Desconectar Todas as Outras Sessões?</h4>
             </div>
-            <p className="text-xs text-gray-300 leading-relaxed">
+            <p className={`${MODAL_DESCRIPTION_CLASS} text-gray-300`}>
               Todos os outros computadores, celulares e navegadores onde sua conta está conectada serão deslogados imediatamente. Apenas este dispositivo permanecerá conectado.
             </p>
             <div className="flex items-center justify-end gap-2 pt-2">
@@ -440,7 +443,7 @@ export const SessionsSettingsView: React.FC = () => {
                 type="button"
                 onClick={() => setConfirmRevokeOtherOpen(false)}
                 disabled={isRevokingOthers}
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                className={MODAL_SECONDARY_BUTTON_CLASS}
               >
                 Cancelar
               </button>
@@ -448,7 +451,7 @@ export const SessionsSettingsView: React.FC = () => {
                 type="button"
                 onClick={handleRevokeOthers}
                 disabled={isRevokingOthers}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-600 text-white transition-colors flex items-center gap-1.5 shadow-md shadow-red-500/20"
+                className={MODAL_DANGER_BUTTON_CLASS}
               >
                 {isRevokingOthers ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 <span>Desconectar Todos</span>

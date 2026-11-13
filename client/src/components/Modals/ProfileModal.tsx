@@ -75,9 +75,14 @@ import {
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_TITLE_CLASS,
   MODAL_CARD_PADDING_CLASS,
+  MODAL_ITEM_ROW_PADDING_CLASS,
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
   MODAL_SECONDARY_BUTTON_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+  MODAL_DANGER_BUTTON_CLASS,
+  MODAL_SWITCH_CONTAINER_CLASS,
+  MODAL_SWITCH_KNOB_CLASS,
 } from '../../constants/modalTypography';
 import { isElectron } from '../../lib/platform';
 import { AccountSubModals, AccountSubModalType } from './ProfileSettings/AccountSubModals';
@@ -1636,7 +1641,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       <button
                         type="submit"
                         disabled={isSavingBio}
-                        className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold text-xs px-5 py-2 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                        className={MODAL_PRIMARY_BUTTON_CLASS}
                       >
                         {bioSuccess ? (
                           <>
@@ -1666,11 +1671,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                   <h4 className={MODAL_SECTION_HEADER_CLASS}>
                     Credenciais de Acesso
                   </h4>
-                  <div className="space-y-4">
+                  <div className="rounded-2xl bg-background-darker/60 border border-white/5 p-4 divide-y divide-white/5">
                     {/* E-mail */}
-                    <div className="flex items-center justify-between">
+                    <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                           Endereço de E-mail
                         </span>
                         <div className="flex items-center gap-2 mt-0.5">
@@ -1695,16 +1700,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       <button
                         type="button"
                         onClick={() => setActiveAccountModal('email')}
-                        className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                        className={`${MODAL_SECONDARY_BUTTON_CLASS} self-start sm:self-auto shrink-0`}
                       >
                         Editar
                       </button>
                     </div>
 
                     {/* Senha */}
-                    <div className="flex items-center justify-between">
+                    <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                           Senha da Conta
                         </span>
                         <span className="text-xs text-gray-500 font-mono tracking-widest block mt-0.5">••••••••••••••••</span>
@@ -1712,22 +1717,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       <button
                         type="button"
                         onClick={() => setActiveAccountModal('password')}
-                        className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
+                        className={`${MODAL_PRIMARY_BUTTON_CLASS} !px-4 !py-2 sm:!py-1.5 self-start sm:self-auto shrink-0`}
                       >
                         Mudar Senha
                       </button>
                     </div>
 
                     {/* Autenticação de Dois Fatores (2FA) */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white">Autenticação de Dois Fatores (2FA)</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={MODAL_TOGGLE_HEADER_CLASS}>Autenticação de Dois Fatores (2FA)</span>
                           <span
-                            className={`text-[10px] font-bold ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                               user.two_factor_enabled
-                                ? 'text-emerald-400'
-                                : 'text-yellow-400'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                             }`}
                           >
                             {user.two_factor_enabled ? 'ATIVADO' : 'DESATIVADO'}
@@ -1741,11 +1746,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       <button
                         type="button"
                         onClick={() => setActiveAccountModal('2fa')}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer self-start sm:self-auto ${
+                        className={
                           user.two_factor_enabled
-                            ? 'bg-dnd/10 hover:bg-dnd/20 text-dnd border-dnd/30'
-                            : 'bg-brand-500 hover:bg-brand-600 text-white border-transparent'
-                        }`}
+                            ? 'bg-dnd/10 hover:bg-dnd/20 active:scale-95 text-dnd border border-dnd/30 px-4 py-2 sm:py-1.5 sm:px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer self-start sm:self-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker'
+                            : `${MODAL_PRIMARY_BUTTON_CLASS} !px-4 !py-2 sm:!py-1.5 self-start sm:self-auto shrink-0`
+                        }
                       >
                         {user.two_factor_enabled ? 'Desativar 2FA' : 'Habilitar 2FA'}
                       </button>
@@ -1831,7 +1836,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     {/* Export Data */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-white block">Exportar Meus Dados (JSON)</span>
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Exportar Meus Dados (JSON)</span>
                         <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
                           Baixe uma cópia estruturada em JSON com todas as suas informações de perfil, servidores associados e lista de contatos.
                         </p>
@@ -1840,7 +1845,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         type="button"
                         onClick={handleExportData}
                         disabled={isExportingData}
-                        className="bg-background-dark hover:bg-white/10 disabled:opacity-50 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                        className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center gap-1.5 self-start sm:self-auto shrink-0`}
                       >
                         {isExportingData ? (
                           <>
@@ -1860,7 +1865,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     <div>
                       <div className="p-3.5 bg-dnd/10 rounded-2xl border border-dnd/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-0.5">
-                          <span className="text-xs font-bold text-dnd block">Excluir Conta Permanentemente</span>
+                          <span className="text-sm font-bold text-dnd block">Excluir Conta Permanentemente</span>
                           <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
                             Esta ação é irreversível. Todos os seus dados, mensagens, servidores próprios e amizades serão permanentemente apagados.
                           </p>
@@ -1868,7 +1873,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         <button
                           type="button"
                           onClick={() => setActiveAccountModal('deleteAccount')}
-                          className="bg-dnd hover:bg-dnd/80 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                          className={`${MODAL_DANGER_BUTTON_CLASS} !px-3.5 !py-2 sm:!py-1.5 self-start sm:self-auto shrink-0`}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           <span>Excluir Conta</span>
@@ -2367,14 +2372,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     <button
                       type="button"
                       role="switch"
+                      aria-label="Reproduzir GIFs automaticamente"
                       aria-checked={autoplayGifs}
                       onClick={() => setAutoplayGifs(!autoplayGifs)}
-                      className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                      className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                         autoplayGifs ? 'bg-brand-500' : 'bg-white/10'
                       }`}
                     >
                       <div
-                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                        className={`${MODAL_SWITCH_KNOB_CLASS} ${
                           autoplayGifs ? 'translate-x-6' : 'translate-x-0'
                         }`}
                       />
@@ -2535,18 +2541,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     <button
                       type="button"
                       role="switch"
+                      aria-label="Determinar sensibilidade de entrada automaticamente"
                       aria-checked={vadAutoSensitivity}
                       onClick={() => {
                         const nextVal = !vadAutoSensitivity;
                         setVadAutoSensitivity(nextVal);
                         audioProcessor.updateConfig({ vadAutoSensitivity: nextVal, vadSensitivity });
                       }}
-                      className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                      className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                         vadAutoSensitivity ? 'bg-brand-500' : 'bg-white/10'
                       }`}
                     >
                       <div
-                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                        className={`${MODAL_SWITCH_KNOB_CLASS} ${
                           vadAutoSensitivity ? 'translate-x-6' : 'translate-x-0'
                         }`}
                       />
@@ -2694,14 +2701,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         <button
                           type="button"
                           role="switch"
+                          aria-label="Cancelamento de Eco"
                           aria-checked={echoCancellation}
                           onClick={() => setEchoCancellation(!echoCancellation)}
-                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                          className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                             echoCancellation ? 'bg-brand-500' : 'bg-white/10'
                           }`}
                         >
                           <div
-                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                            className={`${MODAL_SWITCH_KNOB_CLASS} ${
                               echoCancellation ? 'translate-x-6' : 'translate-x-0'
                             }`}
                           />
@@ -2719,14 +2727,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         <button
                           type="button"
                           role="switch"
+                          aria-label="Controle Automático de Ganho"
                           aria-checked={autoGainControl}
                           onClick={() => setAutoGainControl(!autoGainControl)}
-                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                          className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                             autoGainControl ? 'bg-brand-500' : 'bg-white/10'
                           }`}
                         >
                           <div
-                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                            className={`${MODAL_SWITCH_KNOB_CLASS} ${
                               autoGainControl ? 'translate-x-6' : 'translate-x-0'
                             }`}
                           />
@@ -2808,14 +2817,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         <button
                           type="button"
                           role="switch"
+                          aria-label="Mostrar usuários na barra de voz"
                           aria-checked={showVoiceUsersInBar}
                           onClick={() => setShowVoiceUsersInBar(!showVoiceUsersInBar)}
-                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                          className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                             showVoiceUsersInBar ? 'bg-brand-500' : 'bg-white/10'
                           }`}
                         >
                           <div
-                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                            className={`${MODAL_SWITCH_KNOB_CLASS} ${
                               showVoiceUsersInBar ? 'translate-x-6' : 'translate-x-0'
                             }`}
                           />

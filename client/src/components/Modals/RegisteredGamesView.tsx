@@ -11,6 +11,10 @@ import {
   MODAL_ITEM_ROW_PADDING_CLASS,
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+  MODAL_SECONDARY_BUTTON_CLASS,
+  MODAL_SWITCH_CONTAINER_CLASS,
+  MODAL_SWITCH_KNOB_CLASS,
 } from '../../constants/modalTypography';
 
 function formatLastPlayed(timestamp: number): string {
@@ -280,7 +284,7 @@ export const RegisteredGamesView: React.FC = () => {
               )}
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>{currentRunningGame.name}</span>
+                  <span id="current-running-game-label" className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>{currentRunningGame.name}</span>
                   {currentRunningGame.isVerified && (
                     <span
                       className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#5865F2] text-white shadow-xs shrink-0"
@@ -300,14 +304,15 @@ export const RegisteredGamesView: React.FC = () => {
             <button
               type="button"
               role="switch"
+              aria-labelledby="current-running-game-label"
               aria-checked={currentRunningGame.enabled}
               onClick={() => handleToggleGame(currentRunningGame)}
-              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+              className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                 currentRunningGame.enabled ? 'bg-brand-500' : 'bg-white/10'
               }`}
             >
               <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                className={`${MODAL_SWITCH_KNOB_CLASS} ${
                   currentRunningGame.enabled ? 'translate-x-6' : 'translate-x-0'
                 }`}
               />
@@ -392,7 +397,7 @@ export const RegisteredGamesView: React.FC = () => {
               <button
                 type="submit"
                 disabled={!customGameName.trim()}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-xs transition-all cursor-pointer shadow-sm shrink-0"
+                className={`${MODAL_PRIMARY_BUTTON_CLASS} shrink-0`}
               >
                 Adicionar
               </button>
@@ -433,7 +438,7 @@ export const RegisteredGamesView: React.FC = () => {
                         )}
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-white group-hover/item:text-brand-300 truncate transition-colors">
+                            <span className={`${MODAL_TOGGLE_HEADER_CLASS} group-hover/item:text-brand-300 truncate transition-colors`}>
                               {rawgGame.name}
                             </span>
                             <span
@@ -501,7 +506,7 @@ export const RegisteredGamesView: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsAddingGame(true)}
-              className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+              className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center gap-1.5 shrink-0`}
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Adicionar Jogo</span>
@@ -565,7 +570,7 @@ export const RegisteredGamesView: React.FC = () => {
                 ) : (
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>{game.name}</span>
+                      <span id={`registered-game-label-${game.id}`} className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>{game.name}</span>
                       {game.isVerified && (
                         <span
                           className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#5865F2] text-white shadow-xs shrink-0"
@@ -612,15 +617,16 @@ export const RegisteredGamesView: React.FC = () => {
                 <button
                   type="button"
                   role="switch"
+                  aria-labelledby={`registered-game-label-${game.id}`}
                   aria-checked={game.enabled}
                   onClick={() => handleToggleGame(game)}
-                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                  className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                     game.enabled ? 'bg-brand-500' : 'bg-white/10'
                   }`}
                 >
                   <div
-                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
-                      game.enabled ? 'translate-x-5' : 'translate-x-0'
+                    className={`${MODAL_SWITCH_KNOB_CLASS} ${
+                      game.enabled ? 'translate-x-6' : 'translate-x-0'
                     }`}
                   />
                 </button>

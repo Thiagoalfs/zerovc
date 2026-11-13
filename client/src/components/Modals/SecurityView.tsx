@@ -13,8 +13,15 @@ import { identityManager, DeviceIdentityKeys } from '../../crypto/identity';
 import { backupManager, BackupStatus } from '../../crypto/backupManager';
 import { RecoveryKeyModal } from './RecoveryKeyModal';
 import {
+  MODAL_TOGGLE_HEADER_CLASS,
   MODAL_SECTION_HEADER_CLASS,
+  MODAL_ITEM_ROW_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_SECONDARY_BUTTON_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+  MODAL_DANGER_BUTTON_CLASS,
+  MODAL_SWITCH_CONTAINER_CLASS,
+  MODAL_SWITCH_KNOB_CLASS,
 } from '../../constants/modalTypography';
 
 export const SecurityView: React.FC = () => {
@@ -168,13 +175,13 @@ export const SecurityView: React.FC = () => {
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="rounded-2xl bg-background-darker/60 border border-white/5 p-4 divide-y divide-white/5">
         {/* 1. Identidade Criptográfica (Este Aparelho) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
           <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white block">Identidade deste Aparelho</span>
-              <span className="text-[10px] font-bold text-emerald-400">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Identidade deste Aparelho</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 VODOZEMAC ATIVO
               </span>
             </div>
@@ -197,7 +204,7 @@ export const SecurityView: React.FC = () => {
             aria-label="Copiar chave pública Ed25519"
             onClick={handleCopyKey}
             disabled={!identityKeys}
-            className="bg-background-dark hover:bg-white/10 active:scale-95 disabled:opacity-50 text-gray-200 hover:text-white px-4 py-2 sm:py-1.5 sm:px-3.5 rounded-xl text-xs font-semibold border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker"
+            className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center gap-1.5 self-start sm:self-auto shrink-0`}
           >
             {copiedKey ? (
               <>
@@ -214,17 +221,17 @@ export const SecurityView: React.FC = () => {
         </div>
 
         {/* 2. Backup Automático de Chaves na Nuvem (Opt-out) */}
-        <div className="space-y-2.5">
+        <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} space-y-2.5`}>
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 pr-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-bold text-white block">Backup Automático de Chaves (Nuvem)</span>
+                <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Backup Automático de Chaves (Nuvem)</span>
                 {user?.e2ee_backup_enabled !== false ? (
-                  <span className="text-[10px] font-bold text-emerald-400">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                     ATIVADO (PADRÃO)
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold text-red-400">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
                     DESATIVADO (OPT-OUT)
                   </span>
                 )}
@@ -246,13 +253,13 @@ export const SecurityView: React.FC = () => {
               aria-checked={user?.e2ee_backup_enabled !== false}
               onClick={handleToggleBackup}
               disabled={isSyncingBackup}
-              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker ${
+              className={`${MODAL_SWITCH_CONTAINER_CLASS} disabled:opacity-50 ${
                 user?.e2ee_backup_enabled !== false ? 'bg-brand-500' : 'bg-white/10'
               }`}
               title={user?.e2ee_backup_enabled !== false ? 'Clique para desativar (Opt-out)' : 'Clique para ativar o backup'}
             >
               <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                className={`${MODAL_SWITCH_KNOB_CLASS} ${
                   user?.e2ee_backup_enabled !== false ? 'translate-x-6' : 'translate-x-0'
                 }`}
               />
@@ -266,7 +273,7 @@ export const SecurityView: React.FC = () => {
                 type="button"
                 onClick={handleSyncBackupNow}
                 disabled={isSyncingBackup}
-                className="bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 border border-brand-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className={`${MODAL_PRIMARY_BUTTON_CLASS} !px-3.5 !py-2 sm:!py-1.5`}
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncingBackup ? 'animate-spin' : ''}`} />
                 <span>{isSyncingBackup ? 'Sincronizando...' : 'Sincronizar Agora'}</span>
@@ -276,7 +283,7 @@ export const SecurityView: React.FC = () => {
             <button
               type="button"
               onClick={openRecoverySetup}
-              className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+              className={MODAL_SECONDARY_BUTTON_CLASS}
             >
               Chave de Recuperação Offline
             </button>
@@ -284,7 +291,7 @@ export const SecurityView: React.FC = () => {
             <button
               type="button"
               onClick={openRecoveryRestore}
-              className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+              className={MODAL_SECONDARY_BUTTON_CLASS}
             >
               Restaurar Manualmente
             </button>
@@ -293,9 +300,9 @@ export const SecurityView: React.FC = () => {
 
         {/* 3. Excluir Backup de Chaves na Nuvem (apenas se existir) */}
         {backupStatus.exists && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
             <div className="space-y-0.5">
-              <span className="text-xs font-bold text-dnd block">Excluir Backup da Nuvem</span>
+              <span className="text-sm font-bold text-dnd block">Excluir Backup da Nuvem</span>
               <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
                 Apaga permanentemente o backup das suas chaves no servidor. Suas conversas continuarão salvas nos seus aparelhos atuais.
               </p>
@@ -304,7 +311,7 @@ export const SecurityView: React.FC = () => {
               type="button"
               onClick={handleDeleteBackup}
               disabled={isDeletingBackup}
-              className="bg-dnd/10 hover:bg-dnd/20 text-dnd border border-dnd/30 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shrink-0 disabled:opacity-50"
+              className={`${MODAL_DANGER_BUTTON_CLASS} self-start sm:self-auto shrink-0`}
             >
               {isDeletingBackup ? (
                 <>
@@ -322,9 +329,9 @@ export const SecurityView: React.FC = () => {
         )}
 
         {/* 4. Integração com Sessões & Dispositivos */}
-        <div className="flex items-center justify-between gap-3">
+        <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-3`}>
           <div className="space-y-0.5">
-            <span className="text-xs font-bold text-white block">Gerenciamento de Aparelhos</span>
+            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Gerenciamento de Aparelhos</span>
             <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
               Para verificar chaves com outros aparelhos, ver sessões ativas ou desconectar computadores remotos, acesse a aba <strong className="text-gray-200">Sessões & Dispositivos</strong>.
             </p>

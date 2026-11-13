@@ -8,6 +8,9 @@ import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_SECONDARY_BUTTON_CLASS,
+  MODAL_SWITCH_CONTAINER_CLASS,
+  MODAL_SWITCH_KNOB_CLASS,
 } from '../../constants/modalTypography';
 
 export const AccessibilitySettingsView: React.FC = () => {
@@ -46,7 +49,7 @@ export const AccessibilitySettingsView: React.FC = () => {
           {/* Reduced Motion Toggle */}
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 pr-4">
-              <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+              <span id="a11y-reduced-motion-label" className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Reduzir Movimento
               </span>
               <p className={MODAL_DESCRIPTION_CLASS}>
@@ -57,13 +60,14 @@ export const AccessibilitySettingsView: React.FC = () => {
               type="button"
               role="switch"
               aria-checked={reducedMotion}
+              aria-labelledby="a11y-reduced-motion-label"
               onClick={() => setReducedMotion(!reducedMotion)}
-              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+              className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                 reducedMotion ? 'bg-brand-500' : 'bg-white/10'
               }`}
             >
               <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                className={`${MODAL_SWITCH_KNOB_CLASS} ${
                   reducedMotion ? 'translate-x-6' : 'translate-x-0'
                 }`}
               />
@@ -73,7 +77,7 @@ export const AccessibilitySettingsView: React.FC = () => {
           {/* High Contrast Toggle */}
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 pr-4">
-              <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+              <span id="a11y-high-contrast-label" className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Modo de Alto Contraste
               </span>
               <p className={MODAL_DESCRIPTION_CLASS}>
@@ -84,13 +88,14 @@ export const AccessibilitySettingsView: React.FC = () => {
               type="button"
               role="switch"
               aria-checked={highContrast}
+              aria-labelledby="a11y-high-contrast-label"
               onClick={() => setHighContrast(!highContrast)}
-              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+              className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                 highContrast ? 'bg-brand-500' : 'bg-white/10'
               }`}
             >
               <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                className={`${MODAL_SWITCH_KNOB_CLASS} ${
                   highContrast ? 'translate-x-6' : 'translate-x-0'
                 }`}
               />
@@ -111,7 +116,7 @@ export const AccessibilitySettingsView: React.FC = () => {
           {/* Automatic Reading Toggle */}
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 pr-4">
-              <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+              <span id="a11y-tts-label" className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
                 Leitura Automática de Novas Mensagens
               </span>
               <p className={MODAL_DESCRIPTION_CLASS}>
@@ -122,13 +127,14 @@ export const AccessibilitySettingsView: React.FC = () => {
               type="button"
               role="switch"
               aria-checked={textToSpeechEnabled}
+              aria-labelledby="a11y-tts-label"
               onClick={() => setTextToSpeechEnabled(!textToSpeechEnabled)}
-              className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+              className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
                 textToSpeechEnabled ? 'bg-brand-500' : 'bg-white/10'
               }`}
             >
               <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                className={`${MODAL_SWITCH_KNOB_CLASS} ${
                   textToSpeechEnabled ? 'translate-x-6' : 'translate-x-0'
                 }`}
               />
@@ -149,7 +155,7 @@ export const AccessibilitySettingsView: React.FC = () => {
               type="button"
               onClick={handleTestTTS}
               disabled={isSpeaking}
-              className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer border border-white/10 shrink-0 disabled:opacity-50"
+              className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center gap-2 shrink-0`}
               title="Testar áudio do leitor de voz"
             >
               <Play className={`w-3.5 h-3.5 text-brand-400 ${isSpeaking ? 'animate-pulse' : ''}`} />
