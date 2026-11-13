@@ -27,7 +27,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
 
   const { user: currentUser } = useAuthStore();
-  const { friends, pending, incoming, fetchFriends, sendRequest, acceptRequest, removeFriend } = useFriendStore();
+  const { friends, pending, incoming, isLoading, fetchFriends, sendRequest, acceptRequest, removeFriend } = useFriendStore();
   const { openDMWithUser } = useDMStore();
   const { guilds } = useGuildStore();
   const { startCall } = useCallStore();
@@ -487,16 +487,36 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
             </div>
 
             {(activeTab === 'online' ? onlineFriends : friends).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-                <Users className="w-14 h-14 md:w-16 md:h-16 stroke-1 mb-2 text-gray-600" />
-                <span className="text-sm font-medium">Ninguém por aqui no momento.</span>
-                <button
-                  onClick={() => setActiveTab('add')}
-                  className="mt-3 text-xs bg-brand-500 text-white font-semibold px-4 py-2 rounded-lg hover:bg-brand-600 transition-colors"
-                >
-                  Adicionar Amigos
-                </button>
-              </div>
+              isLoading ? (
+                <div className="space-y-2 py-2" aria-busy="true" aria-label="Carregando amigos">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-3 px-4 rounded-2xl bg-white/[0.03] animate-pulse"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-white/10" />
+                        <div className="space-y-1.5">
+                          <div className="w-28 h-3.5 rounded bg-white/10" />
+                          <div className="w-16 h-2.5 rounded bg-white/5" />
+                        </div>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-white/5" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+                  <Users className="w-14 h-14 md:w-16 md:h-16 stroke-1 mb-2 text-gray-600" />
+                  <span className="text-sm font-medium">Ninguém por aqui no momento.</span>
+                  <button
+                    onClick={() => setActiveTab('add')}
+                    className="mt-3 text-xs bg-brand-500 text-white font-semibold px-4 py-2 rounded-lg hover:bg-brand-600 transition-colors"
+                  >
+                    Adicionar Amigos
+                  </button>
+                </div>
+              )
             ) : (
               (activeTab === 'online' ? onlineFriends : friends).map((f) => {
                 const target = f.friend?.id ? f.friend : f.user;

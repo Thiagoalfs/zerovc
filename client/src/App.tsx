@@ -95,6 +95,31 @@ export const App: React.FC = () => {
   const [isHomeActive, setIsHomeActive] = useState(true);
   const [homeView, setHomeView] = useState<'friends' | 'dm' | 'group'>('friends');
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [bootstrappedUserId, setBootstrappedUserId] = useState<string | null>(null);
+
+  // Boot gate: wait for initial guilds, friends, DMs and groups before revealing the main workspace
+  useEffect(() => {
+    if (!token || !user?.id) {
+      setBootstrappedUserId(null);
+      return;
+    }
+    if (bootstrappedUserId === user.id) return;
+
+    let cancelled = false;
+    const targetUserId = user.id;
+    Promise.allSettled([
+      fetchGuilds(),
+      useFriendStore.getState().fetchFriends().catch(() => {}),
+      useDMStore.getState().fetchRooms().catch(() => {}),
+      useDMGroupStore.getState().fetchGroups().catch(() => {}),
+    ]).finally(() => {
+      if (!cancelled) setBootstrappedUserId(targetUserId);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, user?.id, bootstrappedUserId, fetchGuilds]);
 
   // Auto-sync view to 'friends' if active DM or group is closed/deleted
   useEffect(() => {
@@ -1187,11 +1212,6 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (token && user) {
-      fetchGuilds();
-      useFriendStore.getState().fetchFriends().catch(() => {});
-      useDMStore.getState().fetchRooms().catch(() => {});
-      useDMGroupStore.getState().fetchGroups().catch(() => {});
-
       // Check pending invite or pending redirect
       const pendingInvite = sessionStorage.getItem('pending_invite_code');
       const pendingRedirect = sessionStorage.getItem('pending_redirect_path');
@@ -1839,7 +1859,9 @@ export const App: React.FC = () => {
     }
   }, [token, user]);
 
-  if (isCheckingAuth) {
+  const isBootstrappingData = Boolean(token && user && bootstrappedUserId !== user.id);
+
+  if (isCheckingAuth || isBootstrappingData) {
     return (
       <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest text-gray-400">
         <TitleBar />

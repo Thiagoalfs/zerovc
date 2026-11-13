@@ -37,9 +37,20 @@ interface DeviceItem {
   created_at: string;
 }
 
+const SESSIONS_CACHE_TTL_MS = 60_000;
+let cachedSessionsState: {
+  userId: string;
+  sessions: UserSession[];
+  devices: DeviceItem[];
+  currentDeviceId: string | null;
+  fetchedAt: number;
+} | null = null;
+const cachedIpLocations = new Map<string, string>();
+
 const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip, isSmall }) => {
-  const [location, setLocation] = useState<string>('Calculando localização...');
-  const [isLocLoading, setIsLocLoading] = useState(true);
+  const cachedLoc = ip ? cachedIpLocations.get(ip) : undefined;
+  const [location, setLocation] = useState<string>(cachedLoc || (ip ? 'Calculando localização...' : 'Localização indisponível'));
+  const [isLocLoading, setIsLocLoading] = useState(Boolean(ip && !cachedLoc));
 
   useEffect(() => {
     let isMounted = true;
@@ -48,8 +59,15 @@ const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip,
       setIsLocLoading(false);
       return;
     }
+    const existing = cachedIpLocations.get(ip);
+    if (existing) {
+      setLocation(existing);
+      setIsLocLoading(false);
+      return;
+    }
     setIsLocLoading(true);
     fetchLocationFromIP(ip).then((loc) => {
+      cachedIpLocations.set(ip, loc);
       if (isMounted) {
         setLocation(loc);
         setIsLocLoading(false);
@@ -70,11 +88,14 @@ const SessionLocationItem: React.FC<{ ip?: string; isSmall?: boolean }> = ({ ip,
 
 export const SessionsSettingsView: React.FC = () => {
   const { user } = useAuthStore();
-  const [sessions, setSessions] = useState<UserSession[]>([]);
-  const [devices, setDevices] = useState<DeviceItem[]>([]);
-  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
+  const validCache = cachedSessionsState && cachedSessionsState.userId === user?.id ? cachedSessionsState : null;
+  const [sessions, setSessions] = useState<UserSession[]>(validCache?.sessions ?? []);
+  const [devices, setDevices] = useState<DeviceItem[]>(validCache?.devices ?? []);
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(
+    validCache?.currentDeviceId ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : null)
+  );
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!validCache);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -84,8 +105,18 @@ export const SessionsSettingsView: React.FC = () => {
   const [confirmRevokeOtherOpen, setConfirmRevokeOtherOpen] = useState(false);
   const [confirmRevokeSingle, setConfirmRevokeSingle] = useState<UserSession | null>(null);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
+  const loadData = useCallback(async (force = false) => {
+    if (!user?.id) return;
+    const currentCache = cachedSessionsState?.userId === user.id ? cachedSessionsState : null;
+    if (!force && currentCache && Date.now() - currentCache.fetchedAt < SESSIONS_CACHE_TTL_MS) {
+      setSessions(currentCache.sessions);
+      setDevices(currentCache.devices);
+      setCurrentDeviceId(currentCache.currentDeviceId);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!currentCache) setIsLoading(true);
     setError(null);
 
     const cachedDevId = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : null;
@@ -94,11 +125,21 @@ export const SessionsSettingsView: React.FC = () => {
     try {
       const [sessionsData, devicesData] = await Promise.all([
         api.auth.getSessions().catch(() => []),
-        user?.id ? api.e2ee.getUserDevices(user.id).catch(() => []) : Promise.resolve([]),
+        api.e2ee.getUserDevices(user.id).catch(() => []),
       ]);
 
-      setSessions(sessionsData || []);
-      setDevices(devicesData || []);
+      const nextSessions = sessionsData || [];
+      const nextDevices = devicesData || [];
+      setSessions(nextSessions);
+      setDevices(nextDevices);
+
+      cachedSessionsState = {
+        userId: user.id,
+        sessions: nextSessions,
+        devices: nextDevices,
+        currentDeviceId: cachedDevId,
+        fetchedAt: Date.now(),
+      };
     } catch (err: any) {
       setError(err?.message || 'Não foi possível carregar os dispositivos e sessões ativas.');
     } finally {
@@ -107,7 +148,7 @@ export const SessionsSettingsView: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [loadData]);
 
   const handleRevokeSingle = async (session: UserSession) => {
@@ -116,7 +157,13 @@ export const SessionsSettingsView: React.FC = () => {
     setSuccessMessage(null);
     try {
       await api.auth.revokeSession(session.id);
-      setSessions((prev) => prev.filter((s) => s.id !== session.id));
+      setSessions((prev) => {
+        const next = prev.filter((s) => s.id !== session.id);
+        if (cachedSessionsState && cachedSessionsState.userId === user?.id) {
+          cachedSessionsState = { ...cachedSessionsState, sessions: next, fetchedAt: Date.now() };
+        }
+        return next;
+      });
       setSuccessMessage('Sessão remota desconectada com sucesso.');
       setConfirmRevokeSingle(null);
     } catch (err: any) {
@@ -132,7 +179,13 @@ export const SessionsSettingsView: React.FC = () => {
     setSuccessMessage(null);
     try {
       await api.e2ee.revokeDevice(deviceId);
-      setDevices((prev) => prev.filter((d) => d.id !== deviceId));
+      setDevices((prev) => {
+        const next = prev.filter((d) => d.id !== deviceId);
+        if (cachedSessionsState && cachedSessionsState.userId === user?.id) {
+          cachedSessionsState = { ...cachedSessionsState, devices: next, fetchedAt: Date.now() };
+        }
+        return next;
+      });
       setSuccessMessage('Aparelho desconectado com sucesso.');
     } catch (err: any) {
       setError(err?.message || 'Falha ao revogar o aparelho.');
@@ -147,7 +200,13 @@ export const SessionsSettingsView: React.FC = () => {
     setSuccessMessage(null);
     try {
       await api.auth.revokeOtherSessions();
-      setSessions((prev) => prev.filter((s) => s.is_current));
+      setSessions((prev) => {
+        const next = prev.filter((s) => s.is_current);
+        if (cachedSessionsState && cachedSessionsState.userId === user?.id) {
+          cachedSessionsState = { ...cachedSessionsState, sessions: next, fetchedAt: Date.now() };
+        }
+        return next;
+      });
 
       // Also revoke remote E2EE devices if any
       if (currentDeviceId) {
@@ -157,7 +216,13 @@ export const SessionsSettingsView: React.FC = () => {
             await api.e2ee.revokeDevice(dev.id);
           } catch {}
         }
-        setDevices((prev) => prev.filter((d) => d.id === currentDeviceId));
+        setDevices((prev) => {
+          const next = prev.filter((d) => d.id === currentDeviceId);
+          if (cachedSessionsState && cachedSessionsState.userId === user?.id) {
+            cachedSessionsState = { ...cachedSessionsState, devices: next, fetchedAt: Date.now() };
+          }
+          return next;
+        });
       }
 
       setSuccessMessage('Todas as outras sessões foram desconectadas com sucesso.');
@@ -238,7 +303,7 @@ export const SessionsSettingsView: React.FC = () => {
                 <button
                   type="button"
                   aria-label="Atualizar lista de sessões ativas"
-                  onClick={loadData}
+                  onClick={() => loadData(true)}
                   disabled={isLoading}
                   className="p-1.5 -mt-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   title="Atualizar lista de sessões"

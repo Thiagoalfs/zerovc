@@ -567,14 +567,16 @@ class LiveKitManager {
     };
   }
 
-  private async enableProcessedMicrophone(room: Room) {
+  private async enableProcessedMicrophone(room: Room, deviceIdOverride?: string) {
     const isMobilePlatform = typeof navigator !== 'undefined' && (
       /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
     );
     const cfg = this.readStoredAudioConfig();
-    const devId = !isMobilePlatform && typeof localStorage !== 'undefined'
-      ? localStorage.getItem('zerovc_audio_input_device') || undefined
+    const devId = !isMobilePlatform
+      ? (deviceIdOverride !== undefined
+          ? deviceIdOverride || undefined
+          : (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_audio_input_device') || undefined : undefined))
       : undefined;
 
     // Only enable browser WebRTC NS when mode is 'webrtc'; disable it for RNNoise/none so they don't fight
@@ -1459,7 +1461,10 @@ class LiveKitManager {
       (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
     );
     if (!this.room || isMobile) return;
-    await this.room.switchActiveDevice('audioinput', deviceId);
+    const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (micPub) {
+      await this.enableProcessedMicrophone(this.room, deviceId);
+    }
   }
 
   async setAudioOutputDevice(deviceId: string) {

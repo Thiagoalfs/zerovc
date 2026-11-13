@@ -318,6 +318,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
   const [isTestingMic, setIsTestingMic] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const micPlaybackAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const liveGainNodeRef = useRef<GainNode | null>(null);
@@ -676,7 +677,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
       setIsTestingMic(true);
       setMobileMicTesting(true);
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
+        audio: {
+          deviceId: selectedInput ? { exact: selectedInput } : undefined,
+          echoCancellation,
+          autoGainControl,
+          noiseSuppression: audioProcessingMode === 'webrtc' ? noiseSuppression : false,
+        },
       });
       micStreamRef.current = stream;
 
@@ -687,7 +693,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
       const track = stream.getAudioTracks()[0];
       if (track) {
-        await audioProcessor.processMicrophoneTrack(track, {
+        const processedTrack = await audioProcessor.processMicrophoneTrack(track, {
           mode: audioProcessingMode,
           rnnoiseLevel,
           vadAutoSensitivity,
@@ -698,6 +704,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
           autoGainControl,
           volume: inputVolume,
         });
+
+        // Play back processed mic track so user hears the real denoised/gated output
+        const audioEl = new Audio();
+        audioEl.srcObject = new MediaStream([processedTrack]);
+        audioEl.volume = Math.max(0, Math.min(1, outputVolume / 100));
+        if (selectedOutput && typeof (audioEl as any).setSinkId === 'function') {
+          await (audioEl as any).setSinkId(selectedOutput).catch(() => {});
+        }
+        await audioEl.play().catch(() => {});
+        micPlaybackAudioRef.current = audioEl;
       }
     } catch (err) {
       console.error('Failed to start mic test:', err);
@@ -708,6 +724,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
   const stopMicTest = () => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (micPlaybackAudioRef.current) {
+      micPlaybackAudioRef.current.pause();
+      micPlaybackAudioRef.current.srcObject = null;
+      micPlaybackAudioRef.current = null;
+    }
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
@@ -720,19 +741,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     setVadLiveState({ isSpeaking: false, volume: 0, speechProbability: 0, gateOpen: false });
   };
 
-  // Live mic volume monitoring for input sensitivity preview
+  // Live mic volume monitoring for input sensitivity preview (uses real AudioProcessor without playback)
   useEffect(() => {
     if (!isOpen || activeTab !== 'audio' || isTestingMic) return;
 
-    let localAudioCtx: AudioContext | null = null;
     let localStream: MediaStream | null = null;
-    let localAnim: number | null = null;
     let isMounted = true;
 
     const startLiveMonitor = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
+          audio: {
+            deviceId: selectedInput ? { exact: selectedInput } : undefined,
+            echoCancellation,
+            autoGainControl,
+            noiseSuppression: audioProcessingMode === 'webrtc' ? noiseSuppression : false,
+          },
         });
         if (!isMounted) {
           stream.getTracks().forEach((t) => t.stop());
@@ -740,71 +764,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
         }
         localStream = stream;
 
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioCtx) return;
-        localAudioCtx = new AudioCtx();
-        if (localAudioCtx.state === 'suspended') {
-          await localAudioCtx.resume();
-        }
-
-        const source = localAudioCtx.createMediaStreamSource(stream);
-        const gainNode = localAudioCtx.createGain();
-        gainNode.gain.value = (inputVolume ?? 100) / 100;
-        liveGainNodeRef.current = gainNode;
-
-        const analyser = localAudioCtx.createAnalyser();
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.3;
-        source.connect(gainNode);
-        gainNode.connect(analyser);
-
-        const timeData = new Float32Array(analyser.fftSize);
-        let smoothed = 0;
-        let lastVoiceTime = 0;
-        let isSpeaking = false;
-
-        const tick = () => {
+        audioProcessor.setVadCallback((data) => {
           if (!isMounted) return;
-          analyser.getFloatTimeDomainData(timeData);
+          setMicLevel(Math.round(data.volume));
+          setVadLiveState(data);
+        });
 
-          let sumSquares = 0;
-          for (let i = 0; i < timeData.length; i++) {
-            const sample = timeData[i];
-            sumSquares += sample * sample;
-          }
-          const rms = Math.sqrt(sumSquares / timeData.length);
-
-          // Decibel scale: -100 dBFS (silence) to 0 dBFS (peak) mapped directly to 0..100%
-          const db = 20 * Math.log10(Math.max(rms, 1e-5));
-          const currentLevelRaw = Math.max(0, Math.min(100, Math.round(db + 100)));
-
-          // Smooth transitions for natural meter response (fast attack, smooth release)
-          const smoothingFactor = currentLevelRaw > smoothed ? 0.45 : 0.2;
-          smoothed = smoothed * (1 - smoothingFactor) + currentLevelRaw * smoothingFactor;
-          const currentLevel = Math.round(smoothed);
-          setMicLevel(currentLevel);
-
-          const now = performance.now();
-          const speechThreshold = (vadSensitivity ?? 0.5) * 100;
-          const isVocalDetected = currentLevel >= (vadAutoSensitivity ? 48 : speechThreshold);
-
-          if (isVocalDetected) {
-            lastVoiceTime = now;
-            isSpeaking = true;
-          } else if (now - lastVoiceTime > (vadHangover ?? 250)) {
-            isSpeaking = false;
-          }
-
-          setVadLiveState({
-            isSpeaking,
-            volume: currentLevel,
-            speechProbability: isSpeaking ? 1.0 : 0.0,
-            gateOpen: isSpeaking,
+        const track = stream.getAudioTracks()[0];
+        if (track) {
+          await audioProcessor.processMicrophoneTrack(track, {
+            mode: audioProcessingMode,
+            rnnoiseLevel,
+            vadAutoSensitivity,
+            vadSensitivity,
+            vadHangover,
+            echoCancellation,
+            noiseSuppression,
+            autoGainControl,
+            volume: inputVolume,
           });
-
-          localAnim = requestAnimationFrame(tick);
-        };
-        tick();
+        }
       } catch {
         // Microphone permission or device busy
       }
@@ -814,13 +793,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
     return () => {
       isMounted = false;
-      if (localAnim) cancelAnimationFrame(localAnim);
+      audioProcessor.setVadCallback(null);
+      audioProcessor.cleanup();
       if (localStream) localStream.getTracks().forEach((t) => t.stop());
-      if (localAudioCtx && localAudioCtx.state !== 'closed') {
-        localAudioCtx.close().catch(() => {});
-      }
-      liveGainNodeRef.current = null;
       setMicLevel(0);
+      setVadLiveState({ isSpeaking: false, volume: 0, speechProbability: 0, gateOpen: false });
     };
   }, [isOpen, activeTab, isTestingMic, selectedInput]);
 

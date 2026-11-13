@@ -24,13 +24,23 @@ import {
   MODAL_SWITCH_KNOB_CLASS,
 } from '../../constants/modalTypography';
 
+const SECURITY_CACHE_TTL_MS = 60_000;
+let cachedSecurityState: {
+  userId: string;
+  identityKeys: DeviceIdentityKeys | null;
+  backupStatus: BackupStatus;
+  fetchedAt: number;
+} | null = null;
+
 export const SecurityView: React.FC = () => {
   const { user, updateProfile, setUser } = useAuthStore();
-  const [isSyncingBackup, setIsSyncingBackup] = useState(false);
-  const [identityKeys, setIdentityKeys] = useState<DeviceIdentityKeys | null>(null);
-  const [backupStatus, setBackupStatus] = useState<BackupStatus>({ exists: false });
+  const validCache = cachedSecurityState && cachedSecurityState.userId === user?.id ? cachedSecurityState : null;
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isSyncingBackup, setIsSyncingBackup] = useState(false);
+  const [identityKeys, setIdentityKeys] = useState<DeviceIdentityKeys | null>(validCache?.identityKeys ?? null);
+  const [backupStatus, setBackupStatus] = useState<BackupStatus>(validCache?.backupStatus ?? { exists: false });
+
+  const [isLoading, setIsLoading] = useState(!validCache);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
@@ -40,9 +50,18 @@ export const SecurityView: React.FC = () => {
   const [recoveryModalMode, setRecoveryModalMode] = useState<'setup' | 'restore'>('setup');
   const [isDeletingBackup, setIsDeletingBackup] = useState(false);
 
-  const loadSecurityState = useCallback(async () => {
+  const loadSecurityState = useCallback(async (force = false) => {
     if (!user?.id) return;
-    setIsLoading(true);
+
+    const currentCache = cachedSecurityState?.userId === user.id ? cachedSecurityState : null;
+    if (!force && currentCache && Date.now() - currentCache.fetchedAt < SECURITY_CACHE_TTL_MS) {
+      setIdentityKeys(currentCache.identityKeys);
+      setBackupStatus(currentCache.backupStatus);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!currentCache) setIsLoading(true);
     setError(null);
 
     try {
@@ -59,6 +78,13 @@ export const SecurityView: React.FC = () => {
       // 2. Cloud backup status
       const bStatus = await backupManager.getBackupStatus();
       setBackupStatus(bStatus);
+
+      cachedSecurityState = {
+        userId: user.id,
+        identityKeys: myKeys,
+        backupStatus: bStatus,
+        fetchedAt: Date.now(),
+      };
     } catch (err: any) {
       setError(err?.message || 'Falha ao carregar informações de segurança');
     } finally {
@@ -67,7 +93,7 @@ export const SecurityView: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    loadSecurityState();
+    void loadSecurityState();
   }, [loadSecurityState]);
 
   const handleCopyKey = () => {
@@ -97,6 +123,9 @@ export const SecurityView: React.FC = () => {
         await backupManager.ensureActiveBackup(true);
         const bStatus = await backupManager.getBackupStatus();
         setBackupStatus(bStatus);
+        if (user?.id) {
+          cachedSecurityState = { userId: user.id, identityKeys, backupStatus: bStatus, fetchedAt: Date.now() };
+        }
         setSuccessMessage('Backup automático reativado e sincronizado com sucesso.');
       } else {
         setSuccessMessage('Backup automático de chaves desativado (opt-out).');
@@ -135,7 +164,11 @@ export const SecurityView: React.FC = () => {
 
     try {
       await backupManager.deleteBackup();
-      setBackupStatus({ exists: false });
+      const emptyStatus = { exists: false };
+      setBackupStatus(emptyStatus);
+      if (user?.id) {
+        cachedSecurityState = { userId: user.id, identityKeys, backupStatus: emptyStatus, fetchedAt: Date.now() };
+      }
       setSuccessMessage('Backup de chaves na nuvem excluído com sucesso.');
     } catch (err: any) {
       setError(err?.message || 'Falha ao excluir o backup.');
@@ -345,7 +378,7 @@ export const SecurityView: React.FC = () => {
         isOpen={isRecoveryModalOpen}
         mode={recoveryModalMode}
         onClose={() => setIsRecoveryModalOpen(false)}
-        onSuccess={loadSecurityState}
+        onSuccess={() => loadSecurityState(true)}
       />
     </div>
   );
