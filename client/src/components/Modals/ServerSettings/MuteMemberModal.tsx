@@ -31,8 +31,13 @@ export const MuteMemberModal: React.FC<MuteMemberModalProps> = ({
       }}
       className={MODAL_BACKDROP_CLASS}
     >
-      <div className={`w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-white/10 shadow-2xl ${MODAL_CARD_PADDING_CLASS} text-gray-200 overflow-y-auto chat-scrollbar`}>
-        <h3 className={`${MODAL_DIALOG_TITLE_CLASS} mb-1 flex items-center gap-2`}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mute-member-modal-title"
+        className={`w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-white/10 shadow-2xl ${MODAL_CARD_PADDING_CLASS} text-gray-200 overflow-y-auto chat-scrollbar`}
+      >
+        <h3 id="mute-member-modal-title" className={`${MODAL_DIALOG_TITLE_CLASS} mb-1 flex items-center gap-2`}>
           <Clock className="w-5 h-5 text-amber-400" />
           <span>Silenciar @{muteModalUser.username}</span>
         </h3>

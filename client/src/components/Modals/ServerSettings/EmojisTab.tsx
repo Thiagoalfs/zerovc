@@ -10,6 +10,11 @@ import {
 import { GuildEmoji } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
 import { copyToClipboard } from '../../../utils/clipboard';
+import {
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+} from '../../../constants/modalTypography';
 
 interface EmojisTabProps {
   emojisList: GuildEmoji[];
@@ -59,7 +64,7 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
 
       {/* Emoji count status bar */}
       <div className="flex items-center justify-between">
-        <div className="text-xs text-gray-400">
+        <div className={MODAL_DESCRIPTION_CLASS}>
           Mostrando {emojisList.length} de 50 emojis
         </div>
 
@@ -69,7 +74,7 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
             type="button"
             onClick={() => emojiInputRef.current?.click()}
             disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
-            className="px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+            className={MODAL_PRIMARY_BUTTON_CLASS}
           >
             {isUploadingEmoji ? (
               <>
@@ -106,8 +111,8 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
       ) : emojisList.length === 0 && !isUploadingEmoji ? (
         <div className="text-center py-16 px-4 rounded-2xl bg-background-darker/60 border border-white/10">
           <Smile className="w-12 h-12 stroke-1 text-gray-500 mx-auto mb-3" />
-          <h4 className="text-base font-semibold text-white">Nenhum emoji personalizado ainda</h4>
-          <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
+          <h4 className={MODAL_DIALOG_TITLE_CLASS}>Nenhum emoji personalizado ainda</h4>
+          <p className={`${MODAL_DESCRIPTION_CLASS} max-w-sm mx-auto mt-1`}>
             Carregue imagens quadradas (PNG, GIF, WebP) para que todos os membros possam usar no chat com :nome:!
           </p>
         </div>

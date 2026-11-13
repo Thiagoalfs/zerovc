@@ -43,13 +43,19 @@ export const LimitAlertModal: React.FC<LimitAlertModalProps> = ({
       }}
       className={MODAL_BACKDROP_CLASS}
     >
-      <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="limit-alert-modal-title"
+        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col"
+      >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} flex flex-col items-center text-center relative overflow-y-auto no-scrollbar flex-1`}>
           <button
             type="button"
+            aria-label="Fechar"
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
           </button>
@@ -58,7 +64,7 @@ export const LimitAlertModal: React.FC<LimitAlertModalProps> = ({
             <AlertTriangle className="w-8 h-8" />
           </div>
 
-          <h2 className={MODAL_DIALOG_TITLE_CLASS}>{title}</h2>
+          <h2 id="limit-alert-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>{title}</h2>
           <p className="text-sm text-gray-300 mt-2 leading-relaxed">{message}</p>
           {detail && (
             <span className="mt-2 text-xs font-mono text-gray-400 bg-background-darkest px-3 py-1 rounded-lg border border-white/5">

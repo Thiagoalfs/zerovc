@@ -9,6 +9,9 @@ import {
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_BACKDROP_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateServerModalProps {
@@ -132,22 +135,28 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className={MODAL_BACKDROP_CLASS}
     >
-      <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-server-modal-title"
+        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col"
+      >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} text-center relative flex-shrink-0`}>
           <button
             type="button"
             onClick={handleClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+            aria-label="Fechar"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
           </button>
 
           {mode === 'choose' && (
             <>
-              <h2 className={MODAL_TITLE_CLASS}>Adicionar um Servidor</h2>
+              <h2 id="create-server-modal-title" className={MODAL_TITLE_CLASS}>Adicionar um Servidor</h2>
               <p className="text-xs md:text-sm text-gray-400 mt-1">
                 Seu servidor é onde você e seus amigos se reúnem. Escolha uma opção para começar.
               </p>
@@ -156,7 +165,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
 
           {mode === 'create' && (
             <>
-              <h2 className={MODAL_TITLE_CLASS}>Criar seu Servidor</h2>
+              <h2 id="create-server-modal-title" className={MODAL_TITLE_CLASS}>Criar seu Servidor</h2>
               <p className="text-xs text-gray-400 mt-1">
                 Dê um nome ao seu novo servidor. Você pode alterá-lo quando quiser.
               </p>
@@ -165,7 +174,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
 
           {mode === 'join' && (
             <>
-              <h2 className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
+              <h2 id="create-server-modal-title" className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
               <p className="text-xs text-gray-400 mt-1">
                 Digite o código de 10 caracteres ou o link de convite que você recebeu.
               </p>
@@ -288,7 +297,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
                     setError('');
                     setMode('choose');
                   }}
-                  className="text-xs md:text-sm text-gray-400 hover:text-white flex items-center gap-1.5"
+                  className={`${MODAL_CANCEL_BUTTON_CLASS} flex items-center gap-1.5`}
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Voltar</span>
@@ -297,7 +306,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
                 <button
                   type="submit"
                   disabled={isLoading || isUploadingIcon || !name.trim()}
-                  className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl text-xs md:text-sm transition-colors shadow-lg shadow-brand-500/25"
+                  className={MODAL_PRIMARY_BUTTON_CLASS}
                 >
                   {isLoading || isUploadingIcon ? 'Criando...' : 'Criar Servidor'}
                 </button>
@@ -330,7 +339,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
                     setError('');
                     setMode('choose');
                   }}
-                  className="text-xs md:text-sm text-gray-400 hover:text-white flex items-center gap-1.5"
+                  className={`${MODAL_CANCEL_BUTTON_CLASS} flex items-center gap-1.5`}
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Voltar</span>
@@ -339,7 +348,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
                 <button
                   type="submit"
                   disabled={isLoading || !inviteCode.trim()}
-                  className="bg-online hover:bg-online/90 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl text-xs md:text-sm transition-colors shadow-lg shadow-online/25"
+                  className={MODAL_PRIMARY_BUTTON_CLASS}
                 >
                   {isLoading ? 'Entrando...' : 'Entrar no Servidor'}
                 </button>

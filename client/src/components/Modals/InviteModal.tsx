@@ -13,6 +13,10 @@ import {
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_BACKDROP_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+  MODAL_SECONDARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface InviteModalProps {
@@ -155,17 +159,20 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className={MODAL_BACKDROP_CLASS}
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="invite-modal-title"
         className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-visible shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col relative z-50"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between relative flex-shrink-0`}>
           <div>
-            <h2 className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
+            <h2 id="invite-modal-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
               <Users className="w-5 h-5 text-brand-500" />
               Convidar amigos
             </h2>
@@ -176,7 +183,8 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-200 transition-colors cursor-pointer p-1 rounded-lg hover:bg-white/5"
+            aria-label="Fechar"
+            className="text-gray-400 hover:text-gray-200 transition-colors cursor-pointer p-2 rounded-lg hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
           </button>
@@ -198,7 +206,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
               <button
                 type="button"
                 onClick={loadInvite}
-                className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                className={`${MODAL_PRIMARY_BUTTON_CLASS} mx-auto`}
               >
                 Tentar Novamente
               </button>
@@ -279,7 +287,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                     <button
                       type="button"
                       onClick={() => setShowSettings(false)}
-                      className="text-xs text-gray-400 hover:text-white transition-colors cursor-pointer"
+                      className={MODAL_CANCEL_BUTTON_CLASS}
                     >
                       Cancelar
                     </button>
@@ -325,7 +333,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                     <button
                       type="button"
                       onClick={() => setShowSettings(false)}
-                      className="px-3 py-2 text-xs font-semibold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+                      className={MODAL_SECONDARY_BUTTON_CLASS}
                     >
                       Voltar
                     </button>
@@ -333,7 +341,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                       type="button"
                       disabled={isGenerating}
                       onClick={handleGenerateNewInvite}
-                      className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg"
+                      className={MODAL_PRIMARY_BUTTON_CLASS}
                     >
                       {isGenerating ? (
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />

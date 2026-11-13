@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Phone, PhoneOff, Video } from 'lucide-react';
 import { useCallStore } from '../../stores/callStore';
 import { formatAssetUrl } from '../../lib/api';
+import { MODAL_TOGGLE_HEADER_CLASS, MODAL_DESCRIPTION_CLASS } from '../../constants/modalTypography';
 
 export const IncomingCallModal: React.FC = () => {
   const { callState, incomingCaller, acceptCall, rejectCall } = useCallStore();
@@ -78,7 +79,12 @@ export const IncomingCallModal: React.FC = () => {
   if (callState !== 'ringing' || !incomingCaller) return null;
 
   return (
-    <div className="fixed top-6 right-6 z-50 bg-background-darkest/95 backdrop-blur-xl border border-brand-500/40 p-4 rounded-xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-200 select-none max-w-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="incoming-call-title"
+      className="fixed top-6 right-6 z-50 bg-background-darkest/95 backdrop-blur-xl border border-brand-500/40 p-4 rounded-xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-200 select-none max-w-sm"
+    >
       {/* Avatar with pulse ring */}
       <div className="relative">
         <div className="w-14 h-14 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-lg overflow-hidden relative z-10 shadow-lg">
@@ -88,30 +94,34 @@ export const IncomingCallModal: React.FC = () => {
             <span>{incomingCaller.display_name?.[0]?.toUpperCase() || incomingCaller.username?.[0]?.toUpperCase()}</span>
           )}
         </div>
-        <div className="absolute inset-0 rounded-full bg-brand-500/40 animate-ping" />
+        <div className="absolute inset-0 rounded-full bg-brand-500/40 animate-ping motion-reduce:animate-none" />
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0 pr-2">
         <span className="text-xs font-bold text-brand-400 uppercase tracking-wider block">Chamada Recebida</span>
-        <h4 className="text-sm font-bold text-white truncate">
+        <h4 id="incoming-call-title" className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
           {incomingCaller.display_name || incomingCaller.username}
         </h4>
-        <span className="text-[11px] text-gray-400">Chamada de voz/vídeo 1x1</span>
+        <span className={`${MODAL_DESCRIPTION_CLASS} block`}>Chamada de voz/vídeo 1x1</span>
       </div>
 
       {/* Action Buttons */}
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={rejectCall}
-          className="w-10 h-10 rounded-full bg-dnd/20 text-dnd hover:bg-dnd hover:text-white flex items-center justify-center transition-all cursor-pointer shadow"
+          aria-label="Recusar"
+          className="w-10 h-10 rounded-full bg-dnd/20 text-dnd hover:bg-dnd hover:text-white flex items-center justify-center transition-all cursor-pointer shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           title="Recusar"
         >
           <PhoneOff className="w-5 h-5" />
         </button>
         <button
+          type="button"
           onClick={acceptCall}
-          className="w-10 h-10 rounded-full bg-online hover:bg-emerald-600 text-white flex items-center justify-center transition-all cursor-pointer shadow animate-bounce"
+          aria-label="Atender"
+          className="w-10 h-10 rounded-full bg-online hover:bg-emerald-600 text-white flex items-center justify-center transition-all cursor-pointer shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           title="Atender"
         >
           <Phone className="w-5 h-5" />

@@ -67,19 +67,23 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-server-modal-title"
         className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col text-gray-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} flex-shrink-0`}>
           <div className="flex items-center justify-between mb-2">
-            <h2 className={`${MODAL_DIALOG_TITLE_CLASS} flex items-center gap-2`}>
+            <h2 id="delete-server-modal-title" className={`${MODAL_DIALOG_TITLE_CLASS} flex items-center gap-2`}>
               <span>Excluir servidor</span>
             </h2>
             <button
               type="button"
+              aria-label="Fechar"
               onClick={onClose}
-              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <X className="w-5 h-5" />
             </button>

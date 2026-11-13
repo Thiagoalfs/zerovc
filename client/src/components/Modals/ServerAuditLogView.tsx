@@ -11,6 +11,10 @@ import {
 import { api, formatAssetUrl } from '../../lib/api';
 import { AuditLog, User } from '../../types';
 import { DropdownSelect } from '../Common/DropdownSelect';
+import {
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_TOGGLE_HEADER_CLASS,
+} from '../../constants/modalTypography';
 
 export interface ServerAuditLogViewProps {
   guildId: string;
@@ -328,9 +332,11 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
           placeholder="Filtrar ações..."
         />
         <button
+          type="button"
           onClick={() => fetchLogs(activeFilter)}
           disabled={isLoading}
-          className="p-2 bg-background-darkest border border-white/10 hover:border-white/20 rounded-xl text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+          aria-label="Recarregar registro de auditoria"
+          className="p-2 bg-background-darkest border border-white/10 hover:border-white/20 rounded-xl text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           title="Recarregar"
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-brand-400' : ''}`} />
@@ -342,7 +348,7 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
         {isLoading && logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <RefreshCw className="w-8 h-8 animate-spin text-brand-500 mb-2" />
-            <span className="text-xs">Carregando histórico de auditoria...</span>
+            <span className={MODAL_DESCRIPTION_CLASS}>Carregando histórico de auditoria...</span>
           </div>
         ) : error ? (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs flex items-center gap-2">
@@ -352,8 +358,8 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
         ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <ScrollText className="w-12 h-12 stroke-1 mb-2 text-gray-600" />
-            <span className="text-sm font-medium">Nenhum registro encontrado</span>
-            <span className="text-xs text-gray-500 mt-1">Ações de moderação serão registradas aqui automaticamente.</span>
+            <span className={MODAL_TOGGLE_HEADER_CLASS}>Nenhum registro encontrado</span>
+            <span className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>Ações de moderação serão registradas aqui automaticamente.</span>
           </div>
         ) : (
           logs.map((log) => {

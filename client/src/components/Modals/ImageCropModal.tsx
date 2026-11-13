@@ -267,19 +267,25 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      <div className="bg-background-darkest w-full max-w-lg max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-150">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="image-crop-modal-title"
+        className="bg-background-darkest w-full max-w-lg max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-150"
+      >
         
         {/* Modal Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
           <div className="flex items-center gap-2">
-            <h3 className={MODAL_DIALOG_TITLE_CLASS}>
+            <h3 id="image-crop-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>
               {modalTitle}
             </h3>
           </div>
           <button
             type="button"
+            aria-label="Fechar"
             onClick={onCancel}
-            className="text-gray-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+            className="text-gray-400 hover:text-white p-2 rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
           </button>

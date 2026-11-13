@@ -3,6 +3,7 @@ import { X, Copy, Download, Link, ExternalLink } from 'lucide-react';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { copyToClipboard } from '../../utils/clipboard';
+import { MODAL_BACKDROP_CLASS } from '../../constants/modalTypography';
 
 interface ImageModalProps {
   imageUrl: string | null;
@@ -171,17 +172,21 @@ export const ImageModal: React.FC<ImageModalProps> = ({ imageUrl, isOpen, onClos
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md select-none p-2 sm:p-6 animate-in fade-in duration-150"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Visualizador de imagem"
+        className={MODAL_BACKDROP_CLASS}
         onClick={onClose}
       >
         {/* Close button outside the image */}
         <button
           type="button"
+          aria-label="Fechar"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }}
-          className="fixed top-4 right-4 sm:top-6 sm:right-6 z-50 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white/80 hover:text-white border border-white/15 backdrop-blur-md transition-all shadow-2xl active:scale-95 cursor-pointer"
+          className="fixed top-4 right-4 sm:top-6 sm:right-6 z-50 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white/80 hover:text-white border border-white/15 backdrop-blur-md transition-all shadow-2xl active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           title="Fechar (Esc)"
         >
           <X className="w-5 h-5 sm:w-6 sm:h-6" />

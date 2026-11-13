@@ -9,6 +9,9 @@ import {
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_BACKDROP_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface EditDMGroupNameModalProps {
@@ -66,19 +69,25 @@ export const EditDMGroupNameModal: React.FC<EditDMGroupNameModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm select-none p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className={MODAL_BACKDROP_CLASS}
     >
-      <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-dm-group-name-modal-title"
+        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
+      >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
           <div className="flex items-center gap-2">
             <Edit3 className="w-5 h-5 text-brand-400" />
-            <h2 className={MODAL_TITLE_CLASS}>Mudar Nome do Grupo</h2>
+            <h2 id="edit-dm-group-name-modal-title" className={MODAL_TITLE_CLASS}>Mudar Nome do Grupo</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-white cursor-pointer p-1 rounded-lg hover:bg-white/5 transition-colors"
+            aria-label="Fechar"
+            className="text-gray-400 hover:text-white cursor-pointer p-2 rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
           </button>
@@ -110,14 +119,14 @@ export const EditDMGroupNameModal: React.FC<EditDMGroupNameModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+              className={MODAL_CANCEL_BUTTON_CLASS}
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="px-4 py-2 text-xs font-semibold bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-lg transition-colors cursor-pointer shadow-md"
+              className={MODAL_PRIMARY_BUTTON_CLASS}
             >
               {isLoading ? 'Salvando...' : 'Salvar Alterações'}
             </button>

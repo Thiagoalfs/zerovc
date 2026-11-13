@@ -143,18 +143,24 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
       }}
       className={MODAL_BACKDROP_CLASS}
     >
-      <div className="bg-background-dark w-full max-w-xl max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="screen-share-modal-title"
+        className="bg-background-dark w-full max-w-xl max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col"
+      >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
           <div className="flex items-center gap-2">
-            <h2 className={MODAL_TITLE_CLASS}>
+            <h2 id="screen-share-modal-title" className={MODAL_TITLE_CLASS}>
               Selecione janela ou tela
             </h2>
           </div>
           <button
             type="button"
+            aria-label="Fechar"
             onClick={onClose}
-            className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+            className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
           </button>

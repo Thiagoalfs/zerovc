@@ -38,7 +38,12 @@ import { TransferOwnershipModal } from './ServerSettings/TransferOwnershipModal'
 import { BanMemberModal } from './ServerSettings/BanMemberModal';
 import { MuteMemberModal } from './ServerSettings/MuteMemberModal';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
-import { MODAL_TITLE_CLASS, MODAL_DIALOG_TITLE_CLASS } from '../../constants/modalTypography';
+import {
+  MODAL_TITLE_CLASS,
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+} from '../../constants/modalTypography';
 
 interface ServerSettingsModalProps {
   isOpen: boolean;
@@ -736,6 +741,9 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   return (
     <>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="server-settings-title"
         className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen md:pt-8 bg-background-dark overflow-hidden text-gray-200 select-none ${reducedMotion ? '' : 'animate-in fade-in duration-150'}`}
       >
         {/* MOBILE MENU VIEW */}
@@ -749,7 +757,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={onClose}
-                    className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer"
+                    aria-label="Fechar configurações do servidor"
+                    className="p-2 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     title="Fechar"
                   >
                     <X className="w-5 h-5" />
@@ -937,7 +946,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('overview')}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                    aria-current={activeTab === 'overview' ? 'page' : undefined}
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                       activeTab === 'overview'
                         ? 'bg-white/10 text-white font-medium'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -949,7 +959,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('roles')}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                    aria-current={activeTab === 'roles' ? 'page' : undefined}
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                       activeTab === 'roles'
                         ? 'bg-white/10 text-white font-medium'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -961,7 +972,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('emojis')}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                    aria-current={activeTab === 'emojis' ? 'page' : undefined}
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                       activeTab === 'emojis'
                         ? 'bg-white/10 text-white font-medium'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -973,7 +985,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('invites')}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                    aria-current={activeTab === 'invites' ? 'page' : undefined}
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                       activeTab === 'invites'
                         ? 'bg-white/10 text-white font-medium'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -985,7 +998,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('members')}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                    aria-current={activeTab === 'members' ? 'page' : undefined}
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                       activeTab === 'members'
                         ? 'bg-white/10 text-white font-medium'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -997,7 +1011,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setActiveTab('audit_log')}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                    aria-current={activeTab === 'audit_log' ? 'page' : undefined}
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                       activeTab === 'audit_log'
                         ? 'bg-white/10 text-white font-medium'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1016,14 +1031,14 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   <button
                     type="button"
                     onClick={() => setIsTransferModalOpen(true)}
-                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer"
+                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   >
                     <span>Transferir Posse</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsDeleteModalOpen(true)}
-                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   >
                     <span>Excluir Servidor</span>
                   </button>
@@ -1044,7 +1059,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 <button
                   type="button"
                   onClick={() => setMobileView('menu')}
-                  className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+                  aria-label="Voltar ao menu"
+                  className="p-2 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 >
                   <ArrowLeft className="w-5 h-5" />
                   <span>Voltar</span>
@@ -1061,7 +1077,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Fechar configurações do servidor"
+                className="p-2 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 title="Fechar"
               >
                 <X className="w-5 h-5" />
@@ -1071,7 +1088,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             {/* Desktop Top Header */}
             <div className="hidden md:flex items-center justify-between px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
               <div>
-                <h1 className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
+                <h1 id="server-settings-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
                   {activeTab === 'overview' && 'Visão Geral do Servidor'}
                   {activeTab === 'roles' && 'Gerenciamento de Cargos e Hierarquia'}
                   {activeTab === 'emojis' && 'Emojis Customizados do Servidor'}
@@ -1079,7 +1096,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   {activeTab === 'members' && 'Membros do Servidor e Moderação'}
                   {activeTab === 'audit_log' && 'Registro de Auditoria'}
                 </h1>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className={`${MODAL_DESCRIPTION_CLASS} mt-0.5`}>
                   {activeTab === 'overview' && 'Personalize a identidade visual, canal do sistema e veja estatísticas'}
                   {activeTab === 'roles' && 'Defina permissões, ordem na hierarquia e exibição de membros'}
                   {activeTab === 'emojis' && 'Adicione até 50 emojis exclusivos para membros usarem no chat'}
@@ -1112,7 +1129,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     type="button"
                     onClick={handleGenerateNewInvite}
                     disabled={isCreatingInvite}
-                    className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                    className={MODAL_PRIMARY_BUTTON_CLASS}
                   >
                     <Plus className="w-4 h-4" />
                     <span>{isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}</span>
@@ -1124,7 +1141,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     type="button"
                     onClick={() => emojiInputRef.current?.click()}
                     disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
-                    className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer"
+                    className={MODAL_PRIMARY_BUTTON_CLASS}
                   >
                     {isUploadingEmoji ? (
                       <>
@@ -1158,7 +1175,8 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       type="button"
                       onClick={() => setAuditRefreshTrigger((prev) => prev + 1)}
                       disabled={isAuditLoading}
-                      className="p-2 bg-background-darkest border border-white/10 hover:border-white/20 rounded-xl text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                      aria-label="Recarregar registro de auditoria"
+                      className="p-2 bg-background-darkest border border-white/10 hover:border-white/20 rounded-xl text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       title="Recarregar"
                     >
                       <RefreshCw className={`w-4 h-4 ${isAuditLoading ? 'animate-spin text-brand-400' : ''}`} />
@@ -1167,8 +1185,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 )}
 
                 <button
+                  type="button"
                   onClick={onClose}
-                  className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Fechar configurações do servidor"
+                  className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   title="Fechar Configurações (ESC)"
                 >
                   <X className="w-5 h-5" />

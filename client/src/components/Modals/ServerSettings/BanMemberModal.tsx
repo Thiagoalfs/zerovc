@@ -39,8 +39,13 @@ export const BanMemberModal: React.FC<BanMemberModalProps> = ({
       }}
       className={MODAL_BACKDROP_CLASS}
     >
-      <div className={`w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-red-500/30 shadow-2xl ${MODAL_CARD_PADDING_CLASS} text-gray-200 overflow-y-auto chat-scrollbar`}>
-        <h3 className={`${MODAL_DIALOG_TITLE_CLASS} mb-1 flex items-center gap-2`}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ban-member-modal-title"
+        className={`w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-red-500/30 shadow-2xl ${MODAL_CARD_PADDING_CLASS} text-gray-200 overflow-y-auto chat-scrollbar`}
+      >
+        <h3 id="ban-member-modal-title" className={`${MODAL_DIALOG_TITLE_CLASS} mb-1 flex items-center gap-2`}>
           <Ban className="w-5 h-5 text-red-500" />
           <span>Banir @{banModalUser.username}</span>
         </h3>

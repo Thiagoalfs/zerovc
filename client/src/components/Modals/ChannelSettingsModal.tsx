@@ -36,6 +36,8 @@ import {
   MODAL_FIELD_LABEL_CLASS,
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface ChannelSettingsModalProps {
@@ -352,6 +354,9 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="channel-settings-title"
       className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen md:pt-8 bg-background-dark overflow-hidden text-gray-200 select-none ${
         reducedMotion ? '' : 'animate-in fade-in duration-150'
       }`}
@@ -367,7 +372,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Fechar configurações do canal"
+                className="p-2 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 title="Fechar"
               >
                 <X className="w-5 h-5" />
@@ -505,7 +511,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('overview')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'overview' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'overview'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -517,7 +524,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('permissions')}
-                className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'permissions' ? 'page' : undefined}
+                className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'permissions'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -536,7 +544,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                   type="button"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+                  className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-2" />
                   <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
@@ -562,7 +570,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             <button
               type="button"
               onClick={() => setMobileView('menu')}
-              className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+              aria-label="Voltar ao menu"
+              className="p-2 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <ArrowLeft className="w-5 h-5" />
               <span>Voltar</span>
@@ -574,7 +583,8 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Fechar configurações do canal"
+            className="p-2 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             title="Fechar"
           >
             <X className="w-5 h-5" />
@@ -584,14 +594,14 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         {/* Desktop Top Header */}
         <div className="hidden md:flex items-center justify-between px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
           <div>
-            <h1 className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
+            <h1 id="channel-settings-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
               {activeTab === 'overview'
                 ? isCategory
                   ? 'Visão Geral da Categoria'
                   : 'Visão Geral do Canal'
                 : 'Permissões por Cargo'}
             </h1>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className={`${MODAL_DESCRIPTION_CLASS} mt-0.5`}>
               {activeTab === 'overview'
                 ? isCategory
                   ? 'Altere o nome da categoria para organizar melhor os canais do servidor'
@@ -604,13 +614,15 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
               type="button"
               onClick={() => handleSave()}
               disabled={isSaving}
-              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-xs transition-all cursor-pointer"
+              className={MODAL_PRIMARY_BUTTON_CLASS}
             >
               {isSaving ? 'Salvando...' : 'Salvar Alterações'}
             </button>
             <button
+              type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Fechar configurações do canal"
+              className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               title="Fechar Configurações (ESC)"
             >
               <X className="w-5 h-5" />
@@ -888,7 +900,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-gray-300 hover:underline cursor-pointer"
+            className={MODAL_CANCEL_BUTTON_CLASS}
           >
             Cancelar
           </button>
@@ -896,7 +908,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             type="button"
             onClick={() => handleSave()}
             disabled={isSaving}
-            className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-xs transition-all cursor-pointer"
+            className={MODAL_PRIMARY_BUTTON_CLASS}
           >
             {isSaving ? 'Salvando...' : 'Salvar Alterações'}
           </button>

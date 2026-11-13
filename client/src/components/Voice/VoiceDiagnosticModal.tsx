@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Activity, X, Wifi, Server, Shield, Radio, Sparkles, RefreshCw } from 'lucide-react';
 import { livekit } from '../../lib/livekit';
 import { useVoiceStore } from '../../stores/voiceStore';
+import {
+  MODAL_BACKDROP_CLASS,
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_SECONDARY_BUTTON_CLASS,
+} from '../../constants/modalTypography';
 
 interface VoiceDiagnosticModalProps {
   isOpen: boolean;
@@ -43,22 +49,29 @@ export const VoiceDiagnosticModal: React.FC<VoiceDiagnosticModalProps> = ({ isOp
   const pingBg = ping <= 50 ? 'bg-emerald-500/10 border-emerald-500/20' : ping <= 120 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in select-none">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="voice-diagnostic-modal-title"
+      className={MODAL_BACKDROP_CLASS}
+    >
       <div className="bg-background-darker border border-white/10 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-background-darkest/50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center border border-brand-500/30">
-              <Activity className="w-4 h-4 animate-pulse" />
+              <Activity className="w-4 h-4 animate-pulse motion-reduce:animate-none" />
             </div>
             <div>
-              <h3 className="font-bold text-sm text-gray-100">Diagnóstico da Conexão WebRTC</h3>
-              <p className="text-[11px] text-gray-400">Estatísticas de transmissão de áudio em tempo real</p>
+              <h3 id="voice-diagnostic-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>Diagnóstico da Conexão WebRTC</h3>
+              <p className={MODAL_DESCRIPTION_CLASS}>Estatísticas de transmissão de áudio em tempo real</p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Fechar"
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-4 h-4" />
           </button>
@@ -132,7 +145,7 @@ export const VoiceDiagnosticModal: React.FC<VoiceDiagnosticModalProps> = ({ isOp
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-gray-200 transition-colors cursor-pointer"
+            className={MODAL_SECONDARY_BUTTON_CLASS}
           >
             Fechar
           </button>

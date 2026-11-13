@@ -22,9 +22,7 @@ import {
   Keyboard,
   Key,
   Download,
-  Copy,
   Trash2,
-  AlertTriangle,
   Sliders,
   Palette,
   Bell,
@@ -81,8 +79,8 @@ import {
   MODAL_DESCRIPTION_CLASS,
   MODAL_SECONDARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
-import { copyToClipboard } from '../../utils/clipboard';
 import { isElectron } from '../../lib/platform';
+import { AccountSubModals, AccountSubModalType } from './ProfileSettings/AccountSubModals';
 import { ImageCropModal } from './ImageCropModal';
 import { KeybindSettingsView } from './KeybindSettingsView';
 import { SessionsSettingsView } from './SessionsSettingsView';
@@ -189,58 +187,35 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
   const [revealEmail, setRevealEmail] = useState(false);
   const [revealPhone, setRevealPhone] = useState(false);
 
-  // Display Name Edit Modal
-  const [isEditDisplayNameOpen, setIsEditDisplayNameOpen] = useState(false);
-  const [newDisplayName, setNewDisplayName] = useState(user?.display_name || '');
-  const [isSavingDisplayName, setIsSavingDisplayName] = useState(false);
+  const [activeAccountModal, setActiveAccountModal] = useState<AccountSubModalType>(null);
 
-  // Username Edit Modal
-  const [isEditUsernameOpen, setIsEditUsernameOpen] = useState(false);
-  const [newUsername, setNewUsername] = useState(user?.username || '');
-  const [usernameError, setUsernameError] = useState<string | null>(null);
-  const [isSavingUsername, setIsSavingUsername] = useState(false);
-
-  // Email Edit Modal
-  const [isEditEmailOpen, setIsEditEmailOpen] = useState(false);
-  const [newEmail, setNewEmail] = useState(user?.email || '');
-  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [isSavingEmail, setIsSavingEmail] = useState(false);
-
-  // Phone Edit Modal
-  const [isEditPhoneOpen, setIsEditPhoneOpen] = useState(false);
-  const [newPhone, setNewPhone] = useState(user?.phone_number || '');
-  const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [isSavingPhone, setIsSavingPhone] = useState(false);
-
-  // Password Edit Modal
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
-  const [isSavingPassword, setIsSavingPassword] = useState(false);
-
-  // 2FA Modal & Backup Codes
-  const [is2FAModalOpen, setIs2FAModalOpen] = useState(false);
-  const [qrCodeData, setQrCodeData] = useState<string | null>(null);
-  const [secretKey, setSecretKey] = useState<string | null>(null);
-  const [totpCode, setTotpCode] = useState('');
-  const [twoFactorError, setTwoFactorError] = useState<string | null>(null);
-  const [is2FALoading, setIs2FALoading] = useState(false);
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
-  const [showBackupCodesModal, setShowBackupCodesModal] = useState(false);
-  const [copiedBackupCodes, setCopiedBackupCodes] = useState(false);
-
-  // Export Data & Delete Account (LGPD/GDPR)
+  // Export Data (LGPD/GDPR)
   const [isExportingData, setIsExportingData] = useState(false);
-  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
-  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
-  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
-  // Desktop ESC key handling
+  const modalContainerRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Focus management: save/restore trigger focus when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      previousFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      requestAnimationFrame(() => {
+        if (
+          modalContainerRef.current &&
+          !modalContainerRef.current.contains(document.activeElement)
+        ) {
+          modalContainerRef.current.focus();
+        }
+      });
+      return () => {
+        previousFocusRef.current?.focus();
+        previousFocusRef.current = null;
+      };
+    }
+  }, [isOpen]);
+
+  // Desktop ESC key & lightweight Tab focus-trap handling
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -249,56 +224,48 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
           setIsCropOpen(false);
           return;
         }
-        if (isEditDisplayNameOpen) {
-          setIsEditDisplayNameOpen(false);
-          return;
-        }
-        if (isEditUsernameOpen) {
-          setIsEditUsernameOpen(false);
-          return;
-        }
-        if (isEditEmailOpen) {
-          setIsEditEmailOpen(false);
-          return;
-        }
-        if (isEditPhoneOpen) {
-          setIsEditPhoneOpen(false);
-          return;
-        }
-        if (isChangePasswordOpen) {
-          setIsChangePasswordOpen(false);
-          return;
-        }
-        if (is2FAModalOpen) {
-          setIs2FAModalOpen(false);
-          return;
-        }
-        if (showBackupCodesModal) {
-          setShowBackupCodesModal(false);
-          return;
-        }
-        if (isDeleteAccountOpen) {
-          setIsDeleteAccountOpen(false);
+        if (activeAccountModal) {
+          setActiveAccountModal(null);
           return;
         }
         onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && !isCropOpen && !activeAccountModal && modalContainerRef.current) {
+        const focusables = Array.from(
+          modalContainerRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((el) => el.offsetParent !== null);
+
+        if (focusables.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey) {
+          if (
+            document.activeElement === first ||
+            !modalContainerRef.current.contains(document.activeElement)
+          ) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else if (
+          document.activeElement === last ||
+          !modalContainerRef.current.contains(document.activeElement)
+        ) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    isOpen,
-    onClose,
-    isCropOpen,
-    isEditDisplayNameOpen,
-    isEditUsernameOpen,
-    isEditEmailOpen,
-    isEditPhoneOpen,
-    isChangePasswordOpen,
-    is2FAModalOpen,
-    showBackupCodesModal,
-    isDeleteAccountOpen,
-  ]);
+  }, [isOpen, onClose, isCropOpen, activeAccountModal]);
 
   // Hardware Back Button integration for mobile
   useEffect(() => {
@@ -309,36 +276,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
         setIsCropOpen(false);
         return true;
       }
-      if (isEditDisplayNameOpen) {
-        setIsEditDisplayNameOpen(false);
-        return true;
-      }
-      if (isEditUsernameOpen) {
-        setIsEditUsernameOpen(false);
-        return true;
-      }
-      if (isEditEmailOpen) {
-        setIsEditEmailOpen(false);
-        return true;
-      }
-      if (isEditPhoneOpen) {
-        setIsEditPhoneOpen(false);
-        return true;
-      }
-      if (isChangePasswordOpen) {
-        setIsChangePasswordOpen(false);
-        return true;
-      }
-      if (is2FAModalOpen) {
-        setIs2FAModalOpen(false);
-        return true;
-      }
-      if (showBackupCodesModal) {
-        setShowBackupCodesModal(false);
-        return true;
-      }
-      if (isDeleteAccountOpen) {
-        setIsDeleteAccountOpen(false);
+      if (activeAccountModal) {
+        setActiveAccountModal(null);
         return true;
       }
       if (mobileView === 'content') {
@@ -352,80 +291,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     return () => {
       unregister();
     };
-  }, [
-    isOpen,
-    mobileView,
-    isCropOpen,
-    isEditDisplayNameOpen,
-    isEditUsernameOpen,
-    isEditEmailOpen,
-    isEditPhoneOpen,
-    isChangePasswordOpen,
-    is2FAModalOpen,
-    showBackupCodesModal,
-    isDeleteAccountOpen,
-    onClose,
-  ]);
-
-  // Escape key handler
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (isCropOpen) {
-          setIsCropOpen(false);
-          return;
-        }
-        if (isEditDisplayNameOpen) {
-          setIsEditDisplayNameOpen(false);
-          return;
-        }
-        if (isEditUsernameOpen) {
-          setIsEditUsernameOpen(false);
-          return;
-        }
-        if (isEditEmailOpen) {
-          setIsEditEmailOpen(false);
-          return;
-        }
-        if (isEditPhoneOpen) {
-          setIsEditPhoneOpen(false);
-          return;
-        }
-        if (isChangePasswordOpen) {
-          setIsChangePasswordOpen(false);
-          return;
-        }
-        if (is2FAModalOpen) {
-          setIs2FAModalOpen(false);
-          return;
-        }
-        if (showBackupCodesModal) {
-          setShowBackupCodesModal(false);
-          return;
-        }
-        if (isDeleteAccountOpen) {
-          setIsDeleteAccountOpen(false);
-          return;
-        }
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    isOpen,
-    onClose,
-    isCropOpen,
-    isEditDisplayNameOpen,
-    isEditUsernameOpen,
-    isEditEmailOpen,
-    isEditPhoneOpen,
-    isChangePasswordOpen,
-    is2FAModalOpen,
-    showBackupCodesModal,
-    isDeleteAccountOpen,
-  ]);
+  }, [isOpen, mobileView, isCropOpen, activeAccountModal, onClose]);
 
   // Audio / Device Fields
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
@@ -665,15 +531,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
   useEffect(() => {
     if (isOpen && user) {
       setDisplayName(user.display_name || '');
-      setNewDisplayName(user.display_name || '');
       setAvatarUrl(user.avatar_url || '');
       setBannerUrl(user.banner_url || '');
       setBio(user.bio || '');
       setCustomStatus(user.custom_status || '');
       setStatus(user.status || 'online');
-      setNewUsername(user.username || '');
-      setNewEmail(user.email || '');
-      setNewPhone(user.phone_number || '');
 
       loadMediaDevices();
       navigator.mediaDevices?.addEventListener?.('devicechange', loadMediaDevices);
@@ -783,177 +645,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     }
   };
 
-  // Display Name Save
-  const handleSaveDisplayName = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingDisplayName(true);
-    try {
-      const updated = await updateProfile({ display_name: newDisplayName.trim() });
-      setUser(updated);
-      setDisplayName(updated.display_name || '');
-      setIsEditDisplayNameOpen(false);
-    } catch (err: any) {
-      console.error('Failed to update display name:', err);
-    } finally {
-      setIsSavingDisplayName(false);
-    }
-  };
-
-  // Username Save
-  const handleSaveUsername = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setUsernameError(null);
-    const trimmed = newUsername.trim().toLowerCase();
-    if (!/^[a-z0-9_]{2,32}$/.test(trimmed)) {
-      setUsernameError('O @ deve conter apenas letras minúsculas, números e sublinhado (_) (2 a 32 caracteres), sem espaços, acentos, maiúsculas ou símbolos.');
-      return;
-    }
-
-    setIsSavingUsername(true);
-    try {
-      const updated = await updateProfile({ username: trimmed });
-      setUser(updated);
-      setIsEditUsernameOpen(false);
-    } catch (err: any) {
-      setUsernameError(err.message || 'Este nome de usuário (@) já está em uso.');
-    } finally {
-      setIsSavingUsername(false);
-    }
-  };
-
-  // Email Save
-  const handleSaveEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setEmailError(null);
-    if (!newEmail.trim() || !newEmail.includes('@')) {
-      setEmailError('Insira um e-mail válido.');
-      return;
-    }
-    if (!emailCurrentPassword) {
-      setEmailError('Insira sua senha atual para confirmar.');
-      return;
-    }
-
-    setIsSavingEmail(true);
-    try {
-      const res = await api.auth.changeEmail({
-        password: emailCurrentPassword,
-        new_email: newEmail.trim(),
-      });
-      setUser({ email: res.email });
-      setIsEditEmailOpen(false);
-      setEmailCurrentPassword('');
-    } catch (err: any) {
-      setEmailError(err.message || 'Falha ao atualizar e-mail. Verifique sua senha.');
-    } finally {
-      setIsSavingEmail(false);
-    }
-  };
-
-  // Phone Save
-  const handleSavePhone = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPhoneError(null);
-    const trimmed = newPhone.trim();
-
-    setIsSavingPhone(true);
-    try {
-      const updated = await updateProfile({ phone_number: trimmed });
-      setUser(updated);
-      setIsEditPhoneOpen(false);
-    } catch (err: any) {
-      setPhoneError(err.message || 'Falha ao atualizar número.');
-    } finally {
-      setIsSavingPhone(false);
-    }
-  };
-
-  // Password Save
-  const handleSavePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordError(null);
-    setPasswordSuccess(false);
-
-    if (newPassword.length < 6) {
-      setPasswordError('A nova senha deve ter no mínimo 6 caracteres.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError('A confirmação da nova senha não confere.');
-      return;
-    }
-
-    setIsSavingPassword(true);
-    try {
-      await api.auth.changePassword({
-        current_password: currentPassword,
-        new_password: newPassword,
-      });
-      setPasswordSuccess(true);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => {
-        setIsChangePasswordOpen(false);
-        setPasswordSuccess(false);
-      }, 1500);
-    } catch (err: any) {
-      setPasswordError(err.message || 'Senha atual incorreta.');
-    } finally {
-      setIsSavingPassword(false);
-    }
-  };
-
-  // 2FA Setup
-  const handleOpen2FAModal = async () => {
-    setIs2FAModalOpen(true);
-    setTwoFactorError(null);
-    setTotpCode('');
-    if (!user?.two_factor_enabled) {
-      setIs2FALoading(true);
-      try {
-        const res = await api.auth.generate2FA();
-        setQrCodeData(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(res.otpauth_uri)}`);
-        setSecretKey(res.secret);
-      } catch (err: any) {
-        setTwoFactorError(err.message || 'Erro ao gerar QR Code.');
-      } finally {
-        setIs2FALoading(false);
-      }
-    }
-  };
-
-  const handleToggle2FA = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setTwoFactorError(null);
-    if (!totpCode.trim()) {
-      setTwoFactorError('Digite o código de 6 dígitos.');
-      return;
-    }
-
-    setIs2FALoading(true);
-    try {
-      if (user?.two_factor_enabled) {
-        await api.auth.disable2FA({ code: totpCode.trim() });
-        if (user) setUser({ ...user, two_factor_enabled: false });
-        setIs2FAModalOpen(false);
-      } else {
-        const res = await api.auth.enable2FA({ secret: secretKey || '', code: totpCode.trim() });
-        if (user) setUser({ ...user, two_factor_enabled: true });
-        setIs2FAModalOpen(false);
-        if (res.backup_codes && res.backup_codes.length > 0) {
-          setBackupCodes(res.backup_codes);
-          setShowBackupCodesModal(true);
-          setCopiedBackupCodes(false);
-        }
-      }
-    } catch (err: any) {
-      setTwoFactorError(err.message || 'Código inválido.');
-    } finally {
-      setIs2FALoading(false);
-    }
-  };
-
   const handleExportData = async () => {
     setIsExportingData(true);
     try {
@@ -971,27 +662,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
       alert(err.message || 'Erro ao exportar dados da conta.');
     } finally {
       setIsExportingData(false);
-    }
-  };
-
-  const handleDeleteAccount = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setDeleteAccountError(null);
-    if (!deleteAccountPassword.trim()) {
-      setDeleteAccountError('Digite sua senha para confirmar a exclusão.');
-      return;
-    }
-
-    setIsDeletingAccount(true);
-    try {
-      await api.auth.deleteAccount({ password: deleteAccountPassword });
-      setIsDeleteAccountOpen(false);
-      logout();
-      window.location.href = '/';
-    } catch (err: any) {
-      setDeleteAccountError(err.message || 'Senha incorreta ao tentar excluir conta.');
-    } finally {
-      setIsDeletingAccount(false);
     }
   };
 
@@ -1190,7 +860,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-0 md:p-4 md:pt-10 overflow-hidden animate-in fade-in"
     >
       {/* Unified Container (Full-screen on mobile, matching ServerSettingsModal on desktop) */}
-      <div className={`flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-background-dark rounded-none md:rounded-xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200 ${reducedMotion ? '' : 'animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none'}`}>
+      <div
+        ref={modalContainerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profile-modal-title"
+        tabIndex={-1}
+        className={`flex flex-col md:flex-row w-full h-full md:max-w-5xl md:h-[88vh] md:max-h-[92dvh] md:my-auto bg-background-dark rounded-none md:rounded-xl shadow-2xl border-0 md:border md:border-white/10 overflow-hidden text-gray-200 focus:outline-none ${reducedMotion ? '' : 'animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none'}`}
+      >
         
         {/* ======================================================== */}
         {/* MOBILE MENU VIEW (Visible only on mobile when mobileView === 'menu') */}
@@ -1206,7 +883,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <button
                   type="button"
                   onClick={onClose}
-                  className="p-1.5 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors"
+                  aria-label="Fechar"
+                  className="p-2 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   title="Fechar"
                 >
                   <X className="w-5 h-5" />
@@ -1449,7 +1127,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('account')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'account' || activeTab === 'profile' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'account' || activeTab === 'profile'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1462,7 +1141,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('privacy')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'privacy' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'privacy'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1475,7 +1155,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('sessions')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'sessions' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'sessions'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1494,7 +1175,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('registered_games')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'registered_games' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'registered_games'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1507,7 +1189,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('activity_privacy')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'activity_privacy' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'activity_privacy'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1526,7 +1209,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('appearance')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'appearance' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'appearance'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1539,7 +1223,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('accessibility')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'accessibility' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'accessibility'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1552,7 +1237,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('audio')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'audio' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'audio'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1565,7 +1251,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('notifications')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'notifications' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'notifications'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1578,7 +1265,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('streamer_mode')}
-                className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'streamer_mode' ? 'page' : undefined}
+                className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'streamer_mode'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1586,7 +1274,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               >
                 <span>Modo Streamer</span>
                 {useStreamerModeStore.getState().enabled && (
-                  <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+                  <span
+                    className={`w-2 h-2 rounded-full bg-brand-500 ${
+                      reducedMotion ? '' : 'animate-pulse motion-reduce:animate-none'
+                    }`}
+                  />
                 )}
               </button>
 
@@ -1594,7 +1286,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setActiveTab('preferences')}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                aria-current={activeTab === 'preferences' ? 'page' : undefined}
+                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   activeTab === 'preferences'
                     ? 'bg-white/10 text-white font-medium'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1608,7 +1301,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <button
                   type="button"
                   onClick={() => setActiveTab('keybinds')}
-                  className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                  aria-current={activeTab === 'keybinds' ? 'page' : undefined}
+                  className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                     activeTab === 'keybinds'
                       ? 'bg-white/10 text-white font-medium'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
@@ -1625,7 +1319,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer"
+              className="flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
             >
               <span>Sair da Conta</span>
             </button>
@@ -1646,7 +1340,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <button
                 type="button"
                 onClick={() => setMobileView('menu')}
-                className="p-1.5 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+                aria-label="Voltar"
+                className="p-2 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 <ArrowLeft className="w-5 h-5" />
                 <span>Voltar</span>
@@ -1670,7 +1365,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors"
+              aria-label="Fechar"
+              className="p-2 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               title="Fechar"
             >
               <X className="w-5 h-5" />
@@ -1684,7 +1380,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <button
                   type="button"
                   onClick={() => setActiveTab('account')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer border border-white/10"
+                  aria-label="Voltar para Minha Conta"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   title="Voltar para Minha Conta"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -1692,7 +1389,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 </button>
               )}
               <div>
-                <h1 className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
+                <h1 id="profile-modal-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
                   {activeTab === 'account' && 'Minha Conta e Perfil'}
                   {activeTab === 'profile' && 'Perfil de Usuário'}
                   {activeTab === 'privacy' && 'Privacidade e Segurança'}
@@ -1832,10 +1529,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       <button
                         type="button"
                         aria-label="Editar nome de exibição"
-                        onClick={() => {
-                          setNewDisplayName(user.display_name || '');
-                          setIsEditDisplayNameOpen(true);
-                        }}
+                        onClick={() => setActiveAccountModal('displayName')}
                         className={MODAL_SECONDARY_BUTTON_CLASS}
                       >
                         Editar
@@ -1853,11 +1547,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       <button
                         type="button"
                         aria-label="Editar nome de usuário"
-                        onClick={() => {
-                          setNewUsername(user.username);
-                          setUsernameError(null);
-                          setIsEditUsernameOpen(true);
-                        }}
+                        onClick={() => setActiveAccountModal('username')}
                         className={MODAL_SECONDARY_BUTTON_CLASS}
                       >
                         Editar
@@ -1889,11 +1579,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       <button
                         type="button"
                         aria-label={user.phone_number ? 'Editar número de telefone' : 'Adicionar número de telefone'}
-                        onClick={() => {
-                          setNewPhone(user.phone_number || '');
-                          setPhoneError(null);
-                          setIsEditPhoneOpen(true);
-                        }}
+                        onClick={() => setActiveAccountModal('phone')}
                         className={MODAL_SECONDARY_BUTTON_CLASS}
                       >
                         {user.phone_number ? 'Editar' : 'Adicionar'}
@@ -2008,12 +1694,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          setNewEmail(user.email || '');
-                          setEmailError(null);
-                          setEmailCurrentPassword('');
-                          setIsEditEmailOpen(true);
-                        }}
+                        onClick={() => setActiveAccountModal('email')}
                         className="bg-background-dark hover:bg-white/10 text-gray-200 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
                       >
                         Editar
@@ -2030,14 +1711,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          setPasswordError(null);
-                          setPasswordSuccess(false);
-                          setCurrentPassword('');
-                          setNewPassword('');
-                          setConfirmPassword('');
-                          setIsChangePasswordOpen(true);
-                        }}
+                        onClick={() => setActiveAccountModal('password')}
                         className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
                       >
                         Mudar Senha
@@ -2066,7 +1740,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
                       <button
                         type="button"
-                        onClick={handleOpen2FAModal}
+                        onClick={() => setActiveAccountModal('2fa')}
                         className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer self-start sm:self-auto ${
                           user.two_factor_enabled
                             ? 'bg-dnd/10 hover:bg-dnd/20 text-dnd border-dnd/30'
@@ -2193,11 +1867,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
-                            setDeleteAccountPassword('');
-                            setDeleteAccountError(null);
-                            setIsDeleteAccountOpen(true);
-                          }}
+                          onClick={() => setActiveAccountModal('deleteAccount')}
                           className="bg-dnd hover:bg-dnd/80 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -3241,603 +2911,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
       </div>
 
       {/* --- SUBMODALS FOR ACCOUNT EDITING --- */}
-
-      {/* 0. Edit Display Name Modal */}
-      {isEditDisplayNameOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsEditDisplayNameOpen(false);
-          }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
-        >
-          <form
-            onSubmit={handleSaveDisplayName}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
-            <div className="flex items-center justify-between">
-              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Alterar Nome de Exibição</h4>
-              <button
-                type="button"
-                onClick={() => setIsEditDisplayNameOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-400">
-              Este é o nome visível para os outros usuários nos servidores e conversas.
-            </p>
-
-            <div>
-              <label className={MODAL_FIELD_LABEL_CLASS}>
-                Nome de Exibição
-              </label>
-              <input
-                type="text"
-                value={newDisplayName}
-                onChange={(e) => setNewDisplayName(e.target.value)}
-                maxLength={64}
-                className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                placeholder={user.username}
-                autoFocus
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsEditDisplayNameOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingDisplayName}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
-              >
-                {isSavingDisplayName ? 'Salvando...' : 'Salvar Nome'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 1. Edit Username Modal */}
-      {isEditUsernameOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsEditUsernameOpen(false);
-          }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
-        >
-          <form
-            onSubmit={handleSaveUsername}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
-            <div className="flex items-center justify-between">
-              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Alterar Nome de Usuário</h4>
-              <button
-                type="button"
-                onClick={() => setIsEditUsernameOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-400">
-              Digite seu novo identificador <strong>@</strong>. Permitido apenas letras minúsculas, números e sublinhado (_), sem espaços, acentos, maiúsculas ou símbolos.
-            </p>
-
-            <div>
-              <label className={MODAL_FIELD_LABEL_CLASS}>
-                Novo @
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">@</span>
-                <input
-                  type="text"
-                  value={newUsername}
-                  onChange={(e) => {
-                    setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
-                    setUsernameError(null);
-                  }}
-                  maxLength={32}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono lowercase"
-                  placeholder="novo_usuario"
-                  autoFocus
-                />
-              </div>
-              {usernameError && <span className="text-[11px] text-dnd block mt-1">{usernameError}</span>}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsEditUsernameOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingUsername}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
-              >
-                {isSavingUsername ? 'Salvando...' : 'Salvar @'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 2. Edit Email Modal */}
-      {isEditEmailOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsEditEmailOpen(false);
-          }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
-        >
-          <form
-            onSubmit={handleSaveEmail}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
-            <div className="flex items-center justify-between">
-              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Alterar E-mail</h4>
-              <button
-                type="button"
-                onClick={() => setIsEditEmailOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>
-                  Novo E-mail
-                </label>
-                <input
-                  type="email"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
-                  placeholder="seu_novo_email@dominio.com"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>
-                  Senha Atual (Confirmação)
-                </label>
-                <input
-                  type="password"
-                  value={emailCurrentPassword}
-                  onChange={(e) => setEmailCurrentPassword(e.target.value)}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  placeholder="Digite sua senha atual..."
-                />
-              </div>
-
-              {emailError && <span className="text-[11px] text-dnd block">{emailError}</span>}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsEditEmailOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingEmail}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
-              >
-                {isSavingEmail ? 'Salvando...' : 'Salvar E-mail'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 3. Edit Phone Modal */}
-      {isEditPhoneOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsEditPhoneOpen(false);
-          }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
-        >
-          <form
-            onSubmit={handleSavePhone}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
-            <div className="flex items-center justify-between">
-              <h4 className={MODAL_DIALOG_TITLE_CLASS}>
-                {user.phone_number ? 'Editar Número de Telefone' : 'Adicionar Número de Telefone'}
-              </h4>
-              <button
-                type="button"
-                onClick={() => setIsEditPhoneOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-400">
-              Vincule seu número para recuperação de conta e notificações.
-            </p>
-
-            <div>
-              <label className={MODAL_FIELD_LABEL_CLASS}>
-                Número de Celular
-              </label>
-              <input
-                type="tel"
-                value={newPhone}
-                onChange={(e) => {
-                  setNewPhone(e.target.value);
-                  setPhoneError(null);
-                }}
-                className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
-                placeholder="(11) 98765-4321"
-                autoFocus
-              />
-              {phoneError && <span className="text-[11px] text-dnd block mt-1">{phoneError}</span>}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsEditPhoneOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingPhone}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
-              >
-                {isSavingPhone ? 'Salvando...' : 'Salvar Telefone'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 4. Change Password Modal */}
-      {isChangePasswordOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsChangePasswordOpen(false);
-          }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
-        >
-          <form
-            onSubmit={handleSavePassword}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
-            <div className="flex items-center justify-between">
-              <h4 className={MODAL_DIALOG_TITLE_CLASS}>Mudar Senha</h4>
-              <button
-                type="button"
-                onClick={() => setIsChangePasswordOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>
-                  Senha Atual
-                </label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
-                  placeholder="••••••••"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>
-                  Nova Senha
-                </label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
-                  placeholder="Mínimo 6 caracteres"
-                />
-              </div>
-
-              <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>
-                  Confirmar Nova Senha
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
-                  placeholder="Repita a nova senha"
-                />
-              </div>
-
-              {passwordError && <span className="text-[11px] text-dnd block">{passwordError}</span>}
-              {passwordSuccess && <span className="text-[11px] text-emerald-400 block font-semibold">Senha alterada com sucesso!</span>}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsChangePasswordOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingPassword || passwordSuccess}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md cursor-pointer"
-              >
-                {isSavingPassword ? 'Salvando...' : 'Salvar Nova Senha'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 5. 2FA Modal */}
-      {is2FAModalOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIs2FAModalOpen(false);
-          }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in"
-        >
-          <form
-            onSubmit={handleToggle2FA}
-            className={`bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
-            <div className="flex items-center justify-between">
-              <h4 className={MODAL_DIALOG_TITLE_CLASS}>
-                {user.two_factor_enabled ? 'Desativar Autenticação 2FA' : 'Configurar Autenticação 2FA (TOTP)'}
-              </h4>
-              <button
-                type="button"
-                onClick={() => setIs2FAModalOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {!user.two_factor_enabled && qrCodeData && (
-              <div className="flex flex-col items-center p-3 bg-white rounded-2xl">
-                <img src={qrCodeData} alt="2FA QR Code" className="w-36 h-36 sm:w-44 sm:h-44 object-contain" />
-                {secretKey && (
-                  <span className="text-[10px] text-gray-800 font-mono select-all mt-1">
-                    Chave manual: {secretKey}
-                  </span>
-                )}
-              </div>
-            )}
-
-            <p className="text-xs text-gray-400 leading-relaxed">
-              {user.two_factor_enabled
-                ? 'Para desativar a autenticação de dois fatores, insira o código de 6 dígitos gerado pelo seu app autenticador.'
-                : 'Escaneie o QR Code acima no Google Authenticator ou Authy e digite o código de 6 dígitos para ativar.'}
-            </p>
-
-            <div>
-              <label className={MODAL_FIELD_LABEL_CLASS}>
-                Código de 6 dígitos
-              </label>
-              <input
-                type="text"
-                value={totpCode}
-                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-center text-base tracking-widest text-white font-mono placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                placeholder="123456"
-                autoFocus
-              />
-              {twoFactorError && <span className="text-[11px] text-dnd block mt-1">{twoFactorError}</span>}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIs2FAModalOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={is2FALoading || totpCode.length < 6}
-                className={`text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md transition-all cursor-pointer ${
-                  user.two_factor_enabled
-                    ? 'bg-dnd hover:bg-dnd/80 text-white'
-                    : 'bg-brand-500 hover:bg-brand-600 text-white'
-                }`}
-              >
-                {is2FALoading ? 'Validando...' : user.two_factor_enabled ? 'Desativar 2FA' : 'Ativar 2FA'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 6. 2FA Backup Codes Presentation Modal */}
-      {showBackupCodesModal && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowBackupCodesModal(false);
-          }}
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in"
-        >
-          <div className={`bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}>
-            <div className="flex items-center justify-between">
-              <h4 className={MODAL_DIALOG_TITLE_CLASS}>
-                Códigos de Backup de 2FA
-              </h4>
-              <button
-                type="button"
-                onClick={() => setShowBackupCodesModal(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-start gap-2.5">
-              <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-yellow-200/90 leading-relaxed">
-                Salve estes códigos em um local seguro! Cada código só pode ser usado <strong>uma única vez</strong> para acessar sua conta caso você perca seu aplicativo autenticador.
-              </p>
-            </div>
-
-            {/* Grid of backup codes */}
-            <div className="grid grid-cols-2 gap-2 p-3 sm:p-4 bg-background-darker rounded-2xl border border-white/5 font-mono text-center text-xs sm:text-sm font-bold text-emerald-400 tracking-wider">
-              {backupCodes.map((code, idx) => (
-                <div key={idx} className="p-2 bg-background-darkest/60 rounded-xl border border-white/5 select-all">
-                  {code}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    copyToClipboard(backupCodes.join('\n'));
-                    setCopiedBackupCodes(true);
-                    setTimeout(() => setCopiedBackupCodes(false), 2000);
-                  }}
-                  className="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>{copiedBackupCodes ? 'Copiado!' : 'Copiar'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const blob = new Blob([backupCodes.join('\n')], { type: 'text/plain' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `zerovc-2fa-backup-codes-${user?.username || 'user'}.txt`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  }}
-                  className="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Baixar .txt</span>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowBackupCodesModal(false)}
-                className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold px-5 py-1.5 rounded-xl shadow-md transition-all cursor-pointer"
-              >
-                Concluído
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 7. Delete Account Confirmation Modal */}
-      {isDeleteAccountOpen && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsDeleteAccountOpen(false);
-          }}
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in"
-        >
-          <form
-            onSubmit={handleDeleteAccount}
-            className={`bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-dnd/30 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
-            <div className="flex items-center justify-between">
-              <h4 className={`${MODAL_DIALOG_TITLE_CLASS} text-dnd`}>
-                Excluir Conta Permanentemente
-              </h4>
-              <button
-                type="button"
-                onClick={() => setIsDeleteAccountOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-300 leading-relaxed">
-              Você está prestes a excluir sua conta no ZeroVC. Esta ação <strong>NÃO pode ser desfeita</strong>. Digite sua senha atual para confirmar a exclusão.
-            </p>
-
-            <div>
-              <label className={MODAL_FIELD_LABEL_CLASS}>
-                Sua Senha Atual
-              </label>
-              <input
-                type="password"
-                value={deleteAccountPassword}
-                onChange={(e) => setDeleteAccountPassword(e.target.value)}
-                placeholder="Digite sua senha"
-                className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-dnd"
-                autoFocus
-              />
-              {deleteAccountError && <span className="text-[11px] text-dnd block mt-1">{deleteAccountError}</span>}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsDeleteAccountOpen(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-400 hover:text-white cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isDeletingAccount || !deleteAccountPassword.trim()}
-                className="bg-dnd hover:bg-dnd/80 disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                {isDeletingAccount ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Excluindo...</span>
-                  </>
-                ) : (
-                  <span>Confirmar Exclusão</span>
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <AccountSubModals
+        activeModal={activeAccountModal}
+        onOpenModal={setActiveAccountModal}
+        onClose={() => setActiveAccountModal(null)}
+        onDisplayNameUpdated={setDisplayName}
+      />
 
       {/* Image Crop & Framing Modal */}
       <ImageCropModal

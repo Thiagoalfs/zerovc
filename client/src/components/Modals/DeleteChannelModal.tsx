@@ -65,13 +65,16 @@ export const DeleteChannelModal: React.FC<DeleteChannelModalProps> = ({
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-channel-modal-title"
         className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col text-gray-200 select-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header com ícone de perigo */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} flex-shrink-0`}>
           <div className="flex items-center justify-between mb-2">
-            <h2 className={`${MODAL_DIALOG_TITLE_CLASS} flex items-center gap-2 text-white`}>
+            <h2 id="delete-channel-modal-title" className={`${MODAL_DIALOG_TITLE_CLASS} flex items-center gap-2 text-white`}>
               <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center flex-shrink-0">
                 <Trash2 className="w-4 h-4" />
               </div>
@@ -79,9 +82,10 @@ export const DeleteChannelModal: React.FC<DeleteChannelModalProps> = ({
             </h2>
             <button
               type="button"
+              aria-label="Fechar"
               onClick={onClose}
               disabled={isDeleting}
-              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50"
+              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <X className="w-5 h-5" />
             </button>

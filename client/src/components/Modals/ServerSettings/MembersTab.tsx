@@ -12,6 +12,10 @@ import { Guild, Role, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
 import { DropdownSelect } from '../../Common/DropdownSelect';
 import { useGuildPermissions } from '../../../hooks/useGuildPermissions';
+import {
+  MODAL_SECTION_HEADER_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+} from '../../../constants/modalTypography';
 
 interface MembersTabProps {
   activeGuild: Guild;
@@ -90,7 +94,7 @@ export const MembersTab: React.FC<MembersTabProps> = ({
         )}
       </div>
 
-      <div className="text-xs text-gray-400">
+      <div className={MODAL_DESCRIPTION_CLASS}>
         Mostrando {filteredMembers.length} de {members.length} membros
       </div>
 
@@ -151,7 +155,7 @@ export const MembersTab: React.FC<MembersTabProps> = ({
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-gray-400">@{member.username}</span>
+                  <span className={MODAL_DESCRIPTION_CLASS}>@{member.username}</span>
                 </div>
               </div>
 
@@ -210,7 +214,7 @@ export const MembersTab: React.FC<MembersTabProps> = ({
                         <div className="absolute right-0 top-10 z-30 w-56 p-2 bg-background-darkest border border-white/10 rounded-2xl shadow-2xl space-y-1 animate-fade-in">
                           {perms.canManageRoles && manageableRoles.length > 0 && (
                             <>
-                              <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                              <div className={`${MODAL_SECTION_HEADER_CLASS} px-2 py-1 mb-0`}>
                                 Cargos
                               </div>
                               <div className="max-h-36 overflow-y-auto space-y-0.5 chat-scrollbar pr-1">

@@ -75,20 +75,26 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
       }}
       className={MODAL_BACKDROP_CLASS}
     >
-      <div className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="join-server-modal-title"
+        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
+      >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} text-center relative flex-shrink-0`}>
           <button
             type="button"
+            aria-label="Fechar"
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
           </button>
           <div className="w-12 h-12 bg-online/10 text-online rounded-2xl flex items-center justify-center mx-auto mb-2">
             <Compass className="w-6 h-6" />
           </div>
-          <h2 className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
+          <h2 id="join-server-modal-title" className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
           <p className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>
             Digite o código de 10 caracteres ou o link de convite que você recebeu.
           </p>

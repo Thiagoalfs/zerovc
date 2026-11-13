@@ -5,6 +5,8 @@ import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
+  MODAL_SWITCH_CONTAINER_CLASS,
+  MODAL_SWITCH_KNOB_CLASS,
 } from '../../../constants/modalTypography';
 
 export const StreamerModeTab: React.FC = () => {
@@ -34,7 +36,7 @@ export const StreamerModeTab: React.FC = () => {
       <div className="flex items-center justify-between gap-4">
         <div className="space-y-1 pr-4">
           <div className="flex items-center gap-2">
-            <span className={MODAL_TOGGLE_HEADER_CLASS}>
+            <span id="streamer-mode-enabled-label" className={MODAL_TOGGLE_HEADER_CLASS}>
               Ativar Modo Streamer
             </span>
             <span
@@ -56,6 +58,7 @@ export const StreamerModeTab: React.FC = () => {
           type="button"
           role="switch"
           aria-checked={enabled}
+          aria-labelledby="streamer-mode-enabled-label"
           onClick={() => {
             if (enabled) {
               dismissForSession();
@@ -63,12 +66,12 @@ export const StreamerModeTab: React.FC = () => {
               setEnabled(true);
             }
           }}
-          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+          className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
             enabled ? 'bg-brand-500' : 'bg-white/10'
           }`}
         >
           <div
-            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+            className={`${MODAL_SWITCH_KNOB_CLASS} ${
               enabled ? 'translate-x-6' : 'translate-x-0'
             }`}
           />
@@ -88,7 +91,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Toggle: Auto-detect */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+            <span id="streamer-mode-autodetect-label" className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Ativar automaticamente ao detectar softwares de streaming
             </span>
             <p className={MODAL_DESCRIPTION_CLASS}>
@@ -101,13 +104,14 @@ export const StreamerModeTab: React.FC = () => {
             type="button"
             role="switch"
             aria-checked={autoDetect}
+            aria-labelledby="streamer-mode-autodetect-label"
             onClick={() => setAutoDetect(!autoDetect)}
-            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+            className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
               autoDetect ? 'bg-brand-500' : 'bg-white/10'
             }`}
           >
             <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+              className={`${MODAL_SWITCH_KNOB_CLASS} ${
                 autoDetect ? 'translate-x-6' : 'translate-x-0'
               }`}
             />
@@ -128,7 +132,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Censurar Nomes de Usuários */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+            <span id="streamer-mode-censor-label" className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Censurar nomes de usuários (primeiras 3 letras)
             </span>
             <p className={MODAL_DESCRIPTION_CLASS}>
@@ -141,13 +145,14 @@ export const StreamerModeTab: React.FC = () => {
             type="button"
             role="switch"
             aria-checked={censorUsernames}
+            aria-labelledby="streamer-mode-censor-label"
             onClick={() => setCensorUsernames(!censorUsernames)}
-            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+            className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
               censorUsernames ? 'bg-brand-500' : 'bg-white/10'
             }`}
           >
             <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+              className={`${MODAL_SWITCH_KNOB_CLASS} ${
                 censorUsernames ? 'translate-x-6' : 'translate-x-0'
               }`}
             />
@@ -157,7 +162,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Ocultar Informações Pessoais */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+            <span id="streamer-mode-personal-label" className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Ocultar informações pessoais
             </span>
             <p className={MODAL_DESCRIPTION_CLASS}>
@@ -169,13 +174,14 @@ export const StreamerModeTab: React.FC = () => {
             type="button"
             role="switch"
             aria-checked={hidePersonalData}
+            aria-labelledby="streamer-mode-personal-label"
             onClick={() => setHidePersonalData(!hidePersonalData)}
-            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+            className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
               hidePersonalData ? 'bg-brand-500' : 'bg-white/10'
             }`}
           >
             <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+              className={`${MODAL_SWITCH_KNOB_CLASS} ${
                 hidePersonalData ? 'translate-x-6' : 'translate-x-0'
               }`}
             />
@@ -185,7 +191,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Ocultar Links de Convite */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+            <span id="streamer-mode-invites-label" className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Ocultar links de convite de servidores
             </span>
             <p className={MODAL_DESCRIPTION_CLASS}>
@@ -198,13 +204,14 @@ export const StreamerModeTab: React.FC = () => {
             type="button"
             role="switch"
             aria-checked={hideInviteLinks}
+            aria-labelledby="streamer-mode-invites-label"
             onClick={() => setHideInviteLinks(!hideInviteLinks)}
-            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+            className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
               hideInviteLinks ? 'bg-brand-500' : 'bg-white/10'
             }`}
           >
             <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+              className={`${MODAL_SWITCH_KNOB_CLASS} ${
                 hideInviteLinks ? 'translate-x-6' : 'translate-x-0'
               }`}
             />
@@ -225,7 +232,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Desativar Notificações na Área de Trabalho */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+            <span id="streamer-mode-notifications-label" className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Desativar notificações na área de trabalho
             </span>
             <p className={MODAL_DESCRIPTION_CLASS}>
@@ -237,13 +244,14 @@ export const StreamerModeTab: React.FC = () => {
             type="button"
             role="switch"
             aria-checked={disableNotifications}
+            aria-labelledby="streamer-mode-notifications-label"
             onClick={() => setDisableNotifications(!disableNotifications)}
-            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+            className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
               disableNotifications ? 'bg-brand-500' : 'bg-white/10'
             }`}
           >
             <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+              className={`${MODAL_SWITCH_KNOB_CLASS} ${
                 disableNotifications ? 'translate-x-6' : 'translate-x-0'
               }`}
             />
@@ -253,7 +261,7 @@ export const StreamerModeTab: React.FC = () => {
         {/* Silenciar Efeitos Sonoros */}
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1 pr-4">
-            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+            <span id="streamer-mode-sounds-label" className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
               Silenciar efeitos sonoros do ZeroVC
             </span>
             <p className={MODAL_DESCRIPTION_CLASS}>
@@ -265,13 +273,14 @@ export const StreamerModeTab: React.FC = () => {
             type="button"
             role="switch"
             aria-checked={disableSounds}
+            aria-labelledby="streamer-mode-sounds-label"
             onClick={() => setDisableSounds(!disableSounds)}
-            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+            className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
               disableSounds ? 'bg-brand-500' : 'bg-white/10'
             }`}
           >
             <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+              className={`${MODAL_SWITCH_KNOB_CLASS} ${
                 disableSounds ? 'translate-x-6' : 'translate-x-0'
               }`}
             />

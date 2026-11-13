@@ -215,19 +215,31 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
       {/* Floating Popover Card */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="user-profile-popover-title"
         style={popoverStyle}
         onClick={(e) => e.stopPropagation()}
-        className={`fixed z-50 bg-background-darkest rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[92dvh] overflow-y-auto no-scrollbar ${
+        className={`fixed z-50 bg-background-darkest rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85dvh] sm:max-h-[92dvh] overflow-y-auto no-scrollbar ${
           !position || (typeof window !== 'undefined' && window.innerWidth < 640)
-            ? 'inset-x-4 top-1/2 -translate-y-1/2 sm:translate-y-0 sm:top-auto sm:inset-x-auto max-w-sm mx-auto'
+            ? 'inset-x-3 top-1/2 -translate-y-1/2 sm:translate-y-0 sm:top-auto sm:inset-x-auto max-w-sm mx-auto'
             : ''
         }`}
       >
         {/* Banner with expand action */}
         <div
-          className="w-full h-20 sm:h-24 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-cover bg-center relative group/banner cursor-pointer flex-shrink-0"
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir perfil completo"
+          className="w-full h-20 sm:h-24 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-cover bg-center relative group/banner cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
           style={user.banner_url ? { backgroundImage: `url(${formatAssetUrl(user.banner_url)})` } : {}}
           onClick={handleAvatarClick}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleAvatarClick(e as unknown as React.MouseEvent);
+            }
+          }}
           title="Clique para abrir perfil completo no centro da tela"
         >
           <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-black/80 text-white opacity-0 group-hover/banner:opacity-100 transition-opacity">
@@ -236,12 +248,21 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         </div>
 
         {/* Profile Details */}
-        <div className="px-4 pb-4 relative bg-background-darkest">
+        <div className="px-3.5 sm:px-4 pb-4 relative bg-background-darkest">
           {/* Avatar with Click to Expand */}
           <div className="relative -mt-9 mb-2 inline-block group/avatar">
             <div
+              role="button"
+              tabIndex={0}
+              aria-label="Abrir perfil completo"
               onClick={handleAvatarClick}
-              className="w-16 h-16 rounded-full bg-brand-500 border-4 border-background-darkest flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden cursor-pointer relative transition-transform group-hover/avatar:scale-105 active:scale-95"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleAvatarClick(e as unknown as React.MouseEvent);
+                }
+              }}
+              className="w-16 h-16 rounded-full bg-brand-500 border-4 border-background-darkest flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden cursor-pointer relative transition-transform group-hover/avatar:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               title="Clique para abrir perfil completo no centro da tela"
             >
               {user.avatar_url ? (
@@ -265,7 +286,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           <div className="space-y-3 pt-1">
             {/* Names */}
             <div>
-              <h2 className="text-base font-bold text-white leading-snug">
+              <h2 id="user-profile-popover-title" className="text-base font-bold text-white leading-snug">
                 {user.display_name || user.username || 'Usuário'}
               </h2>
               {user.username && <span className="text-xs text-gray-400 font-medium">@{user.username}</span>}
@@ -359,12 +380,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     }}
                     placeholder={`Conversar com @${user.display_name || user.username}`}
                     disabled={isSendingMessage}
-                    className="w-full bg-background-darkest border border-white/10 focus:border-brand-500 rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-gray-500 outline-none transition-all shadow-inner"
+                    className="w-full bg-background-darkest border border-white/10 focus:border-brand-500 focus-visible:ring-1 focus-visible:ring-brand-500 rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-gray-500 outline-none transition-all shadow-inner"
                   />
                   <button
                     type="submit"
+                    aria-label="Enviar mensagem"
                     disabled={!quickMessage.trim() || isSendingMessage}
-                    className="absolute right-1.5 p-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 transition-colors cursor-pointer"
+                    className="absolute right-1.5 p-1 rounded-lg text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     title="Enviar mensagem"
                   >
                     {isSendingMessage ? (

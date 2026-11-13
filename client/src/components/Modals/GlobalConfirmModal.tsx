@@ -113,6 +113,9 @@ export const GlobalConfirmModal: React.FC = () => {
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="global-confirm-modal-title"
         className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col text-gray-200 select-none"
         onClick={(e) => e.stopPropagation()}
       >
@@ -121,12 +124,13 @@ export const GlobalConfirmModal: React.FC = () => {
           <div className="flex items-center justify-between gap-3 mb-2">
             <div className="flex items-center gap-3">
               {renderIcon()}
-              <h2 className={`${MODAL_DIALOG_TITLE_CLASS} text-white`}>{title}</h2>
+              <h2 id="global-confirm-modal-title" className={`${MODAL_DIALOG_TITLE_CLASS} text-white`}>{title}</h2>
             </div>
             <button
               type="button"
+              aria-label="Fechar"
               onClick={handleCancel}
-              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <X className="w-5 h-5" />
             </button>

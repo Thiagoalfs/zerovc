@@ -277,6 +277,9 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 
       {/* Centered Modal Window */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="user-profile-focus-title"
         onClick={(e) => e.stopPropagation()}
         className="relative bg-background-darkest border border-white/10 rounded-xl w-full max-w-lg sm:max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92dvh] overflow-y-auto no-scrollbar select-text"
       >
@@ -296,11 +299,12 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
           )}
           <button
             type="button"
+            aria-label="Fechar"
             onClick={(e) => {
               e.stopPropagation();
               onClose();
             }}
-            className="absolute top-3.5 right-3.5 p-2 rounded-full bg-black/60 hover:bg-black/80 text-gray-300 hover:text-white transition-all cursor-pointer shadow-lg backdrop-blur-md z-10 active:scale-95"
+            className="absolute top-3.5 right-3.5 p-2 rounded-full bg-black/60 hover:bg-black/80 text-gray-300 hover:text-white transition-all cursor-pointer shadow-lg backdrop-blur-md z-10 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             title="Fechar (ESC)"
           >
             <X className="w-4 h-4" />
@@ -343,7 +347,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                   <button
                     type="button"
                     onClick={handleOpenEdit}
-                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darkest"
                   >
                     <Edit3 className="w-4 h-4" />
                     <span>Editar Perfil</span>
@@ -352,7 +356,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                   <button
                     type="button"
                     onClick={handleStartChat}
-                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darkest"
                   >
                     <MessageSquare className="w-4 h-4" />
                     <span>Enviar Mensagem</span>
@@ -363,7 +367,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                       type="button"
                       onClick={handleAddFriend}
                       disabled={isSendingRequest || isPending || requestSent}
-                      className={`active:scale-95 text-white font-semibold px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
+                      className={`active:scale-95 text-white font-semibold px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darkest ${
                         isPending || requestSent
                           ? 'bg-emerald-600/80 hover:bg-emerald-600'
                           : 'bg-online hover:bg-online/90'
@@ -384,8 +388,9 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
 
                     <button
                       type="button"
+                      aria-label="Enviar Mensagem"
                       onClick={handleStartChat}
-                      className="bg-background-darker hover:bg-white/10 active:scale-95 text-gray-300 hover:text-white p-2 sm:p-2.5 rounded-xl transition-all border border-white/10 cursor-pointer shadow-md flex items-center justify-center"
+                      className="bg-background-darker hover:bg-white/10 active:scale-95 text-gray-300 hover:text-white p-2 sm:p-2.5 rounded-xl transition-all border border-white/10 cursor-pointer shadow-md flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       title="Enviar Mensagem"
                     >
                       <MessageSquare className="w-4 h-4" />
@@ -399,13 +404,13 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
           {/* Names & Quick Copy */}
           <div className="mb-4">
             <div className="flex items-baseline gap-2 flex-wrap">
-              <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight">
+              <h2 id="user-profile-focus-title" className="text-xl sm:text-2xl font-bold text-white leading-tight">
                 {user.display_name || user.username}
               </h2>
               <button
                 type="button"
                 onClick={handleCopyUsername}
-                className="text-xs sm:text-sm text-gray-400 hover:text-white font-medium flex items-center gap-1 transition-colors cursor-pointer group/copy"
+                className="text-xs sm:text-sm text-gray-400 hover:text-white font-medium flex items-center gap-1 transition-colors cursor-pointer group/copy rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 title="Clique para copiar username"
               >
                 <span>@{user.username}</span>
@@ -494,8 +499,9 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                   <div>
                     <button
                       type="button"
+                      aria-expanded={isServersExpanded}
                       onClick={() => setIsServersExpanded((prev) => !prev)}
-                      className="w-full flex items-center gap-2 py-1.5 px-1 hover:bg-white/5 rounded-lg transition-all cursor-pointer group text-left"
+                      className="w-full flex items-center gap-2 py-1.5 px-1 hover:bg-white/5 rounded-lg transition-all cursor-pointer group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     >
                       <span className="text-xs font-semibold text-gray-300 group-hover:text-white transition-colors">
                         Servidores em comum
@@ -552,7 +558,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                               key={g.id}
                               type="button"
                               onClick={() => handleSelectMutualGuild(g.id)}
-                              className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer text-left"
+                              className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                             >
                               <div className="w-7 h-7 rounded-full overflow-hidden bg-background-darker border border-white/10 shrink-0">
                                 {g.icon_url ? (
@@ -579,8 +585,9 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                   <div>
                     <button
                       type="button"
+                      aria-expanded={isFriendsExpanded}
                       onClick={() => setIsFriendsExpanded((prev) => !prev)}
-                      className="w-full flex items-center gap-2 py-1.5 px-1 hover:bg-white/5 rounded-lg transition-all cursor-pointer group text-left"
+                      className="w-full flex items-center gap-2 py-1.5 px-1 hover:bg-white/5 rounded-lg transition-all cursor-pointer group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     >
                       <span className="text-xs font-semibold text-gray-300 group-hover:text-white transition-colors">
                         Amigos em comum
@@ -637,7 +644,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                               key={f.id}
                               type="button"
                               onClick={() => handleSelectMutualFriend(f.id)}
-                              className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer text-left"
+                              className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                             >
                               <div className="w-7 h-7 rounded-full overflow-hidden bg-background-darker border border-white/10 shrink-0">
                                 {f.avatar_url ? (

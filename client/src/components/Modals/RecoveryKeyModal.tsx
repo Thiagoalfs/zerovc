@@ -13,6 +13,14 @@ import {
 import { generateRecoveryKey, zeroBuffer, parseRecoveryKey, RecoveryKeyData } from '../../crypto/recovery';
 import { backupManager } from '../../crypto/backupManager';
 import { copyToClipboard } from '../../utils/clipboard';
+import {
+  MODAL_BACKDROP_CLASS,
+  MODAL_DIALOG_TITLE_CLASS,
+  MODAL_DESCRIPTION_CLASS,
+  MODAL_PRIMARY_BUTTON_CLASS,
+  MODAL_SECONDARY_BUTTON_CLASS,
+  MODAL_CANCEL_BUTTON_CLASS,
+} from '../../constants/modalTypography';
 
 interface RecoveryKeyModalProps {
   isOpen: boolean;
@@ -155,7 +163,12 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="recovery-key-modal-title"
+      className={MODAL_BACKDROP_CLASS}
+    >
       <div className="bg-background-darker w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-background-darkest/50">
@@ -164,10 +177,10 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
               <Key className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">
+              <h2 id="recovery-key-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>
                 {currentMode === 'setup' ? 'Chave de Recuperação E2EE' : 'Restaurar Chaves da Nuvem'}
               </h2>
-              <p className="text-xs text-gray-400">
+              <p className={MODAL_DESCRIPTION_CLASS}>
                 {currentMode === 'setup'
                   ? 'Backup protegido com criptografia de ponta a ponta'
                   : 'Recupere suas sessões em um novo aparelho'}
@@ -177,7 +190,8 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+            aria-label="Fechar"
+            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
           </button>
@@ -221,7 +235,8 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
                     <button
                       type="button"
                       onClick={handleRegenerate}
-                      className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors shrink-0"
+                      aria-label="Gerar nova chave aleatória"
+                      className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       title="Gerar nova chave aleatória"
                     >
                       <RefreshCw className="w-4 h-4" />
@@ -235,11 +250,11 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all ${
+                  className={
                     isCopied
-                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                      : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'
-                  }`}
+                      ? 'flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all bg-emerald-500/15 border-emerald-500/30 text-emerald-400 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
+                      : `${MODAL_SECONDARY_BUTTON_CLASS} flex items-center justify-center gap-2`
+                  }
                 >
                   {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   <span>{isCopied ? 'Copiada!' : 'Copiar Chave'}</span>
@@ -248,7 +263,7 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
                 <button
                   type="button"
                   onClick={handleDownload}
-                  className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white text-xs font-semibold transition-colors"
+                  className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center justify-center gap-2`}
                 >
                   <Download className="w-4 h-4" />
                   <span>Baixar (.txt)</span>
@@ -314,7 +329,7 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white rounded-xl hover:bg-white/5 transition-colors"
+              className={MODAL_CANCEL_BUTTON_CLASS}
             >
               Cancelar
             </button>
@@ -324,7 +339,7 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
                 type="button"
                 onClick={handleCreateBackup}
                 disabled={!confirmedSafekeeping || isLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg shadow-brand-500/20 transition-all"
+                className={`${MODAL_PRIMARY_BUTTON_CLASS} disabled:cursor-not-allowed`}
               >
                 {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <span>Ativar Backup Criptografado</span>
@@ -334,7 +349,7 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
                 type="button"
                 onClick={handleRestoreBackup}
                 disabled={!restoreInput.trim() || isLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg shadow-brand-500/20 transition-all"
+                className={`${MODAL_PRIMARY_BUTTON_CLASS} disabled:cursor-not-allowed`}
               >
                 {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <span>Restaurar Chaves</span>
