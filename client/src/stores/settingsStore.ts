@@ -377,41 +377,65 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setAudioProcessingMode: (audioProcessingMode) => {
     localStorage.setItem('zerovc_audio_proc_mode', audioProcessingMode);
     set({ audioProcessingMode });
+    import('../lib/livekit').then(({ livekit }) => {
+      void livekit.updateMicrophoneConfig({ mode: audioProcessingMode });
+    }).catch(() => {});
   },
 
   setRnnoiseLevel: (rnnoiseLevel) => {
     localStorage.setItem('zerovc_rnnoise_level', rnnoiseLevel);
     set({ rnnoiseLevel });
+    import('../lib/livekit').then(({ livekit }) => {
+      void livekit.updateMicrophoneConfig({ rnnoiseLevel });
+    }).catch(() => {});
   },
 
   setVadAutoSensitivity: (vadAutoSensitivity) => {
     localStorage.setItem('zerovc_vad_auto_sensitivity', String(vadAutoSensitivity));
     set({ vadAutoSensitivity });
+    import('../lib/livekit').then(({ livekit }) => {
+      void livekit.updateMicrophoneConfig({ vadAutoSensitivity });
+    }).catch(() => {});
   },
 
   setVadSensitivity: (vadSensitivity) => {
     localStorage.setItem('zerovc_vad_sensitivity', String(vadSensitivity));
     set({ vadSensitivity });
+    import('../lib/livekit').then(({ livekit }) => {
+      void livekit.updateMicrophoneConfig({ vadSensitivity });
+    }).catch(() => {});
   },
 
   setVadHangover: (vadHangover) => {
     localStorage.setItem('zerovc_vad_hangover', String(vadHangover));
     set({ vadHangover });
+    import('../lib/livekit').then(({ livekit }) => {
+      void livekit.updateMicrophoneConfig({ vadHangover });
+    }).catch(() => {});
   },
 
   setEchoCancellation: (echoCancellation) => {
     localStorage.setItem('zerovc_echo_cancellation', String(echoCancellation));
     set({ echoCancellation });
+    import('../lib/livekit').then(({ livekit }) => {
+      void livekit.updateMicrophoneConfig({ echoCancellation });
+    }).catch(() => {});
   },
 
   setNoiseSuppression: (noiseSuppression) => {
     localStorage.setItem('zerovc_noise_suppression', String(noiseSuppression));
     set({ noiseSuppression });
+    import('../lib/livekit').then(({ livekit }) => {
+      void livekit.updateMicrophoneConfig({ noiseSuppression });
+    }).catch(() => {});
   },
 
   setAutoGainControl: (autoGainControl) => {
     localStorage.setItem('zerovc_auto_gain_control', String(autoGainControl));
     set({ autoGainControl });
+    import('../lib/livekit').then(({ livekit }) => {
+      void livekit.updateMicrophoneConfig({ autoGainControl });
+    }).catch(() => {});
   },
 
   setDmPrivacy: (dmPrivacy) => {

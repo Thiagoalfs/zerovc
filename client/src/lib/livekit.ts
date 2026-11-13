@@ -11,7 +11,13 @@ import {
   LocalAudioTrack,
 } from 'livekit-client';
 import { processAudioBridge } from './processAudioBridge';
-import { audioProcessor } from './audioProcessor';
+import {
+  audioProcessor,
+  AudioProcessorManager,
+  AudioProcessingMode,
+  AudioProcessorConfig,
+  RnnoiseLevel,
+} from './audioProcessor';
 import { GameFamily, GAME_FAMILIES, matchWindowToGameFamily, findBestSourceForGameFamily } from '../utils/gameFamilyManager';
 
 export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
@@ -224,6 +230,8 @@ class LiveKitManager {
   private watchedParticipantIdentities: Set<string> = new Set();
   private isDeafened: boolean = false;
   private activeMediaStreamTracks: Set<MediaStreamTrack> = new Set();
+  private callAudioProcessor = new AudioProcessorManager();
+  private rawMicTrack: MediaStreamTrack | null = null;
   private audioContext?: AudioContext;
   // Dispositivo de saída "principal" atualmente selecionado (o que setAudioOutputDevice
   // define). É o dispositivo que a captura de áudio do sistema (screen share) vai ler.
@@ -535,21 +543,7 @@ class LiveKitManager {
 
     // Auto-enable microphone in background without blocking fast connection
     if (callbacks.autoEnableMicrophone !== false) {
-      const isMobilePlatform = typeof navigator !== 'undefined' && (
-        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-        (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
-      );
-      const autoGain = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_auto_gain_control') !== 'false' : true;
-      const echoCanc = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_echo_cancellation') !== 'false' : true;
-      const noiseSupp = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_noise_suppression') !== 'false' : true;
-      const devId = !isMobilePlatform && typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_audio_input_device') || undefined : undefined;
-
-      room.localParticipant.setMicrophoneEnabled(true, {
-        deviceId: devId,
-        autoGainControl: autoGain,
-        echoCancellation: echoCanc,
-        noiseSuppression: noiseSupp,
-      }).catch((err) => {
+      this.enableProcessedMicrophone(room).catch((err) => {
         console.warn('[LiveKit] Could not auto-enable microphone:', err);
       });
     }
@@ -558,25 +552,100 @@ class LiveKitManager {
     return room;
   }
 
-  async setMicrophoneEnabled(enabled: boolean) {
-    if (this.room) {
-      const isMobilePlatform = typeof navigator !== 'undefined' && (
-        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-        (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
-      );
-      const autoGain = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_auto_gain_control') !== 'false' : true;
-      const echoCanc = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_echo_cancellation') !== 'false' : true;
-      const noiseSupp = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_noise_suppression') !== 'false' : true;
-      const devId = !isMobilePlatform && typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_audio_input_device') || undefined : undefined;
+  private readStoredAudioConfig(): AudioProcessorConfig {
+    const ls = typeof localStorage !== 'undefined' ? localStorage : null;
+    return {
+      mode: (ls?.getItem('zerovc_audio_proc_mode') as AudioProcessingMode) || 'rnnoise_silero',
+      rnnoiseLevel: (ls?.getItem('zerovc_rnnoise_level') as RnnoiseLevel) || 'balanced',
+      vadAutoSensitivity: ls ? ls.getItem('zerovc_vad_auto_sensitivity') !== 'false' : true,
+      vadSensitivity: parseFloat(ls?.getItem('zerovc_vad_sensitivity') || '0.45'),
+      vadHangover: parseInt(ls?.getItem('zerovc_vad_hangover') || '250', 10),
+      echoCancellation: ls ? ls.getItem('zerovc_echo_cancellation') !== 'false' : true,
+      noiseSuppression: ls ? ls.getItem('zerovc_noise_suppression') !== 'false' : true,
+      autoGainControl: ls ? ls.getItem('zerovc_auto_gain_control') !== 'false' : true,
+      volume: parseInt(ls?.getItem('zerovc_input_volume') || '100', 10),
+    };
+  }
 
-      await this.room.localParticipant.setMicrophoneEnabled(enabled, {
-        deviceId: devId,
-        autoGainControl: autoGain,
-        echoCancellation: echoCanc,
-        noiseSuppression: noiseSupp,
+  private async enableProcessedMicrophone(room: Room) {
+    const isMobilePlatform = typeof navigator !== 'undefined' && (
+      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
+    );
+    const cfg = this.readStoredAudioConfig();
+    const devId = !isMobilePlatform && typeof localStorage !== 'undefined'
+      ? localStorage.getItem('zerovc_audio_input_device') || undefined
+      : undefined;
+
+    // Only enable browser WebRTC NS when mode is 'webrtc'; disable it for RNNoise/none so they don't fight
+    const browserNoiseSuppression = cfg.mode === 'webrtc' ? cfg.noiseSuppression : false;
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: devId ? { exact: devId } : undefined,
+        autoGainControl: cfg.autoGainControl,
+        echoCancellation: cfg.echoCancellation,
+        noiseSuppression: browserNoiseSuppression,
+      },
+    });
+    const rawTrack = stream.getAudioTracks()[0];
+    if (!rawTrack) {
+      throw new Error('No microphone audio track returned');
+    }
+
+    if (this.rawMicTrack && this.rawMicTrack !== rawTrack) {
+      try { this.rawMicTrack.stop(); } catch {}
+    }
+    this.rawMicTrack = rawTrack;
+    this.activeMediaStreamTracks.add(rawTrack);
+
+    const processedTrack = await this.callAudioProcessor.processMicrophoneTrack(rawTrack, cfg);
+    this.activeMediaStreamTracks.add(processedTrack);
+
+    const existingPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (existingPub?.track) {
+      await (existingPub.track as LocalAudioTrack).replaceTrack(processedTrack);
+      await existingPub.unmute();
+    } else {
+      await room.localParticipant.publishTrack(processedTrack, {
+        name: 'microphone',
+        source: Track.Source.Microphone,
       });
-      if (enabled) {
-        this.room.startAudio().catch(() => {});
+    }
+  }
+
+  async updateMicrophoneConfig(partial: Partial<AudioProcessorConfig>) {
+    this.callAudioProcessor.updateConfig(partial);
+    const needsHardwareReacquire =
+      partial.echoCancellation !== undefined ||
+      partial.autoGainControl !== undefined ||
+      partial.noiseSuppression !== undefined ||
+      partial.mode === 'webrtc' ||
+      partial.mode === 'none';
+
+    if (needsHardwareReacquire && this.room) {
+      const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+      if (micPub && !micPub.isMuted) {
+        await this.enableProcessedMicrophone(this.room);
+      }
+    }
+  }
+
+  async setMicrophoneEnabled(enabled: boolean) {
+    if (!this.room) return;
+    if (enabled) {
+      await this.enableProcessedMicrophone(this.room);
+      this.room.startAudio().catch(() => {});
+    } else {
+      const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+      if (micPub?.track) {
+        try { micPub.track.stop(); } catch {}
+        try { await this.room.localParticipant.unpublishTrack(micPub.track); } catch {}
+      }
+      this.callAudioProcessor.cleanup();
+      if (this.rawMicTrack) {
+        try { this.rawMicTrack.stop(); } catch {}
+        this.rawMicTrack = null;
       }
     }
   }
@@ -1541,6 +1610,7 @@ class LiveKitManager {
   setInputVolume(volume: number) {
     this.masterInputVolume = Math.max(0, Math.min(100, volume)) / 100;
     try {
+      this.callAudioProcessor.updateConfig({ volume });
       audioProcessor.updateConfig({ volume });
     } catch {}
   }
@@ -1688,6 +1758,11 @@ class LiveKitManager {
     this.attachedStreamAudioElements.clear();
     void processAudioBridge.stopCapture();
     void this.setCallAudioRoutingForCapture(false);
+    this.callAudioProcessor.cleanup();
+    if (this.rawMicTrack) {
+      try { this.rawMicTrack.stop(); } catch {}
+      this.rawMicTrack = null;
+    }
 
     // Stop and unpublish all local tracks
     if (this.room?.localParticipant) {

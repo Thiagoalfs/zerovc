@@ -1,308 +1,340 @@
 /**
- * ZeroVC Real-Time Client-Side Audio Processor
- * Supports:
- * 1. WebRTC Standard Native Filters
- * 2. RNNoise Neural Spectral Noise Suppression
- * 3. RNNoise + Silero VAD Intelligent Speech Gate (Full Silence on Idle)
+ * ZeroVC Real-Time Audio Processor
+ * Pipeline: Source -> HighPass (85Hz) -> RNNoise WASM (AudioWorklet) -> VAD Gate -> Gain -> Destination
  */
+import { loadRnnoise, RnnoiseWorkletNode } from '@sapphi-red/web-noise-suppressor';
+import rnnoiseWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
+import rnnoiseSimdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
+import rnnoiseWorkletUrl from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url';
 
-import { AudioProcessingMode, RNNoiseLevel } from '../stores/settingsStore';
+export type AudioProcessingMode = 'webrtc' | 'rnnoise' | 'rnnoise_silero' | 'none';
+export type RnnoiseLevel = 'light' | 'balanced' | 'aggressive';
 
 export interface AudioProcessorConfig {
   mode: AudioProcessingMode;
-  rnnoiseLevel: RNNoiseLevel;
-  vadAutoSensitivity?: boolean;
-  vadSensitivity: number; // 0.05 to 0.95
-  vadHangover: number; // 100 to 500ms
+  rnnoiseLevel: RnnoiseLevel;
+  vadAutoSensitivity: boolean;
+  vadSensitivity: number; // 0.05 to 0.95 (maps to -95 dB .. -5 dB)
+  vadHangover: number; // ms
   echoCancellation: boolean;
   noiseSuppression: boolean;
   autoGainControl: boolean;
-  volume?: number; // 0 to 100
+  volume: number; // 0 to 100
 }
 
-export type VadStateCallback = (data: {
+export type VadStateCallback = (state: {
   isSpeaking: boolean;
-  volume: number; // 0 to 100
-  speechProbability: number; // 0 to 1
+  volume: number;
+  speechProbability: number;
   gateOpen: boolean;
 }) => void;
 
-class AudioProcessorManager {
-  private audioContext: AudioContext | null = null;
+const DEFAULT_CONFIG: AudioProcessorConfig = {
+  mode: 'rnnoise_silero',
+  rnnoiseLevel: 'balanced',
+  vadAutoSensitivity: true,
+  vadSensitivity: 0.45,
+  vadHangover: 250,
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  volume: 100,
+};
+
+let cachedWasmBinaryPromise: Promise<ArrayBuffer> | null = null;
+function getRnnoiseWasmBinary(): Promise<ArrayBuffer> {
+  if (!cachedWasmBinaryPromise) {
+    cachedWasmBinaryPromise = loadRnnoise({
+      url: rnnoiseWasmUrl,
+      simdUrl: rnnoiseSimdWasmUrl,
+    }).catch((err) => {
+      cachedWasmBinaryPromise = null;
+      throw err;
+    });
+  }
+  return cachedWasmBinaryPromise;
+}
+
+export class AudioProcessorManager {
+  private audioCtx: AudioContext | null = null;
+  private workletLoadedCtx: AudioContext | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private destinationNode: MediaStreamAudioDestinationNode | null = null;
   private highpassFilter: BiquadFilterNode | null = null;
-  private compressorNode: DynamicsCompressorNode | null = null;
-  private gainNode: GainNode | null = null;
-  private processorNode: ScriptProcessorNode | null = null;
+  private rnnoiseNode: RnnoiseWorkletNode | null = null;
+  private gateGainNode: GainNode | null = null;
   private analyserNode: AnalyserNode | null = null;
+  private volumeGainNode: GainNode | null = null;
+  private destinationNode: MediaStreamAudioDestinationNode | null = null;
 
-  private currentTrack: MediaStreamTrack | null = null;
-  private processedTrack: MediaStreamTrack | null = null;
-  private vadCallback: VadStateCallback | null = null;
-  private activeConfig: AudioProcessorConfig | null = null;
+  private activeConfig: AudioProcessorConfig = { ...DEFAULT_CONFIG };
+  private onVadStateChange: VadStateCallback | null = null;
+  private meterTimerId: number | null = null;
+  private timeDataBuf = new Float32Array(512);
+  private freqDataBuf = new Uint8Array(256);
 
-  // Internal VAD state
-  private lastSpeechTime = 0;
   private isGateOpen = false;
-  private currentGain = 1.0;
-  private smoothedVolume = 0;
+  private lastSpeechTimestamp = 0;
+  private noiseFloorDb = -65;
 
-  public setVadCallback(cb: VadStateCallback | null) {
-    this.vadCallback = cb;
-  }
-
-  /**
-   * Pre-warm Web Audio Engine in background upon first interaction
-   * to eliminate AudioContext initialization latency when joining voice.
-   */
-  public async prewarm(): Promise<void> {
+  async prewarm(): Promise<void> {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      if (!this.audioContext || this.audioContext.state === 'closed') {
-        this.audioContext = new AudioCtx({ sampleRate: 48000, latencyHint: 'interactive' });
-      }
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume().catch(() => {});
-      }
-    } catch (e) {
-      console.debug('[AudioProcessor] Prewarm notice:', e);
+      await getRnnoiseWasmBinary();
+    } catch (err) {
+      console.warn('[AudioProcessor] Prewarm RNNoise WASM failed:', err);
     }
   }
 
-  public updateConfig(newConfig: Partial<AudioProcessorConfig>) {
-    if (this.activeConfig) {
-      this.activeConfig = { ...this.activeConfig, ...newConfig };
+  setVadCallback(cb: VadStateCallback | null) {
+    this.onVadStateChange = cb;
+  }
+
+  updateConfig(partial: Partial<AudioProcessorConfig>) {
+    const prevMode = this.activeConfig.mode;
+    this.activeConfig = { ...this.activeConfig, ...partial };
+
+    if (this.volumeGainNode && this.audioCtx && partial.volume !== undefined) {
+      const gainVal = Math.max(0, Math.min(2, this.activeConfig.volume / 100));
+      this.volumeGainNode.gain.setTargetAtTime(gainVal, this.audioCtx.currentTime, 0.015);
     }
-    if (newConfig.volume !== undefined && this.gainNode) {
-      const vol = Math.max(0, Math.min(100, newConfig.volume)) / 100;
-      this.gainNode.gain.value = vol;
+
+    if (partial.mode && partial.mode !== prevMode && this.sourceNode) {
+      void this.rebuildRouting();
     }
   }
 
-  /**
-   * Process a raw microphone MediaStreamTrack according to current settings.
-   */
-  public async processMicrophoneTrack(
+  private async ensureRnnoiseNode(): Promise<RnnoiseWorkletNode | null> {
+    if (!this.audioCtx) return null;
+    try {
+      if (this.workletLoadedCtx !== this.audioCtx) {
+        await this.audioCtx.audioWorklet.addModule(rnnoiseWorkletUrl);
+        this.workletLoadedCtx = this.audioCtx;
+      }
+      if (!this.rnnoiseNode) {
+        const wasmBinary = await getRnnoiseWasmBinary();
+        this.rnnoiseNode = new RnnoiseWorkletNode(this.audioCtx, {
+          maxChannels: 1,
+          wasmBinary,
+        });
+      }
+      return this.rnnoiseNode;
+    } catch (err) {
+      console.warn('[AudioProcessor] RNNoise worklet init failed, using fallback filter:', err);
+      return null;
+    }
+  }
+
+  private async rebuildRouting() {
+    if (
+      !this.audioCtx ||
+      !this.sourceNode ||
+      !this.highpassFilter ||
+      !this.gateGainNode ||
+      !this.analyserNode ||
+      !this.volumeGainNode ||
+      !this.destinationNode
+    ) {
+      return;
+    }
+
+    try { this.sourceNode.disconnect(); } catch {}
+    try { this.highpassFilter.disconnect(); } catch {}
+    try { this.rnnoiseNode?.disconnect(); } catch {}
+    try { this.gateGainNode.disconnect(); } catch {}
+    try { this.analyserNode.disconnect(); } catch {}
+    try { this.volumeGainNode.disconnect(); } catch {}
+
+    const useRnnoise =
+      this.activeConfig.mode === 'rnnoise' || this.activeConfig.mode === 'rnnoise_silero';
+
+    if (useRnnoise) {
+      const rnnoise = await this.ensureRnnoiseNode();
+      this.sourceNode.connect(this.highpassFilter);
+      if (rnnoise) {
+        this.highpassFilter.connect(rnnoise);
+        rnnoise.connect(this.analyserNode);
+      } else {
+        this.highpassFilter.connect(this.analyserNode);
+      }
+      this.analyserNode.connect(this.gateGainNode);
+      this.gateGainNode.connect(this.volumeGainNode);
+      this.volumeGainNode.connect(this.destinationNode);
+    } else {
+      this.gateGainNode.gain.setTargetAtTime(1.0, this.audioCtx.currentTime, 0.01);
+      this.sourceNode.connect(this.analyserNode);
+      this.analyserNode.connect(this.volumeGainNode);
+      this.volumeGainNode.connect(this.destinationNode);
+    }
+  }
+
+  private startVadLoop() {
+    if (this.meterTimerId !== null) {
+      window.clearInterval(this.meterTimerId);
+    }
+
+    this.meterTimerId = window.setInterval(() => {
+      if (!this.analyserNode || !this.gateGainNode || !this.audioCtx) return;
+
+      this.analyserNode.getFloatTimeDomainData(this.timeDataBuf);
+      let sumSq = 0;
+      for (let i = 0; i < this.timeDataBuf.length; i++) {
+        const s = this.timeDataBuf[i];
+        sumSq += s * s;
+      }
+      const rms = Math.sqrt(sumSq / this.timeDataBuf.length);
+      const rmsDb = 20 * Math.log10(Math.max(rms, 1e-5));
+      // Normalized 0..100 meter matching -100 dB .. 0 dB UI scale
+      const meterPct = Math.max(0, Math.min(100, rmsDb + 100));
+
+      const cfg = this.activeConfig;
+      const now = performance.now();
+
+      if (cfg.mode !== 'rnnoise_silero') {
+        this.isGateOpen = rmsDb > -75;
+        this.gateGainNode.gain.setTargetAtTime(1.0, this.audioCtx.currentTime, 0.015);
+        this.onVadStateChange?.({
+          isSpeaking: rmsDb > -52,
+          volume: meterPct,
+          speechProbability: rmsDb > -52 ? 0.9 : 0.05,
+          gateOpen: true,
+        });
+        return;
+      }
+
+      // Compute voice-band (100Hz - 3800Hz) ratio vs total spectrum to reject sharp clicks/hiss
+      this.analyserNode.getByteFrequencyData(this.freqDataBuf);
+      const binHz = this.audioCtx.sampleRate / this.analyserNode.fftSize;
+      const lowBin = Math.max(1, Math.floor(100 / binHz));
+      const highBin = Math.min(this.freqDataBuf.length - 1, Math.ceil(3800 / binHz));
+      let voiceEnergy = 0;
+      let totalEnergy = 0;
+      for (let b = 1; b < this.freqDataBuf.length; b++) {
+        const v = this.freqDataBuf[b];
+        totalEnergy += v;
+        if (b >= lowBin && b <= highBin) voiceEnergy += v;
+      }
+      const voiceRatio = totalEnergy > 16 ? voiceEnergy / totalEnergy : 0;
+
+      // Track stationary noise floor slowly when signal isn't an active speech burst
+      if (rmsDb < this.noiseFloorDb + 6) {
+        this.noiseFloorDb = this.noiseFloorDb * 0.94 + rmsDb * 0.06;
+      } else if (rmsDb < this.noiseFloorDb) {
+        this.noiseFloorDb = this.noiseFloorDb * 0.8 + rmsDb * 0.2;
+      }
+
+      const openThresholdDb = cfg.vadAutoSensitivity
+        ? Math.max(-52, Math.min(-26, this.noiseFloorDb + 11))
+        : cfg.vadSensitivity * 100 - 100;
+      const closeThresholdDb = openThresholdDb - 4;
+
+      const isVoiceLike = voiceRatio >= 0.42;
+      const detectedSpeech = this.isGateOpen
+        ? rmsDb > closeThresholdDb && isVoiceLike
+        : rmsDb > openThresholdDb && isVoiceLike;
+
+      if (detectedSpeech) {
+        this.lastSpeechTimestamp = now;
+        this.isGateOpen = true;
+      } else if (this.isGateOpen && now - this.lastSpeechTimestamp > cfg.vadHangover) {
+        this.isGateOpen = false;
+      }
+
+      const targetGain = this.isGateOpen ? 1.0 : 0.0;
+      const timeConstant = this.isGateOpen ? 0.008 : 0.035;
+      this.gateGainNode.gain.setTargetAtTime(targetGain, this.audioCtx.currentTime, timeConstant);
+
+      const prob = detectedSpeech ? Math.min(0.99, 0.55 + (rmsDb - openThresholdDb) * 0.03) : 0.05;
+      this.onVadStateChange?.({
+        isSpeaking: detectedSpeech,
+        volume: meterPct,
+        speechProbability: Math.max(0, Math.min(1, prob)),
+        gateOpen: this.isGateOpen,
+      });
+    }, 30);
+  }
+
+  async processMicrophoneTrack(
     rawTrack: MediaStreamTrack,
-    config: AudioProcessorConfig
+    config: Partial<AudioProcessorConfig> = {}
   ): Promise<MediaStreamTrack> {
+    this.cleanup();
+    this.activeConfig = { ...DEFAULT_CONFIG, ...config };
+    this.noiseFloorDb = -65;
+
     try {
-      this.cleanup();
-      this.currentTrack = rawTrack;
-      this.activeConfig = { ...config };
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      this.audioCtx = new AudioContextClass({
+        sampleRate: 48000,
+        latencyHint: 'interactive',
+      });
 
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) {
-        return rawTrack;
+      if (this.audioCtx.state === 'suspended') {
+        await this.audioCtx.resume();
       }
 
-      this.audioContext = new AudioCtx({ sampleRate: 48000, latencyHint: 'interactive' });
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-      }
+      const rawStream = new MediaStream([rawTrack]);
+      this.sourceNode = this.audioCtx.createMediaStreamSource(rawStream);
 
-      const inputStream = new MediaStream([rawTrack]);
-      this.sourceNode = this.audioContext.createMediaStreamSource(inputStream);
-      this.destinationNode = this.audioContext.createMediaStreamDestination();
-
-      // 1. High-Pass Filter (Cuts sub-80Hz AC hum, room rumble and mic stand thumps)
-      this.highpassFilter = this.audioContext.createBiquadFilter();
+      this.highpassFilter = this.audioCtx.createBiquadFilter();
       this.highpassFilter.type = 'highpass';
       this.highpassFilter.frequency.value = 85;
-      this.highpassFilter.Q.value = 0.7;
+      this.highpassFilter.Q.value = 0.707;
 
-      // 2. Dynamics Compressor / Auto Gain Control (if enabled)
-      this.compressorNode = this.audioContext.createDynamicsCompressor();
-      this.compressorNode.threshold.value = -24;
-      this.compressorNode.knee.value = 12;
-      this.compressorNode.ratio.value = config.autoGainControl ? 4 : 1;
-      this.compressorNode.attack.value = 0.003;
-      this.compressorNode.release.value = 0.25;
-
-      // 3. Output Gain Gate Node
-      this.gainNode = this.audioContext.createGain();
-      this.gainNode.gain.value = config.volume !== undefined ? Math.max(0, Math.min(100, config.volume)) / 100 : 1.0;
-
-      // 4. Real-time Analyser for UI visualizer
-      this.analyserNode = this.audioContext.createAnalyser();
+      this.analyserNode = this.audioCtx.createAnalyser();
       this.analyserNode.fftSize = 512;
-      this.analyserNode.smoothingTimeConstant = 0.3;
+      this.analyserNode.smoothingTimeConstant = 0.25;
 
-      // 5. Neural Spectral Noise Filter + Silero VAD Intelligent Gate
-      const bufferSize = 512;
-      this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+      this.gateGainNode = this.audioCtx.createGain();
+      this.gateGainNode.gain.value = this.activeConfig.mode === 'rnnoise_silero' ? 0.0 : 1.0;
 
-      // Noise floor tracking
-      let noiseFloor = 0.005;
+      this.volumeGainNode = this.audioCtx.createGain();
+      this.volumeGainNode.gain.value = Math.max(0, Math.min(2, this.activeConfig.volume / 100));
 
-      this.processorNode.onaudioprocess = (e) => {
-        const inputData = e.inputBuffer.getChannelData(0);
-        const outputData = e.outputBuffer.getChannelData(0);
-        const now = performance.now();
+      this.destinationNode = this.audioCtx.createMediaStreamDestination();
 
-        const currentCfg = this.activeConfig || config;
-        const suppressionMultiplier = (() => {
-          switch (currentCfg.rnnoiseLevel) {
-            case 'light': return 0.7;
-            case 'aggressive': return 1.4;
-            default: return 1.0;
-          }
-        })();
+      await this.rebuildRouting();
+      this.startVadLoop();
 
-        // Sensitivity threshold calculation:
-        // When vadAutoSensitivity is active, adapt to noise floor; otherwise use manual vadSensitivity slider (0.05 to 0.95)
-        const effectiveSensitivity = currentCfg.vadAutoSensitivity
-          ? Math.min(0.85, Math.max(0.3, 0.6 - noiseFloor * 5))
-          : currentCfg.vadSensitivity;
-        const vadThreshold = Math.max(0.05, Math.min(0.95, 1.0 - effectiveSensitivity * 0.9));
-        const hangoverMs = currentCfg.vadHangover || 250;
-
-        let sumSquares = 0;
-        let zeroCrossings = 0;
-
-        for (let i = 0; i < inputData.length; i++) {
-          const sample = inputData[i];
-          sumSquares += sample * sample;
-          if (i > 0 && ((sample >= 0 && inputData[i - 1] < 0) || (sample < 0 && inputData[i - 1] >= 0))) {
-            zeroCrossings++;
-          }
-        }
-
-        const rms = Math.sqrt(sumSquares / inputData.length);
-        const zcr = zeroCrossings / inputData.length;
-
-        // Adaptively update noise floor
-        if (rms < noiseFloor * 1.5) {
-          noiseFloor = noiseFloor * 0.95 + rms * 0.05;
-        } else {
-          noiseFloor = noiseFloor * 0.999 + rms * 0.001;
-        }
-
-        // Feature calculation for speech probability (Silero VAD heuristic algorithm)
-        const snr = rms / Math.max(noiseFloor, 0.0001);
-        const isVocalFrequency = zcr > 0.02 && zcr < 0.28; // Human vocal fundamental + formants
-        let speechProb = 0;
-
-        if (snr > 1.8 && isVocalFrequency) {
-          speechProb = Math.min(1.0, (snr - 1.5) * 0.35 + (isVocalFrequency ? 0.3 : 0));
-        }
-
-        // RNNoise Spectral Noise Reduction Subtraction
-        const isSpeaking = speechProb >= vadThreshold;
-
-        if (isSpeaking) {
-          this.lastSpeechTime = now;
-          this.isGateOpen = true;
-        } else if (now - this.lastSpeechTime > hangoverMs) {
-          this.isGateOpen = false;
-        }
-
-        // Apply Gate Envelope
-        const targetGain = (config.mode === 'webrtc' || config.mode === 'none')
-          ? 1.0
-          : (this.isGateOpen || config.mode === 'rnnoise' ? 1.0 : 0.0);
-        const attackFactor = 0.35;
-        const releaseFactor = 0.08;
-        const factor = targetGain > this.currentGain ? attackFactor : releaseFactor;
-        this.currentGain += (targetGain - this.currentGain) * factor;
-
-        // Process audio samples
-        for (let i = 0; i < inputData.length; i++) {
-          let s = inputData[i];
-          // Spectral subtraction when in speech to strip background hum/fans
-          if (config.mode === 'rnnoise' || config.mode === 'rnnoise_silero') {
-            const noiseEstimate = noiseFloor * suppressionMultiplier;
-            if (Math.abs(s) < noiseEstimate) {
-              s *= 0.15;
-            }
-          }
-          outputData[i] = s * this.currentGain;
-        }
-
-        // Volume UI level calculation (0 to 100)
-        // Decibel scale: -100 dBFS (silence) to 0 dBFS (peak) mapped directly to 0..100%
-        const db = 20 * Math.log10(Math.max(rms, 1e-5));
-        const currentVol = Math.max(0, Math.min(100, Math.round(db + 100)));
-        const smoothingFactor = currentVol > this.smoothedVolume ? 0.45 : 0.2;
-        this.smoothedVolume = this.smoothedVolume * (1 - smoothingFactor) + currentVol * smoothingFactor;
-
-        if (this.vadCallback) {
-          this.vadCallback({
-            isSpeaking: this.isGateOpen && rms > 0.003,
-            volume: Math.round(this.smoothedVolume),
-            speechProbability: Math.min(1, Math.max(0, speechProb)),
-            gateOpen: this.currentGain > 0.05,
-          });
-        }
-      };
-
-      // Connect Web Audio Graph:
-      // source -> highpass -> compressor -> processor -> gain -> destination & analyser
-      this.sourceNode.connect(this.highpassFilter);
-      this.highpassFilter.connect(this.compressorNode);
-      this.compressorNode.connect(this.processorNode);
-      this.processorNode.connect(this.gainNode);
-      this.gainNode.connect(this.destinationNode);
-      this.gainNode.connect(this.analyserNode);
-
-      const processedTracks = this.destinationNode.stream.getAudioTracks();
-      if (processedTracks.length > 0) {
-        this.processedTrack = processedTracks[0];
-        this.processedTrack.contentHint = 'speech';
-        return this.processedTrack;
-      }
-
-      return rawTrack;
+      const processedTrack = this.destinationNode.stream.getAudioTracks()[0];
+      return processedTrack || rawTrack;
     } catch (err) {
-      console.warn('[AudioProcessor] Error setting up audio pipeline, falling back to raw track:', err);
+      console.error('[AudioProcessor] Failed to initialize audio pipeline, returning raw track:', err);
       return rawTrack;
     }
   }
 
-  /**
-   * Cleanup any active AudioContext and nodes.
-   */
-  public cleanup() {
-    if (this.processorNode) {
-      this.processorNode.disconnect();
-      this.processorNode.onaudioprocess = null;
-      this.processorNode = null;
+  getActiveProcessedTrack(): MediaStreamTrack | null {
+    return this.destinationNode?.stream.getAudioTracks()[0] || null;
+  }
+
+  cleanup() {
+    if (this.meterTimerId !== null) {
+      window.clearInterval(this.meterTimerId);
+      this.meterTimerId = null;
     }
-    if (this.sourceNode) {
-      this.sourceNode.disconnect();
-      this.sourceNode = null;
+    try { this.sourceNode?.disconnect(); } catch {}
+    try { this.highpassFilter?.disconnect(); } catch {}
+    try { this.rnnoiseNode?.disconnect(); this.rnnoiseNode?.destroy(); } catch {}
+    try { this.analyserNode?.disconnect(); } catch {}
+    try { this.gateGainNode?.disconnect(); } catch {}
+    try { this.volumeGainNode?.disconnect(); } catch {}
+    try { this.destinationNode?.disconnect(); } catch {}
+
+    if (this.audioCtx && this.audioCtx.state !== 'closed') {
+      this.audioCtx.close().catch(() => {});
     }
-    if (this.highpassFilter) {
-      this.highpassFilter.disconnect();
-      this.highpassFilter = null;
-    }
-    if (this.compressorNode) {
-      this.compressorNode.disconnect();
-      this.compressorNode = null;
-    }
-    if (this.gainNode) {
-      this.gainNode.disconnect();
-      this.gainNode = null;
-    }
-    if (this.analyserNode) {
-      this.analyserNode.disconnect();
-      this.analyserNode = null;
-    }
-    if (this.destinationNode) {
-      this.destinationNode.disconnect();
-      this.destinationNode = null;
-    }
-    if (this.audioContext && this.audioContext.state !== 'closed') {
-      this.audioContext.close().catch(() => {});
-      this.audioContext = null;
-    }
-    if (this.processedTrack) {
-      this.processedTrack.stop();
-      this.processedTrack = null;
-    }
-    this.currentTrack = null;
+
+    this.sourceNode = null;
+    this.highpassFilter = null;
+    this.rnnoiseNode = null;
+    this.analyserNode = null;
+    this.gateGainNode = null;
+    this.volumeGainNode = null;
+    this.destinationNode = null;
+    this.workletLoadedCtx = null;
+    this.audioCtx = null;
+    this.isGateOpen = false;
   }
 }
 
