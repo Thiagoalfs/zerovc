@@ -59,7 +59,7 @@ export function detectGpuVendor(): Promise<GpuDetectionResult> {
 
   let detectedVendor: GpuVendor = 'unknown';
   let deviceName = 'Generic Graphics Device';
-  let hwAcceleration = true;
+  let hwAcceleration = false;
 
   try {
     // 1. Electron Native GPU Info
@@ -123,8 +123,8 @@ export function detectGpuVendor(): Promise<GpuDetectionResult> {
     console.warn('[LiveKit] GPU Detection warning:', e);
   }
 
-  // H.264 uses native hardware encoder on all vendors (NVENC for NVIDIA, AMF for AMD, QSV for Intel, VideoToolbox for Apple)
-  const preferredCodec: 'h264' | 'vp9' | 'vp8' = hwAcceleration ? 'h264' : 'vp8';
+  // VP9 uses native Chromium/Electron decode (avoids H.264 OpenH264 black-screen delays on Linux) when HW encode is confirmed, with lightweight VP8 fallback
+  const preferredCodec: 'h264' | 'vp9' | 'vp8' = hwAcceleration ? 'vp9' : 'vp8';
 
   console.log(`[LiveKit GPU] Detected: ${detectedVendor.toUpperCase()} (${deviceName}) | Hardware Acceleration: ${hwAcceleration} | Codec: ${preferredCodec}`);
 
@@ -308,7 +308,7 @@ class LiveKitManager {
     this.onDisconnected = callbacks.onDisconnected;
 
     const room = new Room({
-      adaptiveStream: true,
+      adaptiveStream: false,
       dynacast: true,
       stopLocalTrackOnUnpublish: true,
       e2ee: e2eeOptions,
@@ -966,7 +966,7 @@ class LiveKitManager {
           await this.room.localParticipant.unpublishTrack(oldAudioPub.track);
         }
 
-        // Publish using hardware-accelerated preferred codec (e.g. h264) with vp8 fallback
+        // Publish using VP9 (when HW video_encode is confirmed) or VP8 fallback for fast keyframe/PLI response
         let pub;
         try {
           pub = await this.room.localParticipant.publishTrack(videoTrack, {
@@ -974,7 +974,7 @@ class LiveKitManager {
             source: Track.Source.ScreenShare,
             simulcast: false,
             videoCodec: selectedCodec,
-            backupCodec: true,
+            backupCodec: false,
             videoEncoding: {
               maxBitrate: maxBitrate,
               maxFramerate: frameRate,
@@ -1391,7 +1391,7 @@ class LiveKitManager {
           source: Track.Source.ScreenShare,
           simulcast: false,
           videoCodec: gpu.preferredCodec,
-          backupCodec: true,
+          backupCodec: false,
           videoEncoding: {
             maxBitrate: maxBitrate,
             maxFramerate: frameRate,

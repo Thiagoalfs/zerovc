@@ -466,12 +466,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           ) : (
             <div className="relative w-full h-full flex items-center justify-center bg-black">
               <video
-                ref={(el) => {
-                  videoRef.current = el;
-                  if (el && screenPub?.track && !screenPub.isMuted) {
-                    attachVideoTrack(el, screenPub.track);
-                  }
-                }}
+                ref={videoRef}
                 autoPlay
                 playsInline
                 muted
