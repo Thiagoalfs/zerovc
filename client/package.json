@@ -62,7 +62,7 @@
       "pt-BR",
       "en-US"
     ],
-    "compression": "maximum",
+    "compression": "normal",
     "asar": true,
     "asarUnpack": [
       "**/bin/*"

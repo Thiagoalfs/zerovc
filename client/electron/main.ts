@@ -329,7 +329,7 @@ function createWindow(initialUrl?: string, showImmediately = true) {
     icon: getAppIcon(),
     frame: false, // Frameless window for custom titlebar
     titleBarStyle: 'hidden',
-    show: false, // shown immediately on ready-to-show
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -338,12 +338,7 @@ function createWindow(initialUrl?: string, showImmediately = true) {
     },
   });
 
-  // Aberturas normais (ex.: activate no macOS): mostrar quando pronto.
-  if (showImmediately) {
-    mainWindow.once('ready-to-show', () => {
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
-    });
-  }
+  // Janela já nasce visível (show: true) para abertura imediata.
 
   // Restrict in-window navigation to allowed origins
   mainWindow.webContents.on('will-navigate', (event, url) => {
