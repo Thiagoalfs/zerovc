@@ -1,6 +1,6 @@
 {
   "name": "zerovc-client",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "description": "Ultra-fast, lightweight voice and text communication platform built with Electron and LiveKit WebRTC",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -72,8 +72,6 @@
     },
     "icon": "electron/icon.png",
     "files": [
-      "dist/**/*",
-      "!dist/downloads/**",
       "dist-electron/**/*",
       "package.json",
       "!**/*.map"

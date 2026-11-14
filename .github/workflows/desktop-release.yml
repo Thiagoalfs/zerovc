@@ -1,4 +1,4 @@
-name: Build & Release Desktop App (Windows)
+name: Build & Release Apps (Windows, Linux, Android)
 
 on:
   push:
@@ -12,7 +12,6 @@ permissions:
 jobs:
   release-windows:
     runs-on: windows-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,14 +27,145 @@ jobs:
         working-directory: client
         run: npm ci
 
-      - name: Build Web & Electron
+      - name: Build Electron
         working-directory: client
-        run: |
-          npm run build
-          npm run build:electron
+        run: npm run build:electron
 
-      - name: Build & Publish NSIS Installer with electron-builder
+      - name: Build & Publish Windows NSIS Installer
         working-directory: client
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win nsis --publish always
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZeroVC-windows
+          path: |
+            client/release/ZeroVC-Setup.exe
+            client/release/ZeroVC-Setup.exe.blockmap
+            client/release/latest.yml
+
+  release-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Build Electron
+        working-directory: client
+        run: npm run build:electron
+
+      - name: Build & Publish Linux AppImage
+        working-directory: client
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --linux AppImage --publish always
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZeroVC-linux
+          path: |
+            client/release/ZeroVC.AppImage
+            client/release/latest-linux.yml
+
+  release-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Build Web & Sync Capacitor Android
+        working-directory: client
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Build Release APK
+        working-directory: client/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk ../../ZeroVC.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZeroVC-android
+          path: ZeroVC.apk
+
+  publish-and-deploy-vps:
+    needs: [release-windows, release-linux, release-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download All Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloads-out
+          merge-multiple: true
+
+      - name: Upload ZeroVC.apk to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./client/package.json').version")
+          gh release upload "v${VERSION}" downloads-out/ZeroVC.apk --clobber
+
+      - name: Deploy Installers & Latest Metadata to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          if [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ] || [ -z "$VPS_SSH_KEY" ]; then
+            echo "VPS secrets not configured; skipping VPS upload."
+            exit 0
+          fi
+          PORT="${VPS_PORT:-22}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/vps_key
+          chmod 600 ~/.ssh/vps_key
+          ssh-keyscan -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          SSH_OPTS="-i ~/.ssh/vps_key -p $PORT -o StrictHostKeyChecking=no"
+          REPO_DIR=$(ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" 'if [ -d /root/zerovc ]; then echo /root/zerovc; else echo "$HOME/zerovc"; fi')
+          ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "mkdir -p \"$REPO_DIR/backend/web/downloads\" \"$HOME/zerovc-downloads\""
+          scp -i ~/.ssh/vps_key -P "$PORT" -o StrictHostKeyChecking=no downloads-out/* "$VPS_USER@$VPS_HOST:$HOME/zerovc-downloads/"
+          ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "cp -f \"$HOME/zerovc-downloads/\"* \"$REPO_DIR/backend/web/downloads/\""
+          rm -f ~/.ssh/vps_key

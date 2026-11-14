@@ -60,9 +60,9 @@ try {
   console.warn('[Settings] Failed to load settings:', e);
 }
 
-// ---- Update splash (startup) state ----
-let splashWindow: BrowserWindow | null = null;
-let startupPhase = true;
+// ---- Auto-updater state ----
+let updateDownloaded = false;
+let installAfterDownload = false;
 let isInstallingUpdate = false;
 let pendingInitialUrl: string | undefined = undefined;
 let pendingUpdateAvailableInfo: { version: string; releaseNotes?: any } | null = null;
@@ -124,19 +124,6 @@ function clearUpdateAttempt() {
       fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
     }
   } catch {}
-}
-
-function loadSplashColors(): { accent: string; bg: string } {
-  try {
-    const settingsFile = path.join(app.getPath('userData'), 'settings.json');
-    if (fs.existsSync(settingsFile)) {
-      const parsed = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-      if (parsed?.splash?.accent && parsed?.splash?.bg) {
-        return { accent: String(parsed.splash.accent), bg: String(parsed.splash.bg) };
-      }
-    }
-  } catch {}
-  return { accent: '99,102,241', bg: '13,17,23' };
 }
 
 // V8 Memory Heap Optimization (prevents unbounded memory growth before GC)
@@ -342,7 +329,7 @@ function createWindow(initialUrl?: string, showImmediately = true) {
     icon: getAppIcon(),
     frame: false, // Frameless window for custom titlebar
     titleBarStyle: 'hidden',
-    show: false, // no arranque, quem revela é o splash (finalizeStartupSplash)
+    show: false, // shown immediately on ready-to-show
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -426,18 +413,23 @@ function createWindow(initialUrl?: string, showImmediately = true) {
   if (isDev) {
     mainWindow.loadURL(initialUrl || 'http://localhost:5173');
   } else {
-    // Production Model: Load latest production build from server with offline fallback
+    // Production Model: Load latest production build from server (thin client, no bundled dist/)
     const targetUrl = initialUrl || REMOTE_SERVER_URL;
+    const loadOfflineFallback = () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      const html = `<!doctype html><html><body style="margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#0d1117;color:#e6edf3;font-family:system-ui,sans-serif"><h3>Sem conexão com o ZeroVC</h3><button onclick="location.replace('${REMOTE_SERVER_URL}')" style="padding:8px 16px;border-radius:8px;border:0;background:#6366f1;color:#fff;font-weight:600;cursor:pointer">Tentar novamente</button></body></html>`;
+      mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`).catch(() => {});
+    };
     mainWindow.loadURL(targetUrl).catch((err) => {
-      console.warn('[Electron] Remote server unavailable, loading local fallback:', err);
-      mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
+      console.warn('[Electron] Remote server unavailable:', err);
+      loadOfflineFallback();
     });
 
     // Fallback if main URL fails during navigation
-    mainWindow.webContents.on('did-fail-load', (_event, errorCode, _errorDescription, validatedURL) => {
-      if (validatedURL.startsWith(REMOTE_SERVER_URL)) {
-        console.warn(`[Electron] Failed to load remote (${errorCode}), falling back to local files.`);
-        mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, _errorDescription, validatedURL, isMainFrame) => {
+      if (isMainFrame && validatedURL.startsWith(REMOTE_SERVER_URL)) {
+        console.warn(`[Electron] Failed to load remote (${errorCode}), showing offline fallback.`);
+        loadOfflineFallback();
       }
     });
   }
@@ -459,16 +451,15 @@ function createWindow(initialUrl?: string, showImmediately = true) {
     mainWindow = null;
   });
 
-  // Auto-updater é orquestrado pela sequência de startup (fluxo do splash).
+  // Auto-updater roda em segundo plano sem bloquear a abertura da janela principal.
 }
 
 // -------------------------------------------------------------
-// Auto-Updater Configuration (GitHub Releases)
+// Auto-Updater Configuration (background check; install triggered by user)
 // -------------------------------------------------------------
 function setupAutoUpdater() {
   if (!autoUpdater) return;
 
-  // Se o app já iniciou na versão da última tentativa de update, limpa o registro.
   const prevAttemptOnBoot = getLastUpdateAttempt();
   if (prevAttemptOnBoot && prevAttemptOnBoot.version === app.getVersion()) {
     clearUpdateAttempt();
@@ -479,121 +470,41 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
 
-  autoUpdater.on('checking-for-update', () => {
-    if (startupPhase) sendSplash({ phase: 'checking' });
-  });
-
   autoUpdater.on('update-available', (info: any) => {
+    updateDownloaded = false;
     pendingUpdateAvailableInfo = {
       version: info.version,
       releaseNotes: info.releaseNotes,
     };
-
-    if (startupPhase) {
-      // Circuit breaker: se já tentamos instalar esta exata versão no boot anterior e
-      // o instalador NSIS falhou (o app continua na versão antiga), não prender o usuário
-      // em loop infinito no splash. Abre o app normalmente e mantém o ícone no TitleBar.
-      const prevAttempt = getLastUpdateAttempt();
-      if (prevAttempt && prevAttempt.version === info.version && prevAttempt.count >= 1) {
-        console.warn(
-          `[AutoUpdater] Circuit breaker ativo: atualização para v${info.version} falhou na tentativa anterior (#${prevAttempt.count}). Abrindo app normalmente.`
-        );
-        finalizeStartupSplash();
-        return;
-      }
-
-      // No arranque (splash): baixa automaticamente, como o Discord.
-      sendSplash({ phase: 'downloading', version: info.version, percent: 0 });
-      autoUpdater.downloadUpdate().catch((err: any) => {
-        sendSplash({ phase: 'error', message: String(err?.message || err) });
-        setTimeout(finalizeStartupSplash, 1400);
-      });
-    } else {
-      // App já aberto: apenas avisa (ícone de download no TitleBar). Não baixa.
-      mainWindow?.webContents.send('update-available', {
-        version: info.version,
-        releaseNotes: info.releaseNotes,
-      });
-    }
+    mainWindow?.webContents.send('update-available', {
+      version: info.version,
+      releaseNotes: info.releaseNotes,
+    });
   });
 
   autoUpdater.on('update-not-available', () => {
     pendingUpdateAvailableInfo = null;
+    updateDownloaded = false;
+    installAfterDownload = false;
     clearUpdateAttempt();
-    if (startupPhase) finalizeStartupSplash();
-  });
-
-  autoUpdater.on('download-progress', (progressObj: any) => {
-    if (startupPhase) {
-      sendSplash({
-        phase: 'downloading',
-        percent: Math.floor(progressObj.percent),
-        bytesPerSecond: progressObj.bytesPerSecond,
-        transferred: progressObj.transferred,
-        total: progressObj.total,
-      });
-    }
   });
 
   autoUpdater.on('update-downloaded', (info: any) => {
     pendingUpdateAvailableInfo = null;
-    if (startupPhase) {
+    updateDownloaded = true;
+    if (installAfterDownload) {
+      installAfterDownload = false;
       recordUpdateAttempt(info.version);
-      sendSplash({ phase: 'installing', version: info.version });
-      setTimeout(shutdownForUpdate, 600);
+      shutdownForUpdate();
     } else {
       mainWindow?.webContents.send('update-downloaded', { version: info.version });
     }
   });
 
   autoUpdater.on('error', (err: any) => {
-    if (startupPhase) {
-      sendSplash({ phase: 'error', message: String(err?.message || err) });
-      setTimeout(finalizeStartupSplash, 1400);
-    } else {
-      console.error('[AutoUpdater] Erro ao verificar/baixar update:', err);
-    }
+    installAfterDownload = false;
+    console.error('[AutoUpdater] Erro ao verificar/baixar update:', err);
   });
-}
-
-// ---- Splash (startup) helpers ----
-function sendSplash(data: Record<string, any>) {
-  if (splashWindow && !splashWindow.isDestroyed()) {
-    splashWindow.webContents.send('splash-update', data);
-  }
-}
-
-function finalizeStartupSplash() {
-  if (!startupPhase) return;
-  startupPhase = false;
-
-  // Só inicializa a janela principal, bandeja e scanner de atividades DEPOIS que o
-  // splash concluiu (evita processos filhos e locks em app.asar durante auto-update).
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    createWindow(pendingInitialUrl, false);
-  }
-  createTray();
-  startActivityScanner();
-
-  if (splashWindow && !splashWindow.isDestroyed()) {
-    splashWindow.destroy();
-  }
-  splashWindow = null;
-
-  const reveal = () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  };
-  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents.isLoading()) {
-    mainWindow.once('ready-to-show', reveal);
-    setTimeout(reveal, 6000); // segurança: não travar no splash se o load demorar/falhar
-  } else {
-    reveal();
-  }
-
-  startPeriodicUpdateChecks();
 }
 
 function startPeriodicUpdateChecks() {
@@ -603,32 +514,6 @@ function startPeriodicUpdateChecks() {
       autoUpdater?.checkForUpdates()?.catch(() => {});
     } catch {}
   }, 15 * 60 * 1000);
-}
-
-function createSplashWindow(): BrowserWindow {
-  const { accent, bg } = loadSplashColors();
-  const splash = new BrowserWindow({
-    width: 320,
-    height: 280,
-    frame: false,
-    resizable: false,
-    minimizable: false,
-    maximizable: false,
-    center: true,
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    backgroundColor: `rgb(${bg})`,
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-  const splashFile = path.join(__dirname, '../dist/splash.html');
-  splash.loadFile(splashFile, { query: { accent, bg } });
-  splash.once('ready-to-show', () => splash.show());
-  return splash;
 }
 
 // Garante que, após o instalador NSIS encerrar, o ZeroVC seja reaberto automaticamente
@@ -692,7 +577,7 @@ function shutdownForUpdate() {
   } catch {}
   activeAudioProcess = null;
 
-  // 3. Destrói a bandeja e TODAS as janelas (principal + splash)
+  // 3. Destrói a bandeja e TODAS as janelas
   try {
     tray?.destroy();
   } catch {}
@@ -705,7 +590,6 @@ function shutdownForUpdate() {
     });
   } catch {}
   mainWindow = null;
-  splashWindow = null;
 
   // 4. Muda o CWD para %TEMP% para que nem este processo nem o instalador filho
   //    bloqueiem o Rename/RMDir da pasta %LOCALAPPDATA%\Programs\ZeroVC no NSIS.
@@ -856,28 +740,22 @@ ipcMain.on('check-for-updates', () => {
   }
 });
 
-// Fecha tudo e reabre no splash para atualizar (chamado pelo ícone do TitleBar).
+// Baixa e instala a atualização pendente (chamado pelo ícone do TitleBar).
 ipcMain.on('restart-to-update', () => {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged || !autoUpdater) return;
   clearUpdateAttempt();
-  app.relaunch();
-  app.exit(0);
+  if (updateDownloaded) {
+    shutdownForUpdate();
+    return;
+  }
+  installAfterDownload = true;
+  autoUpdater.downloadUpdate().catch((err: any) => {
+    installAfterDownload = false;
+    console.error('[AutoUpdater] Error on downloadUpdate:', err);
+  });
 });
 
-// Renderer envia as cores resolvidas do tema (acento + fundo) para o splash ler.
-ipcMain.handle('set-splash-colors', (_event, colors: { accent: string; bg: string }) => {
-  try {
-    const settingsFile = path.join(app.getPath('userData'), 'settings.json');
-    let settings: any = {};
-    if (fs.existsSync(settingsFile)) {
-      try {
-        settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-      } catch {}
-    }
-    settings.splash = { accent: colors?.accent, bg: colors?.bg };
-    fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
-  } catch {}
-});
+ipcMain.handle('set-splash-colors', () => {});
 
 ipcMain.on('start-download-update', () => {
   if (autoUpdater) {
@@ -968,7 +846,7 @@ if (!gotTheLock) {
     );
 
     if (mainWindow) {
-      if (!startupPhase && !mainWindow.isVisible()) mainWindow.show();
+      if (!mainWindow.isVisible()) mainWindow.show();
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
 
@@ -1003,21 +881,18 @@ if (!gotTheLock) {
     pendingInitialUrl = initialUrl;
 
     const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-    if (isDev || !autoUpdater) {
-      startupPhase = false;
-      createWindow(initialUrl, true);
-      createTray();
-      startActivityScanner();
-    } else {
-      // Fluxo com splash: cria APENAS o splash primeiro; mainWindow, Tray e ActivityScanner
-      // só são criados em finalizeStartupSplash() se não houver update a instalar agora.
+    createWindow(initialUrl, true);
+    createTray();
+    startActivityScanner();
+
+    if (!isDev && autoUpdater) {
       setupAutoUpdater();
-      splashWindow = createSplashWindow();
-      autoUpdater.checkForUpdates().catch(() => finalizeStartupSplash());
+      startPeriodicUpdateChecks();
+      autoUpdater.checkForUpdates().catch(() => {});
     }
 
     app.on('activate', () => {
-      if (!startupPhase && BrowserWindow.getAllWindows().length === 0) {
+      if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
       }
     });
