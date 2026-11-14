@@ -280,10 +280,14 @@ export class AudioProcessorManager {
       this.highpassFilter.type = 'highpass';
       this.highpassFilter.frequency.value = 85;
       this.highpassFilter.Q.value = 0.707;
+      this.highpassFilter.channelCount = 1;
+      this.highpassFilter.channelCountMode = 'explicit';
 
       this.analyserNode = this.audioCtx.createAnalyser();
       this.analyserNode.fftSize = 512;
       this.analyserNode.smoothingTimeConstant = 0.25;
+      this.analyserNode.channelCount = 1;
+      this.analyserNode.channelCountMode = 'explicit';
 
       this.gateGainNode = this.audioCtx.createGain();
       this.gateGainNode.gain.value = this.activeConfig.mode === 'rnnoise_silero' ? 0.0 : 1.0;
@@ -291,7 +295,10 @@ export class AudioProcessorManager {
       this.volumeGainNode = this.audioCtx.createGain();
       this.volumeGainNode.gain.value = Math.max(0, Math.min(2, this.activeConfig.volume / 100));
 
+      // Voice mic track must be explicit 1-channel mono so stereo headsets with L-only capture play centered in both ears
       this.destinationNode = this.audioCtx.createMediaStreamDestination();
+      this.destinationNode.channelCount = 1;
+      this.destinationNode.channelCountMode = 'explicit';
 
       await this.rebuildRouting();
       this.startVadLoop();
