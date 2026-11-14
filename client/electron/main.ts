@@ -2,7 +2,10 @@ import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalSho
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { spawn, execSync, ChildProcess } from 'child_process';
+import { spawn, execSync, execFile, ChildProcess } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 // Prevent unhandled EPIPE crashes when stdout/stderr is closed (common in Linux AppImage/GUI launch)
 process.stdout?.on('error', (err: any) => {
@@ -1562,6 +1565,7 @@ let activeAudioBuffer = Buffer.alloc(0);
 const AUDIO_CHUNK_BYTES = 3840; // 480 frames * 2 channels * 4 bytes (Float32) = 10ms at 48kHz
 
 let linuxLinkInterval: NodeJS.Timeout | null = null;
+let isSyncingLinuxAudioLinks = false;
 
 function isZeroVCPid(pid: number): boolean {
   let cur = pid;
@@ -1578,9 +1582,11 @@ function isZeroVCPid(pid: number): boolean {
   return false;
 }
 
-function syncLinuxAudioLinks() {
+async function syncLinuxAudioLinks() {
+  if (isSyncingLinuxAudioLinks) return;
+  isSyncingLinuxAudioLinks = true;
   try {
-    const raw = execSync('pw-dump', { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+    const { stdout: raw } = await execFileAsync('pw-dump', [], { maxBuffer: 16 * 1024 * 1024 });
     const dump = JSON.parse(raw) as any[];
 
     const capNode = dump.find(
@@ -1593,15 +1599,23 @@ function syncLinuxAudioLinks() {
     const capFR = ports.find((p) => p.info?.props?.['node.id'] === capNode.id && p.info?.props?.['audio.channel'] === 'FR');
     if (!capFL || !capFR) return;
 
+    const capPortIds = new Set<number>([capFL.id, capFR.id]);
+    const links = dump.filter((o) => o.type === 'PipeWire:Interface:Link');
     const existingLinks = new Set(
-      dump
-        .filter((o) => o.type === 'PipeWire:Interface:Link')
-        .map((l) => `${l.info?.['output-port-id']}->${l.info?.['input-port-id']}`)
+      links.map((l) => `${l.info?.['output-port-id']}->${l.info?.['input-port-id']}`)
     );
+
+    const ownPids = new Set<number>([
+      process.pid,
+      ...app.getAppMetrics().map((m) => m.pid).filter((p) => p > 0),
+    ]);
 
     const outNodes = dump.filter(
       (o) => o.type === 'PipeWire:Interface:Node' && o.info?.props?.['media.class'] === 'Stream/Output/Audio'
     );
+
+    const allowedOutPortIds = new Set<number>();
+    const linkOps: Promise<any>[] = [];
 
     for (const node of outNodes) {
       const props = node.info?.props || {};
@@ -1609,22 +1623,47 @@ function syncLinuxAudioLinks() {
       const bin = String(props['application.process.binary'] || '');
       const appName = String(props['application.name'] || '');
 
-      if (/zerovc/i.test(bin) || /zerovc/i.test(appName) || (pid > 0 && isZeroVCPid(pid))) {
-        continue;
-      }
+      const isOwnApp =
+        /zerovc/i.test(bin) ||
+        /zerovc/i.test(appName) ||
+        (pid > 0 && (ownPids.has(pid) || isZeroVCPid(pid)));
+
+      if (isOwnApp) continue;
 
       const nodePorts = ports.filter((p) => p.info?.props?.['node.id'] === node.id && p.info?.direction === 'output');
       for (const pt of nodePorts) {
         const ch = pt.info?.props?.['audio.channel'];
-        if ((ch === 'FL' || ch === 'MONO') && !existingLinks.has(`${pt.id}->${capFL.id}`)) {
-          try { execSync(`pw-link ${pt.id} ${capFL.id}`, { stdio: 'ignore' }); } catch {}
+        if (ch === 'FL' || ch === 'MONO') {
+          allowedOutPortIds.add(pt.id);
+          if (!existingLinks.has(`${pt.id}->${capFL.id}`)) {
+            linkOps.push(execFileAsync('pw-link', [String(pt.id), String(capFL.id)]).catch(() => {}));
+          }
         }
-        if ((ch === 'FR' || ch === 'MONO') && !existingLinks.has(`${pt.id}->${capFR.id}`)) {
-          try { execSync(`pw-link ${pt.id} ${capFR.id}`, { stdio: 'ignore' }); } catch {}
+        if (ch === 'FR' || ch === 'MONO') {
+          allowedOutPortIds.add(pt.id);
+          if (!existingLinks.has(`${pt.id}->${capFR.id}`)) {
+            linkOps.push(execFileAsync('pw-link', [String(pt.id), String(capFR.id)]).catch(() => {}));
+          }
         }
       }
     }
-  } catch {}
+
+    // Disconnect any unwanted auto-links into zerovc_capture (e.g. default sink monitor or own app)
+    for (const l of links) {
+      const outId = l.info?.['output-port-id'];
+      const inId = l.info?.['input-port-id'];
+      if (capPortIds.has(inId) && !allowedOutPortIds.has(outId)) {
+        linkOps.push(execFileAsync('pw-link', ['-d', String(outId), String(inId)]).catch(() => {}));
+      }
+    }
+
+    if (linkOps.length > 0) {
+      await Promise.all(linkOps);
+    }
+  } catch {
+  } finally {
+    isSyncingLinuxAudioLinks = false;
+  }
 }
 
 function cleanupLinuxAudioState() {
@@ -1651,6 +1690,8 @@ ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceI
       const recordArgs = [
         '--target', '0',
         '-P', 'node.name=zerovc_capture',
+        '-P', 'node.autoconnect=false',
+        '-P', 'stream.capture.sink=false',
         '--raw',
         '--format', 'f32',
         '--rate', '48000',

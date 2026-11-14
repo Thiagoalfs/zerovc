@@ -393,9 +393,10 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
 
     if (screenPub instanceof RemoteTrackPublication) {
       try {
-        screenPub.setSubscribed(true);
+        if (!screenPub.isSubscribed) screenPub.setSubscribed(true);
+        screenPub.setEnabled(true);
       } catch (err) {
-        console.warn('[VoiceFloatingPiP] Error subscribing screenPub:', err);
+        console.warn('[VoiceFloatingPiP] Error enabling screenPub:', err);
       }
     }
 

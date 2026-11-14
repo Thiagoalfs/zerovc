@@ -9,6 +9,8 @@ import {
   E2EEOptions,
   LocalVideoTrack,
   LocalAudioTrack,
+  RemoteTrackPublication,
+  VideoQuality,
 } from 'livekit-client';
 import { processAudioBridge } from './processAudioBridge';
 import {
@@ -390,6 +392,19 @@ class LiveKitManager {
     });
 
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+      if (publication instanceof RemoteTrackPublication) {
+        if (publication.source === Track.Source.ScreenShare) {
+          const isWatched = this.watchedParticipantIdentities.has(participant.identity);
+          publication.setEnabled(isWatched);
+          if (isWatched) {
+            publication.setVideoQuality(VideoQuality.HIGH);
+          }
+        } else if (publication.source === Track.Source.ScreenShareAudio) {
+          const isWatched = this.watchedParticipantIdentities.has(participant.identity);
+          publication.setEnabled(isWatched);
+        }
+      }
+
       if (track.kind === Track.Kind.Audio) {
         const isScreenAudio = publication.source === Track.Source.ScreenShareAudio;
         const audioEl = track.attach();
@@ -421,6 +436,8 @@ class LiveKitManager {
           }
           if (isWatched && !this.isDeafened) {
             audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
+          } else {
+            try { audioEl.pause(); } catch {}
           }
         } else {
           audioEl.muted = this.isDeafened;
@@ -1611,7 +1628,7 @@ class LiveKitManager {
         if (subscribed && !this.isDeafened) {
           const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
           try {
-            el.volume = Math.min(Math.max(streamVol, 0), 1);
+            el.volume = Math.min(Math.max(streamVol * this.masterOutputVolume, 0), 1);
           } catch {}
           el.play().catch((err) => console.log('[LiveKit] Stream audio play error:', err));
         } else {
@@ -1626,30 +1643,35 @@ class LiveKitManager {
     if (this.room) {
       const remote = this.room.remoteParticipants.get(participantIdentity);
       if (remote) {
-        // Video screen share publication
+        // Video screen share publication: keep subscribed (E2EE ready) and pause/resume via setEnabled
         remote.videoTrackPublications.forEach((pub) => {
           if (pub.source === Track.Source.ScreenShare) {
             try {
-              pub.setSubscribed(subscribed);
+              if (!pub.isSubscribed) pub.setSubscribed(true);
+              pub.setEnabled(subscribed);
+              if (subscribed) {
+                pub.setVideoQuality(VideoQuality.HIGH);
+              }
             } catch (err) {
-              console.warn('[LiveKit] Error setting video screenshare subscription:', err);
+              console.warn('[LiveKit] Error setting video screenshare enabled state:', err);
             }
           }
         });
 
-        // Audio screen share publication
+        // Audio screen share publication: keep subscribed and pause/resume via setEnabled
         remote.audioTrackPublications.forEach((pub) => {
           if (pub.source === Track.Source.ScreenShareAudio) {
             try {
-              pub.setSubscribed(subscribed);
+              if (!pub.isSubscribed) pub.setSubscribed(true);
+              pub.setEnabled(subscribed);
             } catch (err) {
-              console.warn('[LiveKit] Error setting audio screenshare subscription:', err);
+              console.warn('[LiveKit] Error setting audio screenshare enabled state:', err);
             }
             const audioTrack = pub.track || (pub as any).audioTrack;
             if (audioTrack && typeof audioTrack.setVolume === 'function') {
               const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
               try {
-                audioTrack.setVolume(subscribed ? streamVol : 0);
+                audioTrack.setVolume(subscribed && !this.isDeafened ? streamVol * this.masterOutputVolume : 0);
               } catch (err) {
                 console.warn('[LiveKit] Error setting stream volume on publication change:', err);
               }

@@ -2,7 +2,7 @@ import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Participant, Track, RemoteTrackPublication, ParticipantEvent } from 'livekit-client';
+import { Participant, Track, RemoteTrackPublication, ParticipantEvent, VideoQuality } from 'livekit-client';
 import { VoiceControlBar } from './VoiceControlBar';
 import {
   MicOff,
@@ -308,9 +308,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
     if (screenPub instanceof RemoteTrackPublication) {
       try {
-        screenPub.setSubscribed(isWatching);
+        if (!screenPub.isSubscribed) screenPub.setSubscribed(true);
+        screenPub.setEnabled(isWatching);
+        if (isWatching) screenPub.setVideoQuality(VideoQuality.HIGH);
       } catch (err) {
-        console.warn('[ParticipantCard] Error setting screenPub subscription:', err);
+        console.warn('[ParticipantCard] Error setting screenPub enabled state:', err);
       }
     }
 
