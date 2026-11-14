@@ -1595,8 +1595,12 @@ async function syncLinuxAudioLinks() {
     if (!capNode) return;
 
     const ports = dump.filter((o) => o.type === 'PipeWire:Interface:Port');
-    const capFL = ports.find((p) => p.info?.props?.['node.id'] === capNode.id && p.info?.props?.['audio.channel'] === 'FL');
-    const capFR = ports.find((p) => p.info?.props?.['node.id'] === capNode.id && p.info?.props?.['audio.channel'] === 'FR');
+    const capFL = ports.find(
+      (p) => p.info?.props?.['node.id'] === capNode.id && p.info?.direction === 'input' && p.info?.props?.['audio.channel'] === 'FL'
+    );
+    const capFR = ports.find(
+      (p) => p.info?.props?.['node.id'] === capNode.id && p.info?.direction === 'input' && p.info?.props?.['audio.channel'] === 'FR'
+    );
     if (!capFL || !capFR) return;
 
     const capPortIds = new Set<number>([capFL.id, capFR.id]);
@@ -1696,6 +1700,7 @@ ipcMain.handle('start-process-audio-capture', async (_event, options?: { sourceI
         '--format', 'f32',
         '--rate', '48000',
         '--channels', '2',
+        '--channel-map', 'Stereo',
         '-',
       ];
 

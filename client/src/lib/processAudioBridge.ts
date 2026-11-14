@@ -123,6 +123,8 @@ export class ProcessAudioBridge {
       });
 
       this.destinationNode = this.audioContext.createMediaStreamDestination();
+      this.destinationNode.channelCount = 2;
+      this.destinationNode.channelCountMode = 'explicit';
       this.workletNode.connect(this.destinationNode);
 
       // Subscribe to binary Float32 PCM chunks from Electron Main
