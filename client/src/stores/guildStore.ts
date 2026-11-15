@@ -27,6 +27,7 @@ interface GuildState {
   firstUnreadMessageIdByChannel: Record<string, string | null>;
   lastReadMessageIdByChannel: Record<string, string | null>;
   unreadCountByChannel: Record<string, number>;
+  fetchedChannels: Record<string, boolean>;
   isLoadingPinned: Record<string, boolean>;
   hasMoreByChannel: Record<string, boolean>;
   isLoadingGuilds: boolean;
@@ -127,6 +128,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   firstUnreadMessageIdByChannel: {},
   lastReadMessageIdByChannel: {},
   unreadCountByChannel: {},
+  fetchedChannels: {},
   isLoadingPinned: {},
   hasMoreByChannel: {},
   isLoadingGuilds: false,
@@ -174,8 +176,9 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         guilds: state.guilds.map((g) => (g.id === fullGuild.id ? { ...g, ...fullGuild } : g)),
       }));
 
-      // Load read receipts for guild
-      api.guilds.getReadStates(guildId).then((readStates) => {
+      // Load read receipts before selecting the initial channel so unread state isn't acked prematurely
+      try {
+        const readStates = await api.guilds.getReadStates(guildId);
         if (readStates && readStates.length > 0) {
           set((state) => {
             const unread = new Set(state.unreadChannels);
@@ -207,7 +210,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
             };
           });
         }
-      }).catch(() => {});
+      } catch {}
 
       if (fullGuild.channels && fullGuild.channels.length > 0) {
         let savedChannelId = initialChannelId;
@@ -239,6 +242,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }
 
     const cachedMessages = get().messagesByChannel[channel.id];
+    const hasFetched = Boolean(get().fetchedChannels[channel.id]);
     const wasUnreadBeforeSelect = get().unreadChannels.has(channel.id);
 
     // Only ack immediately if channel had no unread messages (or is non-text)
@@ -278,20 +282,25 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         guildMentions: nextGuildMentions,
         channelMentions: nextChannelMentions,
         firstUnreadMessageIdByChannel: nextFirstUnread,
-        isLoadingMessages: channel.type === 'text' && !cachedMessages,
+        isLoadingMessages: channel.type === 'text' && !hasFetched && !cachedMessages,
       };
     });
 
-    if (channel.type === 'text' && !cachedMessages) {
+    if (channel.type === 'text' && !hasFetched) {
       try {
         const messages = await api.channels.getMessages(channel.id, 50);
         let shouldAckEmpty = false;
         set((state) => {
+          const existing = state.messagesByChannel[channel.id] || [];
+          const fetchedIds = new Set(messages.map((m) => m.id));
+          const newerWs = existing.filter((m) => !fetchedIds.has(m.id));
+          const merged = newerWs.length > 0 ? [...messages, ...newerWs] : messages;
+
           const nextFirstUnread = { ...state.firstUnreadMessageIdByChannel };
           const unread = new Set(state.unreadChannels);
           if (unread.has(channel.id) && !nextFirstUnread[channel.id]) {
             const resolved = resolveFirstUnreadMessageId(
-              messages,
+              merged,
               state.lastReadMessageIdByChannel[channel.id],
               state.unreadCountByChannel[channel.id] || 0
             );
@@ -302,10 +311,14 @@ export const useGuildStore = create<GuildState>((set, get) => ({
             }
           }
           return {
-            messages: state.activeChannel?.id === channel.id ? messages : state.messages,
+            messages: state.activeChannel?.id === channel.id ? merged : state.messages,
             messagesByChannel: {
               ...state.messagesByChannel,
-              [channel.id]: messages,
+              [channel.id]: merged,
+            },
+            fetchedChannels: {
+              ...state.fetchedChannels,
+              [channel.id]: true,
             },
             hasMoreByChannel: {
               ...state.hasMoreByChannel,

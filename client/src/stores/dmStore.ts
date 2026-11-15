@@ -23,6 +23,7 @@ interface DMState {
   pinnedMessagesByRoom: Record<string, DMMessage[]>;
   isLoadingPinned: Record<string, boolean>;
   hasMoreByRoom: Record<string, boolean>;
+  fetchedRooms: Record<string, boolean>;
   isLoadingRooms: boolean;
   isLoadingMessages: boolean;
   isLoadingMoreMessages: boolean;
@@ -60,6 +61,7 @@ export const useDMStore = create<DMState>((set, get) => ({
   pinnedMessagesByRoom: {},
   isLoadingPinned: {},
   hasMoreByRoom: {},
+  fetchedRooms: {},
   isLoadingRooms: false,
   isLoadingMessages: false,
   isLoadingMoreMessages: false,
@@ -86,6 +88,7 @@ export const useDMStore = create<DMState>((set, get) => ({
     } catch {}
 
     const cachedMessages = get().messagesByRoom[room.id];
+    const hasFetched = Boolean(get().fetchedRooms[room.id]);
 
     set((state) => {
       const wasUnread = state.unreadRooms.has(room.id);
@@ -110,20 +113,25 @@ export const useDMStore = create<DMState>((set, get) => ({
         unreadRooms: unread,
         roomUnreadCounts: counts,
         firstUnreadMessageIdByRoom: nextFirstUnread,
-        isLoadingMessages: !cachedMessages,
+        isLoadingMessages: !hasFetched && !cachedMessages,
       };
     });
 
-    if (!cachedMessages) {
+    if (!hasFetched) {
       try {
         const messages = await api.dms.getMessages(room.id, 50);
         set((state) => {
+          const existing = state.messagesByRoom[room.id] || [];
+          const fetchedIds = new Set(messages.map((m) => m.id));
+          const newerWs = existing.filter((m) => !fetchedIds.has(m.id));
+          const merged = newerWs.length > 0 ? [...messages, ...newerWs] : messages;
+
           const unread = new Set(state.unreadRooms);
           const counts = { ...state.roomUnreadCounts };
           const nextFirstUnread = { ...state.firstUnreadMessageIdByRoom };
           if (unread.has(room.id) && !nextFirstUnread[room.id]) {
             const resolved = resolveFirstUnreadMessageId(
-              messages,
+              merged,
               null,
               counts[room.id] || 0
             );
@@ -134,10 +142,14 @@ export const useDMStore = create<DMState>((set, get) => ({
             }
           }
           return {
-            messages: state.activeRoom?.id === room.id ? messages : state.messages,
+            messages: state.activeRoom?.id === room.id ? merged : state.messages,
             messagesByRoom: {
               ...state.messagesByRoom,
-              [room.id]: messages,
+              [room.id]: merged,
+            },
+            fetchedRooms: {
+              ...state.fetchedRooms,
+              [room.id]: true,
             },
             hasMoreByRoom: {
               ...state.hasMoreByRoom,

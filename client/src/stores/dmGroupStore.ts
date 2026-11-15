@@ -24,6 +24,7 @@ interface DMGroupState {
   pinnedMessagesByGroup: Record<string, DMGroupMessage[]>;
   isLoadingPinned: Record<string, boolean>;
   hasMoreByGroup: Record<string, boolean>;
+  fetchedGroups: Record<string, boolean>;
   isLoadingGroups: boolean;
   isLoadingMessages: boolean;
   isLoadingMoreMessages: boolean;
@@ -66,6 +67,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   pinnedMessagesByGroup: {},
   isLoadingPinned: {},
   hasMoreByGroup: {},
+  fetchedGroups: {},
   isLoadingGroups: false,
   isLoadingMessages: false,
   isLoadingMoreMessages: false,
@@ -93,6 +95,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     } catch {}
 
     const cachedMessages = get().messagesByGroup[group.id];
+    const hasFetched = Boolean(get().fetchedGroups[group.id]);
 
     set((state) => {
       const wasUnread = state.unreadGroups.has(group.id);
@@ -117,20 +120,26 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         unreadGroups: unread,
         groupUnreadCounts: counts,
         firstUnreadMessageIdByGroup: nextFirstUnread,
-        isLoadingMessages: !cachedMessages,
+        isLoadingMessages: !hasFetched && !cachedMessages,
       };
     });
 
-    if (!cachedMessages) {
+    if (!hasFetched) {
       try {
         const messages = await api.dmGroups.getMessages(group.id, 50);
         set((state) => {
+          const list = messages || [];
+          const existing = state.messagesByGroup[group.id] || [];
+          const fetchedIds = new Set(list.map((m) => m.id));
+          const newerWs = existing.filter((m) => !fetchedIds.has(m.id));
+          const merged = newerWs.length > 0 ? [...list, ...newerWs] : list;
+
           const unread = new Set(state.unreadGroups);
           const counts = { ...state.groupUnreadCounts };
           const nextFirstUnread = { ...state.firstUnreadMessageIdByGroup };
           if (unread.has(group.id) && !nextFirstUnread[group.id]) {
             const resolved = resolveFirstUnreadMessageId(
-              messages || [],
+              merged,
               null,
               counts[group.id] || 0
             );
@@ -141,10 +150,14 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
             }
           }
           return {
-            messages: state.activeGroup?.id === group.id ? messages : state.messages,
+            messages: state.activeGroup?.id === group.id ? merged : state.messages,
             messagesByGroup: {
               ...state.messagesByGroup,
-              [group.id]: messages || [],
+              [group.id]: merged,
+            },
+            fetchedGroups: {
+              ...state.fetchedGroups,
+              [group.id]: true,
             },
             hasMoreByGroup: {
               ...state.hasMoreByGroup,
