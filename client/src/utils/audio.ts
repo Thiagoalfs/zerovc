@@ -1,4 +1,6 @@
 // Web Audio API Synthetic Sound Generator for ZeroVC
+import { useStreamerModeStore } from '../stores/streamerModeStore';
+
 let audioCtx: AudioContext | null = null;
 
 const getAudioContext = () => {
@@ -17,7 +19,6 @@ const getAudioContext = () => {
 
 const isSoundsEnabled = () => {
   try {
-    const { useStreamerModeStore } = require('../stores/streamerModeStore');
     const streamerState = useStreamerModeStore.getState();
     if (streamerState.enabled && streamerState.disableSounds) {
       return false;

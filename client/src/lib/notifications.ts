@@ -1,5 +1,6 @@
 import { formatAssetUrl } from './api';
 import { useAuthStore } from '../stores/authStore';
+import { useStreamerModeStore } from '../stores/streamerModeStore';
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -41,7 +42,6 @@ export const sendNativeNotification = ({ title, body, icon, tag, onClick }: Noti
 
   // 2. Modo Streamer - Silenciar notificações
   try {
-    const { useStreamerModeStore } = require('../stores/streamerModeStore');
     const streamerState = useStreamerModeStore.getState();
     if (streamerState.enabled && streamerState.disableNotifications) {
       return;

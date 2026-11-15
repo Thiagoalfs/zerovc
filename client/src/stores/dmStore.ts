@@ -10,6 +10,7 @@ import { optimizeImageForUpload } from '../lib/imageOptimizer';
 import { messageCodec } from '../messaging/messageCodec';
 import { keyRequestManager } from '../crypto/keyRequestManager';
 import { deviceManager } from '../crypto/deviceManager';
+import { resolveFirstUnreadMessageId } from '../utils/unread';
 
 interface DMState {
   rooms: DMRoom[];
@@ -89,12 +90,18 @@ export const useDMStore = create<DMState>((set, get) => ({
     set((state) => {
       const wasUnread = state.unreadRooms.has(room.id);
       const unread = new Set(state.unreadRooms);
-      unread.delete(room.id);
       const counts = { ...state.roomUnreadCounts };
-      delete counts[room.id];
       const nextFirstUnread = { ...state.firstUnreadMessageIdByRoom };
       if (!wasUnread) {
+        unread.delete(room.id);
+        delete counts[room.id];
         nextFirstUnread[room.id] = null;
+      } else if (cachedMessages && cachedMessages.length > 0 && !nextFirstUnread[room.id]) {
+        nextFirstUnread[room.id] = resolveFirstUnreadMessageId(
+          cachedMessages,
+          null,
+          state.roomUnreadCounts[room.id] || 0
+        );
       }
 
       return {
@@ -110,18 +117,38 @@ export const useDMStore = create<DMState>((set, get) => ({
     if (!cachedMessages) {
       try {
         const messages = await api.dms.getMessages(room.id, 50);
-        set((state) => ({
-          messages: state.activeRoom?.id === room.id ? messages : state.messages,
-          messagesByRoom: {
-            ...state.messagesByRoom,
-            [room.id]: messages,
-          },
-          hasMoreByRoom: {
-            ...state.hasMoreByRoom,
-            [room.id]: messages.length === 50,
-          },
-          isLoadingMessages: false,
-        }));
+        set((state) => {
+          const unread = new Set(state.unreadRooms);
+          const counts = { ...state.roomUnreadCounts };
+          const nextFirstUnread = { ...state.firstUnreadMessageIdByRoom };
+          if (unread.has(room.id) && !nextFirstUnread[room.id]) {
+            const resolved = resolveFirstUnreadMessageId(
+              messages,
+              null,
+              counts[room.id] || 0
+            );
+            nextFirstUnread[room.id] = resolved;
+            if (!resolved) {
+              unread.delete(room.id);
+              delete counts[room.id];
+            }
+          }
+          return {
+            messages: state.activeRoom?.id === room.id ? messages : state.messages,
+            messagesByRoom: {
+              ...state.messagesByRoom,
+              [room.id]: messages,
+            },
+            hasMoreByRoom: {
+              ...state.hasMoreByRoom,
+              [room.id]: messages.length === 50,
+            },
+            unreadRooms: unread,
+            roomUnreadCounts: counts,
+            firstUnreadMessageIdByRoom: nextFirstUnread,
+            isLoadingMessages: false,
+          };
+        });
 
         // Asynchronously decode encrypted messages
         const encryptedList = messages.filter((m) => m.encrypted);

@@ -49,7 +49,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 
 import { MessageEmbedCard } from './MessageEmbedCard';
 import { UploadProgressCard } from './UploadProgressCard';
-import { getFormattedUsername } from '../../stores/streamerModeStore';
+import { getFormattedUsername, useStreamerModeStore } from '../../stores/streamerModeStore';
 
 export interface UniversalMessage {
   id: string;
@@ -122,6 +122,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   contextType = 'channel',
 }) => {
   const { user } = useAuthStore();
+  useStreamerModeStore((s) => s.enabled && s.censorUsernames);
   const {
     activeGuild,
     activeChannel,

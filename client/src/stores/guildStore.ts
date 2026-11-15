@@ -11,6 +11,7 @@ import { findFirstAccessibleChannel } from '../utils/userActivity';
 import { useVoiceStore } from './voiceStore';
 import { messageCodec } from '../messaging/messageCodec';
 import { deviceManager } from '../crypto/deviceManager';
+import { resolveFirstUnreadMessageId } from '../utils/unread';
 
 interface GuildState {
   guilds: Guild[];
@@ -24,6 +25,8 @@ interface GuildState {
   messagesByChannel: Record<string, Message[]>;
   pinnedMessagesByChannel: Record<string, Message[]>;
   firstUnreadMessageIdByChannel: Record<string, string | null>;
+  lastReadMessageIdByChannel: Record<string, string | null>;
+  unreadCountByChannel: Record<string, number>;
   isLoadingPinned: Record<string, boolean>;
   hasMoreByChannel: Record<string, boolean>;
   isLoadingGuilds: boolean;
@@ -122,6 +125,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   messagesByChannel: {},
   pinnedMessagesByChannel: {},
   firstUnreadMessageIdByChannel: {},
+  lastReadMessageIdByChannel: {},
+  unreadCountByChannel: {},
   isLoadingPinned: {},
   hasMoreByChannel: {},
   isLoadingGuilds: false,
@@ -174,12 +179,32 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         if (readStates && readStates.length > 0) {
           set((state) => {
             const unread = new Set(state.unreadChannels);
+            const nextLastRead = { ...state.lastReadMessageIdByChannel };
+            const nextUnreadCount = { ...state.unreadCountByChannel };
+            const nextFirstUnread = { ...state.firstUnreadMessageIdByChannel };
             for (const rs of readStates) {
+              if (rs.last_read_message_id) {
+                nextLastRead[rs.channel_id] = rs.last_read_message_id;
+              }
+              nextUnreadCount[rs.channel_id] = rs.unread_count || 0;
               if (rs.unread_count > 0) {
                 unread.add(rs.channel_id);
+                const cached = state.messagesByChannel[rs.channel_id];
+                if (cached && cached.length > 0 && !nextFirstUnread[rs.channel_id]) {
+                  nextFirstUnread[rs.channel_id] = resolveFirstUnreadMessageId(
+                    cached,
+                    rs.last_read_message_id,
+                    rs.unread_count
+                  );
+                }
               }
             }
-            return { unreadChannels: unread };
+            return {
+              unreadChannels: unread,
+              lastReadMessageIdByChannel: nextLastRead,
+              unreadCountByChannel: nextUnreadCount,
+              firstUnreadMessageIdByChannel: nextFirstUnread,
+            };
           });
         }
       }).catch(() => {});
@@ -214,32 +239,36 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }
 
     const cachedMessages = get().messagesByChannel[channel.id];
+    const wasUnreadBeforeSelect = get().unreadChannels.has(channel.id);
 
-    // Ack channel read receipt
-    if (channel.type === 'text') {
+    // Only ack immediately if channel had no unread messages (or is non-text)
+    if (channel.type === 'text' && !wasUnreadBeforeSelect) {
       api.channels.ack(channel.id).catch(() => {});
     }
 
     set((state) => {
       const wasUnread = state.unreadChannels.has(channel.id);
       const unread = new Set(state.unreadChannels);
-      unread.delete(channel.id);
-
-      const chMentions = state.channelMentions[channel.id] || 0;
-      const curGuild = state.activeGuild;
       const nextGuildMentions = { ...state.guildMentions };
       const nextChannelMentions = { ...state.channelMentions };
       const nextFirstUnread = { ...state.firstUnreadMessageIdByChannel };
 
-      if (!wasUnread) {
+      if (!wasUnread || channel.type !== 'text') {
+        unread.delete(channel.id);
         nextFirstUnread[channel.id] = null;
-      }
-
-      if (chMentions > 0) {
-        delete nextChannelMentions[channel.id];
-        if (curGuild) {
-          nextGuildMentions[curGuild.id] = Math.max(0, (nextGuildMentions[curGuild.id] || 0) - chMentions);
+        const chMentions = state.channelMentions[channel.id] || 0;
+        if (chMentions > 0) {
+          delete nextChannelMentions[channel.id];
+          if (state.activeGuild) {
+            nextGuildMentions[state.activeGuild.id] = Math.max(0, (nextGuildMentions[state.activeGuild.id] || 0) - chMentions);
+          }
         }
+      } else if (cachedMessages && cachedMessages.length > 0 && !nextFirstUnread[channel.id]) {
+        nextFirstUnread[channel.id] = resolveFirstUnreadMessageId(
+          cachedMessages,
+          state.lastReadMessageIdByChannel[channel.id],
+          state.unreadCountByChannel[channel.id] || 0
+        );
       }
 
       return {
@@ -256,18 +285,40 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     if (channel.type === 'text' && !cachedMessages) {
       try {
         const messages = await api.channels.getMessages(channel.id, 50);
-        set((state) => ({
-          messages: state.activeChannel?.id === channel.id ? messages : state.messages,
-          messagesByChannel: {
-            ...state.messagesByChannel,
-            [channel.id]: messages,
-          },
-          hasMoreByChannel: {
-            ...state.hasMoreByChannel,
-            [channel.id]: messages.length === 50,
-          },
-          isLoadingMessages: false,
-        }));
+        let shouldAckEmpty = false;
+        set((state) => {
+          const nextFirstUnread = { ...state.firstUnreadMessageIdByChannel };
+          const unread = new Set(state.unreadChannels);
+          if (unread.has(channel.id) && !nextFirstUnread[channel.id]) {
+            const resolved = resolveFirstUnreadMessageId(
+              messages,
+              state.lastReadMessageIdByChannel[channel.id],
+              state.unreadCountByChannel[channel.id] || 0
+            );
+            nextFirstUnread[channel.id] = resolved;
+            if (!resolved) {
+              unread.delete(channel.id);
+              shouldAckEmpty = true;
+            }
+          }
+          return {
+            messages: state.activeChannel?.id === channel.id ? messages : state.messages,
+            messagesByChannel: {
+              ...state.messagesByChannel,
+              [channel.id]: messages,
+            },
+            hasMoreByChannel: {
+              ...state.hasMoreByChannel,
+              [channel.id]: messages.length === 50,
+            },
+            unreadChannels: unread,
+            firstUnreadMessageIdByChannel: nextFirstUnread,
+            isLoadingMessages: false,
+          };
+        });
+        if (shouldAckEmpty) {
+          api.channels.ack(channel.id).catch(() => {});
+        }
 
         const encryptedList = (messages || []).filter((m) => m.encrypted);
         if (encryptedList.length > 0) {
@@ -508,12 +559,18 @@ export const useGuildStore = create<GuildState>((set, get) => ({
 
       const nextFirstUnread = { ...state.firstUnreadMessageIdByChannel };
       nextFirstUnread[channelId] = null;
+      const channelMsgs = state.messagesByChannel[channelId] || (state.activeChannel?.id === channelId ? state.messages : []);
+      const lastMsg = channelMsgs.length > 0 ? channelMsgs[channelMsgs.length - 1] : null;
 
       return {
         unreadChannels: nextUnread,
         channelMentions: nextChannelMentions,
         guildMentions: nextGuildMentions,
         firstUnreadMessageIdByChannel: nextFirstUnread,
+        lastReadMessageIdByChannel: lastMsg
+          ? { ...state.lastReadMessageIdByChannel, [channelId]: lastMsg.id }
+          : state.lastReadMessageIdByChannel,
+        unreadCountByChannel: { ...state.unreadCountByChannel, [channelId]: 0 },
       };
     });
   },

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Hash, Users, Menu, Pin, Search, X, UploadCloud } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
+import { useAutoClearVisibleUnread } from '../../utils/unread';
 import { useAuthStore } from '../../stores/authStore';
 import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
@@ -52,6 +53,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     typingUsers,
     firstUnreadMessageIdByChannel,
     clearUnreadDivider,
+    markChannelAsRead,
   } = useGuildStore();
   const [localShowMemberList, setLocalShowMemberList] = useState<boolean>(() => {
     try {
@@ -150,7 +152,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const handleSendMessage = async (content: string, replyToId?: string, isTTS?: boolean, file?: File) => {
     if (activeChannel) {
-      clearUnreadDivider(activeChannel.id);
+      markChannelAsRead(activeChannel.id);
     }
     scrollToBottom(true);
     await sendMessage(content, replyToId, isTTS, file);
@@ -182,6 +184,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [activeChannel?.id]);
 
   const firstUnreadId = activeChannel ? firstUnreadMessageIdByChannel[activeChannel.id] : null;
+  useAutoClearVisibleUnread(scrollContainerRef, firstUnreadId, messages.length, () => {
+    if (activeChannel) markChannelAsRead(activeChannel.id);
+  });
 
   // Keep scroll position when loading older messages OR scroll smoothly/instantly to bottom / unread on initial load
   useEffect(() => {
@@ -221,7 +226,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
 
     if (isMyMessage && activeChannel) {
-      clearUnreadDivider(activeChannel.id);
+      markChannelAsRead(activeChannel.id);
     }
 
     if ((isNearBottom || isMyMessage) && !isAutoScrollingRef.current) {
@@ -250,10 +255,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       loadMoreMessages(activeChannel.id);
     }
 
-    // Clear unread divider line only when user scrolls down to the bottom
+    // Clear unread divider line and channel unread badge when user scrolls down to the bottom
     const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
     if (isAtBottom && firstUnreadId) {
-      clearUnreadDivider(activeChannel.id);
+      markChannelAsRead(activeChannel.id);
     }
   };
 
@@ -464,7 +469,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                         <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
                         <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          Mensagens não lidas
+                          Novas mensagens não lidas
                         </span>
                         <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
                       </div>

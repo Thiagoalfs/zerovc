@@ -44,7 +44,7 @@ import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
-import { getFormattedUsername } from '../../stores/streamerModeStore';
+import { getFormattedUsername, useStreamerModeStore } from '../../stores/streamerModeStore';
 import { DeleteChannelModal } from '../Modals/DeleteChannelModal';
 
 interface ChannelListProps {
@@ -79,6 +79,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onCloseMobileDrawer,
 }) => {
   const { user } = useAuthStore();
+  useStreamerModeStore((s) => s.enabled && s.censorUsernames);
   const {
     activeGuild,
     activeChannel,

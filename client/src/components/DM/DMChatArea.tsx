@@ -9,6 +9,7 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
+import { useAutoClearVisibleUnread } from '../../utils/unread';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -59,6 +60,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     loadMoreMessages,
     firstUnreadMessageIdByRoom,
     clearUnreadDivider,
+    markRoomAsRead,
     enableE2EE,
   } = useDMStore();
   const { friends } = useFriendStore();
@@ -174,6 +176,9 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   }, [activeRoom?.id]);
 
   const firstUnreadId = activeRoom ? firstUnreadMessageIdByRoom[activeRoom.id] : null;
+  useAutoClearVisibleUnread(scrollContainerRef, firstUnreadId, messages.length, () => {
+    if (activeRoom) markRoomAsRead(activeRoom.id);
+  });
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -212,7 +217,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 350;
 
     if (isMyMessage && activeRoom) {
-      clearUnreadDivider(activeRoom.id);
+      markRoomAsRead(activeRoom.id);
     }
 
     if (isNearBottom || isMyMessage) {
@@ -233,7 +238,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
     if (isNearBottom && firstUnreadId) {
-      clearUnreadDivider(activeRoom.id);
+      markRoomAsRead(activeRoom.id);
     }
   };
 

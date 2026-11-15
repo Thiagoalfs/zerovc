@@ -9,7 +9,7 @@ import { UserAvatar } from '../Common/UserAvatar';
 import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
 import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
 import { useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
-import { getFormattedUsername } from '../../stores/streamerModeStore';
+import { getFormattedUsername, useStreamerModeStore } from '../../stores/streamerModeStore';
 import { findBestSourceForGameFamily } from '../../utils/gameFamilyManager';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { User, UserProfilePosition, Guild } from '../../types';
@@ -25,6 +25,7 @@ interface UserBarProps {
 
 export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenShare, onOpenUserProfile }) => {
   const { user, updateProfile } = useAuthStore();
+  const censorUsernames = useStreamerModeStore((s) => s.enabled && s.censorUsernames);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showVoicePopout, setShowVoicePopout] = useState(false);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
@@ -131,7 +132,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       return dmGroup?.name || 'Chamada em Grupo';
     }
     return 'Voz Conectada';
-  }, [voiceType, activeVoiceChannel, dmRecipient, dmGroup]);
+  }, [voiceType, activeVoiceChannel, dmRecipient, dmGroup, censorUsernames]);
 
   const voiceSubtitle = useMemo(() => {
     if (voiceType === 'guild') {

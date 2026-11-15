@@ -20,6 +20,7 @@ import {
   Camera,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
+import { useAutoClearVisibleUnread } from '../../utils/unread';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -81,6 +82,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     loadMoreMessages,
     firstUnreadMessageIdByGroup,
     clearUnreadDivider,
+    markGroupAsRead,
     enableE2EE,
   } = useDMGroupStore();
   const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
@@ -346,6 +348,9 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   }, [activeGroup?.id]);
 
   const firstUnreadId = activeGroup ? firstUnreadMessageIdByGroup[activeGroup.id] : null;
+  useAutoClearVisibleUnread(scrollContainerRef, firstUnreadId, messages.length, () => {
+    if (activeGroup) markGroupAsRead(activeGroup.id);
+  });
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -385,7 +390,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       container.scrollHeight - container.scrollTop - container.clientHeight < 350;
 
     if (isMyMessage && activeGroup) {
-      clearUnreadDivider(activeGroup.id);
+      markGroupAsRead(activeGroup.id);
     }
 
     if (isNearBottom || isMyMessage) {
@@ -411,7 +416,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     const isNearBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight < 35;
     if (isNearBottom && firstUnreadId) {
-      clearUnreadDivider(activeGroup.id);
+      markGroupAsRead(activeGroup.id);
     }
   };
 

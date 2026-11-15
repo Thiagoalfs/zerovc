@@ -1,4 +1,5 @@
 // ZeroVC Audio Engine - Procedural Sound Effects via Web Audio API
+import { useStreamerModeStore } from '../stores/streamerModeStore';
 
 class SoundManager {
   private ctx: AudioContext | null = null;
@@ -22,7 +23,6 @@ class SoundManager {
 
   private isEnabled(): boolean {
     try {
-      const { useStreamerModeStore } = require('../stores/streamerModeStore');
       const streamerState = useStreamerModeStore.getState();
       if (streamerState.enabled && streamerState.disableSounds) {
         return false;

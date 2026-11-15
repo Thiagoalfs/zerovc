@@ -22,7 +22,7 @@ import { ContextMenu } from '../ContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { getUserActivity, getActivityColorClass } from '../../utils/userActivity';
-import { getFormattedUsername } from '../../stores/streamerModeStore';
+import { getFormattedUsername, useStreamerModeStore } from '../../stores/streamerModeStore';
 
 interface MemberListProps {
   isOpen: boolean;
@@ -51,6 +51,7 @@ export const MemberList: React.FC<MemberListProps> = ({
   const { user: currentUser } = useAuthStore();
   const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
   const memberListWidth = useSettingsStore((s) => s.memberListWidth);
+  useStreamerModeStore((s) => s.enabled && s.censorUsernames);
 
   const members = activeGuild?.members || [];
   const guildRoles = useMemo(() => {

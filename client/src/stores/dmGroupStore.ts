@@ -11,6 +11,7 @@ import { messageCodec } from '../messaging/messageCodec';
 import { keyRequestManager } from '../crypto/keyRequestManager';
 import { megolmManager } from '../crypto/megolmSession';
 import { deviceManager } from '../crypto/deviceManager';
+import { resolveFirstUnreadMessageId } from '../utils/unread';
 
 interface DMGroupState {
   groups: DMGroup[];
@@ -96,12 +97,18 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     set((state) => {
       const wasUnread = state.unreadGroups.has(group.id);
       const unread = new Set(state.unreadGroups);
-      unread.delete(group.id);
       const counts = { ...state.groupUnreadCounts };
-      delete counts[group.id];
       const nextFirstUnread = { ...state.firstUnreadMessageIdByGroup };
       if (!wasUnread) {
+        unread.delete(group.id);
+        delete counts[group.id];
         nextFirstUnread[group.id] = null;
+      } else if (cachedMessages && cachedMessages.length > 0 && !nextFirstUnread[group.id]) {
+        nextFirstUnread[group.id] = resolveFirstUnreadMessageId(
+          cachedMessages,
+          null,
+          state.groupUnreadCounts[group.id] || 0
+        );
       }
 
       return {
@@ -117,18 +124,38 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     if (!cachedMessages) {
       try {
         const messages = await api.dmGroups.getMessages(group.id, 50);
-        set((state) => ({
-          messages: state.activeGroup?.id === group.id ? messages : state.messages,
-          messagesByGroup: {
-            ...state.messagesByGroup,
-            [group.id]: messages || [],
-          },
-          hasMoreByGroup: {
-            ...state.hasMoreByGroup,
-            [group.id]: (messages || []).length === 50,
-          },
-          isLoadingMessages: false,
-        }));
+        set((state) => {
+          const unread = new Set(state.unreadGroups);
+          const counts = { ...state.groupUnreadCounts };
+          const nextFirstUnread = { ...state.firstUnreadMessageIdByGroup };
+          if (unread.has(group.id) && !nextFirstUnread[group.id]) {
+            const resolved = resolveFirstUnreadMessageId(
+              messages || [],
+              null,
+              counts[group.id] || 0
+            );
+            nextFirstUnread[group.id] = resolved;
+            if (!resolved) {
+              unread.delete(group.id);
+              delete counts[group.id];
+            }
+          }
+          return {
+            messages: state.activeGroup?.id === group.id ? messages : state.messages,
+            messagesByGroup: {
+              ...state.messagesByGroup,
+              [group.id]: messages || [],
+            },
+            hasMoreByGroup: {
+              ...state.hasMoreByGroup,
+              [group.id]: (messages || []).length === 50,
+            },
+            unreadGroups: unread,
+            groupUnreadCounts: counts,
+            firstUnreadMessageIdByGroup: nextFirstUnread,
+            isLoadingMessages: false,
+          };
+        });
 
         const encryptedList = (messages || []).filter((m) => m.encrypted);
         if (encryptedList.length > 0) {
