@@ -101,7 +101,7 @@
       ]
     },
     "linux": {
-      "icon": "electron/icon.png",
+      "icon": "electron/icons",
       "category": "Chat",
       "artifactName": "ZeroVC.${ext}",
       "target": [

@@ -32,7 +32,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
   }, []);
 
   const handleDownload = () => {
-    if (os === 'ios' || os === 'other') {
+    if (os === 'linux' || os === 'ios' || os === 'other') {
       onNavigate('/download');
       return;
     }
@@ -41,9 +41,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
     if (os === 'android') {
       fileUrl = '/downloads/ZeroVC.apk';
       fileName = 'ZeroVC.apk';
-    } else if (os === 'linux') {
-      fileUrl = '/downloads/ZeroVC.AppImage';
-      fileName = 'ZeroVC.AppImage';
     }
     const link = document.createElement('a');
     link.href = fileUrl;
