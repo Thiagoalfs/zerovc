@@ -2,6 +2,8 @@
   "name": "zerovc-client",
   "version": "1.0.24",
   "description": "Ultra-fast, lightweight voice and text communication platform built with Electron and LiveKit WebRTC",
+  "homepage": "https://zerovc.safiroko.xyz",
+  "author": "Thiago <contato@zerovc.safiroko.xyz>",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
