@@ -27,10 +27,46 @@ interface DownloadPageProps {
 }
 
 type PlatformType = 'android' | 'windows' | 'linux' | 'ios' | 'web';
+type LinuxFormat = 'deb' | 'rpm' | 'pacman' | 'appimage';
+
+const LINUX_FORMATS: Record<
+  LinuxFormat,
+  { label: string; distro: string; fileName: string; buttonLabel: string; cmd: string }
+> = {
+  deb: {
+    label: '.deb',
+    distro: 'Debian / Ubuntu',
+    fileName: 'ZeroVC.deb',
+    buttonLabel: 'Baixar ZeroVC (.deb)',
+    cmd: 'sudo apt install ./ZeroVC.deb',
+  },
+  rpm: {
+    label: '.rpm',
+    distro: 'Fedora / openSUSE',
+    fileName: 'ZeroVC.rpm',
+    buttonLabel: 'Baixar ZeroVC (.rpm)',
+    cmd: 'sudo dnf install ./ZeroVC.rpm',
+  },
+  pacman: {
+    label: 'Arch',
+    distro: 'Arch / Manjaro',
+    fileName: 'ZeroVC.pacman',
+    buttonLabel: 'Baixar ZeroVC (.pacman)',
+    cmd: 'sudo pacman -U ZeroVC.pacman',
+  },
+  appimage: {
+    label: 'AppImage',
+    distro: 'Universal',
+    fileName: 'ZeroVC.AppImage',
+    buttonLabel: 'Baixar ZeroVC AppImage (.AppImage)',
+    cmd: 'chmod +x ZeroVC.AppImage && ./ZeroVC.AppImage',
+  },
+};
 
 export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) => {
   const [downloadStarted, setDownloadStarted] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('windows');
+  const [linuxFormat, setLinuxFormat] = useState<LinuxFormat>('deb');
 
   useEffect(() => {
     const ua = (navigator.userAgent || navigator.vendor || (window as any).opera || '').toLowerCase();
@@ -61,8 +97,8 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
       fileUrl = '/downloads/ZeroVC.apk';
       fileName = 'ZeroVC.apk';
     } else if (platform === 'linux') {
-      fileUrl = '/downloads/ZeroVC.AppImage';
-      fileName = 'ZeroVC.AppImage';
+      fileName = LINUX_FORMATS[linuxFormat].fileName;
+      fileUrl = `/downloads/${fileName}`;
     }
 
     const link = document.createElement('a');
@@ -307,10 +343,27 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               </div>
 
               <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">ZeroVC para Linux</h2>
-              <div className="flex items-center gap-2 text-xs text-gray-400 mb-6 sm:mb-8 font-mono">
-                <span>Linux x64 (Universal)</span>
+              <div className="flex items-center gap-2 text-xs text-gray-400 mb-5 font-mono">
+                <span>Linux x64</span>
                 <span>•</span>
-                <span>Pacote AppImage</span>
+                <span>{LINUX_FORMATS[linuxFormat].distro}</span>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-1.5 mb-6 p-1 rounded-xl bg-white/5 border border-white/10">
+                {(Object.keys(LINUX_FORMATS) as LinuxFormat[]).map((fmt) => (
+                  <button
+                    key={fmt}
+                    type="button"
+                    onClick={() => setLinuxFormat(fmt)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      linuxFormat === fmt
+                        ? 'bg-brand-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    {LINUX_FORMATS[fmt].label}
+                  </button>
+                ))}
               </div>
 
               {/* Main Download Button */}
@@ -330,16 +383,16 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                 ) : (
                   <>
                     <Download className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
-                    <span>Baixar ZeroVC AppImage (.AppImage)</span>
+                    <span>{LINUX_FORMATS[linuxFormat].buttonLabel}</span>
                   </>
                 )}
               </button>
 
               {downloadStarted && (
                 <p className="text-xs text-brand-400 mt-4 animate-in fade-in">
-                  O arquivo <code className="font-mono font-semibold">ZeroVC.AppImage</code> está sendo baixado. Se o download
+                  O arquivo <code className="font-mono font-semibold">{LINUX_FORMATS[linuxFormat].fileName}</code> está sendo baixado. Se o download
                   não começar,{' '}
-                  <a href="/downloads/ZeroVC.AppImage" className="underline font-semibold hover:text-white">
+                  <a href={`/downloads/${LINUX_FORMATS[linuxFormat].fileName}`} className="underline font-semibold hover:text-white">
                     clique aqui
                   </a>
                   .
@@ -349,9 +402,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               <div className="w-full h-px bg-white/10 my-6" />
 
               <div className="w-full text-left space-y-2 text-xs text-gray-400">
-                <span className="font-semibold text-gray-300">Como executar no Linux:</span>
+                <span className="font-semibold text-gray-300">Como instalar/executar no Linux:</span>
                 <p className="font-mono bg-white/5 p-2.5 rounded-xl border border-white/5 text-gray-300">
-                  chmod +x ZeroVC.AppImage && ./ZeroVC.AppImage
+                  {LINUX_FORMATS[linuxFormat].cmd}
                 </p>
               </div>
             </div>
