@@ -47,7 +47,7 @@ jobs:
             client/release/latest.yml
 
   release-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,7 +74,6 @@ jobs:
         working-directory: client
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEBUG: electron-builder
         run: npx electron-builder --linux --publish always
 
       - name: Upload Linux Artifacts
