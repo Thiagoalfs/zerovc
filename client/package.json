@@ -136,6 +136,11 @@
         "!**/*.ico"
       ]
     },
+    "rpm": {
+      "fpm": [
+        "--verbose"
+      ]
+    },
     "protocols": [
       {
         "name": "ZeroVC",
