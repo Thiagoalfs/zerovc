@@ -7,7 +7,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
-import { DMRoom, User } from '../../types';
+import { DMRoom, Friendship, User } from '../../types';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { setActiveChat } from '../../utils/activeChat';
@@ -257,8 +257,15 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
     openContextMenu(e, items, targetUser.display_name || `@${targetUser.username}`);
   };
 
+  const getFriendTarget = (f: Friendship): User | undefined => {
+    if (currentUser?.id && f.friend?.id === currentUser.id) {
+      return f.user;
+    }
+    return f.friend || f.user;
+  };
+
   const onlineFriends = friends.filter((f) => {
-    const friendUser = f.friend || f.user;
+    const friendUser = getFriendTarget(f);
     return friendUser?.status !== 'offline';
   });
 
@@ -519,7 +526,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
               )
             ) : (
               (activeTab === 'online' ? onlineFriends : friends).map((f) => {
-                const target = f.friend?.id ? f.friend : f.user;
+                const target = getFriendTarget(f);
                 return (
                   <div
                     key={f.id}
