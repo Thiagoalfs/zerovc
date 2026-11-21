@@ -50,7 +50,11 @@ const isSmartGifPageUrl = (url: string) => {
 
 const isMediaUrl = (url: string) => {
   const clean = url.split('?')[0].toLowerCase();
-  const isVoiceMsg = clean.includes('voice-message') || clean.includes('voice_message') || clean.includes('/audio/');
+  const isVoiceMsg =
+    clean.includes('voice-message') ||
+    clean.includes('voice_message') ||
+    clean.includes('/audio/') ||
+    url.toLowerCase().includes('voice=1');
 
   const isAud =
     isVoiceMsg ||

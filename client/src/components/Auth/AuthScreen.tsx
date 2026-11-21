@@ -3,6 +3,7 @@ import { MessageSquare, Shield, ArrowLeft, KeyRound, Mail, CheckCircle, RefreshC
 import { useAuthStore } from '../../stores/authStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { TurnstileWidget, TurnstileWidgetRef } from '../Common/TurnstileWidget';
+import { OtpInput } from '../ui/otp-input';
 
 type AuthMode = 'login' | 'register' | 'verify_email' | 'forgot_password' | 'reset_password';
 
@@ -403,14 +404,27 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
                     <p className="text-[11px] text-gray-400 leading-relaxed">
                       Esta conta está protegida por 2FA. Digite o código de 6 dígitos do seu app autenticador ou código de backup:
                     </p>
-                    <input
-                      type="text"
-                      required
-                      value={twoFactorCode}
-                      onChange={(e) => setTwoFactorCode(e.target.value.trim())}
-                      placeholder={useBackupCode ? 'xxxx-xxxx' : '000000'}
-                      className="w-full bg-background-darkest border border-white/10 rounded-xl px-4 py-2.5 text-center text-lg tracking-widest font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
-                    />
+                    {useBackupCode ? (
+                      <input
+                        type="text"
+                        required
+                        value={twoFactorCode}
+                        onChange={(e) => setTwoFactorCode(e.target.value.trim())}
+                        placeholder="xxxx-xxxx"
+                        className="w-full bg-background-darkest border border-white/10 rounded-xl px-4 py-2.5 text-center text-lg tracking-widest font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
+                      />
+                    ) : (
+                      <div className="flex justify-center pt-1">
+                        <OtpInput
+                          length={6}
+                          value={twoFactorCode}
+                          onChange={setTwoFactorCode}
+                          size="sm"
+                          status={localError ? 'error' : 'idle'}
+                          slotClassName="bg-background-darkest border border-white/10"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -537,19 +551,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5 text-center">
+                <label className="block text-xs font-medium text-gray-300 uppercase mb-2 text-center">
                   Código de Verificação
                 </label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  maxLength={6}
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  className="w-full bg-background-darker border border-white/10 rounded-2xl px-4 py-3.5 text-center text-3xl tracking-[10px] font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
-                />
+                <div className="flex justify-center">
+                  <OtpInput
+                    length={6}
+                    value={verificationCode}
+                    onChange={setVerificationCode}
+                    autoFocus
+                    size="md"
+                    status={error ? 'error' : 'idle'}
+                    slotClassName="bg-background-darker border border-white/10"
+                  />
+                </div>
               </div>
 
               <button
@@ -648,26 +663,34 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
               {requires2FA ? (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5 flex items-center gap-1">
+                    <label className="block text-xs font-medium text-gray-300 uppercase mb-2 flex items-center justify-center gap-1">
                       <KeyRound className="w-3.5 h-3.5 text-brand-400" />
                       <span>{useBackupCode ? 'Código de Backup (8 caracteres)' : 'Código 2FA (6 dígitos)'}</span>
                     </label>
-                    <input
-                      type="text"
-                      required
-                      autoFocus
-                      maxLength={useBackupCode ? 12 : 6}
-                      value={twoFactorCode}
-                      onChange={(e) => {
-                        if (useBackupCode) {
-                          setTwoFactorCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
-                        } else {
-                          setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6));
-                        }
-                      }}
-                      placeholder={useBackupCode ? 'xxxx-xxxx' : '000000'}
-                      className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-3 text-center text-xl tracking-widest font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
-                    />
+                    {useBackupCode ? (
+                      <input
+                        type="text"
+                        required
+                        autoFocus
+                        maxLength={12}
+                        value={twoFactorCode}
+                        onChange={(e) => setTwoFactorCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                        placeholder="xxxx-xxxx"
+                        className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-3 text-center text-xl tracking-widest font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
+                      />
+                    ) : (
+                      <div className="flex justify-center">
+                        <OtpInput
+                          length={6}
+                          value={twoFactorCode}
+                          onChange={setTwoFactorCode}
+                          autoFocus
+                          size="md"
+                          status={error ? 'error' : 'idle'}
+                          slotClassName="bg-background-darker border border-white/10"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex justify-center">

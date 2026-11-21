@@ -249,7 +249,7 @@ func main() {
 			return allowedOrigins[origin]
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Bot-ID"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Bot-ID", "X-Client-E2EE-Version"},
 		ExposedHeaders:   []string{"Link", "X-CSRF-Token", "X-Bot-ID"},
 		AllowCredentials: true,
 		MaxAge:           300,

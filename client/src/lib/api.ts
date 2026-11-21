@@ -31,8 +31,7 @@ export const getApiBaseUrl = (): string => {
   if (
     typeof window !== 'undefined' &&
     window.location.origin &&
-    window.location.origin.startsWith('http') &&
-    !window.location.origin.includes('localhost:5173')
+    window.location.origin.startsWith('http')
   ) {
     cachedApiUrl = window.location.origin;
     return window.location.origin;

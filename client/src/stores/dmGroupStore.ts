@@ -477,7 +477,11 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           },
         });
         useUploadStore.getState().removeUpload(tempId);
-        finalContent = finalContent ? `${finalContent}\n${uploaded.url}` : uploaded.url;
+        const isVoiceFile = file.type.startsWith('audio/') || file.name.startsWith('voice-message-');
+        const mediaUrl = isVoiceFile && !uploaded.url.includes('voice=1')
+          ? `${uploaded.url}${uploaded.url.includes('?') ? '&' : '?'}voice=1`
+          : uploaded.url;
+        finalContent = finalContent ? `${finalContent}\n${mediaUrl}` : mediaUrl;
       }
 
       if (activeGroup.e2ee_enabled) {

@@ -25,6 +25,21 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'https://zerovc.safiroko.xyz',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'wss://zerovc.safiroko.xyz',
+        ws: true,
+        changeOrigin: true,
+      },
+      '/assets': {
+        target: 'https://zerovc.safiroko.xyz',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: 'dist',

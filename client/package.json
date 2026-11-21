@@ -30,7 +30,8 @@
     "@capacitor/core": "^8.5.2",
     "@kinsh/vodozemac-wasm": "^0.4.2",
     "@sapphi-red/web-noise-suppressor": "^0.4.1",
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "motion": "^14.14.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",

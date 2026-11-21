@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Lock, Trash2, Loader2 } from 'lucide-react';
 import { Guild, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
+import { OtpInput } from '../../ui/otp-input';
 import {
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
@@ -52,6 +53,7 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const [useBackupCode, setUseBackupCode] = React.useState(false);
   const has2FA = Boolean(user?.two_factor_enabled) || Boolean(is2FARequired);
 
   const initials = activeGuild.name
@@ -153,26 +155,52 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
           </div>
 
           {has2FA && (
-            <div className="mt-4 space-y-1.5 animate-in fade-in">
+            <div className="mt-4 space-y-2 animate-in fade-in">
               <div className="flex items-center justify-between">
                 <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center gap-1.5`}>
                   <Lock className="w-3.5 h-3.5 text-brand-400" />
-                  <span>CÓDIGO DE AUTENTICAÇÃO (2FA)</span>
+                  <span>{useBackupCode ? 'CÓDIGO DE BACKUP (2FA)' : 'CÓDIGO DE AUTENTICAÇÃO (2FA)'}</span>
                 </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseBackupCode((v) => !v);
+                    setTwoFactorCode('');
+                    if (deleteError) setDeleteError('');
+                  }}
+                  className="text-[11px] text-brand-400 hover:text-brand-300 underline cursor-pointer"
+                >
+                  {useBackupCode ? 'Usar 6 dígitos' : 'Usar backup'}
+                </button>
               </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={10}
-                value={twoFactorCode}
-                onChange={(e) => {
-                  setTwoFactorCode(e.target.value);
-                  if (deleteError) setDeleteError('');
-                }}
-                placeholder="Código de 6 dígitos ou backup"
-                className="w-full px-3 py-2 bg-background-darkest/90 border border-white/10 rounded-xl text-white text-xs font-mono tracking-wider focus:outline-none focus:border-brand-500 transition-colors placeholder:font-sans placeholder:tracking-normal"
-              />
+              {useBackupCode ? (
+                <input
+                  type="text"
+                  autoComplete="one-time-code"
+                  maxLength={12}
+                  value={twoFactorCode}
+                  onChange={(e) => {
+                    setTwoFactorCode(e.target.value);
+                    if (deleteError) setDeleteError('');
+                  }}
+                  placeholder="xxxx-xxxx"
+                  className="w-full px-3 py-2 bg-background-darkest/90 border border-white/10 rounded-xl text-white text-xs font-mono tracking-wider focus:outline-none focus:border-brand-500 transition-colors placeholder:font-sans placeholder:tracking-normal"
+                />
+              ) : (
+                <div className="flex justify-center pt-1">
+                  <OtpInput
+                    length={6}
+                    value={twoFactorCode}
+                    onChange={(val) => {
+                      setTwoFactorCode(val);
+                      if (deleteError) setDeleteError('');
+                    }}
+                    size="sm"
+                    status={deleteError ? 'error' : 'idle'}
+                    slotClassName="bg-background-darkest/90 border border-white/10"
+                  />
+                </div>
+              )}
               <p className="text-[10px] text-gray-400">
                 Insira o código do seu aplicativo autenticador (Google Authenticator, Authy, etc.) ou um código de backup.
               </p>

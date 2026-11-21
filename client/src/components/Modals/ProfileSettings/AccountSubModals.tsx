@@ -3,6 +3,7 @@ import { X, AlertTriangle, Copy, Download, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { api } from '../../../lib/api';
 import { copyToClipboard } from '../../../utils/clipboard';
+import { OtpInput } from '../../ui/otp-input';
 import {
   MODAL_BACKDROP_CLASS,
   MODAL_CANCEL_BUTTON_CLASS,
@@ -778,16 +779,20 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
 
             <div>
               <label className={MODAL_FIELD_LABEL_CLASS}>Código de 6 dígitos</label>
-              <input
-                type="text"
-                value={totpCode}
-                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-center text-base tracking-widest text-white font-mono placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                placeholder="123456"
-                autoFocus
-              />
+              <div className="flex justify-center pt-1.5">
+                <OtpInput
+                  length={6}
+                  value={totpCode}
+                  onChange={setTotpCode}
+                  autoFocus
+                  size="sm"
+                  status={twoFactorError ? 'error' : 'idle'}
+                  disabled={is2FALoading}
+                  slotClassName="bg-background-darker border border-white/10"
+                />
+              </div>
               {twoFactorError && (
-                <span className="text-[11px] text-dnd block mt-1">{twoFactorError}</span>
+                <span className="text-[11px] text-dnd block mt-1.5 text-center">{twoFactorError}</span>
               )}
             </div>
 
