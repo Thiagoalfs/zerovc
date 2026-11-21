@@ -123,8 +123,8 @@ export function detectGpuVendor(): Promise<GpuDetectionResult> {
     console.warn('[LiveKit] GPU Detection warning:', e);
   }
 
-  // VP9 uses native Chromium/Electron decode (avoids H.264 OpenH264 black-screen delays on Linux) when HW encode is confirmed, with lightweight VP8 fallback
-  const preferredCodec: 'h264' | 'vp9' | 'vp8' = hwAcceleration ? 'vp9' : 'vp8';
+  // H.264 uses native hardware encoder on all vendors (NVENC, AMF, QSV, VideoToolbox); VP8 fallback when HW encode is unavailable
+  const preferredCodec: 'h264' | 'vp9' | 'vp8' = hwAcceleration ? 'h264' : 'vp8';
 
   console.log(`[LiveKit GPU] Detected: ${detectedVendor.toUpperCase()} (${deviceName}) | Hardware Acceleration: ${hwAcceleration} | Codec: ${preferredCodec}`);
 
@@ -966,7 +966,7 @@ class LiveKitManager {
           await this.room.localParticipant.unpublishTrack(oldAudioPub.track);
         }
 
-        // Publish using VP9 (when HW video_encode is confirmed) or VP8 fallback for fast keyframe/PLI response
+        // Publish using H.264 HW encode when available (with VP8 backupCodec for viewers without H.264 decode)
         let pub;
         try {
           pub = await this.room.localParticipant.publishTrack(videoTrack, {
@@ -974,7 +974,7 @@ class LiveKitManager {
             source: Track.Source.ScreenShare,
             simulcast: false,
             videoCodec: selectedCodec,
-            backupCodec: false,
+            backupCodec: true,
             videoEncoding: {
               maxBitrate: maxBitrate,
               maxFramerate: frameRate,
@@ -1391,7 +1391,7 @@ class LiveKitManager {
           source: Track.Source.ScreenShare,
           simulcast: false,
           videoCodec: gpu.preferredCodec,
-          backupCodec: false,
+          backupCodec: true,
           videoEncoding: {
             maxBitrate: maxBitrate,
             maxFramerate: frameRate,
