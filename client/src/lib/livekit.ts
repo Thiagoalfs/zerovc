@@ -944,7 +944,7 @@ class LiveKitManager {
       this.currentScreenShareConfig = config;
 
       // Identify Game Family for intelligent auto-switching (e.g. League of Legends Lobby <-> Match)
-      if (resolvedSourceId && (window as any).electronAPI?.getScreenSources) {
+      if (resolvedSourceId && resolvedSourceId !== 'screen:wayland-portal' && (window as any).electronAPI?.getScreenSources) {
         const explicitFamily =
           typeof gameFamily === 'object'
             ? gameFamily

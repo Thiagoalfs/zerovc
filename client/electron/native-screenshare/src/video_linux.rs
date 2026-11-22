@@ -52,11 +52,8 @@ async fn run_wayland_portal_capture(
         .await
         .map_err(|e| format!("Failed to create portal session: {}", e))?;
 
-    let source_types = if args.source_id.starts_with("window:") {
-        SourceType::Window.into()
-    } else {
-        SourceType::Monitor | SourceType::Window
-    };
+    // Always allow picking either a full monitor or a specific window in the single OS portal dialog
+    let source_types = SourceType::Monitor | SourceType::Window;
 
     proxy
         .select_sources(

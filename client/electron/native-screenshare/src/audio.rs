@@ -24,7 +24,12 @@ pub async fn run_audio_capture(
         .audio_helper
         .ok_or_else(|| "Windows audio helper path not provided".to_string())?;
 
+    if args.self_pid == 0 {
+        return Err("self_pid is required to exclude ZeroVC audio".into());
+    }
+
     let mut cmd = Command::new(&helper_path);
+    cmd.args(["--zerovc-pid", &args.self_pid.to_string()]);
     if args.source_id.starts_with("window:") {
         // Window capture: INCLUDE only that window's process tree (never captures ZeroVC)
         let parts: Vec<&str> = args.source_id.split(':').collect();
@@ -32,10 +37,7 @@ pub async fn run_audio_capture(
         cmd.args(["--hwnd", hwnd, "--mode", "include"]);
     } else {
         // Full screen capture: EXCLUDE ZeroVC's entire process tree (zero voice echo)
-        if args.self_pid == 0 {
-            return Err("self_pid is required to exclude ZeroVC audio on full-screen share".into());
-        }
-        cmd.args(["--pid", &args.self_pid.to_string(), "--mode", "exclude"]);
+        cmd.args(["--mode", "exclude"]);
     }
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::null());
@@ -95,37 +97,45 @@ pub async fn run_audio_capture(
     let my_pid = std::process::id();
     let node_name = format!("zerovc-screenshare-audio-{}", my_pid);
 
-    // node.autoconnect=false prevents PipeWire from auto-linking the microphone or ZeroVC's own playback.
-    let mut child = Command::new("pw-cat")
+    // Match Electron's proven PipeWire flags: --target 0 + node.autoconnect=false + stream.capture.sink=false
+    // prevents WirePlumber from auto-linking the microphone or the default sink monitor (which contains ZeroVC).
+    let mut child = Command::new("pw-record")
         .args([
-            "--record",
+            "--target",
+            "0",
+            "-P",
+            &format!("node.name={}", node_name),
+            "-P",
+            "node.autoconnect=false",
+            "-P",
+            "stream.capture.sink=false",
+            "--raw",
+            "--format",
+            "s16",
             "--rate",
             "48000",
             "--channels",
             "2",
-            "--format",
-            "s16",
-            "--properties",
-            &format!("node.name={} node.autoconnect=false", node_name),
+            "--channel-map",
+            "Stereo",
             "-",
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|e| format!("Failed to spawn pw-cat for PipeWire audio capture: {}", e))?;
+        .map_err(|e| format!("Failed to spawn pw-record for PipeWire audio capture: {}", e))?;
 
     let mut stdout = child
         .stdout
         .take()
-        .ok_or_else(|| "Failed to open pw-cat stdout".to_string())?;
+        .ok_or_else(|| "Failed to open pw-record stdout".to_string())?;
 
     // Background linker: connects every Stream/Output/Audio EXCEPT ZeroVC's process tree
+    // and actively disconnects any unwanted auto-links into our capture node.
     let linker_stop = stop.clone();
     let linker_node = node_name.clone();
     let self_pid = args.self_pid;
     let linker_task = tokio::spawn(async move {
-        let mut linked_nodes: HashSet<u64> = HashSet::new();
-        // Wait briefly for pw-cat node to register in PipeWire
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 
         while !linker_stop.load(Ordering::Relaxed) {
@@ -134,57 +144,156 @@ pub async fn run_audio_capture(
 
             if let Ok(output) = Command::new("pw-dump").output().await {
                 if output.status.success() {
-                    if let Ok(nodes) = serde_json::from_slice::<Vec<serde_json::Value>>(&output.stdout) {
-                        for obj in &nodes {
+                    if let Ok(objs) = serde_json::from_slice::<Vec<serde_json::Value>>(&output.stdout) {
+                        // 1. Find our capture node ID and its FL/FR input ports
+                        let cap_node_id = objs.iter().find_map(|obj| {
                             if obj.get("type").and_then(|v| v.as_str()) != Some("PipeWire:Interface:Node") {
-                                continue;
+                                return None;
                             }
-                            let props = match obj.pointer("/info/props") {
-                                Some(p) => p,
-                                None => continue,
-                            };
-                            let media_class = props.get("media.class").and_then(|v| v.as_str()).unwrap_or("");
-                            if media_class != "Stream/Output/Audio" {
-                                continue;
+                            if obj.pointer("/info/props/node.name").and_then(|v| v.as_str()) == Some(linker_node.as_str()) {
+                                obj.get("id").and_then(|v| v.as_u64())
+                            } else {
+                                None
                             }
-                            let node_id = match obj.get("id").and_then(|v| v.as_u64()) {
-                                Some(id) => id,
-                                None => continue,
-                            };
-                            if linked_nodes.contains(&node_id) {
-                                continue;
+                        });
+
+                        if let Some(cap_nid) = cap_node_id {
+                            let mut cap_fl: Option<u64> = None;
+                            let mut cap_fr: Option<u64> = None;
+                            let mut cap_port_ids: HashSet<u64> = HashSet::new();
+
+                            for obj in &objs {
+                                if obj.get("type").and_then(|v| v.as_str()) != Some("PipeWire:Interface:Port") {
+                                    continue;
+                                }
+                                if obj.pointer("/info/props/node.id").and_then(|v| v.as_u64()) != Some(cap_nid) {
+                                    continue;
+                                }
+                                if obj.pointer("/info/direction").and_then(|v| v.as_str()) != Some("input") {
+                                    continue;
+                                }
+                                if let Some(pid) = obj.get("id").and_then(|v| v.as_u64()) {
+                                    cap_port_ids.insert(pid);
+                                    match obj.pointer("/info/props/audio.channel").and_then(|v| v.as_str()) {
+                                        Some("FL") => cap_fl = Some(pid),
+                                        Some("FR") => cap_fr = Some(pid),
+                                        _ => {}
+                                    }
+                                }
                             }
 
-                            // Exclude ZeroVC's own audio streams by PID tree and app name
-                            let pid_val = props
-                                .get("application.process.id")
-                                .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
-                                .unwrap_or(0) as u32;
-                            let app_name = props
-                                .get("application.name")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_lowercase();
-                            if (pid_val != 0 && excluded_pids.contains(&pid_val))
-                                || app_name.contains("zerovc")
-                            {
-                                continue;
+                            if let (Some(fl_id), Some(fr_id)) = (cap_fl, cap_fr) {
+                                // Collect existing links
+                                let mut existing_links: HashSet<(u64, u64)> = HashSet::new();
+                                for obj in &objs {
+                                    if obj.get("type").and_then(|v| v.as_str()) != Some("PipeWire:Interface:Link") {
+                                        continue;
+                                    }
+                                    if let (Some(o), Some(i)) = (
+                                        obj.pointer("/info/output-port-id").and_then(|v| v.as_u64()),
+                                        obj.pointer("/info/input-port-id").and_then(|v| v.as_u64()),
+                                    ) {
+                                        existing_links.insert((o, i));
+                                    }
+                                }
+
+                                // 2. Identify allowed output nodes (Stream/Output/Audio excluding ZeroVC)
+                                let mut allowed_node_ids: HashSet<u64> = HashSet::new();
+                                for obj in &objs {
+                                    if obj.get("type").and_then(|v| v.as_str()) != Some("PipeWire:Interface:Node") {
+                                        continue;
+                                    }
+                                    let props = match obj.pointer("/info/props") {
+                                        Some(p) => p,
+                                        None => continue,
+                                    };
+                                    if props.get("media.class").and_then(|v| v.as_str()) != Some("Stream/Output/Audio") {
+                                        continue;
+                                    }
+                                    let node_id = match obj.get("id").and_then(|v| v.as_u64()) {
+                                        Some(id) => id,
+                                        None => continue,
+                                    };
+                                    let pid_val = props
+                                        .get("application.process.id")
+                                        .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+                                        .unwrap_or(0) as u32;
+                                    let app_name = props
+                                        .get("application.name")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_lowercase();
+                                    let app_bin = props
+                                        .get("application.process.binary")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_lowercase();
+
+                                    if (pid_val != 0 && excluded_pids.contains(&pid_val))
+                                        || app_name.contains("zerovc")
+                                        || app_bin.contains("zerovc")
+                                    {
+                                        continue;
+                                    }
+                                    allowed_node_ids.insert(node_id);
+                                }
+
+                                // 3. Link allowed output ports (FL/FR/MONO) into our capture ports
+                                let mut allowed_out_ports: HashSet<u64> = HashSet::new();
+                                for obj in &objs {
+                                    if obj.get("type").and_then(|v| v.as_str()) != Some("PipeWire:Interface:Port") {
+                                        continue;
+                                    }
+                                    if obj.pointer("/info/direction").and_then(|v| v.as_str()) != Some("output") {
+                                        continue;
+                                    }
+                                    let node_id = match obj.pointer("/info/props/node.id").and_then(|v| v.as_u64()) {
+                                        Some(id) => id,
+                                        None => continue,
+                                    };
+                                    if !allowed_node_ids.contains(&node_id) {
+                                        continue;
+                                    }
+                                    let port_id = match obj.get("id").and_then(|v| v.as_u64()) {
+                                        Some(id) => id,
+                                        None => continue,
+                                    };
+                                    let ch = obj.pointer("/info/props/audio.channel").and_then(|v| v.as_str()).unwrap_or("");
+                                    if ch == "FL" || ch == "MONO" {
+                                        allowed_out_ports.insert(port_id);
+                                        if !existing_links.contains(&(port_id, fl_id)) {
+                                            let _ = Command::new("pw-link")
+                                                .args([&port_id.to_string(), &fl_id.to_string()])
+                                                .output()
+                                                .await;
+                                        }
+                                    }
+                                    if ch == "FR" || ch == "MONO" {
+                                        allowed_out_ports.insert(port_id);
+                                        if !existing_links.contains(&(port_id, fr_id)) {
+                                            let _ = Command::new("pw-link")
+                                                .args([&port_id.to_string(), &fr_id.to_string()])
+                                                .output()
+                                                .await;
+                                        }
+                                    }
+                                }
+
+                                // 4. Disconnect any unwanted auto-links into our capture ports
+                                for &(out_id, in_id) in &existing_links {
+                                    if cap_port_ids.contains(&in_id) && !allowed_out_ports.contains(&out_id) {
+                                        let _ = Command::new("pw-link")
+                                            .args(["-d", &out_id.to_string(), &in_id.to_string()])
+                                            .output()
+                                            .await;
+                                    }
+                                }
                             }
-
-                            // Link FL/FR ports from this app to our isolated pw-cat capture node
-                            let src_fl = format!("{}:output_FL", node_id);
-                            let src_fr = format!("{}:output_FR", node_id);
-                            let dst_fl = format!("{}:input_FL", linker_node);
-                            let dst_fr = format!("{}:input_FR", linker_node);
-
-                            let _ = Command::new("pw-link").args([&src_fl, &dst_fl]).output().await;
-                            let _ = Command::new("pw-link").args([&src_fr, &dst_fr]).output().await;
-                            linked_nodes.insert(node_id);
                         }
                     }
                 }
             }
-            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     });
 

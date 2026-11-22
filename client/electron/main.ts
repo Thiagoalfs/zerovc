@@ -784,6 +784,20 @@ ipcMain.on('reload-app', () => {
 // IPC: Get Screen Sources for Screen Sharing in WebRTC
 ipcMain.handle('get-screen-sources', async (_event, opts?: { thumbnail?: boolean; fetchWindowIcons?: boolean }) => {
   try {
+    // On Linux Wayland, Chromium's desktopCapturer.getSources() triggers the KDE/XDG portal dialog
+    // prematurely just to list sources. Return a single portal entry so only ONE portal dialog opens
+    // when the user actually starts sharing (handled by the native Rust sidecar).
+    if (process.platform === 'linux' && process.env.WAYLAND_DISPLAY) {
+      return [
+        {
+          id: 'screen:wayland-portal',
+          name: 'Selecionar Tela Inteira ou Janela (Portal do Sistema)',
+          thumbnail: '',
+          appIcon: null,
+        },
+      ];
+    }
+
     const shouldFetchThumbnail = opts?.thumbnail !== false;
     const shouldFetchIcons = opts?.fetchWindowIcons !== false;
     const sources = await desktopCapturer.getSources({
@@ -1854,7 +1868,7 @@ ipcMain.handle(
           stopNativeScreenShareProcess();
           finish({ success: false, error: 'native-screenshare-startup-timeout' });
         }
-      }, 15000);
+      }, 60000);
 
       let stdoutBuf = '';
       child.stdout?.on('data', (chunk: Buffer) => {
