@@ -9,7 +9,8 @@ use windows_capture::frame::Frame;
 use windows_capture::graphics_capture_api::InternalCaptureControl;
 use windows_capture::monitor::Monitor;
 use windows_capture::settings::{
-    ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings,
+    ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
+    MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
 };
 use windows_capture::window::Window;
 
@@ -25,7 +26,6 @@ struct WgcHandler {
     flags: CaptureFlags,
     start_ts: Instant,
     last_frame: Instant,
-    i420: I420Buffer,
 }
 
 impl GraphicsCaptureApiHandler for WgcHandler {
@@ -33,12 +33,10 @@ impl GraphicsCaptureApiHandler for WgcHandler {
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
-        let i420 = I420Buffer::new(ctx.flags.target_w, ctx.flags.target_h);
         Ok(Self {
             flags: ctx.flags,
             start_ts: Instant::now(),
             last_frame: Instant::now() - Duration::from_secs(1),
-            i420,
         })
     }
 
@@ -61,13 +59,14 @@ impl GraphicsCaptureApiHandler for WgcHandler {
         let src_w = frame.width();
         let src_h = frame.height();
         let mut buf = frame.buffer()?;
-        let bgra = buf.as_raw_nopadding_buffer()?;
+        let bgra = buf.as_nopadding_buffer()?;
 
+        let mut i420 = I420Buffer::new(self.flags.target_w, self.flags.target_h);
         bgra_scale_to_i420(
             bgra,
             src_w as usize,
             src_h as usize,
-            &mut self.i420,
+            &mut i420,
             self.flags.target_w as usize,
             self.flags.target_h as usize,
         );
@@ -75,7 +74,8 @@ impl GraphicsCaptureApiHandler for WgcHandler {
         self.flags.source.capture_frame(&VideoFrame {
             rotation: VideoRotation::VideoRotation0,
             timestamp_us: self.start_ts.elapsed().as_micros() as i64,
-            buffer: self.i420.clone(),
+            buffer: i420,
+            frame_metadata: None,
         });
 
         Ok(())
@@ -112,6 +112,9 @@ pub async fn run_video_capture(
                 window,
                 CursorCaptureSettings::Default,
                 DrawBorderSettings::WithoutBorder,
+                SecondaryWindowSettings::Default,
+                MinimumUpdateIntervalSettings::Default,
+                DirtyRegionSettings::Default,
                 ColorFormat::Bgra8,
                 flags,
             );
@@ -123,6 +126,9 @@ pub async fn run_video_capture(
                 monitor,
                 CursorCaptureSettings::Default,
                 DrawBorderSettings::WithoutBorder,
+                SecondaryWindowSettings::Default,
+                MinimumUpdateIntervalSettings::Default,
+                DirtyRegionSettings::Default,
                 ColorFormat::Bgra8,
                 flags,
             );

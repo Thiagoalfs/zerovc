@@ -72,14 +72,20 @@ jobs:
         working-directory: client
         run: npm ci
 
-      - name: Install Linux packaging & native build tools (clang, rpm, bsdtar)
-        run: sudo apt-get update && sudo apt-get install -y clang rpm libarchive-tools libssl-dev pkg-config
+      - name: Install Linux packaging & native build tools (clang-21, rpm, bsdtar)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lsb-release wget software-properties-common gnupg rpm libarchive-tools libssl-dev pkg-config
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 21
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Native Rust ScreenShare Sidecar (Linux)
         working-directory: client/electron/native-screenshare
+        env:
+          CC: clang-21
+          CXX: clang++-21
         run: |
           cargo build --release
           cp -f target/release/zerovc-screenshare ../bin/zerovc-screenshare

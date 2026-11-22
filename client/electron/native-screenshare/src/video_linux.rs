@@ -186,13 +186,13 @@ async fn pump_i420_stdout(
     let uv_size = ((width / 2) * (height / 2)) as usize;
     let frame_size = y_size + uv_size * 2;
     let mut raw = vec![0u8; frame_size];
-    let mut i420 = I420Buffer::new(width, height);
     let start_ts = std::time::Instant::now();
 
     while !stop.load(Ordering::Relaxed) {
         if stdout.read_exact(&mut raw).await.is_err() {
             break;
         }
+        let mut i420 = I420Buffer::new(width, height);
         let (y_plane, u_plane, v_plane) = i420.data_mut();
         y_plane[..y_size].copy_from_slice(&raw[..y_size]);
         u_plane[..uv_size].copy_from_slice(&raw[y_size..y_size + uv_size]);
@@ -201,7 +201,8 @@ async fn pump_i420_stdout(
         source.capture_frame(&VideoFrame {
             rotation: VideoRotation::VideoRotation0,
             timestamp_us: start_ts.elapsed().as_micros() as i64,
-            buffer: i420.clone(),
+            buffer: i420,
+            frame_metadata: None,
         });
     }
 

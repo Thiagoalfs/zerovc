@@ -97,7 +97,7 @@ async fn main() {
             match base64::engine::general_purpose::STANDARD.decode(b64_key.trim()) {
                 Ok(key_bytes) if !key_bytes.is_empty() => {
                     let kp = KeyProvider::with_shared_key(KeyProviderOptions::default(), key_bytes);
-                    room_opts.e2ee = Some(E2eeOptions {
+                    room_opts.encryption = Some(E2eeOptions {
                         encryption_type: livekit::e2ee::EncryptionType::Gcm,
                         key_provider: kp,
                     });
@@ -122,10 +122,13 @@ async fn main() {
     emit_event("connected", json!({ "room": room.name() }));
 
     // 1. Publish native video track
-    let video_source = NativeVideoSource::new(VideoResolution {
-        width: args.width,
-        height: args.height,
-    });
+    let video_source = NativeVideoSource::new(
+        VideoResolution {
+            width: args.width,
+            height: args.height,
+        },
+        true,
+    );
     let video_track = LocalVideoTrack::create_video_track(
         "screen_share",
         RtcVideoSource::Native(video_source.clone()),
