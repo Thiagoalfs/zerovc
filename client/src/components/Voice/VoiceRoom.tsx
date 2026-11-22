@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff, MonitorOff, ChevronDown, ChevronUp, Users, LayoutGrid } from 'lucide-react';
+import { Volume2, Mic, MicOff, Headphones, Monitor, PhoneOff, Menu, Video, VideoOff, MonitorOff, ChevronDown, ChevronUp, Users, LayoutGrid, Maximize2, Minimize2 } from 'lucide-react';
 import { Channel, User, VoiceSession } from '../../types';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -77,21 +77,151 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
   const handleWatchStream = async (participantIdentity: string, mode: 'exclusive' | 'additive') => {
     if (isConnectedToThisChannel) {
       watchParticipant(participantIdentity, mode);
+      setSpotlightParticipantId(participantIdentity);
       return;
     }
     const joined = await handleJoinChannel();
     if (joined) {
       watchParticipant(participantIdentity, mode);
+      setSpotlightParticipantId(participantIdentity);
     }
   };
 
   // Keep mobile screen awake while connected in voice channel
   useKeepAwake(isConnectedToThisChannel);
 
+  const voiceRoomRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [spotlightParticipantId, setSpotlightParticipantId] = useState<string | null>(null);
   const [isBottomStripCollapsed, setIsBottomStripCollapsed] = useState(false);
+  const [isVoiceRoomHovered, setIsVoiceRoomHovered] = useState(false);
+  const [isRoomFullscreen, setIsRoomFullscreen] = useState(false);
+
+  const toggleRoomFullscreen = () => {
+    setIsRoomFullscreen((prev) => {
+      const next = !prev;
+      if (window.electronAPI?.setFullScreen) {
+        window.electronAPI.setFullScreen(next);
+      } else if (next) {
+        void document.documentElement.requestFullscreen?.().catch(() => {});
+      } else if (document.fullscreenElement) {
+        void document.exitFullscreen?.().catch(() => {});
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!isRoomFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsRoomFullscreen(false);
+        if (window.electronAPI?.setFullScreen) {
+          window.electronAPI.setFullScreen(false);
+        } else if (document.fullscreenElement) {
+          void document.exitFullscreen?.().catch(() => {});
+        }
+      }
+    };
+    const handleFsChange = () => {
+      if (!document.fullscreenElement && !window.electronAPI?.setFullScreen) {
+        setIsRoomFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('fullscreenchange', handleFsChange);
+    };
+  }, [isRoomFullscreen]);
+
+  useEffect(() => {
+    return () => {
+      if (window.electronAPI?.setFullScreen) {
+        window.electronAPI.setFullScreen(false);
+      } else if (document.fullscreenElement) {
+        void document.exitFullscreen?.().catch(() => {});
+      }
+    };
+  }, []);
+
+  const isFloatingOverlayOpen = () =>
+    Boolean(
+      menu ||
+        document.querySelector(
+          '[role="dialog"], [aria-modal="true"], [data-radix-popper-content-wrapper], [data-floating-overlay="true"]'
+        )
+    );
+
+  useEffect(() => {
+    const clearHover = () => setIsVoiceRoomHovered(false);
+    const handlePointerMove = (e: PointerEvent) => {
+      if (isFloatingOverlayOpen()) {
+        setIsVoiceRoomHovered(false);
+        return;
+      }
+      const el = voiceRoomRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const inside =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      if (!inside) {
+        setIsVoiceRoomHovered(false);
+      } else if (e.movementX !== 0 || e.movementY !== 0) {
+        // Ignore synthetic pointermove (0,0) fired by slide-up animation as cursor exits
+        setIsVoiceRoomHovered(true);
+      }
+    };
+    const handleWindowMouseOut = (e: MouseEvent) => {
+      if (!e.relatedTarget) {
+        setIsVoiceRoomHovered(false);
+      }
+    };
+    window.addEventListener('pointermove', handlePointerMove, { passive: true, capture: true });
+    window.addEventListener('mouseout', handleWindowMouseOut);
+    document.documentElement.addEventListener('pointerleave', clearHover);
+    document.addEventListener('mouseleave', clearHover);
+    window.addEventListener('blur', clearHover);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove, { capture: true });
+      window.removeEventListener('mouseout', handleWindowMouseOut);
+      document.documentElement.removeEventListener('pointerleave', clearHover);
+      document.removeEventListener('mouseleave', clearHover);
+      window.removeEventListener('blur', clearHover);
+    };
+  }, [Boolean(menu)]);
+
+  // Safety net if the OS/Wayland compositor drops the exit event during animation
+  useEffect(() => {
+    if (!isVoiceRoomHovered) return;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      if (isFloatingOverlayOpen()) {
+        setIsVoiceRoomHovered(false);
+        return;
+      }
+      const el = voiceRoomRef.current;
+      if (el && !el.matches(':hover')) {
+        setIsVoiceRoomHovered(false);
+        return;
+      }
+      if (window.electronAPI?.isCursorInWindow) {
+        const insideWin = await window.electronAPI.isCursorInWindow().catch(() => true);
+        if (!cancelled && !insideWin) {
+          setIsVoiceRoomHovered(false);
+        }
+      }
+    }, 100);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [isVoiceRoomHovered, Boolean(menu)]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -326,7 +456,15 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
   return (
     <div
-      className="flex-1 w-full min-w-0 bg-background-dark flex flex-col h-full overflow-hidden select-none"
+      ref={voiceRoomRef}
+      data-hovered={isVoiceRoomHovered ? 'true' : 'false'}
+      onMouseEnter={() => {
+        if (!isFloatingOverlayOpen()) setIsVoiceRoomHovered(true);
+      }}
+      onMouseLeave={() => setIsVoiceRoomHovered(false)}
+      className={`${
+        isRoomFullscreen ? 'fixed inset-0 z-[10000000]' : 'flex-1 w-full min-w-0 h-full relative'
+      } bg-background-dark flex flex-col overflow-hidden select-none group/voiceroom`}
     >
       {/* Voice Room Header */}
       <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10 flex-shrink-0">
@@ -349,7 +487,9 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
       {/* Main Voice / Video Dynamic Stage (Strictly fits without scrollbars) */}
       <div
         ref={stageRef}
-        className="flex-1 min-h-0 min-w-0 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative"
+        className={`flex-1 min-h-0 min-w-0 flex items-center justify-center p-2 sm:p-4 ${
+          isConnectedToThisChannel ? 'md:pb-[78px]' : ''
+        } overflow-hidden relative`}
       >
         {displayedParticipants.length === 0 ? (
           <div className="flex flex-col items-center gap-4 text-gray-500 animate-in fade-in">
@@ -382,7 +522,12 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
               </button>
             )}
           </div>
-        ) : spotlightParticipant ? (
+        ) : spotlightParticipant ? (() => {
+          const spotlightId = spotlightParticipant.identity || spotlightParticipant.sid;
+          const filmstripParticipants = displayedParticipants.filter(
+            (p) => (p.identity || p.sid) !== spotlightId
+          );
+          return (
           /* Spotlight View (Focused card on top, participant filmstrip below - Anexo 1 & 2) */
           <div className="w-full h-full flex flex-col items-center justify-between min-h-0 min-w-0 overflow-hidden relative">
             {/* 1. Main Spotlight Card */}
@@ -399,7 +544,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
               </div>
 
               {/* Floating Expand Button at base of spotlight card when filmstrip is collapsed (Anexo 2) */}
-              {isBottomStripCollapsed && (
+              {filmstripParticipants.length > 0 && isBottomStripCollapsed && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -416,7 +561,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
             </div>
 
             {/* 2. Bottom Filmstrip of Participants (Anexo 1 & 2) */}
-            {!isBottomStripCollapsed && (
+            {filmstripParticipants.length > 0 && !isBottomStripCollapsed && (
               <div className="w-full flex-shrink-0 relative pt-4 pb-2 px-3 flex flex-col items-center">
                 {/* Collapse Button (Anexo 2) placed on top center of the bottom filmstrip */}
                 <button
@@ -434,18 +579,13 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
                 {/* Horizontal scrollable row of participant thumbnails */}
                 <div className="w-full flex items-center justify-center gap-2.5 overflow-x-auto py-1 px-1 no-scrollbar max-w-full">
-                  {displayedParticipants.map((p) => {
+                  {filmstripParticipants.map((p) => {
                     const pId = p.identity || p.sid;
-                    const isSelected = (spotlightParticipant.identity || spotlightParticipant.sid) === pId;
                     return (
                       <div
                         key={pId}
                         onClick={() => setSpotlightParticipantId(pId)}
-                        className={`h-28 sm:h-32 md:h-36 aspect-video flex-shrink-0 rounded-2xl overflow-hidden transition-all duration-150 cursor-pointer ${
-                          isSelected
-                            ? 'ring-2 ring-brand-500 shadow-md'
-                            : 'border border-white/5 hover:border-white/20'
-                        }`}
+                        className="h-28 sm:h-32 md:h-36 aspect-video flex-shrink-0 rounded-2xl overflow-hidden transition-all duration-150 cursor-pointer border border-white/5 hover:border-white/20"
                       >
                         <ParticipantCard
                           participant={p}
@@ -463,7 +603,8 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
               </div>
             )}
           </div>
-        ) : (
+          );
+        })() : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-3 overflow-hidden">
             {/* Participant Cards Grid */}
             <div className="flex flex-col items-center justify-center gap-2 sm:gap-3 overflow-hidden">
@@ -532,11 +673,24 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
 
       {/* Floating Bottom Voice Controls (Only rendered when user is connected to this voice channel) */}
       {isConnectedToThisChannel && (
-        <div 
+        <div
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
-          className="pt-1 pb-3 px-3 md:pt-1.5 md:pb-4 md:px-4 flex justify-center bg-background-dark select-none z-10 flex-shrink-0 animate-in slide-in-from-bottom-2 duration-200"
+          className={`pt-1 pb-3 px-3 md:pt-1.5 md:pb-4 md:px-4 flex items-center justify-center bg-background-dark md:bg-transparent md:absolute md:bottom-0 md:inset-x-0 md:pointer-events-none select-none z-20 flex-shrink-0 transition-all duration-200 ease-out ${
+            isVoiceRoomHovered ? 'md:translate-y-0 md:opacity-100' : 'md:translate-y-full md:opacity-0'
+          }`}
         >
-          <VoiceControlBar onOpenScreenShare={onOpenScreenShare} />
+          <div className="pointer-events-auto">
+            <VoiceControlBar onOpenScreenShare={onOpenScreenShare} />
+          </div>
+          <button
+            type="button"
+            onClick={toggleRoomFullscreen}
+            className="pointer-events-auto absolute right-4 text-gray-300 hover:text-white active:scale-95 transition-all p-2 cursor-pointer"
+            title={isRoomFullscreen ? 'Sair da Tela Cheia (Esc)' : 'Tela Cheia'}
+            aria-label={isRoomFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
+          >
+            {isRoomFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+          </button>
         </div>
       )}
 

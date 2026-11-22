@@ -11,6 +11,10 @@ import {
 import { useDMStore } from '../../stores/dmStore';
 import { showAlert } from '../../stores/confirmModalStore';
 import { useAutoClearVisibleUnread } from '../../utils/unread';
+import {
+  saveChatScrollPosition,
+  restoreChatScrollPosition,
+} from '../../utils/chatScrollMemory';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -195,20 +199,9 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     }
 
     if (isInitialLoadRef.current) {
-      if (messages.length > 0) {
+      if (messages.length > 0 && activeRoom) {
         isInitialLoadRef.current = false;
-        if (firstUnreadId && messages.some((m) => m.id === firstUnreadId)) {
-          setTimeout(() => {
-            const unreadEl = document.getElementById('unread-divider');
-            if (unreadEl) {
-              unreadEl.scrollIntoView({ behavior: 'auto', block: 'center' });
-            } else {
-              container.scrollTop = container.scrollHeight;
-            }
-          }, 60);
-          return;
-        }
-        container.scrollTop = container.scrollHeight;
+        restoreChatScrollPosition(`dm:${activeRoom.id}`, container);
       }
       return;
     }
@@ -226,11 +219,15 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       setTimeout(() => scrollToBottom(true), 100);
       setTimeout(() => scrollToBottom(true), 300);
     }
-  }, [messages, user?.id, firstUnreadId]);
+  }, [activeRoom?.id, messages, user?.id, firstUnreadId]);
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
     if (!container || !activeRoom) return;
+
+    if (!isInitialLoadRef.current) {
+      saveChatScrollPosition(`dm:${activeRoom.id}`, container);
+    }
 
     if (container.scrollTop < 60 && !isLoadingMoreMessages && hasMoreByRoom[activeRoom.id] !== false) {
       prevScrollHeightRef.current = container.scrollHeight;

@@ -411,6 +411,8 @@ declare global {
       onUpdateProgress: (callback: (progress: any) => void) => () => void;
       onUpdateDownloaded: (callback: (info: any) => void) => () => void;
       setMinimizeToTray?: (enabled: boolean) => void;
+      setTrayVoiceState?: (state: 'idle' | 'in-call' | 'speaking' | 'muted' | 'deafened') => void;
+      isCursorInWindow?: () => Promise<boolean>;
       getMinimizeToTray?: () => Promise<boolean>;
       setAutoStart?: (enabled: boolean) => void;
       getAutoStart?: () => Promise<boolean>;

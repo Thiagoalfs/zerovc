@@ -9,7 +9,6 @@ import {
   Settings,
   ChevronDown,
   ChevronRight,
-  GripVertical,
   FolderPlus,
   Folder,
   Trash2,
@@ -832,7 +831,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             setDragOverTarget(null);
           }}
           onContextMenu={(e) => handleChannelContextMenu(e, channel)}
-          className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
+          className={`group flex items-center justify-between px-1 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
             canManageChannels ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
             isActive
@@ -845,11 +844,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           {/* Left white indicator dot for unread */}
           {isUnread && (
             <div className="absolute -left-1 w-1.5 h-2 rounded-r-full bg-white shadow-sm" />
-          )}
-
-          {/* Drag Handle icon */}
-          {canManageChannels && (
-            <GripVertical className="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 -ml-0.5 mr-0.5 transition-opacity pointer-events-none" />
           )}
 
           <div
@@ -972,7 +966,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-background-light/40 text-[13.5px] text-gray-300 cursor-pointer transition-colors group/voice-member"
                     title="Clique com botão esquerdo para perfil ou direito para opções"
                   >
-                    <div className="flex items-center gap-2 truncate">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       <div
                         style={
                           isSpeaking

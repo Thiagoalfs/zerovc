@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage, screen } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import zlib from 'zlib';
 import { spawn, execSync, execFile, ChildProcess } from 'child_process';
 import { promisify } from 'util';
 
@@ -164,6 +165,115 @@ if (process.defaultApp) {
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+type TrayVoiceState = 'idle' | 'in-call' | 'speaking' | 'muted' | 'deafened';
+let currentTrayVoiceState: TrayVoiceState = 'idle';
+let cachedTrayIcons: Partial<Record<TrayVoiceState, Electron.NativeImage>> = {};
+
+function crc32(buf: Buffer): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i];
+    for (let k = 0; k < 8; k++) {
+      c = (c >>> 1) ^ (c & 1 ? 0xedb88320 : 0);
+    }
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const typeBuf = Buffer.from(type, 'ascii');
+  const crcBuf = Buffer.alloc(4);
+  crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+  return Buffer.concat([len, typeBuf, data, crcBuf]);
+}
+
+function distSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+function encodeRgbaPng(size: number, pixelFn: (x: number, y: number) => [number, number, number, number]): Electron.NativeImage {
+  const raw = Buffer.alloc(size * (1 + size * 4));
+  for (let y = 0; y < size; y++) {
+    const rowStart = y * (1 + size * 4);
+    raw[rowStart] = 0;
+    for (let x = 0; x < size; x++) {
+      const [r, g, b, a] = pixelFn(x, y);
+      const idx = rowStart + 1 + x * 4;
+      raw[idx] = r;
+      raw[idx + 1] = g;
+      raw[idx + 2] = b;
+      raw[idx + 3] = a;
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const png = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', zlib.deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+  return nativeImage.createFromBuffer(png);
+}
+
+function createCircleTrayIcon(r: number, g: number, b: number, overlay?: 'muted' | 'deafened', size = 32): Electron.NativeImage {
+  const cx = (size - 1) / 2;
+  const bgRadius = overlay ? size * 0.44 : size * 0.36;
+  return encodeRgbaPng(size, (x, y) => {
+    const bgAlpha = Math.max(0, Math.min(1, bgRadius + 0.5 - Math.hypot(x - cx, y - cx)));
+    if (bgAlpha <= 0) return [0, 0, 0, 0];
+
+    let glyph = 0;
+    if (overlay === 'muted') {
+      // Mic capsule + stand + diagonal slash
+      const dMic = distSegment(x, y, cx, 9.5, cx, 15.5) - 2.4;
+      const dStem = distSegment(x, y, cx, 19.5, cx, 23.0) - 1.1;
+      const dBase = distSegment(x, y, cx - 3.2, 23.0, cx + 3.2, 23.0) - 1.1;
+      const dArc = Math.abs(Math.hypot(x - cx, y - 15.5) - 4.6) - 1.1;
+      const dU = y >= 15.5 ? dArc : 10;
+      const dSlash = distSegment(x, y, 8.5, 8.5, 23.5, 23.5) - 1.4;
+      const d = Math.min(dMic, dStem, dBase, dU, dSlash);
+      glyph = Math.max(0, Math.min(1, 0.5 - d));
+    } else if (overlay === 'deafened') {
+      // Headphones band + earcups + diagonal slash
+      const dBand = Math.abs(Math.hypot(x - cx, y - 15.5) - 6.6) - 1.3;
+      const dBandArc = y <= 16.5 ? dBand : 10;
+      const dLeft = distSegment(x, y, 9.0, 15.5, 9.0, 21.0) - 2.1;
+      const dRight = distSegment(x, y, 22.0, 15.5, 22.0, 21.0) - 2.1;
+      const dSlash = distSegment(x, y, 8.5, 8.5, 23.5, 23.5) - 1.4;
+      const d = Math.min(dBandArc, dLeft, dRight, dSlash);
+      glyph = Math.max(0, Math.min(1, 0.5 - d));
+    }
+
+    const pr = Math.round(r + (255 - r) * glyph);
+    const pg = Math.round(g + (255 - g) * glyph);
+    const pb = Math.round(b + (255 - b) * glyph);
+    return [pr, pg, pb, Math.round(bgAlpha * 255)];
+  });
+}
+
+function setTrayVoiceState(state: TrayVoiceState) {
+  if (!tray || currentTrayVoiceState === state) return;
+  currentTrayVoiceState = state;
+  if (!cachedTrayIcons.idle) cachedTrayIcons.idle = getTrayIcon();
+  if (!cachedTrayIcons['in-call']) cachedTrayIcons['in-call'] = createCircleTrayIcon(128, 132, 142);
+  if (!cachedTrayIcons.speaking) cachedTrayIcons.speaking = createCircleTrayIcon(35, 165, 90);
+  if (!cachedTrayIcons.muted) cachedTrayIcons.muted = createCircleTrayIcon(242, 63, 67, 'muted');
+  if (!cachedTrayIcons.deafened) cachedTrayIcons.deafened = createCircleTrayIcon(242, 63, 67, 'deafened');
+  const img = cachedTrayIcons[state] || cachedTrayIcons.idle;
+  if (img) {
+    tray.setImage(img);
+  }
+}
 
 const TRAY_ICON_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAsklEQVR4nO2XwQ3DIAxFzRfXdL5mgGSodAA6XztAI24oCsFgA5XIuyEI7yNHMhCNjrmafC6fn4bk/XpEPaammBMEreSxvdFKHnOAOoOWpz9z2dRit01i4bx+o3OgzmD4AFZSP86/kvoeGiUolasEkMjFAaRyj9WU54iLAziFUxeXwCnLswLUkLMD1JJ7RM2I26juZvTX3dCEg1a3ovB2DOoMuA8ILY4OpBbUlHu6P81oeHYF80mbLXALmwAAAABJRU5ErkJggg==';
@@ -429,6 +539,17 @@ function createWindow(initialUrl?: string, showImmediately = true) {
     });
   }
 
+  mainWindow.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) {
+      setTrayVoiceState('idle');
+      stopNativeScreenShareProcess();
+      try {
+        activeAudioProcess?.kill();
+      } catch {}
+      activeAudioProcess = null;
+    }
+  });
+
   mainWindow.webContents.on('did-finish-load', () => {
     if (pendingUpdateAvailableInfo && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update-available', pendingUpdateAvailableInfo);
@@ -632,6 +753,23 @@ ipcMain.on('window-close', () => {
     mainWindow?.hide();
   } else {
     mainWindow?.close();
+  }
+});
+
+ipcMain.on('set-tray-voice-state', (_event, state: TrayVoiceState) => {
+  if (state === 'idle' || state === 'in-call' || state === 'speaking' || state === 'muted' || state === 'deafened') {
+    setTrayVoiceState(state);
+  }
+});
+
+ipcMain.handle('is-cursor-in-window', () => {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return false;
+  try {
+    const pt = screen.getCursorScreenPoint();
+    const b = mainWindow.getContentBounds();
+    return pt.x >= b.x && pt.x <= b.x + b.width && pt.y >= b.y && pt.y <= b.y + b.height;
+  } catch {
+    return true;
   }
 });
 

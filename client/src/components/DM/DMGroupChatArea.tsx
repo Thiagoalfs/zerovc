@@ -23,6 +23,10 @@ import {
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { showAlert, showConfirm } from '../../stores/confirmModalStore';
 import { useAutoClearVisibleUnread } from '../../utils/unread';
+import {
+  saveChatScrollPosition,
+  restoreChatScrollPosition,
+} from '../../utils/chatScrollMemory';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -368,20 +372,9 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     }
 
     if (isInitialLoadRef.current) {
-      if (messages.length > 0) {
+      if (messages.length > 0 && activeGroup) {
         isInitialLoadRef.current = false;
-        if (firstUnreadId && messages.some((m) => m.id === firstUnreadId)) {
-          setTimeout(() => {
-            const unreadEl = document.getElementById('unread-divider');
-            if (unreadEl) {
-              unreadEl.scrollIntoView({ behavior: 'auto', block: 'center' });
-            } else {
-              container.scrollTop = container.scrollHeight;
-            }
-          }, 60);
-          return;
-        }
-        container.scrollTop = container.scrollHeight;
+        restoreChatScrollPosition(`group:${activeGroup.id}`, container);
       }
       return;
     }
@@ -400,11 +393,15 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       setTimeout(() => scrollToBottom(true), 100);
       setTimeout(() => scrollToBottom(true), 300);
     }
-  }, [messages, user?.id, firstUnreadId]);
+  }, [activeGroup?.id, messages, user?.id, firstUnreadId]);
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
     if (!container || !activeGroup) return;
+
+    if (!isInitialLoadRef.current) {
+      saveChatScrollPosition(`group:${activeGroup.id}`, container);
+    }
 
     if (
       container.scrollTop < 60 &&
@@ -673,7 +670,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             {/* Dynamic Grid of Participant Cards */}
             <div
               ref={stageRef}
-              className="w-full min-h-[200px] max-h-[380px] h-[45vh] bg-background-darker/60 rounded-2xl border border-white/5 p-2 flex items-center justify-center overflow-hidden relative shadow-inner"
+              className="w-full min-h-[200px] max-h-[380px] h-[45vh] bg-background-darker/60 rounded-2xl border border-white/5 p-2 flex items-center justify-center overflow-hidden relative shadow-inner group/voiceroom"
             >
               {isGroupVoiceConnecting ? (
                 <div className="flex flex-col items-center gap-2 text-gray-400">

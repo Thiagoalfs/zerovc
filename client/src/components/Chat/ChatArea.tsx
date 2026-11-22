@@ -11,6 +11,10 @@ import { SearchResultsPanel } from './SearchResultsPanel';
 import { TypingIndicator } from './TypingIndicator';
 import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
 import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
+import {
+  saveChatScrollPosition,
+  restoreChatScrollPosition,
+} from '../../utils/chatScrollMemory';
 import { setActiveChat, getActiveChat } from '../../utils/activeChat';
 import { User, Message, UserProfilePosition } from '../../types';
 
@@ -203,20 +207,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
 
     if (isInitialLoadRef.current) {
-      if (messages.length > 0) {
+      if (messages.length > 0 && activeChannel) {
         isInitialLoadRef.current = false;
-        if (firstUnreadId && messages.some((m) => m.id === firstUnreadId)) {
-          setTimeout(() => {
-            const unreadEl = document.getElementById('unread-divider');
-            if (unreadEl) {
-              unreadEl.scrollIntoView({ behavior: 'auto', block: 'center' });
-            } else {
-              container.scrollTop = container.scrollHeight;
-            }
-          }, 60);
-          return;
-        }
-        container.scrollTop = container.scrollHeight;
+        restoreChatScrollPosition(`channel:${activeChannel.id}`, container);
       }
       return;
     }
@@ -234,7 +227,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       setTimeout(() => scrollToBottom(true), 100);
       setTimeout(() => scrollToBottom(true), 300);
     }
-  }, [messages, user?.id, firstUnreadId]);
+  }, [activeChannel?.id, messages, user?.id, firstUnreadId]);
 
   const handleMediaLoad = () => {
     const container = scrollContainerRef.current;
@@ -248,6 +241,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const handleScroll = () => {
     const container = scrollContainerRef.current;
     if (!container || !activeChannel) return;
+
+    if (!isInitialLoadRef.current) {
+      saveChatScrollPosition(`channel:${activeChannel.id}`, container);
+    }
 
     // Detect near top scroll for pagination
     if (container.scrollTop < 60 && !isLoadingMoreMessages && hasMoreByChannel[activeChannel.id] !== false) {

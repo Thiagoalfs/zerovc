@@ -46,6 +46,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
     isCameraOn,
     isScreensharing,
     participants,
+    watchParticipant,
     toggleMute,
     toggleDeafen,
     toggleCamera,
@@ -165,6 +166,11 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
     return participants.find((p) => (p.identity || p.sid) === spotlightParticipantId) || null;
   }, [spotlightParticipantId, participants]);
 
+  const handleWatchStream = (participantIdentity: string, mode: 'exclusive' | 'additive') => {
+    watchParticipant(participantIdentity, mode);
+    setSpotlightParticipantId(participantIdentity);
+  };
+
   if (!isCalling && !isDMVoiceActive) return null;
 
   const handleScreenShareClick = (e: React.MouseEvent) => {
@@ -254,7 +260,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
           {/* Dynamic Video & Audio Participants Grid */}
           <div
             ref={containerRef}
-            className="w-full min-h-[200px] max-h-[360px] h-[45vh] bg-background-darker/60 rounded-2xl border border-white/5 p-2 flex items-center justify-center overflow-hidden relative shadow-inner"
+            className="w-full min-h-[200px] max-h-[360px] h-[45vh] bg-background-darker/60 rounded-2xl border border-white/5 p-2 flex items-center justify-center overflow-hidden relative shadow-inner group/voiceroom"
           >
             {isConnecting ? (
               <div className="flex flex-col items-center gap-2 text-gray-400">
@@ -266,7 +272,12 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                 <Volume2 className="w-8 h-8 text-gray-500 animate-pulse" />
                 <span className="text-xs">Aguardando conexão...</span>
               </div>
-            ) : spotlightParticipant ? (
+            ) : spotlightParticipant ? (() => {
+              const spotlightId = spotlightParticipant.identity || spotlightParticipant.sid;
+              const filmstripParticipants = participants.filter(
+                (p) => (p.identity || p.sid) !== spotlightId
+              );
+              return (
               /* Spotlight View (Focused card on top, participant filmstrip below - Anexo 1 & 2) */
               <div className="w-full h-full flex flex-col items-center justify-between min-h-0 min-w-0 overflow-hidden relative">
                 {/* 1. Main Spotlight Card */}
@@ -277,12 +288,13 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                       onOpenUserProfile={onOpenUserProfile}
                       onOpenDM={onOpenDM}
                       onOpenScreenShare={onOpenScreenShare}
+                      onWatchStream={handleWatchStream}
                       onClick={() => setSpotlightParticipantId(null)}
                     />
                   </div>
 
                   {/* Floating Expand Button at base of spotlight card when collapsed (Anexo 2) */}
-                  {isBottomStripCollapsed && (
+                  {filmstripParticipants.length > 0 && isBottomStripCollapsed && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -299,7 +311,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                 </div>
 
                 {/* 2. Bottom Filmstrip of Participants (Anexo 1 & 2) */}
-                {!isBottomStripCollapsed && (
+                {filmstripParticipants.length > 0 && !isBottomStripCollapsed && (
                   <div className="w-full flex-shrink-0 relative pt-2.5 pb-0.5 px-1 border-t border-white/5 bg-background-darkest/50 backdrop-blur-sm flex flex-col items-center">
                     {/* Collapse Button (Anexo 2) placed on top center of the bottom filmstrip */}
                     <button
@@ -317,24 +329,20 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
 
                     {/* Horizontal scrollable row of participant thumbnails */}
                     <div className="w-full flex items-center justify-center gap-1.5 overflow-x-auto py-0.5 px-1 no-scrollbar max-w-full">
-                      {participants.map((p) => {
+                      {filmstripParticipants.map((p) => {
                         const pId = p.identity || p.sid;
-                        const isSelected = (spotlightParticipant.identity || spotlightParticipant.sid) === pId;
                         return (
                           <div
                             key={pId}
                             onClick={() => setSpotlightParticipantId(pId)}
-                            className={`h-20 sm:h-24 aspect-video flex-shrink-0 rounded-xl overflow-hidden transition-all duration-150 cursor-pointer ${
-                              isSelected
-                                ? 'ring-2 ring-brand-500 shadow-md'
-                                : 'border border-white/5 hover:border-white/20'
-                            }`}
+                            className="h-20 sm:h-24 aspect-video flex-shrink-0 rounded-xl overflow-hidden transition-all duration-150 cursor-pointer border border-white/5 hover:border-white/20"
                           >
                             <ParticipantCard
                               participant={p}
                               onOpenUserProfile={onOpenUserProfile}
                               onOpenDM={onOpenDM}
                               onOpenScreenShare={onOpenScreenShare}
+                              onWatchStream={handleWatchStream}
                               isCompact
                               onClick={() => setSpotlightParticipantId(pId)}
                             />
@@ -345,7 +353,8 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                   </div>
                 )}
               </div>
-            ) : (
+              );
+            })() : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-2 overflow-hidden">
                 {stageLayout.rows.map((row, rIdx) => (
                   <div
@@ -369,8 +378,9 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
                           onOpenUserProfile={onOpenUserProfile}
                           onOpenDM={onOpenDM}
                           onOpenScreenShare={onOpenScreenShare}
+                          onWatchStream={handleWatchStream}
                           onClick={() => {
-                            setSpotlightParticipantId(p.sid || p.identity);
+                            setSpotlightParticipantId(p.identity || p.sid);
                           }}
                         />
                       </div>

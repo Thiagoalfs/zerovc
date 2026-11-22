@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Participant, DisconnectReason } from 'livekit-client';
-import { api } from '../lib/api';
+import { api, postKeepalive } from '../lib/api';
 import { livekit } from '../lib/livekit';
 import { User, DMGroup } from '../types';
 import { checkCallEligibility, createE2EEOptions, livekitE2EEManager } from '../lib/livekitE2EE';
@@ -241,14 +241,15 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         });
       },
       onSpeakingChanged: (speakingUserIds) => {
+        const nextIds = get().isDeafened ? [] : speakingUserIds;
         const current = get().speakingUserIds;
         if (
-          current.length === speakingUserIds.length &&
-          current.every((id, idx) => id === speakingUserIds[idx])
+          current.length === nextIds.length &&
+          current.every((id, idx) => id === nextIds[idx])
         ) {
           return;
         }
-        set({ speakingUserIds });
+        set({ speakingUserIds: nextIds });
       },
       onTrackUpdated: () => {
         const room = livekit.getRoom();
@@ -865,7 +866,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         playUndeafenSound();
       }
 
-      set({ isDeafened: nextDeafened, isMuted: nextMuted });
+      set({
+        isDeafened: nextDeafened,
+        isMuted: nextMuted,
+        ...(nextDeafened ? { speakingUserIds: [] } : {}),
+      });
 
       if (voiceType === 'guild' && currentChannelId) {
         try {
@@ -949,3 +954,45 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     },
   };
 });
+
+if (typeof window !== 'undefined') {
+  let lastTrayState: 'idle' | 'in-call' | 'speaking' | 'muted' | 'deafened' = 'idle';
+  useVoiceStore.subscribe((state) => {
+    const api = (window as any).electronAPI;
+    if (!api?.setTrayVoiceState) return;
+    const localId = useAuthStore.getState().user?.id;
+    const isSpeaking =
+      state.isConnected &&
+      !state.isMuted &&
+      !state.isDeafened &&
+      Boolean(localId && state.speakingUserIds.includes(localId));
+    const nextState: 'idle' | 'in-call' | 'speaking' | 'muted' | 'deafened' = !state.isConnected
+      ? 'idle'
+      : state.isDeafened
+      ? 'deafened'
+      : state.isMuted
+      ? 'muted'
+      : isSpeaking
+      ? 'speaking'
+      : 'in-call';
+    if (nextState !== lastTrayState) {
+      lastTrayState = nextState;
+      api.setTrayVoiceState(nextState);
+    }
+  });
+
+  // Clean up backend voice session & Electron tray/sidecar when reloading (Ctrl+R) or closing window
+  const cleanupVoiceOnUnload = () => {
+    const state = useVoiceStore.getState();
+    if (state.isConnected || state.isConnecting) {
+      if (state.voiceType === 'guild' && state.currentChannelId) {
+        postKeepalive(`/channels/${state.currentChannelId}/leave-voice`);
+      } else if (state.voiceType === 'dm' && state.dmRoomId) {
+        postKeepalive(`/dms/${state.dmRoomId}/call/leave`);
+      }
+    }
+    (window as any).electronAPI?.setTrayVoiceState?.('idle');
+    (window as any).electronAPI?.stopNativeScreenShare?.();
+  };
+  window.addEventListener('beforeunload', cleanupVoiceOnUnload);
+}

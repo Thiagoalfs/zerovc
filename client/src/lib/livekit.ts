@@ -880,9 +880,14 @@ class LiveKitManager {
       // Prefer smooth FPS instead of freezing framerate under load
       params.degradationPreference = frameRate >= 60 ? 'maintain-framerate' : 'balanced';
       if (params.encodings && params.encodings.length > 0) {
-        params.encodings[0].maxBitrate = maxBitrate;
-        params.encodings[0].maxFramerate = frameRate;
-        params.encodings[0].networkPriority = 'high';
+        const lastIdx = params.encodings.length - 1;
+        params.encodings.forEach((enc, idx) => {
+          enc.maxFramerate = frameRate;
+          enc.networkPriority = 'high';
+          if (idx === lastIdx) {
+            enc.maxBitrate = maxBitrate;
+          }
+        });
       }
       await sender.setParameters(params);
     } catch (e) {
@@ -1161,16 +1166,23 @@ class LiveKitManager {
         );
 
         if (pub && pub.track) {
-          await this.applyScreenShareSenderParams(pub.track, maxBitrate, frameRate);
-
           const mediaStreamTrack = pub.track.mediaStreamTrack;
           if (mediaStreamTrack) {
+            // Enforce user-chosen cap on Web getDisplayMedia (browsers often ignore ideal hints)
+            await mediaStreamTrack
+              .applyConstraints({
+                width: { max: dims.width },
+                height: { max: dims.height },
+                frameRate: { max: frameRate },
+              })
+              .catch(() => {});
             this.activeMediaStreamTracks.add(mediaStreamTrack);
             mediaStreamTrack.onended = () => {
               this.setScreenShareEnabled(false);
               this.onScreenShareEnded?.();
             };
           }
+          await this.applyScreenShareSenderParams(pub.track, maxBitrate, frameRate);
         }
 
         // Only reroute call audio when capturing full monitor audio on browsers without restrictOwnAudio

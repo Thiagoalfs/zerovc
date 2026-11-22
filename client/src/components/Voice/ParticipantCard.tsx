@@ -39,6 +39,7 @@ import { livekit } from '../../lib/livekit';
 import { getDominantColorFromImage, generateColorFromName } from '../../lib/colorExtractor';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from './VolumeSliders';
+import { ModalButton } from '@/components/ui/modal-button';
 
 interface ParticipantCardProps {
   participant: Participant;
@@ -507,66 +508,46 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           </>
         ) : isScreenSharing && !isWatching ? (
           /* 3. Screen sharing active but user is NOT watching */
-          isCompact ? (
-            <div className="flex flex-col items-center justify-center gap-1.5 p-1 text-center pointer-events-none select-none">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden flex items-center justify-center font-bold text-white text-sm bg-black/40">
-                {avatarUrl ? (
-                  <img src={formatAssetUrl(avatarUrl)} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
-                )}
-              </div>
-              <span className="text-[10px] text-brand-400 font-semibold flex items-center gap-0.5">
-                <Radio className="w-3 h-3 animate-pulse" /> Ao Vivo
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-3 p-4 text-center">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-2xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-400 shadow-xl">
-                  <Radio className="w-8 h-8 animate-pulse text-brand-400" />
-                </div>
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-500" />
-                </span>
-              </div>
-
+          <div className={`flex flex-col items-center justify-center text-center ${isCompact ? 'gap-1.5 p-2' : 'gap-3 p-4'}`}>
+            {!isCompact && (
               <div>
                 <h3 className="text-sm font-bold text-white mb-0.5">{displayName}</h3>
                 <p className="text-xs text-brand-400 font-medium">está transmitindo tela</p>
               </div>
+            )}
 
-              <div className="mt-1 flex items-center justify-center gap-2">
-                <button
-                  type="button"
+            <div className={`${isCompact ? '' : 'mt-1'} flex items-center justify-center gap-1.5`}>
+              <ModalButton
+                htmlType="button"
+                type="secondary"
+                size={isCompact ? 'tiny' : 'small'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleWatch(true, 'exclusive');
+                }}
+                prefix={<Play className="w-3 h-3 fill-current" />}
+                title="Assistir esta transmissão"
+              >
+                Assistir Transmissão
+              </ModalButton>
+
+              {hasAnyActiveWatch && (
+                <ModalButton
+                  htmlType="button"
+                  type="secondary"
+                  size={isCompact ? 'tiny' : 'small'}
+                  svgOnly
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleToggleWatch(true, 'exclusive');
+                    handleToggleWatch(true, 'additive');
                   }}
-                  className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-lg shadow-brand-500/30 flex items-center gap-1.5 cursor-pointer"
-                  title="Assistir esta transmissão"
+                  title="Assistir junto com as outras telas"
                 >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Assistir Transmissão</span>
-                </button>
-
-                {hasAnyActiveWatch && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleWatch(true, 'additive');
-                    }}
-                    className="bg-[#2b2d31] hover:bg-[#383a40] active:scale-95 text-gray-200 hover:text-white border border-white/10 hover:border-brand-500/50 p-2 rounded-xl transition-all shadow-md flex items-center justify-center cursor-pointer group/eye"
-                    title="Assistir junto com as outras telas"
-                  >
-                    <Eye className="w-4 h-4 text-brand-400 group-hover/eye:scale-110 transition-transform" />
-                  </button>
-                )}
-              </div>
+                  <Eye className="w-3.5 h-3.5 text-brand-400" />
+                </ModalButton>
+              )}
             </div>
-          )
+          </div>
         ) : (
           /* 4. Default Voice Participant Avatar View */
           <div className="flex flex-col items-center justify-center pointer-events-none select-none">
@@ -694,8 +675,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             isCompact
               ? 'bottom-2 left-2 px-2 py-0.5 text-[11px] bg-[#111214]'
               : 'bottom-2.5 left-2.5 px-2.5 py-1 text-xs bg-[#111214]/85 backdrop-blur-md'
-          } rounded-md flex items-center gap-1.5 font-semibold text-white shadow max-w-[85%] z-20 pointer-events-none`}>
-            <span className="truncate">{displayName} {isLocal && '(Você)'}</span>
+          } rounded-md flex items-center gap-1.5 font-semibold text-white shadow max-w-[85%] z-20 pointer-events-none md:group-data-[hovered=false]/voiceroom:opacity-0 transition-opacity duration-150`}>
+            <span className="truncate">{displayName}</span>
             {isMuted && (
               <MicOff className={`${isCompact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-dnd flex-shrink-0`} />
             )}

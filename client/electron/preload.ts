@@ -58,6 +58,8 @@ export interface ElectronAPI {
   stopNativeScreenShare: () => Promise<{ success: boolean }>;
   onNativeScreenShareEvent: (callback: (ev: { event: string; message?: string; [key: string]: any }) => void) => () => void;
   setMinimizeToTray: (enabled: boolean) => void;
+  setTrayVoiceState: (state: 'idle' | 'in-call' | 'speaking' | 'muted' | 'deafened') => void;
+  isCursorInWindow: () => Promise<boolean>;
   getMinimizeToTray: () => Promise<boolean>;
   setAutoStart: (enabled: boolean) => void;
   getAutoStart: () => Promise<boolean>;
@@ -140,6 +142,8 @@ const electronAPI: ElectronAPI = {
     return () => ipcRenderer.removeListener('repo-update-available', handler);
   },
   setMinimizeToTray: (enabled: boolean) => ipcRenderer.send('set-minimize-to-tray', enabled),
+  setTrayVoiceState: (state: 'idle' | 'in-call' | 'speaking' | 'muted' | 'deafened') => ipcRenderer.send('set-tray-voice-state', state),
+  isCursorInWindow: () => ipcRenderer.invoke('is-cursor-in-window'),
   getMinimizeToTray: () => ipcRenderer.invoke('get-minimize-to-tray'),
   setAutoStart: (enabled: boolean) => ipcRenderer.send('set-auto-start', enabled),
   getAutoStart: () => ipcRenderer.invoke('get-auto-start'),

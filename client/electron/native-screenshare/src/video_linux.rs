@@ -109,6 +109,7 @@ async fn run_wayland_portal_capture(
             "drop-only=true",
             "!",
             "videoscale",
+            "add-borders=true",
             "!",
             "videoconvert",
             "!",

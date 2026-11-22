@@ -124,6 +124,24 @@ export const CLIENT_E2EE_VERSION = 1;
 
 export const API_BASE_URL = getApiBaseUrl();
 
+export function postKeepalive(endpoint: string): void {
+  try {
+    const headers: Record<string, string> = {};
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+    if (isElectron()) {
+      const token = getStorageItem('token') || getStorageItem('zerovc_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+    }
+    void fetch(`${getApiBaseUrl()}/api${endpoint}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const baseUrl = getApiBaseUrl();
   const method = (options.method || 'GET').toUpperCase();

@@ -228,11 +228,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                   >
                     <div className="flex items-center gap-3 truncate">
                       {item.icon && (
-                        <span
-                          className={`w-5 h-5 flex items-center justify-center flex-shrink-0 ${
-                            isDanger ? 'text-red-400' : 'text-gray-400'
-                          }`}
-                        >
+                        <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-current [&_svg]:!text-current">
                           {item.icon}
                         </span>
                       )}
@@ -285,7 +281,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                           >
                             <div className="flex items-center gap-2.5 truncate">
                               {subItem.icon && (
-                                <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-gray-400">
+                                <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-current [&_svg]:!text-current">
                                   {subItem.icon}
                                 </span>
                               )}
@@ -323,6 +319,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
 
       <div
         ref={menuRef}
+        data-floating-overlay="true"
         style={{
           top: `${position.y}px`,
           left: `${position.x}px`,
@@ -396,11 +393,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                 >
                   <div className="flex items-center gap-2 truncate">
                     {item.icon && (
-                      <span
-                        className={`w-4 h-4 flex items-center justify-center flex-shrink-0 ${
-                          isDanger ? 'text-red-500 group-hover:text-red-400' : 'text-gray-400 group-hover:text-white'
-                        }`}
-                      >
+                      <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-current [&_svg]:!text-current">
                         {item.icon}
                       </span>
                     )}
@@ -459,7 +452,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                         >
                           <div className="flex items-center gap-2 truncate">
                             {subItem.icon && (
-                              <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-gray-400 group-hover:text-white">
+                              <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-current [&_svg]:!text-current">
                                 {subItem.icon}
                               </span>
                             )}

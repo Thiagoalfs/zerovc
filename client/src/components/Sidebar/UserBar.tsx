@@ -16,6 +16,7 @@ import { User, UserProfilePosition, Guild } from '../../types';
 import { UserBarContextMenuControls } from './UserBarContextMenu';
 import { AudioDeviceDropup } from './AudioDeviceDropup';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
+import { ModalButton } from '@/components/ui/modal-button';
 
 interface UserBarProps {
   onOpenSettings: (tab?: string) => void;
@@ -495,10 +496,10 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
             {/* Connected Participants Row (if enabled and other participants in call) */}
             {showVoiceUsersInBar && otherParticipants.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 -mt-0.5 scrollbar-none animate-in fade-in duration-150">
+              <div className="flex items-center gap-1.5 overflow-x-auto py-1.5 px-1.5 -mt-0.5 scrollbar-none animate-in fade-in duration-150">
                 {otherParticipants.map((p) => {
                   const { user: participantUser, displayName } = getParticipantUser(p);
-                  const isSpeaking = Boolean(speakingUserIds.includes(p.identity) || (p as any).isSpeaking);
+                  const isSpeaking = !isDeafened && Boolean(speakingUserIds.includes(p.identity) || (p as any).isSpeaking);
                   const initial = displayName?.[0]?.toUpperCase() || '?';
 
                   return (
@@ -533,7 +534,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                       <div
                         className={`w-6 h-6 rounded-full overflow-hidden flex items-center justify-center bg-brand-500 transition-all duration-150 ${
                           isSpeaking
-                            ? 'ring-2 ring-[#23a55a] shadow-[0_0_8px_rgba(35,165,90,0.85)] scale-105'
+                            ? 'ring-2 ring-[#23a55a] shadow-[0_0_8px_rgba(35,165,90,0.85)]'
                             : 'ring-1 ring-white/10 group-hover/voiceuser:ring-white/40'
                         }`}
                       >
@@ -549,9 +550,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                           </span>
                         )}
                       </div>
-                      {isSpeaking && (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#23a55a] ring-1 ring-background-darkest animate-pulse" />
-                      )}
                     </button>
                   );
                 })}
@@ -560,36 +558,34 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
 
             {/* Large Action Buttons (Camera & Screen Share) */}
             <div className="grid grid-cols-2 gap-1.5 w-full animate-in fade-in slide-in-from-bottom-1 duration-150">
-              <button
-                type="button"
+              <ModalButton
+                htmlType="button"
+                type="secondary"
+                size="small"
+                fullWidth
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleCamera();
                 }}
-                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 ${
-                  isCameraOn
-                    ? 'bg-online text-white shadow-md shadow-online/20 hover:bg-online/90'
-                    : 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/5'
-                }`}
+                prefix={isCameraOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+                className={isCameraOn ? 'border-online/40 bg-online text-white hover:bg-online/90 active:bg-online/80' : undefined}
                 title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
               >
-                {isCameraOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                <span>Câmera</span>
-              </button>
+                Câmera
+              </ModalButton>
 
-              <button
-                type="button"
+              <ModalButton
+                htmlType="button"
+                type="secondary"
+                size="small"
+                fullWidth
                 onClick={handleScreenShareClick}
-                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 ${
-                  isScreensharing
-                    ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 hover:bg-brand-600'
-                    : 'bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/5'
-                }`}
+                prefix={<Monitor className="w-4 h-4" />}
+                className={isScreensharing ? 'border-brand-400/40 bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700' : undefined}
                 title={isScreensharing ? 'Opções de transmissão (Clique para trocar de tela)' : 'Compartilhar Tela'}
               >
-                <Monitor className="w-4 h-4" />
-                <span>Tela</span>
-              </button>
+                Tela
+              </ModalButton>
             </div>
           </>
         )}

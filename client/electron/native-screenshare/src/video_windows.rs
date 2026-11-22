@@ -98,7 +98,9 @@ pub async fn run_video_capture(
             stop,
             target_w: args.width,
             target_h: args.height,
-            frame_interval: Duration::from_micros(1_000_000 / args.fps.max(1) as u64),
+            // Allow 1.5ms DWM jitter tolerance so 60Hz WGC callbacks don't drop to 30fps
+            frame_interval: Duration::from_micros(1_000_000 / args.fps.max(1) as u64)
+                .saturating_sub(Duration::from_micros(1500)),
         };
 
         if args.source_id.starts_with("window:") {
