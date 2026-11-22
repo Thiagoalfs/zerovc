@@ -106,7 +106,7 @@ async fn run_wayland_portal_capture(
     }
 
     let caps = format!(
-        "video/x-raw,format=I420,width={},height={},framerate={}/1",
+        "video/x-raw,format=I420,colorimetry=bt709,width={},height={},framerate={}/1",
         args.width, args.height, args.fps
     );
     let mut child = Command::new("gst-launch-1.0")

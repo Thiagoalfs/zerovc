@@ -348,6 +348,12 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                       codedWidth: width,
                       codedHeight: height,
                       timestamp: Math.round(performance.now() * 1000),
+                      colorSpace: {
+                        primaries: 'bt709',
+                        transfer: 'bt709',
+                        matrix: 'bt709',
+                        fullRange: false,
+                      },
                     });
                     ctx.drawImage(vf, 0, 0);
                     vf.close();

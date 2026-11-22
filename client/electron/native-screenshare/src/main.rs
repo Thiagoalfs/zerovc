@@ -81,8 +81,8 @@ pub fn emit_event(event: &str, data: serde_json::Value) {
 #[tokio::main]
 async fn main() {
     let mut args = Args::parse();
-    // I420 requires even dimensions
-    args.width = (args.width.max(320)) & !1;
+    // I420 requires even dimensions, and GStreamer pads row strides unless width is a multiple of 4
+    args.width = (args.width.max(320)) & !3;
     args.height = (args.height.max(180)) & !1;
     args.fps = args.fps.clamp(5, 60);
 

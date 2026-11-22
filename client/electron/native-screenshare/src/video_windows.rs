@@ -162,7 +162,7 @@ pub async fn run_video_capture(
     .map_err(|e| format!("WGC task panicked: {}", e))?
 }
 
-/// Fast nearest-neighbor BGRA -> I420 (BT.601) conversion into `dst`.
+/// Fast nearest-neighbor BGRA -> I420 (BT.709 limited range) conversion into `dst`.
 fn bgra_scale_to_i420(
     src: &[u8],
     src_w: usize,
@@ -194,12 +194,12 @@ fn bgra_scale_to_i420(
             let g = src[idx + 1] as i32;
             let r = src[idx + 2] as i32;
 
-            let y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+            let y = ((47 * r + 157 * g + 16 * b + 128) >> 8) + 16;
             y_plane[row_y + dx] = y.clamp(0, 255) as u8;
 
             if write_uv && (dx & 1) == 0 {
-                let u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
-                let v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+                let u = ((-26 * r - 86 * g + 112 * b + 128) >> 8) + 128;
+                let v = ((112 * r - 102 * g - 10 * b + 128) >> 8) + 128;
                 let uv_idx = row_uv + (dx / 2);
                 u_plane[uv_idx] = u.clamp(0, 255) as u8;
                 v_plane[uv_idx] = v.clamp(0, 255) as u8;
