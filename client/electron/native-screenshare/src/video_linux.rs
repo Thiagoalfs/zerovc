@@ -71,7 +71,7 @@ async fn run_wayland_portal_capture(
         .map_err(|e| format!("Failed to select portal sources: {}", e))?;
 
     let response = proxy
-        .start(&session, None)
+        .start(&session, &ashpd::WindowIdentifier::default())
         .await
         .map_err(|e| format!("Portal start failed: {}", e))?
         .response()
