@@ -273,21 +273,36 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     (watchedParticipantIds && watchedParticipantIds.length > 0) || !!watchedParticipantId;
 
   const fullscreenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
   const [isAppFocused, setIsAppFocused] = useState(() =>
     typeof document === 'undefined' ? true : document.hasFocus() && !document.hidden
   );
 
-  // Keep local screen preview active only while ZeroVC has OS window focus
+  // Keep local screen preview active only while ZeroVC has OS window focus (instant abort on blur)
   useEffect(() => {
     if (!isLocal || !isScreenSharing) return;
-    const syncFocus = () => setIsAppFocused(document.hasFocus() && !document.hidden);
+    const syncFocus = () => {
+      const focused = document.hasFocus() && !document.hidden;
+      if (!focused && previewAbortRef.current) {
+        previewAbortRef.current.abort();
+        previewAbortRef.current = null;
+      }
+      setIsAppFocused(focused);
+    };
+    const forcePause = () => {
+      if (previewAbortRef.current) {
+        previewAbortRef.current.abort();
+        previewAbortRef.current = null;
+      }
+      setIsAppFocused(false);
+    };
     syncFocus();
     window.addEventListener('focus', syncFocus);
-    window.addEventListener('blur', syncFocus);
+    window.addEventListener('blur', forcePause);
     document.addEventListener('visibilitychange', syncFocus);
     return () => {
       window.removeEventListener('focus', syncFocus);
-      window.removeEventListener('blur', syncFocus);
+      window.removeEventListener('blur', forcePause);
       document.removeEventListener('visibilitychange', syncFocus);
     };
   }, [isLocal, isScreenSharing]);
@@ -306,6 +321,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     const { port, token, width, height } = nativePreview;
     const frameSize = (width * height * 3) >>> 1;
     const controller = new AbortController();
+    previewAbortRef.current = controller;
     let cancelled = false;
     let firstFrameDrawn = false;
 
@@ -379,6 +395,9 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     void run();
     return () => {
       cancelled = true;
+      if (previewAbortRef.current === controller) {
+        previewAbortRef.current = null;
+      }
       controller.abort();
     };
   }, [

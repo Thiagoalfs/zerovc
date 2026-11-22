@@ -1,17 +1,19 @@
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 
 /// Zero-overhead local OBS-style raw I420 preview hub over 127.0.0.1.
-/// Does zero work when no local preview client is connected.
+/// Does zero work when no local preview client is connected, and caps preview to ~30fps.
 #[derive(Clone)]
 pub struct PreviewHub {
     active: Arc<AtomicBool>,
+    epoch: Instant,
+    last_publish_ms: Arc<AtomicU64>,
     tx: watch::Sender<Option<Arc<Vec<u8>>>>,
 }
 
@@ -59,6 +61,8 @@ impl PreviewHub {
 
         let hub = Self {
             active: active.clone(),
+            epoch: Instant::now(),
+            last_publish_ms: Arc::new(AtomicU64::new(0)),
             tx: tx.clone(),
         };
 
@@ -94,8 +98,23 @@ impl PreviewHub {
     }
 
     #[inline]
-    pub fn publish_raw(&self, raw: &[u8]) {
+    pub fn should_publish(&self) -> bool {
         if !self.is_active() {
+            return false;
+        }
+        // Cap local preview to ~30fps even when capturing/streaming at 60fps
+        let now_ms = self.epoch.elapsed().as_millis() as u64;
+        let prev = self.last_publish_ms.load(Ordering::Relaxed);
+        if prev > 0 && now_ms.saturating_sub(prev) < 30 {
+            return false;
+        }
+        self.last_publish_ms.store(now_ms, Ordering::Relaxed);
+        true
+    }
+
+    #[inline]
+    pub fn publish_raw(&self, raw: &[u8]) {
+        if !self.should_publish() {
             return;
         }
         let _ = self.tx.send_replace(Some(Arc::new(raw.to_vec())));
@@ -170,6 +189,7 @@ async fn handle_client(
         }
     }
 
+    let mut eof_buf = [0u8; 16];
     loop {
         if stop.load(Ordering::Relaxed) {
             break;
@@ -184,6 +204,11 @@ async fn handle_client(
                     if socket.write_all(&frame).await.is_err() {
                         break;
                     }
+                }
+            }
+            read_res = socket.read(&mut eof_buf) => {
+                if matches!(read_res, Ok(0) | Err(_)) {
+                    break;
                 }
             }
             _ = tokio::time::sleep(Duration::from_millis(200)) => {}

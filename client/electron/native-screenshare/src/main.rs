@@ -9,7 +9,7 @@ use base64::Engine;
 use clap::Parser;
 use livekit::e2ee::key_provider::{KeyProvider, KeyProviderOptions};
 use livekit::e2ee::E2eeOptions;
-use livekit::options::{TrackPublishOptions, VideoCodec, VideoEncoding};
+use livekit::options::{TrackPublishOptions, VideoCodec, VideoEncoderBackend, VideoEncoding};
 use livekit::prelude::*;
 use livekit::webrtc::audio_source::native::NativeAudioSource;
 use livekit::webrtc::audio_source::AudioSourceOptions;
@@ -185,6 +185,7 @@ async fn main() {
         source: TrackSource::Screenshare,
         simulcast: false,
         video_codec: VideoCodec::H264,
+        video_encoder: VideoEncoderBackend::Hardware,
         video_encoding: Some(VideoEncoding {
             max_bitrate: args.bitrate,
             max_framerate: args.fps as f64,

@@ -3,6 +3,7 @@ use crate::Args;
 use livekit::webrtc::prelude::{I420Buffer, VideoFrame, VideoRotation};
 use livekit::webrtc::video_source::native::NativeVideoSource;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, SyncSender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use windows_capture::capture::{Context, GraphicsCaptureApiHandler};
@@ -15,19 +16,21 @@ use windows_capture::settings::{
 };
 use windows_capture::window::Window;
 
+struct RawFrameMsg {
+    bgra: Vec<u8>,
+    src_w: usize,
+    src_h: usize,
+}
+
 struct CaptureFlags {
-    source: NativeVideoSource,
-    preview: PreviewHub,
+    frame_tx: SyncSender<RawFrameMsg>,
     stop: Arc<AtomicBool>,
-    target_w: u32,
-    target_h: u32,
     frame_interval: Duration,
     ready: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
 }
 
 struct WgcHandler {
     flags: CaptureFlags,
-    start_ts: Instant,
     last_frame: Instant,
 }
 
@@ -41,7 +44,6 @@ impl GraphicsCaptureApiHandler for WgcHandler {
         }
         Ok(Self {
             flags: ctx.flags,
-            start_ts: Instant::now(),
             last_frame: Instant::now() - Duration::from_secs(1),
         })
     }
@@ -62,38 +64,13 @@ impl GraphicsCaptureApiHandler for WgcHandler {
         }
         self.last_frame = now;
 
-        let src_w = frame.width();
-        let src_h = frame.height();
+        let src_w = frame.width() as usize;
+        let src_h = frame.height() as usize;
         let mut buf = frame.buffer()?;
-        let bgra = buf.as_nopadding_buffer()?;
+        let bgra = buf.as_nopadding_buffer()?.to_vec();
 
-        let mut i420 = I420Buffer::new(self.flags.target_w, self.flags.target_h);
-        bgra_scale_to_i420(
-            bgra,
-            src_w as usize,
-            src_h as usize,
-            &mut i420,
-            self.flags.target_w as usize,
-            self.flags.target_h as usize,
-        );
-
-        if self.flags.preview.is_active() {
-            let (y_plane, u_plane, v_plane) = i420.data();
-            let y_size = (self.flags.target_w * self.flags.target_h) as usize;
-            let uv_size = ((self.flags.target_w / 2) * (self.flags.target_h / 2)) as usize;
-            let mut raw = Vec::with_capacity(y_size + uv_size * 2);
-            raw.extend_from_slice(&y_plane[..y_size]);
-            raw.extend_from_slice(&u_plane[..uv_size]);
-            raw.extend_from_slice(&v_plane[..uv_size]);
-            self.flags.preview.publish_vec(raw);
-        }
-
-        self.flags.source.capture_frame(&VideoFrame {
-            rotation: VideoRotation::VideoRotation0,
-            timestamp_us: self.start_ts.elapsed().as_micros() as i64,
-            buffer: i420,
-            frame_metadata: None,
-        });
+        // Non-blocking handoff: if conversion worker is busy, drop this frame instead of stalling WGC
+        let _ = self.flags.frame_tx.try_send(RawFrameMsg { bgra, src_w, src_h });
 
         Ok(())
     }
@@ -112,19 +89,65 @@ pub async fn run_video_capture(
     ready: tokio::sync::oneshot::Sender<Result<(), String>>,
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
+        let (frame_tx, frame_rx) = mpsc::sync_channel::<RawFrameMsg>(1);
+        let target_w = args.width as usize;
+        let target_h = args.height as usize;
+        let w_stop = stop.clone();
+
+        let worker = std::thread::spawn(move || {
+            let start_ts = Instant::now();
+            let mut cached_src_w = 0usize;
+            let mut sx_map: Vec<usize> = Vec::new();
+            while let Ok(msg) = frame_rx.recv() {
+                if w_stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                if msg.src_w != cached_src_w {
+                    cached_src_w = msg.src_w;
+                    sx_map = (0..target_w).map(|dx| (dx * msg.src_w) / target_w).collect();
+                }
+
+                let mut i420 = I420Buffer::new(target_w as u32, target_h as u32);
+                bgra_scale_to_i420(
+                    &msg.bgra,
+                    msg.src_w,
+                    msg.src_h,
+                    &mut i420,
+                    target_w,
+                    target_h,
+                    &sx_map,
+                );
+
+                if preview.should_publish() {
+                    let (y_plane, u_plane, v_plane) = i420.data();
+                    let y_size = target_w * target_h;
+                    let uv_size = (target_w / 2) * (target_h / 2);
+                    let mut raw = Vec::with_capacity(y_size + uv_size * 2);
+                    raw.extend_from_slice(&y_plane[..y_size]);
+                    raw.extend_from_slice(&u_plane[..uv_size]);
+                    raw.extend_from_slice(&v_plane[..uv_size]);
+                    preview.publish_vec(raw);
+                }
+
+                source.capture_frame(&VideoFrame {
+                    rotation: VideoRotation::VideoRotation0,
+                    timestamp_us: start_ts.elapsed().as_micros() as i64,
+                    buffer: i420,
+                    frame_metadata: None,
+                });
+            }
+        });
+
         let flags = CaptureFlags {
-            source,
-            preview,
-            stop,
-            target_w: args.width,
-            target_h: args.height,
+            frame_tx,
+            stop: stop.clone(),
             // Allow 1.5ms DWM jitter tolerance so 60Hz WGC callbacks don't drop to 30fps
             frame_interval: Duration::from_micros(1_000_000 / args.fps.max(1) as u64)
                 .saturating_sub(Duration::from_micros(1500)),
             ready: Some(ready),
         };
 
-        if args.source_id.starts_with("window:") {
+        let res = if args.source_id.starts_with("window:") {
             let parts: Vec<&str> = args.source_id.split(':').collect();
             let hwnd_val: isize = parts
                 .get(1)
@@ -156,7 +179,11 @@ pub async fn run_video_capture(
                 flags,
             );
             WgcHandler::start(settings).map_err(|e| format!("WGC monitor capture error: {}", e))
-        }
+        };
+
+        stop.store(true, Ordering::Relaxed);
+        let _ = worker.join();
+        res
     })
     .await
     .map_err(|e| format!("WGC task panicked: {}", e))?
@@ -170,8 +197,9 @@ fn bgra_scale_to_i420(
     dst: &mut I420Buffer,
     dst_w: usize,
     dst_h: usize,
+    sx_map: &[usize],
 ) {
-    if src_w == 0 || src_h == 0 || dst_w == 0 || dst_h == 0 {
+    if src_w == 0 || src_h == 0 || dst_w == 0 || dst_h == 0 || sx_map.len() < dst_w {
         return;
     }
     let (y_plane, u_plane, v_plane) = dst.data_mut();
@@ -184,8 +212,7 @@ fn bgra_scale_to_i420(
         let write_uv = (dy & 1) == 0;
         let row_uv = (dy / 2) * uv_w;
 
-        for dx in 0..dst_w {
-            let sx = (dx * src_w) / dst_w;
+        for (dx, &sx) in sx_map.iter().enumerate().take(dst_w) {
             let idx = row_src + sx * 4;
             if idx + 2 >= src.len() {
                 continue;
