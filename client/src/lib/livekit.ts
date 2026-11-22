@@ -265,6 +265,10 @@ class LiveKitManager {
     }
   })();
   private currentE2EEOptions?: E2EEOptions;
+  private currentLivekitUrl: string | null = null;
+  private currentScreenshareToken: string | null = null;
+  private isNativeScreenSharing: boolean = false;
+  private nativeScreenShareUnsubscribe?: () => void;
   private currentScreenShareSourceId: string | null = null;
   private currentScreenShareConfig?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean };
   private activeGameFamily: GameFamily | null = null;
@@ -286,6 +290,7 @@ class LiveKitManager {
     token: string,
     callbacks: {
       autoEnableMicrophone?: boolean;
+      screenshareToken?: string;
       onParticipantsChanged?: (participants: Participant[]) => void;
       onSpeakingChanged?: (speakingUserIds: string[]) => void;
       onTrackUpdated?: () => void;
@@ -301,6 +306,8 @@ class LiveKitManager {
     }
 
     this.currentE2EEOptions = e2eeOptions;
+    this.currentLivekitUrl = url;
+    this.currentScreenshareToken = callbacks.screenshareToken || null;
     this.onParticipantsChanged = callbacks.onParticipantsChanged;
     this.onSpeakingChanged = callbacks.onSpeakingChanged;
     this.onTrackUpdated = callbacks.onTrackUpdated;
@@ -347,7 +354,52 @@ class LiveKitManager {
 
     const updateParticipants = () => {
       if (!this.room) return;
-      const all: Participant[] = [this.room.localParticipant, ...Array.from(this.room.remoteParticipants.values())];
+      const sidecarByOwner = new Map<string, Participant>();
+      const visibleRemotes: Participant[] = [];
+
+      for (const remote of this.room.remoteParticipants.values()) {
+        if (remote.identity.startsWith('screenshare:')) {
+          sidecarByOwner.set(remote.identity.slice('screenshare:'.length), remote);
+        } else {
+          visibleRemotes.push(remote);
+        }
+      }
+
+      const mergeSidecar = (p: Participant): Participant => {
+        const sidecar = sidecarByOwner.get(p.identity);
+        if (!sidecar) return p;
+        return new Proxy(p, {
+          get(target, prop, receiver) {
+            if (prop === 'isScreenShareEnabled') {
+              return Boolean(
+                target.isScreenShareEnabled ||
+                  sidecar.getTrackPublication(Track.Source.ScreenShare)
+              );
+            }
+            if (prop === 'getTrackPublication') {
+              return (source: Track.Source) => {
+                if (
+                  source === Track.Source.ScreenShare ||
+                  source === Track.Source.ScreenShareAudio
+                ) {
+                  return (
+                    sidecar.getTrackPublication(source) ||
+                    target.getTrackPublication(source)
+                  );
+                }
+                return target.getTrackPublication(source);
+              };
+            }
+            const value = Reflect.get(target, prop, receiver);
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        });
+      };
+
+      const all: Participant[] = [
+        mergeSidecar(this.room.localParticipant),
+        ...visibleRemotes.map(mergeSidecar),
+      ];
       this.onParticipantsChanged?.(all);
     };
 
@@ -392,37 +444,48 @@ class LiveKitManager {
     });
 
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+      const ownerIdentity = participant.identity.startsWith('screenshare:')
+        ? participant.identity.slice('screenshare:'.length)
+        : participant.identity;
+
       if (publication instanceof RemoteTrackPublication) {
         if (publication.source === Track.Source.ScreenShare) {
-          const isWatched = this.watchedParticipantIdentities.has(participant.identity);
+          const isWatched = this.watchedParticipantIdentities.has(ownerIdentity);
           publication.setEnabled(isWatched);
           if (isWatched) {
             publication.setVideoQuality(VideoQuality.HIGH);
           }
         } else if (publication.source === Track.Source.ScreenShareAudio) {
-          const isWatched = this.watchedParticipantIdentities.has(participant.identity);
+          const isSelfScreenAudio = ownerIdentity === this.room?.localParticipant.identity;
+          const isWatched = !isSelfScreenAudio && this.watchedParticipantIdentities.has(ownerIdentity);
           publication.setEnabled(isWatched);
         }
       }
 
       if (track.kind === Track.Kind.Audio) {
         const isScreenAudio = publication.source === Track.Source.ScreenShareAudio;
+        // Double anti-echo safeguard: never play our own native sidecar's screen share audio locally
+        if (isScreenAudio && ownerIdentity === this.room?.localParticipant.identity) {
+          this.onTrackUpdated?.();
+          updateParticipants();
+          return;
+        }
         const audioEl = track.attach();
         audioEl.id = isScreenAudio
-          ? `audio-stream-${participant.identity}-${track.sid || 'audio'}`
-          : `audio-user-${participant.identity}-${track.sid || 'audio'}`;
+          ? `audio-stream-${ownerIdentity}-${track.sid || 'audio'}`
+          : `audio-user-${ownerIdentity}-${track.sid || 'audio'}`;
         audioEl.style.display = 'none';
         document.body.appendChild(audioEl);
         audioEl.play().catch((err) => console.log('[LiveKit] Audio play blocked:', err));
 
-        const sid = track.sid || `${participant.identity}-${isScreenAudio ? 'screen' : 'mic'}`;
+        const sid = track.sid || `${ownerIdentity}-${isScreenAudio ? 'screen' : 'mic'}`;
         this.attachedAudioElements.set(sid, audioEl);
 
         if (isScreenAudio) {
-          const isWatched = this.watchedParticipantIdentities.has(participant.identity);
+          const isWatched = this.watchedParticipantIdentities.has(ownerIdentity);
           audioEl.muted = this.isDeafened || !isWatched;
           this.attachedStreamAudioElements.set(sid, audioEl);
-          const streamVol = this.streamVolumes.get(participant.identity) ?? 1;
+          const streamVol = this.streamVolumes.get(ownerIdentity) ?? 1;
           try {
             audioEl.volume = Math.min(Math.max(streamVol * this.masterOutputVolume, 0), 1);
           } catch {}
@@ -916,6 +979,52 @@ class LiveKitManager {
       if (resolvedSourceId && (window as any).electronAPI) {
         // Padrão: publicar áudio (fluxo DM não passa config; o modal passa true/false explícito)
         const nativeIncludeAudio = config?.includeAudio !== false;
+
+        // 1. Try Native Rust Sidecar first (bypasses Chromium capture/encode lag & keeps self-audio exclusion)
+        // shortcut: E2EE rooms use per-participant ratcheting keys in callKeyManager, so they keep the Chromium E2EE worker until ratcheting key export is wired to the sidecar.
+        if (
+          !this.currentE2EEOptions &&
+          this.currentLivekitUrl &&
+          this.currentScreenshareToken &&
+          (window as any).electronAPI?.startNativeScreenShare
+        ) {
+          try {
+            // Stop any active Chromium screen share tracks before starting native sidecar
+            await this.room.localParticipant.setScreenShareEnabled(false);
+            await processAudioBridge.stopCapture();
+
+            const nativeRes = await (window as any).electronAPI.startNativeScreenShare({
+              url: this.currentLivekitUrl,
+              token: this.currentScreenshareToken,
+              sourceId: resolvedSourceId,
+              width: dims.width,
+              height: dims.height,
+              fps: frameRate,
+              bitrate: maxBitrate,
+              includeAudio: nativeIncludeAudio,
+            });
+
+            if (nativeRes?.success) {
+              this.isNativeScreenSharing = true;
+              this.nativeScreenShareUnsubscribe?.();
+              this.nativeScreenShareUnsubscribe = (window as any).electronAPI.onNativeScreenShareEvent?.((ev: any) => {
+                if (ev?.event === 'stopped' && this.isNativeScreenSharing) {
+                  this.isNativeScreenSharing = false;
+                  this.onScreenShareEnded?.();
+                }
+              });
+              this.onTrackUpdated?.();
+              return;
+            }
+            if (nativeRes?.error && /cancel/i.test(nativeRes.error)) {
+              return;
+            }
+            console.warn('[LiveKit] Native Rust screenshare unavailable, falling back to Electron/WebRTC:', nativeRes?.error);
+          } catch (nativeErr) {
+            console.warn('[LiveKit] Native Rust screenshare failed, falling back to Electron/WebRTC:', nativeErr);
+          }
+        }
+
         // Stop any previous process audio bridge capture
         await processAudioBridge.stopCapture();
 
@@ -972,9 +1081,9 @@ class LiveKitManager {
           pub = await this.room.localParticipant.publishTrack(videoTrack, {
             name: 'screen_share',
             source: Track.Source.ScreenShare,
-            simulcast: false,
+            simulcast: true,
             videoCodec: selectedCodec,
-            backupCodec: true,
+            backupCodec: false,
             videoEncoding: {
               maxBitrate: maxBitrate,
               maxFramerate: frameRate,
@@ -1042,9 +1151,9 @@ class LiveKitManager {
             contentHint: frameRate >= 60 ? 'motion' : 'detail',
           },
           {
-            simulcast: false,
+            simulcast: true,
             videoCodec: selectedCodec,
-            backupCodec: true,
+            backupCodec: false,
             audioPreset: AudioPresets.musicHighQualityStereo,
             dtx: false,
             videoEncoding: {
@@ -1082,6 +1191,13 @@ class LiveKitManager {
       this.currentScreenShareSourceId = null;
       this.currentScreenShareConfig = undefined;
       this.isGameFamilyTransitioning = false;
+
+      if (this.isNativeScreenSharing) {
+        this.isNativeScreenSharing = false;
+        this.nativeScreenShareUnsubscribe?.();
+        this.nativeScreenShareUnsubscribe = undefined;
+        await (window as any).electronAPI?.stopNativeScreenShare?.().catch(() => {});
+      }
 
       await this.room.localParticipant.setScreenShareEnabled(false);
       const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
@@ -1535,8 +1651,12 @@ class LiveKitManager {
       }
     });
 
-    const remote = this.room?.remoteParticipants.get(participantIdentity);
-    if (remote) {
+    const targets = [
+      this.room?.remoteParticipants.get(participantIdentity),
+      this.room?.remoteParticipants.get(`screenshare:${participantIdentity}`),
+    ];
+    for (const remote of targets) {
+      if (!remote) continue;
       // Find screen share audio track
       remote.audioTrackPublications.forEach((pub) => {
         const audioTrack = pub.track || (pub as any).audioTrack;
@@ -1641,8 +1761,12 @@ class LiveKitManager {
 
     // 2. Adjust subscription on remote participant track publications (video & audio)
     if (this.room) {
-      const remote = this.room.remoteParticipants.get(participantIdentity);
-      if (remote) {
+      const remotes = [
+        this.room.remoteParticipants.get(participantIdentity),
+        this.room.remoteParticipants.get(`screenshare:${participantIdentity}`),
+      ];
+      for (const remote of remotes) {
+        if (!remote) continue;
         // Video screen share publication: keep subscribed (E2EE ready) and pause/resume via setEnabled
         remote.videoTrackPublications.forEach((pub) => {
           if (pub.source === Track.Source.ScreenShare) {
@@ -1661,9 +1785,11 @@ class LiveKitManager {
         // Audio screen share publication: keep subscribed and pause/resume via setEnabled
         remote.audioTrackPublications.forEach((pub) => {
           if (pub.source === Track.Source.ScreenShareAudio) {
+            const isSelfScreenAudio = participantIdentity === this.room?.localParticipant.identity;
+            const shouldEnableAudio = subscribed && !isSelfScreenAudio;
             try {
               if (!pub.isSubscribed) pub.setSubscribed(true);
-              pub.setEnabled(subscribed);
+              pub.setEnabled(shouldEnableAudio);
             } catch (err) {
               console.warn('[LiveKit] Error setting audio screenshare enabled state:', err);
             }
@@ -1671,7 +1797,7 @@ class LiveKitManager {
             if (audioTrack && typeof audioTrack.setVolume === 'function') {
               const streamVol = this.streamVolumes.get(participantIdentity) ?? 1;
               try {
-                audioTrack.setVolume(subscribed && !this.isDeafened ? streamVol * this.masterOutputVolume : 0);
+                audioTrack.setVolume(shouldEnableAudio && !this.isDeafened ? streamVol * this.masterOutputVolume : 0);
               } catch (err) {
                 console.warn('[LiveKit] Error setting stream volume on publication change:', err);
               }
@@ -1756,6 +1882,14 @@ class LiveKitManager {
     this.attachedAudioElements.clear();
     this.attachedUserAudioElements.clear();
     this.attachedStreamAudioElements.clear();
+    if (this.isNativeScreenSharing) {
+      this.isNativeScreenSharing = false;
+      this.nativeScreenShareUnsubscribe?.();
+      this.nativeScreenShareUnsubscribe = undefined;
+      void (window as any).electronAPI?.stopNativeScreenShare?.();
+    }
+    this.currentLivekitUrl = null;
+    this.currentScreenshareToken = null;
     void processAudioBridge.stopCapture();
     void this.setCallAudioRoutingForCapture(false);
     this.callAudioProcessor.cleanup();

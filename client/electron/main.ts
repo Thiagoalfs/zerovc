@@ -566,7 +566,8 @@ function shutdownForUpdate() {
     globalShortcut.unregisterAll();
   } catch {}
 
-  // 2. Derruba o bridge de áudio nativo (zerovc-audio-capture.exe) se estiver ativo
+  // 2. Derruba o bridge de áudio nativo e o sidecar nativo de screenshare se estiverem ativos
+  stopNativeScreenShareProcess();
   try {
     activeAudioProcess?.kill();
   } catch {}
@@ -1752,6 +1753,150 @@ function getAudioCaptureBinaryPath(): string {
   return distBinPath;
 }
 
+let activeScreenShareProcess: ChildProcess | null = null;
+
+function getNativeScreenShareBinaryPath(): string | null {
+  const binaryName = process.platform === 'win32' ? 'zerovc-screenshare.exe' : 'zerovc-screenshare';
+  const candidates = [
+    path.join(process.resourcesPath, 'app.asar.unpacked', 'dist-electron', 'bin', binaryName),
+    path.join(__dirname, 'bin', binaryName),
+    path.join(__dirname, '..', 'electron', 'bin', binaryName),
+    path.join(__dirname, '..', 'electron', 'native-screenshare', 'target', 'release', binaryName),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+function stopNativeScreenShareProcess() {
+  const proc = activeScreenShareProcess;
+  activeScreenShareProcess = null;
+  if (!proc) return;
+  try {
+    proc.stdin?.write('stop\n');
+    proc.stdin?.end();
+  } catch {}
+  setTimeout(() => {
+    try {
+      if (!proc.killed) proc.kill();
+    } catch {}
+  }, 500);
+}
+
+ipcMain.handle(
+  'start-native-screenshare',
+  async (
+    _event,
+    options: {
+      url: string;
+      token: string;
+      sourceId: string;
+      width: number;
+      height: number;
+      fps: number;
+      bitrate: number;
+      includeAudio: boolean;
+      e2eeKey?: string;
+    }
+  ) => {
+    stopNativeScreenShareProcess();
+
+    const binPath = getNativeScreenShareBinaryPath();
+    if (!binPath) {
+      return { success: false, error: 'native-screenshare-binary-not-found' };
+    }
+
+    const args = [
+      '--url', options.url,
+      '--token', options.token,
+      '--source-id', options.sourceId || 'screen:0:0',
+      '--width', String(options.width || 1280),
+      '--height', String(options.height || 720),
+      '--fps', String(options.fps || 30),
+      '--bitrate', String(options.bitrate || 3_500_000),
+      '--include-audio', options.includeAudio ? 'true' : 'false',
+      '--self-pid', String(process.pid),
+    ];
+
+    if (process.platform === 'win32') {
+      const audioHelper = getAudioCaptureBinaryPath();
+      if (fs.existsSync(audioHelper)) {
+        args.push('--audio-helper', audioHelper);
+      }
+    }
+
+    if (options.e2eeKey) {
+      args.push('--e2ee-key', options.e2eeKey);
+    }
+
+    return await new Promise<{ success: boolean; error?: string }>((resolve) => {
+      let settled = false;
+      const finish = (res: { success: boolean; error?: string }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(startupTimer);
+        resolve(res);
+      };
+
+      const child = spawn(binPath, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+      activeScreenShareProcess = child;
+
+      const startupTimer = setTimeout(() => {
+        if (!settled) {
+          stopNativeScreenShareProcess();
+          finish({ success: false, error: 'native-screenshare-startup-timeout' });
+        }
+      }, 15000);
+
+      let stdoutBuf = '';
+      child.stdout?.on('data', (chunk: Buffer) => {
+        stdoutBuf += chunk.toString('utf8');
+        let idx: number;
+        while ((idx = stdoutBuf.indexOf('\n')) !== -1) {
+          const line = stdoutBuf.slice(0, idx).trim();
+          stdoutBuf = stdoutBuf.slice(idx + 1);
+          if (!line) continue;
+          try {
+            const ev = JSON.parse(line);
+            mainWindow?.webContents.send('native-screenshare-event', ev);
+            if (ev.event === 'publishing') {
+              finish({ success: true });
+            } else if (ev.event === 'error' && !settled) {
+              finish({ success: false, error: ev.message || 'native-screenshare-error' });
+            }
+          } catch {}
+        }
+      });
+
+      child.stderr?.on('data', (chunk: Buffer) => {
+        console.warn('[NativeScreenShare]', chunk.toString('utf8').trim());
+      });
+
+      child.on('error', (err) => {
+        if (activeScreenShareProcess === child) activeScreenShareProcess = null;
+        finish({ success: false, error: err.message });
+      });
+
+      child.on('exit', (code) => {
+        if (activeScreenShareProcess === child) activeScreenShareProcess = null;
+        mainWindow?.webContents.send('native-screenshare-event', { event: 'stopped', code });
+        if (!settled) {
+          finish({ success: false, error: `native-screenshare-exited-${code ?? 'null'}` });
+        }
+      });
+    });
+  }
+);
+
+ipcMain.handle('stop-native-screenshare', () => {
+  stopNativeScreenShareProcess();
+  return { success: true };
+});
+
 app.on('before-quit', () => {
   isQuitting = true;
 });
@@ -1759,6 +1904,7 @@ app.on('before-quit', () => {
 app.on('will-quit', () => {
   stopActivityScanner();
   globalShortcut.unregisterAll();
+  stopNativeScreenShareProcess();
   if (activeAudioProcess) {
     try {
       activeAudioProcess.kill();

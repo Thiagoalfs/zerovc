@@ -429,6 +429,19 @@ declare global {
       restartToUpdate?: () => void;
       setSplashColors?: (colors: { accent: string; bg: string }) => Promise<void>;
       onSplashUpdate?: (callback: (data: { phase: string; percent?: number; version?: string; message?: string }) => void) => () => void;
+      startNativeScreenShare?: (options: {
+        url: string;
+        token: string;
+        sourceId: string;
+        width: number;
+        height: number;
+        fps: number;
+        bitrate: number;
+        includeAudio: boolean;
+        e2eeKey?: string;
+      }) => Promise<{ success: boolean; error?: string }>;
+      stopNativeScreenShare?: () => Promise<{ success: boolean }>;
+      onNativeScreenShareEvent?: (callback: (ev: { event: string; message?: string; [key: string]: any }) => void) => () => void;
     };
   }
 }

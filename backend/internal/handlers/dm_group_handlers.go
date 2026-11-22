@@ -1015,10 +1015,11 @@ func (h *DMGroupHandler) EnableE2EE(w http.ResponseWriter, r *http.Request) {
 
 // DMGroupVoiceTokenResponse represents the response payload for joining a DM group voice call.
 type DMGroupVoiceTokenResponse struct {
-	Token       string `json:"token"`
-	LiveKitURL  string `json:"livekit_url"`
-	RoomName    string `json:"room_name"`
-	E2EEEnabled bool   `json:"e2ee_enabled"`
+	Token            string `json:"token"`
+	ScreenShareToken string `json:"screenshare_token,omitempty"`
+	LiveKitURL       string `json:"livekit_url"`
+	RoomName         string `json:"room_name"`
+	E2EEEnabled      bool   `json:"e2ee_enabled"`
 }
 
 func (h *DMGroupHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
@@ -1068,12 +1069,15 @@ func (h *DMGroupHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	screenShareToken, _ := h.livekit.GenerateScreenShareToken(livekitRoomName, userID, userName, string(metaJSON))
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DMGroupVoiceTokenResponse{
-		Token:       token,
-		LiveKitURL:  h.livekit.GetPublicURL(),
-		RoomName:    livekitRoomName,
-		E2EEEnabled: isE2EE,
+		Token:            token,
+		ScreenShareToken: screenShareToken,
+		LiveKitURL:       h.livekit.GetPublicURL(),
+		RoomName:         livekitRoomName,
+		E2EEEnabled:      isE2EE,
 	})
 }
 

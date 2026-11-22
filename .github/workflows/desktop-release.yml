@@ -27,6 +27,15 @@ jobs:
         working-directory: client
         run: npm ci
 
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Native Rust ScreenShare Sidecar (Windows)
+        working-directory: client/electron/native-screenshare
+        run: |
+          cargo build --release
+          Copy-Item -Force target\release\zerovc-screenshare.exe ..\bin\zerovc-screenshare.exe
+
       - name: Build Electron
         working-directory: client
         run: npm run build:electron
@@ -63,12 +72,22 @@ jobs:
         working-directory: client
         run: npm ci
 
+      - name: Install Linux packaging & native build tools (clang, rpm, bsdtar)
+        run: sudo apt-get update && sudo apt-get install -y clang rpm libarchive-tools libssl-dev pkg-config
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Native Rust ScreenShare Sidecar (Linux)
+        working-directory: client/electron/native-screenshare
+        run: |
+          cargo build --release
+          cp -f target/release/zerovc-screenshare ../bin/zerovc-screenshare
+          chmod +x ../bin/zerovc-screenshare
+
       - name: Build Electron
         working-directory: client
         run: npm run build:electron
-
-      - name: Install Linux packaging tools (rpm, bsdtar)
-        run: sudo apt-get update && sudo apt-get install -y rpm libarchive-tools
 
       - name: Build & Publish Linux Installers
         working-directory: client

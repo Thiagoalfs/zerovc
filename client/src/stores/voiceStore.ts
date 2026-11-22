@@ -53,7 +53,7 @@ interface VoiceState {
   setWatchedParticipant: (identity: string | null) => void;
 
   joinVoice: (channelId: string, guildId?: string) => Promise<void>;
-  joinDMCall: (roomId: string, recipient: User, token?: string, livekitUrl?: string, isE2EE?: boolean) => Promise<void>;
+  joinDMCall: (roomId: string, recipient: User, token?: string, livekitUrl?: string, isE2EE?: boolean, screenshareToken?: string) => Promise<void>;
   joinGroupVoice: (groupId: string, group?: DMGroup) => Promise<void>;
   leaveVoice: () => Promise<void>;
 
@@ -178,7 +178,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     shouldDeafen: boolean,
     isE2EERoom: boolean = false,
     callId?: string,
-    sessionEpoch: number = 0
+    sessionEpoch: number = 0,
+    screenshareToken?: string
   ) => {
     let e2eeSetup = undefined;
     if (isE2EERoom) {
@@ -203,6 +204,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
 
     await livekit.connect(livekitUrl, token, {
       autoEnableMicrophone: !shouldMute,
+      screenshareToken,
       onParticipantsChanged: (participants) => {
         set({ participants });
 
@@ -573,7 +575,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           shouldDeafen,
           Boolean((res as any)?.e2ee_enabled),
           channelId,
-          currentEpoch
+          currentEpoch,
+          res.screenshare_token
         );
 
         if (currentEpoch !== activeConnectionEpoch) return;
@@ -602,7 +605,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       }
     },
 
-    joinDMCall: async (roomId: string, recipient: User, token?: string, livekitUrl?: string, isE2EE?: boolean) => {
+    joinDMCall: async (roomId: string, recipient: User, token?: string, livekitUrl?: string, isE2EE?: boolean, screenshareToken?: string) => {
       if (
         get().voiceType === 'dm' &&
         get().dmRoomId === roomId &&
@@ -643,11 +646,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         const fetchTokenPromise = (token && livekitUrl)
           ? Promise.resolve({
               token,
+              screenshare_token: screenshareToken,
               livekit_url: livekitUrl,
               e2ee_enabled: isE2EE,
             })
           : api.dms.acceptCall(roomId).then((res) => ({
               token: res.token,
+              screenshare_token: res.screenshare_token,
               livekit_url: res.livekit_url,
               e2ee_enabled: (res as any)?.e2ee_enabled !== undefined ? Boolean((res as any)?.e2ee_enabled) : isE2EE,
             }));
@@ -666,7 +671,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           shouldDeafen,
           Boolean(res.e2ee_enabled),
           roomId,
-          currentEpoch
+          currentEpoch,
+          res.screenshare_token
         );
       } catch (err) {
         if (currentEpoch !== activeConnectionEpoch) return;
@@ -736,7 +742,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           shouldDeafen,
           Boolean((res as any)?.e2ee_enabled),
           groupId,
-          currentEpoch
+          currentEpoch,
+          res.screenshare_token
         );
       } catch (err) {
         if (currentEpoch !== activeConnectionEpoch) return;

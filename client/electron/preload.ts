@@ -44,6 +44,19 @@ export interface ElectronAPI {
   stopProcessAudioCapture: () => Promise<{ success: boolean; error?: string }>;
   onProcessAudioChunk: (callback: (chunk: Uint8Array) => void) => () => void;
   onProcessAudioFallback: (callback: (info: { reason: string }) => void) => () => void;
+  startNativeScreenShare: (options: {
+    url: string;
+    token: string;
+    sourceId: string;
+    width: number;
+    height: number;
+    fps: number;
+    bitrate: number;
+    includeAudio: boolean;
+    e2eeKey?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
+  stopNativeScreenShare: () => Promise<{ success: boolean }>;
+  onNativeScreenShareEvent: (callback: (ev: { event: string; message?: string; [key: string]: any }) => void) => () => void;
   setMinimizeToTray: (enabled: boolean) => void;
   getMinimizeToTray: () => Promise<boolean>;
   setAutoStart: (enabled: boolean) => void;
@@ -151,6 +164,13 @@ const electronAPI: ElectronAPI = {
   },
   restartToUpdate: () => ipcRenderer.send('restart-to-update'),
   setSplashColors: (colors: { accent: string; bg: string }) => ipcRenderer.invoke('set-splash-colors', colors),
+  startNativeScreenShare: (options) => ipcRenderer.invoke('start-native-screenshare', options),
+  stopNativeScreenShare: () => ipcRenderer.invoke('stop-native-screenshare'),
+  onNativeScreenShareEvent: (callback) => {
+    const handler = (_: any, ev: any) => callback(ev);
+    ipcRenderer.on('native-screenshare-event', handler);
+    return () => ipcRenderer.removeListener('native-screenshare-event', handler);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

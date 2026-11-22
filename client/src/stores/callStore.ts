@@ -22,7 +22,7 @@ interface CallStoreState {
   startCall: (roomId: string, recipient: User) => Promise<void>;
   handleIncomingCall: (roomId: string, caller: User, isE2EE?: boolean) => void;
   acceptCall: () => Promise<void>;
-  handleCallAccepted: (token: string, livekitUrl: string, roomName: string, isE2EE?: boolean) => Promise<void>;
+  handleCallAccepted: (token: string, livekitUrl: string, roomName: string, isE2EE?: boolean, screenshareToken?: string) => Promise<void>;
   rejectCall: () => Promise<void>;
   endCall: () => Promise<void>;
   handleCallEnded: () => Promise<void>;
@@ -132,7 +132,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
           throw new Error('E2EE_CALL_UNSUPPORTED: Platform lacks Insertable Streams. Plaintext fallback strictly forbidden.');
         }
       }
-      await get().handleCallAccepted(res.token, res.livekit_url, res.room_name, isE2EE);
+      await get().handleCallAccepted(res.token, res.livekit_url, res.room_name, isE2EE, res.screenshare_token);
     } catch (err) {
       console.error('Failed to accept call:', err);
       set({ callState: 'idle', roomId: null, incomingCaller: null });
@@ -140,7 +140,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     }
   },
 
-  handleCallAccepted: async (token: string, livekitUrl: string, _roomName: string, isE2EE?: boolean) => {
+  handleCallAccepted: async (token: string, livekitUrl: string, _roomName: string, isE2EE?: boolean, screenshareToken?: string) => {
     const { roomId, targetUser, incomingCaller } = get();
     const recipient = targetUser || incomingCaller;
     if (!roomId || !recipient) return;
@@ -164,7 +164,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       if (typeof window !== 'undefined') {
         (window as any).__lastCallAcceptedE2EE = isE2EE;
       }
-      await useVoiceStore.getState().joinDMCall(roomId, recipient, token, livekitUrl, isE2EE);
+      await useVoiceStore.getState().joinDMCall(roomId, recipient, token, livekitUrl, isE2EE, screenshareToken);
       set({
         callState: 'connected',
         incomingCaller: null,

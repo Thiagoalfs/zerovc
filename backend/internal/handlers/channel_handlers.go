@@ -540,10 +540,11 @@ func BuildLiveKitParticipantMetadata(avatarURL, displayName, username, customSta
 }
 
 type JoinVoiceResponse struct {
-	Token       string `json:"token"`
-	LiveKitURL  string `json:"livekit_url"`
-	RoomName    string `json:"room_name"`
-	E2EEEnabled bool   `json:"e2ee_enabled"`
+	Token            string `json:"token"`
+	ScreenShareToken string `json:"screenshare_token,omitempty"`
+	LiveKitURL       string `json:"livekit_url"`
+	RoomName         string `json:"room_name"`
+	E2EEEnabled      bool   `json:"e2ee_enabled"`
 }
 
 func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
@@ -694,12 +695,18 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
+	var screenShareToken string
+	if canSpeak {
+		screenShareToken, _ = h.livekit.GenerateScreenShareToken(roomName, userID, user.Username, string(metaJSON))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(JoinVoiceResponse{
-		Token:       token,
-		LiveKitURL:  h.livekit.GetPublicURL(),
-		RoomName:    roomName,
-		E2EEEnabled: isE2EE,
+		Token:            token,
+		ScreenShareToken: screenShareToken,
+		LiveKitURL:       h.livekit.GetPublicURL(),
+		RoomName:         roomName,
+		E2EEEnabled:      isE2EE,
 	})
 }
 

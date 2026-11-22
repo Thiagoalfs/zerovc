@@ -1470,7 +1470,7 @@ export const App: React.FC = () => {
       };
 
       const handleCallAccept = (event: any) => {
-        useCallStore.getState().handleCallAccepted(event.data.token, event.data.livekit_url, event.data.room_name, event.data.e2ee_enabled);
+        useCallStore.getState().handleCallAccepted(event.data.token, event.data.livekit_url, event.data.room_name, event.data.e2ee_enabled, event.data.screenshare_token);
       };
 
       const handleCallEnd = () => {

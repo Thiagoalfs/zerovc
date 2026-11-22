@@ -562,7 +562,7 @@ export const api = {
         body: JSON.stringify(payload),
       }),
     joinVoice: (channelId: string, data?: { is_muted?: boolean; is_deafened?: boolean }) =>
-      request<{ token: string; livekit_url: string; room_name: string; e2ee_enabled?: boolean }>(`/channels/${channelId}/join-voice`, {
+      request<{ token: string; screenshare_token?: string; livekit_url: string; room_name: string; e2ee_enabled?: boolean }>(`/channels/${channelId}/join-voice`, {
         method: 'POST',
         body: data ? JSON.stringify(data) : undefined,
       }),
@@ -682,7 +682,7 @@ export const api = {
         method: 'POST',
       }),
     acceptCall: (roomId: string) =>
-      request<{ success: boolean; room_id: string; room_name: string; token: string; livekit_url: string; e2ee_enabled?: boolean }>(`/dms/${roomId}/call/accept`, {
+      request<{ success: boolean; room_id: string; room_name: string; token: string; screenshare_token?: string; livekit_url: string; e2ee_enabled?: boolean }>(`/dms/${roomId}/call/accept`, {
         method: 'POST',
       }),
     rejectCall: (roomId: string) =>
@@ -748,7 +748,7 @@ export const api = {
         method: 'POST',
       }),
     getVoiceToken: (id: string) =>
-      request<{ token: string; livekit_url: string; room_name: string; e2ee_enabled?: boolean }>(`/dm/groups/${id}/voice-token`, {
+      request<{ token: string; screenshare_token?: string; livekit_url: string; room_name: string; e2ee_enabled?: boolean }>(`/dm/groups/${id}/voice-token`, {
         method: 'POST',
       }),
   },

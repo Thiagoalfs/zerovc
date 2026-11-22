@@ -36,3 +36,8 @@ pgdata/
 *.apk
 *.zip
 *.tar.gz
+
+# Native Rust screenshare sidecar build artifacts
+client/electron/native-screenshare/target/
+client/electron/bin/zerovc-screenshare
+client/electron/bin/zerovc-screenshare.exe

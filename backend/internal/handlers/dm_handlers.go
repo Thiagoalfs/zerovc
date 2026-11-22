@@ -906,12 +906,13 @@ type DMCallInviteResponse struct {
 
 // DMCallAcceptResponse represents the response payload for accepting a DM call.
 type DMCallAcceptResponse struct {
-	Success     bool      `json:"success"`
-	RoomID      uuid.UUID `json:"room_id"`
-	RoomName    string    `json:"room_name"`
-	Token       string    `json:"token"`
-	LiveKitURL  string    `json:"livekit_url"`
-	E2EEEnabled bool      `json:"e2ee_enabled"`
+	Success          bool      `json:"success"`
+	RoomID           uuid.UUID `json:"room_id"`
+	RoomName         string    `json:"room_name"`
+	Token            string    `json:"token"`
+	ScreenShareToken string    `json:"screenshare_token,omitempty"`
+	LiveKitURL       string    `json:"livekit_url"`
+	E2EEEnabled      bool      `json:"e2ee_enabled"`
 }
 
 // 1x1 Call Endpoints
@@ -1040,27 +1041,32 @@ func (h *DMHandler) AcceptCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	screenShareTokenAcceptor, _ := h.livekit.GenerateScreenShareToken(livekitRoomName, userID, currentName, string(currentMetaJSON))
+	screenShareTokenCaller, _ := h.livekit.GenerateScreenShareToken(livekitRoomName, otherUserID, otherName, string(otherMetaJSON))
+
 	// Notify caller via WS with token and URL
 	h.hub.SendToUser(otherUserID, models.WSEvent{
 		Type: "CALL_ACCEPT",
 		Data: map[string]any{
-			"room_id":      roomID,
-			"room_name":    livekitRoomName,
-			"token":        tokenCaller,
-			"livekit_url":  h.livekit.GetPublicURL(),
-			"e2ee_enabled": isE2EE,
+			"room_id":           roomID,
+			"room_name":         livekitRoomName,
+			"token":             tokenCaller,
+			"screenshare_token": screenShareTokenCaller,
+			"livekit_url":       h.livekit.GetPublicURL(),
+			"e2ee_enabled":      isE2EE,
 		},
 	})
 
 	// Respond to acceptor with their token and URL
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DMCallAcceptResponse{
-		Success:     true,
-		RoomID:      roomID,
-		RoomName:    livekitRoomName,
-		Token:       tokenAcceptor,
-		LiveKitURL:  h.livekit.GetPublicURL(),
-		E2EEEnabled: isE2EE,
+		Success:          true,
+		RoomID:           roomID,
+		RoomName:         livekitRoomName,
+		Token:            tokenAcceptor,
+		ScreenShareToken: screenShareTokenAcceptor,
+		LiveKitURL:       h.livekit.GetPublicURL(),
+		E2EEEnabled:      isE2EE,
 	})
 }
 

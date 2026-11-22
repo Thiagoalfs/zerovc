@@ -46,6 +46,32 @@ func (s *LiveKitService) GenerateJoinToken(roomName string, userID uuid.UUID, us
 	return token, nil
 }
 
+func (s *LiveKitService) GenerateScreenShareToken(roomName string, userID uuid.UUID, username string, metadata string) (string, error) {
+	at := auth.NewAccessToken(s.apiKey, s.apiSecret)
+	canPublish := true
+	canSubscribe := false
+	grant := &auth.VideoGrant{
+		RoomJoin:       true,
+		Room:           roomName,
+		CanPublish:     &canPublish,
+		CanSubscribe:   &canSubscribe,
+		CanPublishData: &canSubscribe,
+	}
+
+	at.AddGrant(grant).
+		SetIdentity("screenshare:" + userID.String()).
+		SetName(username).
+		SetMetadata(metadata).
+		SetValidFor(24 * time.Hour)
+
+	token, err := at.ToJWT()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate LiveKit screenshare JWT token: %w", err)
+	}
+
+	return token, nil
+}
+
 func (s *LiveKitService) GetPublicURL() string {
 	return s.publicURL
 }
