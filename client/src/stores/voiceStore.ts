@@ -254,7 +254,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       onTrackUpdated: () => {
         const room = livekit.getRoom();
         if (room) {
-          const participants = [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
+          const participants = livekit.getVisibleParticipants();
           set({ participants });
 
           const currentScreenShares = new Set(
@@ -301,11 +301,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         }
       },
       onParticipantConnected: (participant) => {
+        if (participant.identity.startsWith('screenshare:')) return;
         const deviceId = extractParticipantDeviceId(participant);
         participantDeviceMap.set(participant.identity, deviceId);
         callKeyManager.handleParticipantJoined(deviceId);
       },
       onParticipantDisconnected: (participant) => {
+        if (participant.identity.startsWith('screenshare:')) return;
         const deviceId = participantDeviceMap.get(participant.identity) || extractParticipantDeviceId(participant);
         participantDeviceMap.delete(participant.identity);
         callKeyManager.handleParticipantLeft(deviceId);
@@ -368,6 +370,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
 
       if (room && room.remoteParticipants) {
         for (const participant of room.remoteParticipants.values()) {
+          if (participant.identity.startsWith('screenshare:')) continue;
           const devId = extractParticipantDeviceId(participant);
           participantDeviceMap.set(participant.identity, devId);
           existingDeviceIds.push(devId);
@@ -927,7 +930,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     ) => {
       const { currentChannelId, voiceType } = get();
       try {
-        await livekit.setScreenShareEnabled(true, sourceId, config, gameFamily);
+        const started = await livekit.setScreenShareEnabled(true, sourceId, config, gameFamily);
+        if (!started) {
+          set({ isScreensharing: false });
+          return;
+        }
         set({ isScreensharing: true });
 
         if (voiceType === 'guild' && currentChannelId) {

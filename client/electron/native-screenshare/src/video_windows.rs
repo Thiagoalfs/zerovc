@@ -1,3 +1,4 @@
+use crate::preview::PreviewHub;
 use crate::Args;
 use livekit::webrtc::prelude::{I420Buffer, VideoFrame, VideoRotation};
 use livekit::webrtc::video_source::native::NativeVideoSource;
@@ -16,10 +17,12 @@ use windows_capture::window::Window;
 
 struct CaptureFlags {
     source: NativeVideoSource,
+    preview: PreviewHub,
     stop: Arc<AtomicBool>,
     target_w: u32,
     target_h: u32,
     frame_interval: Duration,
+    ready: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
 }
 
 struct WgcHandler {
@@ -32,7 +35,10 @@ impl GraphicsCaptureApiHandler for WgcHandler {
     type Flags = CaptureFlags;
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
-    fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
+    fn new(mut ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
+        if let Some(tx) = ctx.flags.ready.take() {
+            let _ = tx.send(Ok(()));
+        }
         Ok(Self {
             flags: ctx.flags,
             start_ts: Instant::now(),
@@ -71,6 +77,17 @@ impl GraphicsCaptureApiHandler for WgcHandler {
             self.flags.target_h as usize,
         );
 
+        if self.flags.preview.is_active() {
+            let (y_plane, u_plane, v_plane) = i420.data();
+            let y_size = (self.flags.target_w * self.flags.target_h) as usize;
+            let uv_size = ((self.flags.target_w / 2) * (self.flags.target_h / 2)) as usize;
+            let mut raw = Vec::with_capacity(y_size + uv_size * 2);
+            raw.extend_from_slice(&y_plane[..y_size]);
+            raw.extend_from_slice(&u_plane[..uv_size]);
+            raw.extend_from_slice(&v_plane[..uv_size]);
+            self.flags.preview.publish_vec(raw);
+        }
+
         self.flags.source.capture_frame(&VideoFrame {
             rotation: VideoRotation::VideoRotation0,
             timestamp_us: self.start_ts.elapsed().as_micros() as i64,
@@ -90,17 +107,21 @@ impl GraphicsCaptureApiHandler for WgcHandler {
 pub async fn run_video_capture(
     args: Args,
     source: NativeVideoSource,
+    preview: PreviewHub,
     stop: Arc<AtomicBool>,
+    ready: tokio::sync::oneshot::Sender<Result<(), String>>,
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let flags = CaptureFlags {
             source,
+            preview,
             stop,
             target_w: args.width,
             target_h: args.height,
             // Allow 1.5ms DWM jitter tolerance so 60Hz WGC callbacks don't drop to 30fps
             frame_interval: Duration::from_micros(1_000_000 / args.fps.max(1) as u64)
                 .saturating_sub(Duration::from_micros(1500)),
+            ready: Some(ready),
         };
 
         if args.source_id.starts_with("window:") {

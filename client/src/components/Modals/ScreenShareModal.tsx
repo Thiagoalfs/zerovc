@@ -34,14 +34,34 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'screens' | 'windows'>('all');
-  const [resolution, setResolution] = useState<ScreenResolution>('720p');
-  const [fps, setFps] = useState<ScreenFPS>(30);
-  const [includeAudio, setIncludeAudio] = useState(true);
+  const [resolution, setResolution] = useState<ScreenResolution>(() => {
+    try {
+      const saved = localStorage.getItem('zerovc_screenshare_res');
+      if (saved === '480p' || saved === '720p' || saved === '1080p') return saved;
+    } catch {}
+    return '720p';
+  });
+  const [fps, setFps] = useState<ScreenFPS>(() => {
+    try {
+      const saved = Number(localStorage.getItem('zerovc_screenshare_fps'));
+      if (saved === 15 || saved === 30 || saved === 60) return saved;
+    } catch {}
+    return 30;
+  });
+  const [includeAudio, setIncludeAudio] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('zerovc_screenshare_audio');
+      if (saved !== null) return saved !== 'false';
+    } catch {}
+    return true;
+  });
   const [isLoading, setIsLoading] = useState(true);
   const { startScreenShare: startVoiceScreenShare } = useVoiceStore();
   const { callState, startScreenShare: startCallScreenShare } = useCallStore();
 
   const isElectron = !!(window as any).electronAPI?.getScreenSources;
+  const isWaylandPortal = isElectron && sources.length === 1 && sources[0].id === 'screen:wayland-portal';
+  const isExternalPicker = !isElectron || isWaylandPortal;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -120,6 +140,12 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
 
   const handleShare = async () => {
     if (!selectedSourceId) return;
+    try {
+      localStorage.setItem('zerovc_screenshare_res', resolution);
+      localStorage.setItem('zerovc_screenshare_fps', String(fps));
+      localStorage.setItem('zerovc_screenshare_audio', String(includeAudio));
+    } catch {}
+
     const selectedSource = sources.find((s) => s.id === selectedSourceId);
     let matchedFamily;
     try {
@@ -128,12 +154,20 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
         : undefined;
     } catch {}
 
+    // Close immediately when handing off to the OS/browser picker so the modal doesn't sit behind it
+    if (isExternalPicker) {
+      onClose();
+    }
+
     if (callState === 'connected' || callState === 'calling') {
       await startCallScreenShare(selectedSourceId, { resolution, fps, includeAudio }, matchedFamily);
     } else {
       await startVoiceScreenShare(selectedSourceId, { resolution, fps, includeAudio }, matchedFamily);
     }
-    onClose();
+
+    if (!isExternalPicker) {
+      onClose();
+    }
   };
 
   return (
@@ -147,13 +181,15 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
         role="dialog"
         aria-modal="true"
         aria-labelledby="screen-share-modal-title"
-        className="bg-background-dark w-full max-w-xl max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col"
+        className={`bg-background-dark w-full ${
+          isExternalPicker ? 'max-w-md' : 'max-w-xl'
+        } max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col`}
       >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
           <div className="flex items-center gap-2">
             <h2 id="screen-share-modal-title" className={MODAL_TITLE_CLASS}>
-              Selecione janela ou tela
+              {isExternalPicker ? 'Configurar transmissão' : 'Selecione janela ou tela'}
             </h2>
           </div>
           <ModalButton
@@ -170,7 +206,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
 
         {/* Source Selection Area */}
         <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6 space-y-4 sm:space-y-5">
-          {isElectron && sources.length > 0 && (
+          {!isExternalPicker && isElectron && sources.length > 0 && (
             <div className="flex items-center gap-2 pb-1">
               <button
                 type="button"
@@ -208,24 +244,18 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
             </div>
           )}
 
-          {/* Sources Grid */}
+          {/* Sources Grid (hidden when OS/browser picker handles source selection) */}
           {isLoading ? (
             <div className="h-44 flex flex-col items-center justify-center gap-2 text-sm text-gray-400">
               <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
               <span>Carregando janelas...</span>
             </div>
-          ) : !isElectron ? (
-            <div
-              onClick={() => setSelectedSourceId('screen:0:0')}
-              className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col items-center justify-center text-center gap-3 ${
-                selectedSourceId === 'screen:0:0'
-                  ? 'border-brand-500 bg-brand-500/10'
-                  : 'border-white/10 bg-white/5 hover:border-white/20'
-              }`}
-            >
-              <Monitor className="w-12 h-12 text-brand-400" />
-              <p className="text-sm font-bold text-white">Compartilhar tela via navegador</p>
-            </div>
+          ) : isExternalPicker ? (
+            <p className="text-xs text-gray-400 text-center">
+              {isWaylandPortal
+                ? 'Você escolherá a tela ou janela no seletor do sistema ao continuar.'
+                : 'Você escolherá a guia, janela ou tela no seletor do navegador ao continuar.'}
+            </p>
           ) : filteredSources.length === 0 ? (
             <div className="h-44 flex items-center justify-center text-sm text-gray-400">
               Nenhuma fonte encontrada nesta categoria.
@@ -365,7 +395,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
             onClick={handleShare}
             disabled={!selectedSourceId}
           >
-            Iniciar transmissão
+            {isExternalPicker ? 'Escolher tela' : 'Iniciar transmissão'}
           </ModalButton>
         </div>
       </div>

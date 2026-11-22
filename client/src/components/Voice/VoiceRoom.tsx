@@ -10,6 +10,7 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
 import { VoiceControlBar } from './VoiceControlBar';
+import { ModalButton } from '@/components/ui/modal-button';
 import { canUserConnectVoice } from '../../utils/userActivity';
 import { showAlert } from '../../stores/confirmModalStore';
 
@@ -501,25 +502,19 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
             </div>
 
             {!isConnectedToThisChannel && (
-              <button
+              <ModalButton
+                htmlType="button"
+                type="primary"
+                size="medium"
+                loading={isConnectingToThisChannel}
                 disabled={isConnectingToThisChannel}
                 onClick={() => {
                   void handleJoinChannel();
                 }}
-                className="bg-brand-500 hover:bg-brand-600 disabled:opacity-75 text-white font-semibold text-sm px-6 py-2.5 rounded-xl shadow-lg hover:shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 animate-in zoom-in-95"
+                prefix={!isConnectingToThisChannel ? <Volume2 className="w-4 h-4" /> : undefined}
               >
-                {isConnectingToThisChannel ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Conectando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Volume2 className="w-4 h-4" />
-                    <span>Conectar à Voz</span>
-                  </>
-                )}
-              </button>
+                {isConnectingToThisChannel ? 'Conectando...' : 'Conectar à Voz'}
+              </ModalButton>
             )}
           </div>
         ) : spotlightParticipant ? (() => {
@@ -646,25 +641,19 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
             {/* Connect to Voice Button (Always centered below cards when not connected) */}
             {!isConnectedToThisChannel && (
               <div className="pt-2 flex-shrink-0">
-                <button
+                <ModalButton
+                  htmlType="button"
+                  type="primary"
+                  size="medium"
+                  loading={isConnectingToThisChannel}
                   disabled={isConnectingToThisChannel}
                   onClick={() => {
                     void handleJoinChannel();
                   }}
-                  className="bg-brand-500 hover:bg-brand-600 disabled:opacity-75 text-white font-semibold text-sm px-6 py-2.5 rounded-xl shadow-lg hover:shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 animate-in zoom-in-95"
+                  prefix={!isConnectingToThisChannel ? <Volume2 className="w-4 h-4" /> : undefined}
                 >
-                  {isConnectingToThisChannel ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Conectando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Volume2 className="w-4 h-4" />
-                      <span>Conectar à Voz</span>
-                    </>
-                  )}
-                </button>
+                  {isConnectingToThisChannel ? 'Conectando...' : 'Conectar à Voz'}
+                </ModalButton>
               </div>
             )}
           </div>

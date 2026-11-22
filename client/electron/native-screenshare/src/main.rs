@@ -1,4 +1,5 @@
 mod audio;
+mod preview;
 #[cfg(target_os = "linux")]
 mod video_linux;
 #[cfg(target_os = "windows")]
@@ -111,17 +112,8 @@ async fn main() {
         }
     }
 
-    let (room, mut room_events) = match Room::connect(&args.url, &args.token, room_opts).await {
-        Ok(res) => res,
-        Err(err) => {
-            emit_event("error", json!({ "message": format!("LiveKit connect failed: {}", err) }));
-            std::process::exit(1);
-        }
-    };
-
-    emit_event("connected", json!({ "room": room.name() }));
-
-    // 1. Publish native video track
+    // 1. Start platform-specific video capture FIRST so OS pickers (e.g. KDE Wayland portal)
+    // complete BEFORE we connect/publish to LiveKit (no black screen while choosing a window).
     let video_source = NativeVideoSource::new(
         VideoResolution {
             width: args.width,
@@ -129,14 +121,69 @@ async fn main() {
         },
         true,
     );
+
+    let (preview_hub, preview_port, preview_token) = match preview::PreviewHub::start(stop_flag.clone()).await {
+        Ok(res) => res,
+        Err(err) => {
+            emit_event("error", json!({ "message": err }));
+            std::process::exit(1);
+        }
+    };
+
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
+    let v_args = args.clone();
+    let v_stop = stop_flag.clone();
+    let v_source = video_source.clone();
+    let v_preview = preview_hub.clone();
+    let video_handle = tokio::spawn(async move {
+        #[cfg(target_os = "linux")]
+        let res = video_linux::run_video_capture(v_args, v_source, v_preview, v_stop.clone(), ready_tx).await;
+
+        #[cfg(target_os = "windows")]
+        let res = video_windows::run_video_capture(v_args, v_source, v_preview, v_stop.clone(), ready_tx).await;
+
+        if let Err(err) = res {
+            if !v_stop.load(Ordering::Relaxed) {
+                emit_event("error", json!({ "message": err }));
+                v_stop.store(true, Ordering::Relaxed);
+            }
+        }
+    });
+
+    match ready_rx.await {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => {
+            emit_event("error", json!({ "message": err }));
+            std::process::exit(1);
+        }
+        Err(_) => {
+            emit_event("error", json!({ "message": "Video capture aborted before starting" }));
+            std::process::exit(1);
+        }
+    }
+
+    // 2. Connect to LiveKit only after capture source is confirmed ready
+    let (room, mut room_events) = match Room::connect(&args.url, &args.token, room_opts).await {
+        Ok(res) => res,
+        Err(err) => {
+            stop_flag.store(true, Ordering::Relaxed);
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(1), video_handle).await;
+            emit_event("error", json!({ "message": format!("LiveKit connect failed: {}", err) }));
+            std::process::exit(1);
+        }
+    };
+
+    emit_event("connected", json!({ "room": room.name() }));
+
+    // 3. Publish native video track
     let video_track = LocalVideoTrack::create_video_track(
         "screen_share",
-        RtcVideoSource::Native(video_source.clone()),
+        RtcVideoSource::Native(video_source),
     );
 
     let video_pub_opts = TrackPublishOptions {
         source: TrackSource::Screenshare,
-        simulcast: true,
+        simulcast: false,
         video_codec: VideoCodec::H264,
         video_encoding: Some(VideoEncoding {
             max_bitrate: args.bitrate,
@@ -150,12 +197,13 @@ async fn main() {
         .publish_track(LocalTrack::Video(video_track), video_pub_opts)
         .await
     {
+        stop_flag.store(true, Ordering::Relaxed);
         emit_event("error", json!({ "message": format!("Failed to publish video: {}", err) }));
         let _ = room.close().await;
         std::process::exit(1);
     }
 
-    // 2. Optionally publish zero-echo native audio track
+    // 4. Optionally publish zero-echo native audio track
     let mut audio_published = false;
     let audio_handle = if args.include_audio {
         let audio_source = NativeAudioSource::new(
@@ -213,28 +261,12 @@ async fn main() {
             "width": args.width,
             "height": args.height,
             "fps": args.fps,
+            "preview_port": preview_port,
+            "preview_token": preview_token,
         }),
     );
 
-    // 3. Start platform-specific video capture
-    let v_args = args.clone();
-    let v_stop = stop_flag.clone();
-    let video_handle = tokio::spawn(async move {
-        #[cfg(target_os = "linux")]
-        let res = video_linux::run_video_capture(v_args, video_source, v_stop.clone()).await;
-
-        #[cfg(target_os = "windows")]
-        let res = video_windows::run_video_capture(v_args, video_source, v_stop.clone()).await;
-
-        if let Err(err) = res {
-            if !v_stop.load(Ordering::Relaxed) {
-                emit_event("error", json!({ "message": err }));
-                v_stop.store(true, Ordering::Relaxed);
-            }
-        }
-    });
-
-    // 4. Listen for "stop" on stdin, EOF (parent died), Ctrl+C, or RoomDisconnected
+    // 5. Listen for "stop" on stdin, EOF (parent died), Ctrl+C, or RoomDisconnected
     let stdin_stop = stop_flag.clone();
     let stdin_task = tokio::spawn(async move {
         let mut lines = BufReader::new(tokio::io::stdin()).lines();

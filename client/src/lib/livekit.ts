@@ -268,6 +268,7 @@ class LiveKitManager {
   private currentLivekitUrl: string | null = null;
   private currentScreenshareToken: string | null = null;
   private isNativeScreenSharing: boolean = false;
+  private nativePreviewInfo: { port: number; token: string; width: number; height: number } | null = null;
   private nativeScreenShareUnsubscribe?: () => void;
   private currentScreenShareSourceId: string | null = null;
   private currentScreenShareConfig?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean };
@@ -279,6 +280,65 @@ class LiveKitManager {
 
   getRoom(): Room | null {
     return this.room;
+  }
+
+  getNativePreviewInfo(): { port: number; token: string; width: number; height: number } | null {
+    return this.isNativeScreenSharing ? this.nativePreviewInfo : null;
+  }
+
+  getVisibleParticipants(): Participant[] {
+    if (!this.room) return [];
+    const sidecarByOwner = new Map<string, Participant>();
+    const visibleRemotes: Participant[] = [];
+
+    for (const remote of this.room.remoteParticipants.values()) {
+      if (remote.identity.startsWith('screenshare:')) {
+        sidecarByOwner.set(remote.identity.slice('screenshare:'.length), remote);
+      } else {
+        visibleRemotes.push(remote);
+      }
+    }
+
+    const isNativeLocalShare = this.isNativeScreenSharing;
+    const localIdentity = this.room.localParticipant.identity;
+
+    const mergeSidecar = (p: Participant): Participant => {
+      const sidecar = sidecarByOwner.get(p.identity);
+      const forceLocalShare = p.identity === localIdentity && isNativeLocalShare;
+      if (!sidecar && !forceLocalShare) return p;
+      return new Proxy(p, {
+        get(target, prop, receiver) {
+          if (prop === 'isScreenShareEnabled') {
+            return Boolean(
+              forceLocalShare ||
+                target.isScreenShareEnabled ||
+                sidecar?.getTrackPublication(Track.Source.ScreenShare)
+            );
+          }
+          if (prop === 'getTrackPublication') {
+            return (source: Track.Source) => {
+              if (
+                source === Track.Source.ScreenShare ||
+                source === Track.Source.ScreenShareAudio
+              ) {
+                return (
+                  sidecar?.getTrackPublication(source) ||
+                  target.getTrackPublication(source)
+                );
+              }
+              return target.getTrackPublication(source);
+            };
+          }
+          const value = Reflect.get(target, prop, receiver);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    };
+
+    return [
+      mergeSidecar(this.room.localParticipant),
+      ...visibleRemotes.map(mergeSidecar),
+    ];
   }
 
   isE2EEEnabled(): boolean {
@@ -354,53 +414,7 @@ class LiveKitManager {
 
     const updateParticipants = () => {
       if (!this.room) return;
-      const sidecarByOwner = new Map<string, Participant>();
-      const visibleRemotes: Participant[] = [];
-
-      for (const remote of this.room.remoteParticipants.values()) {
-        if (remote.identity.startsWith('screenshare:')) {
-          sidecarByOwner.set(remote.identity.slice('screenshare:'.length), remote);
-        } else {
-          visibleRemotes.push(remote);
-        }
-      }
-
-      const mergeSidecar = (p: Participant): Participant => {
-        const sidecar = sidecarByOwner.get(p.identity);
-        if (!sidecar) return p;
-        return new Proxy(p, {
-          get(target, prop, receiver) {
-            if (prop === 'isScreenShareEnabled') {
-              return Boolean(
-                target.isScreenShareEnabled ||
-                  sidecar.getTrackPublication(Track.Source.ScreenShare)
-              );
-            }
-            if (prop === 'getTrackPublication') {
-              return (source: Track.Source) => {
-                if (
-                  source === Track.Source.ScreenShare ||
-                  source === Track.Source.ScreenShareAudio
-                ) {
-                  return (
-                    sidecar.getTrackPublication(source) ||
-                    target.getTrackPublication(source)
-                  );
-                }
-                return target.getTrackPublication(source);
-              };
-            }
-            const value = Reflect.get(target, prop, receiver);
-            return typeof value === 'function' ? value.bind(target) : value;
-          },
-        });
-      };
-
-      const all: Participant[] = [
-        mergeSidecar(this.room.localParticipant),
-        ...visibleRemotes.map(mergeSidecar),
-      ];
-      this.onParticipantsChanged?.(all);
+      this.onParticipantsChanged?.(this.getVisibleParticipants());
     };
 
     room.on(RoomEvent.Connected, async () => {
@@ -449,6 +463,18 @@ class LiveKitManager {
         : participant.identity;
 
       if (publication instanceof RemoteTrackPublication) {
+        // Never download our own native sidecar's video/audio back from LiveKit SFU (local OBS-style preview is used instead)
+        if (
+          participant.identity.startsWith('screenshare:') &&
+          ownerIdentity === this.room?.localParticipant.identity
+        ) {
+          try {
+            publication.setSubscribed(false);
+          } catch {}
+          this.onTrackUpdated?.();
+          updateParticipants();
+          return;
+        }
         if (publication.source === Track.Source.ScreenShare) {
           const isWatched = this.watchedParticipantIdentities.has(ownerIdentity);
           publication.setEnabled(isWatched);
@@ -555,7 +581,15 @@ class LiveKitManager {
       updateParticipants();
     });
 
-    room.on(RoomEvent.TrackPublished, () => {
+    room.on(RoomEvent.TrackPublished, (publication, participant) => {
+      if (
+        participant.identity === `screenshare:${this.room?.localParticipant.identity}` &&
+        publication instanceof RemoteTrackPublication
+      ) {
+        try {
+          publication.setSubscribed(false);
+        } catch {}
+      }
       this.onTrackUpdated?.();
       updateParticipants();
     });
@@ -900,8 +934,8 @@ class LiveKitManager {
     sourceId?: string,
     config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean },
     gameFamily?: GameFamily | string
-  ) {
-    if (!this.room) return;
+  ): Promise<boolean> {
+    if (!this.room) return false;
 
     if (enabled) {
       const res = config?.resolution || '720p';
@@ -915,11 +949,11 @@ class LiveKitManager {
         }
       })();
 
-      // Optimized bitrate curves (capped at 4.5 Mbps on 1080p60 to avoid saturating E2EE worker/uplink)
+      // Single-layer screen share bitrate curve (no simulcast split)
       const maxBitrate = (() => {
-        if (res === '480p') return frameRate === 15 ? 500_000 : frameRate === 30 ? 1_000_000 : 1_800_000;
-        if (res === '1080p') return frameRate === 15 ? 2_500_000 : frameRate === 30 ? 3_500_000 : 4_500_000;
-        return frameRate === 15 ? 1_200_000 : frameRate === 30 ? 1_800_000 : 3_500_000;
+        if (res === '480p') return frameRate === 15 ? 600_000 : frameRate === 30 ? 1_200_000 : 2_000_000;
+        if (res === '1080p') return frameRate === 15 ? 3_000_000 : frameRate === 30 ? 5_000_000 : 7_500_000;
+        return frameRate === 15 ? 1_500_000 : frameRate === 30 ? 2_500_000 : 4_000_000;
       })();
 
       const gpu = await detectGpuVendor();
@@ -995,6 +1029,24 @@ class LiveKitManager {
             await this.room.localParticipant.setScreenShareEnabled(false);
             await processAudioBridge.stopCapture();
 
+            this.nativePreviewInfo = null;
+            this.nativeScreenShareUnsubscribe?.();
+            this.nativeScreenShareUnsubscribe = (window as any).electronAPI.onNativeScreenShareEvent?.((ev: any) => {
+              if (ev?.event === 'publishing' && ev?.preview_port && ev?.preview_token) {
+                this.nativePreviewInfo = {
+                  port: Number(ev.preview_port),
+                  token: String(ev.preview_token),
+                  width: Number(ev.width) || dims.width,
+                  height: Number(ev.height) || dims.height,
+                };
+                this.onTrackUpdated?.();
+              } else if (ev?.event === 'stopped' && this.isNativeScreenSharing) {
+                this.isNativeScreenSharing = false;
+                this.nativePreviewInfo = null;
+                this.onScreenShareEnded?.();
+              }
+            });
+
             const nativeRes = await (window as any).electronAPI.startNativeScreenShare({
               url: this.currentLivekitUrl,
               token: this.currentScreenshareToken,
@@ -1008,18 +1060,14 @@ class LiveKitManager {
 
             if (nativeRes?.success) {
               this.isNativeScreenSharing = true;
-              this.nativeScreenShareUnsubscribe?.();
-              this.nativeScreenShareUnsubscribe = (window as any).electronAPI.onNativeScreenShareEvent?.((ev: any) => {
-                if (ev?.event === 'stopped' && this.isNativeScreenSharing) {
-                  this.isNativeScreenSharing = false;
-                  this.onScreenShareEnded?.();
-                }
-              });
               this.onTrackUpdated?.();
-              return;
+              return true;
             }
+            this.nativePreviewInfo = null;
+            this.nativeScreenShareUnsubscribe?.();
+            this.nativeScreenShareUnsubscribe = undefined;
             if (nativeRes?.error && /cancel/i.test(nativeRes.error)) {
-              return;
+              return false;
             }
             console.warn('[LiveKit] Native Rust screenshare unavailable, falling back to Electron/WebRTC:', nativeRes?.error);
           } catch (nativeErr) {
@@ -1083,7 +1131,7 @@ class LiveKitManager {
           pub = await this.room.localParticipant.publishTrack(videoTrack, {
             name: 'screen_share',
             source: Track.Source.ScreenShare,
-            simulcast: true,
+            simulcast: false,
             videoCodec: selectedCodec,
             backupCodec: false,
             videoEncoding: {
@@ -1152,7 +1200,7 @@ class LiveKitManager {
             contentHint: frameRate >= 60 ? 'motion' : 'detail',
           },
           {
-            simulcast: true,
+            simulcast: false,
             videoCodec: selectedCodec,
             backupCodec: false,
             audioPreset: AudioPresets.musicHighQualityStereo,
@@ -1206,6 +1254,7 @@ class LiveKitManager {
 
       if (this.isNativeScreenSharing) {
         this.isNativeScreenSharing = false;
+        this.nativePreviewInfo = null;
         this.nativeScreenShareUnsubscribe?.();
         this.nativeScreenShareUnsubscribe = undefined;
         await (window as any).electronAPI?.stopNativeScreenShare?.().catch(() => {});
@@ -1230,6 +1279,7 @@ class LiveKitManager {
     }
 
     this.onTrackUpdated?.();
+    return enabled;
   }
 
   /**
@@ -1471,9 +1521,9 @@ class LiveKitManager {
       })();
 
       const maxBitrate = (() => {
-        if (res === '480p') return frameRate === 15 ? 500_000 : frameRate === 30 ? 1_000_000 : 1_800_000;
-        if (res === '1080p') return frameRate === 15 ? 2_500_000 : frameRate === 30 ? 3_500_000 : 4_500_000;
-        return frameRate === 15 ? 1_200_000 : frameRate === 30 ? 1_800_000 : 3_500_000;
+        if (res === '480p') return frameRate === 15 ? 600_000 : frameRate === 30 ? 1_200_000 : 2_000_000;
+        if (res === '1080p') return frameRate === 15 ? 3_000_000 : frameRate === 30 ? 5_000_000 : 7_500_000;
+        return frameRate === 15 ? 1_500_000 : frameRate === 30 ? 2_500_000 : 4_000_000;
       })();
 
       // Acquire new desktop media stream
@@ -1780,12 +1830,22 @@ class LiveKitManager {
 
     // 2. Adjust subscription on remote participant track publications (video & audio)
     if (this.room) {
+      const isSelf = participantIdentity === this.room.localParticipant.identity;
       const remotes = [
         this.room.remoteParticipants.get(participantIdentity),
         this.room.remoteParticipants.get(`screenshare:${participantIdentity}`),
       ];
       for (const remote of remotes) {
         if (!remote) continue;
+        // Never subscribe to our own native sidecar stream from LiveKit SFU
+        if (isSelf && remote.identity.startsWith('screenshare:')) {
+          remote.trackPublications.forEach((pub) => {
+            try {
+              pub.setSubscribed(false);
+            } catch {}
+          });
+          continue;
+        }
         // Video screen share publication: keep subscribed (E2EE ready) and pause/resume via setEnabled
         remote.videoTrackPublications.forEach((pub) => {
           if (pub.source === Track.Source.ScreenShare) {
@@ -1903,6 +1963,7 @@ class LiveKitManager {
     this.attachedStreamAudioElements.clear();
     if (this.isNativeScreenSharing) {
       this.isNativeScreenSharing = false;
+      this.nativePreviewInfo = null;
       this.nativeScreenShareUnsubscribe?.();
       this.nativeScreenShareUnsubscribe = undefined;
       void (window as any).electronAPI?.stopNativeScreenShare?.();

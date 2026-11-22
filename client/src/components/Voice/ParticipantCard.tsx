@@ -89,11 +89,14 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   } = useVoiceStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraRef = useRef<HTMLVideoElement | null>(null);
+  const localPreviewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fullscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [dominantBg, setDominantBg] = useState<string>('#2b2d31');
+  const [hasNativePreviewFrame, setHasNativePreviewFrame] = useState(false);
   const [, setTrackUpdateTick] = useState(0);
 
   // Re-render immediately when LiveKit participant track status changes
@@ -290,6 +293,97 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   }, [isLocal, isScreenSharing]);
 
   const isLocalPreviewPaused = isLocal && isScreenSharing && !isAppFocused;
+  const nativePreview = isLocal ? livekit.getNativePreviewInfo() : null;
+  const useLocalNativePreview = Boolean(nativePreview && isLocal && isScreenSharing);
+
+  // Local OBS-style lossless I420 preview directly from the native sidecar (zero server download)
+  useEffect(() => {
+    if (!useLocalNativePreview || !nativePreview || !isWatching || isLocalPreviewPaused) {
+      setHasNativePreviewFrame(false);
+      return;
+    }
+
+    const { port, token, width, height } = nativePreview;
+    const frameSize = (width * height * 3) >>> 1;
+    const controller = new AbortController();
+    let cancelled = false;
+    let firstFrameDrawn = false;
+
+    const run = async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/preview/${token}`, {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        if (!res.ok || !res.body) return;
+
+        const reader = res.body.getReader();
+        const frameBuf = new Uint8Array(frameSize);
+        let offset = 0;
+
+        try {
+          while (!cancelled) {
+            const { value, done } = await reader.read();
+            if (done || !value) break;
+
+            let srcOff = 0;
+            while (srcOff < value.length) {
+              const copyLen = Math.min(frameSize - offset, value.length - srcOff);
+              frameBuf.set(value.subarray(srcOff, srcOff + copyLen), offset);
+              offset += copyLen;
+              srcOff += copyLen;
+
+              if (offset === frameSize) {
+                offset = 0;
+                const canvas = fullscreenCanvasRef.current || localPreviewCanvasRef.current;
+                if (canvas && typeof VideoFrame !== 'undefined') {
+                  if (canvas.width !== width || canvas.height !== height) {
+                    canvas.width = width;
+                    canvas.height = height;
+                  }
+                  const ctx = canvas.getContext('2d', { alpha: false });
+                  if (ctx) {
+                    const vf = new VideoFrame(frameBuf, {
+                      format: 'I420',
+                      codedWidth: width,
+                      codedHeight: height,
+                      timestamp: Math.round(performance.now() * 1000),
+                    });
+                    ctx.drawImage(vf, 0, 0);
+                    vf.close();
+                    if (!firstFrameDrawn) {
+                      firstFrameDrawn = true;
+                      setHasNativePreviewFrame(true);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } finally {
+          try {
+            await reader.cancel();
+          } catch {}
+        }
+      } catch {
+        // Aborted on pause/stop/unmount
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [
+    useLocalNativePreview,
+    nativePreview?.port,
+    nativePreview?.token,
+    nativePreview?.width,
+    nativePreview?.height,
+    isWatching,
+    isLocalPreviewPaused,
+  ]);
 
   // Helper to safely attach track to HTMLVideoElement
   const attachVideoTrack = (el: HTMLVideoElement | null, track: any) => {
@@ -304,6 +398,15 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
   // Handle Screen Share video track attachment and LiveKit subscription
   useEffect(() => {
+    if (useLocalNativePreview) {
+      if (screenPub instanceof RemoteTrackPublication) {
+        try {
+          screenPub.setSubscribed(false);
+        } catch {}
+      }
+      return;
+    }
+
     const el = videoRef.current;
     if (isWatching && !isLocalPreviewPaused && hasScreenVideoTrack && screenPub?.track && el) {
       attachVideoTrack(el, screenPub.track);
@@ -326,7 +429,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         } catch {}
       }
     };
-  }, [screenPub?.track, screenPub?.trackSid, hasScreenVideoTrack, isWatching, isLocalPreviewPaused]);
+  }, [screenPub?.track, screenPub?.trackSid, hasScreenVideoTrack, isWatching, isLocalPreviewPaused, useLocalNativePreview]);
 
   // Handle Camera track attachment
   useEffect(() => {
@@ -449,7 +552,12 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           }
         }}
         style={{
-          backgroundColor: (isScreenSharing && isWatching) || hasCameraVideoTrack ? '#000000' : dominantBg,
+          backgroundColor:
+            (isScreenSharing && isWatching) || hasCameraVideoTrack
+              ? '#000000'
+              : isScreenSharing
+              ? '#1e1f22'
+              : dominantBg,
         }}
         className={`relative rounded-2xl overflow-hidden flex flex-col items-center justify-center w-full h-full min-h-0 aspect-video border-2 transition-all duration-150 group cursor-pointer ${
           isSpeaking
@@ -470,20 +578,39 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             </div>
           ) : (
             <div className="relative w-full h-full flex items-center justify-center bg-black">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className={`w-full h-full object-contain bg-black transition-opacity duration-200 ${
-                  hasScreenVideoTrack ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'
-                }`}
-              />
-              {!hasScreenVideoTrack && (
-                <div className="flex flex-col items-center justify-center gap-2.5 p-4 text-center">
-                  <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-xs font-medium text-gray-300">Carregando transmissão...</span>
-                </div>
+              {useLocalNativePreview ? (
+                <>
+                  <canvas
+                    ref={localPreviewCanvasRef}
+                    className={`w-full h-full object-contain bg-black transition-opacity duration-200 ${
+                      hasNativePreviewFrame ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'
+                    }`}
+                  />
+                  {!hasNativePreviewFrame && (
+                    <div className="flex flex-col items-center justify-center gap-2.5 p-4 text-center">
+                      <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-medium text-gray-300">Carregando preview local...</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-contain bg-black transition-opacity duration-200 ${
+                      hasScreenVideoTrack ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'
+                    }`}
+                  />
+                  {!hasScreenVideoTrack && (
+                    <div className="flex flex-col items-center justify-center gap-2.5 p-4 text-center">
+                      <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-medium text-gray-300">Carregando transmissão...</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )
@@ -700,14 +827,22 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               areFullscreenControlsVisible ? 'cursor-default' : 'cursor-none'
             }`}
           >
-            <video
-              ref={fullscreenVideoRef}
-              onContextMenu={handleContextMenu}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-contain bg-black"
-            />
+            {useLocalNativePreview ? (
+              <canvas
+                ref={fullscreenCanvasRef}
+                onContextMenu={handleContextMenu}
+                className="w-full h-full object-contain bg-black"
+              />
+            ) : (
+              <video
+                ref={fullscreenVideoRef}
+                onContextMenu={handleContextMenu}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-contain bg-black"
+              />
+            )}
 
             {/* Top Fullscreen Controls Overlay */}
             <div

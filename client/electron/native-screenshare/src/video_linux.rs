@@ -1,3 +1,4 @@
+use crate::preview::PreviewHub;
 use crate::Args;
 use livekit::webrtc::prelude::{I420Buffer, VideoFrame, VideoRotation};
 use livekit::webrtc::video_source::native::NativeVideoSource;
@@ -10,35 +11,46 @@ use tokio::process::Command;
 pub async fn run_video_capture(
     args: Args,
     source: NativeVideoSource,
+    preview: PreviewHub,
     stop: Arc<AtomicBool>,
+    ready: tokio::sync::oneshot::Sender<Result<(), String>>,
 ) -> Result<(), String> {
     let is_wayland = std::env::var("WAYLAND_DISPLAY")
         .map(|v| !v.is_empty())
         .unwrap_or(false);
 
+    let mut ready_opt = Some(ready);
+
     if is_wayland {
-        match run_wayland_portal_capture(&args, &source, stop.clone()).await {
+        match run_wayland_portal_capture(&args, &source, &preview, stop.clone(), &mut ready_opt).await {
             Ok(()) => return Ok(()),
             Err(err) => {
                 // If user cancelled the portal, do not fall back to X11
-                if err.contains("cancelled") || err.contains("Cancelled") {
-                    return Err(err);
-                }
-                // Fall back to X11grab if DISPLAY is available
-                if std::env::var("DISPLAY").is_err() {
+                if err.contains("cancelled") || err.contains("Cancelled") || std::env::var("DISPLAY").is_err() {
+                    if let Some(tx) = ready_opt.take() {
+                        let _ = tx.send(Err(err.clone()));
+                    }
                     return Err(err);
                 }
             }
         }
     }
 
-    run_x11_ffmpeg_capture(&args, &source, stop).await
+    let res = run_x11_ffmpeg_capture(&args, &source, &preview, stop, &mut ready_opt).await;
+    if let Err(ref err) = res {
+        if let Some(tx) = ready_opt.take() {
+            let _ = tx.send(Err(err.clone()));
+        }
+    }
+    res
 }
 
 async fn run_wayland_portal_capture(
     args: &Args,
     source: &NativeVideoSource,
+    preview: &PreviewHub,
     stop: Arc<AtomicBool>,
+    ready: &mut Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
 ) -> Result<(), String> {
     use ashpd::desktop::screencast::{CursorMode, Screencast, SourceType};
     use ashpd::desktop::PersistMode;
@@ -123,7 +135,12 @@ async fn run_wayland_portal_capture(
         .spawn()
         .map_err(|e| format!("Failed to spawn gst-launch-1.0: {}", e))?;
 
-    let res = pump_i420_stdout(&mut child, args.width, args.height, source, stop).await;
+    // Portal selection succeeded and GStreamer is capturing — now allow LiveKit publish
+    if let Some(tx) = ready.take() {
+        let _ = tx.send(Ok(()));
+    }
+
+    let res = pump_i420_stdout(&mut child, args.width, args.height, source, preview, stop).await;
     let _ = child.kill().await;
     let _ = session.close().await;
     res
@@ -132,7 +149,9 @@ async fn run_wayland_portal_capture(
 async fn run_x11_ffmpeg_capture(
     args: &Args,
     source: &NativeVideoSource,
+    preview: &PreviewHub,
     stop: Arc<AtomicBool>,
+    ready: &mut Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
 ) -> Result<(), String> {
     let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0.0".to_string());
     let scale_filter = format!(
@@ -163,7 +182,11 @@ async fn run_x11_ffmpeg_capture(
         .spawn()
         .map_err(|e| format!("Failed to spawn ffmpeg x11grab: {}", e))?;
 
-    let res = pump_i420_stdout(&mut child, args.width, args.height, source, stop).await;
+    if let Some(tx) = ready.take() {
+        let _ = tx.send(Ok(()));
+    }
+
+    let res = pump_i420_stdout(&mut child, args.width, args.height, source, preview, stop).await;
     let _ = child.kill().await;
     res
 }
@@ -173,6 +196,7 @@ async fn pump_i420_stdout(
     width: u32,
     height: u32,
     source: &NativeVideoSource,
+    preview: &PreviewHub,
     stop: Arc<AtomicBool>,
 ) -> Result<(), String> {
     let mut stdout = child
@@ -190,6 +214,7 @@ async fn pump_i420_stdout(
         if stdout.read_exact(&mut raw).await.is_err() {
             break;
         }
+        preview.publish_raw(&raw);
         let mut i420 = I420Buffer::new(width, height);
         let (y_plane, u_plane, v_plane) = i420.data_mut();
         y_plane[..y_size].copy_from_slice(&raw[..y_size]);
