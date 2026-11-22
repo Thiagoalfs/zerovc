@@ -27,13 +27,19 @@ jobs:
             cd /root/zerovc || cd ~/zerovc
             
             echo "📥 Puxando alterações da branch main..."
+            PREV_HEAD=$(git rev-parse HEAD)
             git reset --hard HEAD
             git pull origin main
+            LIVEKIT_CFG_CHANGED=$(git diff --name-only "$PREV_HEAD" HEAD -- deploy/livekit.yaml || true)
             cp -u "$HOME/zerovc-downloads/"* backend/web/downloads/ 2>/dev/null || true
             
             echo "🐳 Reconstruindo e reiniciando os containers..."
             if [ -f "deploy/docker-compose.yml" ]; then
               cd deploy && docker compose up -d --build
+              if [ -n "$LIVEKIT_CFG_CHANGED" ]; then
+                echo "🔄 deploy/livekit.yaml alterado — reiniciando zerovc-livekit..."
+                docker compose restart livekit
+              fi
             else
               docker compose up -d --build
             fi

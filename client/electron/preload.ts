@@ -75,6 +75,7 @@ export interface ElectronAPI {
   setCustomStreamerProcesses: (processes: string[]) => void;
   getStreamerSoftwareStatus: () => Promise<{ runningApps: string[] }>;
   restartToUpdate: () => void;
+  applyTitlebarUpdate: () => Promise<{ action: 'restarting' | 'downloading' | 'reload' }>;
   setSplashColors: (colors: { accent: string; bg: string }) => Promise<void>;
   onSplashUpdate: (callback: (data: { phase: string; percent?: number; version?: string; message?: string }) => void) => () => void;
 }
@@ -163,6 +164,7 @@ const electronAPI: ElectronAPI = {
     return () => ipcRenderer.removeListener('splash-update', handler);
   },
   restartToUpdate: () => ipcRenderer.send('restart-to-update'),
+  applyTitlebarUpdate: () => ipcRenderer.invoke('apply-titlebar-update'),
   setSplashColors: (colors: { accent: string; bg: string }) => ipcRenderer.invoke('set-splash-colors', colors),
   startNativeScreenShare: (options) => ipcRenderer.invoke('start-native-screenshare', options),
   stopNativeScreenShare: () => ipcRenderer.invoke('stop-native-screenshare'),

@@ -427,6 +427,7 @@ declare global {
       setCustomStreamerProcesses?: (processes: string[]) => void;
       getStreamerSoftwareStatus?: () => Promise<{ runningApps: string[] }>;
       restartToUpdate?: () => void;
+      applyTitlebarUpdate?: () => Promise<{ action: 'restarting' | 'downloading' | 'reload' }>;
       setSplashColors?: (colors: { accent: string; bg: string }) => Promise<void>;
       onSplashUpdate?: (callback: (data: { phase: string; percent?: number; version?: string; message?: string }) => void) => () => void;
       startNativeScreenShare?: (options: {

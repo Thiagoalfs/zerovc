@@ -10,6 +10,8 @@ import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
 import { VoiceControlBar } from './VoiceControlBar';
+import { canUserConnectVoice } from '../../utils/userActivity';
+import { showAlert } from '../../stores/confirmModalStore';
 
 interface VoiceRoomProps {
   channel: Channel;
@@ -35,6 +37,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
     isConnecting,
     currentChannelId,
     joinVoice,
+    watchParticipant,
     isMuted,
     isDeafened,
     isScreensharing,
@@ -50,6 +53,37 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const isConnectedToThisChannel = isConnected && currentChannelId === channel.id;
   const isConnectingToThisChannel = isConnecting && currentChannelId === channel.id;
+  const canConnectToThisChannel = useMemo(
+    () => canUserConnectVoice(liveChannel, activeGuild, user),
+    [liveChannel, activeGuild, user]
+  );
+
+  const handleJoinChannel = async () => {
+    if (!canConnectToThisChannel) {
+      hapticWarning();
+      showAlert({
+        title: 'Sem permissão',
+        message: 'Você não tem permissão para entrar neste canal de voz.',
+        variant: 'warning',
+      });
+      return false;
+    }
+    hapticMedium();
+    await joinVoice(channel.id, channel.guild_id);
+    const state = useVoiceStore.getState();
+    return state.isConnected && state.currentChannelId === channel.id;
+  };
+
+  const handleWatchStream = async (participantIdentity: string, mode: 'exclusive' | 'additive') => {
+    if (isConnectedToThisChannel) {
+      watchParticipant(participantIdentity, mode);
+      return;
+    }
+    const joined = await handleJoinChannel();
+    if (joined) {
+      watchParticipant(participantIdentity, mode);
+    }
+  };
 
   // Keep mobile screen awake while connected in voice channel
   useKeepAwake(isConnectedToThisChannel);
@@ -330,8 +364,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
               <button
                 disabled={isConnectingToThisChannel}
                 onClick={() => {
-                  hapticMedium();
-                  joinVoice(channel.id, channel.guild_id);
+                  void handleJoinChannel();
                 }}
                 className="bg-brand-500 hover:bg-brand-600 disabled:opacity-75 text-white font-semibold text-sm px-6 py-2.5 rounded-xl shadow-lg hover:shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 animate-in zoom-in-95"
               >
@@ -360,6 +393,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                   onOpenUserProfile={onOpenUserProfile}
                   onOpenDM={onOpenDM}
                   onOpenScreenShare={onOpenScreenShare}
+                  onWatchStream={handleWatchStream}
                   onClick={() => setSpotlightParticipantId(null)}
                 />
               </div>
@@ -418,6 +452,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                           onOpenUserProfile={onOpenUserProfile}
                           onOpenDM={onOpenDM}
                           onOpenScreenShare={onOpenScreenShare}
+                          onWatchStream={handleWatchStream}
                           isCompact
                           onClick={() => setSpotlightParticipantId(pId)}
                         />
@@ -456,6 +491,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                         onOpenUserProfile={onOpenUserProfile}
                         onOpenDM={onOpenDM}
                         onOpenScreenShare={onOpenScreenShare}
+                        onWatchStream={handleWatchStream}
                         onClick={() => {
                           setSpotlightParticipantId(p.identity || p.sid);
                         }}
@@ -472,8 +508,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
                 <button
                   disabled={isConnectingToThisChannel}
                   onClick={() => {
-                    hapticMedium();
-                    joinVoice(channel.id, channel.guild_id);
+                    void handleJoinChannel();
                   }}
                   className="bg-brand-500 hover:bg-brand-600 disabled:opacity-75 text-white font-semibold text-sm px-6 py-2.5 rounded-xl shadow-lg hover:shadow-brand-500/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 animate-in zoom-in-95"
                 >

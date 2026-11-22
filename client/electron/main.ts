@@ -725,9 +725,37 @@ ipcMain.on('set-hardware-acceleration', (_event, enabled: boolean) => {
   }
 });
 
-ipcMain.on('relaunch-app', () => {
+function relaunchCleanly() {
+  isQuitting = true;
+  stopActivityScanner();
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = null;
+  }
+  stopNativeScreenShareProcess();
+  try {
+    activeAudioProcess?.kill();
+  } catch {}
+  activeAudioProcess = null;
+  try {
+    tray?.destroy();
+  } catch {}
+  tray = null;
   app.relaunch();
   app.exit(0);
+}
+
+function isRunningDeletedLinuxBinary(): boolean {
+  if (process.platform !== 'linux') return false;
+  try {
+    return fs.readlinkSync('/proc/self/exe').endsWith(' (deleted)');
+  } catch {
+    return false;
+  }
+}
+
+ipcMain.on('relaunch-app', () => {
+  relaunchCleanly();
 });
 
 ipcMain.on('check-for-updates', () => {
@@ -738,17 +766,76 @@ ipcMain.on('check-for-updates', () => {
 
 // Baixa e instala a atualização pendente (chamado pelo ícone do TitleBar).
 ipcMain.on('restart-to-update', () => {
-  if (!app.isPackaged || !autoUpdater) return;
+  if (isRunningDeletedLinuxBinary()) {
+    relaunchCleanly();
+    return;
+  }
+  if (!app.isPackaged || !autoUpdater) {
+    relaunchCleanly();
+    return;
+  }
   clearUpdateAttempt();
   if (updateDownloaded) {
     shutdownForUpdate();
+    return;
+  }
+  if (typeof autoUpdater.isUpdaterActive === 'function' && !autoUpdater.isUpdaterActive()) {
+    relaunchCleanly();
     return;
   }
   installAfterDownload = true;
   autoUpdater.downloadUpdate().catch((err: any) => {
     installAfterDownload = false;
     console.error('[AutoUpdater] Error on downloadUpdate:', err);
+    relaunchCleanly();
   });
+});
+
+// TitleBar update click: checks for an installer update first and closes/reopens the app if one exists;
+// otherwise signals the renderer to just reload the web bundle.
+ipcMain.handle('apply-titlebar-update', async () => {
+  if (isRunningDeletedLinuxBinary()) {
+    relaunchCleanly();
+    return { action: 'restarting' };
+  }
+  if (!app.isPackaged || !autoUpdater) {
+    return { action: 'reload' };
+  }
+  if (updateDownloaded) {
+    clearUpdateAttempt();
+    shutdownForUpdate();
+    return { action: 'restarting' };
+  }
+
+  let hasNewInstaller = Boolean(pendingUpdateAvailableInfo);
+  if (!hasNewInstaller) {
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      const remoteVersion = result?.updateInfo?.version;
+      if (remoteVersion && remoteVersion !== app.getVersion()) {
+        hasNewInstaller = true;
+      }
+    } catch (err) {
+      console.warn('[AutoUpdater] TitleBar update check failed:', err);
+    }
+  }
+
+  if (!hasNewInstaller) {
+    return { action: 'reload' };
+  }
+
+  clearUpdateAttempt();
+  if (typeof autoUpdater.isUpdaterActive === 'function' && !autoUpdater.isUpdaterActive()) {
+    relaunchCleanly();
+    return { action: 'restarting' };
+  }
+  installAfterDownload = true;
+  autoUpdater.downloadUpdate().catch((err: any) => {
+    installAfterDownload = false;
+    console.error('[AutoUpdater] Error on downloadUpdate:', err);
+    relaunchCleanly();
+  });
+  return { action: 'downloading' };
 });
 
 ipcMain.handle('set-splash-colors', () => {});

@@ -476,7 +476,6 @@ class LiveKitManager {
           : `audio-user-${ownerIdentity}-${track.sid || 'audio'}`;
         audioEl.style.display = 'none';
         document.body.appendChild(audioEl);
-        audioEl.play().catch((err) => console.log('[LiveKit] Audio play blocked:', err));
 
         const sid = track.sid || `${ownerIdentity}-${isScreenAudio ? 'screen' : 'mic'}`;
         this.attachedAudioElements.set(sid, audioEl);
@@ -492,18 +491,22 @@ class LiveKitManager {
           const audioTrack = (track as any);
           if (typeof audioTrack.setVolume === 'function') {
             try {
-              audioTrack.setVolume(streamVol * this.masterOutputVolume);
+              audioTrack.setVolume(isWatched && !this.isDeafened ? streamVol * this.masterOutputVolume : 0);
             } catch (err) {
               console.warn('[LiveKit] Error setting stream volume on subscribed track:', err);
             }
           }
           if (isWatched && !this.isDeafened) {
+            if (this.audioContext && this.audioContext.state === 'suspended') {
+              void this.audioContext.resume().catch(() => {});
+            }
             audioEl.play().catch((err) => console.log('[LiveKit] Auto-play stream audio error:', err));
           } else {
             try { audioEl.pause(); } catch {}
           }
         } else {
           audioEl.muted = this.isDeafened;
+          audioEl.play().catch((err) => console.log('[LiveKit] Audio play blocked:', err));
           this.attachedUserAudioElements.set(sid, audioEl);
           const userVol = this.userVolumes.get(participant.identity) ?? 1;
           try {
@@ -597,18 +600,12 @@ class LiveKitManager {
       this.onDisconnected?.(reason);
     });
 
+    // Let LiveKit's JoinResponse provide ICE servers/direct node IP without stalling on external STUN
     await room.connect(url, token, {
       autoSubscribe: true,
       maxRetries: 3,
-      peerConnectionTimeout: 15000,
-      websocketTimeout: 15000,
-      rtcConfig: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-        ],
-        iceCandidatePoolSize: 2,
-        iceTransportPolicy: 'all',
-      },
+      peerConnectionTimeout: 10000,
+      websocketTimeout: 10000,
     });
 
     if (e2eeOptions) {
@@ -1135,7 +1132,6 @@ class LiveKitManager {
                   noiseSuppression: false,
                   autoGainControl: false,
                   restrictOwnAudio: true,
-                  suppressLocalAudioPlayback: true,
                   channelCount: 2,
                   sampleRate: 48000,
                 } as any)
@@ -1177,12 +1173,16 @@ class LiveKitManager {
           }
         }
 
-        // O picker nativo do navegador decide se o áudio do sistema foi realmente incluído
-        // (checkbox "compartilhar áudio"), então só sabemos depois de tentar publicar -
-        // se existir uma publicação de ScreenShareAudio, o ducking precisa ser ativado.
+        // Only reroute call audio when capturing full monitor audio on browsers without restrictOwnAudio
         const nativeAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
         if (nativeAudioPub) {
-          void this.setCallAudioRoutingForCapture(true);
+          const displaySurface = (pub?.track?.mediaStreamTrack?.getSettings?.() as any)?.displaySurface;
+          const supportsRestrictOwnAudio = Boolean(
+            (navigator.mediaDevices?.getSupportedConstraints?.() as any)?.restrictOwnAudio
+          );
+          if (displaySurface !== 'browser' && !supportsRestrictOwnAudio) {
+            void this.setCallAudioRoutingForCapture(true);
+          }
         }
       }
     } else {
@@ -1737,6 +1737,13 @@ class LiveKitManager {
   setStreamSubscribed(participantIdentity: string, subscribed: boolean) {
     if (subscribed) {
       this.watchedParticipantIdentities.add(participantIdentity);
+      if (!this.isDeafened) {
+        // Unlock browser WebAudio & HTML5 autoplay on the "Watch stream" user gesture
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+          void this.audioContext.resume().catch(() => {});
+        }
+        void this.room?.startAudio().catch(() => {});
+      }
     } else {
       this.watchedParticipantIdentities.delete(participantIdentity);
     }
@@ -1898,17 +1905,14 @@ class LiveKitManager {
       this.rawMicTrack = null;
     }
 
-    // Stop and unpublish all local tracks
-    if (this.room?.localParticipant) {
-      for (const pub of this.room.localParticipant.trackPublications.values()) {
+    // Stop local tracks immediately and disconnect room without blocking on sequential unpublish RPCs
+    const oldRoom = this.room;
+    this.room = null;
+    if (oldRoom?.localParticipant) {
+      for (const pub of oldRoom.localParticipant.trackPublications.values()) {
         try {
           pub.track?.stop();
         } catch {}
-        if (pub.track) {
-          try {
-            await this.room.localParticipant.unpublishTrack(pub.track);
-          } catch {}
-        }
       }
     }
 
@@ -1921,9 +1925,12 @@ class LiveKitManager {
     this.activeMediaStreamTracks.clear();
     this.currentE2EEOptions = undefined;
 
-    if (this.room) {
-      await this.room.disconnect();
-      this.room = null;
+    if (oldRoom) {
+      // Bound teardown so a dead/lossy previous socket never stalls joining the next call
+      await Promise.race([
+        oldRoom.disconnect().catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 600)),
+      ]);
     }
   }
 }

@@ -50,6 +50,7 @@ export const TitleBar: React.FC = () => {
           setInitialServerTime((prev) => {
             if (prev && prev !== data.server_time) {
               setWebSyncAvailable(true);
+              window.electronAPI?.checkForUpdates?.();
               return prev;
             }
             return prev || data.server_time;
@@ -109,13 +110,25 @@ export const TitleBar: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // Handle update action (Instant Web Sync or binary install)
-  const handleDirectUpdate = () => {
+  // Handle update action: if a new installer exists (or Linux binary changed on disk),
+  // close and reopen/install the app; otherwise just reload the web bundle.
+  const handleDirectUpdate = async () => {
     if (binaryUpdateAvailable) {
-      // Fecha tudo e reabre no splash para atualizar.
       window.electronAPI?.restartToUpdate?.();
-    } else if (webSyncAvailable) {
-      // Atualização instantânea da UI (bundle servido pelo backend).
+      return;
+    }
+    if (webSyncAvailable) {
+      if (window.electronAPI?.applyTitlebarUpdate) {
+        try {
+          const res = await window.electronAPI.applyTitlebarUpdate();
+          if (res?.action === 'reload') {
+            window.location.reload();
+          }
+          return;
+        } catch {
+          // Fall back to web reload if IPC fails
+        }
+      }
       window.location.reload();
     }
   };

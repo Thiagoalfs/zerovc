@@ -95,6 +95,68 @@ export function canUserViewChannel(ch: Channel, guild: Guild | null, currentUser
 }
 
 /**
+ * Checks whether the current user can both view and connect to a voice channel,
+ * mirroring backend JoinVoice (canUserAccessChannel + PermConnectVoice).
+ */
+export function canUserConnectVoice(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!ch || !guild || !currentUser || ch.type !== 'voice') return false;
+  if (!canUserViewChannel(ch, guild, currentUser)) return false;
+
+  if (guild.owner_id === currentUser.id) return true;
+
+  const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
+  if (!currentMember) return false;
+
+  const userRoles = (currentMember.roles || []).map((r: any) => {
+    const roleId = typeof r === 'string' ? r : r?.id;
+    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(roleId));
+    return fullRole ? { ...r, ...fullRole, id: roleId } : (typeof r === 'object' ? r : { id: roleId });
+  });
+
+  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
+  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
+  userRoles.forEach((r: any) => {
+    userPerms |= Number(r?.permissions || 0);
+  });
+
+  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
+    return true;
+  }
+
+  let canConnect = (userPerms & Permissions.CONNECT_VOICE) !== 0;
+
+  if (ch.permission_overwrites && ch.permission_overwrites.length > 0) {
+    if (everyoneRole) {
+      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
+      if (ow) {
+        if ((ow.deny & Permissions.CONNECT_VOICE) !== 0) canConnect = false;
+        if ((ow.allow & Permissions.CONNECT_VOICE) !== 0) canConnect = true;
+      }
+    }
+
+    let roleDeny = false;
+    let roleAllow = false;
+    userRoles.forEach((r: any) => {
+      const roleId = typeof r === 'string' ? r : r?.id;
+      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(roleId));
+      if (ow) {
+        if ((ow.deny & Permissions.CONNECT_VOICE) !== 0) roleDeny = true;
+        if ((ow.allow & Permissions.CONNECT_VOICE) !== 0) roleAllow = true;
+      }
+    });
+
+    if (roleDeny) canConnect = false;
+    if (roleAllow) canConnect = true;
+  }
+
+  return canConnect;
+}
+
+/**
  * Checks whether the current user has permission to send messages in a channel,
  * combining guild role permissions, Administrator bypass, and channel permission overwrites.
  */

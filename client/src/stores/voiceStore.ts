@@ -411,12 +411,6 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     callKeyManager.endCall();
     livekitE2EEManager.cleanup();
 
-    if (prev?.isScreensharing) {
-      try {
-        await livekit.setScreenShareEnabled(false);
-      } catch {}
-    }
-
     const currentUserId = useAuthStore.getState().user?.id;
     if (currentUserId && prev?.voiceType === 'guild' && prev.channelId) {
       useGuildStore.getState().updateVoiceState('leave', undefined, prev.channelId, currentUserId);

@@ -45,6 +45,7 @@ interface ParticipantCardProps {
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   onOpenDM?: (userId: string) => void;
   onOpenScreenShare?: () => void;
+  onWatchStream?: (identity: string, mode: 'exclusive' | 'additive') => void | Promise<void>;
   onClick?: () => void;
   isCompact?: boolean;
 }
@@ -54,6 +55,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   onOpenUserProfile,
   onOpenDM,
   onOpenScreenShare,
+  onWatchStream,
   onClick,
   isCompact = false,
 }) => {
@@ -368,7 +370,9 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
   const handleToggleWatch = (watch: boolean, mode: 'exclusive' | 'additive' = 'exclusive') => {
     if (watch) {
-      if (watchParticipant) {
+      if (onWatchStream) {
+        void onWatchStream(participant.identity, mode);
+      } else if (watchParticipant) {
         watchParticipant(participant.identity, mode);
       } else {
         setWatchedParticipant(participant.identity);
