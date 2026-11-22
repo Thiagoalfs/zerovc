@@ -79,7 +79,7 @@
     "compression": "normal",
     "asar": true,
     "asarUnpack": [
-      "**/bin/*"
+      "dist-electron/bin/*"
     ],
     "directories": {
       "output": "release"
