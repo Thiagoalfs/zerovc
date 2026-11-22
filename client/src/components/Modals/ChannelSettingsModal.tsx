@@ -36,9 +36,8 @@ import {
   MODAL_FIELD_LABEL_CLASS,
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
 } from '../../constants/modalTypography';
+import { ModalButton } from '@/components/ui/modal-button';
 
 interface ChannelSettingsModalProps {
   channel: Channel | null;
@@ -369,15 +368,18 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             className="px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex items-center justify-between flex-shrink-0"
           >
             <div className="flex items-center gap-3">
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 onClick={onClose}
                 aria-label="Fechar configurações do canal"
-                className="p-2 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 title="Fechar"
+                className="-ml-1"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </ModalButton>
               <h2 className={MODAL_DIALOG_TITLE_CLASS}>Configurações do Canal</h2>
             </div>
           </div>
@@ -567,28 +569,31 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex-shrink-0"
         >
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <ModalButton
+              type="tertiary"
+              size="small"
               onClick={() => setMobileView('menu')}
               aria-label="Voltar ao menu"
-              className="p-2 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              prefix={<ArrowLeft className="w-5 h-5" />}
+              className="-ml-1"
             >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Voltar</span>
-            </button>
+              Voltar
+            </ModalButton>
           </div>
           <h2 className="text-sm font-bold text-white truncate max-w-[180px]">
             {activeTab === 'overview' ? 'Visão Geral' : 'Permissões'}
           </h2>
-          <button
-            type="button"
+          <ModalButton
+            type="tertiary"
+            shape="circle"
+            size="small"
+            svgOnly
             onClick={onClose}
             aria-label="Fechar configurações do canal"
-            className="p-2 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             title="Fechar"
           >
             <X className="w-5 h-5" />
-          </button>
+          </ModalButton>
         </div>
 
         {/* Desktop Top Header */}
@@ -610,23 +615,24 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
+            <ModalButton
+              type="primary"
               onClick={() => handleSave()}
-              disabled={isSaving}
-              className={MODAL_PRIMARY_BUTTON_CLASS}
+              loading={isSaving}
             >
               {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-            </button>
-            <button
-              type="button"
+            </ModalButton>
+            <ModalButton
+              type="tertiary"
+              shape="circle"
+              size="small"
+              svgOnly
               onClick={onClose}
               aria-label="Fechar configurações do canal"
-              className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               title="Fechar Configurações (ESC)"
             >
               <X className="w-5 h-5" />
-            </button>
+            </ModalButton>
           </div>
         </div>
 
@@ -779,15 +785,15 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                       </div>
 
                       {overwrites[selectedRole.id] && (
-                        <button
-                          type="button"
+                        <ModalButton
+                          type="secondary"
+                          size="small"
                           onClick={() => handleResetRolePermissions(selectedRole.id)}
-                          className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                          prefix={<RotateCcw className="w-3.5 h-3.5" />}
                           title="Restaurar todas as permissões para o padrão do servidor"
                         >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          <span>Redefinir Cargo</span>
-                        </button>
+                          Redefinir Cargo
+                        </ModalButton>
                       )}
                     </div>
 
@@ -897,21 +903,19 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
         {/* Mobile Floating Save Button */}
         <div className="flex md:hidden p-4 bg-background-darkest border-t border-white/10 items-center justify-between flex-shrink-0">
-          <button
-            type="button"
+          <ModalButton
+            type="secondary"
             onClick={onClose}
-            className={MODAL_CANCEL_BUTTON_CLASS}
           >
             Cancelar
-          </button>
-          <button
-            type="button"
+          </ModalButton>
+          <ModalButton
+            type="primary"
             onClick={() => handleSave()}
-            disabled={isSaving}
-            className={MODAL_PRIMARY_BUTTON_CLASS}
+            loading={isSaving}
           >
             {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-          </button>
+          </ModalButton>
         </div>
       </div>
 

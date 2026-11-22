@@ -76,7 +76,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
       const res = await api.upload.groupIcon(croppedFile);
       await updateGroup(targetGroupId, { icon_url: res.url });
     } catch (err: any) {
-      alert(err?.message || 'Falha ao atualizar foto do grupo');
+      showAlert({ title: 'Erro', message: err?.message || 'Falha ao atualizar foto do grupo', variant: 'danger' });
     }
   };
 
@@ -158,9 +158,9 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
           const r = roomId ? { id: roomId } : await openDMWithUser(targetUser.id);
           const inviteLink = `${window.location.origin}/invite/${invite.code}`;
           await api.dms.sendMessage(r.id, { content: `Aqui está o convite para o servidor **${g.name}**:\n${inviteLink}` });
-          alert(`Convite para o servidor "${g.name}" enviado com sucesso na DM de @${targetUser.username}!`);
+          showAlert({ title: 'Convite enviado', message: `Convite para o servidor "${g.name}" enviado com sucesso na DM de @${targetUser.username}!`, variant: 'success' });
         } catch (err: any) {
-          alert(err?.message || 'Erro ao enviar convite para o servidor');
+          showAlert({ title: 'Erro', message: err?.message || 'Erro ao enviar convite para o servidor', variant: 'danger' });
         }
       },
     }));
@@ -215,7 +215,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                   const r = roomId ? { id: roomId } : await openDMWithUser(targetUser.id);
                   await startCall(r.id, targetUser);
                 } catch (err: any) {
-                  alert(err?.message || 'Erro ao iniciar chamada');
+                  showAlert({ title: 'Erro na chamada', message: err?.message || 'Erro ao iniciar chamada', variant: 'danger' });
                 }
               },
             },
@@ -244,11 +244,17 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                   icon: <UserMinus className="w-4 h-4" />,
                   variant: 'danger' as const,
                   onClick: async () => {
-                    if (window.confirm(`Tem certeza que deseja remover @${targetUser.username} dos seus amigos?`)) {
+                    const ok = await showConfirm({
+                      title: 'Remover amigo',
+                      message: `Tem certeza que deseja remover @${targetUser.username} dos seus amigos?`,
+                      confirmText: 'Remover',
+                      variant: 'danger',
+                    });
+                    if (ok) {
                       try {
                         if (friendship) await removeFriend(friendship.id);
                       } catch (err: any) {
-                        alert(err?.message || 'Erro ao remover amigo');
+                        showAlert({ title: 'Erro', message: err?.message || 'Erro ao remover amigo', variant: 'danger' });
                       }
                     }
                   },
@@ -260,9 +266,9 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                   onClick: async () => {
                     try {
                       await sendRequest(targetUser.username);
-                      alert(`Pedido de amizade enviado para @${targetUser.username}!`);
+                      showAlert({ title: 'Pedido enviado', message: `Pedido de amizade enviado para @${targetUser.username}!`, variant: 'success' });
                     } catch (err: any) {
-                      alert(err?.message || 'Erro ao enviar pedido de amizade');
+                      showAlert({ title: 'Erro', message: err?.message || 'Erro ao enviar pedido de amizade', variant: 'danger' });
                     }
                   },
                 },

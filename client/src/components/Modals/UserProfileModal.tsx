@@ -12,9 +12,9 @@ import {
   Volume2,
   Maximize2,
   Send,
-  Loader2,
   AlertTriangle,
 } from 'lucide-react';
+import { ModalButton } from '@/components/ui/modal-button';
 import { User, UserProfilePosition, Guild } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -382,19 +382,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     disabled={isSendingMessage}
                     className="w-full bg-background-darkest border border-white/10 focus:border-brand-500 focus-visible:ring-1 focus-visible:ring-brand-500 rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-gray-500 outline-none transition-all shadow-inner"
                   />
-                  <button
-                    type="submit"
+                  <ModalButton
+                    type="tertiary"
+                    htmlType="submit"
+                    shape="circle"
+                    size="tiny"
+                    svgOnly
+                    loading={isSendingMessage}
+                    disabled={!quickMessage.trim()}
                     aria-label="Enviar mensagem"
-                    disabled={!quickMessage.trim() || isSendingMessage}
-                    className="absolute right-1.5 p-1 rounded-lg text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:text-gray-400 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     title="Enviar mensagem"
+                    className="absolute right-1.5 text-brand-400"
                   >
-                    {isSendingMessage ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400" />
-                    ) : (
-                      <Send className="w-3.5 h-3.5 text-brand-400" />
-                    )}
-                  </button>
+                    <Send className="w-3.5 h-3.5" />
+                  </ModalButton>
                 </div>
                 {sendError && (
                   <div className="flex items-center gap-1.5 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 rounded-xl">

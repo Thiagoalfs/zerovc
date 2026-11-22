@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, Video, VideoOff, Gamepad2, ChevronDown } from 'lucide-react';
+import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff, Video, VideoOff, Gamepad2, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
@@ -215,6 +215,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         {
           id: 'stop-screen',
           label: 'Parar compartilhamento',
+          icon: <MonitorOff className="w-4 h-4" />,
           variant: 'danger',
           onClick: () => {
             stopScreenShare();
@@ -249,6 +250,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         {
           id: 'stop-screen',
           label: 'Parar transmissão',
+          icon: <MonitorOff className="w-4 h-4" />,
           variant: 'danger',
           onClick: () => {
             stopScreenShare();

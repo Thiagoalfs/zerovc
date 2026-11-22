@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Gamepad2, Check, Plus, Trash2, Edit2, X, ChevronDown, Monitor, Sparkles, Search, Star, Loader2 } from 'lucide-react';
+import { Gamepad2, Check, Plus, Trash2, Edit2, X, Monitor, Sparkles, Search, Star, Loader2 } from 'lucide-react';
 import { useRegisteredGamesStore, RegisteredGame } from '../../stores/registeredGamesStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
+import { SquishSwitch } from '../ui/squish-switch';
+import { ModalButton } from '@/components/ui/modal-button';
+import { SettingsGroup } from '@/components/ui/settings-group';
+import { AppInput } from '@/components/ui/app-input';
 import { api, formatAssetUrl } from '../../lib/api';
 import { GameSearchResult } from '../../types';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_SECTION_HEADER_CLASS,
   MODAL_ITEM_ROW_PADDING_CLASS,
-  MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-  MODAL_SECONDARY_BUTTON_CLASS,
-  MODAL_SWITCH_CONTAINER_CLASS,
-  MODAL_SWITCH_KNOB_CLASS,
 } from '../../constants/modalTypography';
 
 function formatLastPlayed(timestamp: number): string {
@@ -257,11 +256,7 @@ export const RegisteredGamesView: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in">
       {/* 1. CURRENT GAME SECTION */}
-      <div>
-        <h4 className={MODAL_SECTION_HEADER_CLASS}>
-          Jogo Atual
-        </h4>
-
+      <SettingsGroup title="Jogo Atual">
         {currentRunningGame ? (
           <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-4`}>
             <div className="flex items-center gap-3 min-w-0">
@@ -301,25 +296,14 @@ export const RegisteredGamesView: React.FC = () => {
               </div>
             </div>
 
-            <button
-              type="button"
-              role="switch"
+            <SquishSwitch
               aria-labelledby="current-running-game-label"
-              aria-checked={currentRunningGame.enabled}
-              onClick={() => handleToggleGame(currentRunningGame)}
-              className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                currentRunningGame.enabled ? 'bg-brand-500' : 'bg-white/10'
-              }`}
-            >
-              <div
-                className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                  currentRunningGame.enabled ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+              checked={currentRunningGame.enabled}
+              onCheckedChange={() => handleToggleGame(currentRunningGame)}
+            />
           </div>
         ) : (
-          <div className="py-2">
+          <div className="py-1">
             <h5 className={`${MODAL_TOGGLE_HEADER_CLASS} mb-0.5`}>Nenhum jogo detectado</h5>
             <p className={MODAL_DESCRIPTION_CLASS}>
               Não está vendo seu jogo?{' '}
@@ -333,7 +317,7 @@ export const RegisteredGamesView: React.FC = () => {
             </p>
           </div>
         )}
-      </div>
+      </SettingsGroup>
 
       {/* ADD GAME DROPDOWN / MODAL */}
       {isAddingGame && (
@@ -343,16 +327,18 @@ export const RegisteredGamesView: React.FC = () => {
               <Plus className="w-3.5 h-3.5 text-brand-400" />
               Adicionar Jogo ou Aplicativo
             </span>
-            <button
-              type="button"
+            <ModalButton
+              type="tertiary"
+              svgOnly
+              size="small"
               onClick={() => {
                 setIsAddingGame(false);
                 setCustomGameName('');
               }}
-              className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+              aria-label="Fechar"
             >
               <X className="w-4 h-4" />
-            </button>
+            </ModalButton>
           </div>
 
           {/* Running Windows selector if in Electron */}
@@ -381,26 +367,29 @@ export const RegisteredGamesView: React.FC = () => {
           {/* Manual Input & Live RAWG Autocomplete */}
           <form onSubmit={handleAddCustomGame} className="space-y-2 pt-1">
             <div className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={customGameName}
-                  onChange={(e) => setCustomGameName(e.target.value)}
-                  placeholder="Digite o nome do jogo (ex: Minecraft, Valorant, GTA V)..."
-                  className="w-full bg-background-darkest border border-white/10 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                />
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                {isSearchingRawg && (
-                  <Loader2 className="w-3.5 h-3.5 text-brand-400 animate-spin absolute right-3 top-3" />
-                )}
-              </div>
-              <button
-                type="submit"
+              <AppInput
+                type="text"
+                value={customGameName}
+                onChange={(e) => setCustomGameName(e.target.value)}
+                placeholder="Digite o nome do jogo (ex: Minecraft, Valorant, GTA V)..."
+                leftIcon={<Search className="w-4 h-4" />}
+                rightElement={
+                  isSearchingRawg ? (
+                    <Loader2 className="w-3.5 h-3.5 text-brand-400 animate-spin" />
+                  ) : undefined
+                }
+                containerClassName="flex-1"
+                className="py-2 text-xs"
+              />
+              <ModalButton
+                type="primary"
+                htmlType="submit"
+                size="small"
                 disabled={!customGameName.trim()}
-                className={`${MODAL_PRIMARY_BUTTON_CLASS} shrink-0`}
+                className="shrink-0"
               >
                 Adicionar
-              </button>
+              </ModalButton>
             </div>
 
             {/* RAWG Online Database Results */}
@@ -471,16 +460,17 @@ export const RegisteredGamesView: React.FC = () => {
                         </div>
                       </div>
 
-                      <button
-                        type="button"
+                      <ModalButton
+                        type="secondary"
+                        size="tiny"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleSelectRawgGame(rawgGame);
                         }}
-                        className="bg-brand-500/20 group-hover/item:bg-brand-500 text-brand-300 group-hover/item:text-white font-semibold px-2.5 py-1 rounded-lg text-[11px] transition-colors shrink-0 ml-2 cursor-pointer"
+                        className="shrink-0 ml-2"
                       >
                         Jogar
-                      </button>
+                      </ModalButton>
                     </div>
                   ))}
                 </div>
@@ -490,12 +480,9 @@ export const RegisteredGamesView: React.FC = () => {
         </div>
       )}
 
-      {/* DIVIDER */}
-      <div className={MODAL_DIVIDER_CLASS} />
-
       {/* 2. ADDED GAMES LIST */}
       <div>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h4 className={MODAL_SECTION_HEADER_CLASS}>Jogos Registrados</h4>
             <p className={`${MODAL_DESCRIPTION_CLASS} mt-0.5`}>
@@ -503,18 +490,19 @@ export const RegisteredGamesView: React.FC = () => {
             </p>
           </div>
           {!isAddingGame && (
-            <button
-              type="button"
+            <ModalButton
+              type="secondary"
+              size="small"
               onClick={() => setIsAddingGame(true)}
-              className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center gap-1.5 shrink-0`}
+              prefix={<Plus className="w-3.5 h-3.5" />}
+              className="shrink-0"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Adicionar Jogo</span>
-            </button>
+              Adicionar Jogo
+            </ModalButton>
           )}
         </div>
 
-        <div className="divide-y divide-white/5 mt-3">
+        <SettingsGroup>
           {validGames.map((game) => (
             <div
               key={game.id}
@@ -541,7 +529,7 @@ export const RegisteredGamesView: React.FC = () => {
 
                 {editingGameId === game.id ? (
                   <div className="flex items-center gap-2 flex-1 max-w-xs">
-                    <input
+                    <AppInput
                       type="text"
                       value={editingGameName}
                       onChange={(e) => setEditingGameName(e.target.value)}
@@ -550,22 +538,28 @@ export const RegisteredGamesView: React.FC = () => {
                         if (e.key === 'Escape') setEditingGameId(null);
                       }}
                       autoFocus
-                      className="bg-background-darkest border border-brand-500 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none w-full"
+                      containerClassName="flex-1"
+                      className="border-brand-500 rounded-lg px-2.5 py-1 text-xs"
                     />
-                    <button
-                      type="button"
+                    <ModalButton
+                      type="tertiary"
+                      svgOnly
+                      size="small"
                       onClick={() => handleSaveRename(game.id)}
-                      className="p-1 text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                      aria-label="Salvar nome"
+                      className="text-emerald-400 hover:text-emerald-300"
                     >
                       <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
+                    </ModalButton>
+                    <ModalButton
+                      type="tertiary"
+                      svgOnly
+                      size="small"
                       onClick={() => setEditingGameId(null)}
-                      className="p-1 text-gray-400 hover:text-white cursor-pointer"
+                      aria-label="Cancelar"
                     >
                       <X className="w-3.5 h-3.5" />
-                    </button>
+                    </ModalButton>
                   </div>
                 ) : (
                   <div className="min-w-0">
@@ -590,46 +584,41 @@ export const RegisteredGamesView: React.FC = () => {
               <div className="flex items-center gap-3 shrink-0">
                 {/* Edit custom game name */}
                 {!game.isVerified && editingGameId !== game.id && (
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="tertiary"
+                    svgOnly
+                    size="small"
                     onClick={() => {
                       setEditingGameId(game.id);
                       setEditingGameName(game.name);
                     }}
-                    className="p-1.5 text-gray-500 hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-white/5 cursor-pointer"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Renomear jogo"
+                    aria-label="Renomear jogo"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
-                  </button>
+                  </ModalButton>
                 )}
 
                 {/* Delete button */}
-                <button
-                  type="button"
+                <ModalButton
+                  type="tertiary"
+                  svgOnly
+                  size="small"
                   onClick={() => removeGame(game.id)}
-                  className="p-1.5 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-white/5 cursor-pointer"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400"
                   title="Remover jogo registrado"
+                  aria-label="Remover jogo registrado"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                </ModalButton>
 
                 {/* Toggle switch */}
-                <button
-                  type="button"
-                  role="switch"
+                <SquishSwitch
                   aria-labelledby={`registered-game-label-${game.id}`}
-                  aria-checked={game.enabled}
-                  onClick={() => handleToggleGame(game)}
-                  className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                    game.enabled ? 'bg-brand-500' : 'bg-white/10'
-                  }`}
-                >
-                  <div
-                    className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                      game.enabled ? 'translate-x-6' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
+                  checked={game.enabled}
+                  onCheckedChange={() => handleToggleGame(game)}
+                />
               </div>
             </div>
           ))}
@@ -639,7 +628,7 @@ export const RegisteredGamesView: React.FC = () => {
               Nenhum jogo registrado no momento.
             </div>
           )}
-        </div>
+        </SettingsGroup>
       </div>
     </div>
   );

@@ -45,6 +45,21 @@
     background-color: rgba(255, 255, 255, 0.35);
   }
 
+  /* Thin horizontal scrollbar with constant 5px track height (no layout shift) */
+  .preview-scrollbar-x::-webkit-scrollbar {
+    height: 5px;
+  }
+  .preview-scrollbar-x::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .preview-scrollbar-x::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 9999px;
+  }
+  .preview-scrollbar-x::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.35);
+  }
+
   html[data-theme="light"] .chat-scrollbar:hover,
   html.light .chat-scrollbar:hover {
     scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
@@ -344,6 +359,10 @@ html.reduced-motion .animate-screen-shake {
     animation: none !important;
     transform: none !important;
   }
+}
+
+html.video-fullscreen header[data-titlebar] {
+  display: none;
 }
 
 

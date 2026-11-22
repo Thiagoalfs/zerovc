@@ -9,6 +9,7 @@ import {
 import { GuildInvite } from '../../../types';
 import { useStreamerModeStore } from '../../../stores/streamerModeStore';
 import { MODAL_DESCRIPTION_CLASS } from '../../../constants/modalTypography';
+import { ModalButton } from '@/components/ui/modal-button';
 
 interface InvitesTabProps {
   invitesList: GuildInvite[];
@@ -40,15 +41,15 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
     <div className="max-w-4xl space-y-6 animate-fade-in py-6">
       {/* Mobile-only create invite button */}
       <div className="md:hidden flex justify-end">
-        <button
-          type="button"
+        <ModalButton
+          type="primary"
+          fullWidth
           onClick={handleGenerateNewInvite}
-          disabled={isCreatingInvite}
-          className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+          loading={isCreatingInvite}
+          prefix={<Plus className="w-4 h-4" />}
         >
-          <Plus className="w-4 h-4" />
-          <span>{isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}</span>
-        </button>
+          {isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}
+        </ModalButton>
       </div>
 
       {isLoadingInvites ? (
@@ -94,28 +95,26 @@ export const InvitesTab: React.FC<InvitesTabProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="secondary"
+                    size="small"
                     onClick={() => handleCopyInviteLink(inv.code)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      isCopied
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                        : 'bg-white/10 hover:bg-white/15 text-white'
-                    }`}
+                    prefix={isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   >
-                    {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{isCopied ? 'Copiado!' : 'Copiar'}</span>
-                  </button>
+                    {isCopied ? 'Copiado!' : 'Copiar'}
+                  </ModalButton>
 
                   {(isOwner || hasAdmin || canManageGuild) && (
-                    <button
-                      type="button"
+                    <ModalButton
+                      type="error"
+                      size="small"
+                      svgOnly
                       onClick={() => handleRevokeInvite(inv.code)}
-                      className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
                       title="Revogar / Excluir Convite"
+                      aria-label="Revogar / Excluir Convite"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </ModalButton>
                   )}
                 </div>
               </div>

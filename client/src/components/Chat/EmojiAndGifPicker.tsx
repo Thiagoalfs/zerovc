@@ -236,7 +236,7 @@ const GifPickerItem: React.FC<{
       />
 
       {!autoplayGifs && !isHovered && (
-        <div className="absolute bottom-1 left-1.5 bg-black/70 text-white/90 px-1.5 py-0.5 rounded-md text-[9px] font-bold tracking-wider uppercase border border-white/10">
+        <div className="absolute top-1.5 left-1.5 bg-black/75 text-white/90 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border border-white/15">
           GIF
         </div>
       )}

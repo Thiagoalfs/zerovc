@@ -347,8 +347,8 @@ export class BackupManager {
   /**
    * Deletes the user's cloud key backup via POST /api/e2ee/backup/delete.
    */
-  async deleteBackup(): Promise<void> {
-    await api.e2ee.deleteBackup();
+  async deleteBackup(code?: string): Promise<void> {
+    await api.e2ee.deleteBackup(code);
   }
 
   /**

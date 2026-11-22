@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useAuthStore } from './stores/authStore';
+import { useAuthStore, hasPendingProfileField } from './stores/authStore';
 import { useGuildStore } from './stores/guildStore';
 import { useFriendStore } from './stores/friendStore';
 import { useVoiceStore } from './stores/voiceStore';
@@ -62,6 +62,13 @@ import { callKeyManager } from './crypto/callKeys';
 import { deviceManager } from './crypto/deviceManager';
 import { safeCryptoLogger } from './crypto/safeLogger';
 import { messageCodec } from './messaging/messageCodec';
+import {
+  SHORTCUTS,
+  syncElectronShortcuts,
+  registeredGlobalActions,
+  eventToKeyCombo,
+  normalizeEventKey,
+} from './components/Modals/KeybindSettingsView';
 
 export const App: React.FC = () => {
   const { user, token, isCheckingAuth, checkAuth, setUser } = useAuthStore();
@@ -859,7 +866,7 @@ export const App: React.FC = () => {
               api.users
                 .updateProfile({ custom_activity: null })
                 .then((updated) => {
-                  useAuthStore.getState().setUser(updated);
+                  useAuthStore.getState().setUser({ custom_activity: updated.custom_activity });
                   if (updated.id) {
                     useGuildStore.getState().updateMemberInGuild(updated);
                   }
@@ -958,7 +965,7 @@ export const App: React.FC = () => {
           api.users
             .updateProfile({ custom_activity: targetActivity })
             .then((updated) => {
-              useAuthStore.getState().setUser(updated);
+              useAuthStore.getState().setUser({ custom_activity: updated.custom_activity });
               if (updated.id) {
                 useGuildStore.getState().updateMemberInGuild(updated);
               }
@@ -1139,21 +1146,60 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Push-to-Talk (PTT) Global Key Listener
+  // Push-to-Talk (PTT) & Global/In-App Shortcuts Listener
   useEffect(() => {
     let isPTTPressed = false;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-        return;
+    const triggerShortcutAction = (action: string) => {
+      if (action === 'toggle-mute') {
+        useVoiceStore.getState().toggleMute();
+      } else if (action === 'toggle-deafen') {
+        useVoiceStore.getState().toggleDeafen();
+      } else if (action === 'toggle-screenshare') {
+        const vs = useVoiceStore.getState();
+        if (vs.isConnected) {
+          if (vs.isScreensharing) {
+            livekit.setScreenShareEnabled(false);
+            useVoiceStore.setState({ isScreensharing: false });
+          } else {
+            setIsScreenShareOpen(true);
+          }
+        }
       }
+    };
+
+    // Register saved Electron global shortcuts on startup
+    void syncElectronShortcuts();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      const target = e.target as HTMLElement;
+      const isTyping = !!(target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable));
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
+
+      const combo = eventToKeyCombo(e);
+
+      // In-app fallback for voice shortcuts (when Electron globalShortcut didn't register or on Web)
+      if (!isTyping || hasModifier) {
+        for (const sc of SHORTCUTS) {
+          if (sc.id === 'ptt_key') continue;
+          if (registeredGlobalActions.has(sc.electronAction)) continue;
+          const bound = localStorage.getItem(sc.storageKey) || sc.defaultKey;
+          if (bound && combo === bound) {
+            e.preventDefault();
+            triggerShortcutAction(sc.electronAction);
+            return;
+          }
+        }
+      }
+
+      if (isTyping) return;
 
       const mode = localStorage.getItem('zerovc_input_mode');
       if (mode !== 'ptt') return;
 
       const pttKey = localStorage.getItem('zerovc_ptt_key') || 'Space';
-      if (e.code === pttKey && !isPTTPressed) {
+      if ((combo === pttKey || e.code === pttKey) && !isPTTPressed) {
         if (e.code === 'Space') {
           e.preventDefault();
         }
@@ -1163,16 +1209,14 @@ export const App: React.FC = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-        return;
-      }
-
+      if (!isPTTPressed) return;
       const mode = localStorage.getItem('zerovc_input_mode');
       if (mode !== 'ptt') return;
 
       const pttKey = localStorage.getItem('zerovc_ptt_key') || 'Space';
-      if (e.code === pttKey) {
+      const combo = eventToKeyCombo(e);
+      const key = normalizeEventKey(e);
+      if (combo === pttKey || e.code === pttKey || pttKey.split('+').includes(key)) {
         isPTTPressed = false;
         livekit.setMuted(true);
       }
@@ -1184,23 +1228,7 @@ export const App: React.FC = () => {
     // Electron global shortcut event listener
     let removeShortcutListener: (() => void) | undefined;
     if ((window as any).electronAPI?.onGlobalShortcut) {
-      removeShortcutListener = (window as any).electronAPI.onGlobalShortcut((action: string) => {
-        if (action === 'toggle-mute') {
-          useVoiceStore.getState().toggleMute();
-        } else if (action === 'toggle-deafen') {
-          useVoiceStore.getState().toggleDeafen();
-        } else if (action === 'toggle-screenshare') {
-          const vs = useVoiceStore.getState();
-          if (vs.isConnected) {
-            if (vs.isScreensharing) {
-              livekit.setScreenShareEnabled(false);
-              useVoiceStore.setState({ isScreensharing: false });
-            } else {
-              setIsScreenShareOpen(true);
-            }
-          }
-        }
-      });
+      removeShortcutListener = (window as any).electronAPI.onGlobalShortcut(triggerShortcutAction);
     }
 
     return () => {
@@ -1402,7 +1430,11 @@ export const App: React.FC = () => {
       const handleUserUpdate = (event: any) => {
         const currentUserId = useAuthStore.getState().user?.id;
         if (event.data?.id && currentUserId && event.data.id === currentUserId) {
-          useAuthStore.getState().setUser(event.data);
+          const filtered: Record<string, any> = {};
+          for (const [k, v] of Object.entries(event.data)) {
+            if (!hasPendingProfileField(k)) filtered[k] = v;
+          }
+          useAuthStore.getState().setUser(filtered);
         }
         useGuildStore.getState().updateMemberInGuild(event.data);
       };

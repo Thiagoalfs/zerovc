@@ -1,15 +1,15 @@
 import React from 'react';
-import { Crown, Search, Check } from 'lucide-react';
+import { Search, Check } from 'lucide-react';
 import { Guild, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
 import {
-  MODAL_DIALOG_TITLE_CLASS,
-  MODAL_FIELD_LABEL_CLASS,
-  MODAL_CARD_PADDING_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_BACKDROP_CLASS,
-} from '../../../constants/modalTypography';
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
+import { AppInput } from '@/components/ui/app-input';
+import { InlineAlert } from '@/components/ui/inline-alert';
 
 interface TransferOwnershipModalProps {
   isOpen: boolean;
@@ -48,149 +48,121 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
   isTransferring,
   onConfirmTransfer,
 }) => {
-  if (!isOpen) return null;
-
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="lg"
+      titleId="transfer-ownership-modal-title"
+      className="border-amber-500/40"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="transfer-ownership-modal-title"
-        className={`w-full max-w-lg max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-amber-500/40 shadow-2xl ${MODAL_CARD_PADDING_CLASS} text-gray-200 overflow-y-auto chat-scrollbar`}
-      >
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400">
-            <Crown className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 id="transfer-ownership-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>Transferir Posse do Servidor</h3>
-            <p className={MODAL_DESCRIPTION_CLASS}>Passe o controle total deste servidor para outro membro</p>
+      <AppModalHeader
+        title="Transferir posse do servidor"
+        titleId="transfer-ownership-modal-title"
+        onClose={onClose}
+      />
+
+      <AppModalBody onSubmit={onConfirmTransfer}>
+        <InlineAlert variant="warning">
+          Você deixará de ser o dono do servidor e passará a ser um administrador. Esta ação não poderá ser desfeita por você após a confirmação.
+        </InlineAlert>
+
+        {transferError && <InlineAlert variant="error">{transferError}</InlineAlert>}
+
+        <div className="space-y-1.5">
+          <AppInput
+            label="1. Selecione o novo dono"
+            leftIcon={<Search className="w-4 h-4" />}
+            type="text"
+            value={transferSearchQuery}
+            onChange={(e) => setTransferSearchQuery(e.target.value)}
+            placeholder="Filtrar membro..."
+            className="text-xs focus:border-amber-500"
+            containerClassName="mb-2"
+          />
+
+          <div className="max-h-36 overflow-y-auto space-y-1 bg-background-darkest/60 p-2 rounded-xl border border-white/10 chat-scrollbar">
+            {members
+              .filter((m) => m.id !== user?.id)
+              .filter((m) =>
+                !transferSearchQuery.trim() ||
+                m.username.toLowerCase().includes(transferSearchQuery.toLowerCase()) ||
+                (m.display_name && m.display_name.toLowerCase().includes(transferSearchQuery.toLowerCase()))
+              )
+              .map((m) => {
+                const isSelected = transferTargetUser?.id === m.id;
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => setTransferTargetUser(m)}
+                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
+                      isSelected ? 'bg-amber-500/20 border border-amber-500/40 text-white' : 'hover:bg-background-dark text-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-full bg-white/10 overflow-hidden shrink-0">
+                        {m.avatar_url ? (
+                          <img src={formatAssetUrl(m.avatar_url)} alt={m.username} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-white bg-brand-600">
+                            {m.username[0]?.toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs font-semibold">{m.display_name || m.username}</span>
+                      <span className="text-[11px] text-gray-500">@{m.username}</span>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-amber-400" />}
+                  </div>
+                );
+              })}
           </div>
         </div>
 
-        <div className="p-3.5 my-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs leading-relaxed">
-          ⚠️ <strong>Atenção:</strong> Você deixará de ser o dono do servidor e passará a ser um administrador. Esta ação não poderá ser desfeita por você após a confirmação.
-        </div>
+        {transferTargetUser && (
+          <div className="space-y-3 pt-2">
+            <label className="flex items-start gap-2.5 cursor-pointer text-xs text-gray-300 select-none">
+              <input
+                type="checkbox"
+                checked={transferAcknowledge}
+                onChange={(e) => setTransferAcknowledge(e.target.checked)}
+                className="mt-0.5 rounded bg-background-darkest border-white/10 text-amber-500 focus:ring-0"
+              />
+              <span>
+                Reconheço que estou transferindo irreversivelmente a posse para <strong>@{transferTargetUser.username}</strong>.
+              </span>
+            </label>
 
-        {transferError && (
-          <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs">
-            {transferError}
+            <AppInput
+              label={
+                <>
+                  2. Digite o nome do servidor para confirmar:{' '}
+                  <span className="text-white select-all">{activeGuild.name}</span>
+                </>
+              }
+              type="text"
+              value={transferConfirmText}
+              onChange={(e) => setTransferConfirmText(e.target.value)}
+              placeholder={activeGuild.name}
+              className="text-xs focus:border-amber-500"
+            />
           </div>
         )}
 
-        <form onSubmit={onConfirmTransfer} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className={MODAL_FIELD_LABEL_CLASS}>
-              1. Selecione o Novo Dono
-            </label>
-            <div className="relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={transferSearchQuery}
-                onChange={(e) => setTransferSearchQuery(e.target.value)}
-                placeholder="Filtrar membro..."
-                className="w-full pl-9 pr-4 py-2 bg-background-darkest border border-white/10 rounded-xl text-white text-xs mb-2 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div className="max-h-36 overflow-y-auto space-y-1 bg-background-darkest/60 p-2 rounded-xl border border-white/10 chat-scrollbar">
-              {members
-                .filter((m) => m.id !== user?.id)
-                .filter((m) =>
-                  !transferSearchQuery.trim() ||
-                  m.username.toLowerCase().includes(transferSearchQuery.toLowerCase()) ||
-                  (m.display_name && m.display_name.toLowerCase().includes(transferSearchQuery.toLowerCase()))
-                )
-                .map((m) => {
-                  const isSelected = transferTargetUser?.id === m.id;
-                  return (
-                    <div
-                      key={m.id}
-                      onClick={() => setTransferTargetUser(m)}
-                      className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                        isSelected ? 'bg-amber-500/20 border border-amber-500/40 text-white' : 'hover:bg-background-dark text-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-6 h-6 rounded-full bg-white/10 overflow-hidden shrink-0">
-                          {m.avatar_url ? (
-                            <img src={formatAssetUrl(m.avatar_url)} alt={m.username} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-white bg-brand-600">
-                              {m.username[0]?.toUpperCase()}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-xs font-semibold">{m.display_name || m.username}</span>
-                        <span className="text-[11px] text-gray-500">@{m.username}</span>
-                      </div>
-                      {isSelected && <Check className="w-4 h-4 text-amber-400" />}
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-
-          {transferTargetUser && (
-            <div className="space-y-3 pt-2">
-              <label className="flex items-start gap-2.5 cursor-pointer text-xs text-gray-300 select-none">
-                <input
-                  type="checkbox"
-                  checked={transferAcknowledge}
-                  onChange={(e) => setTransferAcknowledge(e.target.checked)}
-                  className="mt-0.5 rounded bg-background-darkest border-white/10 text-amber-500 focus:ring-0"
-                />
-                <span>
-                  Reconheço que estou transferindo irreversivelmente a posse para <strong>@{transferTargetUser.username}</strong>.
-                </span>
-              </label>
-
-              <div className="space-y-1.5">
-                <label className={MODAL_FIELD_LABEL_CLASS}>
-                  2. Digite o nome do servidor para confirmar: <span className="text-white select-all">{activeGuild.name}</span>
-                </label>
-                <input
-                  type="text"
-                  value={transferConfirmText}
-                  onChange={(e) => setTransferConfirmText(e.target.value)}
-                  placeholder={activeGuild.name}
-                  className="w-full px-4 py-2 bg-background-darkest border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
-            <button
-              type="button"
-              onClick={onClose}
-              className={MODAL_CANCEL_BUTTON_CLASS}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={
-                isTransferring ||
-                !transferTargetUser ||
-                !transferAcknowledge ||
-                transferConfirmText.trim() !== activeGuild.name.trim()
-              }
-              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
-            >
-              {isTransferring ? 'Transferindo...' : 'Confirmar Transferência'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <AppModalFooter
+          align="end"
+          onCancel={onClose}
+          confirmText={isTransferring ? 'Transferindo...' : 'Confirmar transferência'}
+          confirmType="warning"
+          confirmHtmlType="submit"
+          loading={isTransferring}
+          disabled={
+            !transferTargetUser ||
+            !transferAcknowledge ||
+            transferConfirmText.trim() !== activeGuild.name.trim()
+          }
+        />
+      </AppModalBody>
+    </AppModal>
   );
 };

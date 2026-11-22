@@ -73,7 +73,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   const dragCounterRef = useRef<number>(0);
 
   // Fetch pinned messages from backend whenever showPinnedOnly is toggled or channel changes
@@ -123,7 +123,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      setDroppedFile(files[0]);
+      setDroppedFiles(Array.from(files));
     }
   };
 
@@ -150,7 +150,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  const handleSendMessage = async (content: string, replyToId?: string, isTTS?: boolean, file?: File) => {
+  const handleSendMessage = async (content: string, replyToId?: string, isTTS?: boolean, file?: File | File[]) => {
     if (activeChannel) {
       markChannelAsRead(activeChannel.id);
     }
@@ -335,19 +335,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       onDrop={handleDrop}
       className="flex-1 w-full min-w-0 bg-background-dark flex flex-col h-full overflow-hidden relative min-h-0"
     >
-      {/* Drag & Drop Files Overlay */}
-      {isDraggingFile && (
-        <div className="absolute inset-3 z-50 bg-background-darkest/90 backdrop-blur-md border-2 border-dashed border-brand-500 rounded-3xl flex flex-col items-center justify-center gap-3 p-6 animate-in fade-in zoom-in-95 pointer-events-none shadow-2xl">
-          <div className="w-16 h-16 rounded-2xl bg-brand-500/20 text-brand-400 flex items-center justify-center shadow-inner animate-bounce">
-            <UploadCloud className="w-8 h-8" />
-          </div>
-          <div className="text-center">
-            <h3 className="text-lg font-bold text-white mb-0.5">Solte seus arquivos aqui</h3>
-            <p className="text-xs text-gray-400">Imagens, vídeos ou documentos (até 20 MB)</p>
-          </div>
-        </div>
-      )}
-
       {/* 1. Full-Width Channel Header */}
       <ChatHeader
         onOpenMobileDrawer={onOpenMobileDrawer}
@@ -507,8 +494,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             onCancelReply={() => setReplyingTo(null)}
             onSendMessage={handleSendMessage}
             onEditLastMessage={handleEditLastMessage}
-            droppedFile={droppedFile}
-            onClearDroppedFile={() => setDroppedFile(null)}
+            droppedFiles={droppedFiles}
+            onClearDroppedFiles={() => setDroppedFiles(null)}
+            isDraggingFile={isDraggingFile}
           />
         </div>
 

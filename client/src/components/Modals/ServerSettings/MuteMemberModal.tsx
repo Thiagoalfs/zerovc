@@ -1,13 +1,12 @@
 import React from 'react';
-import { Clock } from 'lucide-react';
 import { User } from '../../../types';
+import { ModalButton } from '@/components/ui/modal-button';
 import {
-  MODAL_DIALOG_TITLE_CLASS,
-  MODAL_CARD_PADDING_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_BACKDROP_CLASS,
-} from '../../../constants/modalTypography';
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
 
 interface MuteMemberModalProps {
   isOpen: boolean;
@@ -25,81 +24,65 @@ export const MuteMemberModal: React.FC<MuteMemberModalProps> = ({
   if (!isOpen || !muteModalUser) return null;
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="mute-member-modal-title"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="mute-member-modal-title"
-        className={`w-full max-w-md max-h-[92dvh] my-auto bg-background-darker rounded-xl border border-white/10 shadow-2xl ${MODAL_CARD_PADDING_CLASS} text-gray-200 overflow-y-auto chat-scrollbar`}
-      >
-        <h3 id="mute-member-modal-title" className={`${MODAL_DIALOG_TITLE_CLASS} mb-1 flex items-center gap-2`}>
-          <Clock className="w-5 h-5 text-amber-400" />
-          <span>Silenciar @{muteModalUser.username}</span>
-        </h3>
-        <p className={`${MODAL_DESCRIPTION_CLASS} mb-5`}>
-          Escolha por quanto tempo o membro ficará silenciado no servidor.
-        </p>
+      <AppModalHeader
+        title={`Silenciar @${muteModalUser.username}`}
+        titleId="mute-member-modal-title"
+        onClose={onClose}
+      />
 
-        <div className="grid grid-cols-2 gap-2.5 mb-6">
-          <button
-            type="button"
+      <AppModalBody>
+        <div className="grid grid-cols-2 gap-2.5">
+          <ModalButton
+            type="secondary"
+            fullWidth
             onClick={() => onMuteDuration(15 * 60)}
-            className="p-3 bg-background-dark hover:bg-background-light text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
           >
-            15 Minutos
-          </button>
-          <button
-            type="button"
+            15 minutos
+          </ModalButton>
+          <ModalButton
+            type="secondary"
+            fullWidth
             onClick={() => onMuteDuration(60 * 60)}
-            className="p-3 bg-background-dark hover:bg-background-light text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
           >
-            1 Hora
-          </button>
-          <button
-            type="button"
+            1 hora
+          </ModalButton>
+          <ModalButton
+            type="secondary"
+            fullWidth
             onClick={() => onMuteDuration(24 * 60 * 60)}
-            className="p-3 bg-background-dark hover:bg-background-light text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
           >
-            24 Horas (1 Dia)
-          </button>
-          <button
-            type="button"
+            24 horas (1 dia)
+          </ModalButton>
+          <ModalButton
+            type="secondary"
+            fullWidth
             onClick={() => onMuteDuration(7 * 24 * 60 * 60)}
-            className="p-3 bg-background-dark hover:bg-background-light text-white rounded-xl text-xs font-semibold text-center border border-white/10 transition-colors cursor-pointer"
           >
-            7 Dias (1 Semana)
-          </button>
-          <button
-            type="button"
+            7 dias (1 semana)
+          </ModalButton>
+          <ModalButton
+            type="error"
+            fullWidth
             onClick={() => onMuteDuration(-1)}
-            className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-xl text-xs font-semibold text-center border border-red-500/30 transition-colors cursor-pointer"
           >
             Permanente
-          </button>
-          <button
-            type="button"
+          </ModalButton>
+          <ModalButton
+            type="secondary"
+            fullWidth
             onClick={() => onMuteDuration(0)}
-            className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-xl text-xs font-semibold text-center border border-emerald-500/30 transition-colors cursor-pointer"
           >
-            Remover Silêncio
-          </button>
+            Remover silêncio
+          </ModalButton>
         </div>
 
-        <div className="flex justify-end pt-3 border-t border-white/5">
-          <button
-            type="button"
-            onClick={onClose}
-            className={MODAL_CANCEL_BUTTON_CLASS}
-          >
-            Cancelar
-          </button>
-        </div>
-      </div>
-    </div>
+        <AppModalFooter align="end" onCancel={onClose} />
+      </AppModalBody>
+    </AppModal>
   );
 };

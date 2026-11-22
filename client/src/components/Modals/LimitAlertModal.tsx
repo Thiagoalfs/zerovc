@@ -1,12 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { X, AlertTriangle } from 'lucide-react';
+import { ModalButton } from '@/components/ui/modal-button';
 import {
-  MODAL_DIALOG_TITLE_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
-  MODAL_FOOTER_PADDING_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-  MODAL_BACKDROP_CLASS,
-} from '../../constants/modalTypography';
+  AppModal,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
+import { MODAL_DIALOG_TITLE_CLASS } from '../../constants/modalTypography';
 
 interface LimitAlertModalProps {
   isOpen: boolean;
@@ -23,67 +23,47 @@ export const LimitAlertModal: React.FC<LimitAlertModalProps> = ({
   message,
   detail,
 }) => {
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="limit-alert-modal-title"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="limit-alert-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col"
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} flex flex-col items-center text-center relative overflow-y-auto no-scrollbar flex-1`}>
-          <button
-            type="button"
-            aria-label="Fechar"
-            onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          >
-            <X className="w-5 h-5" />
-          </button>
+      <AppModalBody className="flex flex-col items-center text-center relative space-y-0">
+        <ModalButton
+          type="tertiary"
+          shape="circle"
+          size="small"
+          svgOnly
+          aria-label="Fechar"
+          onClick={onClose}
+          className="absolute top-4 right-4"
+        >
+          <X className="w-5 h-5" />
+        </ModalButton>
 
-          <div className="w-14 h-14 rounded-2xl bg-yellow-500/15 text-yellow-400 flex items-center justify-center mb-3">
-            <AlertTriangle className="w-8 h-8" />
-          </div>
-
-          <h2 id="limit-alert-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>{title}</h2>
-          <p className="text-sm text-gray-300 mt-2 leading-relaxed">{message}</p>
-          {detail && (
-            <span className="mt-2 text-xs font-mono text-gray-400 bg-background-darkest px-3 py-1 rounded-lg border border-white/5">
-              {detail}
-            </span>
-          )}
+        <div className="w-14 h-14 rounded-2xl bg-yellow-500/15 text-yellow-400 flex items-center justify-center mb-3 mt-1">
+          <AlertTriangle className="w-8 h-8" />
         </div>
 
-        {/* Action Button */}
-        <div className={`${MODAL_FOOTER_PADDING_CLASS} flex justify-center`}>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`w-full ${MODAL_PRIMARY_BUTTON_CLASS} py-2.5`}
-          >
-            Entendido
-          </button>
-        </div>
-      </div>
-    </div>
+        <h2 id="limit-alert-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>{title}</h2>
+        <p className="text-sm text-gray-300 mt-2 leading-relaxed">{message}</p>
+        {detail && (
+          <span className="mt-2 text-xs font-mono text-gray-400 bg-background-darkest px-3 py-1 rounded-lg border border-white/5">
+            {detail}
+          </span>
+        )}
+      </AppModalBody>
+
+      <AppModalFooter className="px-5 pb-5 pt-3 border-t-0">
+        <ModalButton
+          type="primary"
+          fullWidth
+          onClick={onClose}
+        >
+          Entendido
+        </ModalButton>
+      </AppModalFooter>
+    </AppModal>
   );
 };

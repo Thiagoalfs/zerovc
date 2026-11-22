@@ -1490,8 +1490,24 @@ func (h *E2EEHandler) DeleteBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	code := strings.TrimSpace(r.Header.Get("X-2FA-Code"))
+	if code == "" && r.Body != nil {
+		var body struct {
+			Code string `json:"code"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		code = strings.TrimSpace(body.Code)
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
+
+	if twoFAErr := verifyUser2FA(ctx, h.db, userID, code); twoFAErr != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(twoFAErr.Status)
+		w.Write([]byte(twoFAErr.Payload))
+		return
+	}
 
 	tx, err := h.db.Pool.Begin(ctx)
 	if err != nil {

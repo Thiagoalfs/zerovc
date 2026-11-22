@@ -111,9 +111,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
           const r = await openDMWithUser(targetUser.id);
           const inviteLink = `${window.location.origin}/invite/${invite.code}`;
           await api.dms.sendMessage(r.id, { content: `Aqui está o convite para o servidor **${g.name}**:\n${inviteLink}` });
-          alert(`Convite para o servidor "${g.name}" enviado com sucesso na DM de @${targetUser.username}!`);
+          showAlert({ title: 'Convite enviado', message: `Convite para o servidor "${g.name}" enviado com sucesso na DM de @${targetUser.username}!`, variant: 'success' });
         } catch (err: any) {
-          alert(err?.message || 'Erro ao enviar convite para o servidor');
+          showAlert({ title: 'Erro', message: err?.message || 'Erro ao enviar convite para o servidor', variant: 'danger' });
         }
       },
     }));
@@ -138,7 +138,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                   const r = await openDMWithUser(targetUser.id);
                   await startCall(r.id, targetUser);
                 } catch (err: any) {
-                  alert(err?.message || 'Erro ao iniciar chamada');
+                  showAlert({ title: 'Erro na chamada', message: err?.message || 'Erro ao iniciar chamada', variant: 'danger' });
                 }
               },
             },

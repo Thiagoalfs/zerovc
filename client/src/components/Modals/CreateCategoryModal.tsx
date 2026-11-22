@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { X, FolderPlus } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import {
-  MODAL_TITLE_CLASS,
-  MODAL_FIELD_LABEL_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
-  MODAL_BODY_PADDING_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_BACKDROP_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-} from '../../constants/modalTypography';
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
+import { AppInput } from '@/components/ui/app-input';
+import { InlineAlert } from '@/components/ui/inline-alert';
 
 interface CreateCategoryModalProps {
   isOpen: boolean;
@@ -32,17 +30,6 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
       setError('');
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   if (!isOpen || !activeGuild) return null;
 
@@ -71,82 +58,40 @@ export const CreateCategoryModal: React.FC<CreateCategoryModalProps> = ({
   };
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="create-category-modal-title"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-category-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} relative flex-shrink-0 border-b border-white/5`}>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 cursor-pointer p-2 rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <div className="flex items-center gap-2">
-            <FolderPlus className="w-5 h-5 text-brand-400" />
-            <h2 id="create-category-modal-title" className={MODAL_TITLE_CLASS}>Criar Categoria</h2>
-          </div>
-          <p className="text-xs text-gray-400 mt-1 truncate">em {activeGuild.name}</p>
-        </div>
+      <AppModalHeader
+        title="Criar Categoria"
+        subtitle={`em ${activeGuild.name}`}
+        titleId="create-category-modal-title"
+        onClose={onClose}
+      />
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto no-scrollbar flex-1`}>
-          {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-md">{error}</div>}
+      <AppModalBody onSubmit={handleSubmit}>
+        {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
-          {/* Name Field */}
-          <div>
-            <label className={MODAL_FIELD_LABEL_CLASS}>
-              Nome da Categoria
-            </label>
-            <div className="relative flex items-center">
-              <span className="absolute left-3 text-gray-400">
-                <FolderPlus className="w-4 h-4" />
-              </span>
-              <input
-                type="text"
-                required
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="NOVA CATEGORIA"
-                className="w-full bg-background-darkest text-white pl-9 pr-3 py-2.5 rounded-lg border border-white/5 focus:outline-none focus:border-brand-500 text-sm"
-              />
-            </div>
-            <p className={`${MODAL_DESCRIPTION_CLASS} mt-1.5`}>
-              Use categorias para organizar seus canais de texto e voz.
-            </p>
-          </div>
+        {/* Name Field */}
+        <AppInput
+          label="Nome da Categoria"
+          leftIcon={<FolderPlus className="w-4 h-4" />}
+          type="text"
+          required
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
 
-          {/* Footer actions */}
-          <div className="flex justify-between items-center pt-3 border-t border-white/5">
-            <button
-              type="button"
-              onClick={onClose}
-              className={MODAL_CANCEL_BUTTON_CLASS}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || !name.trim()}
-              className={MODAL_PRIMARY_BUTTON_CLASS}
-            >
-              {isLoading ? 'Criando...' : 'Criar Categoria'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <AppModalFooter
+          onCancel={onClose}
+          confirmText={isLoading ? 'Criando...' : 'Criar Categoria'}
+          confirmHtmlType="submit"
+          loading={isLoading}
+          disabled={!name.trim()}
+        />
+      </AppModalBody>
+    </AppModal>
   );
 };

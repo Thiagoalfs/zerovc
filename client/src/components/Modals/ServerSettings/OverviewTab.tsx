@@ -13,6 +13,7 @@ import { Guild, Channel, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
 import { DropdownSelect } from '../../Common/DropdownSelect';
 import { MODAL_SECTION_HEADER_CLASS, MODAL_FIELD_LABEL_CLASS, MODAL_DIVIDER_CLASS, MODAL_DESCRIPTION_CLASS } from '../../../constants/modalTypography';
+import { ModalButton } from '@/components/ui/modal-button';
 
 interface OverviewTabProps {
   activeGuild: Guild;
@@ -174,24 +175,25 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   accept="image/*"
                   className="hidden"
                 />
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  size="small"
                   onClick={() => iconInputRef.current?.click()}
-                  disabled={!canEdit || isUploadingIcon}
-                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  disabled={!canEdit}
+                  loading={isUploadingIcon}
+                  prefix={<Upload className="w-3.5 h-3.5" />}
                 >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>{isUploadingIcon ? 'Enviando...' : 'Trocar Ícone'}</span>
-                </button>
+                  {isUploadingIcon ? 'Enviando...' : 'Trocar Ícone'}
+                </ModalButton>
                 {activeGuild.icon_url && canEdit && (
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="error"
+                    size="tiny"
                     onClick={handleRemoveIcon}
                     disabled={isUploadingIcon}
-                    className="text-xs text-red-400 hover:text-red-300 text-left transition-colors cursor-pointer"
                   >
                     Remover Ícone
-                  </button>
+                  </ModalButton>
                 )}
               </div>
             </div>
@@ -223,24 +225,25 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   accept="image/*"
                   className="hidden"
                 />
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  size="small"
                   onClick={() => bannerInputRef.current?.click()}
-                  disabled={!canEdit || isUploadingBanner}
-                  className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  disabled={!canEdit}
+                  loading={isUploadingBanner}
+                  prefix={<Upload className="w-3.5 h-3.5" />}
                 >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>{isUploadingBanner ? 'Enviando...' : 'Trocar Banner'}</span>
-                </button>
+                  {isUploadingBanner ? 'Enviando...' : 'Trocar Banner'}
+                </ModalButton>
                 {activeGuild.banner_url && canEdit && (
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="error"
+                    size="tiny"
                     onClick={handleRemoveBanner}
                     disabled={isUploadingBanner}
-                    className="text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer"
                   >
                     Remover Banner
-                  </button>
+                  </ModalButton>
                 )}
               </div>
             </div>
@@ -296,13 +299,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
         {canEdit && (
           <div className="flex justify-end pt-2">
-            <button
-              type="submit"
-              disabled={isSavingOverview || !guildName.trim()}
-              className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-50 cursor-pointer"
+            <ModalButton
+              type="primary"
+              htmlType="submit"
+              loading={isSavingOverview}
+              disabled={!guildName.trim()}
             >
               {isSavingOverview ? 'Salvando...' : 'Salvar Alterações'}
-            </button>
+            </ModalButton>
           </div>
         )}
       </form>

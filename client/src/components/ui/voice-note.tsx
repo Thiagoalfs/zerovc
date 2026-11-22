@@ -30,7 +30,7 @@ const ICON: Transition = { type: "spring", duration: 0.34, bounce: 0.2 };
 const TAP: Transition = { type: "spring", duration: 0.25, bounce: 0.3 };
 const INSTANT: Transition = { duration: 0 };
 
-const PLAYING_GLOW = 0.62;
+const PLAYING_GLOW = 0;
 
 const SPEEDS = [1, 1.5, 2];
 
@@ -87,7 +87,7 @@ const pointOnPill = (distance: number, width: number, height: number) => {
 
 // the triangle is split down the middle, giving it the same two four-point quads as the bars
 const PLAY_SHAPE = [
-  7.7, 5.8, 13, 8.9, 13, 15.1, 7.7, 18.2, 13, 8.9, 18.3, 12, 18.3, 12, 13, 15.1,
+  7.2, 5.8, 12.5, 8.9, 12.5, 15.1, 7.2, 18.2, 12.5, 8.9, 17.8, 12, 17.8, 12, 12.5, 15.1,
 ];
 const PAUSE_SHAPE = [
   8.2, 6.8, 10.9, 6.8, 10.9, 17.2, 8.2, 17.2, 13.1, 6.8, 15.8, 6.8, 15.8, 17.2,
@@ -413,7 +413,7 @@ function VoiceNote({
         whileTap={shouldReduceMotion || blocked ? undefined : { scale: 0.9 }}
         transition={shouldReduceMotion ? INSTANT : TAP}
         style={{ width: control, height: control }}
-        className="z-10 flex shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-full bg-white text-black outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#868593] disabled:cursor-default disabled:opacity-40 dark:bg-[#0E0E0E] dark:text-white"
+        className="z-10 flex shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-full bg-white p-0 leading-none text-black outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#868593] disabled:cursor-default disabled:opacity-40 dark:bg-[#0E0E0E] dark:text-white"
       >
         <TransportIcon
           playing={isPlaying}
@@ -666,9 +666,10 @@ function TransportIcon({
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 24"
+      viewBox="0 0 24 24"
       width={size}
       height={size}
+      className="block"
       aria-hidden
     >
       <motion.path d={shape} {...ICON_PAINT} />

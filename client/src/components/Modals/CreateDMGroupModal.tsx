@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { X, Users, Check, Shield } from 'lucide-react';
+import { Check, Shield } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { formatAssetUrl } from '../../lib/api';
+import { SquishSwitch } from '../ui/squish-switch';
 import {
-  MODAL_TITLE_CLASS,
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
+import { AppInput } from '@/components/ui/app-input';
+import { InlineAlert } from '@/components/ui/inline-alert';
+import {
   MODAL_FIELD_LABEL_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
-  MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_BACKDROP_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateDMGroupModalProps {
@@ -43,17 +46,6 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
       setError('');
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -91,51 +83,28 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
   };
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="create-dm-group-modal-title"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-dm-group-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-brand-400" />
-            <h2 id="create-dm-group-modal-title" className={MODAL_TITLE_CLASS}>Criar Grupo de DM</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="text-gray-400 hover:text-white cursor-pointer p-2 rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+      <AppModalHeader
+        title="Criar Grupo de DM"
+        titleId="create-dm-group-modal-title"
+        onClose={onClose}
+      />
 
-        {/* Form */}
-        <form onSubmit={handleCreate} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto flex-1 no-scrollbar`}>
-          {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg">{error}</div>}
+      <AppModalBody onSubmit={handleCreate}>
+          {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
           {/* Group Name Input */}
-          <div>
-            <label className={MODAL_FIELD_LABEL_CLASS}>
-              Nome do Grupo (Opcional)
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="ex: Galera do Game"
-              className="w-full bg-background-darkest border border-white/10 rounded-lg px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-            />
-          </div>
+          <AppInput
+            label="Nome do Grupo (Opcional)"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="ex: Galera do Game"
+          />
 
           {/* E2EE Opt-in Toggle */}
           <div className="p-3 rounded-xl bg-background-darkest border border-white/5 flex items-center justify-between gap-3">
@@ -148,19 +117,12 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsE2EE(!isE2EE)}
-              className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                isE2EE ? 'bg-emerald-500' : 'bg-gray-700'
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  isE2EE ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </button>
+            <SquishSwitch
+              size="sm"
+              checked={isE2EE}
+              onCheckedChange={setIsE2EE}
+              className={isE2EE ? 'bg-emerald-500' : 'bg-gray-700'}
+            />
           </div>
 
           {/* Friends Selection */}
@@ -227,25 +189,14 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
             )}
           </div>
 
-          {/* Footer actions */}
-          <div className="pt-3 border-t border-white/5 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={onClose}
-              className={MODAL_CANCEL_BUTTON_CLASS}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || selectedFriendIds.length === 0}
-              className={MODAL_PRIMARY_BUTTON_CLASS}
-            >
-              {isLoading ? 'Criando...' : 'Criar Grupo'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          <AppModalFooter
+            onCancel={onClose}
+            confirmText={isLoading ? 'Criando...' : 'Criar Grupo'}
+            confirmHtmlType="submit"
+            loading={isLoading}
+            disabled={selectedFriendIds.length === 0}
+          />
+        </AppModalBody>
+      </AppModal>
   );
 };

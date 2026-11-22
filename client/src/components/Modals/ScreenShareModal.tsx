@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Monitor, AppWindow, Sparkles, Volume2, Check } from 'lucide-react';
+import { X, Monitor, AppWindow, Volume2, Check } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
 import { matchWindowToGameFamily } from '../../utils/gameFamilyManager';
+import { SquishSwitch } from '../ui/squish-switch';
+import { ModalButton } from '@/components/ui/modal-button';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_TITLE_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_FOOTER_PADDING_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
   MODAL_SWITCH_CONTAINER_CLASS,
   MODAL_SWITCH_KNOB_CLASS,
   MODAL_BACKDROP_CLASS,
@@ -156,14 +156,16 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
               Selecione janela ou tela
             </h2>
           </div>
-          <button
-            type="button"
+          <ModalButton
+            type="tertiary"
+            shape="circle"
+            size="small"
+            svgOnly
             aria-label="Fechar"
             onClick={onClose}
-            className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
-          </button>
+          </ModalButton>
         </div>
 
         {/* Source Selection Area */}
@@ -222,12 +224,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
               }`}
             >
               <Monitor className="w-12 h-12 text-brand-400" />
-              <div>
-                <p className="text-sm font-bold text-white">Compartilhar Tela via Navegador</p>
-                <p className="text-xs text-gray-400 mt-1 max-w-sm">
-                  O navegador abrirá uma janela nativa permitindo escolher a tela inteira, uma janela ou uma guia específica.
-                </p>
-              </div>
+              <p className="text-sm font-bold text-white">Compartilhar tela via navegador</p>
             </div>
           ) : filteredSources.length === 0 ? (
             <div className="h-44 flex items-center justify-center text-sm text-gray-400">
@@ -350,45 +347,26 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
             </div>
 
             {/* Toggle Switch */}
-            <button
-              type="button"
-              role="switch"
-              aria-checked={includeAudio}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIncludeAudio(!includeAudio);
-              }}
-              className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                includeAudio ? 'bg-brand-500' : 'bg-white/10'
-              }`}
-            >
-              <div
-                className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                  includeAudio ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+            <SquishSwitch
+              checked={includeAudio}
+              onCheckedChange={setIncludeAudio}
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         </div>
 
         {/* Footer */}
         <div className={`${MODAL_FOOTER_PADDING_CLASS} bg-background-darkest border-t border-white/5 flex justify-end items-center gap-3`}>
-          <button
-            type="button"
-            onClick={onClose}
-            className={MODAL_CANCEL_BUTTON_CLASS}
-          >
+          <ModalButton type="secondary" onClick={onClose}>
             Cancelar
-          </button>
-          <button
-            type="button"
+          </ModalButton>
+          <ModalButton
+            type="primary"
             onClick={handleShare}
             disabled={!selectedSourceId}
-            className={MODAL_PRIMARY_BUTTON_CLASS}
           >
-            <Sparkles className="w-4 h-4" />
-            <span>Iniciar Transmissão</span>
-          </button>
+            Iniciar transmissão
+          </ModalButton>
         </div>
       </div>
     </div>

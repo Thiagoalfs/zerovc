@@ -9,6 +9,7 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
+import { showAlert } from '../../stores/confirmModalStore';
 import { useAutoClearVisibleUnread } from '../../utils/unread';
 import { useAuthStore } from '../../stores/authStore';
 import { useCallStore } from '../../stores/callStore';
@@ -75,7 +76,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   const dragCounterRef = useRef<number>(0);
 
   const recipient = activeRoom?.recipient;
@@ -142,7 +143,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
 
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      setDroppedFile(files[0]);
+      setDroppedFiles(Array.from(files));
     }
   };
 
@@ -151,7 +152,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
     try {
       await startCall(activeRoom.id, activeRoom.recipient);
     } catch (err: any) {
-      alert(err.message || 'Falha ao iniciar chamada');
+      showAlert({ title: 'Erro na chamada', message: err.message || 'Falha ao iniciar chamada', variant: 'danger' });
     }
   };
 
@@ -339,19 +340,6 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       onDrop={handleDrop}
       className="flex-1 flex flex-col bg-background-dark overflow-hidden relative"
     >
-      {/* Drag & Drop Visual Overlay */}
-      {isDraggingFile && (
-        <div className="absolute inset-0 z-50 bg-brand-500/20 backdrop-blur-sm border-2 border-dashed border-brand-400 flex flex-col items-center justify-center gap-3 pointer-events-none animate-in fade-in duration-150">
-          <div className="w-16 h-16 rounded-3xl bg-brand-500 flex items-center justify-center text-white shadow-2xl shadow-brand-500/50 scale-110">
-            <UploadCloud className="w-8 h-8 animate-bounce" />
-          </div>
-          <div className="text-center">
-            <p className="text-lg font-bold text-white">Solte o arquivo para anexar</p>
-            <p className="text-xs text-brand-200">Imagens, vídeos e documentos até 20 MB</p>
-          </div>
-        </div>
-      )}
-
       {/* ChatHeader */}
       <ChatHeader
         onOpenMobileDrawer={onOpenMobileDrawer}
@@ -604,8 +592,9 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
           }
         }}
         onEditLastMessage={handleEditLastMessage}
-        droppedFile={droppedFile}
-        onClearDroppedFile={() => setDroppedFile(null)}
+        droppedFiles={droppedFiles}
+        onClearDroppedFiles={() => setDroppedFiles(null)}
+        isDraggingFile={isDraggingFile}
         contextType="dm"
         customMentions={mentionSuggestions}
       />

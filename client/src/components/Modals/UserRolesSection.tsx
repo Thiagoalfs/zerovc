@@ -5,6 +5,7 @@ import { User, Role, Guild } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
+import { ModalButton } from '@/components/ui/modal-button';
 
 export interface UserRolesSectionProps {
   user: User | null;
@@ -276,19 +277,17 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
               <span className="truncate max-w-[140px]">{role.name}</span>
 
               {removable && (
-                <button
-                  type="button"
-                  disabled={isOperating}
+                <ModalButton
+                  type="tertiary"
+                  size="tiny"
+                  svgOnly
+                  loading={isOperating}
                   onClick={(e) => handleRemoveRole(role, e)}
-                  className="ml-0.5 p-0.5 rounded hover:bg-white/10 text-gray-400 hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  className="!w-4 !h-4 ml-0.5 text-gray-400 hover:text-red-400"
                   title={`Remover cargo ${role.name}`}
                 >
-                  {isOperating ? (
-                    <Loader2 className={`${isSmall ? 'w-2.5 h-2.5' : 'w-3 h-3'} animate-spin`} />
-                  ) : (
-                    <X className={`${isSmall ? 'w-2.5 h-2.5' : 'w-3 h-3'}`} />
-                  )}
-                </button>
+                  <X className={isSmall ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
+                </ModalButton>
               )}
             </span>
           );
@@ -296,17 +295,17 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
 
         {canManageMemberRoles && (
           <>
-            <button
+            <ModalButton
               ref={buttonRef}
-              type="button"
+              type="secondary"
+              size="tiny"
+              svgOnly
               onClick={handleToggleDropdown}
-              className={`rounded-md bg-white/5 hover:bg-white/15 active:scale-95 border border-white/10 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-all ${
-                isSmall ? 'p-0.5 px-1.5 text-[10px]' : 'p-1 px-2 text-xs'
-              }`}
+              className={isSmall ? '!w-5 !h-5' : '!w-6 !h-6'}
               title="Adicionar ou alterar cargos"
             >
               <Plus className={isSmall ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
-            </button>
+            </ModalButton>
 
             {isDropdownOpen && dropdownPos && typeof document !== 'undefined' &&
               createPortal(

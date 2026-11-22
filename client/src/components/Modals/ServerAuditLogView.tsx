@@ -6,11 +6,12 @@ import {
   RefreshCw,
   Hash,
   Volume2,
-  AlertCircle,
 } from 'lucide-react';
 import { api, formatAssetUrl } from '../../lib/api';
 import { AuditLog, User } from '../../types';
 import { DropdownSelect } from '../Common/DropdownSelect';
+import { ModalButton } from '@/components/ui/modal-button';
+import { InlineAlert } from '@/components/ui/inline-alert';
 import {
   MODAL_DESCRIPTION_CLASS,
   MODAL_TOGGLE_HEADER_CLASS,
@@ -331,16 +332,17 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
           }))}
           placeholder="Filtrar ações..."
         />
-        <button
-          type="button"
+        <ModalButton
+          type="secondary"
+          svgOnly
+          size="small"
           onClick={() => fetchLogs(activeFilter)}
-          disabled={isLoading}
+          loading={isLoading}
           aria-label="Recarregar registro de auditoria"
-          className="p-2 bg-background-darkest border border-white/10 hover:border-white/20 rounded-xl text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           title="Recarregar"
         >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-brand-400' : ''}`} />
-        </button>
+          <RefreshCw className="w-4 h-4" />
+        </ModalButton>
       </div>
 
       {/* Logs List Container */}
@@ -351,10 +353,9 @@ export const ServerAuditLogView: React.FC<ServerAuditLogViewProps> = ({
             <span className={MODAL_DESCRIPTION_CLASS}>Carregando histórico de auditoria...</span>
           </div>
         ) : error ? (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
+          <InlineAlert variant="error" className="p-4">
+            {error}
+          </InlineAlert>
         ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <ScrollText className="w-12 h-12 stroke-1 mb-2 text-gray-600" />

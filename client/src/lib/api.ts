@@ -1,5 +1,6 @@
 import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession, VoiceSession, GameSearchResult } from '../types';
 import { convertToWebP } from '../utils/image';
+import { optimizeImageForUpload } from './imageOptimizer';
 import { isElectron } from './platform';
 import { updateServerTime } from '../utils/timeSync';
 
@@ -82,6 +83,41 @@ export const getCsrfToken = (): string => {
     }
   }
   return '';
+};
+
+export const buildAttachmentUrl = (
+  uploaded: { url: string; filename?: string; size?: number },
+  file: File
+): string => {
+  const isVoice = file.type.startsWith('audio/') || file.name.startsWith('voice-message-');
+  const params = new URLSearchParams();
+  if (isVoice && !uploaded.url.includes('voice=1')) params.set('voice', '1');
+  if (uploaded.filename || file.name) params.set('name', uploaded.filename || file.name);
+  const byteSize = uploaded.size ?? file.size;
+  if (Number.isFinite(byteSize) && byteSize >= 0) params.set('size', String(byteSize));
+  const qs = params.toString();
+  if (!qs) return uploaded.url;
+  return `${uploaded.url}${uploaded.url.includes('?') ? '&' : '?'}${qs}`;
+};
+
+export const uploadAttachmentFiles = async (
+  files: File[],
+  signal: AbortSignal,
+  onProgress: (percent: number) => void
+): Promise<string[]> => {
+  const urls: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const optimized = await optimizeImageForUpload(f, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
+    const uploaded = await api.upload.attachment(optimized, {
+      signal,
+      onProgress: (percent) => {
+        onProgress(Math.round(((i + percent / 100) / files.length) * 100));
+      },
+    });
+    urls.push(buildAttachmentUrl(uploaded, f));
+  }
+  return urls;
 };
 
 export const CLIENT_E2EE_VERSION = 1;
@@ -261,17 +297,17 @@ export const api = {
         body: JSON.stringify(data),
       }),
     exportData: () => request<Record<string, unknown>>('/auth/export-data'),
-    deleteAccount: (data: { password: string }) =>
+    deleteAccount: (data: { password: string; code?: string }) =>
       request<{ success: boolean; message: string }>('/auth/delete-account', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    changePassword: (data: { current_password: string; new_password: string }) =>
+    changePassword: (data: { current_password: string; new_password: string; code?: string }) =>
       request<{ success: boolean; message: string }>('/auth/change-password', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    changeEmail: (data: { password: string; new_email: string }) =>
+    changeEmail: (data: { password: string; new_email: string; code?: string }) =>
       request<{ success: boolean; email: string }>('/auth/change-email', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -295,6 +331,7 @@ export const api = {
   users: {
     updateProfile: (data: {
       username?: string;
+      code?: string;
       phone_number?: string;
       display_name?: string;
       avatar_url?: string;
@@ -1194,9 +1231,11 @@ export const api = {
         status?: string;
       }>('/e2ee/backup'),
 
-    deleteBackup: () =>
+    deleteBackup: (code?: string) =>
       request<{ status: string }>('/e2ee/backup/delete', {
         method: 'POST',
+        headers: code ? { 'X-2FA-Code': code } : undefined,
+        body: code ? JSON.stringify({ code }) : undefined,
       }),
 
     saveRoomKey: (payload: {

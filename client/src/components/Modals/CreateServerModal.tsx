@@ -3,6 +3,7 @@ import { X, Sparkles, Compass, ChevronRight, ArrowLeft, Camera, UploadCloud } fr
 import { useGuildStore } from '../../stores/guildStore';
 import { api } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
+import { ModalButton } from '@/components/ui/modal-button';
 import {
   MODAL_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
@@ -10,8 +11,6 @@ import {
   MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
   MODAL_BACKDROP_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateServerModalProps {
@@ -145,40 +144,28 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
       >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} text-center relative flex-shrink-0`}>
-          <button
-            type="button"
+          <ModalButton
+            type="tertiary"
+            shape="circle"
+            size="small"
+            svgOnly
             onClick={handleClose}
             aria-label="Fechar"
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="absolute top-4 right-4"
           >
             <X className="w-5 h-5" />
-          </button>
+          </ModalButton>
 
           {mode === 'choose' && (
-            <>
-              <h2 id="create-server-modal-title" className={MODAL_TITLE_CLASS}>Adicionar um Servidor</h2>
-              <p className="text-xs md:text-sm text-gray-400 mt-1">
-                Seu servidor é onde você e seus amigos se reúnem. Escolha uma opção para começar.
-              </p>
-            </>
+            <h2 id="create-server-modal-title" className={MODAL_TITLE_CLASS}>Adicionar um Servidor</h2>
           )}
 
           {mode === 'create' && (
-            <>
-              <h2 id="create-server-modal-title" className={MODAL_TITLE_CLASS}>Criar seu Servidor</h2>
-              <p className="text-xs text-gray-400 mt-1">
-                Dê um nome ao seu novo servidor. Você pode alterá-lo quando quiser.
-              </p>
-            </>
+            <h2 id="create-server-modal-title" className={MODAL_TITLE_CLASS}>Criar seu Servidor</h2>
           )}
 
           {mode === 'join' && (
-            <>
-              <h2 id="create-server-modal-title" className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
-              <p className="text-xs text-gray-400 mt-1">
-                Digite o código de 10 caracteres ou o link de convite que você recebeu.
-              </p>
-            </>
+            <h2 id="create-server-modal-title" className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
           )}
         </div>
 
@@ -206,12 +193,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
                   <div className="w-11 h-11 rounded-2xl bg-brand-500/15 text-brand-400 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                     <Sparkles className="w-6 h-6" />
                   </div>
-                  <div>
-                    <span className="font-bold text-white text-sm block">Criar meu próprio servidor</span>
-                    <span className="text-xs text-gray-400 mt-0.5 block leading-tight">
-                      Crie um espaço personalizado para você e seus amigos
-                    </span>
-                  </div>
+                  <span className="font-bold text-white text-sm block">Criar meu próprio servidor</span>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-white group-hover:translate-x-0.5 transition-all flex-shrink-0 ml-2" />
               </button>
@@ -229,12 +211,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
                   <div className="w-11 h-11 rounded-2xl bg-online/15 text-online flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                     <Compass className="w-6 h-6" />
                   </div>
-                  <div>
-                    <span className="font-bold text-white text-sm block">Entrar em um servidor</span>
-                    <span className="text-xs text-gray-400 mt-0.5 block leading-tight">
-                      Já tem um código ou link de convite? Entre aqui
-                    </span>
-                  </div>
+                  <span className="font-bold text-white text-sm block">Entrar em um servidor</span>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-white group-hover:translate-x-0.5 transition-all flex-shrink-0 ml-2" />
               </button>
@@ -270,9 +247,11 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
                     <UploadCloud className="w-5 h-5 text-white" />
                   </div>
                 </button>
-                <span className={`${MODAL_DESCRIPTION_CLASS} mt-2`}>
-                  {iconUrl ? 'Clique para trocar o ícone' : 'Opcional: adicione um ícone'}
-                </span>
+                {!iconUrl && (
+                  <span className={`${MODAL_DESCRIPTION_CLASS} mt-2`}>
+                    Ícone opcional
+                  </span>
+                )}
               </div>
 
               <div>
@@ -291,25 +270,25 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
               </div>
 
               <div className="flex justify-between items-center pt-2">
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  prefix={<ArrowLeft className="w-4 h-4" />}
                   onClick={() => {
                     setError('');
                     setMode('choose');
                   }}
-                  className={`${MODAL_CANCEL_BUTTON_CLASS} flex items-center gap-1.5`}
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Voltar</span>
-                </button>
+                  Voltar
+                </ModalButton>
 
-                <button
-                  type="submit"
-                  disabled={isLoading || isUploadingIcon || !name.trim()}
-                  className={MODAL_PRIMARY_BUTTON_CLASS}
+                <ModalButton
+                  type="primary"
+                  htmlType="submit"
+                  loading={isLoading || isUploadingIcon}
+                  disabled={!name.trim()}
                 >
                   {isLoading || isUploadingIcon ? 'Criando...' : 'Criar Servidor'}
-                </button>
+                </ModalButton>
               </div>
             </form>
           )}
@@ -333,25 +312,25 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
               </div>
 
               <div className="flex justify-between items-center pt-2">
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  prefix={<ArrowLeft className="w-4 h-4" />}
                   onClick={() => {
                     setError('');
                     setMode('choose');
                   }}
-                  className={`${MODAL_CANCEL_BUTTON_CLASS} flex items-center gap-1.5`}
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Voltar</span>
-                </button>
+                  Voltar
+                </ModalButton>
 
-                <button
-                  type="submit"
-                  disabled={isLoading || !inviteCode.trim()}
-                  className={MODAL_PRIMARY_BUTTON_CLASS}
+                <ModalButton
+                  type="primary"
+                  htmlType="submit"
+                  loading={isLoading}
+                  disabled={!inviteCode.trim()}
                 >
                   {isLoading ? 'Entrando...' : 'Entrar no Servidor'}
-                </button>
+                </ModalButton>
               </div>
             </form>
           )}

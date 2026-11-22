@@ -5,19 +5,15 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCw,
-  Sparkles,
   Check,
-  Move,
   RotateCcw,
-  Film,
 } from 'lucide-react';
 import { isGif, cropImageToWebP } from '../../utils/image';
+import { ModalButton } from '@/components/ui/modal-button';
 import {
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_FOOTER_PADDING_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
   MODAL_BACKDROP_CLASS,
 } from '../../constants/modalTypography';
 
@@ -243,17 +239,17 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   const modalTitle = (() => {
     switch (cropType) {
       case 'avatar':
-        return 'Enquadrar Foto de Perfil';
+        return 'Enquadrar foto de perfil';
       case 'banner':
-        return 'Enquadrar Banner de Perfil';
+        return 'Enquadrar banner de perfil';
       case 'guildIcon':
-        return 'Enquadrar Ícone do Servidor';
+        return 'Enquadrar ícone do servidor';
       case 'guildBanner':
-        return 'Enquadrar Banner do Servidor';
+        return 'Enquadrar banner do servidor';
       case 'groupIcon':
-        return 'Enquadrar Ícone do Grupo';
+        return 'Enquadrar ícone do grupo';
       default:
-        return 'Enquadrar Imagem';
+        return 'Enquadrar imagem';
     }
   })();
 
@@ -281,14 +277,16 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
               {modalTitle}
             </h3>
           </div>
-          <button
-            type="button"
+          <ModalButton
+            type="tertiary"
+            shape="circle"
+            size="small"
+            svgOnly
             aria-label="Fechar"
             onClick={onCancel}
-            className="text-gray-400 hover:text-white p-2 rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
-          </button>
+          </ModalButton>
         </div>
 
         {/* Modal Body / Crop Viewport */}
@@ -334,26 +332,22 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
 
             {/* Framing Guide Overlay */}
             <div className="absolute inset-0 border-2 border-brand-400/40 pointer-events-none rounded-[inherit]" />
-
-            {/* Pan Indicator Hint */}
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm px-2.5 py-0.5 rounded-full text-[10px] text-gray-300 pointer-events-none flex items-center gap-1 opacity-60">
-              <Move className="w-3 h-3" />
-              <span>Arraste para reposicionar</span>
-            </div>
           </div>
 
           {/* Controls Bar (Zoom, Rotate, Reset) */}
           <div className="w-full mt-6 space-y-4">
             {/* Zoom Slider */}
             <div className="flex items-center gap-3 px-2">
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="tiny"
+                svgOnly
                 onClick={() => handleZoomChange(zoom - 0.15)}
-                className="text-gray-400 hover:text-white transition-colors cursor-pointer"
                 title="Diminuir Zoom"
               >
                 <ZoomOut className="w-4 h-4" />
-              </button>
+              </ModalButton>
 
               <input
                 type="range"
@@ -365,36 +359,38 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
                 className="flex-1 accent-brand-500 h-1.5 bg-background-darker rounded-lg cursor-pointer"
               />
 
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="tiny"
+                svgOnly
                 onClick={() => handleZoomChange(zoom + 0.15)}
-                className="text-gray-400 hover:text-white transition-colors cursor-pointer"
                 title="Aumentar Zoom"
               >
                 <ZoomIn className="w-4 h-4" />
-              </button>
+              </ModalButton>
             </div>
 
             {/* Extra Action Buttons */}
             <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-white/5">
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  size="small"
+                  prefix={<RotateCw className="w-3.5 h-3.5" />}
                   onClick={handleRotate}
-                  className="px-3 py-1.5 rounded-xl bg-background-darker hover:bg-white/5 text-gray-300 hover:text-white transition-colors flex items-center gap-1.5 border border-white/5 cursor-pointer"
                 >
-                  <RotateCw className="w-3.5 h-3.5" />
-                  <span>Girar 90°</span>
-                </button>
+                  Girar 90°
+                </ModalButton>
 
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  size="small"
+                  prefix={<RotateCcw className="w-3.5 h-3.5" />}
                   onClick={handleReset}
-                  className="px-3 py-1.5 rounded-xl bg-background-darker hover:bg-white/5 text-gray-300 hover:text-white transition-colors flex items-center gap-1.5 border border-white/5 cursor-pointer"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Redefinir</span>
-                </button>
+                  Redefinir
+                </ModalButton>
               </div>
 
               <span className="text-[11px] text-gray-400">
@@ -406,30 +402,22 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
 
         {/* Modal Footer */}
         <div className={`${MODAL_FOOTER_PADDING_CLASS} bg-background-darker/80 border-t border-white/5 flex items-center justify-between`}>
-          <button
-            type="button"
+          <ModalButton
+            type="secondary"
             onClick={onCancel}
             disabled={isProcessing}
-            className={MODAL_CANCEL_BUTTON_CLASS}
           >
             Cancelar
-          </button>
+          </ModalButton>
 
-          <button
-            type="button"
+          <ModalButton
+            type="primary"
             onClick={handleApply}
-            disabled={isProcessing}
-            className={MODAL_PRIMARY_BUTTON_CLASS}
+            loading={isProcessing}
+            prefix={<Check className="w-4 h-4" />}
           >
-            {isProcessing ? (
-              <span>Processando...</span>
-            ) : (
-              <>
-                <Check className="w-4 h-4" />
-                <span>Aplicar</span>
-              </>
-            )}
-          </button>
+            {isProcessing ? 'Processando...' : 'Aplicar'}
+          </ModalButton>
         </div>
       </div>
     </div>,

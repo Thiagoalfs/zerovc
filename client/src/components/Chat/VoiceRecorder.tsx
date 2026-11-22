@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Trash2, SendHorizontal, Square } from 'lucide-react';
+import { showAlert } from '../../stores/confirmModalStore';
 
 interface VoiceRecorderProps {
   onSendVoice: (file: File) => Promise<void>;
@@ -59,7 +60,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSendVoice, onCan
         }, 1000);
       } catch (err) {
         console.error('[VoiceRecorder] Could not access microphone:', err);
-        alert('Não foi possível acessar o microfone para gravar a mensagem de voz.');
+        showAlert({ title: 'Microfone indisponível', message: 'Não foi possível acessar o microfone para gravar a mensagem de voz.', variant: 'danger' });
         onCancel();
       }
     }

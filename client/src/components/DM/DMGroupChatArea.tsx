@@ -14,12 +14,14 @@ import {
   Video,
   VideoOff,
   Monitor,
+  MonitorOff,
   Volume2,
   Plus,
   Edit3,
   Camera,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
+import { showAlert, showConfirm } from '../../stores/confirmModalStore';
 import { useAutoClearVisibleUnread } from '../../utils/unread';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
@@ -117,7 +119,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       const res = await api.upload.groupIcon(croppedFile);
       await updateGroup(activeGroup.id, { icon_url: res.url });
     } catch (err: any) {
-      alert(err?.message || 'Falha ao atualizar foto do grupo');
+      showAlert({ title: 'Erro', message: err?.message || 'Falha ao atualizar foto do grupo', variant: 'danger' });
     }
   };
 
@@ -183,7 +185,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   const dragCounterRef = useRef<number>(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -323,7 +325,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      setDroppedFile(files[0]);
+      setDroppedFiles(Array.from(files));
     }
   };
 
@@ -468,7 +470,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       try {
         await joinGroupVoice(activeGroup.id, activeGroup);
       } catch (err: any) {
-        alert(err.message || 'Falha ao conectar na chamada em grupo');
+        showAlert({ title: 'Falha na conexão', message: err.message || 'Falha ao conectar na chamada em grupo', variant: 'danger' });
       }
     }
   };
@@ -492,6 +494,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
         {
           id: 'stop-screen',
           label: 'Parar compartilhamento',
+          icon: <MonitorOff className="w-4 h-4" />,
           variant: 'danger',
           onClick: () => {
             stopScreenShare();
@@ -555,19 +558,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       onDrop={handleDrop}
       className="flex-1 flex flex-col bg-background-dark overflow-hidden relative"
     >
-      {/* Drag & Drop Visual Overlay */}
-      {isDraggingFile && (
-        <div className="absolute inset-0 z-50 bg-brand-500/20 backdrop-blur-sm border-2 border-dashed border-brand-400 flex flex-col items-center justify-center gap-3 pointer-events-none animate-in fade-in duration-150">
-          <div className="w-16 h-16 rounded-3xl bg-brand-500 flex items-center justify-center text-white shadow-2xl shadow-brand-500/50 scale-110">
-            <UploadCloud className="w-8 h-8 animate-bounce" />
-          </div>
-          <div className="text-center">
-            <p className="text-lg font-bold text-white">Solte o arquivo para anexar</p>
-            <p className="text-xs text-brand-200">Imagens, vídeos e documentos até 20 MB</p>
-          </div>
-        </div>
-      )}
-
       {/* Group Header */}
       <ChatHeader
         onOpenMobileDrawer={onOpenMobileDrawer}
@@ -941,8 +931,9 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 }
               }}
               onEditLastMessage={handleEditLastMessage}
-              droppedFile={droppedFile}
-              onClearDroppedFile={() => setDroppedFile(null)}
+              droppedFiles={droppedFiles}
+              onClearDroppedFiles={() => setDroppedFiles(null)}
+              isDraggingFile={isDraggingFile}
               contextType="dm_group"
               customMentions={groupMemberMentions}
             />
@@ -1094,14 +1085,22 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             {/* Leave Group Button in Sidebar Footer */}
             <div className="p-2 border-t border-white/5">
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (activeGroup.owner_id === user?.id && (activeGroup.members?.length || 0) > 1) {
-                    alert(
-                      'Você é o dono deste grupo. Transfira a posse do grupo para outro membro antes de sair (clique com botão direito em um membro).'
-                    );
+                    showAlert({
+                      title: 'Transferência necessária',
+                      message: 'Você é o dono deste grupo. Transfira a posse do grupo para outro membro antes de sair (clique com botão direito em um membro).',
+                      variant: 'warning',
+                    });
                     return;
                   }
-                  if (confirm('Tem certeza que deseja sair deste grupo?')) {
+                  const ok = await showConfirm({
+                    title: 'Sair do grupo',
+                    message: 'Tem certeza que deseja sair deste grupo?',
+                    confirmText: 'Sair do grupo',
+                    variant: 'danger',
+                  });
+                  if (ok) {
                     onSelectFriends?.();
                     leaveGroup(activeGroup.id);
                   }

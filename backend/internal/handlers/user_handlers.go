@@ -44,6 +44,7 @@ type UpdateProfileRequest struct {
 	E2EEBackupEnabled  *bool            `json:"e2ee_backup_enabled,omitempty"`
 	ServerFolders      *json.RawMessage `json:"server_folders,omitempty"`
 	GuildPositions     *json.RawMessage `json:"guild_positions,omitempty"`
+	Code               string           `json:"code,omitempty"`
 }
 
 func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +91,20 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		if exists {
 			http.Error(w, `{"error":"Este nome de usuário (@) já está em uso por outra conta"}`, http.StatusConflict)
 			return
+		}
+
+		var currentUsername string
+		if err := h.db.Pool.QueryRow(r.Context(), "SELECT LOWER(username) FROM users WHERE id = $1", userID).Scan(&currentUsername); err == nil && currentUsername != un {
+			code := strings.TrimSpace(req.Code)
+			if code == "" {
+				code = strings.TrimSpace(r.Header.Get("X-2FA-Code"))
+			}
+			if twoFAErr := verifyUser2FA(r.Context(), h.db, userID, code); twoFAErr != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(twoFAErr.Status)
+				w.Write([]byte(twoFAErr.Payload))
+				return
+			}
 		}
 	}
 

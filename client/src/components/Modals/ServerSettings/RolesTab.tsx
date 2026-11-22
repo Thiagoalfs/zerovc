@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Role, User, Permissions } from '../../../types';
 import { PRESET_ROLE_COLORS, PERMISSION_GROUPS } from './constants';
+import { SquishSwitch } from '../../ui/squish-switch';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_SECTION_HEADER_CLASS,
@@ -17,6 +18,7 @@ import {
   MODAL_SWITCH_CONTAINER_CLASS,
   MODAL_SWITCH_KNOB_CLASS,
 } from '../../../constants/modalTypography';
+import { ModalButton } from '@/components/ui/modal-button';
 
 interface RolesTabProps {
   roles: Role[];
@@ -124,15 +126,18 @@ export const RolesTab: React.FC<RolesTabProps> = ({
             Cargos ({sortedRoles.length})
           </span>
           {canManageRoles && (
-            <button
-              type="button"
-              disabled={isCreatingRole}
+            <ModalButton
+              type="tertiary"
+              shape="circle"
+              size="tiny"
+              svgOnly
+              loading={isCreatingRole}
               onClick={() => handleCreateRole()}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-50 transition-colors cursor-pointer"
               title="Novo Cargo"
+              aria-label="Novo Cargo"
             >
               <Plus className="w-4 h-4" />
-            </button>
+            </ModalButton>
           )}
         </div>
 
@@ -264,13 +269,15 @@ export const RolesTab: React.FC<RolesTabProps> = ({
             </div>
 
             {canManageRoles && selectedRole.name !== '@everyone' && (
-              <button
+              <ModalButton
+                type="error"
+                size="small"
                 onClick={() => handleDeleteRole(selectedRole.id)}
-                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                prefix={<Trash2 className="w-3.5 h-3.5" />}
+                className="shrink-0"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Excluir Cargo</span>
-              </button>
+                Excluir Cargo
+              </ModalButton>
             )}
           </div>
 
@@ -361,25 +368,12 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                         : 'Membros com este cargo aparecerão em uma categoria própria na lista lateral de membros.'}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={selectedRole.hoist}
+                  <SquishSwitch
+                    checked={Boolean(selectedRole.hoist)}
+                    onCheckedChange={() => handleToggleRoleHoist()}
                     disabled={!canManageRoles || selectedRole.name === '@everyone'}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleRoleHoist();
-                    }}
-                    className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                      selectedRole.hoist ? 'bg-brand-500' : 'bg-white/10'
-                    } disabled:opacity-40 disabled:cursor-not-allowed`}
-                  >
-                    <div
-                      className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                        selectedRole.hoist ? 'translate-x-6' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+                    onClick={(e) => e.stopPropagation()}
+                  />
                 </div>
 
                 <div
@@ -400,25 +394,12 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                       Permite que membros enviem mensagens com @cargo para notificar todos com este cargo.
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={selectedRole.mentionable}
+                  <SquishSwitch
+                    checked={Boolean(selectedRole.mentionable)}
+                    onCheckedChange={() => handleToggleRoleMentionable()}
                     disabled={!canManageRoles}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleRoleMentionable();
-                    }}
-                    className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                      selectedRole.mentionable ? 'bg-brand-500' : 'bg-white/10'
-                    } disabled:opacity-40 disabled:cursor-not-allowed`}
-                  >
-                    <div
-                      className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                        selectedRole.mentionable ? 'translate-x-6' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+                    onClick={(e) => e.stopPropagation()}
+                  />
                 </div>
               </div>
             </div>
@@ -462,27 +443,16 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                             <div className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>{perm.description}</div>
                           </div>
 
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={isChecked}
-                            disabled={!canManageRoles || (isRoleAdmin && perm.flag !== Permissions.ADMINISTRATOR)}
-                            onClick={(e) => {
-                              e.stopPropagation();
+                          <SquishSwitch
+                            checked={isChecked}
+                            onCheckedChange={() => {
                               if (canManageRoles && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
                                 handleTogglePermission(perm.flag);
                               }
                             }}
-                            className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                              isChecked ? 'bg-brand-500' : 'bg-white/10'
-                            } disabled:opacity-50`}
-                          >
-                            <div
-                              className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                                isChecked ? 'translate-x-6' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
+                            disabled={!canManageRoles || (isRoleAdmin && perm.flag !== Permissions.ADMINISTRATOR)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
                         </div>
                       );
                     })}

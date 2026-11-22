@@ -142,6 +142,7 @@ export const TitleBar: React.FC = () => {
 
   return (
     <header
+      data-titlebar=""
       className="h-8 bg-background-darkest border-b border-white/5 flex items-center justify-between px-3 select-none flex-shrink-0 z-[9999999] relative"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >

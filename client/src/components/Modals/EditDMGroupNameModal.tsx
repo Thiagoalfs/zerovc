@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Edit3 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { DMGroup } from '../../types';
 import {
-  MODAL_TITLE_CLASS,
-  MODAL_FIELD_LABEL_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
-  MODAL_BODY_PADDING_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_BACKDROP_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-} from '../../constants/modalTypography';
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
+import { AppInput } from '@/components/ui/app-input';
+import { InlineAlert } from '@/components/ui/inline-alert';
+import { MODAL_DESCRIPTION_CLASS } from '../../constants/modalTypography';
 
 interface EditDMGroupNameModalProps {
   isOpen: boolean;
@@ -37,17 +35,6 @@ export const EditDMGroupNameModal: React.FC<EditDMGroupNameModalProps> = ({
     }
   }, [isOpen, group]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
   if (!isOpen || !group) return null;
 
   const handleSave = async (e: React.FormEvent) => {
@@ -65,75 +52,43 @@ export const EditDMGroupNameModal: React.FC<EditDMGroupNameModalProps> = ({
   };
 
   return createPortal(
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="edit-dm-group-name-modal-title"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-dm-group-name-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
-          <div className="flex items-center gap-2">
-            <Edit3 className="w-5 h-5 text-brand-400" />
-            <h2 id="edit-dm-group-name-modal-title" className={MODAL_TITLE_CLASS}>Mudar Nome do Grupo</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="text-gray-400 hover:text-white cursor-pointer p-2 rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          >
-            <X className="w-5 h-5" />
-          </button>
+      <AppModalHeader
+        title="Mudar Nome do Grupo"
+        titleId="edit-dm-group-name-modal-title"
+        onClose={onClose}
+      />
+
+      <AppModalBody onSubmit={handleSave}>
+        {error && <InlineAlert variant="error">{error}</InlineAlert>}
+
+        <div>
+          <AppInput
+            label="Nome do Grupo"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={100}
+            autoFocus
+          />
+          <p className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>
+            Deixe em branco para usar os nomes dos participantes como padrão.
+          </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSave} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto flex-1 no-scrollbar`}>
-          {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg">{error}</div>}
-
-          <div>
-            <label className={MODAL_FIELD_LABEL_CLASS}>
-              Nome do Grupo
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Digite um novo nome para o grupo"
-              maxLength={100}
-              className="w-full bg-background-darkest border border-white/10 rounded-lg px-3.5 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-              autoFocus
-            />
-            <p className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>
-              Deixe em branco para usar os nomes dos participantes como padrão.
-            </p>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
-            <button
-              type="button"
-              onClick={onClose}
-              className={MODAL_CANCEL_BUTTON_CLASS}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={MODAL_PRIMARY_BUTTON_CLASS}
-            >
-              {isLoading ? 'Salvando...' : 'Salvar Alterações'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
+        <AppModalFooter
+          align="end"
+          onCancel={onClose}
+          confirmText={isLoading ? 'Salvando...' : 'Salvar Alterações'}
+          confirmHtmlType="submit"
+          loading={isLoading}
+        />
+      </AppModalBody>
+    </AppModal>,
     document.body
   );
 };

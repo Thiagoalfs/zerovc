@@ -7,6 +7,7 @@ import {
   Video,
   VideoOff,
   Monitor,
+  MonitorOff,
   Volume2,
   ChevronDown,
   ChevronUp,
@@ -185,6 +186,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
         {
           id: 'stop-screen',
           label: 'Parar compartilhamento',
+          icon: <MonitorOff className="w-4 h-4" />,
           variant: 'danger',
           onClick: () => {
             stopScreenShare();

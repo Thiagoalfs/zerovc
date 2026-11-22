@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { SquishSwitch } from '../ui/squish-switch';
 import {
   X,
   Camera,
@@ -12,7 +13,6 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
-  Loader2,
   Laptop,
   Smile,
   FileText,
@@ -51,6 +51,7 @@ import {
   Send,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { showAlert } from '../../stores/confirmModalStore';
 import { UserAvatar } from '../Common/UserAvatar';
 import { DropdownSelect } from '../Common/DropdownSelect';
 import {
@@ -78,12 +79,12 @@ import {
   MODAL_ITEM_ROW_PADDING_CLASS,
   MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_SECONDARY_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-  MODAL_DANGER_BUTTON_CLASS,
   MODAL_SWITCH_CONTAINER_CLASS,
   MODAL_SWITCH_KNOB_CLASS,
 } from '../../constants/modalTypography';
+import { ModalButton } from '@/components/ui/modal-button';
+import { SettingsGroup, SettingsRow } from '../ui/settings-group';
+import { InlineAlert } from '../ui/inline-alert';
 import { isElectron } from '../../lib/platform';
 import { AccountSubModals, AccountSubModalType } from './ProfileSettings/AccountSubModals';
 import { ImageCropModal } from './ImageCropModal';
@@ -665,7 +666,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message || 'Erro ao exportar dados da conta.');
+      showAlert({ title: 'Erro', message: err.message || 'Erro ao exportar dados da conta.', variant: 'danger' });
     } finally {
       setIsExportingData(false);
     }
@@ -862,15 +863,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               className="px-4 pb-3.5 border-b border-white/5 bg-background-darker/70 flex items-center justify-between flex-shrink-0"
             >
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
+                <ModalButton
+                  type="tertiary"
+                  shape="circle"
+                  size="small"
+                  svgOnly
                   onClick={onClose}
                   aria-label="Fechar"
-                  className="p-2 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  className="-ml-1 text-gray-400 hover:text-white"
                   title="Fechar"
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </ModalButton>
                 <h2 className={MODAL_DIALOG_TITLE_CLASS}>Configurações</h2>
               </div>
             </div>
@@ -1298,13 +1302,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
           {/* Bottom Logout */}
           <div className="pt-2 border-t border-white/10 flex flex-col gap-1 flex-shrink-0 mt-auto">
-            <button
-              type="button"
+            <ModalButton
+              type="error"
+              size="small"
+              fullWidth
+              prefix={<LogOut className="w-3.5 h-3.5" />}
               onClick={handleLogout}
-              className="flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
             >
-              <span>Sair da Conta</span>
-            </button>
+              Sair da Conta
+            </ModalButton>
           </div>
         </div>
 
@@ -1319,15 +1325,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
             className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex-shrink-0"
           >
             <div className="flex items-center gap-2">
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                size="small"
+                prefix={<ArrowLeft className="w-4 h-4" />}
                 onClick={() => setMobileView('menu')}
                 aria-label="Voltar"
-                className="p-2 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="-ml-1 text-gray-300 hover:text-white"
               >
-                <ArrowLeft className="w-5 h-5" />
-                <span>Voltar</span>
-              </button>
+                Voltar
+              </ModalButton>
             </div>
             <h2 className="text-sm font-bold text-white truncate max-w-[180px]">
               {activeTab === 'account' && 'Minha Conta'}
@@ -1344,31 +1351,34 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               {activeTab === 'preferences' && 'Preferências'}
               {activeTab === 'keybinds' && 'Atalhos'}
             </h2>
-            <button
-              type="button"
+            <ModalButton
+              type="tertiary"
+              shape="circle"
+              size="small"
+              svgOnly
               onClick={onClose}
               aria-label="Fechar"
-              className="p-2 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="text-gray-400 hover:text-white"
               title="Fechar"
             >
               <X className="w-5 h-5" />
-            </button>
+            </ModalButton>
           </div>
 
           {/* Desktop Top Header */}
           <div className="hidden md:flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
             <div className="flex items-center gap-3">
               {activeTab === 'profile' && (
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  size="small"
+                  prefix={<ArrowLeft className="w-4 h-4" />}
                   onClick={() => setActiveTab('account')}
                   aria-label="Voltar para Minha Conta"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   title="Voltar para Minha Conta"
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Voltar</span>
-                </button>
+                  Voltar
+                </ModalButton>
               )}
               <div>
                 <h1 id="profile-modal-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
@@ -1404,14 +1414,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               </div>
             </div>
 
-            <button
+            <ModalButton
+              type="tertiary"
+              shape="circle"
+              size="small"
+              svgOnly
               onClick={onClose}
               aria-label="Fechar configurações"
-              className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="text-gray-400 hover:text-white"
               title="Fechar Configurações (ESC)"
             >
               <X className="w-5 h-5" />
-            </button>
+            </ModalButton>
           </div>
 
           {/* Hidden File Inputs for Avatar and Banner */}
@@ -1508,14 +1522,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           {user.display_name || user.username}
                         </span>
                       </div>
-                      <button
-                        type="button"
+                      <ModalButton
+                        type="secondary"
+                        size="small"
                         aria-label="Editar nome de exibição"
                         onClick={() => setActiveAccountModal('displayName')}
-                        className={MODAL_SECONDARY_BUTTON_CLASS}
                       >
                         Editar
-                      </button>
+                      </ModalButton>
                     </div>
 
                     {/* Username row */}
@@ -1526,14 +1540,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         </span>
                         <span className="text-xs font-semibold text-white font-mono">@{user.username}</span>
                       </div>
-                      <button
-                        type="button"
+                      <ModalButton
+                        type="secondary"
+                        size="small"
                         aria-label="Editar nome de usuário"
                         onClick={() => setActiveAccountModal('username')}
-                        className={MODAL_SECONDARY_BUTTON_CLASS}
                       >
                         Editar
-                      </button>
+                      </ModalButton>
                     </div>
 
                     {/* Phone row */}
@@ -1558,14 +1572,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           )}
                         </div>
                       </div>
-                      <button
-                        type="button"
+                      <ModalButton
+                        type="secondary"
+                        size="small"
                         aria-label={user.phone_number ? 'Editar número de telefone' : 'Adicionar número de telefone'}
                         onClick={() => setActiveAccountModal('phone')}
-                        className={MODAL_SECONDARY_BUTTON_CLASS}
                       >
                         {user.phone_number ? 'Editar' : 'Adicionar'}
-                      </button>
+                      </ModalButton>
                     </div>
                   </div>
                 </div>
@@ -1615,25 +1629,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     </div>
 
                     <div className="flex justify-end pt-1">
-                      <button
-                        type="submit"
-                        disabled={isSavingBio}
-                        className={MODAL_PRIMARY_BUTTON_CLASS}
+                      <ModalButton
+                        type="primary"
+                        htmlType="submit"
+                        loading={isSavingBio}
+                        prefix={bioSuccess ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : undefined}
                       >
-                        {bioSuccess ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-300" />
-                            <span>Salvo com Sucesso!</span>
-                          </>
-                        ) : isSavingBio ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Salvando...</span>
-                          </>
-                        ) : (
-                          'Salvar Recado e Bio'
-                        )}
-                      </button>
+                        {bioSuccess
+                          ? 'Salvo com Sucesso!'
+                          : isSavingBio
+                            ? 'Salvando...'
+                            : 'Salvar Recado e Bio'}
+                      </ModalButton>
                     </div>
                   </form>
                 </div>
@@ -1644,96 +1651,81 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
             {activeTab === 'privacy' && (
               <div className="space-y-6 animate-in fade-in">
                 {/* 1. Credenciais de Acesso (E-mail, Senha & 2FA) */}
-                <div>
-                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                    Credenciais de Acesso
-                  </h4>
-                  <div className="rounded-2xl bg-background-darker/60 border border-white/5 p-4 divide-y divide-white/5">
-                    {/* E-mail */}
-                    <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-                      <div>
-                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
-                          Endereço de E-mail
-                        </span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-gray-200 font-mono">{getMaskedEmail(user.email)}</span>
-                          {!streamerModeActive ? (
-                            <button
-                              type="button"
-                              onClick={() => setRevealEmail(!revealEmail)}
-                              className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
-                            >
-                              {revealEmail ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                              <span>{revealEmail ? 'Ocultar' : 'Revelar e-mail'}</span>
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
-                              <EyeOff className="w-2.5 h-2.5" />
-                              <span>Oculto pelo Modo Streamer</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
+                <SettingsGroup title="Credenciais de Acesso">
+                  <SettingsRow
+                    label="Endereço de E-mail"
+                    description={
+                      <span className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-xs text-gray-200 font-mono">{getMaskedEmail(user.email)}</span>
+                        {!streamerModeActive ? (
+                          <button
+                            type="button"
+                            onClick={() => setRevealEmail(!revealEmail)}
+                            className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            {revealEmail ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            <span>{revealEmail ? 'Ocultar' : 'Revelar e-mail'}</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
+                            <EyeOff className="w-2.5 h-2.5" />
+                            <span>Oculto pelo Modo Streamer</span>
+                          </span>
+                        )}
+                      </span>
+                    }
+                    control={
+                      <ModalButton
+                        type="secondary"
+                        size="small"
                         onClick={() => setActiveAccountModal('email')}
-                        className={`${MODAL_SECONDARY_BUTTON_CLASS} self-start sm:self-auto shrink-0`}
                       >
                         Editar
-                      </button>
-                    </div>
+                      </ModalButton>
+                    }
+                  />
 
-                    {/* Senha */}
-                    <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-                      <div>
-                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
-                          Senha da Conta
-                        </span>
-                        <span className="text-xs text-gray-500 font-mono tracking-widest block mt-0.5">••••••••••••••••</span>
-                      </div>
-                      <button
-                        type="button"
+                  <SettingsRow
+                    label="Senha da Conta"
+                    description={
+                      <span className="text-xs text-gray-500 font-mono tracking-widest block mt-0.5">••••••••••••••••</span>
+                    }
+                    control={
+                      <ModalButton
+                        type="primary"
+                        size="small"
                         onClick={() => setActiveAccountModal('password')}
-                        className={`${MODAL_PRIMARY_BUTTON_CLASS} !px-4 !py-2 sm:!py-1.5 self-start sm:self-auto shrink-0`}
                       >
                         Mudar Senha
-                      </button>
-                    </div>
+                      </ModalButton>
+                    }
+                  />
 
-                    {/* Autenticação de Dois Fatores (2FA) */}
-                    <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={MODAL_TOGGLE_HEADER_CLASS}>Autenticação de Dois Fatores (2FA)</span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                              user.two_factor_enabled
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                            }`}
-                          >
-                            {user.two_factor_enabled ? 'ATIVADO' : 'DESATIVADO'}
-                          </span>
-                        </div>
-                        <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
-                          Proteja sua conta adicionando uma etapa de confirmação via código TOTP (Google Authenticator / Authy).
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setActiveAccountModal('2fa')}
-                        className={
+                  <SettingsRow
+                    label="Autenticação de Dois Fatores (2FA)"
+                    badge={
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                           user.two_factor_enabled
-                            ? 'bg-dnd/10 hover:bg-dnd/20 active:scale-95 text-dnd border border-dnd/30 px-4 py-2 sm:py-1.5 sm:px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer self-start sm:self-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darker'
-                            : `${MODAL_PRIMARY_BUTTON_CLASS} !px-4 !py-2 sm:!py-1.5 self-start sm:self-auto shrink-0`
-                        }
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        }`}
+                      >
+                        {user.two_factor_enabled ? 'ATIVADO' : 'DESATIVADO'}
+                      </span>
+                    }
+                    description="Proteja sua conta adicionando uma etapa de confirmação via código TOTP (Google Authenticator / Authy)."
+                    control={
+                      <ModalButton
+                        type={user.two_factor_enabled ? 'error' : 'primary'}
+                        size="small"
+                        onClick={() => setActiveAccountModal('2fa')}
                       >
                         {user.two_factor_enabled ? 'Desativar 2FA' : 'Habilitar 2FA'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                      </ModalButton>
+                    }
+                  />
+                </SettingsGroup>
 
                 <div className={MODAL_DIVIDER_CLASS} />
 
@@ -1818,24 +1810,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           Baixe uma cópia estruturada em JSON com todas as suas informações de perfil, servidores associados e lista de contatos.
                         </p>
                       </div>
-                      <button
-                        type="button"
+                      <ModalButton
+                        type="secondary"
+                        size="small"
+                        loading={isExportingData}
+                        prefix={<Download className="w-3.5 h-3.5" />}
                         onClick={handleExportData}
-                        disabled={isExportingData}
-                        className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center gap-1.5 self-start sm:self-auto shrink-0`}
+                        className="self-start sm:self-auto shrink-0"
                       >
-                        {isExportingData ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Exportando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Exportar Dados</span>
-                          </>
-                        )}
-                      </button>
+                        {isExportingData ? 'Exportando...' : 'Exportar Dados'}
+                      </ModalButton>
                     </div>
 
                     {/* Delete Account (Danger Zone) */}
@@ -1847,14 +1831,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                             Esta ação é irreversível. Todos os seus dados, mensagens, servidores próprios e amizades serão permanentemente apagados.
                           </p>
                         </div>
-                        <button
-                          type="button"
+                        <ModalButton
+                          type="error"
+                          size="small"
+                          prefix={<Trash2 className="w-3.5 h-3.5" />}
                           onClick={() => setActiveAccountModal('deleteAccount')}
-                          className={`${MODAL_DANGER_BUTTON_CLASS} !px-3.5 !py-2 sm:!py-1.5 self-start sm:self-auto shrink-0`}
+                          className="self-start sm:self-auto shrink-0"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Excluir Conta</span>
-                        </button>
+                          Excluir Conta
+                        </ModalButton>
                       </div>
                     </div>
                   </div>
@@ -2335,35 +2320,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <div className={MODAL_DIVIDER_CLASS} />
 
                 {/* Media and GIFs */}
-                <div>
-                  <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                    Mídia & Animações
-                  </h4>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5 pr-4">
-                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Reproduzir GIFs automaticamente</span>
-                      <p className={MODAL_DESCRIPTION_CLASS}>
-                        Se desativado, GIFs só serão reproduzidos ao passar o cursor do mouse por cima.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-label="Reproduzir GIFs automaticamente"
-                      aria-checked={autoplayGifs}
-                      onClick={() => setAutoplayGifs(!autoplayGifs)}
-                      className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                        autoplayGifs ? 'bg-brand-500' : 'bg-white/10'
-                      }`}
-                    >
-                      <div
-                        className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                          autoplayGifs ? 'translate-x-6' : 'translate-x-0'
-                        }`}
+                <SettingsGroup title="Mídia & Animações">
+                  <SettingsRow
+                    label="Reproduzir GIFs automaticamente"
+                    description="Se desativado, GIFs só serão reproduzidos ao passar o cursor do mouse por cima."
+                    control={
+                      <SquishSwitch
+                        aria-label="Reproduzir GIFs automaticamente"
+                        checked={autoplayGifs}
+                        onCheckedChange={setAutoplayGifs}
                       />
-                    </button>
-                  </div>
-                </div>
+                    }
+                  />
+                </SettingsGroup>
               </div>
             )}
 
@@ -2452,17 +2421,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     </div>
                   </div>
                 ) : (
-                  <div className="p-4 bg-background-darker/80 rounded-2xl border border-white/5 flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-400 flex-shrink-0 mt-0.5">
-                      <Headphones className="w-4 h-4" />
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-xs font-bold text-gray-200 block">Roteamento Automático de Áudio</span>
-                      <span className={`${MODAL_DESCRIPTION_CLASS} block`}>
+                  <InlineAlert variant="info" icon={<Headphones className="w-4 h-4" />}>
+                    <div>
+                      <span className="font-bold block mb-0.5">Roteamento Automático de Áudio</span>
+                      <span>
                         No celular, o áudio e microfone são gerenciados automaticamente pelo sistema ao conectar ou desconectar fones Bluetooth e com fio.
                       </span>
                     </div>
-                  </div>
+                  </InlineAlert>
                 )}
 
                 {/* Mic Test Section */}
@@ -2474,17 +2440,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     </span>
                   </div>
                   <div className="flex items-center gap-3 pt-0.5">
-                    <button
-                      type="button"
+                    <ModalButton
+                      type={isTestingMic ? 'error' : 'primary'}
+                      size="small"
                       onClick={isTestingMic ? stopMicTest : startMicTest}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0 ${
-                        isTestingMic
-                          ? 'bg-dnd text-white hover:bg-dnd/90'
-                          : 'bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/25'
-                      }`}
+                      className="shrink-0"
                     >
                       {isTestingMic ? 'Parar Teste' : 'Testar Mic'}
-                    </button>
+                    </ModalButton>
                     <div className="flex-1 flex items-center gap-[3px] h-8 px-3 bg-background-darkest rounded-xl border border-white/5 overflow-hidden">
                       {Array.from({ length: 48 }).map((_, i) => {
                         const threshold = (i / 48) * 100;
@@ -2515,26 +2478,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         Controla a quantidade de som que o ZeroVC transmite do seu microfone.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      role="switch"
+                    <SquishSwitch
                       aria-label="Determinar sensibilidade de entrada automaticamente"
-                      aria-checked={vadAutoSensitivity}
-                      onClick={() => {
-                        const nextVal = !vadAutoSensitivity;
+                      checked={vadAutoSensitivity}
+                      onCheckedChange={(nextVal) => {
                         setVadAutoSensitivity(nextVal);
                         audioProcessor.updateConfig({ vadAutoSensitivity: nextVal, vadSensitivity });
                       }}
-                      className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                        vadAutoSensitivity ? 'bg-brand-500' : 'bg-white/10'
-                      }`}
-                    >
-                      <div
-                        className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                          vadAutoSensitivity ? 'translate-x-6' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
+                    />
                   </div>
 
                   {/* Dual-Color Volume Bar & Interactive Slider */}
@@ -2564,7 +2515,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           <div
                             className={`absolute top-0 bottom-0 left-0 transition-all duration-75 ${
                               vadLiveState.isSpeaking || vadLiveState.gateOpen
-                                ? 'bg-[#23a55a] shadow-[0_0_10px_rgba(35,165,90,0.6)]'
+                                ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)]'
                                 : 'bg-white/15'
                             }`}
                             style={{
@@ -2574,17 +2525,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         ) : (
                           /* In Manual Mode: Dual-color threshold fill */
                           <>
-                            {/* Below threshold fill (Vibrant Amber/Yellow #faa61a) */}
+                            {/* Below threshold fill (Vibrant Amber) */}
                             <div
-                              className="absolute top-0 bottom-0 left-0 bg-[#faa61a] transition-all duration-75 shadow-[0_0_8px_rgba(250,166,26,0.6)]"
+                              className="absolute top-0 bottom-0 left-0 bg-amber-500 transition-all duration-75 shadow-[0_0_8px_rgba(245,158,11,0.6)]"
                               style={{
                                 width: `${Math.min(micLevel, vadSensitivity * 100)}%`,
                               }}
                             />
-                            {/* Above threshold fill (Vibrant Green #3ba55c) */}
+                            {/* Above threshold fill (Vibrant Green) */}
                             {micLevel > vadSensitivity * 100 && (
                               <div
-                                className="absolute top-0 bottom-0 bg-[#3ba55c] transition-all duration-75 shadow-[0_0_8px_rgba(59,165,92,0.7)]"
+                                className="absolute top-0 bottom-0 bg-emerald-500 transition-all duration-75 shadow-[0_0_8px_rgba(16,185,129,0.7)]"
                                 style={{
                                   left: `${vadSensitivity * 100}%`,
                                   width: `${Math.min(micLevel - vadSensitivity * 100, 100 - vadSensitivity * 100)}%`,
@@ -2635,180 +2586,125 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                   </div>
                 </div>
 
-                {/* Noise Suppression Selector Row */}
-                <div className="space-y-4 pt-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    <div className="space-y-0.5 pr-2">
-                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
-                        Redução de ruído
-                      </span>
-                      <p className={MODAL_DESCRIPTION_CLASS}>
-                        Reduz o ruído de fundo do seu microfone.
-                      </p>
-                    </div>
+                {/* Noise Suppression & Audio Processing */}
+                <SettingsGroup>
+                  <SettingsRow
+                    label="Redução de ruído"
+                    description="Reduz o ruído de fundo do seu microfone."
+                    control={
+                      <DropdownSelect
+                        className="w-56 flex-shrink-0"
+                        align="right"
+                        value={audioProcessingMode}
+                        onChange={(val: any) => {
+                          setAudioProcessingMode(val);
+                          audioProcessor.updateConfig({ mode: val });
+                        }}
+                        options={[
+                          { value: 'rnnoise_silero', label: 'RNNoise + Silero VAD' },
+                          { value: 'webrtc', label: 'Padrão' },
+                          { value: 'none', label: 'Nenhum' },
+                        ]}
+                      />
+                    }
+                  />
 
-                    {/* Compact Modern Dropdown Button & Popover */}
-                    <DropdownSelect
-                      className="w-56 flex-shrink-0"
-                      align="right"
-                      value={audioProcessingMode}
-                      onChange={(val: any) => {
-                        setAudioProcessingMode(val);
-                        audioProcessor.updateConfig({ mode: val });
-                      }}
-                      options={[
-                        { value: 'rnnoise_silero', label: 'RNNoise + Silero VAD' },
-                        { value: 'webrtc', label: 'Padrão' },
-                        { value: 'none', label: 'Nenhum' },
-                      ]}
-                    />
-                  </div>
+                  <SettingsRow
+                    label="Cancelamento de Eco"
+                    description="Impede que o áudio das caixas de som retorne ao microfone criando microfonia."
+                    control={
+                      <SquishSwitch
+                        aria-label="Cancelamento de Eco"
+                        checked={echoCancellation}
+                        onCheckedChange={setEchoCancellation}
+                      />
+                    }
+                  />
 
-                  {/* Sub-Settings Options (Echo Cancellation, Auto Gain, Push-to-Talk) */}
-                  <div className="pt-1">
-                    <div className="space-y-4 animate-in fade-in duration-150">
-                      {/* Echo Cancellation */}
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5 pr-4">
-                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Cancelamento de Eco</span>
-                          <p className={MODAL_DESCRIPTION_CLASS}>
-                            Impede que o áudio das caixas de som retorne ao microfone criando microfonia.
-                          </p>
+                  <SettingsRow
+                    label="Controle Automático de Ganho"
+                    description="Normaliza o volume da voz automaticamente."
+                    control={
+                      <SquishSwitch
+                        aria-label="Controle Automático de Ganho"
+                        checked={autoGainControl}
+                        onCheckedChange={setAutoGainControl}
+                      />
+                    }
+                  />
+
+                  <SettingsRow
+                    label="Mostrar usuários na barra de voz"
+                    description="Exibe fotos e animação de fala dos participantes conectados abaixo do nome da chamada."
+                    control={
+                      <SquishSwitch
+                        aria-label="Mostrar usuários na barra de voz"
+                        checked={showVoiceUsersInBar}
+                        onCheckedChange={setShowVoiceUsersInBar}
+                      />
+                    }
+                  />
+                </SettingsGroup>
+
+                {/* Modo de Entrada (Aberto / Push to Talk) */}
+                <div className="space-y-2">
+                  <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
+                    Modo de Entrada
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => handleInputModeChange('activity')}
+                      className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                        inputMode === 'activity'
+                          ? 'bg-brand-500/10 border-brand-500/50 text-white shadow-sm shadow-brand-500/10'
+                          : 'bg-background-darker/60 border-white/5 text-gray-300 hover:bg-white/5'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                          inputMode === 'activity' ? 'bg-brand-500/20 text-brand-400' : 'bg-white/5 text-gray-400'
+                        }`}>
+                          <Mic className="w-3.5 h-3.5" />
                         </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-label="Cancelamento de Eco"
-                          aria-checked={echoCancellation}
-                          onClick={() => setEchoCancellation(!echoCancellation)}
-                          className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                            echoCancellation ? 'bg-brand-500' : 'bg-white/10'
-                          }`}
-                        >
-                          <div
-                            className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                              echoCancellation ? 'translate-x-6' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Auto Gain Control */}
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5 pr-4">
-                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Controle Automático de Ganho</span>
-                          <p className={MODAL_DESCRIPTION_CLASS}>
-                            Normaliza o volume da voz automaticamente.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-label="Controle Automático de Ganho"
-                          aria-checked={autoGainControl}
-                          onClick={() => setAutoGainControl(!autoGainControl)}
-                          className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                            autoGainControl ? 'bg-brand-500' : 'bg-white/10'
-                          }`}
-                        >
-                          <div
-                            className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                              autoGainControl ? 'translate-x-6' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Modo de Entrada (Aberto / Push to Talk) */}
-                      <div className="space-y-2">
-                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
-                          Modo de Entrada
-                        </span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          <button
-                            type="button"
-                            onClick={() => handleInputModeChange('activity')}
-                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
-                              inputMode === 'activity'
-                                ? 'bg-brand-500/10 border-brand-500/50 text-white shadow-sm shadow-brand-500/10'
-                                : 'bg-background-darker/60 border-white/5 text-gray-300 hover:bg-white/5'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                                inputMode === 'activity' ? 'bg-brand-500/20 text-brand-400' : 'bg-white/5 text-gray-400'
-                              }`}>
-                                <Mic className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="text-left">
-                                <span className="text-xs font-bold block">Aberto</span>
-                                <span className="text-[10px] text-gray-400 block">Atividade de voz contínua</span>
-                              </div>
-                            </div>
-                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                              inputMode === 'activity' ? 'border-brand-400 bg-brand-500' : 'border-gray-500 bg-transparent'
-                            }`}>
-                              {inputMode === 'activity' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                            </div>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleInputModeChange('ptt')}
-                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
-                              inputMode === 'ptt'
-                                ? 'bg-brand-500/10 border-brand-500/50 text-white shadow-sm shadow-brand-500/10'
-                                : 'bg-background-darker/60 border-white/5 text-gray-300 hover:bg-white/5'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                                inputMode === 'ptt' ? 'bg-brand-500/20 text-brand-400' : 'bg-white/5 text-gray-400'
-                              }`}>
-                                <Radio className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="text-left">
-                                <span className="text-xs font-bold block">Push to Talk</span>
-                                <span className="text-[10px] text-gray-400 block">Aperte para falar</span>
-                              </div>
-                            </div>
-                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                              inputMode === 'ptt' ? 'border-brand-400 bg-brand-500' : 'border-gray-500 bg-transparent'
-                            }`}>
-                              {inputMode === 'ptt' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                            </div>
-                          </button>
+                        <div className="text-left">
+                          <span className="text-xs font-bold block">Aberto</span>
+                          <span className="text-[10px] text-gray-400 block">Atividade de voz contínua</span>
                         </div>
                       </div>
-
-                      {/* Mostrar usuários na barra de voz */}
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5 pr-4">
-                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
-                            Mostrar usuários na barra de voz
-                          </span>
-                          <p className={MODAL_DESCRIPTION_CLASS}>
-                            Exibe fotos e animação de fala dos participantes conectados abaixo do nome da chamada.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-label="Mostrar usuários na barra de voz"
-                          aria-checked={showVoiceUsersInBar}
-                          onClick={() => setShowVoiceUsersInBar(!showVoiceUsersInBar)}
-                          className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                            showVoiceUsersInBar ? 'bg-brand-500' : 'bg-white/10'
-                          }`}
-                        >
-                          <div
-                            className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                              showVoiceUsersInBar ? 'translate-x-6' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                        inputMode === 'activity' ? 'border-brand-400 bg-brand-500' : 'border-gray-500 bg-transparent'
+                      }`}>
+                        {inputMode === 'activity' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                       </div>
-                    </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleInputModeChange('ptt')}
+                      className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                        inputMode === 'ptt'
+                          ? 'bg-brand-500/10 border-brand-500/50 text-white shadow-sm shadow-brand-500/10'
+                          : 'bg-background-darker/60 border-white/5 text-gray-300 hover:bg-white/5'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                          inputMode === 'ptt' ? 'bg-brand-500/20 text-brand-400' : 'bg-white/5 text-gray-400'
+                        }`}>
+                          <Radio className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="text-left">
+                          <span className="text-xs font-bold block">Push to Talk</span>
+                          <span className="text-[10px] text-gray-400 block">Aperte para falar</span>
+                        </div>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                        inputMode === 'ptt' ? 'border-brand-400 bg-brand-500' : 'border-gray-500 bg-transparent'
+                      }`}>
+                        {inputMode === 'ptt' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </button>
                   </div>
                 </div>
 
@@ -2855,18 +2751,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       )}
                     </div>
 
-                    <button
-                      type="button"
+                    <ModalButton
+                      type={isTestingCamera ? 'error' : 'primary'}
+                      size="small"
+                      fullWidth
                       onClick={isTestingCamera ? stopCameraTest : startCameraTest}
                       disabled={videoDevices.length === 0 && !isTestingCamera}
-                      className={`w-full py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                        isTestingCamera
-                          ? 'bg-dnd text-white shadow-md'
-                          : 'bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white shadow-md'
-                      }`}
                     >
-                      <span>{isTestingCamera ? 'Parar Teste de Vídeo' : 'Testar Câmera'}</span>
-                    </button>
+                      {isTestingCamera ? 'Parar Teste de Vídeo' : 'Testar Câmera'}
+                    </ModalButton>
                   </div>
                 </div>
               </div>

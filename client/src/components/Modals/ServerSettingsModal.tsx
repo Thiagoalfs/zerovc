@@ -27,6 +27,7 @@ import { ImageCropModal } from './ImageCropModal';
 import { ServerAuditLogView, ACTION_FILTERS } from './ServerAuditLogView';
 import { DropdownSelect } from '../Common/DropdownSelect';
 import { pushBackHandler } from '../../lib/mobileBackHandler';
+import { showAlert, showConfirm } from '../../stores/confirmModalStore';
 
 import { OverviewTab } from './ServerSettings/OverviewTab';
 import { RolesTab } from './ServerSettings/RolesTab';
@@ -42,8 +43,8 @@ import {
   MODAL_TITLE_CLASS,
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
+import { ModalButton } from '@/components/ui/modal-button';
 
 interface ServerSettingsModalProps {
   isOpen: boolean;
@@ -122,7 +123,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   // Members & Search State
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('all');
-  const [activeMemberMenuId, setActiveMemberMenuId] = useState<string | null>(null);
   const [muteModalUser, setMuteModalUser] = useState<User | null>(null);
   const [banModalUser, setBanModalUser] = useState<User | null>(null);
   const [banReason, setBanReason] = useState('');
@@ -313,7 +313,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleRemoveIcon = async () => {
-    if (!confirm('Deseja remover o ícone do servidor?')) return;
+    const ok = await showConfirm({
+      title: 'Remover ícone',
+      message: 'Deseja remover o ícone do servidor?',
+      confirmText: 'Remover',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setIsUploadingIcon(true);
     try {
       await updateGuild(activeGuild.id, { icon_url: '' });
@@ -335,7 +341,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleRemoveBanner = async () => {
-    if (!confirm('Deseja remover o banner do servidor?')) return;
+    const ok = await showConfirm({
+      title: 'Remover banner',
+      message: 'Deseja remover o banner do servidor?',
+      confirmText: 'Remover',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setIsUploadingBanner(true);
     try {
       await updateGuild(activeGuild.id, { banner_url: '' });
@@ -500,11 +512,21 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     if (!canManageRoles) return;
     const targetRole = roles.find((r) => r.id === roleId);
     if (targetRole?.name === '@everyone') {
-      alert('O cargo @everyone é o cargo padrão do servidor e não pode ser excluído.');
+      showAlert({
+        title: 'Ação não permitida',
+        message: 'O cargo @everyone é o cargo padrão do servidor e não pode ser excluído.',
+        variant: 'warning',
+      });
       return;
     }
 
-    if (confirm('Tem certeza que deseja excluir este cargo?')) {
+    const ok = await showConfirm({
+      title: 'Excluir cargo',
+      message: 'Tem certeza que deseja excluir este cargo?',
+      confirmText: 'Excluir',
+      variant: 'danger',
+    });
+    if (ok) {
       try {
         await deleteRole(activeGuild.id, roleId);
         if (selectedRoleId === roleId) {
@@ -522,7 +544,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      alert('A imagem do emoji deve ter no máximo 2MB.');
+      showAlert({
+        title: 'Arquivo muito grande',
+        message: 'A imagem do emoji deve ter no máximo 2MB.',
+        variant: 'warning',
+      });
       if (emojiInputRef.current) emojiInputRef.current.value = '';
       return;
     }
@@ -584,13 +610,19 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleDeleteEmoji = async (emojiId: string, name: string) => {
-    if (!confirm(`Deseja remover o emoji :${name}:?`)) return;
+    const ok = await showConfirm({
+      title: 'Remover emoji',
+      message: `Deseja remover o emoji :${name}:?`,
+      confirmText: 'Remover',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.guilds.deleteEmoji(activeGuild.id, emojiId);
       setEmojisList((prev) => prev.filter((em) => em.id !== emojiId));
       useGuildStore.getState().handleEmojiDeleteEvent({ guild_id: activeGuild.id, id: emojiId });
     } catch (err: any) {
-      alert(err.message || 'Erro ao remover emoji');
+      showAlert({ title: 'Erro', message: err.message || 'Erro ao remover emoji', variant: 'danger' });
     }
   };
 
@@ -601,7 +633,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       const inv = await api.guilds.createInvite(activeGuild.id, true);
       setInvitesList((prev) => [inv, ...prev.filter((item) => item.code !== inv.code)]);
     } catch (err: any) {
-      alert(err.message || 'Erro ao gerar novo convite');
+      showAlert({ title: 'Erro', message: err.message || 'Erro ao gerar novo convite', variant: 'danger' });
     } finally {
       setIsCreatingInvite(false);
     }
@@ -620,12 +652,18 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   };
 
   const handleRevokeInvite = async (code: string) => {
-    if (!confirm('Deseja revogar e invalidar este link de convite?')) return;
+    const ok = await showConfirm({
+      title: 'Revogar convite',
+      message: 'Deseja revogar e invalidar este link de convite?',
+      confirmText: 'Revogar',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.guilds.deleteInvite(activeGuild.id, code);
       setInvitesList((prev) => prev.filter((i) => i.code !== code));
     } catch (err: any) {
-      alert(err.message || 'Erro ao revogar convite');
+      showAlert({ title: 'Erro', message: err.message || 'Erro ao revogar convite', variant: 'danger' });
     }
   };
 
@@ -661,7 +699,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       await muteMember(activeGuild.id, muteModalUser.id, seconds);
       setMuteModalUser(null);
     } catch (err: any) {
-      alert(err.message || 'Erro ao alterar status de silêncio');
+      showAlert({ title: 'Erro', message: err.message || 'Erro ao alterar status de silêncio', variant: 'danger' });
     }
   };
 
@@ -673,7 +711,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       setBanModalUser(null);
       setBanReason('');
     } catch (err: any) {
-      alert(err.message || 'Erro ao banir membro');
+      showAlert({ title: 'Erro', message: err.message || 'Erro ao banir membro', variant: 'danger' });
     }
   };
 
@@ -754,15 +792,18 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 className="px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex items-center justify-between flex-shrink-0"
               >
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="tertiary"
+                    shape="circle"
+                    size="small"
+                    svgOnly
                     onClick={onClose}
                     aria-label="Fechar configurações do servidor"
-                    className="p-2 -ml-1 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     title="Fechar"
+                    className="-ml-1"
                   >
                     <X className="w-5 h-5" />
-                  </button>
+                  </ModalButton>
                   <h2 className={MODAL_DIALOG_TITLE_CLASS}>Configurações do Servidor</h2>
                 </div>
               </div>
@@ -1056,15 +1097,16 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex-shrink-0"
             >
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
+                <ModalButton
+                  type="tertiary"
+                  size="small"
                   onClick={() => setMobileView('menu')}
                   aria-label="Voltar ao menu"
-                  className="p-2 -ml-1 text-gray-300 hover:text-white rounded-xl active:bg-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  prefix={<ArrowLeft className="w-5 h-5" />}
+                  className="-ml-1"
                 >
-                  <ArrowLeft className="w-5 h-5" />
-                  <span>Voltar</span>
-                </button>
+                  Voltar
+                </ModalButton>
               </div>
               <h2 className="text-sm font-bold text-white truncate max-w-[180px]">
                 {activeTab === 'overview' && 'Visão Geral'}
@@ -1074,15 +1116,17 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 {activeTab === 'members' && 'Membros'}
                 {activeTab === 'audit_log' && 'Auditoria'}
               </h2>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 onClick={onClose}
                 aria-label="Fechar configurações do servidor"
-                className="p-2 text-gray-400 hover:text-white rounded-xl active:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 title="Fechar"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </ModalButton>
             </div>
 
             {/* Desktop Top Header */}
@@ -1125,36 +1169,26 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 )}
 
                 {activeTab === 'invites' && (
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="primary"
                     onClick={handleGenerateNewInvite}
-                    disabled={isCreatingInvite}
-                    className={MODAL_PRIMARY_BUTTON_CLASS}
+                    loading={isCreatingInvite}
+                    prefix={<Plus className="w-4 h-4" />}
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>{isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}</span>
-                  </button>
+                    {isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}
+                  </ModalButton>
                 )}
 
                 {activeTab === 'emojis' && (
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="primary"
                     onClick={() => emojiInputRef.current?.click()}
-                    disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
-                    className={MODAL_PRIMARY_BUTTON_CLASS}
+                    disabled={!isOwner && !hasAdmin && !canManageGuild}
+                    loading={isUploadingEmoji}
+                    prefix={<Upload className="w-4 h-4" />}
                   >
-                    {isUploadingEmoji ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" />
-                        <span>Carregando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4" />
-                        <span>Carregar Emoji</span>
-                      </>
-                    )}
-                  </button>
+                    {isUploadingEmoji ? 'Carregando...' : 'Carregar Emoji'}
+                  </ModalButton>
                 )}
 
                 {activeTab === 'audit_log' && (
@@ -1171,28 +1205,31 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       placeholder="Filtrar ações..."
                     />
 
-                    <button
-                      type="button"
+                    <ModalButton
+                      type="secondary"
+                      size="small"
+                      svgOnly
                       onClick={() => setAuditRefreshTrigger((prev) => prev + 1)}
                       disabled={isAuditLoading}
                       aria-label="Recarregar registro de auditoria"
-                      className="p-2 bg-background-darkest border border-white/10 hover:border-white/20 rounded-xl text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       title="Recarregar"
                     >
                       <RefreshCw className={`w-4 h-4 ${isAuditLoading ? 'animate-spin text-brand-400' : ''}`} />
-                    </button>
+                    </ModalButton>
                   </div>
                 )}
 
-                <button
-                  type="button"
+                <ModalButton
+                  type="tertiary"
+                  shape="circle"
+                  size="small"
+                  svgOnly
                   onClick={onClose}
                   aria-label="Fechar configurações do servidor"
-                  className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   title="Fechar Configurações (ESC)"
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </ModalButton>
               </div>
             </div>
 
@@ -1296,8 +1333,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   setMemberSearchQuery={setMemberSearchQuery}
                   selectedRoleFilter={selectedRoleFilter}
                   setSelectedRoleFilter={setSelectedRoleFilter}
-                  activeMemberMenuId={activeMemberMenuId}
-                  setActiveMemberMenuId={setActiveMemberMenuId}
                   handleToggleMemberRole={handleToggleMemberRole}
                   setMuteModalUser={setMuteModalUser}
                   setBanModalUser={setBanModalUser}

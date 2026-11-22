@@ -1,28 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  ShieldCheck,
-  AlertTriangle,
-  RefreshCw,
-  Loader2,
-  CheckCircle2,
-  Copy,
-  Trash2,
-} from 'lucide-react';
+import { SquishSwitch } from '../ui/squish-switch';
+import { ModalButton } from '@/components/ui/modal-button';
+import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
+import { InlineAlert } from '@/components/ui/inline-alert';
+import { AppModal, AppModalHeader, AppModalBody, AppModalFooter } from '@/components/ui/app-modal';
+import { AppInput } from '@/components/ui/app-input';
+import { RefreshCw, Trash2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { showConfirm } from '../../stores/confirmModalStore';
 import { identityManager, DeviceIdentityKeys } from '../../crypto/identity';
 import { backupManager, BackupStatus } from '../../crypto/backupManager';
 import { RecoveryKeyModal } from './RecoveryKeyModal';
-import {
-  MODAL_TOGGLE_HEADER_CLASS,
-  MODAL_SECTION_HEADER_CLASS,
-  MODAL_ITEM_ROW_PADDING_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_SECONDARY_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-  MODAL_DANGER_BUTTON_CLASS,
-  MODAL_SWITCH_CONTAINER_CLASS,
-  MODAL_SWITCH_KNOB_CLASS,
-} from '../../constants/modalTypography';
 
 const SECURITY_CACHE_TTL_MS = 60_000;
 let cachedSecurityState: {
@@ -48,6 +36,9 @@ export const SecurityView: React.FC = () => {
   // Modals state
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
   const [recoveryModalMode, setRecoveryModalMode] = useState<'setup' | 'restore'>('setup');
+  const [isDelete2FAModalOpen, setIsDelete2FAModalOpen] = useState(false);
+  const [delete2FACode, setDelete2FACode] = useState('');
+  const [delete2FAError, setDelete2FAError] = useState<string | null>(null);
   const [isDeletingBackup, setIsDeletingBackup] = useState(false);
 
   const loadSecurityState = useCallback(async (force = false) => {
@@ -106,9 +97,15 @@ export const SecurityView: React.FC = () => {
   const handleToggleBackup = async () => {
     const current = user?.e2ee_backup_enabled !== false;
     if (current) {
-      if (!confirm('Atenção: Ao desativar o backup de chaves na nuvem, você não poderá ler mensagens antigas cifradas se fizer login em outro computador ou navegador sem uma chave manual. Deseja realmente desativar (opt-out)?')) {
-        return;
-      }
+      const confirmed = await showConfirm({
+        title: 'Desativar backup automático',
+        message: 'Sem o backup na nuvem, você precisará da chave de recuperação para ler mensagens antigas em outros aparelhos.',
+        confirmText: 'Desativar',
+        cancelText: 'Cancelar',
+        variant: 'danger',
+        icon: 'alert',
+      });
+      if (!confirmed) return;
     }
 
     setError(null);
@@ -153,28 +150,53 @@ export const SecurityView: React.FC = () => {
     }
   };
 
-  const handleDeleteBackup = async () => {
-    if (!confirm('Deseja realmente excluir o backup de chaves na nuvem? Suas mensagens continuarão nos seus aparelhos, mas não poderão ser recuperadas em novos dispositivos sem exportação manual.')) {
-      return;
-    }
-
+  const executeDeleteBackup = async (code?: string) => {
     setIsDeletingBackup(true);
     setError(null);
+    setDelete2FAError(null);
     setSuccessMessage(null);
 
     try {
-      await backupManager.deleteBackup();
+      await backupManager.deleteBackup(code);
       const emptyStatus = { exists: false };
       setBackupStatus(emptyStatus);
       if (user?.id) {
         cachedSecurityState = { userId: user.id, identityKeys, backupStatus: emptyStatus, fetchedAt: Date.now() };
       }
+      setIsDelete2FAModalOpen(false);
+      setDelete2FACode('');
       setSuccessMessage('Backup de chaves na nuvem excluído com sucesso.');
     } catch (err: any) {
-      setError(err?.message || 'Falha ao excluir o backup.');
+      const msg = err?.message || 'Falha ao excluir o backup.';
+      if (isDelete2FAModalOpen) {
+        setDelete2FAError(msg);
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsDeletingBackup(false);
     }
+  };
+
+  const handleDeleteBackup = async () => {
+    if (user?.two_factor_enabled) {
+      setDelete2FACode('');
+      setDelete2FAError(null);
+      setIsDelete2FAModalOpen(true);
+      return;
+    }
+
+    const confirmed = await showConfirm({
+      title: 'Excluir backup na nuvem',
+      message: 'O backup salvo no servidor será apagado. Suas mensagens continuam salvas nos aparelhos atuais.',
+      confirmText: 'Excluir backup',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+      icon: 'trash',
+    });
+    if (!confirmed) return;
+
+    await executeDeleteBackup();
   };
 
   const openRecoverySetup = () => {
@@ -189,189 +211,119 @@ export const SecurityView: React.FC = () => {
 
   return (
     <div>
-      <h4 className={MODAL_SECTION_HEADER_CLASS}>
-        Criptografia de Ponta a Ponta (E2EE)
-      </h4>
-
       {/* Alertas */}
       {error && (
-        <div className="flex items-center gap-2 p-3 mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <InlineAlert variant="error" className="mb-4">
+          {error}
+        </InlineAlert>
       )}
 
       {successMessage && (
-        <div className="flex items-center gap-2 p-3 mb-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{successMessage}</span>
-        </div>
+        <InlineAlert variant="success" className="mb-4">
+          {successMessage}
+        </InlineAlert>
       )}
 
-      <div className="rounded-2xl bg-background-darker/60 border border-white/5 p-4 divide-y divide-white/5">
+      <SettingsGroup title="Criptografia de Ponta a Ponta (E2EE)">
         {/* 1. Identidade Criptográfica (Este Aparelho) */}
-        <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Identidade deste Aparelho</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                VODOZEMAC ATIVO
-              </span>
-            </div>
-            <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
-              {identityKeys ? (
-                <>
-                  Chave pública Ed25519:{' '}
-                  <span className="font-mono text-gray-300 select-all">
-                    {identityKeys.ed25519.slice(0, 10)}...{identityKeys.ed25519.slice(-10)}
-                  </span>
-                  . Suas conversas em DMs e canais habilitados são protegidas localmente.
-                </>
-              ) : (
-                'Inicializando chaves criptográficas do dispositivo...'
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label="Copiar chave pública Ed25519"
-            onClick={handleCopyKey}
-            disabled={!identityKeys}
-            className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center gap-1.5 self-start sm:self-auto shrink-0`}
-          >
-            {copiedKey ? (
+        <SettingsRow
+          label="Identidade deste Aparelho"
+          badge={
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              VODOZEMAC ATIVO
+            </span>
+          }
+          description={
+            identityKeys ? (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Copiado!</span>
+                Chave pública Ed25519:{' '}
+                <span className="font-mono text-gray-300 select-all">
+                  {identityKeys.ed25519.slice(0, 10)}...{identityKeys.ed25519.slice(-10)}
+                </span>
               </>
             ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copiar Chave</span>
-              </>
-            )}
-          </button>
-        </div>
+              'Inicializando chaves criptográficas do dispositivo...'
+            )
+          }
+        />
 
         {/* 2. Backup Automático de Chaves na Nuvem (Opt-out) */}
-        <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} space-y-2.5`}>
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-0.5 pr-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Backup Automático de Chaves (Nuvem)</span>
-                {user?.e2ee_backup_enabled !== false ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    ATIVADO (PADRÃO)
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
-                    DESATIVADO (OPT-OUT)
-                  </span>
-                )}
-              </div>
-              <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
-                {user?.e2ee_backup_enabled !== false
-                  ? (backupStatus.exists
-                      ? `Seu backup criptografado contém ${backupStatus.keyCount || 0} sessões protegidas com chave AES-GCM-256 derivada da sua conta.`
-                      : 'O backup automático está ativado por padrão. Suas chaves de sessões criptografadas são salvas na nuvem de ponta a ponta.')
-                  : 'Você optou por desativar o backup. Novas mensagens e conversas não poderão ser lidas em outros navegadores ou aparelhos sem exportação manual.'}
-              </p>
-            </div>
-
-            {/* Opt-out Toggle Switch */}
-            <button
-              type="button"
-              role="switch"
-              aria-label={user?.e2ee_backup_enabled !== false ? 'Desativar backup automático de chaves' : 'Ativar backup automático de chaves'}
-              aria-checked={user?.e2ee_backup_enabled !== false}
-              onClick={handleToggleBackup}
-              disabled={isSyncingBackup}
-              className={`${MODAL_SWITCH_CONTAINER_CLASS} disabled:opacity-50 ${
-                user?.e2ee_backup_enabled !== false ? 'bg-brand-500' : 'bg-white/10'
-              }`}
-              title={user?.e2ee_backup_enabled !== false ? 'Clique para desativar (Opt-out)' : 'Clique para ativar o backup'}
-            >
-              <div
-                className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                  user?.e2ee_backup_enabled !== false ? 'translate-x-6' : 'translate-x-0'
-                }`}
+        <SettingsRow
+          label="Backup Automático de Chaves (Nuvem)"
+          badge={
+            user?.e2ee_backup_enabled !== false ? (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                ATIVADO (PADRÃO)
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
+                DESATIVADO (OPT-OUT)
+              </span>
+            )
+          }
+          description={
+            user?.e2ee_backup_enabled !== false
+              ? (backupStatus.exists
+                  ? `Seu backup criptografado contém ${backupStatus.keyCount || 0} sessões protegidas.`
+                  : 'O backup automático está ativado por padrão. Suas chaves de sessões criptografadas são salvas na nuvem de ponta a ponta.')
+              : 'Você optou por desativar o backup. Novas mensagens e conversas não poderão ser lidas em outros navegadores ou aparelhos sem exportação manual.'
+          }
+          control={
+            <div className="flex items-center gap-2.5">
+              {user?.e2ee_backup_enabled === false && backupStatus.exists && (
+                <ModalButton
+                  type="error"
+                  size="small"
+                  onClick={handleDeleteBackup}
+                  loading={isDeletingBackup}
+                  prefix={<Trash2 className="w-3.5 h-3.5" />}
+                  title="Apagar permanentemente o backup das suas chaves no servidor"
+                >
+                  {isDeletingBackup ? 'Excluindo...' : 'Excluir Backup'}
+                </ModalButton>
+              )}
+              <SquishSwitch
+                checked={user?.e2ee_backup_enabled !== false}
+                onCheckedChange={handleToggleBackup}
+                disabled={isSyncingBackup}
+                aria-label={user?.e2ee_backup_enabled !== false ? 'Desativar backup automático de chaves' : 'Ativar backup automático de chaves'}
+                title={user?.e2ee_backup_enabled !== false ? 'Clique para desativar (Opt-out)' : 'Clique para ativar o backup'}
               />
-            </button>
-          </div>
-
+            </div>
+          }
+        >
           {/* Action buttons row */}
           <div className="flex items-center gap-2 pt-0.5 flex-wrap">
             {user?.e2ee_backup_enabled !== false && (
-              <button
-                type="button"
+              <ModalButton
+                type="primary"
+                size="small"
                 onClick={handleSyncBackupNow}
-                disabled={isSyncingBackup}
-                className={`${MODAL_PRIMARY_BUTTON_CLASS} !px-3.5 !py-2 sm:!py-1.5`}
+                loading={isSyncingBackup}
+                prefix={<RefreshCw className="w-3.5 h-3.5" />}
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingBackup ? 'animate-spin' : ''}`} />
-                <span>{isSyncingBackup ? 'Sincronizando...' : 'Sincronizar Agora'}</span>
-              </button>
+                {isSyncingBackup ? 'Sincronizando...' : 'Sincronizar Agora'}
+              </ModalButton>
             )}
 
-            <button
-              type="button"
+            <ModalButton
+              type="secondary"
+              size="small"
               onClick={openRecoverySetup}
-              className={MODAL_SECONDARY_BUTTON_CLASS}
             >
               Chave de Recuperação Offline
-            </button>
+            </ModalButton>
 
-            <button
-              type="button"
+            <ModalButton
+              type="secondary"
+              size="small"
               onClick={openRecoveryRestore}
-              className={MODAL_SECONDARY_BUTTON_CLASS}
             >
               Restaurar Manualmente
-            </button>
+            </ModalButton>
           </div>
-        </div>
-
-        {/* 3. Excluir Backup de Chaves na Nuvem (apenas se existir) */}
-        {backupStatus.exists && (
-          <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-            <div className="space-y-0.5">
-              <span className="text-sm font-bold text-dnd block">Excluir Backup da Nuvem</span>
-              <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
-                Apaga permanentemente o backup das suas chaves no servidor. Suas conversas continuarão salvas nos seus aparelhos atuais.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleDeleteBackup}
-              disabled={isDeletingBackup}
-              className={`${MODAL_DANGER_BUTTON_CLASS} self-start sm:self-auto shrink-0`}
-            >
-              {isDeletingBackup ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Excluindo...</span>
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Excluir Backup</span>
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
-        {/* 4. Integração com Sessões & Dispositivos */}
-        <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-3`}>
-          <div className="space-y-0.5">
-            <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Gerenciamento de Aparelhos</span>
-            <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
-              Para verificar chaves com outros aparelhos, ver sessões ativas ou desconectar computadores remotos, acesse a aba <strong className="text-gray-200">Sessões & Dispositivos</strong>.
-            </p>
-          </div>
-          <ShieldCheck className="w-5 h-5 text-brand-400 shrink-0" />
-        </div>
-      </div>
+        </SettingsRow>
+      </SettingsGroup>
 
       {/* Modal de Recuperação */}
       <RecoveryKeyModal
@@ -380,6 +332,58 @@ export const SecurityView: React.FC = () => {
         onClose={() => setIsRecoveryModalOpen(false)}
         onSuccess={() => loadSecurityState(true)}
       />
+
+      {/* Modal 2FA para excluir backup */}
+      <AppModal
+        isOpen={isDelete2FAModalOpen}
+        onClose={() => !isDeletingBackup && setIsDelete2FAModalOpen(false)}
+        titleId="delete-backup-2fa-title"
+        closeOnBackdrop={!isDeletingBackup}
+        closeOnEsc={!isDeletingBackup}
+      >
+        <AppModalHeader
+          title="Excluir backup na nuvem"
+          titleId="delete-backup-2fa-title"
+          onClose={() => setIsDelete2FAModalOpen(false)}
+          closeDisabled={isDeletingBackup}
+        />
+        <AppModalBody
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!delete2FACode.trim()) {
+              setDelete2FAError('Digite o código 2FA ou código de backup.');
+              return;
+            }
+            void executeDeleteBackup(delete2FACode.trim());
+          }}
+        >
+          <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">
+            O backup salvo no servidor será apagado. Suas mensagens continuam salvas nos aparelhos atuais.
+          </p>
+          {delete2FAError && <InlineAlert variant="error">{delete2FAError}</InlineAlert>}
+          <AppInput
+            label="Código 2FA (6 dígitos ou backup)"
+            value={delete2FACode}
+            onChange={(e) => {
+              setDelete2FACode(e.target.value);
+              setDelete2FAError(null);
+            }}
+            maxLength={16}
+            placeholder="000000"
+            className="font-mono tracking-wider"
+            autoFocus
+          />
+          <AppModalFooter
+            onCancel={() => setIsDelete2FAModalOpen(false)}
+            cancelDisabled={isDeletingBackup}
+            confirmText={isDeletingBackup ? 'Excluindo...' : 'Excluir backup'}
+            confirmType="error"
+            confirmHtmlType="submit"
+            loading={isDeletingBackup}
+            disabled={!delete2FACode.trim()}
+          />
+        </AppModalBody>
+      </AppModal>
     </div>
   );
 };

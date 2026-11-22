@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, UserPlus, Check, Shield } from 'lucide-react';
+import { Check, Shield } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
 import { formatAssetUrl } from '../../lib/api';
 import { DMGroup } from '../../types';
 import {
-  MODAL_TITLE_CLASS,
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
+import { InlineAlert } from '@/components/ui/inline-alert';
+import {
   MODAL_FIELD_LABEL_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
-  MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_BACKDROP_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface AddDMGroupMembersModalProps {
@@ -52,17 +53,6 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
   if (!isOpen || !group) return null;
 
   const toggleFriend = (friendId: string) => {
@@ -98,57 +88,34 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
   };
 
   return createPortal(
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="add-dm-group-members-modal-title"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-dm-group-members-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
-          <div className="flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-brand-400" />
-            <div>
-              <h2 id="add-dm-group-members-modal-title" className={MODAL_TITLE_CLASS}>Adicionar ao Grupo</h2>
-              <p className="text-xs text-gray-400">{group.name || 'Grupo de DM'}</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="text-gray-400 hover:text-white cursor-pointer p-2 rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+      <AppModalHeader
+        title="Adicionar ao Grupo"
+        subtitle={group.name || 'Grupo de DM'}
+        titleId="add-dm-group-members-modal-title"
+        onClose={onClose}
+      />
 
-        {/* Form */}
-        <form onSubmit={handleAdd} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto flex-1 no-scrollbar`}>
-          {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg">{error}</div>}
+      <AppModalBody onSubmit={handleAdd}>
+          {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
           {group.e2ee_enabled && (
-            <div className="p-3 rounded-xl bg-brand-500/10 border border-brand-500/20 text-xs text-brand-300 flex items-start gap-2.5">
-              <Shield className="w-4 h-4 text-brand-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="font-semibold text-white">Grupo Criptografado (E2EE)</p>
-                <p className="text-[11px] text-gray-300 leading-tight mt-0.5">
-                  Por segurança e isolamento de histórico, novos membros adicionados não terão acesso a mensagens anteriores ao seu ingresso.
-                </p>
-              </div>
-            </div>
+            <InlineAlert variant="info" icon={<Shield className="w-4 h-4 text-brand-400" />}>
+              <p className="font-semibold text-white">Grupo Criptografado (E2EE)</p>
+              <p className="text-[11px] text-gray-300 leading-tight mt-0.5">
+                Novos membros não terão acesso a mensagens anteriores.
+              </p>
+            </InlineAlert>
           )}
 
           {maxAddable === 0 && (
-            <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs rounded-xl">
+            <InlineAlert variant="warning">
               Este grupo atingiu a capacidade máxima de 15 membros.
-            </div>
+            </InlineAlert>
           )}
 
           {/* Friends Selection */}
@@ -167,7 +134,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
                 <p className="text-xs text-gray-400">
                   {friends.length === 0
                     ? 'Você ainda não tem amigos adicionados.'
-                    : 'Todos os seus amigos já estão neste grupo!'}
+                    : 'Todos os seus amigos já estão neste grupo.'}
                 </p>
               </div>
             ) : (
@@ -226,26 +193,16 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
             )}
           </div>
 
-          {/* Footer actions */}
-          <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
-            <button
-              type="button"
-              onClick={onClose}
-              className={MODAL_CANCEL_BUTTON_CLASS}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || selectedFriendIds.length === 0 || maxAddable <= 0}
-              className={MODAL_PRIMARY_BUTTON_CLASS}
-            >
-              {isLoading ? 'Adicionando...' : `Adicionar (${selectedFriendIds.length})`}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
+          <AppModalFooter
+            align="end"
+            onCancel={onClose}
+            confirmText={isLoading ? 'Adicionando...' : `Adicionar (${selectedFriendIds.length})`}
+            confirmHtmlType="submit"
+            loading={isLoading}
+            disabled={selectedFriendIds.length === 0 || maxAddable <= 0}
+          />
+        </AppModalBody>
+      </AppModal>,
     document.body
   );
 };

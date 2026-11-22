@@ -13,8 +13,14 @@ export async function convertToWebP(
   file: File,
   options?: { quality?: number; maxWidth?: number; maxHeight?: number }
 ): Promise<File> {
-  // If it's not an image, or if it's an animated GIF, preserve original format
-  if (!file.type.startsWith('image/') || isGif(file)) {
+  // If it's not an image, or if it's GIF/SVG/ICO, preserve original format
+  if (
+    !file.type.startsWith('image/') ||
+    isGif(file) ||
+    file.type === 'image/svg+xml' ||
+    file.type === 'image/x-icon' ||
+    file.type === 'image/vnd.microsoft.icon'
+  ) {
     return file;
   }
 

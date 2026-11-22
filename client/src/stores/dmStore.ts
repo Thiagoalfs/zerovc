@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DMRoom, DMMessage } from '../types';
-import { api } from '../lib/api';
+import { api, uploadAttachmentFiles } from '../lib/api';
 import { playMessageSound, speakText } from '../utils/audio';
 import { isChatActiveNow } from '../utils/activeChat';
 import { useAuthStore } from './authStore';
@@ -37,7 +37,7 @@ interface DMState {
   openDMWithUser: (recipientId: string) => Promise<DMRoom>;
   closeRoom: (roomId: string) => Promise<void>;
   enableE2EE: (roomId: string) => Promise<void>;
-  sendMessage: (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File) => Promise<void>;
+  sendMessage: (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File | File[]) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   removeMessageFromStore: (messageId: string, roomId?: string) => void;
@@ -322,7 +322,7 @@ export const useDMStore = create<DMState>((set, get) => ({
     }));
   },
 
-  sendMessage: async (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File) => {
+  sendMessage: async (content: string, attachments?: any[], replyToId?: string, isTTS?: boolean, file?: File | File[]) => {
     const { activeRoom, messages } = get();
     if (!activeRoom) return;
     const currentUser = useAuthStore.getState().user;
@@ -341,13 +341,16 @@ export const useDMStore = create<DMState>((set, get) => ({
     }
 
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    const abortController = file ? new AbortController() : null;
+    const filesToUpload = Array.isArray(file) ? file : file ? [file] : [];
+    const totalSize = filesToUpload.reduce((sum, f) => sum + f.size, 0);
+    const displayName = filesToUpload.length > 1 ? `${filesToUpload.length} arquivos` : filesToUpload[0]?.name || '';
+    const abortController = filesToUpload.length > 0 ? new AbortController() : null;
 
-    if (file && abortController) {
+    if (filesToUpload.length > 0 && abortController) {
       useUploadStore.getState().startUpload({
         id: tempId,
-        fileName: file.name,
-        fileSize: file.size,
+        fileName: displayName,
+        fileSize: totalSize,
         progress: 0,
         abortController,
         onCancel: () => get().removeMessageFromStore(tempId, activeRoom.id),
@@ -370,10 +373,10 @@ export const useDMStore = create<DMState>((set, get) => ({
       encrypted: Boolean(activeRoom.e2ee_enabled),
       decryption_status: activeRoom.e2ee_enabled ? 'decrypted' : 'plaintext',
       status: 'sending',
-      uploadingFile: file
+      uploadingFile: filesToUpload.length > 0
         ? {
-            name: file.name,
-            size: file.size,
+            name: displayName,
+            size: totalSize,
           }
         : undefined,
       created_at: new Date().toISOString(),
@@ -401,20 +404,13 @@ export const useDMStore = create<DMState>((set, get) => ({
       let e2eePayload: { encrypted: true; e2ee_ciphertext: string; e2ee_meta: any } | null = null;
       const clientMsgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-      if (file && abortController) {
-        const optimizedFile = await optimizeImageForUpload(file, { maxWidth: 2048, maxHeight: 2048, quality: 0.85 });
-        const uploaded = await api.upload.attachment(optimizedFile, {
-          signal: abortController.signal,
-          onProgress: (percent) => {
-            useUploadStore.getState().updateProgress(tempId, percent);
-          },
+      if (filesToUpload.length > 0 && abortController) {
+        const urls = await uploadAttachmentFiles(filesToUpload, abortController.signal, (percent) => {
+          useUploadStore.getState().updateProgress(tempId, percent);
         });
         useUploadStore.getState().removeUpload(tempId);
-        const isVoiceFile = file.type.startsWith('audio/') || file.name.startsWith('voice-message-');
-        const mediaUrl = isVoiceFile && !uploaded.url.includes('voice=1')
-          ? `${uploaded.url}${uploaded.url.includes('?') ? '&' : '?'}voice=1`
-          : uploaded.url;
-        finalContent = finalContent ? `${finalContent}\n${mediaUrl}` : mediaUrl;
+        const joinedUrls = urls.join('\n');
+        finalContent = finalContent ? `${finalContent}\n${joinedUrls}` : joinedUrls;
       }
 
       if (activeRoom.e2ee_enabled) {

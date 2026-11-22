@@ -6,7 +6,6 @@ import {
   Trash2,
   AlertTriangle,
   Loader2,
-  CheckCircle2,
   RefreshCw,
   Clock,
   MapPin,
@@ -16,16 +15,15 @@ import { api } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { UserSession } from '../../types';
 import { fetchLocationFromIP } from '../../utils/location';
+import { ModalButton } from '@/components/ui/modal-button';
+import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
+import { InlineAlert } from '@/components/ui/inline-alert';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
-  MODAL_SECTION_HEADER_CLASS,
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_CARD_PADDING_CLASS,
   MODAL_ITEM_ROW_PADDING_CLASS,
-  MODAL_DIVIDER_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_SECONDARY_BUTTON_CLASS,
-  MODAL_DANGER_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface DeviceItem {
@@ -272,18 +270,16 @@ export const SessionsSettingsView: React.FC = () => {
     <div className="space-y-6">
       {/* Success Banner */}
       {successMessage && (
-        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{successMessage}</span>
-        </div>
+        <InlineAlert variant="success" className="animate-in fade-in">
+          {successMessage}
+        </InlineAlert>
       )}
 
       {/* Error Banner */}
       {error && (
-        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs animate-in fade-in">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <InlineAlert variant="error" className="animate-in fade-in">
+          {error}
+        </InlineAlert>
       )}
 
       {isLoading && sessions.length === 0 ? (
@@ -295,23 +291,22 @@ export const SessionsSettingsView: React.FC = () => {
         <div className="space-y-6">
           {/* Current Device */}
           {currentSession && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                  Este Dispositivo
-                </h4>
-                <button
-                  type="button"
+            <SettingsGroup
+              title="Este Dispositivo"
+              action={
+                <ModalButton
+                  type="tertiary"
+                  svgOnly
+                  size="small"
                   aria-label="Atualizar lista de sessões ativas"
                   onClick={() => loadData(true)}
-                  disabled={isLoading}
-                  className="p-1.5 -mt-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  loading={isLoading}
                   title="Atualizar lista de sessões"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-brand-400' : ''}`} />
-                </button>
-              </div>
-
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </ModalButton>
+              }
+            >
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 py-1">
                 <div className="flex items-start gap-3.5 min-w-0">
                   <div className="p-2.5 rounded-xl bg-white/5 text-brand-300 shrink-0 mt-0.5">
@@ -342,114 +337,98 @@ export const SessionsSettingsView: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </SettingsGroup>
           )}
 
-          {/* Divider */}
-          <div className={MODAL_DIVIDER_CLASS} />
-
           {/* Other Devices List */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                Outros Dispositivos Conectados ({otherSessions.length})
-              </h4>
-              {otherSessions.length > 0 && (
-                <button
-                  type="button"
+          <SettingsGroup
+            title={`Outros Dispositivos Conectados (${otherSessions.length})`}
+            action={
+              otherSessions.length > 0 && (
+                <ModalButton
+                  type="error"
+                  size="tiny"
                   onClick={() => setConfirmRevokeOtherOpen(true)}
                   disabled={isRevokingOthers}
-                  className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors cursor-pointer hover:underline disabled:opacity-50"
                 >
                   Encerrar todas as outras sessões
-                </button>
-              )}
-            </div>
-
+                </ModalButton>
+              )
+            }
+          >
             {otherSessions.length === 0 ? (
               <div className="py-4 text-xs text-gray-500">
                 Nenhum outro computador ou celular conectado no momento.
               </div>
             ) : (
-              <div className="divide-y divide-white/5">
-                {otherSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors`}
-                  >
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className="p-2 rounded-xl bg-white/5 text-gray-400 shrink-0 mt-0.5">
-                        {getDeviceIcon(session.device_type, session.os)}
+              otherSessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors`}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-white/5 text-gray-400 shrink-0 mt-0.5">
+                      {getDeviceIcon(session.device_type, session.os)}
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
+                          {session.os || 'Dispositivo Remoto'} • {session.browser || 'Navegador'}
+                        </span>
                       </div>
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
-                            {session.os || 'Dispositivo Remoto'} • {session.browser || 'Navegador'}
-                          </span>
-                        </div>
 
-                        <div className={`flex items-center gap-3 ${MODAL_DESCRIPTION_CLASS} flex-wrap`}>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-gray-500" />
-                            {formatLastActive(session.last_active_at)}
-                          </span>
-                          <SessionLocationItem ip={session.ip_address} isSmall />
-                        </div>
+                      <div className={`flex items-center gap-3 ${MODAL_DESCRIPTION_CLASS} flex-wrap`}>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-gray-500" />
+                          {formatLastActive(session.last_active_at)}
+                        </span>
+                        <SessionLocationItem ip={session.ip_address} isSmall />
                       </div>
                     </div>
-
-                    <button
-                      type="button"
-                      aria-label={`Desconectar sessão em ${session.os || 'dispositivo'} ${session.browser || ''}`}
-                      onClick={() => setConfirmRevokeSingle(session)}
-                      disabled={revokingId === session.id}
-                      className="p-2 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                      title="Desconectar este dispositivo"
-                    >
-                      {revokingId === session.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-red-400" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
-                    </button>
                   </div>
-                ))}
-              </div>
+
+                  <ModalButton
+                    type="tertiary"
+                    svgOnly
+                    size="small"
+                    aria-label={`Desconectar sessão em ${session.os || 'dispositivo'} ${session.browser || ''}`}
+                    onClick={() => setConfirmRevokeSingle(session)}
+                    loading={revokingId === session.id}
+                    className="shrink-0 hover:text-red-400 hover:bg-red-500/10"
+                    title="Desconectar este dispositivo"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </ModalButton>
+                </div>
+              ))
             )}
-          </div>
+          </SettingsGroup>
 
           {/* Additional Devices without active web session (e.g. background clients) */}
           {otherDevices.length > otherSessions.length && (
-            <div className="space-y-3 pt-2">
-              <div className={MODAL_DIVIDER_CLASS} />
-              <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                Aparelhos Adicionais
-              </h4>
-              <div className="divide-y divide-white/5">
-                {otherDevices.slice(otherSessions.length).map((dev) => (
-                  <div key={dev.id} className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-3`}>
-                    <div className="space-y-0.5">
-                      <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>
-                        Aparelho {dev.id.slice(0, 8)}...
-                      </span>
-                      <p className={MODAL_DESCRIPTION_CLASS}>
-                        Dispositivo secundário registrado
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
+            <SettingsGroup title="Aparelhos Adicionais">
+              {otherDevices.slice(otherSessions.length).map((dev) => (
+                <SettingsRow
+                  key={dev.id}
+                  label={`Aparelho ${dev.id.slice(0, 8)}...`}
+                  description="Dispositivo secundário registrado"
+                  control={
+                    <ModalButton
+                      type="tertiary"
+                      svgOnly
+                      size="small"
                       onClick={() => handleRevokeDeviceOnly(dev.id)}
-                      disabled={revokingId === dev.id}
-                      className="p-2 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                      loading={revokingId === dev.id}
+                      className="hover:text-red-400 hover:bg-red-500/10"
                       title="Desconectar este aparelho"
+                      aria-label="Desconectar este aparelho"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+                    </ModalButton>
+                  }
+                />
+              ))}
+            </SettingsGroup>
           )}
         </div>
       )}
@@ -468,23 +447,23 @@ export const SessionsSettingsView: React.FC = () => {
               O dispositivo <strong className="text-white">{confirmRevokeSingle.os} ({confirmRevokeSingle.browser})</strong> será desconectado imediatamente da sua conta.
             </p>
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
+              <ModalButton
+                type="secondary"
+                size="small"
                 onClick={() => setConfirmRevokeSingle(null)}
                 disabled={Boolean(revokingId)}
-                className={MODAL_SECONDARY_BUTTON_CLASS}
               >
                 Cancelar
-              </button>
-              <button
-                type="button"
+              </ModalButton>
+              <ModalButton
+                type="error"
+                size="small"
                 onClick={() => handleRevokeSingle(confirmRevokeSingle)}
-                disabled={Boolean(revokingId)}
-                className={MODAL_DANGER_BUTTON_CLASS}
+                loading={Boolean(revokingId)}
+                prefix={<Trash2 className="w-3.5 h-3.5" />}
               >
-                {revokingId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                <span>Desconectar</span>
-              </button>
+                Desconectar
+              </ModalButton>
             </div>
           </div>
         </div>
@@ -504,23 +483,23 @@ export const SessionsSettingsView: React.FC = () => {
               Todos os outros computadores, celulares e navegadores onde sua conta está conectada serão deslogados imediatamente. Apenas este dispositivo permanecerá conectado.
             </p>
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
+              <ModalButton
+                type="secondary"
+                size="small"
                 onClick={() => setConfirmRevokeOtherOpen(false)}
                 disabled={isRevokingOthers}
-                className={MODAL_SECONDARY_BUTTON_CLASS}
               >
                 Cancelar
-              </button>
-              <button
-                type="button"
+              </ModalButton>
+              <ModalButton
+                type="error"
+                size="small"
                 onClick={handleRevokeOthers}
-                disabled={isRevokingOthers}
-                className={MODAL_DANGER_BUTTON_CLASS}
+                loading={isRevokingOthers}
+                prefix={<Trash2 className="w-3.5 h-3.5" />}
               >
-                {isRevokingOthers ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                <span>Desconectar Todos</span>
-              </button>
+                Desconectar Todos
+              </ModalButton>
             </div>
           </div>
         </div>

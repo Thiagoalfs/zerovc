@@ -13,8 +13,8 @@ import { copyToClipboard } from '../../../utils/clipboard';
 import {
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
 } from '../../../constants/modalTypography';
+import { ModalButton } from '@/components/ui/modal-button';
 
 interface EmojisTabProps {
   emojisList: GuildEmoji[];
@@ -70,37 +70,32 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
 
         {/* Mobile-only Upload Button */}
         <div className="md:hidden">
-          <button
-            type="button"
+          <ModalButton
+            type="primary"
+            size="small"
             onClick={() => emojiInputRef.current?.click()}
-            disabled={(!isOwner && !hasAdmin && !canManageGuild) || isUploadingEmoji}
-            className={MODAL_PRIMARY_BUTTON_CLASS}
+            disabled={!isOwner && !hasAdmin && !canManageGuild}
+            loading={isUploadingEmoji}
+            prefix={<Upload className="w-3.5 h-3.5" />}
           >
-            {isUploadingEmoji ? (
-              <>
-                <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white/20 border-t-white" />
-                <span>Carregando...</span>
-              </>
-            ) : (
-              <>
-                <Upload className="w-3.5 h-3.5" />
-                <span>Carregar Emoji</span>
-              </>
-            )}
-          </button>
+            {isUploadingEmoji ? 'Carregando...' : 'Carregar Emoji'}
+          </ModalButton>
         </div>
       </div>
 
       {emojiError && (
         <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center justify-between animate-fade-in">
           <span>{emojiError}</span>
-          <button
-            type="button"
+          <ModalButton
+            type="tertiary"
+            shape="circle"
+            size="tiny"
+            svgOnly
+            aria-label="Fechar erro"
             onClick={() => setEmojiError('')}
-            className="p-1 hover:text-white rounded transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
-          </button>
+          </ModalButton>
         </div>
       )}
 
@@ -171,31 +166,35 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
                       {em.creator ? `@${em.creator.username}` : ''}
                     </span>
                     <div className="flex items-center gap-1">
-                      <button
-                        type="button"
+                      <ModalButton
+                        type="tertiary"
+                        size="tiny"
+                        svgOnly
                         onClick={() => {
                           copyToClipboard(`:${em.name}:`);
                           setCopiedEmojiId(em.id);
                           setTimeout(() => setCopiedEmojiId(null), 2000);
                         }}
-                        className="p-1 text-gray-400 hover:text-white rounded transition-colors cursor-pointer"
                         title="Copiar código :nome:"
+                        aria-label="Copiar código"
                       >
                         {isCopied ? (
                           <Check className="w-3.5 h-3.5 text-emerald-400" />
                         ) : (
                           <Copy className="w-3.5 h-3.5" />
                         )}
-                      </button>
+                      </ModalButton>
                       {(isOwner || hasAdmin || canManageGuild) && (
-                        <button
-                          type="button"
+                        <ModalButton
+                          type="error"
+                          size="tiny"
+                          svgOnly
                           onClick={() => handleDeleteEmoji(em.id, em.name)}
-                          className="p-1 text-red-400 hover:text-red-300 rounded transition-colors cursor-pointer"
                           title="Excluir Emoji"
+                          aria-label="Excluir Emoji"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        </ModalButton>
                       )}
                     </div>
                   </div>

@@ -3,6 +3,7 @@ import { X, Copy, Download, Link, ExternalLink } from 'lucide-react';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { copyToClipboard } from '../../utils/clipboard';
+import { ModalButton } from '@/components/ui/modal-button';
 import { MODAL_BACKDROP_CLASS } from '../../constants/modalTypography';
 
 interface ImageModalProps {
@@ -179,18 +180,21 @@ export const ImageModal: React.FC<ImageModalProps> = ({ imageUrl, isOpen, onClos
         onClick={onClose}
       >
         {/* Close button outside the image */}
-        <button
-          type="button"
+        <ModalButton
+          type="tertiary"
+          shape="circle"
+          size="small"
+          svgOnly
           aria-label="Fechar"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }}
-          className="fixed top-4 right-4 sm:top-6 sm:right-6 z-50 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white/80 hover:text-white border border-white/15 backdrop-blur-md transition-all shadow-2xl active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="fixed top-4 right-4 sm:top-6 sm:right-6 z-50 bg-black/60 hover:bg-black/90 text-white/80 hover:text-white border border-white/15 backdrop-blur-md shadow-2xl"
           title="Fechar (Esc)"
         >
           <X className="w-5 h-5 sm:w-6 sm:h-6" />
-        </button>
+        </ModalButton>
 
         {/* Image container: 75% viewport max on desktop, 100% horizontal on mobile */}
         <div

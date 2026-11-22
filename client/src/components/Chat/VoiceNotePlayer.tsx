@@ -22,9 +22,10 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, className
     <VoiceNote
       src={src}
       seed={seed}
+      bars={32}
       size="md"
       accent="#6366f1"
-      className={`w-[280px] sm:w-[320px] ${className}`.trim()}
+      className={`w-fit max-w-full ${className}`.trim()}
     />
   );
 };

@@ -663,10 +663,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
               {requires2FA ? (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-300 uppercase mb-2 flex items-center justify-center gap-1">
-                      <KeyRound className="w-3.5 h-3.5 text-brand-400" />
-                      <span>{useBackupCode ? 'Código de Backup (8 caracteres)' : 'Código 2FA (6 dígitos)'}</span>
-                    </label>
+                    {useBackupCode && (
+                      <label className="block text-xs font-medium text-gray-300 uppercase mb-2 flex items-center justify-center gap-1">
+                        <KeyRound className="w-3.5 h-3.5 text-brand-400" />
+                        <span>Código de Backup (8 caracteres)</span>
+                      </label>
+                    )}
                     {useBackupCode ? (
                       <input
                         type="text"

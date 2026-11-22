@@ -1,105 +1,79 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
-import {
-  MODAL_TOGGLE_HEADER_CLASS,
-  MODAL_SECTION_HEADER_CLASS,
-  MODAL_ITEM_ROW_PADDING_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_SWITCH_CONTAINER_CLASS,
-  MODAL_SWITCH_KNOB_CLASS,
-} from '../../constants/modalTypography';
+import { SquishSwitch } from '../ui/squish-switch';
+import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
+import { InlineAlert } from '@/components/ui/inline-alert';
 
 export const ActivityPrivacySettingsView: React.FC = () => {
   const { user, updateProfile, setUser } = useAuthStore();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const inFlightRef = useRef({ show_activity_status: false, auto_detect_activity: false });
+  const desiredRef = useRef<{ show_activity_status?: boolean; auto_detect_activity?: boolean }>({});
 
   if (!user) return null;
+
+  const toggleField = async (field: 'show_activity_status' | 'auto_detect_activity', next: boolean) => {
+    const prev = user[field] !== false;
+    desiredRef.current[field] = next;
+    setErrorMsg(null);
+    setUser({ [field]: next });
+
+    if (inFlightRef.current[field]) return;
+    inFlightRef.current[field] = true;
+    let lastConfirmed = prev;
+    try {
+      while (desiredRef.current[field] !== lastConfirmed) {
+        const target = desiredRef.current[field]!;
+        try {
+          await updateProfile({ [field]: target });
+          lastConfirmed = target;
+        } catch (err: any) {
+          desiredRef.current[field] = lastConfirmed;
+          setUser({ [field]: lastConfirmed });
+          setErrorMsg(err?.message || 'Erro ao salvar configuração. Aguarde um instante.');
+          break;
+        }
+      }
+    } finally {
+      inFlightRef.current[field] = false;
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in">
       <div>
-        <h4 className={MODAL_SECTION_HEADER_CLASS}>
-          Status de Atividade & Jogos
-        </h4>
-
-        <div className="rounded-2xl bg-background-darker/60 border border-white/5 px-4 py-3.5 divide-y divide-white/5">
-          {/* Show Activity Status */}
-          <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-4`}>
-            <div className="space-y-0.5 pr-4">
-              <span
-                id="activity-status-toggle-label"
-                className={`${MODAL_TOGGLE_HEADER_CLASS} block`}
-              >
-                Exibir atividade atual como mensagem de status
-              </span>
-              <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
-                Permite que outros usuários vejam qual jogo ou aplicativo você está executando em seu perfil e na lista de membros.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-labelledby="activity-status-toggle-label"
-              aria-checked={user.show_activity_status !== false}
-              onClick={async () => {
-                const currentVal = user.show_activity_status !== false;
-                try {
-                  const updated = await updateProfile({ show_activity_status: !currentVal });
-                  setUser(updated);
-                } catch (err) {
-                  console.error('Failed to toggle show_activity_status:', err);
-                }
-              }}
-              className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                user.show_activity_status !== false ? 'bg-brand-500' : 'bg-white/10'
-              }`}
-            >
-              <div
-                className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                  user.show_activity_status !== false ? 'translate-x-6' : 'translate-x-0'
-                }`}
+        <SettingsGroup title="Status de Atividade & Jogos">
+          <SettingsRow
+            label="Exibir atividade atual como mensagem de status"
+            labelId="activity-status-toggle-label"
+            description="Permite que outros usuários vejam qual jogo ou aplicativo você está executando em seu perfil e na lista de membros."
+            control={
+              <SquishSwitch
+                aria-labelledby="activity-status-toggle-label"
+                checked={user.show_activity_status !== false}
+                onCheckedChange={(next) => toggleField('show_activity_status', next)}
               />
-            </button>
-          </div>
+            }
+          />
 
-          {/* Auto-detect activity in Electron */}
-          <div className={`${MODAL_ITEM_ROW_PADDING_CLASS} flex items-center justify-between gap-4`}>
-            <div className="space-y-0.5 pr-4">
-              <span
-                id="auto-detect-activity-toggle-label"
-                className={`${MODAL_TOGGLE_HEADER_CLASS} block`}
-              >
-                Detectar automaticamente jogos em execução
-              </span>
-              <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
-                Escaneia processos em segundo plano no desktop e sincroniza seu status de jogo em tempo real.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-labelledby="auto-detect-activity-toggle-label"
-              aria-checked={user.auto_detect_activity !== false}
-              onClick={async () => {
-                const currentVal = user.auto_detect_activity !== false;
-                try {
-                  const updated = await updateProfile({ auto_detect_activity: !currentVal });
-                  setUser(updated);
-                } catch (err) {
-                  console.error('Failed to toggle auto_detect_activity:', err);
-                }
-              }}
-              className={`${MODAL_SWITCH_CONTAINER_CLASS} ${
-                user.auto_detect_activity !== false ? 'bg-brand-500' : 'bg-white/10'
-              }`}
-            >
-              <div
-                className={`${MODAL_SWITCH_KNOB_CLASS} ${
-                  user.auto_detect_activity !== false ? 'translate-x-6' : 'translate-x-0'
-                }`}
+          <SettingsRow
+            label="Detectar automaticamente jogos em execução"
+            labelId="auto-detect-activity-toggle-label"
+            description="Escaneia processos em segundo plano no desktop e sincroniza seu status de jogo em tempo real."
+            control={
+              <SquishSwitch
+                aria-labelledby="auto-detect-activity-toggle-label"
+                checked={user.auto_detect_activity !== false}
+                onCheckedChange={(next) => toggleField('auto_detect_activity', next)}
               />
-            </button>
-          </div>
-        </div>
+            }
+          />
+        </SettingsGroup>
+        {errorMsg && (
+          <InlineAlert variant="error" className="mt-3">
+            {errorMsg}
+          </InlineAlert>
+        )}
       </div>
     </div>
   );

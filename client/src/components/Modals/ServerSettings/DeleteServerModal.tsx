@@ -1,18 +1,21 @@
 import React from 'react';
-import { X, Lock, Trash2, Loader2 } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { Guild, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
 import { OtpInput } from '../../ui/otp-input';
 import {
-  MODAL_DIALOG_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
-  MODAL_FOOTER_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_DANGER_BUTTON_CLASS,
-  MODAL_BACKDROP_CLASS,
 } from '../../../constants/modalTypography';
+import { ModalButton } from '@/components/ui/modal-button';
+import { AppInput } from '@/components/ui/app-input';
+import { InlineAlert } from '@/components/ui/inline-alert';
+import {
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
 
 interface DeleteServerModalProps {
   isOpen: boolean;
@@ -51,8 +54,6 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
   membersCount,
   is2FARequired,
 }) => {
-  if (!isOpen) return null;
-
   const [useBackupCode, setUseBackupCode] = React.useState(false);
   const has2FA = Boolean(user?.two_factor_enabled) || Boolean(is2FARequired);
 
@@ -64,200 +65,159 @@ export const DeleteServerModal: React.FC<DeleteServerModalProps> = ({
     .toUpperCase();
 
   return (
-    <div
-      className={MODAL_BACKDROP_CLASS}
-      onClick={onClose}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="delete-server-modal-title"
+      closeOnBackdrop={!isDeleting}
+      closeOnEsc={!isDeleting}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-server-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col text-gray-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} flex-shrink-0`}>
-          <div className="flex items-center justify-between mb-2">
-            <h2 id="delete-server-modal-title" className={`${MODAL_DIALOG_TITLE_CLASS} flex items-center gap-2`}>
-              <span>Excluir servidor</span>
-            </h2>
-            <button
-              type="button"
-              aria-label="Fechar"
-              onClick={onClose}
-              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <p className={MODAL_DESCRIPTION_CLASS}>
-            Tem certeza de que deseja excluir o servidor <span className="font-semibold text-white">"{activeGuild.name}"</span>? Esta ação não pode ser desfeita.
-          </p>
-        </div>
+      <AppModalHeader
+        title="Excluir servidor"
+        titleId="delete-server-modal-title"
+        onClose={onClose}
+        closeDisabled={isDeleting}
+      />
+
+      <AppModalBody>
+        <p className={MODAL_DESCRIPTION_CLASS}>
+          Tem certeza de que deseja excluir o servidor <span className="font-semibold text-white">"{activeGuild.name}"</span>? Esta ação não pode ser desfeita.
+        </p>
 
         {/* Server Preview Box */}
-        <div className="px-4 sm:px-6 py-2 overflow-y-auto chat-scrollbar flex-1">
-          <div className="bg-background-darkest/90 rounded-2xl p-3 border border-white/5 shadow-inner flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-brand-500 flex items-center justify-center font-bold text-white text-sm flex-shrink-0 overflow-hidden shadow-md">
-              {activeGuild.icon_url ? (
-                <img
-                  src={formatAssetUrl(activeGuild.icon_url)}
-                  alt={activeGuild.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span>{initials}</span>
-              )}
+        <div className="bg-background-darkest/90 rounded-2xl p-3 border border-white/5 shadow-inner flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-brand-500 flex items-center justify-center font-bold text-white text-sm flex-shrink-0 overflow-hidden shadow-md">
+            {activeGuild.icon_url ? (
+              <img
+                src={formatAssetUrl(activeGuild.icon_url)}
+                alt={activeGuild.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span>{initials}</span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-xs text-white truncate">
+              {activeGuild.name}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-xs text-white truncate">
-                {activeGuild.name}
-              </div>
-              <div className="text-[10px] text-gray-400 mt-0.5">
-                {membersCount} membro(s) • {(activeGuild.channels || []).length} canal(is)
-              </div>
+            <div className="text-[10px] text-gray-400 mt-0.5">
+              {membersCount} membro(s) • {(activeGuild.channels || []).length} canal(is)
             </div>
           </div>
+        </div>
 
-          {deleteError && (
-            <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs">
-              {deleteError}
-            </div>
-          )}
+        {deleteError && <InlineAlert variant="error">{deleteError}</InlineAlert>}
 
-          <div className="mt-4 space-y-1.5">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className={MODAL_FIELD_LABEL_CLASS}>
+              Digite o nome do servidor
+            </label>
+            <ModalButton
+              type="tertiary"
+              size="tiny"
+              onClick={() => {
+                setDeleteConfirmText(activeGuild.name);
+                if (deleteError) setDeleteError('');
+              }}
+            >
+              Preencher
+            </ModalButton>
+          </div>
+          <AppInput
+            type="text"
+            value={deleteConfirmText}
+            onChange={(e) => {
+              setDeleteConfirmText(e.target.value);
+              if (deleteError) setDeleteError('');
+            }}
+            placeholder={activeGuild.name}
+            autoFocus
+            className="text-xs focus:border-red-500"
+          />
+        </div>
+
+        {has2FA && (
+          <div className="space-y-2 animate-in fade-in">
             <div className="flex items-center justify-between">
-              <label className={MODAL_FIELD_LABEL_CLASS}>
-                DIGITE O NOME DO SERVIDOR
+              <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center gap-1.5`}>
+                <Lock className="w-3.5 h-3.5 text-brand-400" />
+                <span>{useBackupCode ? 'Código de backup (2FA)' : 'Código de autenticação (2FA)'}</span>
               </label>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                size="tiny"
                 onClick={() => {
-                  setDeleteConfirmText(activeGuild.name);
+                  setUseBackupCode((v) => !v);
+                  setTwoFactorCode('');
                   if (deleteError) setDeleteError('');
                 }}
-                className="text-[11px] text-brand-400 hover:text-brand-300 hover:underline cursor-pointer"
               >
-                Preencher
-              </button>
+                {useBackupCode ? 'Usar 6 dígitos' : 'Usar backup'}
+              </ModalButton>
             </div>
-            <input
-              type="text"
-              value={deleteConfirmText}
-              onChange={(e) => {
-                setDeleteConfirmText(e.target.value);
-                if (deleteError) setDeleteError('');
-              }}
-              placeholder={activeGuild.name}
-              autoFocus
-              className="w-full px-3 py-2 bg-background-darkest/90 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-red-500 transition-colors"
-            />
-          </div>
-
-          {has2FA && (
-            <div className="mt-4 space-y-2 animate-in fade-in">
-              <div className="flex items-center justify-between">
-                <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center gap-1.5`}>
-                  <Lock className="w-3.5 h-3.5 text-brand-400" />
-                  <span>{useBackupCode ? 'CÓDIGO DE BACKUP (2FA)' : 'CÓDIGO DE AUTENTICAÇÃO (2FA)'}</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUseBackupCode((v) => !v);
-                    setTwoFactorCode('');
-                    if (deleteError) setDeleteError('');
-                  }}
-                  className="text-[11px] text-brand-400 hover:text-brand-300 underline cursor-pointer"
-                >
-                  {useBackupCode ? 'Usar 6 dígitos' : 'Usar backup'}
-                </button>
-              </div>
-              {useBackupCode ? (
-                <input
-                  type="text"
-                  autoComplete="one-time-code"
-                  maxLength={12}
-                  value={twoFactorCode}
-                  onChange={(e) => {
-                    setTwoFactorCode(e.target.value);
-                    if (deleteError) setDeleteError('');
-                  }}
-                  placeholder="xxxx-xxxx"
-                  className="w-full px-3 py-2 bg-background-darkest/90 border border-white/10 rounded-xl text-white text-xs font-mono tracking-wider focus:outline-none focus:border-brand-500 transition-colors placeholder:font-sans placeholder:tracking-normal"
-                />
-              ) : (
-                <div className="flex justify-center pt-1">
-                  <OtpInput
-                    length={6}
-                    value={twoFactorCode}
-                    onChange={(val) => {
-                      setTwoFactorCode(val);
-                      if (deleteError) setDeleteError('');
-                    }}
-                    size="sm"
-                    status={deleteError ? 'error' : 'idle'}
-                    slotClassName="bg-background-darkest/90 border border-white/10"
-                  />
-                </div>
-              )}
-              <p className="text-[10px] text-gray-400">
-                Insira o código do seu aplicativo autenticador (Google Authenticator, Authy, etc.) ou um código de backup.
-              </p>
-            </div>
-          )}
-
-          <div className="mt-3 flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/5">
-            <input
-              type="checkbox"
-              id="delete-server-ack"
-              checked={isDeleteAcknowledged}
-              onChange={(e) => {
-                setIsDeleteAcknowledged(e.target.checked);
-                if (deleteError) setDeleteError('');
-              }}
-              className="w-4 h-4 rounded border-gray-600 bg-background-darkest text-red-600 focus:ring-red-500 cursor-pointer shrink-0"
-            />
-            <label
-              htmlFor="delete-server-ack"
-              className="text-xs text-gray-300 cursor-pointer select-none leading-tight"
-            >
-              Estou ciente de que todos os canais e mensagens serão excluídos permanentemente.
-            </label>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className={`${MODAL_FOOTER_PADDING_CLASS} bg-background-darkest/60 border-t border-white/5 flex items-center justify-end gap-3 mt-2 flex-shrink-0`}>
-          <button
-            type="button"
-            disabled={isDeleting}
-            onClick={onClose}
-            className={MODAL_CANCEL_BUTTON_CLASS}
-          >
-            Cancelar
-          </button>
-
-          <button
-            type="button"
-            disabled={isDeleting || (has2FA && !twoFactorCode.trim())}
-            onClick={onConfirmDelete}
-            className={MODAL_DANGER_BUTTON_CLASS}
-          >
-            {isDeleting ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Excluindo...</span>
-              </>
+            {useBackupCode ? (
+              <AppInput
+                type="text"
+                autoComplete="one-time-code"
+                maxLength={12}
+                value={twoFactorCode}
+                onChange={(e) => {
+                  setTwoFactorCode(e.target.value);
+                  if (deleteError) setDeleteError('');
+                }}
+                placeholder="xxxx-xxxx"
+                className="text-xs font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal"
+              />
             ) : (
-              <>
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Excluir Servidor</span>
-              </>
+              <div className="flex justify-center pt-1">
+                <OtpInput
+                  length={6}
+                  value={twoFactorCode}
+                  onChange={(val) => {
+                    setTwoFactorCode(val);
+                    if (deleteError) setDeleteError('');
+                  }}
+                  size="sm"
+                  status={deleteError ? 'error' : 'idle'}
+                  slotClassName="bg-background-darkest/90 border border-white/10"
+                />
+              </div>
             )}
-          </button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/5">
+          <input
+            type="checkbox"
+            id="delete-server-ack"
+            checked={isDeleteAcknowledged}
+            onChange={(e) => {
+              setIsDeleteAcknowledged(e.target.checked);
+              if (deleteError) setDeleteError('');
+            }}
+            className="w-4 h-4 rounded border-gray-600 bg-background-darkest text-red-600 focus:ring-red-500 cursor-pointer shrink-0"
+          />
+          <label
+            htmlFor="delete-server-ack"
+            className="text-xs text-gray-300 cursor-pointer select-none leading-tight"
+          >
+            Estou ciente de que todos os canais e mensagens serão excluídos permanentemente.
+          </label>
         </div>
-      </div>
-    </div>
+
+        <AppModalFooter
+          align="end"
+          onCancel={onClose}
+          cancelDisabled={isDeleting}
+          confirmText={isDeleting ? 'Excluindo...' : 'Excluir servidor'}
+          confirmType="error"
+          onConfirm={onConfirmDelete}
+          loading={isDeleting}
+          disabled={has2FA && !twoFactorCode.trim()}
+        />
+      </AppModalBody>
+    </AppModal>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X, Loader2, FileText, UploadCloud, Hash, Volume2, Lock, Mic, Terminal, Bot, Sparkles, CornerDownLeft, AlertCircle, AlertTriangle } from 'lucide-react';
+import { PlusCircle, SendHorizontal, Smile, X, FileText, UploadCloud, Hash, Volume2, Lock, Mic, Terminal, Bot, Sparkles, CornerDownLeft, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -13,6 +13,18 @@ import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { searchEmojiSuggestions, replaceEmojiShortcodes, EmojiSuggestion } from '../../utils/emojis';
 import { canUserSendTTS, canUserUseCommands, canUserSendMessages, canUserAttachFiles } from '../../utils/userActivity';
 import { optimizeImageForUpload } from '../../lib/imageOptimizer';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle,
+} from '@/components/ui/attachment';
 import { SLASH_COMMANDS, parseSlashCommand, SlashOption, SlashCommand, validateSlashOption } from '../../lib/slashCommands';
 
 interface MentionSuggestionItem {
@@ -46,10 +58,11 @@ interface MessageInputProps {
   placeholder?: string;
   replyingTo?: { id: string; author?: { username?: string; display_name?: string }; content: string } | null;
   onCancelReply?: () => void;
-  onSendMessage: (content: string, replyToId?: string, isTTS?: boolean, file?: File) => Promise<void>;
+  onSendMessage: (content: string, replyToId?: string, isTTS?: boolean, file?: File | File[]) => Promise<void>;
   onEditLastMessage?: () => void;
-  droppedFile?: File | null;
-  onClearDroppedFile?: () => void;
+  droppedFiles?: File[] | null;
+  onClearDroppedFiles?: () => void;
+  isDraggingFile?: boolean;
   contextType?: 'channel' | 'dm' | 'dm_group';
   customMentions?: MentionSuggestionItem[];
   onTyping?: () => void;
@@ -57,6 +70,7 @@ interface MessageInputProps {
 
 const MAX_CHARS = 2000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_FILES = 4;
 
 function getSlashParamsBadge(options?: SlashOption[]): string | null {
   if (!options || options.length === 0) return null;
@@ -82,8 +96,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onCancelReply,
   onSendMessage,
   onEditLastMessage,
-  droppedFile,
-  onClearDroppedFile,
+  droppedFiles,
+  onClearDroppedFiles,
+  isDraggingFile = false,
   contextType = 'channel',
   customMentions,
   onTyping,
@@ -115,8 +130,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [pickerInitialTab, setPickerInitialTab] = useState<'emoji' | 'gif'>('emoji');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ id: string; file: File; previewUrl: string | null }>>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [limitAlert, setLimitAlert] = useState<{ title: string; message: string; detail?: string } | null>(null);
@@ -518,11 +532,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   }, [emojiQuery, allAvailableEmojis, activeGuild?.name]);
 
   useEffect(() => {
-    if (droppedFile) {
-      processFile(droppedFile);
-      onClearDroppedFile?.();
+    if (droppedFiles && droppedFiles.length > 0) {
+      processFiles(droppedFiles);
+      onClearDroppedFiles?.();
     }
-  }, [droppedFile]);
+  }, [droppedFiles]);
 
   useEffect(() => {
     if (channel?.id && !activeSlash && textareaRef.current) {
@@ -1084,8 +1098,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           }
 
           setContent('');
-          setSelectedFile(null);
-          setSelectedImagePreview(null);
+          setSelectedFiles([]);
           setShowEmojiPicker(false);
           setChannelQuery(null);
           setMentionQuery(null);
@@ -1122,8 +1135,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             await api.commands.executeDMGroupCommand(channel.id, payload);
           }
           setContent('');
-          setSelectedFile(null);
-          setSelectedImagePreview(null);
+          setSelectedFiles([]);
           setShowEmojiPicker(false);
           setChannelQuery(null);
           setMentionQuery(null);
@@ -1165,14 +1177,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return;
     }
 
-    if (!finalContent && !selectedFile) return;
+    if (!finalContent && selectedFiles.length === 0) return;
 
-    const fileToUpload = selectedFile;
+    const filesToUpload = selectedFiles.map((s) => s.file);
+    selectedFiles.forEach((s) => {
+      if (s.previewUrl) URL.revokeObjectURL(s.previewUrl);
+    });
     const replyId = replyingTo?.id;
 
     setContent('');
-    setSelectedFile(null);
-    setSelectedImagePreview(null);
+    setSelectedFiles([]);
     setShowEmojiPicker(false);
     setChannelQuery(null);
     setMentionQuery(null);
@@ -1185,7 +1199,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     isSendingRef.current = true;
     try {
-      await onSendMessage(finalContent, replyId, false, fileToUpload || undefined);
+      await onSendMessage(finalContent, replyId, false, filesToUpload.length > 0 ? filesToUpload : undefined);
     } catch (err: any) {
       console.error('Failed to send message/file:', err);
       setLimitAlert({
@@ -1309,7 +1323,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
 
     // 4. ArrowUp Shortcut to edit user's last message when input is empty
-    if (e.key === 'ArrowUp' && !content.trim() && !selectedFile && !replyingTo) {
+    if (e.key === 'ArrowUp' && !content.trim() && selectedFiles.length === 0 && !replyingTo) {
       e.preventDefault();
       onEditLastMessage?.();
       return;
@@ -1402,50 +1416,62 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     onCancelReply?.();
   };
 
-  const processFile = (file: File) => {
-    if (file.size > MAX_FILE_BYTES) {
-      setLimitAlert({
-        title: 'Arquivo Muito Grande',
-        message: 'O limite de imagens/vídeos/arquivos é de 20 MB',
-        detail: `Tamanho do arquivo: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
-      });
-      return;
+  const processFiles = (incoming: File[]) => {
+    if (incoming.length === 0) return;
+    const valid: File[] = [];
+    for (const file of incoming) {
+      if (file.size > MAX_FILE_BYTES) {
+        setLimitAlert({
+          title: 'Arquivo Muito Grande',
+          message: 'O limite de imagens/vídeos/arquivos é de 20 MB',
+          detail: `${file.name}: ${(file.size / (1024 * 1024)).toFixed(2)} MB (Máximo permitido: 20 MB)`,
+        });
+        continue;
+      }
+      valid.push(file);
     }
+    if (valid.length === 0) return;
 
-    setSelectedFile(file);
-
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (readEvent) => {
-        setSelectedImagePreview(readEvent.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setSelectedImagePreview(null);
-    }
+    setSelectedFiles((prev) => {
+      const remaining = MAX_FILES - prev.length;
+      if (remaining <= 0 || valid.length > remaining) {
+        setLimitAlert({
+          title: 'Limite de Anexos',
+          message: `Você pode enviar no máximo ${MAX_FILES} arquivos por mensagem.`,
+        });
+      }
+      if (remaining <= 0) return prev;
+      const accepted = valid.slice(0, remaining).map((file) => ({
+        id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        file,
+        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      }));
+      return [...prev, ...accepted];
+    });
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
+    const pastedFiles: File[] = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (item.kind === 'file') {
-        e.preventDefault();
         const file = item.getAsFile();
-        if (file) {
-          processFile(file);
-          break;
-        }
+        if (file) pastedFiles.push(file);
       }
+    }
+    if (pastedFiles.length > 0) {
+      e.preventDefault();
+      processFiles(pastedFiles);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    processFile(file);
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+    processFiles(files);
     e.target.value = '';
   };
 
@@ -1483,7 +1509,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     >
       {/* 1. Slash Commands (/) Initial Autocomplete Suggestions Popup */}
       {slashSuggestions.length > 0 && !activeSlash && (
-        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-brand-500/25 shadow-2xl p-1.5 max-h-64 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
+        <div className="mb-2 bg-background-darkest/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl p-1.5 max-h-64 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-bottom-2">
           {commandError && (
             <div className="mb-1.5 bg-rose-500/15 border border-rose-500/30 rounded-xl p-2.5 flex items-start gap-2 text-rose-200 animate-in fade-in duration-150">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
@@ -1506,48 +1532,62 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               </div>
             </div>
           )}
-          <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between">
+          <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 mb-1 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-brand-400 font-semibold">
               <Bot className="w-3.5 h-3.5" />
               <span>Comandos ({slashSuggestions.length})</span>
             </span>
-            <span className="text-[9px] font-normal text-gray-500">↑↓ para navegar • Enter / Tab para selecionar</span>
+            <span className="hidden sm:flex items-center gap-1 text-[10px] font-normal normal-case text-gray-500">
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[9px] text-gray-300">↑↓</kbd>
+              <span>navegar</span>
+              <span className="mx-0.5">·</span>
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[9px] text-gray-300">Tab</kbd>
+              <span>/</span>
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[9px] text-gray-300">Enter</kbd>
+            </span>
           </div>
           <div ref={slashListRef} className="space-y-0.5">
-            {slashSuggestions.map((item, idx) => (
-              <button
-                key={item.name}
-                type="button"
-                onClick={() => startSlashCommand(item)}
-                onMouseEnter={() => setSelectedSlashIndex(idx)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
-                  selectedSlashIndex === idx ? 'bg-brand-500/25 text-white' : 'text-gray-300 hover:bg-white/5'
-                }`}
-              >
-                <div className="w-7 h-7 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400 flex-shrink-0 border border-brand-500/20">
-                  <Terminal className="w-3.5 h-3.5" />
-                </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-white">
-                      {item.name}
-                    </span>
-                    {(() => {
-                      const badge = getSlashParamsBadge(item.options);
-                      if (!badge) return null;
-                      return (
-                        <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap">
+            {slashSuggestions.map((item, idx) => {
+              const isSelected = selectedSlashIndex === idx;
+              const badge = getSlashParamsBadge(item.options);
+              return (
+                <button
+                  key={item.name}
+                  type="button"
+                  onClick={() => startSlashCommand(item)}
+                  onMouseEnter={() => setSelectedSlashIndex(idx)}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                    isSelected ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5'
+                  }`}
+                >
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 border transition-colors ${
+                    isSelected
+                      ? 'bg-brand-500/15 border-brand-500/30 text-brand-300'
+                      : 'bg-white/5 border-white/10 text-brand-400'
+                  }`}>
+                    <Terminal className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-semibold text-xs text-white">
+                        {item.name}
+                      </span>
+                      {badge && (
+                        <span className="text-[10px] text-gray-300 font-mono bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md whitespace-nowrap truncate">
                           {badge}
                         </span>
-                      );
-                    })()}
+                      )}
+                    </div>
+                    <span className="text-[11px] text-gray-400 truncate mt-0.5">
+                      {item.description}
+                    </span>
                   </div>
-                  <span className="text-[11px] text-gray-400 truncate mt-0.5">
-                    {item.description}
-                  </span>
-                </div>
-              </button>
-            ))}
+                  {isSelected && (
+                    <CornerDownLeft className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1758,36 +1798,40 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                   if (cmd.requiredPermission === 'ban_members' && !canBan) return false;
                   if (cmd.requiredPermission === 'send_tts' && !canSendTTS) return false;
                   return true;
-                }).map((cmd) => (
-                  <button
-                    key={cmd.name}
-                    type="button"
-                    onClick={() => {
-                      startSlashCommand({
-                        command: cmd.name,
-                        name: cmd.name,
-                        description: cmd.description,
-                        syntax: `/${cmd.name}`,
-                      });
-                      setCommandError(null);
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer text-gray-300 hover:bg-white/5 hover:text-white"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-white">/{cmd.name}</span>
-                      <span className="text-[11px] text-gray-400">{cmd.description}</span>
-                    </div>
-                    {(() => {
-                      const badge = getSlashParamsBadge(cmd.options);
-                      if (!badge) return null;
-                      return (
-                        <span className="text-[10px] text-brand-300 font-medium bg-brand-500/15 px-2 py-0.5 rounded-md border border-brand-500/20 whitespace-nowrap">
-                          {badge}
-                        </span>
-                      );
-                    })()}
-                  </button>
-                ))}
+                }).map((cmd) => {
+                  const badge = getSlashParamsBadge(cmd.options);
+                  return (
+                    <button
+                      key={cmd.name}
+                      type="button"
+                      onClick={() => {
+                        startSlashCommand({
+                          command: cmd.name,
+                          name: cmd.name,
+                          description: cmd.description,
+                          syntax: `/${cmd.name}`,
+                        });
+                        setCommandError(null);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors cursor-pointer text-gray-300 hover:bg-white/5 hover:text-white"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-brand-400 flex-shrink-0">
+                        <Terminal className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-semibold text-xs text-white">/{cmd.name}</span>
+                          {badge && (
+                            <span className="text-[10px] text-gray-300 font-mono bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md whitespace-nowrap truncate">
+                              {badge}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-gray-400 truncate mt-0.5">{cmd.description}</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1980,44 +2024,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {/* Selected File / Image Preview */}
-      {selectedFile && (
-        <div className="mb-2 p-2 bg-background-darkest rounded-2xl border border-white/10 flex items-center justify-between w-max max-w-xs animate-in fade-in">
-          <div className="flex items-center gap-2.5">
-            {selectedImagePreview ? (
-              <img
-                src={selectedImagePreview}
-                alt="Preview"
-                className="w-12 h-12 object-cover rounded-xl border border-white/10 flex-shrink-0"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-background-light flex items-center justify-center text-brand-400 border border-white/10 flex-shrink-0">
-                <FileText className="w-5 h-5" />
-              </div>
-            )}
-            <div className="min-w-0">
-              <span className="text-xs text-gray-200 font-medium block truncate max-w-[140px]">
-                {selectedFile.name}
-              </span>
-              <span className="text-[10px] text-gray-400 font-mono">
-                {(selectedFile.size / 1024).toFixed(0)} KB
-              </span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedFile(null);
-              setSelectedImagePreview(null);
-            }}
-            className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white ml-3 cursor-pointer flex-shrink-0"
-            title="Remover anexo"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {/* Emoji & Klipy GIF Picker */}
       <EmojiAndGifPicker
         isOpen={showEmojiPicker}
@@ -2031,6 +2037,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       <input
         ref={fileInputRef}
         type="file"
+        multiple
         accept="*/*"
         onChange={handleFileChange}
         className="hidden"
@@ -2042,38 +2049,110 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           onCancel={() => setIsRecordingVoice(false)}
         />
       ) : (
-        <div
-          className={`bg-background-darkest flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 min-h-[48px] md:min-h-[56px] border border-white/5 focus-within:border-brand-500/50 shadow-inner transition-colors ${
-            replyingTo ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl'
-          }`}
-        >
+        <div className="relative">
+          {/* Expanding drop zone anchored at bottom-0 so ChatArea never shifts */}
+          <div
+            className={`absolute bottom-0 left-0 right-0 z-30 pointer-events-none overflow-hidden bg-background-darkest/95 backdrop-blur-md border-2 border-dashed border-brand-500 shadow-2xl flex flex-col items-center justify-center gap-1.5 transition-[height,opacity] duration-300 ease-out ${
+              isDraggingFile ? 'h-[156px] opacity-100' : 'h-[48px] md:h-[56px] opacity-0'
+            } ${replyingTo ? 'rounded-b-2xl rounded-t-xl' : 'rounded-2xl'}`}
+          >
+            <div className="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
+              <UploadCloud className="w-5 h-5 animate-bounce" />
+            </div>
+            <p className="text-sm font-semibold text-white">Solte seus arquivos aqui</p>
+            <p className="text-[11px] text-gray-400">Imagens, vídeos ou documentos (até 20 MB)</p>
+          </div>
+
+          <div
+            className={`bg-background-darkest border border-white/10 focus-within:border-brand-500/50 focus-within:ring-2 focus-within:ring-brand-500/15 shadow-inner transition-all duration-200 ${
+              isDraggingFile ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            } ${
+              replyingTo ? 'rounded-b-2xl rounded-t-none' : 'rounded-2xl'
+            }`}
+          >
+            {/* Selected Files / Images Inline Preview inside the unified composer */}
+            {selectedFiles.length > 0 && (
+              <div className="border-b border-white/5 px-3 pt-2.5 pb-1.5">
+                <AttachmentGroup
+                  onWheel={(e) => {
+                    if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY;
+                  }}
+                  className="overflow-x-scroll preview-scrollbar-x flex-nowrap py-0 pb-1 animate-in fade-in"
+                >
+                  {selectedFiles.map((item) => (
+                    <Attachment key={item.id} size="sm" className="max-w-[230px]">
+                      {item.previewUrl ? (
+                        <AttachmentMedia variant="image">
+                          <img src={item.previewUrl} alt={item.file.name} />
+                        </AttachmentMedia>
+                      ) : (
+                        <AttachmentMedia>
+                          <FileText />
+                        </AttachmentMedia>
+                      )}
+                      <AttachmentContent>
+                        <AttachmentTitle title={item.file.name}>{item.file.name}</AttachmentTitle>
+                        <AttachmentDescription>
+                          {item.file.size < 1024
+                            ? `${item.file.size} B`
+                            : item.file.size < 1024 * 1024
+                              ? `${(item.file.size / 1024).toFixed(0)} KB`
+                              : `${(item.file.size / (1024 * 1024)).toFixed(1)} MB`}
+                        </AttachmentDescription>
+                      </AttachmentContent>
+                      <AttachmentActions>
+                        <AttachmentAction
+                          type="button"
+                          onClick={() => {
+                            if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+                            setSelectedFiles((prev) => prev.filter((f) => f.id !== item.id));
+                          }}
+                          aria-label={`Remover ${item.file.name}`}
+                          title="Remover anexo"
+                        >
+                          <X />
+                        </AttachmentAction>
+                      </AttachmentActions>
+                    </Attachment>
+                  ))}
+                </AttachmentGroup>
+              </div>
+            )}
+
+            <div className="flex items-end gap-1.5 px-2.5 md:px-3 py-2">
           {/* Left: Attachment Upload Button or Bot Avatar */}
           {!activeSlash ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading || !canAttachFiles || !canSendMessages}
-              className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
+              className="h-9 w-9 rounded-lg text-gray-400 hover:text-white flex-shrink-0"
+              aria-label="Anexar Arquivo ou Imagem"
               title="Anexar Arquivo ou Imagem (até 20 MB)"
             >
-              <PlusCircle className="w-5 h-5" />
-            </button>
+              <PlusCircle className="w-5 h-5" strokeWidth={1.85} />
+            </Button>
           ) : (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setActiveSlash(null)}
-              className="text-gray-400 hover:text-rose-400 p-1 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer"
+              className="h-9 w-9 rounded-lg text-gray-400 hover:text-rose-400 flex-shrink-0"
+              aria-label="Cancelar Comando"
               title="Cancelar Comando (Esc)"
             >
-              <X className="w-4 h-4" />
-            </button>
+              <X className="w-5 h-5" />
+            </Button>
           )}
 
           {/* Center: Slash Command Discord Pill Mode OR Standard Textarea */}
           {activeSlash ? (
             <div
               ref={commandContainerRef}
-              className="flex-1 flex flex-wrap items-center gap-1.5 min-h-[30px] py-0.5"
+              className="flex-1 flex flex-wrap items-center gap-1.5 min-h-[36px]"
             >
               {/* Invisible input when no specific pill is focused to capture Enter/Escape/Backspace/Arrows */}
               {activeSlash.activeOptionName === null && (
@@ -2244,13 +2323,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               }
               rows={1}
               disabled={isUploading || !canSendMessages}
-              className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-1.5 min-h-[26px] max-h-40 leading-relaxed font-normal no-scrollbar disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-2 min-h-[36px] max-h-40 leading-5 font-normal no-scrollbar disabled:opacity-60 disabled:cursor-not-allowed"
             />
           )}
 
           {/* Emoji Button */}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={() => {
               if (showEmojiPicker && pickerInitialTab === 'emoji') {
                 setShowEmojiPicker(false);
@@ -2259,17 +2340,22 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 setShowEmojiPicker(true);
               }
             }}
-            className={`p-1.5 rounded-full hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer ${
-              showEmojiPicker && pickerInitialTab === 'emoji' ? 'text-brand-500' : 'text-gray-400 hover:text-white'
+            className={`h-9 w-9 rounded-lg flex-shrink-0 ${
+              showEmojiPicker && pickerInitialTab === 'emoji'
+                ? 'bg-brand-500/15 text-brand-400 hover:bg-brand-500/20 hover:text-brand-300'
+                : 'text-gray-400 hover:text-white'
             }`}
+            aria-label="Inserir Emoji"
             title="Inserir Emoji"
           >
-            <Smile className="w-5 h-5" />
-          </button>
+            <Smile className="w-5 h-5" strokeWidth={1.85} />
+          </Button>
 
           {/* GIF Button */}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => {
               if (showEmojiPicker && pickerInitialTab === 'gif') {
                 setShowEmojiPicker(false);
@@ -2278,44 +2364,47 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 setShowEmojiPicker(true);
               }
             }}
-            className={`px-1.5 py-1 rounded-lg hover:bg-white/5 transition-colors flex-shrink-0 cursor-pointer flex items-center justify-center ${
-              showEmojiPicker && pickerInitialTab === 'gif' ? 'text-brand-500' : 'text-gray-400 hover:text-white'
+            className={`h-9 px-2 rounded-lg flex-shrink-0 text-xs font-bold tracking-wider ${
+              showEmojiPicker && pickerInitialTab === 'gif'
+                ? 'bg-brand-500/15 text-brand-400 hover:bg-brand-500/20 hover:text-brand-300'
+                : 'text-gray-400 hover:text-white'
             }`}
+            aria-label="Abrir seletor de GIFs"
             title="Abrir seletor de GIFs"
           >
-            <span
-              className={`px-1.5 py-0.5 rounded-[4px] border text-[10px] font-black tracking-wider leading-none transition-colors select-none ${
-                showEmojiPicker && pickerInitialTab === 'gif'
-                  ? 'border-brand-500 bg-brand-500/15 text-brand-400'
-                  : 'border-current'
-              }`}
-            >
-              GIF
-            </span>
-          </button>
+            GIF
+          </Button>
 
           {/* Voice Record Button or Send Button */}
-          {!activeSlash && !content.trim() && !selectedFile ? (
-            <button
+          {!activeSlash && !content.trim() && selectedFiles.length === 0 ? (
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setIsRecordingVoice(true)}
               disabled={isUploading}
-              className="text-gray-400 hover:text-red-400 hover:bg-red-500/10 p-2 rounded-xl transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+              className="h-9 w-9 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 active:scale-95 flex-shrink-0"
+              aria-label="Gravar Mensagem de Voz"
               title="Gravar Mensagem de Voz"
             >
-              <Mic className="w-4 h-4" />
-            </button>
+              <Mic className="w-5 h-5" strokeWidth={1.85} />
+            </Button>
           ) : (
-            <button
+            <Button
               type="button"
+              variant="default"
+              size="icon"
               onClick={handleSend}
               disabled={isUploading}
-              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white p-2 rounded-xl transition-all shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0 cursor-pointer"
+              className="h-9 w-9 rounded-lg shadow-md shadow-brand-500/20 active:scale-95 flex-shrink-0"
+              aria-label={activeSlash ? 'Executar Comando' : 'Enviar Mensagem'}
               title={activeSlash ? 'Executar Comando (Enter)' : 'Enviar Mensagem'}
             >
-              {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
-            </button>
+              {isUploading ? <Spinner className="w-5 h-5" /> : <SendHorizontal className="w-5 h-5" strokeWidth={2} />}
+            </Button>
           )}
+            </div>
+          </div>
         </div>
       )}
 

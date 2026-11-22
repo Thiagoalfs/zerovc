@@ -7,6 +7,7 @@ import {
   UserX,
   Ban,
   Check,
+  Shield,
 } from 'lucide-react';
 import { Guild, Role, User } from '../../../types';
 import { formatAssetUrl } from '../../../lib/api';
@@ -16,6 +17,9 @@ import {
   MODAL_SECTION_HEADER_CLASS,
   MODAL_DESCRIPTION_CLASS,
 } from '../../../constants/modalTypography';
+import { ModalButton } from '@/components/ui/modal-button';
+import { showConfirm } from '../../../stores/confirmModalStore';
+import { ContextMenu, useContextMenu, ContextMenuItem } from '../../ContextMenu';
 
 interface MembersTabProps {
   activeGuild: Guild;
@@ -27,8 +31,6 @@ interface MembersTabProps {
   setMemberSearchQuery: (val: string) => void;
   selectedRoleFilter: string;
   setSelectedRoleFilter: (val: string) => void;
-  activeMemberMenuId: string | null;
-  setActiveMemberMenuId: (id: string | null) => void;
   handleToggleMemberRole: (userId: string, roleId: string, hasRole: boolean) => Promise<void>;
   setMuteModalUser: (u: User | null) => void;
   setBanModalUser: (u: User | null) => void;
@@ -46,14 +48,13 @@ export const MembersTab: React.FC<MembersTabProps> = ({
   setMemberSearchQuery,
   selectedRoleFilter,
   setSelectedRoleFilter,
-  activeMemberMenuId,
-  setActiveMemberMenuId,
   handleToggleMemberRole,
   setMuteModalUser,
   setBanModalUser,
   kickMember,
   isOwner,
 }) => {
+  const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const perms = useGuildPermissions(activeGuild);
   const currentMember = activeGuild?.members?.find((m) => m.id === user?.id);
   const currentUserHighestPos = perms.currentUserHighestPos;
@@ -104,7 +105,6 @@ export const MembersTab: React.FC<MembersTabProps> = ({
           const isMemberOwner = member.id === activeGuild.owner_id;
           const memberRoles = member.roles || [];
           const isMuted = !!member.muted_until && new Date(member.muted_until) > new Date();
-          const isMenuOpen = activeMemberMenuId === member.id;
 
           return (
             <div
@@ -199,99 +199,91 @@ export const MembersTab: React.FC<MembersTabProps> = ({
                     return rolePos > currentUserHighestPos;
                   });
 
+                  const openMemberActions = (e: React.MouseEvent) => {
+                    const items: ContextMenuItem[] = [];
+
+                    if (perms.canManageRoles && manageableRoles.length > 0) {
+                      items.push({
+                        id: 'roles',
+                        label: 'Cargos',
+                        icon: <Shield className="w-4 h-4" />,
+                        subItems: manageableRoles.map((r) => {
+                          const hasThisRole = memberRoles.some((mr) => mr.id === r.id);
+                          return {
+                            id: `role-${r.id}`,
+                            label: r.name,
+                            icon: hasThisRole ? (
+                              <Check className="w-3.5 h-3.5 text-brand-400" />
+                            ) : (
+                              <span
+                                className="w-2.5 h-2.5 rounded-full"
+                                style={{ backgroundColor: r.color || '#99AAB5' }}
+                              />
+                            ),
+                            onClick: () => handleToggleMemberRole(member.id, r.id, hasThisRole),
+                          };
+                        }),
+                      });
+                    }
+
+                    if (items.length > 0 && (perms.canMute || perms.canKick || perms.canBan)) {
+                      items.push({ separator: true, label: '' });
+                    }
+
+                    if (perms.canMute) {
+                      items.push({
+                        id: 'mute',
+                        label: isMuted ? 'Alterar Silenciamento' : 'Silenciar (Timeout)',
+                        icon: <Clock className="w-4 h-4 text-amber-400" />,
+                        onClick: () => setMuteModalUser(member),
+                      });
+                    }
+
+                    if (perms.canKick) {
+                      items.push({
+                        id: 'kick',
+                        label: 'Expulsar Membro',
+                        icon: <UserX className="w-4 h-4" />,
+                        variant: 'danger',
+                        onClick: async () => {
+                          const ok = await showConfirm({
+                            title: 'Expulsar membro',
+                            message: `Expulsar @${member.username} do servidor?`,
+                            confirmText: 'Expulsar',
+                            variant: 'danger',
+                          });
+                          if (ok) {
+                            kickMember(activeGuild.id, member.id);
+                          }
+                        },
+                      });
+                    }
+
+                    if (perms.canBan) {
+                      items.push({
+                        id: 'ban',
+                        label: 'Banir Membro',
+                        icon: <Ban className="w-4 h-4" />,
+                        variant: 'danger',
+                        onClick: () => setBanModalUser(member),
+                      });
+                    }
+
+                    openContextMenu(e, items, member.display_name || member.username);
+                  };
+
                   return (
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setActiveMemberMenuId(isMenuOpen ? null : member.id)}
-                        className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                        title="Moderar membro"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-
-                      {isMenuOpen && (
-                        <div className="absolute right-0 top-10 z-30 w-56 p-2 bg-background-darkest border border-white/10 rounded-2xl shadow-2xl space-y-1 animate-fade-in">
-                          {perms.canManageRoles && manageableRoles.length > 0 && (
-                            <>
-                              <div className={`${MODAL_SECTION_HEADER_CLASS} px-2 py-1 mb-0`}>
-                                Cargos
-                              </div>
-                              <div className="max-h-36 overflow-y-auto space-y-0.5 chat-scrollbar pr-1">
-                                {manageableRoles.map((r) => {
-                                  const hasThisRole = memberRoles.some((mr) => mr.id === r.id);
-                                  return (
-                                    <button
-                                      key={r.id}
-                                      type="button"
-                                      onClick={() => handleToggleMemberRole(member.id, r.id, hasThisRole)}
-                                      className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-background-dark text-left transition-colors cursor-pointer"
-                                    >
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <span
-                                          className="w-2 h-2 rounded-full"
-                                          style={{ backgroundColor: r.color || '#99AAB5' }}
-                                        />
-                                        <span className="truncate text-white">{r.name}</span>
-                                      </div>
-                                      {hasThisRole && <Check className="w-3.5 h-3.5 text-brand-400" />}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </>
-                          )}
-
-                          {(perms.canMute || perms.canKick || perms.canBan) && (
-                            <div className="pt-2 mt-1 border-t border-white/10 space-y-0.5">
-                              {perms.canMute && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveMemberMenuId(null);
-                                    setMuteModalUser(member);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-amber-300 hover:bg-amber-500/15 transition-colors cursor-pointer"
-                                >
-                                  <Clock className="w-3.5 h-3.5" />
-                                  <span>{isMuted ? 'Alterar Silenciamento' : 'Silenciar (Timeout)'}</span>
-                                </button>
-                              )}
-
-                              {perms.canKick && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveMemberMenuId(null);
-                                    if (confirm(`Expulsar @${member.username} do servidor?`)) {
-                                      kickMember(activeGuild.id, member.id);
-                                    }
-                                  }}
-                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/15 transition-colors cursor-pointer"
-                                >
-                                  <UserX className="w-3.5 h-3.5" />
-                                  <span>Expulsar Membro</span>
-                                </button>
-                              )}
-
-                              {perms.canBan && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveMemberMenuId(null);
-                                    setBanModalUser(member);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-500 hover:bg-red-500/20 font-semibold transition-colors cursor-pointer"
-                                >
-                                  <Ban className="w-3.5 h-3.5" />
-                                  <span>Banir Membro</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <ModalButton
+                      type="tertiary"
+                      shape="circle"
+                      size="small"
+                      svgOnly
+                      onClick={openMemberActions}
+                      title="Moderar membro"
+                      aria-label="Moderar membro"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </ModalButton>
                   );
                 })()}
               </div>
@@ -299,6 +291,8 @@ export const MembersTab: React.FC<MembersTabProps> = ({
           );
         })}
       </div>
+
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
     </div>
   );
 };

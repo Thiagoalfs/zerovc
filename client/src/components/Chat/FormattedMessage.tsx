@@ -1,5 +1,38 @@
 import React, { useState, useMemo } from 'react';
-import { Star, Hash, Volume2 } from 'lucide-react';
+import { Star, Hash, Volume2, FileText, Download } from 'lucide-react';
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+} from '@/components/ui/attachment';
+import {
+  VideoPlayer,
+  VideoPlayerControls,
+  VideoPlayerFullscreen,
+  VideoPlayerPlay,
+  VideoPlayerSeek,
+  VideoPlayerTime,
+  VideoPlayerVideo,
+  VideoPlayerVolume,
+} from '@/components/ui/video-player';
+
+const ChatVideoPlayer: React.FC<{ src: string }> = ({ src }) => (
+  <VideoPlayer className="max-w-sm sm:max-w-md md:max-w-lg w-full">
+    <VideoPlayerVideo src={src} className="max-h-[350px] w-full" />
+    <VideoPlayerControls>
+      <VideoPlayerPlay />
+      <VideoPlayerTime mode="elapsed" />
+      <VideoPlayerSeek />
+      <VideoPlayerTime mode="remaining" />
+      <VideoPlayerVolume />
+      <VideoPlayerFullscreen />
+    </VideoPlayerControls>
+  </VideoPlayer>
+);
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 import { formatAssetUrl } from '../../lib/api';
 import { GifEmbed } from './GifEmbed';
@@ -86,8 +119,7 @@ const isMediaUrl = (url: string) => {
       clean.endsWith('.svg') ||
       clean.endsWith('.bmp') ||
       clean.endsWith('.avif') ||
-      url.includes('/assets/user/') ||
-      url.includes('/assets/guild/') ||
+      /\/assets\/(?:user|guild)\/(?:avatar|icon|banner)_/i.test(clean) ||
       url.includes('media.tenor.com') ||
       url.includes('c.tenor.com') ||
       url.includes('media.giphy.com') ||
@@ -97,7 +129,61 @@ const isMediaUrl = (url: string) => {
       url.includes('static2.klipy.com') ||
       url.startsWith('data:image/'));
 
-  return { isMedia: isImg || isVid || isAud, isImage: isImg, isVideo: isVid, isAudio: isAud };
+  const isFile =
+    !isVoiceMsg &&
+    !isAud &&
+    !isVid &&
+    !isImg &&
+    clean.includes('/assets/user/att_');
+
+  return { isMedia: isImg || isVid || isAud || isFile, isImage: isImg, isVideo: isVid, isAudio: isAud, isFile };
+};
+
+const formatFileSize = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+const FileAttachmentCard: React.FC<{ src: string; rawUrl: string }> = ({ src, rawUrl }) => {
+  const { name, sizeLabel } = useMemo(() => {
+    const query = rawUrl.includes('?') ? rawUrl.split('?')[1] : '';
+    const params = new URLSearchParams(query);
+    const paramName = params.get('name');
+    const paramSize = params.get('size');
+    const fallbackName = rawUrl.split('?')[0].split('/').pop() || 'arquivo';
+    const parsedSize = paramSize !== null ? Number(paramSize) : NaN;
+    return {
+      name: paramName || fallbackName,
+      sizeLabel: Number.isFinite(parsedSize) ? formatFileSize(parsedSize) : '',
+    };
+  }, [rawUrl]);
+
+  return (
+    <Attachment className="mt-1.5 w-full max-w-sm">
+      <AttachmentMedia>
+        <FileText />
+      </AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle title={name}>{name}</AttachmentTitle>
+        <AttachmentDescription>{sizeLabel || 'Arquivo'}</AttachmentDescription>
+      </AttachmentContent>
+      <AttachmentActions>
+        <AttachmentAction asChild aria-label={`Baixar ${name}`}>
+          <a
+            href={src}
+            download={name}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Baixar ${name}`}
+          >
+            <Download />
+          </a>
+        </AttachmentAction>
+      </AttachmentActions>
+    </Attachment>
+  );
 };
 
 const SpoilerText: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -270,7 +356,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     .replace(/<:[a-zA-Z0-9_+-]+:[^>]+>/g, '');
 
   const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|\/assets\/user\/[^\s]+|\/assets\/guild\/[^\s]+|data:image\/[^\s]+)/g;
-  const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean }[] = [];
+  const mediaEmbeds: { url: string; isImage: boolean; isVideo: boolean; isAudio: boolean; isFile: boolean }[] = [];
   const smartGifEmbeds: string[] = [];
   const linkEmbedUrls: string[] = [];
   const foundUrls = new Set<string>();
@@ -398,25 +484,12 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
               const resolvedSrc = formatAssetUrl(media.url);
               const isGif =
                 resolvedSrc.includes('.gif') ||
-                resolvedSrc.includes('.webp') ||
                 resolvedSrc.includes('klipy') ||
                 resolvedSrc.includes('giphy') ||
                 resolvedSrc.includes('tenor');
 
               if (media.isVideo) {
-                return (
-                  <div
-                    key={idx}
-                    className="rounded-2xl overflow-hidden border border-white/10 max-w-sm sm:max-w-md md:max-w-lg bg-black/50 shadow-md"
-                  >
-                    <video
-                      src={resolvedSrc}
-                      controls
-                      preload="metadata"
-                      className="max-h-[350px] max-w-full w-auto h-auto rounded-2xl block"
-                    />
-                  </div>
-                );
+                return <ChatVideoPlayer key={idx} src={resolvedSrc} />;
               }
 
               if (media.isAudio) {
@@ -427,6 +500,10 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
                     className="mt-2 mb-1"
                   />
                 );
+              }
+
+              if (media.isFile) {
+                return <FileAttachmentCard key={idx} src={resolvedSrc} rawUrl={media.url} />;
               }
 
               // Image / GIF Preview
@@ -500,25 +577,12 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
             const resolvedSrc = formatAssetUrl(media.url);
             const isGif =
               resolvedSrc.includes('.gif') ||
-              resolvedSrc.includes('.webp') ||
               resolvedSrc.includes('klipy') ||
               resolvedSrc.includes('giphy') ||
               resolvedSrc.includes('tenor');
 
             if (media.isVideo) {
-              return (
-                <div
-                  key={idx}
-                  className="rounded-2xl overflow-hidden border border-white/10 max-w-sm sm:max-w-md md:max-w-lg bg-black/50 shadow-md"
-                >
-                  <video
-                    src={resolvedSrc}
-                    controls
-                    preload="metadata"
-                    className="max-h-[350px] max-w-full w-auto h-auto rounded-2xl block"
-                  />
-                </div>
-              );
+              return <ChatVideoPlayer key={idx} src={resolvedSrc} />;
             }
 
             if (media.isAudio) {
@@ -529,6 +593,10 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
                   className="mt-2 mb-1"
                 />
               );
+            }
+
+            if (media.isFile) {
+              return <FileAttachmentCard key={idx} src={resolvedSrc} rawUrl={media.url} />;
             }
 
             // Image / GIF Preview

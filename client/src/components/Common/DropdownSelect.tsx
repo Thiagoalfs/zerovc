@@ -1,5 +1,10 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import React from 'react';
+import {
+  Dropdown,
+  DropdownContent,
+  DropdownItem,
+  DropdownTrigger,
+} from '@/components/ui/r-dropdown';
 
 export interface DropdownOption<T = string> {
   value: T;
@@ -35,125 +40,46 @@ export function DropdownSelect<T extends string | number>({
   align = 'left',
   placement = 'auto',
 }: DropdownSelectProps<T>) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [openUpward, setOpenUpward] = useState(placement === 'top');
-  const containerRef = useRef<HTMLDivElement>(null);
-
+  const stringValue = value !== undefined && value !== null ? String(value) : '';
   const selectedOption = options.find((opt) => opt.value === value);
 
-  // Measure space dynamically to prevent cropping by modal/viewport boundaries
-  useLayoutEffect(() => {
-    if (isOpen && containerRef.current) {
-      if (placement === 'top') {
-        setOpenUpward(true);
-      } else if (placement === 'bottom') {
-        setOpenUpward(false);
-      } else {
-        const rect = containerRef.current.getBoundingClientRect();
-        const spaceBelow = window.innerHeight - rect.bottom;
-        const spaceAbove = rect.top;
-
-        // If less than 240px below and more room above, open upwards
-        if (spaceBelow < 240 && spaceAbove > spaceBelow) {
-          setOpenUpward(true);
-        } else {
-          setOpenUpward(false);
-        }
-      }
-    }
-  }, [isOpen, placement]);
-
-  // Close on Escape or click outside
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsOpen(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
-
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`w-full bg-background-darker hover:bg-background-dark border border-white/10 hover:border-white/20 px-3.5 py-2.5 rounded-xl flex items-center justify-between text-xs sm:text-sm font-medium text-gray-200 transition-all cursor-pointer shadow-sm group disabled:opacity-50 disabled:cursor-not-allowed ${
-          isOpen ? 'border-brand-500/50 ring-1 ring-brand-500/30' : ''
-        } ${buttonClassName}`}
+    <Dropdown
+      value={stringValue}
+      onValueChange={(nextStr) => {
+        const matched = options.find((opt) => String(opt.value) === nextStr);
+        if (matched && !matched.disabled) {
+          onChange(matched.value);
+        }
+      }}
+      disabled={disabled}
+      className={className}
+    >
+      <DropdownTrigger className={buttonClassName}>
+        {prefixIcon && <span className="flex-shrink-0 text-gray-400">{prefixIcon}</span>}
+        {selectedOption?.icon && <span className="flex-shrink-0">{selectedOption.icon}</span>}
+        <span className={`truncate font-medium text-left ${!selectedOption ? 'text-gray-400' : ''}`}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+      </DropdownTrigger>
+
+      <DropdownContent
+        align={align === 'right' ? 'end' : 'start'}
+        side={placement === 'top' ? 'top' : 'bottom'}
+        className={`w-full min-w-[200px] ${menuClassName}`.trim()}
       >
-        <div className="flex items-center gap-2 truncate pr-2">
-          {prefixIcon && <span className="flex-shrink-0 text-gray-400">{prefixIcon}</span>}
-          {selectedOption?.icon && <span className="flex-shrink-0">{selectedOption.icon}</span>}
-          <span className="truncate font-medium text-left">
-            {selectedOption ? selectedOption.label : placeholder}
-          </span>
-        </div>
-
-        <ChevronDown
-          className={`w-4 h-4 text-gray-400 group-hover:text-white transition-transform duration-200 flex-shrink-0 ${
-            isOpen ? 'rotate-180 text-brand-400' : ''
-          }`}
-        />
-      </button>
-
-      {isOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-[80]"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsOpen(false);
-            }}
-          />
-          <div
-            className={`absolute ${
-              align === 'right' ? 'right-0' : 'left-0'
-            } ${
-              openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-            } w-full min-w-[200px] max-h-60 overflow-y-auto z-[90] bg-background-darker border border-white/10 p-1.5 rounded-xl shadow-2xl space-y-0.5 animate-in fade-in zoom-in-95 no-scrollbar ${menuClassName}`}
+        {options.map((opt) => (
+          <DropdownItem
+            key={String(opt.value)}
+            value={String(opt.value)}
+            disabled={opt.disabled}
+            textValue={opt.label}
           >
-            {options.map((opt) => {
-              const isSelected = opt.value === value;
-              return (
-                <button
-                  key={String(opt.value)}
-                  type="button"
-                  disabled={opt.disabled}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!opt.disabled) {
-                      onChange(opt.value);
-                      setIsOpen(false);
-                    }
-                  }}
-                  className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left text-xs sm:text-sm transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-                    isSelected
-                      ? 'bg-brand-500/20 text-brand-400 font-semibold'
-                      : 'hover:bg-white/5 text-gray-300 font-medium'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate pr-2">
-                    {opt.icon && <span className="flex-shrink-0">{opt.icon}</span>}
-                    <span className="truncate">{opt.label}</span>
-                  </div>
-                  {isSelected && <Check className="w-4 h-4 text-brand-400 flex-shrink-0 ml-2" />}
-                </button>
-              );
-            })}
-            {options.length === 0 && (
-              <div className="px-3 py-2 text-xs text-gray-500 text-center select-none">
-                Nenhuma opção disponível
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+            {opt.icon && <span className="flex-shrink-0">{opt.icon}</span>}
+            <span className="whitespace-normal break-words leading-snug">{opt.label}</span>
+          </DropdownItem>
+        ))}
+      </DropdownContent>
+    </Dropdown>
   );
 }

@@ -1,16 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { X, Compass, Check } from 'lucide-react';
+import React, { useState } from 'react';
 import { api } from '../../lib/api';
 import { useGuildStore } from '../../stores/guildStore';
 import {
-  MODAL_TITLE_CLASS,
-  MODAL_FIELD_LABEL_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
-  MODAL_BODY_PADDING_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_BACKDROP_CLASS,
-} from '../../constants/modalTypography';
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
+import { AppInput } from '@/components/ui/app-input';
+import { InlineAlert } from '@/components/ui/inline-alert';
 
 interface JoinServerModalProps {
   isOpen: boolean;
@@ -22,19 +20,6 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const { fetchGuilds, selectGuild } = useGuildStore();
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,73 +54,37 @@ export const JoinServerModal: React.FC<JoinServerModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="join-server-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} text-center relative flex-shrink-0`}>
-          <button
-            type="button"
-            aria-label="Fechar"
-            onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <div className="w-12 h-12 bg-online/10 text-online rounded-2xl flex items-center justify-center mx-auto mb-2">
-            <Compass className="w-6 h-6" />
-          </div>
-          <h2 id="join-server-modal-title" className={MODAL_TITLE_CLASS}>Entrar em um Servidor</h2>
-          <p className={`${MODAL_DESCRIPTION_CLASS} mt-1`}>
-            Digite o código de 10 caracteres ou o link de convite que você recebeu.
-          </p>
-        </div>
+    <AppModal isOpen={isOpen} onClose={onClose} titleId="join-server-modal-title">
+      <AppModalHeader
+        title="Entrar em um servidor"
+        titleId="join-server-modal-title"
+        onClose={onClose}
+        className="text-center"
+      />
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto no-scrollbar flex-1`}>
-          {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-lg font-medium">{error}</div>}
+      <AppModalBody onSubmit={handleSubmit}>
+        {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
-          <div>
-            <label className={MODAL_FIELD_LABEL_CLASS}>
-              Link ou Código de Convite (10 Caracteres)
-            </label>
-            <input
-              type="text"
-              required
-              value={inputCode}
-              onChange={(e) => setInputCode(e.target.value)}
-              placeholder="Ex: aB9xK2mP8q ou http://.../invite/aB9xK2mP8q"
-              className="w-full bg-background-darkest text-white px-3.5 py-2.5 rounded-xl border border-white/5 focus:outline-none focus:border-brand-500 text-sm font-mono"
-            />
-          </div>
+        <AppInput
+          label="Link ou código de convite (10 caracteres)"
+          type="text"
+          required
+          value={inputCode}
+          onChange={(e) => setInputCode(e.target.value)}
+          placeholder="Ex: aB9xK2mP8q ou http://.../invite/aB9xK2mP8q"
+          className="font-mono"
+        />
 
-          <div className="flex justify-between items-center pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className={MODAL_CANCEL_BUTTON_CLASS}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || !inputCode.trim()}
-              className="bg-online hover:bg-online/90 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-colors cursor-pointer"
-            >
-              {isLoading ? 'Entrando...' : 'Entrar no Servidor'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <AppModalFooter
+          align="between"
+          onCancel={onClose}
+          confirmText={isLoading ? 'Entrando...' : 'Entrar no servidor'}
+          confirmType="primary"
+          confirmHtmlType="submit"
+          loading={isLoading}
+          disabled={!inputCode.trim()}
+        />
+      </AppModalBody>
+    </AppModal>
   );
 };

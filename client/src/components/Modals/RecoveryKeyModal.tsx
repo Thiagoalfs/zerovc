@@ -1,25 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
   X,
-  Key,
   Copy,
   Download,
   Check,
-  AlertTriangle,
-  Loader2,
-  ShieldCheck,
   RefreshCw,
 } from 'lucide-react';
 import { generateRecoveryKey, zeroBuffer, parseRecoveryKey, RecoveryKeyData } from '../../crypto/recovery';
 import { backupManager } from '../../crypto/backupManager';
 import { copyToClipboard } from '../../utils/clipboard';
+import { ModalButton } from '@/components/ui/modal-button';
+import { AppInput } from '@/components/ui/app-input';
+import { InlineAlert } from '@/components/ui/inline-alert';
 import {
   MODAL_BACKDROP_CLASS,
   MODAL_DIALOG_TITLE_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-  MODAL_SECONDARY_BUTTON_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface RecoveryKeyModalProps {
@@ -126,7 +121,7 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
     setError(null);
     try {
       const result = await backupManager.createBackup(recoveryData.rawBytes);
-      setSuccessMessage(`Backup ativado com sucesso! ${result.key_count} sessões foram criptografadas e salvas na nuvem.`);
+      setSuccessMessage(`Backup ativado. ${result.key_count} sessões criptografadas e salvas na nuvem.`);
       setTimeout(() => {
         onSuccess?.();
         onClose();
@@ -150,7 +145,7 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
       const parsedBytes = parseRecoveryKey(restoreInput);
       const res = await backupManager.restoreBackup(parsedBytes);
       zeroBuffer(parsedBytes);
-      setSuccessMessage(`Restauração concluída! ${res.restoredSessions} sessões criptografadas foram importadas.`);
+      setSuccessMessage(`Restauração concluída. ${res.restoredSessions} sessões criptografadas importadas.`);
       setTimeout(() => {
         onSuccess?.();
         onClose();
@@ -172,102 +167,74 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
       <div className="bg-background-darker w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-background-darkest/50">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-brand-500/10 text-brand-400">
-              <Key className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 id="recovery-key-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>
-                {currentMode === 'setup' ? 'Chave de Recuperação E2EE' : 'Restaurar Chaves da Nuvem'}
-              </h2>
-              <p className={MODAL_DESCRIPTION_CLASS}>
-                {currentMode === 'setup'
-                  ? 'Backup protegido com criptografia de ponta a ponta'
-                  : 'Recupere suas sessões em um novo aparelho'}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
+          <h2 id="recovery-key-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>
+            {currentMode === 'setup' ? 'Chave de recuperação E2EE' : 'Restaurar chaves da nuvem'}
+          </h2>
+          <ModalButton
+            type="tertiary"
+            shape="circle"
+            size="small"
+            svgOnly
             onClick={onClose}
             aria-label="Fechar"
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
-          </button>
+          </ModalButton>
         </div>
 
         {/* Content */}
         <div className="p-6 space-y-5 flex-1 overflow-y-auto">
-          {error && (
-            <div className="flex items-center gap-2.5 p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+          {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
-          {successMessage && (
-            <div className="flex items-center gap-2.5 p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl">
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>{successMessage}</span>
-            </div>
-          )}
+          {successMessage && <InlineAlert variant="success">{successMessage}</InlineAlert>}
 
           {currentMode === 'setup' ? (
             <>
-              <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs leading-relaxed flex items-start gap-3">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="font-semibold block mb-0.5">Guarde sua chave com segurança</strong>
-                  Sua Chave de Recuperação de 256 bits é gerada localmente no seu aparelho e nunca é enviada aos nossos servidores. Se você perder esta chave e todos os seus dispositivos, ninguém poderá restaurar seu histórico.
-                </div>
-              </div>
+              <InlineAlert variant="warning">
+                <strong className="font-semibold block mb-0.5">Guarde sua chave com segurança</strong>
+                Sua Chave de Recuperação de 256 bits é gerada localmente no seu aparelho e nunca é enviada aos nossos servidores. Se você perder esta chave e todos os seus dispositivos, ninguém poderá restaurar seu histórico.
+              </InlineAlert>
 
               {recoveryData && (
-                <div className="space-y-2">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                    Sua Chave de Recuperação de 256 bits
+                <div className="p-4 bg-background-darkest rounded-xl border border-white/10 flex items-center justify-between gap-3">
+                  <span className="font-mono text-sm sm:text-base font-bold text-brand-300 tracking-wider break-all select-all">
+                    {recoveryData.recoveryKey}
                   </span>
-                  <div className="p-4 bg-background-darkest rounded-xl border border-white/10 flex items-center justify-between gap-3">
-                    <span className="font-mono text-sm sm:text-base font-bold text-brand-300 tracking-wider break-all select-all">
-                      {recoveryData.recoveryKey}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleRegenerate}
-                      aria-label="Gerar nova chave aleatória"
-                      className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                      title="Gerar nova chave aleatória"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <ModalButton
+                    type="tertiary"
+                    shape="circle"
+                    size="small"
+                    svgOnly
+                    onClick={handleRegenerate}
+                    aria-label="Gerar nova chave aleatória"
+                    title="Gerar nova chave aleatória"
+                    className="shrink-0"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </ModalButton>
                 </div>
               )}
 
               {/* Action Buttons: Copy & Download */}
               <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  fullWidth
                   onClick={handleCopy}
-                  className={
-                    isCopied
-                      ? 'flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all bg-emerald-500/15 border-emerald-500/30 text-emerald-400 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
-                      : `${MODAL_SECONDARY_BUTTON_CLASS} flex items-center justify-center gap-2`
-                  }
+                  prefix={isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  className={isCopied ? '!bg-emerald-500/15 !border-emerald-500/30 !text-emerald-400' : ''}
                 >
-                  {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  <span>{isCopied ? 'Copiada!' : 'Copiar Chave'}</span>
-                </button>
+                  {isCopied ? 'Copiada' : 'Copiar chave'}
+                </ModalButton>
 
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  fullWidth
                   onClick={handleDownload}
-                  className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center justify-center gap-2`}
+                  prefix={<Download className="w-4 h-4" />}
                 >
-                  <Download className="w-4 h-4" />
-                  <span>Baixar (.txt)</span>
-                </button>
+                  Baixar (.txt)
+                </ModalButton>
               </div>
 
               {/* Confirmation Checkbox */}
@@ -286,21 +253,17 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
           ) : (
             <div className="space-y-4">
               <p className="text-xs text-gray-300 leading-relaxed">
-                Digite ou cole sua chave de recuperação de 256 bits (no formato <code className="bg-white/10 px-1 py-0.5 rounded text-brand-300">ZVC-XXXX-XXXX-XXXX-XXXX</code>) para decifrar e restaurar suas sessões de conversa.
+                Informe sua chave de recuperação para decifrar e restaurar suas sessões.
               </p>
 
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Chave de Recuperação
-                </label>
-                <input
-                  type="text"
-                  value={restoreInput}
-                  onChange={(e) => setRestoreInput(e.target.value)}
-                  placeholder="ZVC-XXXX-XXXX-XXXX-XXXX"
-                  className="w-full px-3.5 py-2.5 bg-background-darkest rounded-xl border border-white/10 text-white font-mono text-sm placeholder-gray-500 focus:outline-none focus:border-brand-400"
-                />
-              </div>
+              <AppInput
+                label="Chave de recuperação"
+                type="text"
+                value={restoreInput}
+                onChange={(e) => setRestoreInput(e.target.value)}
+                placeholder="ZVC-XXXX-XXXX-XXXX-XXXX"
+                className="font-mono"
+              />
             </div>
           )}
         </div>
@@ -308,52 +271,46 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 bg-background-darkest/40">
           {currentMode === 'setup' ? (
-            <button
-              type="button"
+            <ModalButton
+              type="tertiary"
+              size="small"
               onClick={() => setCurrentMode('restore')}
-              className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
             >
               Já tenho uma chave e quero restaurar
-            </button>
+            </ModalButton>
           ) : (
-            <button
-              type="button"
+            <ModalButton
+              type="tertiary"
+              size="small"
               onClick={() => setCurrentMode('setup')}
-              className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
             >
               Quero gerar uma nova chave
-            </button>
+            </ModalButton>
           )}
 
           <div className="flex items-center gap-2 ml-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              className={MODAL_CANCEL_BUTTON_CLASS}
-            >
+            <ModalButton type="secondary" onClick={onClose}>
               Cancelar
-            </button>
+            </ModalButton>
 
             {currentMode === 'setup' ? (
-              <button
-                type="button"
+              <ModalButton
+                type="primary"
                 onClick={handleCreateBackup}
-                disabled={!confirmedSafekeeping || isLoading}
-                className={`${MODAL_PRIMARY_BUTTON_CLASS} disabled:cursor-not-allowed`}
+                loading={isLoading}
+                disabled={!confirmedSafekeeping}
               >
-                {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>Ativar Backup Criptografado</span>
-              </button>
+                Ativar backup criptografado
+              </ModalButton>
             ) : (
-              <button
-                type="button"
+              <ModalButton
+                type="primary"
                 onClick={handleRestoreBackup}
-                disabled={!restoreInput.trim() || isLoading}
-                className={`${MODAL_PRIMARY_BUTTON_CLASS} disabled:cursor-not-allowed`}
+                loading={isLoading}
+                disabled={!restoreInput.trim()}
               >
-                {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>Restaurar Chaves</span>
-              </button>
+                Restaurar chaves
+              </ModalButton>
             )}
           </div>
         </div>

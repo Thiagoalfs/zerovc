@@ -1,22 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, AlertTriangle, Copy, Download, Loader2 } from 'lucide-react';
+import { X, AlertTriangle, Copy, Download } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { api } from '../../../lib/api';
 import { copyToClipboard } from '../../../utils/clipboard';
 import { OtpInput } from '../../ui/otp-input';
+import { AppInput } from '@/components/ui/app-input';
+import { ModalButton } from '@/components/ui/modal-button';
 import {
   MODAL_BACKDROP_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
   MODAL_CARD_PADDING_CLASS,
-  MODAL_DANGER_BUTTON_CLASS,
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-  MODAL_SECONDARY_BUTTON_CLASS,
 } from '../../../constants/modalTypography';
-
-const CLOSE_BUTTON_CLASS =
-  'text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500';
 
 export type AccountSubModalType =
   | 'displayName'
@@ -86,9 +81,13 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
+  // 2FA confirmation for sensitive account actions
+  const [twoFactorActionCode, setTwoFactorActionCode] = useState('');
+
   // Sync/reset fields when opening a sub-modal
   useEffect(() => {
     if (!activeModal || !user) return;
+    setTwoFactorActionCode('');
 
     if (activeModal === 'displayName') {
       setNewDisplayName(user.display_name || '');
@@ -194,9 +193,17 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
       return;
     }
 
+    if (user.two_factor_enabled && trimmed !== user.username?.toLowerCase() && !twoFactorActionCode.trim()) {
+      setUsernameError('Digite o código 2FA (ou código de backup) para confirmar.');
+      return;
+    }
+
     setIsSavingUsername(true);
     try {
-      const updated = await updateProfile({ username: trimmed });
+      const updated = await updateProfile({
+        username: trimmed,
+        ...(user.two_factor_enabled ? { code: twoFactorActionCode.trim() } : {}),
+      });
       setUser(updated);
       onClose();
     } catch (err: any) {
@@ -217,12 +224,17 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
       setEmailError('Insira sua senha atual para confirmar.');
       return;
     }
+    if (user.two_factor_enabled && !twoFactorActionCode.trim()) {
+      setEmailError('Digite o código 2FA (ou código de backup) para confirmar.');
+      return;
+    }
 
     setIsSavingEmail(true);
     try {
       const res = await api.auth.changeEmail({
         password: emailCurrentPassword,
         new_email: newEmail.trim(),
+        ...(user.two_factor_enabled ? { code: twoFactorActionCode.trim() } : {}),
       });
       setUser({ email: res.email });
       onClose();
@@ -264,12 +276,17 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
       setPasswordError('A confirmação da nova senha não confere.');
       return;
     }
+    if (user.two_factor_enabled && !twoFactorActionCode.trim()) {
+      setPasswordError('Digite o código 2FA (ou código de backup) para confirmar.');
+      return;
+    }
 
     setIsSavingPassword(true);
     try {
       await api.auth.changePassword({
         current_password: currentPassword,
         new_password: newPassword,
+        ...(user.two_factor_enabled ? { code: twoFactorActionCode.trim() } : {}),
       });
       setPasswordSuccess(true);
       setCurrentPassword('');
@@ -328,10 +345,17 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
       setDeleteAccountError('Digite sua senha para confirmar a exclusão.');
       return;
     }
+    if (user.two_factor_enabled && !twoFactorActionCode.trim()) {
+      setDeleteAccountError('Digite o código 2FA (ou código de backup) para confirmar.');
+      return;
+    }
 
     setIsDeletingAccount(true);
     try {
-      await api.auth.deleteAccount({ password: deleteAccountPassword });
+      await api.auth.deleteAccount({
+        password: deleteAccountPassword,
+        ...(user.two_factor_enabled ? { code: twoFactorActionCode.trim() } : {}),
+      });
       onClose();
       logout();
       window.location.href = '/';
@@ -361,24 +385,22 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
           >
             <div className="flex items-center justify-between">
               <h4 id="account-submodal-title-display-name" className={MODAL_DIALOG_TITLE_CLASS}>
-                Alterar Nome de Exibição
+                Alterar nome de exibição
               </h4>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 aria-label="Fechar"
                 onClick={onClose}
-                className={CLOSE_BUTTON_CLASS}
               >
                 <X className="w-4 h-4" />
-              </button>
+              </ModalButton>
             </div>
 
-            <p className="text-xs text-gray-400">
-              Este é o nome visível para os outros usuários nos servidores e conversas.
-            </p>
-
             <div>
-              <label className={MODAL_FIELD_LABEL_CLASS}>Nome de Exibição</label>
+              <label className={MODAL_FIELD_LABEL_CLASS}>Nome de exibição</label>
               <input
                 type="text"
                 value={newDisplayName}
@@ -391,20 +413,12 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className={MODAL_CANCEL_BUTTON_CLASS}
-              >
+              <ModalButton type="secondary" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingDisplayName}
-                className={MODAL_PRIMARY_BUTTON_CLASS}
-              >
-                {isSavingDisplayName ? 'Salvando...' : 'Salvar Nome'}
-              </button>
+              </ModalButton>
+              <ModalButton type="primary" htmlType="submit" loading={isSavingDisplayName}>
+                {isSavingDisplayName ? 'Salvando...' : 'Salvar nome'}
+              </ModalButton>
             </div>
           </form>
         </div>
@@ -427,21 +441,22 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
           >
             <div className="flex items-center justify-between">
               <h4 id="account-submodal-title-username" className={MODAL_DIALOG_TITLE_CLASS}>
-                Alterar Nome de Usuário
+                Alterar nome de usuário
               </h4>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 aria-label="Fechar"
                 onClick={onClose}
-                className={CLOSE_BUTTON_CLASS}
               >
                 <X className="w-4 h-4" />
-              </button>
+              </ModalButton>
             </div>
 
             <p className="text-xs text-gray-400">
-              Digite seu novo identificador <strong>@</strong>. Permitido apenas letras minúsculas,
-              números e sublinhado (_), sem espaços, acentos, maiúsculas ou símbolos.
+              Apenas letras minúsculas, números e sublinhado (_), sem espaços, acentos, maiúsculas ou símbolos.
             </p>
 
             <div>
@@ -463,26 +478,32 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                   autoFocus
                 />
               </div>
+              {user.two_factor_enabled && (
+                <AppInput
+                  label="Código 2FA (6 dígitos ou backup)"
+                  value={twoFactorActionCode}
+                  onChange={(e) => {
+                    setTwoFactorActionCode(e.target.value);
+                    setUsernameError(null);
+                  }}
+                  maxLength={16}
+                  placeholder="000000"
+                  className="font-mono tracking-wider mt-1"
+                  containerClassName="mt-3"
+                />
+              )}
               {usernameError && (
                 <span className="text-[11px] text-dnd block mt-1">{usernameError}</span>
               )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className={MODAL_CANCEL_BUTTON_CLASS}
-              >
+              <ModalButton type="secondary" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingUsername}
-                className={MODAL_PRIMARY_BUTTON_CLASS}
-              >
+              </ModalButton>
+              <ModalButton type="primary" htmlType="submit" loading={isSavingUsername}>
                 {isSavingUsername ? 'Salvando...' : 'Salvar @'}
-              </button>
+              </ModalButton>
             </div>
           </form>
         </div>
@@ -507,19 +528,21 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
               <h4 id="account-submodal-title-email" className={MODAL_DIALOG_TITLE_CLASS}>
                 Alterar E-mail
               </h4>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 aria-label="Fechar"
                 onClick={onClose}
-                className={CLOSE_BUTTON_CLASS}
               >
                 <X className="w-4 h-4" />
-              </button>
+              </ModalButton>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>Novo E-mail</label>
+                <label className={MODAL_FIELD_LABEL_CLASS}>Novo e-mail</label>
                 <input
                   type="email"
                   value={newEmail}
@@ -531,34 +554,39 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
               </div>
 
               <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>Senha Atual (Confirmação)</label>
+                <label className={MODAL_FIELD_LABEL_CLASS}>Senha atual (confirmação)</label>
                 <input
                   type="password"
                   value={emailCurrentPassword}
                   onChange={(e) => setEmailCurrentPassword(e.target.value)}
                   className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  placeholder="Digite sua senha atual..."
                 />
               </div>
+
+              {user.two_factor_enabled && (
+                <AppInput
+                  label="Código 2FA (6 dígitos ou backup)"
+                  value={twoFactorActionCode}
+                  onChange={(e) => {
+                    setTwoFactorActionCode(e.target.value);
+                    setEmailError(null);
+                  }}
+                  maxLength={16}
+                  placeholder="000000"
+                  className="font-mono tracking-wider"
+                />
+              )}
 
               {emailError && <span className="text-[11px] text-dnd block">{emailError}</span>}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className={MODAL_CANCEL_BUTTON_CLASS}
-              >
+              <ModalButton type="secondary" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingEmail}
-                className={MODAL_PRIMARY_BUTTON_CLASS}
-              >
+              </ModalButton>
+              <ModalButton type="primary" htmlType="submit" loading={isSavingEmail}>
                 {isSavingEmail ? 'Salvando...' : 'Salvar E-mail'}
-              </button>
+              </ModalButton>
             </div>
           </form>
         </div>
@@ -583,14 +611,16 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
               <h4 id="account-submodal-title-phone" className={MODAL_DIALOG_TITLE_CLASS}>
                 {user.phone_number ? 'Editar Número de Telefone' : 'Adicionar Número de Telefone'}
               </h4>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 aria-label="Fechar"
                 onClick={onClose}
-                className={CLOSE_BUTTON_CLASS}
               >
                 <X className="w-4 h-4" />
-              </button>
+              </ModalButton>
             </div>
 
             <p className="text-xs text-gray-400">
@@ -614,20 +644,12 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className={MODAL_CANCEL_BUTTON_CLASS}
-              >
+              <ModalButton type="secondary" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingPhone}
-                className={MODAL_PRIMARY_BUTTON_CLASS}
-              >
+              </ModalButton>
+              <ModalButton type="primary" htmlType="submit" loading={isSavingPhone}>
                 {isSavingPhone ? 'Salvando...' : 'Salvar Telefone'}
-              </button>
+              </ModalButton>
             </div>
           </form>
         </div>
@@ -652,31 +674,32 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
               <h4 id="account-submodal-title-password" className={MODAL_DIALOG_TITLE_CLASS}>
                 Mudar Senha
               </h4>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 aria-label="Fechar"
                 onClick={onClose}
-                className={CLOSE_BUTTON_CLASS}
               >
                 <X className="w-4 h-4" />
-              </button>
+              </ModalButton>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>Senha Atual</label>
+                <label className={MODAL_FIELD_LABEL_CLASS}>Senha atual</label>
                 <input
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
-                  placeholder="••••••••"
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>Nova Senha</label>
+                <label className={MODAL_FIELD_LABEL_CLASS}>Nova senha</label>
                 <input
                   type="password"
                   value={newPassword}
@@ -687,39 +710,49 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
               </div>
 
               <div>
-                <label className={MODAL_FIELD_LABEL_CLASS}>Confirmar Nova Senha</label>
+                <label className={MODAL_FIELD_LABEL_CLASS}>Confirmar nova senha</label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
-                  placeholder="Repita a nova senha"
                 />
               </div>
+
+              {user.two_factor_enabled && (
+                <AppInput
+                  label="Código 2FA (6 dígitos ou backup)"
+                  value={twoFactorActionCode}
+                  onChange={(e) => {
+                    setTwoFactorActionCode(e.target.value);
+                    setPasswordError(null);
+                  }}
+                  maxLength={16}
+                  placeholder="000000"
+                  className="font-mono tracking-wider"
+                />
+              )}
 
               {passwordError && <span className="text-[11px] text-dnd block">{passwordError}</span>}
               {passwordSuccess && (
                 <span className="text-[11px] text-emerald-400 block font-semibold">
-                  Senha alterada com sucesso!
+                  Senha alterada com sucesso.
                 </span>
               )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className={MODAL_CANCEL_BUTTON_CLASS}
-              >
+              <ModalButton type="secondary" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingPassword || passwordSuccess}
-                className={MODAL_PRIMARY_BUTTON_CLASS}
+              </ModalButton>
+              <ModalButton
+                type="primary"
+                htmlType="submit"
+                loading={isSavingPassword}
+                disabled={passwordSuccess}
               >
                 {isSavingPassword ? 'Salvando...' : 'Salvar Nova Senha'}
-              </button>
+              </ModalButton>
             </div>
           </form>
         </div>
@@ -746,14 +779,16 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                   ? 'Desativar Autenticação 2FA'
                   : 'Configurar Autenticação 2FA (TOTP)'}
               </h4>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 aria-label="Fechar"
                 onClick={onClose}
-                className={CLOSE_BUTTON_CLASS}
               >
                 <X className="w-4 h-4" />
-              </button>
+              </ModalButton>
             </div>
 
             {!user.two_factor_enabled && qrCodeData && (
@@ -770,12 +805,6 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                 )}
               </div>
             )}
-
-            <p className="text-xs text-gray-400 leading-relaxed">
-              {user.two_factor_enabled
-                ? 'Para desativar a autenticação de dois fatores, insira o código de 6 dígitos gerado pelo seu app autenticador.'
-                : 'Escaneie o QR Code acima no Google Authenticator ou Authy e digite o código de 6 dígitos para ativar.'}
-            </p>
 
             <div>
               <label className={MODAL_FIELD_LABEL_CLASS}>Código de 6 dígitos</label>
@@ -797,26 +826,21 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className={MODAL_CANCEL_BUTTON_CLASS}
-              >
+              <ModalButton type="secondary" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={is2FALoading || totpCode.length < 6}
-                className={
-                  user.two_factor_enabled ? MODAL_DANGER_BUTTON_CLASS : MODAL_PRIMARY_BUTTON_CLASS
-                }
+              </ModalButton>
+              <ModalButton
+                type={user.two_factor_enabled ? 'error' : 'primary'}
+                htmlType="submit"
+                loading={is2FALoading}
+                disabled={totpCode.length < 6}
               >
                 {is2FALoading
                   ? 'Validando...'
                   : user.two_factor_enabled
                     ? 'Desativar 2FA'
                     : 'Ativar 2FA'}
-              </button>
+              </ModalButton>
             </div>
           </form>
         </div>
@@ -840,20 +864,22 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
               <h4 id="account-submodal-title-backup-codes" className={MODAL_DIALOG_TITLE_CLASS}>
                 Códigos de Backup de 2FA
               </h4>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 aria-label="Fechar"
                 onClick={onClose}
-                className={CLOSE_BUTTON_CLASS}
               >
                 <X className="w-4 h-4" />
-              </button>
+              </ModalButton>
             </div>
 
             <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-start gap-2.5">
               <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
               <p className="text-xs text-yellow-200/90 leading-relaxed">
-                Salve estes códigos em um local seguro! Cada código só pode ser usado{' '}
+                Salve estes códigos em um local seguro. Cada código só pode ser usado{' '}
                 <strong>uma única vez</strong> para acessar sua conta caso você perca seu
                 aplicativo autenticador.
               </p>
@@ -873,21 +899,23 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
 
             <div className="flex items-center justify-between pt-2">
               <div className="flex gap-2">
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  size="small"
+                  prefix={<Copy className="w-3.5 h-3.5" />}
                   onClick={() => {
                     copyToClipboard(backupCodes.join('\n'));
                     setCopiedBackupCodes(true);
                     setTimeout(() => setCopiedBackupCodes(false), 2000);
                   }}
-                  className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center gap-1.5`}
                 >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>{copiedBackupCodes ? 'Copiado!' : 'Copiar'}</span>
-                </button>
+                  {copiedBackupCodes ? 'Copiado' : 'Copiar'}
+                </ModalButton>
 
-                <button
-                  type="button"
+                <ModalButton
+                  type="secondary"
+                  size="small"
+                  prefix={<Download className="w-3.5 h-3.5" />}
                   onClick={() => {
                     const blob = new Blob([backupCodes.join('\n')], { type: 'text/plain' });
                     const url = URL.createObjectURL(blob);
@@ -899,20 +927,14 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                   }}
-                  className={`${MODAL_SECONDARY_BUTTON_CLASS} flex items-center gap-1.5`}
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Baixar .txt</span>
-                </button>
+                  Baixar .txt
+                </ModalButton>
               </div>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className={MODAL_PRIMARY_BUTTON_CLASS}
-              >
+              <ModalButton type="primary" size="small" onClick={onClose}>
                 Concluído
-              </button>
+              </ModalButton>
             </div>
           </div>
         </div>
@@ -940,59 +962,63 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
               >
                 Excluir Conta Permanentemente
               </h4>
-              <button
-                type="button"
+              <ModalButton
+                type="tertiary"
+                shape="circle"
+                size="small"
+                svgOnly
                 aria-label="Fechar"
                 onClick={onClose}
-                className={CLOSE_BUTTON_CLASS}
               >
                 <X className="w-4 h-4" />
-              </button>
+              </ModalButton>
             </div>
 
             <p className="text-xs text-gray-300 leading-relaxed">
               Você está prestes a excluir sua conta no ZeroVC. Esta ação{' '}
-              <strong>NÃO pode ser desfeita</strong>. Digite sua senha atual para confirmar a
-              exclusão.
+              <strong>não pode ser desfeita</strong>.
             </p>
 
             <div>
-              <label className={MODAL_FIELD_LABEL_CLASS}>Sua Senha Atual</label>
+              <label className={MODAL_FIELD_LABEL_CLASS}>Sua senha atual</label>
               <input
                 type="password"
                 value={deleteAccountPassword}
                 onChange={(e) => setDeleteAccountPassword(e.target.value)}
-                placeholder="Digite sua senha"
                 className="w-full bg-background-darker border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-dnd"
                 autoFocus
               />
+              {user.two_factor_enabled && (
+                <AppInput
+                  label="Código 2FA (6 dígitos ou backup)"
+                  value={twoFactorActionCode}
+                  onChange={(e) => {
+                    setTwoFactorActionCode(e.target.value);
+                    setDeleteAccountError(null);
+                  }}
+                  maxLength={16}
+                  placeholder="000000"
+                  className="font-mono tracking-wider"
+                  containerClassName="mt-3"
+                />
+              )}
               {deleteAccountError && (
                 <span className="text-[11px] text-dnd block mt-1">{deleteAccountError}</span>
               )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className={MODAL_CANCEL_BUTTON_CLASS}
-              >
+              <ModalButton type="secondary" onClick={onClose}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isDeletingAccount || !deleteAccountPassword.trim()}
-                className={MODAL_DANGER_BUTTON_CLASS}
+              </ModalButton>
+              <ModalButton
+                type="error"
+                htmlType="submit"
+                loading={isDeletingAccount}
+                disabled={!deleteAccountPassword.trim()}
               >
-                {isDeletingAccount ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Excluindo...</span>
-                  </>
-                ) : (
-                  <span>Confirmar Exclusão</span>
-                )}
-              </button>
+                {isDeletingAccount ? 'Excluindo...' : 'Confirmar Exclusão'}
+              </ModalButton>
             </div>
           </form>
         </div>

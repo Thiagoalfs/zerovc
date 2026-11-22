@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Star, Play } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useFavoriteGifStore } from '../../stores/favoriteGifStore';
 
@@ -90,21 +90,19 @@ export const GifEmbed: React.FC<GifEmbedProps> = ({
         className="max-h-[350px] max-w-full w-auto h-auto object-contain rounded-2xl cursor-pointer hover:opacity-95 transition-opacity block"
       />
 
-      {/* Static / Paused Overlay Badge */}
+      {/* Static / Paused Corner Badge */}
       {isGif && !autoplayGifs && !shouldAnimate && (
-        <div
+        <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             setIsPlayingManual(true);
           }}
-          className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center cursor-pointer group-hover/gif:bg-black/20 transition-all"
+          className="absolute top-2 left-2 z-10 bg-black/75 hover:bg-black/90 text-white border border-white/15 rounded px-1.5 py-0.5 font-bold text-[10px] tracking-wider uppercase shadow-sm cursor-pointer transition-colors"
           title="Clique ou passe o mouse para reproduzir GIF"
         >
-          <div className="bg-black/80 text-white border border-white/20 rounded-full px-3 py-1.5 flex items-center gap-1.5 shadow-xl font-bold text-xs tracking-wider group-hover/gif:scale-105 transition-transform">
-            <Play className="w-3.5 h-3.5 fill-current text-brand-400" />
-            <span>GIF</span>
-          </div>
-        </div>
+          GIF
+        </button>
       )}
 
       {/* Favorite Star Button */}

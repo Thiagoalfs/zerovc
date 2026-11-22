@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Copy, Check, Link as LinkIcon, Users, AlertCircle, RefreshCw, Settings2, Clock, Hash, ChevronDown, Sparkles } from 'lucide-react';
+import { X, Copy, Check, Link as LinkIcon, AlertCircle, RefreshCw, Settings2 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { api, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
 import { GuildInvite } from '../../types';
 import { DropdownSelect } from '../Common/DropdownSelect';
 import { useStreamerModeStore } from '../../stores/streamerModeStore';
+import { ModalButton } from '@/components/ui/modal-button';
 import {
   MODAL_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
@@ -14,9 +15,6 @@ import {
   MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
   MODAL_BACKDROP_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
-  MODAL_SECONDARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface InviteModalProps {
@@ -172,22 +170,23 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between relative flex-shrink-0`}>
           <div>
-            <h2 id="invite-modal-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
-              <Users className="w-5 h-5 text-brand-500" />
+            <h2 id="invite-modal-title" className={MODAL_TITLE_CLASS}>
               Convidar amigos
             </h2>
             <p className="text-xs text-gray-400 mt-1">
-              Envie o link de convite para amigos entrarem em {activeGuild.name}.
+              Convite para {activeGuild.name}
             </p>
           </div>
-          <button
-            type="button"
+          <ModalButton
+            type="tertiary"
+            shape="circle"
+            size="small"
+            svgOnly
             onClick={onClose}
             aria-label="Fechar"
-            className="text-gray-400 hover:text-gray-200 transition-colors cursor-pointer p-2 rounded-lg hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X className="w-5 h-5" />
-          </button>
+          </ModalButton>
         </div>
 
         {/* Content */}
@@ -203,13 +202,13 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                 <AlertCircle className="w-4 h-4" />
                 <span>{error}</span>
               </div>
-              <button
-                type="button"
+              <ModalButton
+                type="primary"
                 onClick={loadInvite}
-                className={`${MODAL_PRIMARY_BUTTON_CLASS} mx-auto`}
+                className="mx-auto"
               >
-                Tentar Novamente
-              </button>
+                Tentar novamente
+              </ModalButton>
             </div>
           ) : (
             <>
@@ -217,7 +216,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
               {!isExistingInvite && inviteCode && !showSettings && (
                 <div>
                   <label className={MODAL_FIELD_LABEL_CLASS}>
-                    Código de Convite (10 Caracteres)
+                    Código de convite
                   </label>
                   <div
                     onClick={() => handleCopyCode()}
@@ -227,14 +226,15 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                     <span className="flex-1 font-mono text-lg font-bold text-brand-500 tracking-wider select-all">
                       {isStreamerModeHidingInvites ? '••••••••' : inviteCode}
                     </span>
-                    <button
-                      type="button"
+                    <ModalButton
+                      type="primary"
+                      size="small"
                       onClick={(e) => handleCopyCode(e)}
-                      className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer flex-shrink-0"
+                      prefix={copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      className="flex-shrink-0"
                     >
-                      {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedCode ? 'Copiado!' : 'Copiar Hash'}</span>
-                    </button>
+                      {copiedCode ? 'Copiado' : 'Copiar código'}
+                    </ModalButton>
                   </div>
                 </div>
               )}
@@ -243,7 +243,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
               {!showSettings && fullInviteUrl && (
                 <div>
                   <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center justify-between`}>
-                    <span>Link de Convite do Servidor</span>
+                    <span>Link de convite</span>
                     {invite && (
                       <span className={`${MODAL_DESCRIPTION_CLASS} font-normal normal-case flex items-center gap-2`}>
                         <span>{formatExpirationText(invite.expires_at)}</span>
@@ -264,14 +264,15 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                     <span className="flex-1 text-xs text-gray-300 truncate font-mono select-all">
                       {isStreamerModeHidingInvites ? `${origin}/invite/••••••••` : fullInviteUrl}
                     </span>
-                    <button
-                      type="button"
+                    <ModalButton
+                      type="primary"
+                      size="small"
                       onClick={(e) => handleCopyLink(e)}
-                      className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer flex-shrink-0"
+                      prefix={copiedLink ? <Check className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
+                      className="flex-shrink-0"
                     >
-                      {copiedLink ? <Check className="w-3.5 h-3.5 text-white" /> : <LinkIcon className="w-3.5 h-3.5" />}
-                      <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link'}</span>
-                    </button>
+                      {copiedLink ? 'Link copiado' : 'Copiar link'}
+                    </ModalButton>
                   </div>
                 </div>
               )}
@@ -280,24 +281,22 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
               {showSettings ? (
                 <div className="bg-background-darkest/60 border border-white/10 rounded-xl p-4 space-y-4 animate-in fade-in zoom-in-95 duration-100 overflow-visible">
                   <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
-                    <span className={`${MODAL_SECTION_HEADER_CLASS} flex items-center gap-1.5 !mb-0`}>
-                      <Settings2 className="w-4 h-4 text-brand-500" />
-                      Configurações do Link de Convite
+                    <span className={`${MODAL_SECTION_HEADER_CLASS} !mb-0`}>
+                      Configurações do link
                     </span>
-                    <button
-                      type="button"
+                    <ModalButton
+                      type="tertiary"
+                      size="small"
                       onClick={() => setShowSettings(false)}
-                      className={MODAL_CANCEL_BUTTON_CLASS}
                     >
                       Cancelar
-                    </button>
+                    </ModalButton>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* Expira em */}
                     <div>
-                      <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center gap-1`}>
-                        <Clock className="w-3 h-3 text-gray-400" />
+                      <label className={MODAL_FIELD_LABEL_CLASS}>
                         Expira em
                       </label>
                       <DropdownSelect
@@ -313,8 +312,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
 
                     {/* Limite de usos */}
                     <div>
-                      <label className={`${MODAL_FIELD_LABEL_CLASS} flex items-center gap-1`}>
-                        <Hash className="w-3 h-3 text-gray-400" />
+                      <label className={MODAL_FIELD_LABEL_CLASS}>
                         Limite de usos
                       </label>
                       <DropdownSelect
@@ -330,38 +328,31 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                   </div>
 
                   <div className="pt-2 flex justify-end gap-2">
-                    <button
-                      type="button"
+                    <ModalButton
+                      type="secondary"
                       onClick={() => setShowSettings(false)}
-                      className={MODAL_SECONDARY_BUTTON_CLASS}
                     >
                       Voltar
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isGenerating}
+                    </ModalButton>
+                    <ModalButton
+                      type="primary"
+                      loading={isGenerating}
                       onClick={handleGenerateNewInvite}
-                      className={MODAL_PRIMARY_BUTTON_CLASS}
                     >
-                      {isGenerating ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-3.5 h-3.5" />
-                      )}
-                      <span>{isGenerating ? 'Gerando...' : 'Gerar Novo Link'}</span>
-                    </button>
+                      {isGenerating ? 'Gerando...' : 'Gerar novo link'}
+                    </ModalButton>
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="tertiary"
+                    size="small"
+                    prefix={<Settings2 className="w-3.5 h-3.5" />}
                     onClick={() => setShowSettings(true)}
-                    className="text-xs text-brand-400 hover:text-brand-300 hover:underline flex items-center gap-1.5 cursor-pointer font-medium transition-colors"
                   >
-                    <Settings2 className="w-3.5 h-3.5" />
-                    <span>Editar link de convite (Expiração e Limite de usos)</span>
-                  </button>
+                    Editar link de convite
+                  </ModalButton>
                 </div>
               )}
             </>

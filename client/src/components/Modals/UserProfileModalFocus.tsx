@@ -3,7 +3,6 @@ import { formatDateLong } from '../../utils/date';
 import {
   MessageSquare,
   Shield,
-  Calendar,
   Edit3,
   Gamepad2,
   Music,
@@ -24,10 +23,12 @@ import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useFriendStore } from '../../stores/friendStore';
+import { showAlert } from '../../stores/confirmModalStore';
 import { copyToClipboard } from '../../utils/clipboard';
 import { api, formatAssetUrl } from '../../lib/api';
 import { getUserActivity, useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
+import { ModalButton } from '@/components/ui/modal-button';
 
 export interface UserProfileModalFocusProps {
   user: User | null;
@@ -228,9 +229,9 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
     try {
       await sendRequest(user.username);
       setRequestSent(true);
-      alert(`Pedido de amizade enviado para @${user.username}!`);
+      showAlert({ title: 'Pedido enviado', message: `Pedido de amizade enviado para @${user.username}.`, variant: 'success' });
     } catch (err: any) {
-      alert(err?.message || 'Erro ao enviar pedido de amizade');
+      showAlert({ title: 'Erro', message: err?.message || 'Erro ao enviar pedido de amizade', variant: 'danger' });
     } finally {
       setIsSendingRequest(false);
     }
@@ -297,18 +298,21 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
               <ExternalLink className="w-5 h-5 drop-shadow" />
             </div>
           )}
-          <button
-            type="button"
+          <ModalButton
+            type="tertiary"
+            shape="circle"
+            size="small"
+            svgOnly
             aria-label="Fechar"
             onClick={(e) => {
               e.stopPropagation();
               onClose();
             }}
-            className="absolute top-3.5 right-3.5 p-2 rounded-full bg-black/60 hover:bg-black/80 text-gray-300 hover:text-white transition-all cursor-pointer shadow-lg backdrop-blur-md z-10 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="absolute top-3.5 right-3.5 bg-black/60 hover:bg-black/80 text-gray-300 hover:text-white shadow-lg backdrop-blur-md z-10"
             title="Fechar (ESC)"
           >
             <X className="w-4 h-4" />
-          </button>
+          </ModalButton>
         </div>
 
         {/* Profile Header & Content */}
@@ -344,57 +348,50 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
             {!isBot && (
               <div className="flex items-center gap-2 mb-1">
                 {isMe ? (
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="primary"
+                    size="small"
+                    prefix={<Edit3 className="w-4 h-4" />}
                     onClick={handleOpenEdit}
-                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darkest"
                   >
-                    <Edit3 className="w-4 h-4" />
-                    <span>Editar Perfil</span>
-                  </button>
+                    Editar perfil
+                  </ModalButton>
                 ) : isFriend ? (
-                  <button
-                    type="button"
+                  <ModalButton
+                    type="primary"
+                    size="small"
+                    prefix={<MessageSquare className="w-4 h-4" />}
                     onClick={handleStartChat}
-                    className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darkest"
                   >
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Enviar Mensagem</span>
-                  </button>
+                    Enviar mensagem
+                  </ModalButton>
                 ) : (
                   <div className="flex items-center gap-1.5 sm:gap-2">
-                    <button
-                      type="button"
+                    <ModalButton
+                      type="primary"
+                      size="small"
+                      loading={isSendingRequest}
+                      disabled={isPending || requestSent}
+                      prefix={isPending || requestSent ? <Check className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
                       onClick={handleAddFriend}
-                      disabled={isSendingRequest || isPending || requestSent}
-                      className={`active:scale-95 text-white font-semibold px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background-darkest ${
-                        isPending || requestSent
-                          ? 'bg-emerald-600/80 hover:bg-emerald-600'
-                          : 'bg-online hover:bg-online/90'
-                      }`}
                     >
-                      {isPending || requestSent ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>Pedido Enviado</span>
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="w-4 h-4" />
-                          <span>{isSendingRequest ? 'Enviando...' : 'Adicionar amigo'}</span>
-                        </>
-                      )}
-                    </button>
+                      {isPending || requestSent
+                        ? 'Pedido enviado'
+                        : isSendingRequest
+                          ? 'Enviando...'
+                          : 'Adicionar amigo'}
+                    </ModalButton>
 
-                    <button
-                      type="button"
+                    <ModalButton
+                      type="secondary"
+                      size="small"
+                      svgOnly
                       aria-label="Enviar Mensagem"
                       onClick={handleStartChat}
-                      className="bg-background-darker hover:bg-white/10 active:scale-95 text-gray-300 hover:text-white p-2 sm:p-2.5 rounded-xl transition-all border border-white/10 cursor-pointer shadow-md flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       title="Enviar Mensagem"
                     >
                       <MessageSquare className="w-4 h-4" />
-                    </button>
+                    </ModalButton>
                   </div>
                 )}
               </div>
@@ -677,15 +674,10 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                     </span>
                     <div className={`grid gap-2 ${guild ? 'grid-cols-2' : 'grid-cols-1'}`}>
                       {/* Data de criação da conta */}
-                      <div className="flex items-center gap-2.5 py-1 px-1 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center shrink-0">
-                          <Calendar className="w-4 h-4 text-brand-400" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">No ZeroVC</div>
-                          <div className="text-xs font-semibold text-gray-200 truncate" title={createdDateStr}>
-                            {createdDateStr || 'Desconhecido'}
-                          </div>
+                      <div className="py-1 px-1 min-w-0">
+                        <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">No ZeroVC</div>
+                        <div className="text-xs font-semibold text-gray-200 truncate" title={createdDateStr}>
+                          {createdDateStr || 'Desconhecido'}
                         </div>
                       </div>
 

@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Keyboard, Mic, Headphones, Monitor, Radio, RotateCcw, Check, Sparkles, X } from 'lucide-react';
 import { isElectron } from '../../lib/platform';
+import { ModalButton } from '@/components/ui/modal-button';
+import { SettingsGroup } from '@/components/ui/settings-group';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_DESCRIPTION_CLASS,
   MODAL_ITEM_ROW_PADDING_CLASS,
 } from '../../constants/modalTypography';
 
-interface ShortcutConfig {
+export interface ShortcutConfig {
   id: string;
   name: string;
   description: string;
@@ -17,7 +19,7 @@ interface ShortcutConfig {
   electronAction: string;
 }
 
-const SHORTCUTS: ShortcutConfig[] = [
+export const SHORTCUTS: ShortcutConfig[] = [
   {
     id: 'toggle_mute',
     name: 'Mutar / Desmutar Microfone',
@@ -56,6 +58,44 @@ const SHORTCUTS: ShortcutConfig[] = [
   },
 ];
 
+export const registeredGlobalActions = new Set<string>();
+
+export const normalizeEventKey = (e: KeyboardEvent): string => {
+  let keyName = e.code || e.key;
+  if (keyName.startsWith('Key')) keyName = keyName.slice(3);
+  else if (keyName.startsWith('Digit')) keyName = keyName.slice(5);
+  else if (keyName === 'Space' || keyName === ' ') keyName = 'Space';
+  return keyName;
+};
+
+export const eventToKeyCombo = (e: KeyboardEvent): string => {
+  const parts: string[] = [];
+  if (e.ctrlKey || e.metaKey) parts.push('Control');
+  if (e.shiftKey) parts.push('Shift');
+  if (e.altKey) parts.push('Alt');
+  parts.push(normalizeEventKey(e));
+  return parts.join('+');
+};
+
+export const syncElectronShortcuts = async (bindingsOverride?: Record<string, string>) => {
+  registeredGlobalActions.clear();
+  if (!isElectron() || !window.electronAPI?.registerGlobalShortcut) return;
+  try {
+    await window.electronAPI.unregisterAllShortcuts?.();
+  } catch {}
+  for (const sc of SHORTCUTS) {
+    if (sc.id === 'ptt_key') continue; // PTT is handled in renderer
+    const key = bindingsOverride?.[sc.id] ?? localStorage.getItem(sc.storageKey) ?? sc.defaultKey;
+    if (key) {
+      const accelerator = key.replace(/Control/g, 'CommandOrControl');
+      try {
+        const ok = await window.electronAPI.registerGlobalShortcut(accelerator, sc.electronAction);
+        if (ok) registeredGlobalActions.add(sc.electronAction);
+      } catch {}
+    }
+  }
+};
+
 export const KeybindSettingsView: React.FC = () => {
   const [bindings, setBindings] = useState<Record<string, string>>({});
   const [recordingId, setRecordingId] = useState<string | null>(null);
@@ -71,16 +111,7 @@ export const KeybindSettingsView: React.FC = () => {
   }, []);
 
   const registerElectronShortcuts = (newBindings: Record<string, string>) => {
-    if (isElectron() && window.electronAPI?.registerGlobalShortcut) {
-      for (const sc of SHORTCUTS) {
-        if (sc.id === 'ptt_key') continue; // PTT is handled in renderer
-        const key = newBindings[sc.id];
-        if (key) {
-          const accelerator = key.replace(/Control/g, 'CommandOrControl');
-          window.electronAPI.registerGlobalShortcut(accelerator, sc.electronAction).catch(() => {});
-        }
-      }
-    }
+    void syncElectronShortcuts(newBindings);
   };
 
   // Global window key listener when recording
@@ -102,18 +133,7 @@ export const KeybindSettingsView: React.FC = () => {
         return;
       }
 
-      const parts: string[] = [];
-      if (e.ctrlKey || e.metaKey) parts.push('Control');
-      if (e.shiftKey) parts.push('Shift');
-      if (e.altKey) parts.push('Alt');
-
-      let keyName = e.code || e.key;
-      if (keyName.startsWith('Key')) keyName = keyName.slice(3);
-      else if (keyName.startsWith('Digit')) keyName = keyName.slice(5);
-      else if (keyName === 'Space' || keyName === ' ') keyName = 'Space';
-
-      parts.push(keyName);
-      const keyCombination = parts.join('+');
+      const keyCombination = eventToKeyCombo(e);
 
       const targetShortcut = SHORTCUTS.find((s) => s.id === recordingId);
       if (targetShortcut) {
@@ -170,7 +190,7 @@ export const KeybindSettingsView: React.FC = () => {
         </div>
       )}
 
-      <div className="divide-y divide-white/5">
+      <SettingsGroup>
         {SHORTCUTS.map((sc) => {
           const isRecording = recordingId === sc.id;
           const currentKey = bindings[sc.id] || sc.defaultKey;
@@ -203,14 +223,16 @@ export const KeybindSettingsView: React.FC = () => {
                       <div className="px-3.5 py-1.5 bg-brand-500 text-white text-xs font-bold rounded-xl animate-pulse shadow-md shadow-brand-500/30">
                         Pressione as teclas...
                       </div>
-                      <button
-                        type="button"
+                      <ModalButton
+                        type="tertiary"
+                        svgOnly
+                        size="small"
                         onClick={() => setRecordingId(null)}
-                        className="p-1.5 text-gray-400 hover:text-white bg-black/40 hover:bg-white/10 rounded-xl border border-white/10 transition-colors cursor-pointer"
                         title="Cancelar (Esc)"
+                        aria-label="Cancelar gravação de atalho"
                       >
                         <X className="w-3.5 h-3.5" />
-                      </button>
+                      </ModalButton>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -224,14 +246,16 @@ export const KeybindSettingsView: React.FC = () => {
                       </button>
 
                       {currentKey !== sc.defaultKey && (
-                        <button
-                          type="button"
+                        <ModalButton
+                          type="tertiary"
+                          svgOnly
+                          size="small"
                           onClick={() => handleResetDefault(sc)}
-                          className="p-1.5 text-gray-400 hover:text-white bg-background-darkest hover:bg-white/5 rounded-xl border border-white/5 transition-colors cursor-pointer"
                           title="Restaurar atalho padrão"
+                          aria-label="Restaurar atalho padrão"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
-                        </button>
+                        </ModalButton>
                       )}
                     </div>
                   )}
@@ -240,7 +264,7 @@ export const KeybindSettingsView: React.FC = () => {
             </div>
           );
         })}
-      </div>
+      </SettingsGroup>
     </div>
   );
 };

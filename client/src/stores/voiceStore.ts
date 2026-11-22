@@ -815,10 +815,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         localStorage.setItem('zerovc_user_deafened', String(nextDeafened));
       } catch {}
 
-      await livekit.setMuted(nextMuted);
-      if (!nextMuted && isDeafened) {
-        await livekit.setDeafened(false);
-      }
+      set({ isMuted: nextMuted, isDeafened: nextDeafened });
 
       if (nextMuted) {
         playMuteSound();
@@ -826,7 +823,14 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         playUnmuteSound();
       }
 
-      set({ isMuted: nextMuted, isDeafened: nextDeafened });
+      try {
+        await livekit.setMuted(nextMuted);
+        if (!nextMuted && isDeafened) {
+          await livekit.setDeafened(false);
+        }
+      } catch (err) {
+        console.warn('[Voice] Failed to apply mute state:', err);
+      }
 
       if (voiceType === 'guild' && currentChannelId) {
         try {

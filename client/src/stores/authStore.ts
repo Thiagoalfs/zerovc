@@ -28,6 +28,7 @@ interface AuthState {
   checkAuth: () => Promise<void>;
   updateProfile: (data: {
     username?: string;
+    code?: string;
     phone_number?: string;
     display_name?: string;
     avatar_url?: string;
@@ -131,6 +132,12 @@ const cleanupAllStoresAndConnections = async () => {
     speakingUserIds: [],
   });
 };
+
+// Track in-flight profile updates per key so stale responses and USER_UPDATE broadcasts don't clobber newer optimistic clicks.
+const pendingProfileCount: Record<string, number> = {};
+const latestProfileSeq: Record<string, number> = {};
+
+export const hasPendingProfileField = (key: string): boolean => (pendingProfileCount[key] || 0) > 0;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -328,9 +335,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   updateProfile: async (data) => {
-    const updated = await api.users.updateProfile(data);
-    set({ user: updated });
-    return updated;
+    const keys = Object.keys(data);
+    const mySeq: Record<string, number> = {};
+    for (const key of keys) {
+      pendingProfileCount[key] = (pendingProfileCount[key] || 0) + 1;
+      latestProfileSeq[key] = (latestProfileSeq[key] || 0) + 1;
+      mySeq[key] = latestProfileSeq[key];
+    }
+    try {
+      const updated = await api.users.updateProfile(data);
+      set((state) => {
+        if (!state.user) return { user: updated };
+        const patched: Record<string, any> = {};
+        for (const key of keys) {
+          if (mySeq[key] === latestProfileSeq[key] && key in updated) {
+            patched[key] = (updated as any)[key];
+          }
+        }
+        return Object.keys(patched).length > 0 ? { user: { ...state.user, ...patched } } : state;
+      });
+      return updated;
+    } finally {
+      for (const key of keys) {
+        pendingProfileCount[key] = Math.max(0, (pendingProfileCount[key] || 1) - 1);
+      }
+    }
   },
 
   setUser: (user: Partial<User> & { id?: string }) => {

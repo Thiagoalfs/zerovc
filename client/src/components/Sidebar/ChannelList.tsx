@@ -46,6 +46,7 @@ import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { getFormattedUsername, useStreamerModeStore } from '../../stores/streamerModeStore';
 import { DeleteChannelModal } from '../Modals/DeleteChannelModal';
+import { showConfirm } from '../../stores/confirmModalStore';
 
 interface ChannelListProps {
   isHomeActive: boolean;
@@ -707,7 +708,13 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           icon: <UserMinus className="w-4 h-4" />,
           variant: 'danger',
           onClick: async () => {
-            if (confirm(`Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`)) {
+            const ok = await showConfirm({
+              title: 'Expulsar membro',
+              message: `Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`,
+              confirmText: 'Expulsar',
+              variant: 'danger',
+            });
+            if (ok) {
               await kickMember(activeGuild.id, targetMember.id);
             }
           },

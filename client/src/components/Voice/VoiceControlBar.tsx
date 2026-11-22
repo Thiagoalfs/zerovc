@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, MicOff, Headphones, Monitor, PhoneOff, Video, VideoOff } from 'lucide-react';
+import { Mic, MicOff, Headphones, Monitor, MonitorOff, PhoneOff, Video, VideoOff } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
@@ -36,6 +36,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
     e.preventDefault();
     e.stopPropagation();
     if (isScreensharing) {
+      const rect = e.currentTarget.getBoundingClientRect();
       const items: ContextMenuItem[] = [
         {
           id: 'switch-screen',
@@ -52,13 +53,18 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
         {
           id: 'stop-screen',
           label: 'Parar compartilhamento',
+          icon: <MonitorOff className="w-4 h-4" />,
           variant: 'danger',
           onClick: () => {
             stopScreenShare();
           },
         },
       ];
-      openContextMenu(e, items);
+      openContextMenu(
+        { clientX: rect.left + rect.width / 2, clientY: rect.top - 10 },
+        items,
+        'Transmissão de Tela'
+      );
     } else {
       if (onOpenScreenShare) {
         onOpenScreenShare();

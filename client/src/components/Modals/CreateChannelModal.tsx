@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { X, Hash, Volume2, Lock } from 'lucide-react';
+import { Hash, Volume2, Lock } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
+import { SquishSwitch } from '../ui/squish-switch';
+import {
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
+import { AppInput } from '@/components/ui/app-input';
+import { InlineAlert } from '@/components/ui/inline-alert';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
-  MODAL_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
   MODAL_SECTION_HEADER_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
-  MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_BACKDROP_CLASS,
-  MODAL_CANCEL_BUTTON_CLASS,
-  MODAL_PRIMARY_BUTTON_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateChannelModalProps {
@@ -45,17 +48,6 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
     }
   }, [isOpen, initialType]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
   if (!isOpen || !activeGuild) return null;
 
   const roles = activeGuild.roles || [];
@@ -87,35 +79,20 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
   };
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="create-channel-modal-title"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-channel-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto flex flex-col rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} relative flex-shrink-0 border-b border-white/5`}>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 cursor-pointer p-2 rounded-lg hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <h2 id="create-channel-modal-title" className={MODAL_TITLE_CLASS}>Criar Canal</h2>
-          <p className="text-xs text-gray-400 mt-1 truncate">em {activeGuild.name}</p>
-        </div>
+      <AppModalHeader
+        title="Criar Canal"
+        subtitle={`em ${activeGuild.name}`}
+        titleId="create-channel-modal-title"
+        onClose={onClose}
+      />
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className={`${MODAL_BODY_PADDING_CLASS} space-y-4 overflow-y-auto flex-1 no-scrollbar`}>
-          {error && <div className="p-3 bg-dnd/20 text-dnd text-xs rounded-md">{error}</div>}
+      <AppModalBody onSubmit={handleSubmit}>
+          {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
           {/* Type Selector */}
           <div>
@@ -138,14 +115,9 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                   }`} />
                 </div>
                 <Hash className={`w-5 h-5 flex-shrink-0 transition-colors ${type === 'text' ? 'text-white' : 'text-gray-400'}`} />
-                <div className="flex flex-col min-w-0">
-                  <span className={`${MODAL_TOGGLE_HEADER_CLASS} transition-colors ${type === 'text' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
-                    Canal de Texto
-                  </span>
-                  <span className={MODAL_DESCRIPTION_CLASS}>
-                    Poste mensagens, imagens e memes
-                  </span>
-                </div>
+                <span className={`${MODAL_TOGGLE_HEADER_CLASS} transition-colors ${type === 'text' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
+                  Canal de Texto
+                </span>
               </div>
 
               {/* Voice Option */}
@@ -163,38 +135,24 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                   }`} />
                 </div>
                 <Volume2 className={`w-5 h-5 flex-shrink-0 transition-colors ${type === 'voice' ? 'text-white' : 'text-gray-400'}`} />
-                <div className="flex flex-col min-w-0">
-                  <span className={`${MODAL_TOGGLE_HEADER_CLASS} transition-colors ${type === 'voice' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
-                    Canal de Voz
-                  </span>
-                  <span className={MODAL_DESCRIPTION_CLASS}>
-                    Converse por voz e compartilhe tela
-                  </span>
-                </div>
+                <span className={`${MODAL_TOGGLE_HEADER_CLASS} transition-colors ${type === 'voice' ? 'text-white' : 'text-gray-300 group-hover:text-gray-100'}`}>
+                  Canal de Voz
+                </span>
               </div>
             </div>
           </div>
 
           {/* Name Field */}
-          <div>
-            <label className={MODAL_FIELD_LABEL_CLASS}>
-              Nome do Canal
-            </label>
-            <div className="relative flex items-center">
-              <span className="absolute left-3 text-gray-400">
-                {type === 'text' ? '#' : <Volume2 className="w-4 h-4" />}
-              </span>
-              <input
-                type="text"
-                required
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={type === 'text' ? 'novo-canal' : 'novo-canal-de-voz'}
-                className="w-full bg-background-darkest text-white pl-8 pr-3 py-2.5 rounded-lg border border-white/5 focus:outline-none focus:border-brand-500 text-sm"
-              />
-            </div>
-          </div>
+          <AppInput
+            label="Nome do Canal"
+            leftIcon={type === 'text' ? <span className="text-sm leading-none">#</span> : <Volume2 className="w-4 h-4" />}
+            type="text"
+            required
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={type === 'text' ? 'novo-canal' : 'novo-canal-de-voz'}
+          />
 
           {/* Private Channel Toggle */}
           <div className="space-y-3 pt-1">
@@ -207,19 +165,12 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsPrivate(!isPrivate)}
-                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  isPrivate ? 'bg-brand-500' : 'bg-gray-700'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                    isPrivate ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+              <SquishSwitch
+                size="sm"
+                checked={isPrivate}
+                onCheckedChange={setIsPrivate}
+                className={isPrivate ? 'bg-brand-500' : 'bg-gray-700'}
+              />
             </div>
 
             {/* Roles Multi-select when Private */}
@@ -265,25 +216,14 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
             )}
           </div>
 
-          {/* Footer actions */}
-          <div className="flex justify-between items-center pt-3 border-t border-white/5">
-            <button
-              type="button"
-              onClick={onClose}
-              className={MODAL_CANCEL_BUTTON_CLASS}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || !name.trim()}
-              className={MODAL_PRIMARY_BUTTON_CLASS}
-            >
-              {isLoading ? 'Criando...' : 'Criar Canal'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          <AppModalFooter
+            onCancel={onClose}
+            confirmText={isLoading ? 'Criando...' : 'Criar Canal'}
+            confirmHtmlType="submit"
+            loading={isLoading}
+            disabled={!name.trim()}
+          />
+        </AppModalBody>
+      </AppModal>
   );
 };

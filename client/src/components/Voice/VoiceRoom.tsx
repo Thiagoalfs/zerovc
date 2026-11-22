@@ -98,6 +98,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
         {
           id: 'stop-screen',
           label: 'Parar compartilhamento',
+          icon: <MonitorOff className="w-4 h-4" />,
           variant: 'danger',
           onClick: () => {
             stopScreenShare();
