@@ -78,8 +78,11 @@
     ],
     "compression": "normal",
     "asar": true,
-    "asarUnpack": [
-      "dist-electron/bin/*"
+    "extraResources": [
+      {
+        "from": "dist-electron/bin",
+        "to": "bin"
+      }
     ],
     "directories": {
       "output": "release"
@@ -87,6 +90,7 @@
     "icon": "electron/icon.png",
     "files": [
       "dist-electron/**/*",
+      "!dist-electron/bin/**",
       "package.json",
       "!**/*.map"
     ],

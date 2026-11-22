@@ -1741,6 +1741,9 @@ ipcMain.handle('stop-process-audio-capture', async () => {
 
 function getAudioCaptureBinaryPath(): string {
   const binaryName = 'zerovc-audio-capture.exe';
+  const resourcesBinPath = path.join(process.resourcesPath, 'bin', binaryName);
+  if (fs.existsSync(resourcesBinPath)) return resourcesBinPath;
+
   const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'dist-electron', 'bin', binaryName);
   if (fs.existsSync(unpackedPath)) return unpackedPath;
 
@@ -1758,6 +1761,7 @@ let activeScreenShareProcess: ChildProcess | null = null;
 function getNativeScreenShareBinaryPath(): string | null {
   const binaryName = process.platform === 'win32' ? 'zerovc-screenshare.exe' : 'zerovc-screenshare';
   const candidates = [
+    path.join(process.resourcesPath, 'bin', binaryName),
     path.join(process.resourcesPath, 'app.asar.unpacked', 'dist-electron', 'bin', binaryName),
     path.join(__dirname, 'bin', binaryName),
     path.join(__dirname, '..', 'electron', 'bin', binaryName),
