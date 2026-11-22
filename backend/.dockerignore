@@ -1,0 +1,4 @@
+# Served via bind mount (../backend/web:/app/web); never bake installers into the image
+web/downloads/
+# Dockerfile builds with -mod=mod
+vendor/
