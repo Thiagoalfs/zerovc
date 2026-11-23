@@ -1,21 +1,84 @@
-import React from 'react';
-import { Mic, MicOff, Headphones, Monitor, MonitorOff, PhoneOff, Video, VideoOff } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Mic, MicOff, Headphones, Monitor, MonitorOff, PhoneOff, Video, VideoOff, Maximize2, Minimize2 } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
 
+/**
+ * Shared fullscreen toggle state (Electron window or DOM fullscreen + ESC exit)
+ * for call stages across server channels, DM groups, and private DMs.
+ */
+export function useStageFullscreen() {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((prev) => {
+      const next = !prev;
+      if (window.electronAPI?.setFullScreen) {
+        window.electronAPI.setFullScreen(next);
+      } else if (next) {
+        void document.documentElement.requestFullscreen?.().catch(() => {});
+      } else if (document.fullscreenElement) {
+        void document.exitFullscreen?.().catch(() => {});
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+        if (window.electronAPI?.setFullScreen) {
+          window.electronAPI.setFullScreen(false);
+        } else if (document.fullscreenElement) {
+          void document.exitFullscreen?.().catch(() => {});
+        }
+      }
+    };
+    const handleFsChange = () => {
+      if (!document.fullscreenElement && !window.electronAPI?.setFullScreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('fullscreenchange', handleFsChange);
+    };
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    return () => {
+      if (window.electronAPI?.setFullScreen) {
+        window.electronAPI.setFullScreen(false);
+      } else if (document.fullscreenElement) {
+        void document.exitFullscreen?.().catch(() => {});
+      }
+    };
+  }, []);
+
+  return { isFullscreen, toggleFullscreen };
+}
+
 export interface VoiceControlBarProps {
   className?: string;
   onOpenScreenShare?: () => void;
   onDisconnect?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
   className = '',
   onOpenScreenShare,
   onDisconnect,
+  isFullscreen = false,
+  onToggleFullscreen,
 }) => {
   const {
     isMuted,
@@ -88,7 +151,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
   return (
     <>
       <div
-        className={`bg-background-darkest/95 px-4 md:px-6 py-2 rounded-2xl shadow-2xl flex items-center gap-3 md:gap-4 border border-white/10 select-none ${className}`}
+        className={`flex items-center justify-center gap-2.5 sm:gap-3.5 pt-1 select-none ${className}`}
         onClick={(e) => e.stopPropagation()}
         onDoubleClick={(e) => e.stopPropagation()}
       >
@@ -99,14 +162,14 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
             hapticMedium();
             toggleMute();
           }}
-          className={`p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
             isMuted
-              ? 'bg-dnd text-white hover:bg-dnd/80'
-              : 'bg-background-light text-gray-200 hover:bg-white/20'
+              ? 'bg-dnd text-white hover:bg-rose-700'
+              : 'bg-background-light hover:bg-white/15 text-white'
           }`}
           title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
         >
-          {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
 
         {/* Deafen */}
@@ -116,17 +179,17 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
             hapticMedium();
             toggleDeafen();
           }}
-          className={`p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
             isDeafened
-              ? 'bg-dnd text-white hover:bg-dnd/80'
-              : 'bg-background-light text-gray-200 hover:bg-white/20'
+              ? 'bg-dnd text-white hover:bg-rose-700'
+              : 'bg-background-light hover:bg-white/15 text-white'
           }`}
           title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
         >
           {isDeafened ? (
-            <HeadphonesOff className="w-5 h-5" />
+            <HeadphonesOff className="w-4 h-4 sm:w-5 sm:h-5" />
           ) : (
-            <Headphones className="w-5 h-5" />
+            <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
           )}
         </button>
 
@@ -137,41 +200,56 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
             hapticMedium();
             toggleCamera();
           }}
-          className={`p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
             isCameraOn
-              ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
-              : 'bg-background-light text-gray-200 hover:bg-white/20'
+              ? 'bg-online text-white hover:bg-emerald-600'
+              : 'bg-background-light hover:bg-white/15 text-white'
           }`}
           title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
         >
-          {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+          {isCameraOn ? <Video className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
 
         {/* Screen Share */}
         <button
           type="button"
           onClick={handleScreenShareClick}
-          className={`flex p-2.5 md:p-3 rounded-full transition-all cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
             isScreensharing
-              ? 'bg-online text-white hover:bg-online/80 ring-2 ring-online/50'
-              : 'bg-background-light text-gray-200 hover:bg-white/20'
+              ? 'bg-online text-white hover:bg-emerald-600'
+              : 'bg-background-light hover:bg-white/15 text-white'
           }`}
-          title={isScreensharing ? 'Opções de Compartilhamento de Tela' : 'Compartilhar Tela'}
+          title={isScreensharing ? 'Opções de Compartilhamento' : 'Compartilhar Tela'}
         >
-          <Monitor className="w-5 h-5" />
+          <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
-
-        <div className="w-[1px] h-7 bg-white/10 mx-0.5" />
 
         {/* Disconnect */}
         <button
           type="button"
           onClick={handleDisconnect}
-          className="p-2.5 md:p-3 rounded-full bg-dnd/20 text-dnd hover:bg-dnd hover:text-white transition-all cursor-pointer active:scale-95"
-          title="Desconectar da Sala"
+          className="bg-dnd hover:bg-rose-700 text-white p-2.5 sm:p-3 rounded-full transition-all shadow-lg cursor-pointer ml-1 active:scale-95"
+          title="Desconectar da Voz"
         >
-          <PhoneOff className="w-5 h-5" />
+          <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
+
+        {/* Optional Fullscreen Button (Server VoiceRoom) */}
+        {onToggleFullscreen && (
+          <button
+            type="button"
+            onClick={onToggleFullscreen}
+            className="bg-background-light hover:bg-white/15 text-white p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95"
+            title={isFullscreen ? 'Sair da Tela Cheia (Esc)' : 'Tela Cheia'}
+            aria-label={isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5" />
+            ) : (
+              <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />
+            )}
+          </button>
+        )}
       </div>
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />

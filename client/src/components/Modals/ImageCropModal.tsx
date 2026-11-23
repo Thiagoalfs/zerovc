@@ -40,11 +40,14 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
   const [rotation, setRotation] = useState<number>(0);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isProcessing, setIsProcessing] = useState(false);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
 
   const isAnimatedGif = file ? isGif(file) : false;
 
@@ -125,9 +128,11 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
       setZoom(1);
       setRotation(0);
       setPan({ x: 0, y: 0 });
+      panRef.current = { x: 0, y: 0 };
       setIsProcessing(false);
 
       return () => {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
         URL.revokeObjectURL(url);
       };
     } else {
@@ -135,11 +140,23 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
     }
   }, [isOpen, file]);
 
+  const applyTransform = useCallback(
+    (x: number, y: number, currentZoom: number, rot: number) => {
+      if (!imgRef.current) return;
+      imgRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${rot}deg) scale(${coverScale * currentZoom})`;
+    },
+    [coverScale]
+  );
+
   const handleZoomChange = useCallback(
     (newZoom: number) => {
       const clampedZoom = Math.min(Math.max(newZoom, minZoom), maxZoom);
       setZoom(clampedZoom);
-      setPan((prev) => clampPan(prev.x, prev.y, clampedZoom, rotation));
+      setPan((prev) => {
+        const next = clampPan(prev.x, prev.y, clampedZoom, rotation);
+        panRef.current = next;
+        return next;
+      });
     },
     [minZoom, maxZoom, clampPan, rotation]
   );
@@ -154,55 +171,57 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
     [handleZoomChange, zoom]
   );
 
-  // Mouse drag handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
+  // Pointer drag handlers (zero React re-renders during drag via rAF + direct GPU transform)
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDraggingRef.current = true;
     setIsDragging(true);
-    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    dragStartRef.current = { x: e.clientX - panRef.current.x, y: e.clientY - panRef.current.y };
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    const rawX = e.clientX - dragStart.x;
-    const rawY = e.clientY - dragStart.y;
-    setPan(clampPan(rawX, rawY));
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    const rawX = e.clientX - dragStartRef.current.x;
+    const rawY = e.clientY - dragStartRef.current.y;
+    const clamped = clampPan(rawX, rawY);
+    panRef.current = clamped;
+
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      applyTransform(clamped.x, clamped.y, zoom, rotation);
+    });
   };
 
-  const handleMouseUp = () => {
+  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
     setIsDragging(false);
-  };
-
-  // Touch drag handlers
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 1) {
-      setIsDragging(true);
-      setDragStart({
-        x: e.touches[0].clientX - pan.x,
-        y: e.touches[0].clientY - pan.y,
-      });
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
     }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || e.touches.length !== 1) return;
-    const rawX = e.touches[0].clientX - dragStart.x;
-    const rawY = e.touches[0].clientY - dragStart.y;
-    setPan(clampPan(rawX, rawY));
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    setPan(panRef.current);
   };
 
   const handleRotate = () => {
     const nextRotation = (rotation + 90) % 360;
     setRotation(nextRotation);
-    setPan((prev) => clampPan(prev.x, prev.y, zoom, nextRotation));
+    setPan((prev) => {
+      const next = clampPan(prev.x, prev.y, zoom, nextRotation);
+      panRef.current = next;
+      return next;
+    });
   };
 
   const handleReset = () => {
     setZoom(1);
     setRotation(0);
+    panRef.current = { x: 0, y: 0 };
     setPan({ x: 0, y: 0 });
   };
 
@@ -259,9 +278,6 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
     >
       <div
         role="dialog"
@@ -294,20 +310,14 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
           <div
             ref={containerRef}
             onWheel={handleWheel}
-            onMouseDown={handleMouseDown}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            className="relative overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center cursor-grab active:cursor-grabbing shadow-inner max-w-[calc(100vw-48px)]"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerEnd}
+            className="relative overflow-hidden bg-black/70 border border-white/10 rounded-xl flex items-center justify-center cursor-grab active:cursor-grabbing shadow-inner max-w-[calc(100vw-48px)] touch-none select-none"
             style={{
-              width: `${viewportSize.width}px`,
-              height: `${viewportSize.height}px`,
-              borderRadius:
-                cropType === 'avatar'
-                  ? '9999px'
-                  : cropType === 'guildIcon'
-                  ? '28px'
-                  : '16px',
+              width: `${isBanner ? viewportSize.width + 32 : viewportSize.width + 64}px`,
+              height: `${viewportSize.height + 64}px`,
             }}
           >
             {/* Movable & Scalable Image */}
@@ -316,6 +326,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
               src={imageSrc}
               alt="Crop Preview"
               draggable={false}
+              decoding="async"
               onLoad={(e) => {
                 const img = e.currentTarget;
                 setImageDimensions({
@@ -323,15 +334,30 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
                   height: img.naturalHeight,
                 });
               }}
-              className="max-w-none pointer-events-none transition-transform duration-75"
+              className={`max-w-none pointer-events-none will-change-transform ${
+                isDragging ? '' : 'transition-transform duration-150 ease-out'
+              }`}
               style={{
-                transform: `translate(${pan.x}px, ${pan.y}px) rotate(${rotation}deg) scale(${coverScale * zoom})`,
+                transform: `translate3d(${pan.x}px, ${pan.y}px, 0) rotate(${rotation}deg) scale(${coverScale * zoom})`,
                 transformOrigin: 'center center',
               }}
             />
 
-            {/* Framing Guide Overlay */}
-            <div className="absolute inset-0 border-2 border-brand-400/40 pointer-events-none rounded-[inherit]" />
+            {/* Framing Guide Overlay: clear center hole + dimmed outer area */}
+            <div
+              className="absolute pointer-events-none border-2 border-white"
+              style={{
+                width: `${viewportSize.width}px`,
+                height: `${viewportSize.height}px`,
+                borderRadius:
+                  cropType === 'avatar'
+                    ? '9999px'
+                    : cropType === 'guildIcon'
+                    ? '28px'
+                    : '16px',
+                boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.6)',
+              }}
+            />
           </div>
 
           {/* Controls Bar (Zoom, Rotate, Reset) */}

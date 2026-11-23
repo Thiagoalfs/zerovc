@@ -195,6 +195,7 @@ type Channel struct {
 	RotationEpoch        int                          `json:"rotation_epoch"`
 	AudienceLimit        int                          `json:"audience_limit"`
 	AudienceHash         *string                      `json:"audience_hash,omitempty"`
+	SlowmodeSeconds      int                          `json:"slowmode_seconds"`
 	CreatedAt            time.Time                    `json:"created_at"`
 }
 

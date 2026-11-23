@@ -31,7 +31,7 @@ func NewMessageHandler(db *database.DB, hub *gateway.Hub) *MessageHandler {
 }
 
 func (h *MessageHandler) broadcastChannelEvent(ctx context.Context, guildID, channelID uuid.UUID, isPrivate bool, event models.WSEvent) {
-	if !isPrivate {
+	if !channelHasViewRestrictions(ctx, h.db, guildID, channelID, isPrivate) {
 		h.hub.BroadcastToGuild(guildID, event)
 		return
 	}
@@ -83,12 +83,13 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Verify channel & membership, plus load E2EE state
+	// 1. Verify channel & membership, plus load E2EE & slowmode state
 	var guildID uuid.UUID
 	var isPrivate bool
 	var e2eeEnabled bool
 	var rotationEpoch int
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private, COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1) FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate, &e2eeEnabled, &rotationEpoch)
+	var slowmodeSeconds int
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private, COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1), COALESCE(slowmode_seconds, 0) FROM channels WHERE id = $1", channelID).Scan(&guildID, &isPrivate, &e2eeEnabled, &rotationEpoch, &slowmodeSeconds)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
@@ -146,6 +147,34 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 	if err != nil || !canSendMsg {
 		http.Error(w, `{"error":"forbidden: você não tem permissão para enviar mensagens neste canal"}`, http.StatusForbidden)
 		return
+	}
+
+	if slowmodeSeconds > 0 {
+		isImmune, _ := canUserManageMessages(r.Context(), h.db, guildID, channelID, userID)
+		if !isImmune {
+			var lastCreatedAt time.Time
+			if err := h.db.Pool.QueryRow(
+				r.Context(),
+				"SELECT created_at FROM messages WHERE channel_id = $1 AND author_id = $2 ORDER BY created_at DESC LIMIT 1",
+				channelID, userID,
+			).Scan(&lastCreatedAt); err == nil {
+				slowmodeDur := time.Duration(slowmodeSeconds) * time.Second
+				elapsed := time.Since(lastCreatedAt)
+				if elapsed < slowmodeDur {
+					remaining := int((slowmodeDur - elapsed + time.Second - 1) / time.Second)
+					if remaining < 1 {
+						remaining = 1
+					}
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusTooManyRequests)
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"error":       "Modo lento ativo. Aguarde antes de enviar outra mensagem.",
+						"retry_after": remaining,
+					})
+					return
+				}
+			}
+		}
 	}
 
 	if len(req.Attachments) > 0 {

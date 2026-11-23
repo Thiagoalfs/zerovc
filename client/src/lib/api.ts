@@ -556,7 +556,7 @@ export const api = {
       request<{ success: boolean }>(`/channels/${channelId}/messages/${messageId}`, {
         method: 'DELETE',
       }),
-    update: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean; is_private?: boolean; role_ids?: string[]; permission_overwrites?: ChannelPermissionOverwrite[] }) =>
+    update: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean; is_private?: boolean; slowmode_seconds?: number; role_ids?: string[]; permission_overwrites?: ChannelPermissionOverwrite[] }) =>
       request<Channel>(`/channels/${channelId}`, {
         method: 'PATCH',
         body: JSON.stringify(data),

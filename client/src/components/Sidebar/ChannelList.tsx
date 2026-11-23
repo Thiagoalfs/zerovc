@@ -42,6 +42,12 @@ import { UserBar } from './UserBar';
 import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
+import {
+  canUserViewChannel,
+  canUserManageChannel,
+  canUserMuteVoice,
+  canUserDeafenVoice,
+} from '../../utils/userActivity';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { getFormattedUsername, useStreamerModeStore } from '../../stores/streamerModeStore';
 import { DeleteChannelModal } from '../Modals/DeleteChannelModal';
@@ -149,13 +155,13 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     .filter((c) => c.type === 'category')
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const rootChannels = channels
-    .filter((c) => c.type !== 'category' && !c.category_id)
+    .filter((c) => c.type !== 'category' && !c.category_id && canUserViewChannel(c, activeGuild, user))
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const categoryChannelsMap: Record<string, Channel[]> = {};
 
   categories.forEach((cat) => {
     categoryChannelsMap[cat.id] = channels
-      .filter((c) => c.category_id === cat.id)
+      .filter((c) => c.category_id === cat.id && canUserViewChannel(c, activeGuild, user))
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   });
 
@@ -292,6 +298,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     e.stopPropagation();
     const isText = channel.type === 'text';
     const isUnread = isText && (unreadChannels.has(channel.id) || (channelMentions[channel.id] || 0) > 0);
+    const canManageThisChannel = canUserManageChannel(channel, activeGuild, user);
 
     const items: ContextMenuItem[] = [
       ...(isText
@@ -306,7 +313,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             { label: '', separator: true },
           ]
         : []),
-      ...(canManageChannels
+      ...(canManageThisChannel
         ? [
             {
               label: 'Configurações do Canal',
@@ -347,6 +354,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     const isCatUnread = catChannels.some(
       (c) => c.type === 'text' && (unreadChannels.has(c.id) || (channelMentions[c.id] || 0) > 0)
     );
+    const canManageThisCat = canUserManageChannel(category, activeGuild, user);
 
     const items: ContextMenuItem[] = [
       {
@@ -368,7 +376,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         icon: isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />,
         onClick: () => toggleCategoryCollapse(category.id),
       },
-      ...(canManageChannels
+      ...(canManageThisCat
         ? [
             {
               label: 'Criar Canal',
@@ -441,8 +449,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     const canKick = perms.canKick;
     const canBan = perms.canBan;
     const canMute = perms.canMute;
-    const canMuteVoice = perms.canMuteVoice;
-    const canDeafenVoice = perms.canDeafenVoice;
     const canMoveMembers = perms.canMoveMembers;
     const currentUserHighestPos = perms.currentUserHighestPos;
 
@@ -474,16 +480,20 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     ];
 
     // Voice Call Moderation
-    const canModerateVoice = isHierarchyAllowed && (canMuteVoice || canMute || isCurrentOwner || hasAdmin);
+    const canMuteInChannel = canUserMuteVoice(channel, activeGuild, user);
+    const canDeafenInChannel = canUserDeafenVoice(channel, activeGuild, user);
+    const canMuteCall = isHierarchyAllowed && (canMuteInChannel || isCurrentOwner || hasAdmin);
+    const canDeafenCall = isHierarchyAllowed && (canDeafenInChannel || isCurrentOwner || hasAdmin);
     const canMove = isHierarchyAllowed && (canMoveMembers || isCurrentOwner || hasAdmin);
+    const canDisconnect = isHierarchyAllowed && (canMoveMembers || isCurrentOwner || hasAdmin);
     const otherVoiceChannels = (activeGuild.channels || []).filter(
       (c) => c.type === 'voice' && c.id !== channel.id
     );
 
-    if (canModerateVoice || canMove) {
+    if (canMuteCall || canDeafenCall || canMove || canDisconnect) {
       items.push({ label: '', separator: true });
 
-      if (canModerateVoice) {
+      if (canMuteCall) {
         items.push({
           label: vs.is_muted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
           icon: vs.is_muted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
@@ -493,7 +503,9 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             });
           },
         });
+      }
 
+      if (canDeafenCall) {
         items.push({
           label: vs.is_deafened ? 'Desativar Ensurdecimento' : 'Ensurdecer na Call',
           icon: vs.is_deafened ? (
@@ -538,7 +550,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         }
       }
 
-      if (canModerateVoice) {
+      if (canDisconnect) {
         items.push({
           label: 'Desconectar da Call',
           icon: <PhoneOff className="w-4 h-4 text-dnd" />,
@@ -758,6 +770,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     const isDragOver = dragOverTarget?.id === channel.id && !isDragging;
     const isDragOverTop = isDragOver && dragOverTarget?.position === 'top';
     const isDragOverBottom = isDragOver && dragOverTarget?.position === 'bottom';
+    const canManageThisChannel = canUserManageChannel(channel, activeGuild, user);
 
     return (
       <div key={channel.id} className="space-y-0.5 relative">
@@ -776,9 +789,9 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         )}
 
         <div
-          draggable={canManageChannels}
+          draggable={canManageThisChannel}
           onDragStart={(e) => {
-            if (!canManageChannels) {
+            if (!canManageThisChannel) {
               e.preventDefault();
               return;
             }
@@ -832,7 +845,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           }}
           onContextMenu={(e) => handleChannelContextMenu(e, channel)}
           className={`group flex items-center justify-between px-1 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
-            canManageChannels ? 'cursor-grab active:cursor-grabbing' : ''
+            canManageThisChannel ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
             isActive
               ? 'bg-background-light text-white font-medium shadow-sm'
@@ -894,7 +907,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             </>
           )}
 
-          {canManageChannels && onOpenChannelSettings && (
+          {canManageThisChannel && onOpenChannelSettings && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1199,6 +1212,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               {categories.map((category) => {
                 const isCollapsed = !!collapsedCategories[category.id];
                 const childChannels = categoryChannelsMap[category.id] || [];
+                const canManageThisCat = canUserManageChannel(category, activeGuild, user);
                 const isDragOverCategoryHeaderTop = dragOverTarget?.id === category.id && dragOverTarget.position === 'top';
                 const isDragOverCategory = dragOverTarget?.id === category.id && dragOverTarget.isCategory && !isDragOverCategoryHeaderTop;
 
@@ -1265,7 +1279,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         <span className="truncate">{category.name}</span>
                       </div>
 
-                      {canManageChannels && (
+                      {canManageThisCat && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

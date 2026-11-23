@@ -557,11 +557,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 return (
                   <span
                     key={i}
-                    className="font-semibold px-1.5 py-0.5 rounded-md text-xs inline-flex items-center gap-1 mx-0.5 border"
+                    className="font-medium px-1 py-[1px] rounded-[4px] inline-flex items-center gap-1 align-baseline"
                     style={{
-                      backgroundColor: `${matchedRole.color}25`,
+                      backgroundColor: `${matchedRole.color}28`,
                       color: matchedRole.color,
-                      borderColor: `${matchedRole.color}50`,
                     }}
                   >
                     <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: matchedRole.color }} />
@@ -573,10 +572,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               return (
                 <span
                   key={i}
-                  className={`font-semibold px-1 py-0.5 rounded text-xs inline-block mx-0.5 ${
+                  className={`font-medium px-1 py-[1px] rounded-[4px] inline align-baseline transition-colors duration-100 ${
                     isSelfMention
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                      : 'bg-brand-500/20 text-brand-300'
+                      ? 'bg-amber-500/20 text-amber-200'
+                      : 'bg-brand-500/25 text-brand-200'
                   }`}
                 >
                   {part}

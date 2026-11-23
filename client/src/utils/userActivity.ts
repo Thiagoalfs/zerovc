@@ -20,10 +20,18 @@ export interface DisplayedActivity {
 }
 
 /**
- * Checks whether the current user has permission to view/access a channel in a guild.
+ * Evaluates whether the current user has a specific permission flag in a guild channel,
+ * combining guild role permissions, Administrator bypass, category overwrites, and channel overwrites.
  */
-export function canUserViewChannel(ch: Channel, guild: Guild | null, currentUser: User | null): boolean {
-  if (!guild || !ch || ch.type === 'category' || !currentUser) return false;
+function evaluateChannelPermission(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined,
+  flag: number,
+  defaultNoChannel?: boolean
+): boolean {
+  if (!guild || !currentUser) return false;
+  if (!ch && defaultNoChannel !== undefined) return defaultNoChannel;
 
   // Server owner always has full access
   if (guild.owner_id === currentUser.id) return true;
@@ -32,11 +40,16 @@ export function canUserViewChannel(ch: Channel, guild: Guild | null, currentUser
   const userRoles = (currentMember?.roles || []).map((r: any) => {
     const roleId = typeof r === 'string' ? r : r?.id;
     const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(roleId));
-    return fullRole ? { ...r, ...fullRole, id: roleId } : (typeof r === 'object' ? r : { id: roleId });
+    if (fullRole) {
+      return typeof r === 'object' && r !== null
+        ? { ...r, ...fullRole, id: roleId }
+        : { ...fullRole, id: roleId };
+    }
+    return typeof r === 'object' && r !== null ? r : { id: roleId };
   });
 
   const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
-  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
+  let userPerms = everyoneRole ? Number(everyoneRole.permissions || 0) : 0;
   userRoles.forEach((r: any) => {
     userPerms |= Number(r?.permissions || 0);
   });
@@ -46,29 +59,27 @@ export function canUserViewChannel(ch: Channel, guild: Guild | null, currentUser
     return true;
   }
 
-  let hasAccess = (userPerms & Permissions.VIEW_CHANNEL) !== 0;
-
-  // Private channel role check
-  if (ch.is_private) {
-    const hasRole = ch.role_ids && ch.role_ids.length > 0
-      ? userRoles.some((r: any) => ch.role_ids?.some((id) => String(id) === String(r.id)))
-      : false;
-    if (!hasRole) {
-      return false;
-    }
+  let hasPerm: boolean;
+  if (flag === Permissions.VIEW_CHANNEL && ch?.is_private) {
+    hasPerm =
+      ch.role_ids && ch.role_ids.length > 0
+        ? userRoles.some((r: any) => ch.role_ids?.some((id) => String(id) === String(r?.id)))
+        : false;
+  } else {
+    hasPerm = (userPerms & flag) !== 0;
   }
 
-  // Permission overwrites
-  if (ch.permission_overwrites && ch.permission_overwrites.length > 0) {
+  const applyOverwrites = (targetCh: Channel | undefined, current: boolean): boolean => {
+    if (!targetCh?.permission_overwrites?.length) return current;
+    let result = current;
+
     if (everyoneRole) {
-      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
+      const ow = targetCh.permission_overwrites.find(
+        (o) => String(o.role_id) === String(everyoneRole.id)
+      );
       if (ow) {
-        if ((ow.deny & Permissions.VIEW_CHANNEL) !== 0) {
-          hasAccess = false;
-        }
-        if ((ow.allow & Permissions.VIEW_CHANNEL) !== 0) {
-          hasAccess = true;
-        }
+        if ((ow.deny & flag) !== 0) result = false;
+        if ((ow.allow & flag) !== 0) result = true;
       }
     }
 
@@ -76,22 +87,45 @@ export function canUserViewChannel(ch: Channel, guild: Guild | null, currentUser
     let roleAllow = false;
     userRoles.forEach((r: any) => {
       const roleId = typeof r === 'string' ? r : r?.id;
-      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(roleId));
+      if (!roleId) return;
+      if (everyoneRole && String(roleId) === String(everyoneRole.id)) return;
+      const ow = targetCh.permission_overwrites?.find((o) => String(o.role_id) === String(roleId));
       if (ow) {
-        if ((ow.deny & Permissions.VIEW_CHANNEL) !== 0) {
-          roleDeny = true;
-        }
-        if ((ow.allow & Permissions.VIEW_CHANNEL) !== 0) {
-          roleAllow = true;
-        }
+        if ((ow.deny & flag) !== 0) roleDeny = true;
+        if ((ow.allow & flag) !== 0) roleAllow = true;
       }
     });
 
-    if (roleDeny) hasAccess = false;
-    if (roleAllow) hasAccess = true;
+    if (roleDeny) result = false;
+    if (roleAllow) result = true;
+
+    return result;
+  };
+
+  if (ch?.category_id) {
+    const categoryCh = (guild.channels || []).find(
+      (c) => String(c.id) === String(ch.category_id)
+    );
+    hasPerm = applyOverwrites(categoryCh, hasPerm);
   }
 
-  return hasAccess;
+  if (ch) {
+    hasPerm = applyOverwrites(ch, hasPerm);
+  }
+
+  return hasPerm;
+}
+
+/**
+ * Checks whether the current user has permission to view/access a channel in a guild.
+ */
+export function canUserViewChannel(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!guild || !ch || ch.type === 'category' || !currentUser) return false;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.VIEW_CHANNEL, false);
 }
 
 /**
@@ -111,49 +145,7 @@ export function canUserConnectVoice(
   const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
   if (!currentMember) return false;
 
-  const userRoles = (currentMember.roles || []).map((r: any) => {
-    const roleId = typeof r === 'string' ? r : r?.id;
-    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(roleId));
-    return fullRole ? { ...r, ...fullRole, id: roleId } : (typeof r === 'object' ? r : { id: roleId });
-  });
-
-  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
-  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
-  userRoles.forEach((r: any) => {
-    userPerms |= Number(r?.permissions || 0);
-  });
-
-  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
-    return true;
-  }
-
-  let canConnect = (userPerms & Permissions.CONNECT_VOICE) !== 0;
-
-  if (ch.permission_overwrites && ch.permission_overwrites.length > 0) {
-    if (everyoneRole) {
-      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
-      if (ow) {
-        if ((ow.deny & Permissions.CONNECT_VOICE) !== 0) canConnect = false;
-        if ((ow.allow & Permissions.CONNECT_VOICE) !== 0) canConnect = true;
-      }
-    }
-
-    let roleDeny = false;
-    let roleAllow = false;
-    userRoles.forEach((r: any) => {
-      const roleId = typeof r === 'string' ? r : r?.id;
-      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(roleId));
-      if (ow) {
-        if ((ow.deny & Permissions.CONNECT_VOICE) !== 0) roleDeny = true;
-        if ((ow.allow & Permissions.CONNECT_VOICE) !== 0) roleAllow = true;
-      }
-    });
-
-    if (roleDeny) canConnect = false;
-    if (roleAllow) canConnect = true;
-  }
-
-  return canConnect;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.CONNECT_VOICE, false);
 }
 
 /**
@@ -167,53 +159,7 @@ export function canUserSendMessages(
 ): boolean {
   if (!guild || !currentUser) return false;
   if (!ch) return true;
-
-  if (guild.owner_id === currentUser.id) return true;
-
-  const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
-  const userRoles = (currentMember?.roles || []).map((r: any) => {
-    const roleId = typeof r === 'string' ? r : r?.id;
-    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(roleId));
-    return fullRole ? { ...r, ...fullRole, id: roleId } : (typeof r === 'object' ? r : { id: roleId });
-  });
-
-  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
-  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
-  userRoles.forEach((r: any) => {
-    userPerms |= Number(r?.permissions || 0);
-  });
-
-  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
-    return true;
-  }
-
-  let hasPerm = (userPerms & Permissions.SEND_MESSAGES) !== 0;
-
-  if (ch.permission_overwrites && ch.permission_overwrites.length > 0) {
-    if (everyoneRole) {
-      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
-      if (ow) {
-        if ((ow.deny & Permissions.SEND_MESSAGES) !== 0) hasPerm = false;
-        if ((ow.allow & Permissions.SEND_MESSAGES) !== 0) hasPerm = true;
-      }
-    }
-
-    let roleDeny = false;
-    let roleAllow = false;
-    userRoles.forEach((r: any) => {
-      const roleId = typeof r === 'string' ? r : r?.id;
-      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(roleId));
-      if (ow) {
-        if ((ow.deny & Permissions.SEND_MESSAGES) !== 0) roleDeny = true;
-        if ((ow.allow & Permissions.SEND_MESSAGES) !== 0) roleAllow = true;
-      }
-    });
-
-    if (roleDeny) hasPerm = false;
-    if (roleAllow) hasPerm = true;
-  }
-
-  return hasPerm;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.SEND_MESSAGES, true);
 }
 
 /**
@@ -227,53 +173,7 @@ export function canUserAttachFiles(
 ): boolean {
   if (!guild || !currentUser) return false;
   if (!ch) return true;
-
-  if (guild.owner_id === currentUser.id) return true;
-
-  const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
-  const userRoles = (currentMember?.roles || []).map((r: any) => {
-    const roleId = typeof r === 'string' ? r : r?.id;
-    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(roleId));
-    return fullRole ? { ...r, ...fullRole, id: roleId } : (typeof r === 'object' ? r : { id: roleId });
-  });
-
-  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
-  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
-  userRoles.forEach((r: any) => {
-    userPerms |= Number(r?.permissions || 0);
-  });
-
-  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
-    return true;
-  }
-
-  let hasPerm = (userPerms & Permissions.ATTACH_FILES) !== 0;
-
-  if (ch.permission_overwrites && ch.permission_overwrites.length > 0) {
-    if (everyoneRole) {
-      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
-      if (ow) {
-        if ((ow.deny & Permissions.ATTACH_FILES) !== 0) hasPerm = false;
-        if ((ow.allow & Permissions.ATTACH_FILES) !== 0) hasPerm = true;
-      }
-    }
-
-    let roleDeny = false;
-    let roleAllow = false;
-    userRoles.forEach((r: any) => {
-      const roleId = typeof r === 'string' ? r : r?.id;
-      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(roleId));
-      if (ow) {
-        if ((ow.deny & Permissions.ATTACH_FILES) !== 0) roleDeny = true;
-        if ((ow.allow & Permissions.ATTACH_FILES) !== 0) roleAllow = true;
-      }
-    });
-
-    if (roleDeny) hasPerm = false;
-    if (roleAllow) hasPerm = true;
-  }
-
-  return hasPerm;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.ATTACH_FILES, true);
 }
 
 /**
@@ -287,121 +187,20 @@ export function canUserManageChannelMessages(
 ): boolean {
   if (!guild || !currentUser) return false;
   if (!ch) return false;
-
-  if (guild.owner_id === currentUser.id) return true;
-
-  const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
-  const userRoles = (currentMember?.roles || []).map((r: any) => {
-    const roleId = typeof r === 'string' ? r : r?.id;
-    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(roleId));
-    return fullRole ? { ...r, ...fullRole, id: roleId } : (typeof r === 'object' ? r : { id: roleId });
-  });
-
-  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
-  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
-  userRoles.forEach((r: any) => {
-    userPerms |= Number(r?.permissions || 0);
-  });
-
-  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
-    return true;
-  }
-
-  let hasPerm = (userPerms & Permissions.MANAGE_MESSAGES) !== 0;
-
-  if (ch.permission_overwrites && ch.permission_overwrites.length > 0) {
-    if (everyoneRole) {
-      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
-      if (ow) {
-        if ((ow.deny & Permissions.MANAGE_MESSAGES) !== 0) hasPerm = false;
-        if ((ow.allow & Permissions.MANAGE_MESSAGES) !== 0) hasPerm = true;
-      }
-    }
-
-    let roleDeny = false;
-    let roleAllow = false;
-    userRoles.forEach((r: any) => {
-      const roleId = typeof r === 'string' ? r : r?.id;
-      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(roleId));
-      if (ow) {
-        if ((ow.deny & Permissions.MANAGE_MESSAGES) !== 0) roleDeny = true;
-        if ((ow.allow & Permissions.MANAGE_MESSAGES) !== 0) roleAllow = true;
-      }
-    });
-
-    if (roleDeny) hasPerm = false;
-    if (roleAllow) hasPerm = true;
-  }
-
-  return hasPerm;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.MANAGE_MESSAGES, false);
 }
 
 /**
-  * Checks if a user has permission to use TTS in a channel,
-  * combining guild role permissions, Administrator bypass, and channel permission overwrites.
-  */
+ * Checks if a user has permission to use TTS in a channel,
+ * combining guild role permissions, Administrator bypass, and channel permission overwrites.
+ */
 export function canUserSendTTS(
   ch: Channel | null | undefined,
   guild: Guild | null | undefined,
   currentUser: User | null | undefined
 ): boolean {
   if (!guild || !currentUser) return false;
-
-  // Server owner always has full access
-  if (guild.owner_id === currentUser.id) return true;
-
-  const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
-  const userRoles = (currentMember?.roles || []).map((r) => {
-    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(r.id));
-    return fullRole ? { ...r, ...fullRole } : r;
-  });
-
-  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
-  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
-  userRoles.forEach((r) => {
-    userPerms |= (r.permissions || 0);
-  });
-
-  // Administrator bypasses restrictions
-  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
-    return true;
-  }
-
-  let hasTTS = (userPerms & Permissions.SEND_TTS) !== 0;
-
-  // Channel permission overwrites
-  if (ch && ch.permission_overwrites && ch.permission_overwrites.length > 0) {
-    if (everyoneRole) {
-      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
-      if (ow) {
-        if ((ow.deny & Permissions.SEND_TTS) !== 0) {
-          hasTTS = false;
-        }
-        if ((ow.allow & Permissions.SEND_TTS) !== 0) {
-          hasTTS = true;
-        }
-      }
-    }
-
-    let roleDeny = false;
-    let roleAllow = false;
-    userRoles.forEach((r) => {
-      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(r.id));
-      if (ow) {
-        if ((ow.deny & Permissions.SEND_TTS) !== 0) {
-          roleDeny = true;
-        }
-        if ((ow.allow & Permissions.SEND_TTS) !== 0) {
-          roleAllow = true;
-        }
-      }
-    });
-
-    if (roleDeny) hasTTS = false;
-    if (roleAllow) hasTTS = true;
-  }
-
-  return hasTTS;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.SEND_TTS);
 }
 
 /**
@@ -414,62 +213,67 @@ export function canUserUseCommands(
   currentUser: User | null | undefined
 ): boolean {
   if (!guild || !currentUser) return true;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.USE_COMMANDS);
+}
 
-  // Server owner always has full access
-  if (guild.owner_id === currentUser.id) return true;
+/**
+ * Checks whether the current user has permission to manage a specific channel or category.
+ */
+export function canUserManageChannel(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!guild || !ch || !currentUser) return false;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.MANAGE_CHANNELS, false);
+}
 
-  const currentMember = (guild.members || []).find((m) => String(m.id) === String(currentUser.id));
-  const userRoles = (currentMember?.roles || []).map((r) => {
-    const fullRole = (guild.roles || []).find((gr) => String(gr.id) === String(r.id));
-    return fullRole ? { ...r, ...fullRole } : r;
-  });
+/**
+ * Checks whether the current user has permission to speak in a voice channel.
+ */
+export function canUserSpeakVoice(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!guild || !currentUser) return false;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.SPEAK_VOICE);
+}
 
-  const everyoneRole = (guild.roles || []).find((r) => r.name === '@everyone');
-  let userPerms = everyoneRole ? (everyoneRole.permissions || 0) : 0;
-  userRoles.forEach((r) => {
-    userPerms |= (r.permissions || 0);
-  });
+/**
+ * Checks whether the current user has permission to stream video/screen in a voice channel.
+ */
+export function canUserStreamVoice(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!guild || !currentUser) return false;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.STREAM_VOICE);
+}
 
-  // Administrator bypasses restrictions
-  if ((userPerms & Permissions.ADMINISTRATOR) !== 0) {
-    return true;
-  }
+/**
+ * Checks whether the current user has permission to mute others in a voice channel.
+ */
+export function canUserMuteVoice(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!guild || !currentUser) return false;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.MUTE_VOICE);
+}
 
-  let hasPerm = (userPerms & Permissions.USE_COMMANDS) !== 0;
-
-  // Channel permission overwrites
-  if (ch && ch.permission_overwrites && ch.permission_overwrites.length > 0) {
-    if (everyoneRole) {
-      const ow = ch.permission_overwrites.find((o) => String(o.role_id) === String(everyoneRole.id));
-      if (ow) {
-        if ((ow.deny & Permissions.USE_COMMANDS) !== 0) {
-          hasPerm = false;
-        }
-        if ((ow.allow & Permissions.USE_COMMANDS) !== 0) {
-          hasPerm = true;
-        }
-      }
-    }
-
-    let roleDeny = false;
-    let roleAllow = false;
-    userRoles.forEach((r) => {
-      const ow = ch.permission_overwrites?.find((o) => String(o.role_id) === String(r.id));
-      if (ow) {
-        if ((ow.deny & Permissions.USE_COMMANDS) !== 0) {
-          roleDeny = true;
-        }
-        if ((ow.allow & Permissions.USE_COMMANDS) !== 0) {
-          roleAllow = true;
-        }
-      }
-    });
-
-    if (roleDeny) hasPerm = false;
-    if (roleAllow) hasPerm = true;
-  }
-
-  return hasPerm;
+/**
+ * Checks whether the current user has permission to deafen others in a voice channel.
+ */
+export function canUserDeafenVoice(
+  ch: Channel | null | undefined,
+  guild: Guild | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!guild || !currentUser) return false;
+  return evaluateChannelPermission(ch, guild, currentUser, Permissions.DEAFEN_VOICE);
 }
 
 /**

@@ -51,6 +51,7 @@ type UpdateChannelRequest struct {
 	CategoryID           *uuid.UUID                           `json:"category_id,omitempty"`
 	ClearCategory        *bool                                `json:"clear_category,omitempty"`
 	IsPrivate            *bool                                `json:"is_private,omitempty"`
+	SlowmodeSeconds      *int                                 `json:"slowmode_seconds,omitempty"`
 	RoleIDs              []uuid.UUID                          `json:"role_ids,omitempty"`
 	PermissionOverwrites *[]models.ChannelPermissionOverwrite `json:"permission_overwrites,omitempty"`
 }
@@ -88,7 +89,7 @@ func (h *ChannelHandler) checkChannelPermissions(ctx context.Context, guildID, u
 }
 
 func (h *ChannelHandler) broadcastChannelEvent(ctx context.Context, guildID, channelID uuid.UUID, isPrivate bool, event models.WSEvent) {
-	if !isPrivate {
+	if !channelHasViewRestrictions(ctx, h.db, guildID, channelID, isPrivate) {
 		h.hub.BroadcastToGuild(guildID, event)
 		return
 	}
@@ -206,9 +207,9 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed, msg := h.checkChannelPermissions(r.Context(), guildID, userID)
-	if !allowed {
-		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
+	canManage, err := canUserManageChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canManage {
+		http.Error(w, `{"error":"forbidden: você não tem permissão para gerenciar este canal"}`, http.StatusForbidden)
 		return
 	}
 
@@ -226,6 +227,122 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if (req.ClearCategory == nil || !*req.ClearCategory) && req.CategoryID != nil {
+		var validCategory bool
+		_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channels WHERE id = $1 AND guild_id = $2 AND type = 'category')", req.CategoryID, guildID).Scan(&validCategory)
+		if !validCategory {
+			http.Error(w, `{"error":"categoria inválida ou não pertence a este servidor"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
+	type pendingOverwrite struct {
+		RoleID uuid.UUID
+		Allow  int64
+		Deny   int64
+	}
+	var pendingOverwrites []pendingOverwrite
+	if req.PermissionOverwrites != nil {
+		actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
+		if err != nil {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+
+		type guildRoleMeta struct {
+			Name     string
+			Position int
+		}
+		guildRoles := make(map[uuid.UUID]guildRoleMeta)
+		roleRows, err := h.db.Pool.Query(r.Context(), "SELECT id, name, position FROM guild_roles WHERE guild_id = $1", guildID)
+		if err != nil {
+			http.Error(w, `{"error":"failed to load guild roles"}`, http.StatusInternalServerError)
+			return
+		}
+		for roleRows.Next() {
+			var rid uuid.UUID
+			var meta guildRoleMeta
+			if roleRows.Scan(&rid, &meta.Name, &meta.Position) == nil {
+				guildRoles[rid] = meta
+			}
+		}
+		roleRows.Close()
+
+		existingOverwrites, err := loadOverwritesMap(r.Context(), h.db, channelID)
+		if err != nil {
+			http.Error(w, `{"error":"failed to load channel overwrites"}`, http.StatusInternalServerError)
+			return
+		}
+
+		seenRoles := make(map[uuid.UUID]bool)
+		finalByRole := make(map[uuid.UUID]pendingOverwrite)
+		var finalOrder []uuid.UUID
+
+		for _, ow := range *req.PermissionOverwrites {
+			role, ok := guildRoles[ow.RoleID]
+			if !ok {
+				continue
+			}
+			seenRoles[ow.RoleID] = true
+			allowClean := ow.Allow & ^models.PermAdministrator
+			prev := existingOverwrites[ow.RoleID]
+
+			if allowClean == 0 && ow.Deny == 0 {
+				if prev.Allow != 0 || prev.Deny != 0 {
+					if allowed, msg := actorCtx.canManageRoleOverwrite(role.Name, role.Position, canManage, 0, prev.Deny); !allowed {
+						http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
+						return
+					}
+				}
+				delete(finalByRole, ow.RoleID)
+				continue
+			}
+
+			if allowClean != prev.Allow || ow.Deny != prev.Deny {
+				addedAllow := allowClean & ^prev.Allow
+				addedDeny := ow.Deny & ^prev.Deny
+				if allowed, msg := actorCtx.canManageRoleOverwrite(role.Name, role.Position, canManage, addedAllow, addedDeny); !allowed {
+					http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
+					return
+				}
+			}
+
+			if _, exists := finalByRole[ow.RoleID]; !exists {
+				finalOrder = append(finalOrder, ow.RoleID)
+			}
+			finalByRole[ow.RoleID] = pendingOverwrite{
+				RoleID: ow.RoleID,
+				Allow:  allowClean,
+				Deny:   ow.Deny,
+			}
+		}
+
+		for roleID, prev := range existingOverwrites {
+			if seenRoles[roleID] || (prev.Allow == 0 && prev.Deny == 0) {
+				continue
+			}
+			role, ok := guildRoles[roleID]
+			if !ok {
+				continue
+			}
+			if allowed, msg := actorCtx.canManageRoleOverwrite(role.Name, role.Position, canManage, 0, prev.Deny); !allowed {
+				http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
+				return
+			}
+		}
+
+		for _, rid := range finalOrder {
+			if item, ok := finalByRole[rid]; ok {
+				pendingOverwrites = append(pendingOverwrites, item)
+			}
+		}
+	}
+
+	if req.SlowmodeSeconds != nil && (*req.SlowmodeSeconds < 0 || *req.SlowmodeSeconds > 21600) {
+		http.Error(w, `{"error":"slowmode_seconds deve estar entre 0 e 21600 segundos"}`, http.StatusBadRequest)
+		return
+	}
+
 	var channel models.Channel
 	var query string
 
@@ -236,32 +353,28 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 			    topic = COALESCE($2, topic),
 			    position = COALESCE($3, position),
 			    is_private = COALESCE($4, is_private),
+			    slowmode_seconds = COALESCE($5, slowmode_seconds),
 			    category_id = NULL
-			WHERE id = $5
-			RETURNING id, guild_id, name, type, category_id, topic, position, is_private, created_at
+			WHERE id = $6
+			RETURNING id, guild_id, name, type, category_id, topic, position, is_private, COALESCE(slowmode_seconds, 0), created_at
 		`
-		err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, req.IsPrivate, channelID).Scan(
-			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+		err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, req.IsPrivate, req.SlowmodeSeconds, channelID).Scan(
+			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.SlowmodeSeconds, &channel.CreatedAt,
 		)
 	} else if req.CategoryID != nil {
-		var validCategory bool
-		_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channels WHERE id = $1 AND guild_id = $2 AND type = 'category')", req.CategoryID, guildID).Scan(&validCategory)
-		if !validCategory {
-			http.Error(w, `{"error":"categoria inválida ou não pertence a este servidor"}`, http.StatusBadRequest)
-			return
-		}
 		query = `
 			UPDATE channels
 			SET name = COALESCE($1, name),
 			    topic = COALESCE($2, topic),
 			    position = COALESCE($3, position),
 			    is_private = COALESCE($4, is_private),
-			    category_id = $5
-			WHERE id = $6
-			RETURNING id, guild_id, name, type, category_id, topic, position, is_private, created_at
+			    slowmode_seconds = COALESCE($5, slowmode_seconds),
+			    category_id = $6
+			WHERE id = $7
+			RETURNING id, guild_id, name, type, category_id, topic, position, is_private, COALESCE(slowmode_seconds, 0), created_at
 		`
-		err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, req.IsPrivate, req.CategoryID, channelID).Scan(
-			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+		err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, req.IsPrivate, req.SlowmodeSeconds, req.CategoryID, channelID).Scan(
+			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.SlowmodeSeconds, &channel.CreatedAt,
 		)
 	} else {
 		query = `
@@ -269,12 +382,13 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 			SET name = COALESCE($1, name),
 			    topic = COALESCE($2, topic),
 			    position = COALESCE($3, position),
-			    is_private = COALESCE($4, is_private)
-			WHERE id = $5
-			RETURNING id, guild_id, name, type, category_id, topic, position, is_private, created_at
+			    is_private = COALESCE($4, is_private),
+			    slowmode_seconds = COALESCE($5, slowmode_seconds)
+			WHERE id = $6
+			RETURNING id, guild_id, name, type, category_id, topic, position, is_private, COALESCE(slowmode_seconds, 0), created_at
 		`
-		err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, req.IsPrivate, channelID).Scan(
-			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+		err = h.db.Pool.QueryRow(r.Context(), query, req.Name, req.Topic, req.Position, req.IsPrivate, req.SlowmodeSeconds, channelID).Scan(
+			&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.SlowmodeSeconds, &channel.CreatedAt,
 		)
 	}
 
@@ -298,35 +412,15 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		channel.RoleIDs = validRoleIDs
 	}
 
-	// Update permission overwrites if provided
+	// Update permission overwrites if provided (all overwrites already validated above)
 	if req.PermissionOverwrites != nil {
-		actorCtx, err := loadActorGuildContext(r.Context(), h.db, guildID, userID)
-		if err != nil {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-			return
-		}
-
-		if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageRoles) == 0 {
-			http.Error(w, `{"error":"forbidden: você não tem permissão para gerenciar permissões de canais"}`, http.StatusForbidden)
-			return
-		}
-
 		h.db.Pool.Exec(r.Context(), "DELETE FROM channel_permission_overwrites WHERE channel_id = $1", channelID)
-		for _, ow := range *req.PermissionOverwrites {
-			var roleBelongs bool
-			_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_roles WHERE id = $1 AND guild_id = $2)", ow.RoleID, guildID).Scan(&roleBelongs)
-			if roleBelongs && (ow.Allow != 0 || ow.Deny != 0) {
-				allowClean := ow.Allow & ^models.PermAdministrator
-				if !actorCtx.IsOwner && !actorCtx.HasAdmin && (allowClean & ^actorCtx.Perms) != 0 {
-					http.Error(w, `{"error":"forbidden: você não pode conceder permissões que não possui"}`, http.StatusForbidden)
-					return
-				}
-				h.db.Pool.Exec(r.Context(), `
-					INSERT INTO channel_permission_overwrites (channel_id, role_id, allow, deny)
-					VALUES ($1, $2, $3, $4)
-					ON CONFLICT (channel_id, role_id) DO UPDATE SET allow = EXCLUDED.allow, deny = EXCLUDED.deny
-				`, channelID, ow.RoleID, allowClean, ow.Deny)
-			}
+		for _, ow := range pendingOverwrites {
+			h.db.Pool.Exec(r.Context(), `
+				INSERT INTO channel_permission_overwrites (channel_id, role_id, allow, deny)
+				VALUES ($1, $2, $3, $4)
+				ON CONFLICT (channel_id, role_id) DO UPDATE SET allow = EXCLUDED.allow, deny = EXCLUDED.deny
+			`, channelID, ow.RoleID, ow.Allow, ow.Deny)
 		}
 	}
 
@@ -383,9 +477,9 @@ func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed, msg := h.checkChannelPermissions(r.Context(), guildID, userID)
-	if !allowed {
-		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
+	canManage, err := canUserManageChannel(r.Context(), h.db, guildID, channelID, userID)
+	if err != nil || !canManage {
+		http.Error(w, `{"error":"forbidden: você não tem permissão para gerenciar este canal"}`, http.StatusForbidden)
 		return
 	}
 
@@ -696,7 +790,8 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	})
 
 	var screenShareToken string
-	if canSpeak {
+	canStream, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, userID, models.PermStreamVoice)
+	if canStream {
 		screenShareToken, _ = h.livekit.GenerateScreenShareToken(roomName, userID, user.Username, string(metaJSON))
 	}
 
@@ -903,28 +998,28 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 				return
 			}
 
-			hasMovePerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermMoveMembers) != 0
+			hasMovePerm, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, adminID, models.PermMoveMembers)
 			if !hasMovePerm {
 				http.Error(w, `{"error":"forbidden: você não tem permissão para mover membros"}`, http.StatusForbidden)
 				return
 			}
 		} else {
 			if req.Disconnect != nil && *req.Disconnect {
-				hasMovePerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermMoveMembers) != 0
+				hasMovePerm, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, adminID, models.PermMoveMembers)
 				if !hasMovePerm {
 					http.Error(w, `{"error":"forbidden: você não tem permissão para desconectar membros de voz"}`, http.StatusForbidden)
 					return
 				}
 			}
 			if req.IsDeafened != nil {
-				hasDeafenPerm := actorCtx.HasAdmin || (actorCtx.Perms&models.PermDeafenVoice) != 0
+				hasDeafenPerm, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, adminID, models.PermDeafenVoice)
 				if !hasDeafenPerm {
 					http.Error(w, `{"error":"forbidden: você não tem permissão para ensurdecer membros de voz"}`, http.StatusForbidden)
 					return
 				}
 			}
 			if req.IsMuted != nil {
-				hasMutePerm := actorCtx.HasAdmin || (actorCtx.Perms&(models.PermMuteVoice|models.PermMuteMembers)) != 0
+				hasMutePerm, _ := canUserPerformInChannel(r.Context(), h.db, guildID, channelID, adminID, models.PermMuteVoice)
 				if !hasMutePerm {
 					http.Error(w, `{"error":"forbidden: você não tem permissão para silenciar membros de voz"}`, http.StatusForbidden)
 					return
@@ -1113,9 +1208,10 @@ func (h *ChannelHandler) UpdatePermissionOverwrite(w http.ResponseWriter, r *htt
 		return
 	}
 
-	var roleBelongs bool
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_roles WHERE id = $1 AND guild_id = $2)", roleID, guildID).Scan(&roleBelongs)
-	if err != nil || !roleBelongs {
+	var roleName string
+	var rolePosition int
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT name, position FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&roleName, &rolePosition)
+	if err != nil {
 		http.Error(w, `{"error":"role not found in guild"}`, http.StatusBadRequest)
 		return
 	}
@@ -1126,20 +1222,27 @@ func (h *ChannelHandler) UpdatePermissionOverwrite(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageChannels) == 0 && (actorCtx.Perms&models.PermManageRoles) == 0 {
-		http.Error(w, `{"error":"forbidden: sem permissão para gerenciar permissões do canal"}`, http.StatusForbidden)
-		return
-	}
-
 	var req SetPermissionOverwriteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
 		return
 	}
 
+	canManage, _ := canUserManageChannel(r.Context(), h.db, guildID, channelID, userID)
+
+	var existing roleOverwrite
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT allow, deny FROM channel_permission_overwrites WHERE channel_id = $1 AND role_id = $2", channelID, roleID).Scan(&existing.Allow, &existing.Deny)
+
 	allowClean := req.Allow & ^models.PermAdministrator
-	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (allowClean & ^actorCtx.Perms) != 0 {
-		http.Error(w, `{"error":"forbidden: você não pode conceder permissões que não possui"}`, http.StatusForbidden)
+	var addedAllow, addedDeny int64
+	if allowClean == 0 && req.Deny == 0 {
+		addedDeny = existing.Deny
+	} else {
+		addedAllow = allowClean & ^existing.Allow
+		addedDeny = req.Deny & ^existing.Deny
+	}
+	if allowed, msg := actorCtx.canManageRoleOverwrite(roleName, rolePosition, canManage, addedAllow, addedDeny); !allowed {
+		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
 		return
 	}
 
@@ -1161,8 +1264,8 @@ func (h *ChannelHandler) UpdatePermissionOverwrite(w http.ResponseWriter, r *htt
 
 	// Fetch updated channel
 	var channel models.Channel
-	h.db.Pool.QueryRow(r.Context(), "SELECT id, guild_id, name, type, category_id, topic, position, is_private, created_at FROM channels WHERE id = $1", channelID).Scan(
-		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, guild_id, name, type, category_id, topic, position, is_private, COALESCE(slowmode_seconds, 0), created_at FROM channels WHERE id = $1", channelID).Scan(
+		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.SlowmodeSeconds, &channel.CreatedAt,
 	)
 
 	// Fetch overwrites
@@ -1218,9 +1321,10 @@ func (h *ChannelHandler) DeletePermissionOverwrite(w http.ResponseWriter, r *htt
 		return
 	}
 
-	var roleBelongs bool
-	err = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_roles WHERE id = $1 AND guild_id = $2)", roleID, guildID).Scan(&roleBelongs)
-	if err != nil || !roleBelongs {
+	var roleName string
+	var rolePosition int
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT name, position FROM guild_roles WHERE id = $1 AND guild_id = $2", roleID, guildID).Scan(&roleName, &rolePosition)
+	if err != nil {
 		http.Error(w, `{"error":"role not found in guild"}`, http.StatusBadRequest)
 		return
 	}
@@ -1231,8 +1335,13 @@ func (h *ChannelHandler) DeletePermissionOverwrite(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if !actorCtx.IsOwner && !actorCtx.HasAdmin && (actorCtx.Perms&models.PermManageChannels) == 0 && (actorCtx.Perms&models.PermManageRoles) == 0 {
-		http.Error(w, `{"error":"forbidden: sem permissão para gerenciar permissões do canal"}`, http.StatusForbidden)
+	canManage, _ := canUserManageChannel(r.Context(), h.db, guildID, channelID, userID)
+
+	var existing roleOverwrite
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT allow, deny FROM channel_permission_overwrites WHERE channel_id = $1 AND role_id = $2", channelID, roleID).Scan(&existing.Allow, &existing.Deny)
+
+	if allowed, msg := actorCtx.canManageRoleOverwrite(roleName, rolePosition, canManage, 0, existing.Deny); !allowed {
+		http.Error(w, `{"error":"forbidden: `+msg+`"}`, http.StatusForbidden)
 		return
 	}
 
@@ -1240,8 +1349,8 @@ func (h *ChannelHandler) DeletePermissionOverwrite(w http.ResponseWriter, r *htt
 
 	// Fetch updated channel
 	var channel models.Channel
-	h.db.Pool.QueryRow(r.Context(), "SELECT id, guild_id, name, type, category_id, topic, position, is_private, created_at FROM channels WHERE id = $1", channelID).Scan(
-		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.CreatedAt,
+	h.db.Pool.QueryRow(r.Context(), "SELECT id, guild_id, name, type, category_id, topic, position, is_private, COALESCE(slowmode_seconds, 0), created_at FROM channels WHERE id = $1", channelID).Scan(
+		&channel.ID, &channel.GuildID, &channel.Name, &channel.Type, &channel.CategoryID, &channel.Topic, &channel.Position, &channel.IsPrivate, &channel.SlowmodeSeconds, &channel.CreatedAt,
 	)
 
 	// Fetch overwrites

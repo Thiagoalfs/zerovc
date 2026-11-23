@@ -5,27 +5,22 @@ import {
   Hash,
   Volume2,
   Folder,
-  Shield,
   Check,
-  Slash,
-  Eye,
-  Settings as SettingsIcon,
-  MessageSquare,
-  Paperclip,
-  Mic,
-  Monitor,
-  VolumeX,
-  Headphones,
-  CheckCircle2,
   AlertTriangle,
   RotateCcw,
   ArrowLeft,
   ChevronRight,
+  Lock,
+  Minus,
+  Search,
 } from 'lucide-react';
 import { Channel, Role, Permissions, ChannelPermissionOverwrite } from '../../types';
 import { useGuildStore } from '../../stores/guildStore';
+import { useAuthStore } from '../../stores/authStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
+import { canUserManageChannel } from '../../utils/userActivity';
+import { api } from '../../lib/api';
 import { DropdownSelect } from '../Common/DropdownSelect';
 import { DeleteChannelModal } from './DeleteChannelModal';
 import {
@@ -38,6 +33,7 @@ import {
   MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 import { ModalButton } from '@/components/ui/modal-button';
+import { UnsavedChangesBar, useUnsavedGuard } from './UnsavedChangesBar';
 
 interface ChannelSettingsModalProps {
   channel: Channel | null;
@@ -50,17 +46,41 @@ interface PermDef {
   name: string;
   desc: string;
   flag: number;
-  icon: React.ReactNode;
 }
+
+const SLOWMODE_OPTIONS = [
+  { value: '0', label: 'Desativado' },
+  { value: '5', label: '5 segundos' },
+  { value: '10', label: '10 segundos' },
+  { value: '15', label: '15 segundos' },
+  { value: '30', label: '30 segundos' },
+  { value: '60', label: '1 minuto' },
+  { value: '120', label: '2 minutos' },
+  { value: '300', label: '5 minutos' },
+  { value: '600', label: '10 minutos' },
+  { value: '900', label: '15 minutos' },
+  { value: '1800', label: '30 minutos' },
+  { value: '3600', label: '1 hora' },
+  { value: '7200', label: '2 horas' },
+  { value: '10800', label: '3 horas' },
+  { value: '21600', label: '6 horas' },
+];
 
 export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   channel,
   isOpen,
   onClose,
 }) => {
+  const { user } = useAuthStore();
   const { activeGuild, updateChannel, deleteChannel } = useGuildStore();
+  const liveChannel = useMemo(
+    () => activeGuild?.channels?.find((c) => c.id === channel?.id) || channel,
+    [activeGuild?.channels, channel]
+  );
   const perms = useGuildPermissions(activeGuild);
-  const hasChannelPermission = perms.isCurrentOwner || perms.hasAdmin || perms.canManageChannels;
+  const canManageThisChannel = Boolean(liveChannel && canUserManageChannel(liveChannel, activeGuild, user));
+  const hasChannelPermission = Boolean(channel && (canManageThisChannel || perms.canManageRoles));
+  const canSaveOverviewAndOverwrites = hasChannelPermission;
   const reducedMotion = useSettingsStore((state) => state.reducedMotion);
 
   // Tab & View state
@@ -70,11 +90,12 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   // Overview Form
   const [name, setName] = useState('');
   const [topic, setTopic] = useState('');
-  const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
+  const [slowmodeSeconds, setSlowmodeSeconds] = useState<number>(0);
 
   // Permissions State: map of roleId -> { allow: number, deny: number }
   const [overwrites, setOverwrites] = useState<Record<string, { allow: number; deny: number }>>({});
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
+  const [permSearch, setPermSearch] = useState('');
 
   // Status
   const [isSaving, setIsSaving] = useState(false);
@@ -85,11 +106,12 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   // Initialize state when modal opens or channel changes
   useEffect(() => {
     if (channel && isOpen) {
-      setActiveTab('overview');
+      setActiveTab(canManageThisChannel ? 'overview' : 'permissions');
       setMobileView('menu');
       setName(channel.name || '');
       setTopic(channel.topic || '');
-      setCategoryId(channel.category_id);
+      setSlowmodeSeconds(Number(channel.slowmode_seconds || 0));
+      setPermSearch('');
       setSaveStatus(null);
 
       // Load overwrites
@@ -107,28 +129,58 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         setSelectedRoleId(activeGuild.roles[0].id);
       }
     }
-  }, [channel, isOpen, activeGuild]);
+  }, [channel?.id, isOpen]);
+
+  const isCategory = liveChannel?.type === 'category';
+  const isText = liveChannel?.type === 'text';
+  const hasUnsavedChanges = (() => {
+    if (!isOpen || !liveChannel || !activeGuild || !hasChannelPermission) return false;
+    if (canManageThisChannel) {
+      const formattedCurrent = isCategory
+        ? name.trim()
+        : name.trim().toLowerCase().replace(/\s+/g, '-');
+      if (formattedCurrent !== (liveChannel.name || '')) return true;
+      if (!isCategory && topic.trim() !== (liveChannel.topic || '').trim()) return true;
+      if (isText && slowmodeSeconds !== Number(liveChannel.slowmode_seconds || 0)) return true;
+    }
+
+    const origMap: Record<string, { allow: number; deny: number }> = {};
+    (liveChannel.permission_overwrites || []).forEach((ow) => {
+      const allow = Number(ow.allow || 0);
+      const deny = Number(ow.deny || 0);
+      if (allow !== 0 || deny !== 0) origMap[ow.role_id] = { allow, deny };
+    });
+
+    const curMap: Record<string, { allow: number; deny: number }> = {};
+    Object.entries(overwrites).forEach(([rid, val]) => {
+      if (val.allow !== 0 || val.deny !== 0) curMap[rid] = val;
+    });
+
+    const allRoleIds = new Set([...Object.keys(origMap), ...Object.keys(curMap)]);
+    for (const rid of allRoleIds) {
+      const a = origMap[rid] || { allow: 0, deny: 0 };
+      const b = curMap[rid] || { allow: 0, deny: 0 };
+      if (a.allow !== b.allow || a.deny !== b.deny) return true;
+    }
+    return false;
+  })();
+
+  const { isShaking, attemptClose } = useUnsavedGuard(hasUnsavedChanges, onClose);
 
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        attemptClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, attemptClose]);
 
   if (!isOpen || !channel || !activeGuild || !hasChannelPermission) return null;
 
-  const isCategory = channel.type === 'category';
-  const isText = channel.type === 'text';
   const isVoice = channel.type === 'voice';
-
-  const categories = (activeGuild.channels || []).filter(
-    (c) => c.type === 'category' && c.id !== channel.id
-  );
 
   // Sort roles: custom roles first, @everyone last
   const roles = [...(activeGuild.roles || [])].sort((a, b) => {
@@ -138,6 +190,41 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   });
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
+
+  const canEditRole = (role: Role | undefined): boolean => {
+    if (!hasChannelPermission || !role) return false;
+    if (perms.isCurrentOwner || role.name === '@everyone') return true;
+    const rolePos = typeof role.position === 'number' ? role.position : 999;
+    return rolePos > perms.currentUserHighestPos;
+  };
+
+  const canEditSelectedRole = canEditRole(selectedRole);
+  const roleEditBlockedReason = !canEditSelectedRole
+    ? 'Você não pode editar permissões de um cargo igual ou superior ao seu na hierarquia'
+    : undefined;
+
+  const countFlagBits = (mask: number): number => {
+    let n = mask >>> 0;
+    let count = 0;
+    while (n) {
+      count += n & 1;
+      n >>>= 1;
+    }
+    return count;
+  };
+
+  const handleRevert = () => {
+    const base = liveChannel || channel;
+    setName(base.name || '');
+    setTopic(base.topic || '');
+    setSlowmodeSeconds(Number(base.slowmode_seconds || 0));
+    setSaveStatus(null);
+    const owMap: Record<string, { allow: number; deny: number }> = {};
+    (base.permission_overwrites || []).forEach((ow) => {
+      owMap[ow.role_id] = { allow: Number(ow.allow || 0), deny: Number(ow.deny || 0) };
+    });
+    setOverwrites(owMap);
+  };
 
   // Defined permissions for this channel type
   const channelPermsList: { category: string; perms: PermDef[] }[] = [
@@ -149,14 +236,12 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           name: 'Ver Canal',
           desc: 'Permite aos membros verem este canal e lerem seu histórico. Se negado, o canal fica oculto para este cargo.',
           flag: Permissions.VIEW_CHANNEL,
-          icon: <Eye className="w-4 h-4 text-sky-400" />,
         },
         {
           key: 'MANAGE_CHANNELS',
           name: 'Gerenciar Canal',
           desc: 'Permite aos membros alterarem as configurações, nome, tópico ou excluir este canal.',
           flag: Permissions.MANAGE_CHANNELS,
-          icon: <SettingsIcon className="w-4 h-4 text-amber-400" />,
         },
       ],
     },
@@ -170,35 +255,30 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 name: 'Enviar Mensagens',
                 desc: 'Permite aos membros enviarem mensagens de texto neste canal.',
                 flag: Permissions.SEND_MESSAGES,
-                icon: <MessageSquare className="w-4 h-4 text-emerald-400" />,
               },
               {
                 key: 'ATTACH_FILES',
                 name: 'Anexar Arquivos e Mídias',
                 desc: 'Permite aos membros enviarem fotos, vídeos, áudios e outros arquivos.',
                 flag: Permissions.ATTACH_FILES,
-                icon: <Paperclip className="w-4 h-4 text-indigo-400" />,
               },
               {
                 key: 'MANAGE_MESSAGES',
                 name: 'Gerenciar Mensagens',
                 desc: 'Permite aos membros apagarem e fixarem mensagens de outros membros neste canal.',
                 flag: Permissions.MANAGE_MESSAGES,
-                icon: <Shield className="w-4 h-4 text-red-400" />,
               },
               {
                 key: 'SEND_TTS',
                 name: 'Permitir TTS',
                 desc: 'Permite aos membros utilizarem o comando /tts para que suas mensagens sejam reproduzidas em voz alta neste canal.',
                 flag: Permissions.SEND_TTS,
-                icon: <Volume2 className="w-4 h-4 text-pink-400" />,
               },
               {
                 key: 'USE_COMMANDS',
                 name: 'Usar Comandos de Barra',
                 desc: 'Permite aos membros utilizarem comandos com barra (slash commands) neste canal.',
                 flag: Permissions.USE_COMMANDS,
-                icon: <Slash className="w-4 h-4 text-brand-400" />,
               },
             ],
           },
@@ -214,35 +294,30 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 name: 'Conectar na Call',
                 desc: 'Permite aos membros entrarem e ouvirem a sala de voz.',
                 flag: Permissions.CONNECT_VOICE,
-                icon: <Volume2 className="w-4 h-4 text-online" />,
               },
               {
                 key: 'SPEAK_VOICE',
                 name: 'Falar na Call',
                 desc: 'Permite aos membros falarem no microfone durante a chamada.',
                 flag: Permissions.SPEAK_VOICE,
-                icon: <Mic className="w-4 h-4 text-purple-400" />,
               },
               {
                 key: 'STREAM_VOICE',
                 name: 'Transmitir Tela e Vídeo',
                 desc: 'Permite aos membros compartilharem suas telas ou câmeras de vídeo na sala.',
                 flag: Permissions.STREAM_VOICE,
-                icon: <Monitor className="w-4 h-4 text-teal-400" />,
               },
               {
                 key: 'MUTE_VOICE',
                 name: 'Silenciar Outros Membros',
                 desc: 'Permite mutar o microfone de outros participantes na call.',
                 flag: Permissions.MUTE_VOICE,
-                icon: <VolumeX className="w-4 h-4 text-amber-400" />,
               },
               {
                 key: 'DEAFEN_VOICE',
                 name: 'Ensurdecer Outros Membros',
                 desc: 'Permite desativar o áudio de outros participantes na call.',
                 flag: Permissions.DEAFEN_VOICE,
-                icon: <Headphones className="w-4 h-4 text-dnd" />,
               },
             ],
           },
@@ -261,6 +336,9 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
   // Set permission state for a role ('allow' | 'deny' | 'inherit')
   const setPermissionState = (roleId: string, flag: number, newState: 'allow' | 'deny' | 'inherit') => {
+    const targetRole = roles.find((r) => r.id === roleId);
+    if (!canEditRole(targetRole)) return;
+
     setOverwrites((prev) => {
       const current = prev[roleId] || { allow: 0, deny: 0 };
       let newAllow = current.allow & ~flag;
@@ -281,6 +359,9 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
   // Reset all permissions for currently selected role to Inherit (Neutral)
   const handleResetRolePermissions = (roleId: string) => {
+    const targetRole = roles.find((r) => r.id === roleId);
+    if (!canEditRole(targetRole)) return;
+
     setOverwrites((prev) => {
       const next = { ...prev };
       delete next[roleId];
@@ -291,33 +372,73 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   // Save all changes (Overview + Permissions)
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!hasChannelPermission) return;
-    if (!name.trim()) return;
+    if (!canSaveOverviewAndOverwrites) return;
+    if (canManageThisChannel && !name.trim()) return;
 
     setIsSaving(true);
     setSaveStatus(null);
     try {
-      const formattedName = isCategory
-        ? name.trim()
-        : name.trim().toLowerCase().replace(/\s+/g, '-');
+      if (canManageThisChannel) {
+        const formattedName = isCategory
+          ? name.trim()
+          : name.trim().toLowerCase().replace(/\s+/g, '-');
 
-      // Convert overwrites map to array for payload
-      const owArray: ChannelPermissionOverwrite[] = Object.entries(overwrites)
-        .filter(([_, val]) => val.allow !== 0 || val.deny !== 0)
-        .map(([roleId, val]) => ({
-          channel_id: channel.id,
-          role_id: roleId,
-          allow: val.allow,
-          deny: val.deny,
-        }));
+        // Convert overwrites map to array for payload
+        const owArray: ChannelPermissionOverwrite[] = Object.entries(overwrites)
+          .filter(([_, val]) => val.allow !== 0 || val.deny !== 0)
+          .map(([roleId, val]) => ({
+            channel_id: channel.id,
+            role_id: roleId,
+            allow: val.allow,
+            deny: val.deny,
+          }));
 
-      await updateChannel(channel.id, {
-        name: formattedName,
-        topic: isCategory ? undefined : topic.trim(),
-        category_id: isCategory ? undefined : categoryId,
-        clear_category: !isCategory && !categoryId,
-        permission_overwrites: owArray,
-      });
+        await updateChannel(channel.id, {
+          name: formattedName,
+          topic: isCategory ? undefined : topic.trim(),
+          slowmode_seconds: isText ? slowmodeSeconds : undefined,
+          permission_overwrites: owArray,
+        });
+      } else {
+        const prevMap = new Map<string, { allow: number; deny: number }>();
+        (channel.permission_overwrites || []).forEach((ow) => {
+          prevMap.set(ow.role_id, { allow: Number(ow.allow || 0), deny: Number(ow.deny || 0) });
+        });
+
+        let latestChannel: Channel | null = null;
+        for (const role of roles) {
+          if (!canEditRole(role)) continue;
+          const prev = prevMap.get(role.id) || { allow: 0, deny: 0 };
+          const curr = overwrites[role.id] || { allow: 0, deny: 0 };
+          if (curr.allow === prev.allow && curr.deny === prev.deny) continue;
+
+          if (curr.allow === 0 && curr.deny === 0) {
+            latestChannel = await api.channels.deletePermissionOverwrite(channel.id, role.id);
+          } else {
+            latestChannel = await api.channels.updatePermissionOverwrite(channel.id, role.id, {
+              allow: curr.allow,
+              deny: curr.deny,
+            });
+          }
+        }
+
+        if (latestChannel) {
+          useGuildStore.setState((state) => {
+            if (!state.activeGuild) return state;
+            const channels = (state.activeGuild.channels || []).map((c) =>
+              c.id === channel.id ? { ...c, ...latestChannel } : c
+            );
+            const activeChannel =
+              state.activeChannel?.id === channel.id
+                ? { ...state.activeChannel, ...latestChannel }
+                : state.activeChannel;
+            return {
+              activeGuild: { ...state.activeGuild, channels },
+              activeChannel,
+            };
+          });
+        }
+      }
 
       setSaveStatus({ type: 'success', text: 'Configurações e permissões salvas com sucesso!' });
       setTimeout(() => setSaveStatus(null), 3000);
@@ -330,11 +451,12 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   };
 
   const handleDelete = () => {
+    if (!canManageThisChannel) return;
     setIsDeleteModalOpen(true);
   };
 
   const handleConfirmDelete = async () => {
-    if (!hasChannelPermission) return;
+    if (!canManageThisChannel) return;
     setIsDeleting(true);
     try {
       await deleteChannel(channel.id);
@@ -373,7 +495,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 shape="circle"
                 size="small"
                 svgOnly
-                onClick={onClose}
+                onClick={attemptClose}
                 aria-label="Fechar configurações do canal"
                 title="Fechar"
                 className="-ml-1"
@@ -458,31 +580,33 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             </div>
 
             {/* Danger Actions */}
-            <div className="space-y-1.5 pt-1">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
-                Ações
-              </span>
-              <div className="bg-background-darker rounded-2xl border border-white/10 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="w-full flex items-center justify-between p-3.5 text-left hover:bg-red-500/10 active:bg-red-500/20 text-red-400 transition-colors cursor-pointer"
-                >
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold">
-                      {isCategory ? 'Excluir Categoria' : 'Excluir Canal'}
+            {canManageThisChannel && (
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2 block">
+                  Ações
+                </span>
+                <div className="bg-background-darker rounded-2xl border border-white/10 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-red-500/10 active:bg-red-500/20 text-red-400 transition-colors cursor-pointer"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">
+                        {isCategory ? 'Excluir Categoria' : 'Excluir Canal'}
+                      </div>
+                      <div className="text-xs text-red-400/70">
+                        {isCategory
+                          ? 'Remove a categoria (move canais para a raiz)'
+                          : 'Apagar permanentemente este canal'}
+                      </div>
                     </div>
-                    <div className="text-xs text-red-400/70">
-                      {isCategory
-                        ? 'Remove a categoria (move canais para a raiz)'
-                        : 'Apagar permanentemente este canal'}
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-red-400/50 shrink-0" />
-                </button>
+                    <ChevronRight className="w-4 h-4 text-red-400/50 shrink-0" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -541,17 +665,19 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 )}
               </button>
 
-              <div className="pt-2 mt-2 border-t border-white/10 flex flex-col gap-0.5 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                >
-                  <Trash2 className="w-3.5 h-3.5 mr-2" />
-                  <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
-                </button>
-              </div>
+              {canManageThisChannel && (
+                <div className="pt-2 mt-2 border-t border-white/10 flex flex-col gap-0.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-2" />
+                    <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
+                  </button>
+                </div>
+              )}
             </nav>
           </div>
         </div>
@@ -588,7 +714,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
             shape="circle"
             size="small"
             svgOnly
-            onClick={onClose}
+            onClick={attemptClose}
             aria-label="Fechar configurações do canal"
             title="Fechar"
           >
@@ -616,18 +742,11 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           </div>
           <div className="flex items-center gap-3">
             <ModalButton
-              type="primary"
-              onClick={() => handleSave()}
-              loading={isSaving}
-            >
-              {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-            </ModalButton>
-            <ModalButton
               type="tertiary"
               shape="circle"
               size="small"
               svgOnly
-              onClick={onClose}
+              onClick={attemptClose}
               aria-label="Fechar configurações do canal"
               title="Fechar Configurações (ESC)"
             >
@@ -636,20 +755,10 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           </div>
         </div>
 
-        {/* Status Toast Notification */}
-        {saveStatus && (
-          <div
-            className={`mx-4 sm:mx-8 lg:mx-12 xl:mx-16 2xl:mx-24 mt-4 p-3 rounded-xl text-xs flex items-center gap-2.5 animate-in fade-in flex-shrink-0 ${
-              saveStatus.type === 'success'
-                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                : 'bg-red-500/15 text-red-300 border border-red-500/30'
-            }`}
-          >
-            {saveStatus.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-            ) : (
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-            )}
+        {/* Error Notification */}
+        {saveStatus?.type === 'error' && (
+          <div className="mx-4 sm:mx-8 lg:mx-12 xl:mx-16 2xl:mx-24 mt-4 p-3 rounded-xl text-xs flex items-center gap-2.5 animate-in fade-in flex-shrink-0 bg-red-500/15 text-red-300 border border-red-500/30">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{saveStatus.text}</span>
           </div>
         )}
@@ -659,6 +768,13 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           {/* TAB 1: Visão Geral */}
           {activeTab === 'overview' && (
             <div className="max-w-2xl space-y-6 py-6">
+              {!canManageThisChannel && (
+                <div className="p-3 rounded-xl text-xs bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Você possui permissão apenas para gerenciar permissões de cargos neste canal.</span>
+                </div>
+              )}
+
               <div>
                 <label className={MODAL_FIELD_LABEL_CLASS}>
                   {isCategory ? 'Nome da Categoria' : 'Nome do Canal'}
@@ -676,31 +792,30 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                   <input
                     type="text"
                     required
+                    disabled={!canManageThisChannel}
+                    title={!canManageThisChannel ? 'Você precisa da permissão Gerenciar Canal para editar este campo' : undefined}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder={isCategory ? 'COMUNIDADE' : 'novo-canal'}
-                    className="w-full bg-background-darkest border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
+                    className="w-full bg-background-darkest border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
 
-              {!isCategory && categories.length > 0 && (
+              {isText && (
                 <div>
                   <label className={MODAL_FIELD_LABEL_CLASS}>
-                    Categoria Pai
+                    Modo Lento (Slowmode)
                   </label>
+                  <p className={`${MODAL_DESCRIPTION_CLASS} mb-2`}>
+                    Define o intervalo mínimo entre mensagens para membros sem a permissão de Gerenciar Mensagens.
+                  </p>
                   <DropdownSelect
-                    value={categoryId || ''}
-                    onChange={(val) => setCategoryId(val ? String(val) : undefined)}
-                    options={[
-                      { value: '', label: 'Nenhuma (Canal na Raiz)' },
-                      ...categories.map((cat) => ({
-                        value: cat.id,
-                        label: cat.name,
-                        icon: <Folder className="w-4 h-4 text-gray-400" />,
-                      })),
-                    ]}
-                    placeholder="Nenhuma (Canal na Raiz)"
+                    value={String(slowmodeSeconds)}
+                    disabled={!canManageThisChannel}
+                    onChange={(val) => setSlowmodeSeconds(Number(val) || 0)}
+                    options={SLOWMODE_OPTIONS}
+                    placeholder="Desativado"
                   />
                 </div>
               )}
@@ -712,10 +827,12 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                   </label>
                   <textarea
                     rows={4}
+                    disabled={!canManageThisChannel}
+                    title={!canManageThisChannel ? 'Você precisa da permissão Gerenciar Canal para editar este campo' : undefined}
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
                     placeholder="Descreva o propósito deste canal..."
-                    className="w-full bg-background-darkest border border-white/10 rounded-xl p-3.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none transition-colors"
+                    className="w-full bg-background-darkest border border-white/10 rounded-xl p-3.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               )}
@@ -734,9 +851,10 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto max-h-none md:max-h-[calc(100vh-245px)] gap-1.5 md:gap-1 no-scrollbar">
                   {roles.map((role) => {
                     const isSelected = selectedRole?.id === role.id;
-                    const hasCustomOw =
-                      overwrites[role.id] &&
-                      (overwrites[role.id].allow !== 0 || overwrites[role.id].deny !== 0);
+                    const roleOw = overwrites[role.id];
+                    const allowCount = roleOw ? countFlagBits(roleOw.allow) : 0;
+                    const denyCount = roleOw ? countFlagBits(roleOw.deny) : 0;
+                    const isRoleLocked = !canEditRole(role);
 
                     return (
                       <div
@@ -756,14 +874,29 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                           <span className="truncate">{role.name}</span>
                         </div>
 
-                        {hasCustomOw && (
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              isSelected ? 'bg-brand-400' : 'bg-brand-400'
-                            } shrink-0 ml-1`}
-                            title="Possui permissões configuradas neste canal"
-                          />
-                        )}
+                        <div className="flex items-center gap-1 shrink-0 ml-1.5">
+                          {isRoleLocked && (
+                            <span title="Cargo igual ou superior ao seu na hierarquia">
+                              <Lock className="w-3 h-3 text-amber-400/80" />
+                            </span>
+                          )}
+                          {allowCount > 0 && (
+                            <span
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400"
+                              title={`${allowCount} permissão(ões) permitida(s)`}
+                            >
+                              +{allowCount}
+                            </span>
+                          )}
+                          {denyCount > 0 && (
+                            <span
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400"
+                              title={`${denyCount} permissão(ões) negada(s)`}
+                            >
+                              -{denyCount}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -784,22 +917,60 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                         <span className="font-bold text-base text-white">{selectedRole.name}</span>
                       </div>
 
-                      {overwrites[selectedRole.id] && (
+                      <div
+                        className={overwrites[selectedRole.id] ? '' : 'invisible pointer-events-none'}
+                        aria-hidden={!overwrites[selectedRole.id]}
+                        title={roleEditBlockedReason || 'Restaurar todas as permissões para o padrão do servidor'}
+                      >
                         <ModalButton
                           type="secondary"
                           size="small"
+                          disabled={!canEditSelectedRole || !overwrites[selectedRole.id]}
                           onClick={() => handleResetRolePermissions(selectedRole.id)}
                           prefix={<RotateCcw className="w-3.5 h-3.5" />}
-                          title="Restaurar todas as permissões para o padrão do servidor"
+                          className={!canEditSelectedRole ? 'opacity-50 cursor-not-allowed' : undefined}
+                          title={roleEditBlockedReason || 'Restaurar todas as permissões para o padrão do servidor'}
                         >
                           Redefinir Cargo
                         </ModalButton>
-                      )}
+                      </div>
+                    </div>
+
+                    {!canEditSelectedRole && roleEditBlockedReason && (
+                      <div className="p-3 rounded-xl text-xs bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>{roleEditBlockedReason}</span>
+                      </div>
+                    )}
+
+                    {/* Search Permissions */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={permSearch}
+                        onChange={(e) => setPermSearch(e.target.value)}
+                        placeholder="Filtrar permissões..."
+                        className="w-full bg-background-darkest border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
+                      />
                     </div>
 
                     {/* Permissions Groups */}
                     <div className="space-y-6">
-                      {channelPermsList.map((group, idx) => (
+                      {channelPermsList
+                        .map((group) => {
+                          const q = permSearch.trim().toLowerCase();
+                          const filteredPerms = q
+                            ? group.perms.filter(
+                                (p) =>
+                                  p.name.toLowerCase().includes(q) ||
+                                  p.desc.toLowerCase().includes(q)
+                              )
+                            : group.perms;
+                          return { ...group, perms: filteredPerms };
+                        })
+                        .filter((group) => group.perms.length > 0)
+                        .map((group, idx) => (
                         <React.Fragment key={group.category}>
                           {idx > 0 && <div className={MODAL_DIVIDER_CLASS} />}
                           <div className="space-y-3">
@@ -814,25 +985,28 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                 return (
                                   <div
                                     key={perm.key}
-                                    className="flex items-center justify-between gap-4 transition-all"
+                                    className="flex items-center justify-between gap-4 py-1"
                                   >
                                   <div className="space-y-0.5 min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                      {perm.icon}
-                                      <span className={MODAL_TOGGLE_HEADER_CLASS}>
-                                        {perm.name}
-                                      </span>
-                                    </div>
+                                    <span className={MODAL_TOGGLE_HEADER_CLASS}>
+                                      {perm.name}
+                                    </span>
                                     <p className={MODAL_DESCRIPTION_CLASS}>
                                       {perm.desc}
                                     </p>
                                   </div>
 
-                                  {/* 3-State Toggle: ❌ Negar | ⚪ Herdar | ✅ Permitir */}
-                                  <div className="flex items-center bg-background-darker p-1 rounded-xl border border-white/10 shrink-0">
+                                  {/* 3-State Toggle: ❌ Negar | ➖ Herdar | ✅ Permitir */}
+                                  <div
+                                    title={roleEditBlockedReason}
+                                    className={`flex items-center bg-background-darker p-1 rounded-xl border border-white/10 shrink-0 ${
+                                      !canEditSelectedRole ? 'opacity-50 cursor-not-allowed' : ''
+                                    }`}
+                                  >
                                     {/* Deny Button ❌ */}
                                     <button
                                       type="button"
+                                      disabled={!canEditSelectedRole}
                                       onClick={() =>
                                         setPermissionState(
                                           selectedRole.id,
@@ -840,35 +1014,45 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                           state === 'deny' ? 'inherit' : 'deny'
                                         )
                                       }
-                                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
+                                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
+                                        !canEditSelectedRole ? 'cursor-not-allowed' : 'cursor-pointer'
+                                      } ${
                                         state === 'deny'
                                           ? 'bg-red-500 text-white shadow-md shadow-red-500/30'
-                                          : 'text-gray-400 hover:text-red-400 hover:bg-white/5'
+                                          : canEditSelectedRole
+                                          ? 'text-gray-400 hover:text-red-400 hover:bg-white/5'
+                                          : 'text-gray-400'
                                       }`}
-                                      title="Negar permissão neste canal"
+                                      title={roleEditBlockedReason || 'Negar permissão neste canal'}
                                     >
                                       <X className="w-3.5 h-3.5" />
                                     </button>
 
-                                    {/* Inherit Button ⚪ */}
+                                    {/* Inherit Button ➖ */}
                                     <button
                                       type="button"
+                                      disabled={!canEditSelectedRole}
                                       onClick={() =>
                                         setPermissionState(selectedRole.id, perm.flag, 'inherit')
                                       }
-                                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
+                                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
+                                        !canEditSelectedRole ? 'cursor-not-allowed' : 'cursor-pointer'
+                                      } ${
                                         state === 'inherit'
                                           ? 'bg-white/15 text-gray-100'
-                                          : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                                          : canEditSelectedRole
+                                          ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                                          : 'text-gray-500'
                                       }`}
-                                      title="Padrão / Herdar permissão do servidor"
+                                      title={roleEditBlockedReason || 'Padrão / Herdar permissão do servidor'}
                                     >
-                                      <Slash className="w-3 h-3 rotate-90" />
+                                      <Minus className="w-3.5 h-3.5" />
                                     </button>
 
                                     {/* Allow Button ✅ */}
                                     <button
                                       type="button"
+                                      disabled={!canEditSelectedRole}
                                       onClick={() =>
                                         setPermissionState(
                                           selectedRole.id,
@@ -876,12 +1060,16 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                           state === 'allow' ? 'inherit' : 'allow'
                                         )
                                       }
-                                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
+                                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
+                                        !canEditSelectedRole ? 'cursor-not-allowed' : 'cursor-pointer'
+                                      } ${
                                         state === 'allow'
                                           ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                                          : 'text-gray-400 hover:text-emerald-400 hover:bg-white/5'
+                                          : canEditSelectedRole
+                                          ? 'text-gray-400 hover:text-emerald-400 hover:bg-white/5'
+                                          : 'text-gray-400'
                                       }`}
-                                      title="Permitir ação neste canal"
+                                      title={roleEditBlockedReason || 'Permitir ação neste canal'}
                                     >
                                       <Check className="w-3.5 h-3.5" />
                                     </button>
@@ -901,23 +1089,25 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           )}
         </div>
 
-        {/* Mobile Floating Save Button */}
+        {/* Mobile Bottom Bar */}
         <div className="flex md:hidden p-4 bg-background-darkest border-t border-white/10 items-center justify-between flex-shrink-0">
           <ModalButton
             type="secondary"
-            onClick={onClose}
+            onClick={attemptClose}
           >
-            Cancelar
-          </ModalButton>
-          <ModalButton
-            type="primary"
-            onClick={() => handleSave()}
-            loading={isSaving}
-          >
-            {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+            Fechar
           </ModalButton>
         </div>
       </div>
+
+      <UnsavedChangesBar
+        show={hasUnsavedChanges}
+        isShaking={isShaking}
+        isSaving={isSaving}
+        error={saveStatus?.type === 'error' ? saveStatus.text : null}
+        onSave={() => handleSave()}
+        onRevert={handleRevert}
+      />
 
       <DeleteChannelModal
         isOpen={isDeleteModalOpen}

@@ -55,7 +55,7 @@ interface GuildState {
   handleGuildUpdateEvent: (guild: Guild) => void;
   handleGuildDeleteEvent: (guildId: string) => void;
   createChannel: (guildId: string, name: string, type: 'text' | 'voice' | 'category', topic?: string, categoryId?: string, isPrivate?: boolean, roleIds?: string[]) => Promise<Channel>;
-  updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean; is_private?: boolean; role_ids?: string[]; permission_overwrites?: ChannelPermissionOverwrite[] }) => Promise<void>;
+  updateChannel: (channelId: string, data: { name?: string; topic?: string; position?: number; category_id?: string; clear_category?: boolean; is_private?: boolean; slowmode_seconds?: number; role_ids?: string[]; permission_overwrites?: ChannelPermissionOverwrite[] }) => Promise<void>;
   deleteChannel: (channelId: string) => Promise<void>;
   handleChannelDeleteEvent: (guildId: string, channelId: string) => void;
   reorderChannels: (guildId: string, payload: string[] | Array<{ id: string; position: number; category_id?: string; clear_category?: boolean }>) => Promise<void>;
@@ -286,7 +286,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       };
     });
 
-    if (channel.type === 'text' && !hasFetched) {
+    if (channel.type === 'text' && (!hasFetched || !cachedMessages)) {
       try {
         const messages = await api.channels.getMessages(channel.id, 50);
         let shouldAckEmpty = false;
@@ -649,9 +649,9 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       if (!state.activeGuild) return state;
       const channels = (state.activeGuild.channels || []).map((c) =>
-        c.id === channelId ? { ...c, ...updated } : c
+        c.id === channelId ? { ...c, ...data, ...updated } : c
       );
-      const activeChannel = state.activeChannel?.id === channelId ? { ...state.activeChannel, ...updated } : state.activeChannel;
+      const activeChannel = state.activeChannel?.id === channelId ? { ...state.activeChannel, ...data, ...updated } : state.activeChannel;
       return {
         activeGuild: { ...state.activeGuild, channels },
         activeChannel,

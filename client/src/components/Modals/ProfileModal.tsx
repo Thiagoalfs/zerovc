@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SquishSwitch } from '../ui/squish-switch';
 import {
   X,
-  Camera,
   Sparkles,
   Check,
   LogOut,
@@ -17,7 +16,6 @@ import {
   Smile,
   FileText,
   Edit3,
-  Pencil,
   ArrowLeft,
   Keyboard,
   Key,
@@ -88,6 +86,8 @@ import { InlineAlert } from '../ui/inline-alert';
 import { isElectron } from '../../lib/platform';
 import { AccountSubModals, AccountSubModalType } from './ProfileSettings/AccountSubModals';
 import { ImageCropModal } from './ImageCropModal';
+import { EditPencilOverlay } from '../Common/EditPencilOverlay';
+import { UnsavedChangesBar, useUnsavedGuard } from './UnsavedChangesBar';
 import { KeybindSettingsView } from './KeybindSettingsView';
 import { SessionsSettingsView } from './SessionsSettingsView';
 import { AccessibilitySettingsView } from './AccessibilitySettingsView';
@@ -179,11 +179,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
   const [displayName, setDisplayName] = useState(user?.display_name || '');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
   const [bannerUrl, setBannerUrl] = useState(user?.banner_url || '');
+  const [pendingAvatar, setPendingAvatar] = useState<{ file: File; previewUrl: string } | null>(null);
+  const [pendingBanner, setPendingBanner] = useState<{ file: File; previewUrl: string } | null>(null);
   const [bio, setBio] = useState(user?.bio || '');
   const [customStatus, setCustomStatus] = useState(user?.custom_status || '');
   const [status, setStatus] = useState<'online' | 'idle' | 'dnd' | 'offline'>(user?.status || 'online');
   const [isSavingBio, setIsSavingBio] = useState(false);
-  const [bioSuccess, setBioSuccess] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
@@ -221,6 +223,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     }
   }, [isOpen]);
 
+  const hasUnsavedServerChanges = Boolean(
+    isOpen &&
+      user &&
+      (pendingAvatar !== null ||
+        pendingBanner !== null ||
+        bio.trim() !== (user.bio || '').trim() ||
+        customStatus.trim() !== (user.custom_status || '').trim() ||
+        status !== (user.status || 'online'))
+  );
+
+  const { isShaking, attemptClose } = useUnsavedGuard(hasUnsavedServerChanges, onClose);
+
   // Desktop ESC key & lightweight Tab focus-trap handling
   useEffect(() => {
     if (!isOpen) return;
@@ -234,7 +248,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
           setActiveAccountModal(null);
           return;
         }
-        onClose();
+        attemptClose();
         return;
       }
 
@@ -271,7 +285,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, isCropOpen, activeAccountModal]);
+  }, [isOpen, attemptClose, isCropOpen, activeAccountModal]);
 
   // Hardware Back Button integration for mobile
   useEffect(() => {
@@ -290,14 +304,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
         setMobileView('menu');
         return true;
       }
-      onClose();
+      attemptClose();
       return true;
     });
 
     return () => {
       unregister();
     };
-  }, [isOpen, mobileView, isCropOpen, activeAccountModal, onClose]);
+  }, [isOpen, mobileView, isCropOpen, activeAccountModal, attemptClose]);
 
   // Audio / Device Fields
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
@@ -543,6 +557,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
       setBio(user.bio || '');
       setCustomStatus(user.custom_status || '');
       setStatus(user.status || 'online');
+      setPendingAvatar((prev) => {
+        if (prev) URL.revokeObjectURL(prev.previewUrl);
+        return null;
+      });
+      setPendingBanner((prev) => {
+        if (prev) URL.revokeObjectURL(prev.previewUrl);
+        return null;
+      });
+      setProfileSaveError(null);
 
       loadMediaDevices();
       navigator.mediaDevices?.addEventListener?.('devicechange', loadMediaDevices);
@@ -554,7 +577,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     return () => {
       navigator.mediaDevices?.removeEventListener?.('devicechange', loadMediaDevices);
     };
-  }, [isOpen, user]);
+  }, [isOpen, user?.id]);
 
   const streamerModeActive = useStreamerModeStore((s) => s.enabled && s.hidePersonalData);
 
@@ -596,60 +619,105 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     e.target.value = '';
   };
 
-  const handleCropConfirmed = async (croppedFile: File) => {
+  const handleCropConfirmed = (croppedFile: File) => {
     setIsCropOpen(false);
+    const previewUrl = URL.createObjectURL(croppedFile);
     if (cropType === 'avatar') {
-      setIsUploadingAvatar(true);
-      try {
-        const res = await api.upload.avatar(croppedFile);
+      setPendingAvatar((prev) => {
+        if (prev) URL.revokeObjectURL(prev.previewUrl);
+        return { file: croppedFile, previewUrl };
+      });
+    } else {
+      setPendingBanner((prev) => {
+        if (prev) URL.revokeObjectURL(prev.previewUrl);
+        return { file: croppedFile, previewUrl };
+      });
+    }
+  };
+
+  const handleRevertServerProfile = () => {
+    if (!user) return;
+    setBio(user.bio || '');
+    setCustomStatus(user.custom_status || '');
+    setStatus(user.status || 'online');
+    setAvatarUrl(user.avatar_url || '');
+    setBannerUrl(user.banner_url || '');
+    setPendingAvatar((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+    setPendingBanner((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+    setProfileSaveError(null);
+  };
+
+  const handleSaveServerProfile = async () => {
+    if (!user) return;
+    setIsSavingBio(true);
+    setProfileSaveError(null);
+    try {
+      const payload: {
+        avatar_url?: string;
+        banner_url?: string;
+        bio?: string;
+        custom_status?: string;
+        status?: 'online' | 'idle' | 'dnd' | 'offline';
+      } = {};
+
+      if (pendingAvatar) {
+        setIsUploadingAvatar(true);
+        const res = await api.upload.avatar(pendingAvatar.file);
+        payload.avatar_url = res.url;
         setAvatarUrl(res.url);
-        await updateProfile({ avatar_url: res.url });
-      } catch (err) {
-        console.error('Failed to upload avatar:', err);
-      } finally {
+        URL.revokeObjectURL(pendingAvatar.previewUrl);
         setIsUploadingAvatar(false);
       }
-    } else {
-      setIsUploadingBanner(true);
-      try {
-        const res = await api.upload.banner(croppedFile);
+
+      if (pendingBanner) {
+        setIsUploadingBanner(true);
+        const res = await api.upload.banner(pendingBanner.file);
+        payload.banner_url = res.url;
         setBannerUrl(res.url);
-        await updateProfile({ banner_url: res.url });
-      } catch (err) {
-        console.error('Failed to upload banner:', err);
-      } finally {
+        URL.revokeObjectURL(pendingBanner.previewUrl);
         setIsUploadingBanner(false);
       }
+
+      if (bio.trim() !== (user.bio || '').trim()) {
+        payload.bio = bio.trim();
+      }
+      if (customStatus.trim() !== (user.custom_status || '').trim()) {
+        payload.custom_status = customStatus.trim();
+      }
+      if (status !== (user.status || 'online')) {
+        payload.status = status;
+      }
+
+      if (Object.keys(payload).length > 0) {
+        await updateProfile(payload);
+      }
+      setPendingAvatar(null);
+      setPendingBanner(null);
+    } catch (err: any) {
+      console.error('Failed to save profile changes:', err);
+      setProfileSaveError(err?.message || 'Erro ao salvar alterações do perfil.');
+    } finally {
+      setIsSavingBio(false);
+      setIsUploadingAvatar(false);
+      setIsUploadingBanner(false);
     }
   };
 
   // Save Bio & Custom Status
   const handleSaveBioAndStatus = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSavingBio(true);
-    try {
-      await updateProfile({
-        bio: bio.trim(),
-        custom_status: customStatus.trim(),
-        status,
-      });
-      setBioSuccess(true);
-      setTimeout(() => setBioSuccess(false), 2500);
-    } catch (err: any) {
-      console.error('Failed to update bio & status:', err);
-    } finally {
-      setIsSavingBio(false);
-    }
+    await handleSaveServerProfile();
   };
 
-  // Status quick change
-  const handleStatusChange = async (newStatus: 'online' | 'idle' | 'dnd' | 'offline') => {
+  // Status quick change (staged until Save)
+  const handleStatusChange = (newStatus: 'online' | 'idle' | 'dnd' | 'offline') => {
     setStatus(newStatus);
-    try {
-      await updateProfile({ status: newStatus });
-    } catch (err) {
-      console.error('Failed to change status:', err);
-    }
   };
 
   const handleExportData = async () => {
@@ -835,10 +903,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
   if (!isOpen || !user) return null;
 
+  const effectiveAvatarSrc = pendingAvatar?.previewUrl || (avatarUrl ? formatAssetUrl(avatarUrl) : '');
+  const effectiveBannerSrc = pendingBanner?.previewUrl || (bannerUrl ? formatAssetUrl(bannerUrl) : '');
+
   return (
     <div
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) attemptClose();
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-0 md:p-4 md:pt-10 overflow-hidden animate-in fade-in"
     >
@@ -868,7 +939,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                   shape="circle"
                   size="small"
                   svgOnly
-                  onClick={onClose}
+                  onClick={attemptClose}
                   aria-label="Fechar"
                   className="-ml-1 text-gray-400 hover:text-white"
                   title="Fechar"
@@ -891,8 +962,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-12 h-12 rounded-full bg-brand-500 overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow">
-                    {user.avatar_url ? (
-                      <img src={formatAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
+                    {effectiveAvatarSrc ? (
+                      <img src={effectiveAvatarSrc} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase()}</span>
                     )}
@@ -1356,7 +1427,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               shape="circle"
               size="small"
               svgOnly
-              onClick={onClose}
+              onClick={attemptClose}
               aria-label="Fechar"
               className="text-gray-400 hover:text-white"
               title="Fechar"
@@ -1419,7 +1490,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               shape="circle"
               size="small"
               svgOnly
-              onClick={onClose}
+              onClick={attemptClose}
               aria-label="Fechar configurações"
               className="text-gray-400 hover:text-white"
               title="Fechar Configurações (ESC)"
@@ -1458,14 +1529,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     aria-label="Alterar imagem de banner do perfil"
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') bannerFileInputRef.current?.click(); }}
                     className="w-full h-28 sm:h-32 bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-                    style={{ backgroundImage: user.banner_url ? `url(${formatAssetUrl(user.banner_url)})` : undefined }}
+                    style={{ backgroundImage: effectiveBannerSrc ? `url(${effectiveBannerSrc})` : undefined }}
                     onClick={() => bannerFileInputRef.current?.click()}
                     title="Clique para alterar seu banner"
                   >
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-semibold backdrop-blur-xs">
-                      <Camera className="w-4 h-4" />
-                      <span>{isUploadingBanner ? 'Processando Banner...' : 'Alterar Banner'}</span>
-                    </div>
+                    <EditPencilOverlay variant="top-right" />
                   </div>
 
                   {/* Header Row: Avatar + Name */}
@@ -1481,9 +1549,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         onClick={() => avatarFileInputRef.current?.click()}
                         title="Clique para alterar seu avatar"
                       >
-                        {user.avatar_url ? (
+                        {effectiveAvatarSrc ? (
                           <img
-                            src={formatAssetUrl(user.avatar_url)}
+                            src={effectiveAvatarSrc}
                             alt={`Avatar de ${user.display_name || user.username}`}
                             className="w-full h-full object-cover"
                           />
@@ -1491,11 +1559,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           <span>{user.display_name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}</span>
                         )}
 
-                        {/* Camera Overlay on Hover */}
-                        <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-0.5">
-                          <Camera className="w-5 h-5" />
-                          <span className="text-[9px] font-bold uppercase tracking-wider">{isUploadingAvatar ? '...' : 'Mudar'}</span>
-                        </div>
+                        <EditPencilOverlay variant="center" roundedClass="rounded-full" />
                       </div>
 
                       {/* Name & Username tag cleanly aligned in dark area */}
@@ -1626,21 +1690,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         maxLength={255}
                         className="w-full bg-background-darkest border border-white/10 rounded-xl p-3 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none leading-relaxed"
                       />
-                    </div>
-
-                    <div className="flex justify-end pt-1">
-                      <ModalButton
-                        type="primary"
-                        htmlType="submit"
-                        loading={isSavingBio}
-                        prefix={bioSuccess ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : undefined}
-                      >
-                        {bioSuccess
-                          ? 'Salvo com Sucesso!'
-                          : isSavingBio
-                            ? 'Salvando...'
-                            : 'Salvar Recado e Bio'}
-                      </ModalButton>
                     </div>
                   </form>
                 </div>
@@ -2805,6 +2854,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
         cropType={cropType}
         onConfirm={handleCropConfirmed}
         onCancel={() => setIsCropOpen(false)}
+      />
+
+      <UnsavedChangesBar
+        show={hasUnsavedServerChanges}
+        isShaking={isShaking}
+        isSaving={isSavingBio || isUploadingAvatar || isUploadingBanner}
+        error={profileSaveError}
+        onSave={handleSaveServerProfile}
+        onRevert={handleRevertServerProfile}
       />
     </div>
   );

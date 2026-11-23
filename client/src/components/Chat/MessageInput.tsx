@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { PlusCircle, SendHorizontal, Smile, X, FileText, UploadCloud, Hash, Volume2, Lock, Mic, Terminal, Bot, Sparkles, CornerDownLeft, AlertCircle, AlertTriangle } from 'lucide-react';
+import { PlusCircle, SendHorizontal, Smile, X, FileText, UploadCloud, Hash, Volume2, Lock, Mic, Terminal, Bot, Sparkles, CornerDownLeft, AlertCircle, AlertTriangle, Clock } from 'lucide-react';
 import { Channel, Message } from '../../types';
 import { socket } from '../../lib/socket';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -54,7 +54,7 @@ interface ActiveSlashState {
 }
 
 interface MessageInputProps {
-  channel?: { id?: string; name?: string; type?: string } | null;
+  channel?: { id?: string; name?: string; type?: string; slowmode_seconds?: number } | null;
   placeholder?: string;
   replyingTo?: { id: string; author?: { username?: string; display_name?: string }; content: string } | null;
   onCancelReply?: () => void;
@@ -214,7 +214,61 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [slashChoiceIndex, setSlashChoiceIndex] = useState<number>(0);
   const [slashUserIndex, setSlashUserIndex] = useState<number>(0);
 
+  // Slowmode state per channel
+  const slowmodeSeconds =
+    contextType === 'channel' && channel?.type === 'text'
+      ? Number(channel.slowmode_seconds || 0)
+      : 0;
+  const isSlowmodeImmune = canManageMessages;
+  const slowmodeEndByChannelRef = useRef<Record<string, number>>({});
+  const [slowmodeRemaining, setSlowmodeRemaining] = useState<number>(0);
+
+  const formatSlowmodeDuration = (totalSeconds: number): string => {
+    const s = Math.max(0, Math.floor(totalSeconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    const parts: string[] = [];
+    if (h > 0) parts.push(`${h}h`);
+    if (m > 0) parts.push(`${m}m`);
+    if (sec > 0 || parts.length === 0) parts.push(`${sec}s`);
+    return parts.join(' ');
+  };
+
+  useEffect(() => {
+    const cid = channel?.id;
+    if (!cid || slowmodeSeconds <= 0 || isSlowmodeImmune) {
+      setSlowmodeRemaining(0);
+      return;
+    }
+
+    const syncRemaining = () => {
+      const endAt = slowmodeEndByChannelRef.current[cid] || 0;
+      const diff = Math.ceil((endAt - Date.now()) / 1000);
+      if (diff > 0) {
+        setSlowmodeRemaining(diff);
+      } else {
+        delete slowmodeEndByChannelRef.current[cid];
+        setSlowmodeRemaining(0);
+      }
+    };
+
+    syncRemaining();
+    const id = window.setInterval(syncRemaining, 500);
+    return () => window.clearInterval(id);
+  }, [channel?.id, slowmodeSeconds, isSlowmodeImmune]);
+
+  const startSlowmodeCooldown = (seconds: number) => {
+    const cid = channel?.id;
+    if (!cid || seconds <= 0 || isSlowmodeImmune) return;
+    slowmodeEndByChannelRef.current[cid] = Date.now() + seconds * 1000;
+    setSlowmodeRemaining(seconds);
+  };
+
+  const isSlowmodeBlocked = slowmodeSeconds > 0 && !isSlowmodeImmune && slowmodeRemaining > 0;
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const mainSlashInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingTime = useRef<number>(0);
@@ -227,6 +281,98 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const channelListRef = useRef<HTMLDivElement>(null);
   const emojiListRef = useRef<HTMLDivElement>(null);
   const mentionListRef = useRef<HTMLDivElement>(null);
+
+  const syncTextareaBackdropScroll = () => {
+    if (backdropRef.current && textareaRef.current) {
+      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  };
+
+  const highlightedInputNodes = useMemo(() => {
+    if (!content) return null;
+    const tokenRegex = /(@[a-zA-Z0-9_.-]+|#[a-zA-Z0-9_-]+)/g;
+    const parts: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let m: RegExpExecArray | null;
+    let k = 0;
+
+    while ((m = tokenRegex.exec(content)) !== null) {
+      if (m.index > lastIdx) {
+        parts.push(content.slice(lastIdx, m.index));
+      }
+      const token = m[0];
+      if (token.startsWith('#')) {
+        const chName = token.slice(1).toLowerCase();
+        const matchedChannel = activeGuild?.channels?.find((c) => c.name.toLowerCase() === chName);
+        if (matchedChannel) {
+          parts.push(
+            <span key={k++} className="rounded-[4px] py-[1px] bg-brand-500/25 text-brand-200">
+              {token}
+            </span>
+          );
+        } else {
+          parts.push(token);
+        }
+      } else {
+        const isGlobal = token === '@everyone' || token === '@here';
+        const targetName = token.slice(1).toLowerCase();
+        const matchedRole = activeGuild?.roles?.find((r) => r.name.toLowerCase() === targetName);
+        const matchedMember = activeGuild?.members?.find(
+          (mb) =>
+            mb.username.toLowerCase() === targetName ||
+            (mb.display_name && mb.display_name.toLowerCase() === targetName)
+        );
+        const currentUserRoles =
+          user && activeGuild?.members
+            ? activeGuild.members.find((mb) => mb.id === user.id)?.roles || []
+            : [];
+        const isUserInRole = matchedRole && currentUserRoles.some((r) => r.id === matchedRole.id);
+        const isSelfMention =
+          isUserInRole ||
+          (user &&
+            (token.toLowerCase() === `@${user.username.toLowerCase()}` ||
+              (user.display_name && token.toLowerCase() === `@${user.display_name.toLowerCase()}`) ||
+              token === '@everyone'));
+
+        if (matchedRole) {
+          parts.push(
+            <span
+              key={k++}
+              className="rounded-[4px] py-[1px]"
+              style={{
+                backgroundColor: `${matchedRole.color || '#5865F2'}28`,
+                color: matchedRole.color || '#c9cdfb',
+              }}
+            >
+              {token}
+            </span>
+          );
+        } else if (matchedMember || isGlobal) {
+          parts.push(
+            <span
+              key={k++}
+              className={`rounded-[4px] py-[1px] ${
+                isSelfMention ? 'bg-amber-500/20 text-amber-200' : 'bg-brand-500/25 text-brand-200'
+              }`}
+            >
+              {token}
+            </span>
+          );
+        } else {
+          parts.push(token);
+        }
+      }
+      lastIdx = m.index + token.length;
+    }
+
+    if (lastIdx < content.length) {
+      parts.push(content.slice(lastIdx));
+    }
+    if (content.endsWith('\n')) {
+      parts.push('\u200b');
+    }
+    return parts;
+  }, [content, activeGuild?.channels, activeGuild?.roles, activeGuild?.members, user]);
 
   // All available options for the active slash command
   const activeSlashOptions = useMemo<SlashOption[]>(() => {
@@ -1006,7 +1152,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleSend = async () => {
-    if (isUploading || isSendingRef.current) return;
+    if (isUploading || isSendingRef.current || isSlowmodeBlocked) return;
     if (activeSlash) {
       await handleSendActiveSlash();
       return;
@@ -1200,8 +1346,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     isSendingRef.current = true;
     try {
       await onSendMessage(finalContent, replyId, false, filesToUpload.length > 0 ? filesToUpload : undefined);
+      if (slowmodeSeconds > 0 && !isSlowmodeImmune) {
+        startSlowmodeCooldown(slowmodeSeconds);
+      }
     } catch (err: any) {
       console.error('Failed to send message/file:', err);
+      if (err?.retry_after && Number(err.retry_after) > 0) {
+        startSlowmodeCooldown(Number(err.retry_after));
+      }
       setLimitAlert({
         title: 'Erro ao Enviar Mensagem',
         message: err.message || 'Não foi possível enviar a mensagem. Verifique sua conexão.',
@@ -1212,12 +1364,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleSendVoice = async (audioFile: File) => {
+    if (isSlowmodeBlocked) return;
     setIsRecordingVoice(false);
     try {
       await onSendMessage('', replyingTo?.id, false, audioFile);
       onCancelReply?.();
+      if (slowmodeSeconds > 0 && !isSlowmodeImmune) {
+        startSlowmodeCooldown(slowmodeSeconds);
+      }
     } catch (err: any) {
       console.error('Failed to send voice note:', err);
+      if (err?.retry_after && Number(err.retry_after) > 0) {
+        startSlowmodeCooldown(Number(err.retry_after));
+      }
       setLimitAlert({
         title: 'Erro ao Enviar Mensagem de Voz',
         message: err.message || 'Não foi possível enviar o áudio gravado.',
@@ -2050,6 +2209,23 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         />
       ) : (
         <div className="relative">
+          {slowmodeSeconds > 0 && (
+            <div className="flex justify-end px-2 pb-1 text-[11px] font-medium select-none">
+              <span
+                className={`inline-flex items-center gap-1.5 ${
+                  !isSlowmodeImmune && slowmodeRemaining > 0 ? 'text-amber-300' : 'text-gray-400'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                {isSlowmodeImmune
+                  ? `Modo lento: ${formatSlowmodeDuration(slowmodeSeconds)} (Imune)`
+                  : slowmodeRemaining > 0
+                  ? `Modo lento: aguarde ${formatSlowmodeDuration(slowmodeRemaining)}`
+                  : `Modo lento: ${formatSlowmodeDuration(slowmodeSeconds)}`}
+              </span>
+            </div>
+          )}
+
           {/* Expanding drop zone anchored at bottom-0 so ChatArea never shifts */}
           <div
             className={`absolute bottom-0 left-0 right-0 z-30 pointer-events-none overflow-hidden bg-background-darkest/95 backdrop-blur-md border-2 border-dashed border-brand-500 shadow-2xl flex flex-col items-center justify-center gap-1.5 transition-[height,opacity] duration-300 ease-out ${
@@ -2306,25 +2482,44 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               )}
             </div>
           ) : (
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              placeholder={
-                !canSendMessages
-                  ? 'Você não tem permissão para enviar mensagens neste canal.'
-                  : replyingTo
-                  ? (replyingTo.author?.display_name || replyingTo.author?.username
-                      ? `Respondendo a @${replyingTo.author.display_name || replyingTo.author.username}...`
-                      : 'Respondendo à mensagem...')
-                  : (placeholder || (channel?.name ? `Conversar em #${channel.name}` : 'Conversar...'))
-              }
-              rows={1}
-              disabled={isUploading || !canSendMessages}
-              className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 text-sm focus:outline-none resize-none py-2 min-h-[36px] max-h-40 leading-5 font-normal no-scrollbar disabled:opacity-60 disabled:cursor-not-allowed"
-            />
+            <div className="relative flex-1 min-w-0">
+              {content && (
+                <div
+                  ref={backdropRef}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 overflow-y-auto no-scrollbar whitespace-pre-wrap break-words py-2 text-sm leading-5 font-normal text-gray-100"
+                >
+                  {highlightedInputNodes}
+                </div>
+              )}
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={(e) => {
+                  handleInput(e);
+                  syncTextareaBackdropScroll();
+                }}
+                onScroll={syncTextareaBackdropScroll}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder={
+                  !canSendMessages
+                    ? 'Você não tem permissão para enviar mensagens neste canal.'
+                    : replyingTo
+                    ? (replyingTo.author?.display_name || replyingTo.author?.username
+                        ? `Respondendo a @${replyingTo.author.display_name || replyingTo.author.username}...`
+                        : 'Respondendo à mensagem...')
+                    : (placeholder || (channel?.name ? `Conversar em #${channel.name}` : 'Conversar...'))
+                }
+                rows={1}
+                disabled={isUploading || !canSendMessages}
+                className={`relative z-10 w-full block bg-transparent placeholder-gray-500 text-sm focus:outline-none resize-none py-2 min-h-[36px] max-h-40 leading-5 font-normal no-scrollbar disabled:opacity-60 disabled:cursor-not-allowed ${
+                  content
+                    ? 'text-transparent caret-gray-100 selection:bg-brand-500/35'
+                    : 'text-gray-100'
+                }`}
+              />
+            </div>
           )}
 
           {/* Emoji Button */}

@@ -1,22 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
   Download,
-  Monitor,
-  Headphones,
-  Sliders,
-  ShieldCheck,
   ArrowRight,
   ArrowLeft,
   Info,
   Check,
+  Copy,
   Laptop,
   Smartphone,
   Apple,
   Globe,
   Share2,
-  PlusSquare,
-  HelpCircle,
-  ExternalLink,
   Terminal,
 } from 'lucide-react';
 import { ZeroVCLogo } from '../Common/ZeroVCLogo';
@@ -67,6 +61,13 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
   const [downloadStarted, setDownloadStarted] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('windows');
   const [linuxFormat, setLinuxFormat] = useState<LinuxFormat>('deb');
+  const [copiedCmd, setCopiedCmd] = useState(false);
+
+  const handleCopyLinuxCmd = () => {
+    navigator.clipboard?.writeText(LINUX_FORMATS[linuxFormat].cmd).catch(() => {});
+    setCopiedCmd(true);
+    setTimeout(() => setCopiedCmd(false), 2000);
+  };
 
   useEffect(() => {
     const ua = (navigator.userAgent || navigator.vendor || (window as any).opera || '').toLowerCase();
@@ -151,10 +152,10 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               </button>
             ) : (
               <button
-                onClick={() => onNavigate('/signin')}
+                onClick={() => onNavigate('/@me')}
                 className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs sm:text-sm border border-white/10 transition-all cursor-pointer flex-shrink-0"
               >
-                Entrar na Web
+                Abrir no Navegador
               </button>
             )}
           </div>
@@ -172,13 +173,13 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
         </h1>
 
         <p className="text-xs sm:text-base md:text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed mb-6 sm:mb-8 flex-shrink-0">
-          Desfrute de chamadas com latência zero, áudio cristalino, menor uso de bateria e conexão ultra-rápida.
+          Chamadas de voz com baixa latência, compartilhamento de tela e chat no desktop, celular ou navegador.
         </p>
 
         {/* Platform Selector Tabs */}
-        <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-2xl bg-white/5 border border-white/10 max-w-lg w-full flex-shrink-0">
+        <div className="grid grid-cols-2 sm:flex items-center justify-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-2xl bg-white/5 border border-white/10 max-w-lg w-full flex-shrink-0">
           <button
-            onClick={() => setSelectedPlatform('android')}
+            onClick={() => { setSelectedPlatform('android'); setDownloadStarted(false); }}
             className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex-shrink-0 ${
               selectedPlatform === 'android'
                 ? 'bg-brand-600 text-white'
@@ -190,7 +191,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
           </button>
 
           <button
-            onClick={() => setSelectedPlatform('windows')}
+            onClick={() => { setSelectedPlatform('windows'); setDownloadStarted(false); }}
             className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex-shrink-0 ${
               selectedPlatform === 'windows'
                 ? 'bg-brand-600 text-white'
@@ -202,7 +203,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
           </button>
 
           <button
-            onClick={() => setSelectedPlatform('linux')}
+            onClick={() => { setSelectedPlatform('linux'); setDownloadStarted(false); }}
             className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex-shrink-0 ${
               selectedPlatform === 'linux'
                 ? 'bg-brand-600 text-white'
@@ -214,7 +215,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
           </button>
 
           <button
-            onClick={() => setSelectedPlatform('ios')}
+            onClick={() => { setSelectedPlatform('ios'); setDownloadStarted(false); }}
             className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex-shrink-0 ${
               selectedPlatform === 'ios'
                 ? 'bg-brand-600 text-white'
@@ -226,11 +227,8 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
           </button>
         </div>
 
-        {/* -------------------------------------------------------------
-            PLATFORM CARD: ANDROID
-        ------------------------------------------------------------- */}
-        {selectedPlatform === 'android' && (
-          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
+        <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 relative overflow-hidden backdrop-blur-md flex-shrink-0">
+          {selectedPlatform === 'android' && (
             <div className="flex flex-col items-center">
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white mb-4 sm:mb-6 flex-shrink-0">
                 <Smartphone className="w-8 h-8 sm:w-10 sm:h-10" />
@@ -243,14 +241,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                 <span>Pacote APK Direto</span>
               </div>
 
-              {/* Download APK Button */}
               <button
                 onClick={() => handleDownload('android')}
-                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-bold text-sm sm:text-lg transition-colors cursor-pointer group flex-shrink-0 ${
-                  downloadStarted
-                    ? 'bg-brand-600 text-white'
-                    : 'bg-brand-600 hover:bg-brand-500 text-white'
-                }`}
+                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm sm:text-lg transition-colors cursor-pointer group flex-shrink-0"
               >
                 {downloadStarted ? (
                   <>
@@ -265,25 +258,17 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                 )}
               </button>
 
-              {downloadStarted && (
-                <p className="text-xs text-brand-400 mt-4 animate-in fade-in">
-                  O arquivo <code className="font-mono font-semibold">ZeroVC.apk</code> está sendo baixado. Se o download
-                  não começar,{' '}
-                  <a href="/downloads/ZeroVC.apk" className="underline font-semibold hover:text-white">
-                    clique aqui
-                  </a>
-                  .
-                </p>
-              )}
+              <p aria-live="polite" className={`text-xs text-brand-400 mt-4 min-h-[32px] transition-opacity ${downloadStarted ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                Iniciando o download de <code className="font-mono font-semibold">ZeroVC.apk</code>. Se não começar,{' '}
+                <a href="/downloads/ZeroVC.apk" className="underline font-semibold hover:text-white">
+                  baixar manualmente
+                </a>
+                .
+              </p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* -------------------------------------------------------------
-            PLATFORM CARD: WINDOWS
-        ------------------------------------------------------------- */}
-        {selectedPlatform === 'windows' && (
-          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
+          {selectedPlatform === 'windows' && (
             <div className="flex flex-col items-center">
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white mb-4 sm:mb-6 flex-shrink-0">
                 <Laptop className="w-8 h-8 sm:w-10 sm:h-10" />
@@ -296,14 +281,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                 <span>Instalador Setup Wizard (.exe)</span>
               </div>
 
-              {/* Main Download Button */}
               <button
                 onClick={() => handleDownload('windows')}
-                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-bold text-sm sm:text-lg transition-colors cursor-pointer group flex-shrink-0 ${
-                  downloadStarted
-                    ? 'bg-brand-600 text-white'
-                    : 'bg-brand-600 hover:bg-brand-500 text-white'
-                }`}
+                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm sm:text-lg transition-colors cursor-pointer group flex-shrink-0"
               >
                 {downloadStarted ? (
                   <>
@@ -318,25 +298,17 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                 )}
               </button>
 
-              {downloadStarted && (
-                <p className="text-xs text-brand-400 mt-4 animate-in fade-in">
-                  O arquivo <code className="font-mono font-semibold">ZeroVC-Setup.exe</code> está sendo baixado. Se o download
-                  não começar,{' '}
-                  <a href="/downloads/ZeroVC-Setup.exe" className="underline font-semibold hover:text-white">
-                    clique aqui
-                  </a>
-                  .
-                </p>
-              )}
+              <p aria-live="polite" className={`text-xs text-brand-400 mt-4 min-h-[32px] transition-opacity ${downloadStarted ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                Iniciando o download de <code className="font-mono font-semibold">ZeroVC-Setup.exe</code>. Se não começar,{' '}
+                <a href="/downloads/ZeroVC-Setup.exe" className="underline font-semibold hover:text-white">
+                  baixar manualmente
+                </a>
+                .
+              </p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* -------------------------------------------------------------
-            PLATFORM CARD: LINUX
-        ------------------------------------------------------------- */}
-        {selectedPlatform === 'linux' && (
-          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
+          {selectedPlatform === 'linux' && (
             <div className="flex flex-col items-center">
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white mb-4 sm:mb-6 flex-shrink-0">
                 <Terminal className="w-8 h-8 sm:w-10 sm:h-10" />
@@ -354,7 +326,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                   <button
                     key={fmt}
                     type="button"
-                    onClick={() => setLinuxFormat(fmt)}
+                    onClick={() => { setLinuxFormat(fmt); setDownloadStarted(false); }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       linuxFormat === fmt
                         ? 'bg-brand-600 text-white'
@@ -366,14 +338,9 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                 ))}
               </div>
 
-              {/* Main Download Button */}
               <button
                 onClick={() => handleDownload('linux')}
-                className={`w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl font-bold text-sm sm:text-lg transition-colors cursor-pointer group flex-shrink-0 ${
-                  downloadStarted
-                    ? 'bg-brand-600 text-white'
-                    : 'bg-brand-600 hover:bg-brand-500 text-white'
-                }`}
+                className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm sm:text-lg transition-colors cursor-pointer group flex-shrink-0"
               >
                 {downloadStarted ? (
                   <>
@@ -388,34 +355,37 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                 )}
               </button>
 
-              {downloadStarted && (
-                <p className="text-xs text-brand-400 mt-4 animate-in fade-in">
-                  O arquivo <code className="font-mono font-semibold">{LINUX_FORMATS[linuxFormat].fileName}</code> está sendo baixado. Se o download
-                  não começar,{' '}
-                  <a href={`/downloads/${LINUX_FORMATS[linuxFormat].fileName}`} className="underline font-semibold hover:text-white">
-                    clique aqui
-                  </a>
-                  .
-                </p>
-              )}
+              <p aria-live="polite" className={`text-xs text-brand-400 mt-4 min-h-[32px] transition-opacity ${downloadStarted ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                Iniciando o download de <code className="font-mono font-semibold">{LINUX_FORMATS[linuxFormat].fileName}</code>. Se não começar,{' '}
+                <a href={`/downloads/${LINUX_FORMATS[linuxFormat].fileName}`} className="underline font-semibold hover:text-white">
+                  baixar manualmente
+                </a>
+                .
+              </p>
 
-              <div className="w-full h-px bg-white/10 my-6" />
+              <div className="w-full h-px bg-white/10 my-4" />
 
               <div className="w-full text-left space-y-2 text-xs text-gray-400">
-                <span className="font-semibold text-gray-300">Como instalar/executar no Linux:</span>
-                <p className="font-mono bg-white/5 p-2.5 rounded-xl border border-white/5 text-gray-300">
-                  {LINUX_FORMATS[linuxFormat].cmd}
-                </p>
+                <span className="font-semibold text-gray-300">
+                  {linuxFormat === 'appimage' ? 'Como executar no Linux:' : 'Como instalar no Linux:'}
+                </span>
+                <div className="flex items-center justify-between gap-2 bg-white/5 p-2.5 pl-3 rounded-xl border border-white/5">
+                  <code className="font-mono text-gray-300 truncate">{LINUX_FORMATS[linuxFormat].cmd}</code>
+                  <button
+                    type="button"
+                    onClick={handleCopyLinuxCmd}
+                    aria-label="Copiar comando de instalação"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-gray-200 font-semibold transition-colors cursor-pointer flex-shrink-0"
+                  >
+                    {copiedCmd ? <Check className="w-3.5 h-3.5 text-online" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCmd ? 'Copiado' : 'Copiar'}</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* -------------------------------------------------------------
-            PLATFORM CARD: iOS
-        ------------------------------------------------------------- */}
-        {selectedPlatform === 'ios' && (
-          <div className="w-full max-w-2xl rounded-3xl bg-background-dark/90 border border-white/10 p-5 sm:p-10 relative overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-200 flex-shrink-0">
+          {selectedPlatform === 'ios' && (
             <div className="flex flex-col items-center">
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-brand-600 flex items-center justify-center text-white mb-4 sm:mb-6 flex-shrink-0">
                 <Apple className="w-8 h-8 sm:w-10 sm:h-10" />
@@ -428,9 +398,8 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                 <span>Instalação PWA via Safari</span>
               </div>
 
-              {/* iOS Direct Action */}
               <button
-                onClick={() => onNavigate(user ? '/@me' : '/signin')}
+                onClick={() => onNavigate('/@me')}
                 className="w-full sm:w-auto min-h-[56px] flex items-center justify-center gap-3 px-8 sm:px-10 py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm sm:text-lg transition-colors cursor-pointer flex-shrink-0"
               >
                 <Globe className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
@@ -439,7 +408,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
 
               <div className="w-full h-px bg-white/10 my-8" />
 
-              {/* iOS Step by Step Instructions */}
               <div className="w-full text-left space-y-4">
                 <div className="text-xs font-medium uppercase tracking-wider text-gray-400">
                   Como instalar na Tela de Início do iOS:
@@ -478,8 +446,8 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
 
 
@@ -493,7 +461,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             </div>
           </div>
           <button
-            onClick={() => onNavigate(user ? '/@me' : '/signin')}
+            onClick={() => onNavigate('/@me')}
             className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs whitespace-nowrap transition-colors cursor-pointer"
           >
             Acessar Web
@@ -510,7 +478,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
             <ZeroVCLogo className="w-6 h-6 flex-shrink-0" />
             <span className="font-bold text-white">ZeroVC</span>
             <span>•</span>
-            <span>Disponível para Windows, Android e Web</span>
+            <span>Disponível para Windows, Linux, Android, iOS e Web</span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -521,7 +489,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ onNavigate, user }) 
               Entrar
             </button>
             <button onClick={() => onNavigate('/signup')} className="hover:text-gray-300 transition-colors cursor-pointer">
-              Cadastrar
+              Criar Conta
             </button>
           </div>
         </div>

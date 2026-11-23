@@ -4,10 +4,15 @@ import {
   Trash2,
   Check,
   Shield,
+  Search,
+  Lock,
+  RotateCcw,
+  Users,
 } from 'lucide-react';
 import { Role, User, Permissions } from '../../../types';
 import { PRESET_ROLE_COLORS, PERMISSION_GROUPS } from './constants';
 import { SquishSwitch } from '../../ui/squish-switch';
+import { useGuildPermissions } from '../../../hooks/useGuildPermissions';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_SECTION_HEADER_CLASS,
@@ -41,6 +46,7 @@ interface RolesTabProps {
   handleToggleRoleHoist: () => Promise<void>;
   handleToggleRoleMentionable: () => Promise<void>;
   handleTogglePermission: (flag: number) => Promise<void>;
+  handleClearPermissions?: () => Promise<void>;
   isRoleAdmin: boolean;
 }
 
@@ -63,10 +69,34 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   handleToggleRoleHoist,
   handleToggleRoleMentionable,
   handleTogglePermission,
+  handleClearPermissions,
   isRoleAdmin,
 }) => {
+  const { currentUserHighestPos } = useGuildPermissions();
   const [draggedRoleId, setDraggedRoleId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ id: string; position: 'top' | 'bottom' } | null>(null);
+  const [roleSubTab, setRoleSubTab] = useState<'display' | 'permissions'>('display');
+  const [permSearch, setPermSearch] = useState('');
+
+  const memberCountByRoleId = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const m of members || []) {
+      for (const r of (m as any).roles || []) {
+        const rid = typeof r === 'string' ? r : r?.id;
+        if (rid) counts[String(rid)] = (counts[String(rid)] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [members]);
+
+  const canEditRole = (role: Role | undefined): boolean => {
+    if (!canManageRoles || !role) return false;
+    if (isOwner || role.name === '@everyone') return true;
+    const pos = typeof role.position === 'number' ? role.position : 999;
+    return pos > currentUserHighestPos;
+  };
+
+  const canEditSelectedRole = canEditRole(selectedRole);
 
   const sortedRoles = useMemo(() => {
     const seen = new Set<string>();
@@ -249,6 +279,24 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                       {role.name}
                     </span>
                   </div>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {!canEditRole(role) && (
+                      <span title="Cargo igual ou superior ao seu na hierarquia">
+                        <Lock className="w-3 h-3 text-amber-400/80" />
+                      </span>
+                    )}
+                    <span
+                      className="text-[11px] text-gray-500 flex items-center gap-0.5 tabular-nums"
+                      title={
+                        isEveryone
+                          ? `${members.length} membro(s)`
+                          : `${memberCountByRoleId[String(role.id)] || 0} membro(s) com este cargo`
+                      }
+                    >
+                      <Users className="w-3 h-3" />
+                      {isEveryone ? members.length : (memberCountByRoleId[String(role.id)] || 0)}
+                    </span>
+                  </div>
                 </div>
               </div>
             );
@@ -268,7 +316,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
               <h2 className={`${MODAL_DIALOG_TITLE_CLASS} truncate`}>{selectedRole.name}</h2>
             </div>
 
-            {canManageRoles && selectedRole.name !== '@everyone' && (
+            {canEditSelectedRole && selectedRole.name !== '@everyone' && (
               <ModalButton
                 type="error"
                 size="small"
@@ -281,7 +329,42 @@ export const RolesTab: React.FC<RolesTabProps> = ({
             )}
           </div>
 
+          {/* Sub-tabs: Exibição | Permissões */}
+          <div className="flex items-center gap-1 border-b border-white/10 pt-3 pb-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setRoleSubTab('display')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                roleSubTab === 'display'
+                  ? 'bg-white/10 text-white'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              }`}
+            >
+              Exibição
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoleSubTab('permissions')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                roleSubTab === 'permissions'
+                  ? 'bg-white/10 text-white'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              }`}
+            >
+              Permissões
+            </button>
+          </div>
+
+          {!canEditSelectedRole && (
+            <div className="mt-4 p-3 rounded-xl text-xs bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-2 shrink-0">
+              <Lock className="w-4 h-4 shrink-0" />
+              <span>Você não pode editar um cargo igual ou superior ao seu na hierarquia.</span>
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto space-y-6 pt-5 pr-4 md:pr-6 chat-scrollbar touch-pan-y min-h-0">
+            {roleSubTab === 'display' && (
+              <>
             {/* Role Name */}
             <div className="space-y-1.5">
               <label className={MODAL_FIELD_LABEL_CLASS}>
@@ -292,7 +375,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                 defaultValue={selectedRole.name}
                 key={selectedRole.id + selectedRole.name}
                 onBlur={(e) => handleUpdateRoleName(e.target.value)}
-                disabled={!canManageRoles || selectedRole.name === '@everyone'}
+                disabled={!canEditSelectedRole || selectedRole.name === '@everyone'}
                 className="w-full px-4 py-2 bg-background-darkest border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-brand-500 disabled:opacity-60"
               />
               {selectedRole.name === '@everyone' && (
@@ -313,7 +396,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     key={c}
                     type="button"
                     onClick={() => handleUpdateRoleColor(c)}
-                    disabled={!canManageRoles}
+                    disabled={!canEditSelectedRole}
                     className={`w-7 h-7 rounded-full transition-transform flex items-center justify-center ${
                       selectedRole.color?.toLowerCase() === c.toLowerCase()
                         ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-[#111214]'
@@ -331,7 +414,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     type="color"
                     value={selectedRole.color || '#5865F2'}
                     onChange={(e) => handleUpdateRoleColor(e.target.value)}
-                    disabled={!canManageRoles}
+                    disabled={!canEditSelectedRole}
                     className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer disabled:opacity-50"
                     title="Cor personalizada"
                   />
@@ -350,12 +433,12 @@ export const RolesTab: React.FC<RolesTabProps> = ({
               <div className="space-y-4">
                 <div
                   onClick={() => {
-                    if (canManageRoles && selectedRole.name !== '@everyone') {
+                    if (canEditSelectedRole && selectedRole.name !== '@everyone') {
                       handleToggleRoleHoist();
                     }
                   }}
                   className={`flex items-center justify-between transition-all ${
-                    canManageRoles && selectedRole.name !== '@everyone' ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
+                    canEditSelectedRole && selectedRole.name !== '@everyone' ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
                   }`}
                 >
                   <div className="pr-4 select-none">
@@ -371,19 +454,19 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   <SquishSwitch
                     checked={Boolean(selectedRole.hoist)}
                     onCheckedChange={() => handleToggleRoleHoist()}
-                    disabled={!canManageRoles || selectedRole.name === '@everyone'}
+                    disabled={!canEditSelectedRole || selectedRole.name === '@everyone'}
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
 
                 <div
                   onClick={() => {
-                    if (canManageRoles) {
+                    if (canEditSelectedRole) {
                       handleToggleRoleMentionable();
                     }
                   }}
                   className={`flex items-center justify-between transition-all ${
-                    canManageRoles ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
+                    canEditSelectedRole ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'
                   }`}
                 >
                   <div className="pr-4 select-none">
@@ -397,22 +480,62 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   <SquishSwitch
                     checked={Boolean(selectedRole.mentionable)}
                     onCheckedChange={() => handleToggleRoleMentionable()}
-                    disabled={!canManageRoles}
+                    disabled={!canEditSelectedRole}
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
               </div>
             </div>
+              </>
+            )}
 
-            <div className={MODAL_DIVIDER_CLASS} />
-
-            {/* Permission Groups */}
+            {roleSubTab === 'permissions' && (
             <div className="space-y-5">
-              <label className={MODAL_SECTION_HEADER_CLASS}>
-                Permissões do Cargo
-              </label>
+              <div className="flex items-center justify-between gap-3">
+                <label className={MODAL_SECTION_HEADER_CLASS}>
+                  Permissões do Cargo
+                </label>
 
-              {PERMISSION_GROUPS.map((group) => (
+                {canEditSelectedRole &&
+                  selectedRole.name !== '@everyone' &&
+                  Number(selectedRole.permissions || 0) !== 0 &&
+                  handleClearPermissions && (
+                    <ModalButton
+                      type="secondary"
+                      size="small"
+                      onClick={() => handleClearPermissions()}
+                      prefix={<RotateCcw className="w-3.5 h-3.5" />}
+                      title="Remover todas as permissões deste cargo"
+                    >
+                      Limpar permissões
+                    </ModalButton>
+                  )}
+              </div>
+
+
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={permSearch}
+                  onChange={(e) => setPermSearch(e.target.value)}
+                  placeholder="Filtrar permissões..."
+                  className="w-full bg-background-darkest border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
+                />
+              </div>
+
+              {PERMISSION_GROUPS.map((group) => {
+                const q = permSearch.trim().toLowerCase();
+                const filteredPerms = q
+                  ? group.permissions.filter(
+                      (p) =>
+                        p.name.toLowerCase().includes(q) ||
+                        p.description.toLowerCase().includes(q)
+                    )
+                  : group.permissions;
+                if (filteredPerms.length === 0) return null;
+
+                return (
                 <div key={group.category} className="space-y-3">
                   <div className="flex items-center gap-2 text-xs font-semibold text-gray-300">
                     {group.icon}
@@ -420,7 +543,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   </div>
 
                   <div className="divide-y divide-white/5">
-                    {group.permissions.map((perm) => {
+                    {filteredPerms.map((perm) => {
                       const currentPerms = Number(selectedRole.permissions || 0);
                       const isChecked = isRoleAdmin || (currentPerms & perm.flag) !== 0;
 
@@ -428,12 +551,12 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                         <div
                           key={perm.flag}
                           onClick={() => {
-                            if (canManageRoles && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
+                            if (canEditSelectedRole && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
                               handleTogglePermission(perm.flag);
                             }
                           }}
                           className={`flex items-start justify-between py-3.5 transition-all ${
-                            canManageRoles ? 'cursor-pointer' : 'opacity-70'
+                            canEditSelectedRole ? 'cursor-pointer' : 'opacity-70 cursor-not-allowed'
                           }`}
                         >
                           <div className="pr-4 select-none">
@@ -446,11 +569,11 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                           <SquishSwitch
                             checked={isChecked}
                             onCheckedChange={() => {
-                              if (canManageRoles && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
+                              if (canEditSelectedRole && (!isRoleAdmin || perm.flag === Permissions.ADMINISTRATOR)) {
                                 handleTogglePermission(perm.flag);
                               }
                             }}
-                            disabled={!canManageRoles || (isRoleAdmin && perm.flag !== Permissions.ADMINISTRATOR)}
+                            disabled={!canEditSelectedRole || (isRoleAdmin && perm.flag !== Permissions.ADMINISTRATOR)}
                             onClick={(e) => e.stopPropagation()}
                           />
                         </div>
@@ -458,8 +581,10 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     })}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
+            )}
           </div>
         </div>
       ) : (

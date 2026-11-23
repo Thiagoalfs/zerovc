@@ -549,6 +549,14 @@ export const App: React.FC = () => {
     typeof window !== 'undefined' &&
     Boolean((window as any).electronAPI || (window as any).electron || navigator.userAgent.includes('Electron'));
 
+  const isCapacitor =
+    typeof window !== 'undefined' &&
+    (typeof (window as any).Capacitor !== 'undefined' &&
+      ((window as any).Capacitor?.isNativePlatform?.() ||
+        (window as any).Capacitor?.getPlatform?.() === 'android' ||
+        (window as any).Capacitor?.getPlatform?.() === 'ios') ||
+      window.matchMedia?.('(display-mode: standalone)')?.matches);
+
   const getCurrentRoute = () => {
     if (typeof window === 'undefined') return '/';
     // Se houver hash router (ex: #/reset-password?token=... ou #/signin)
@@ -570,6 +578,24 @@ export const App: React.FC = () => {
   });
 
   const navigateTo = (path: string, replace = false) => {
+    const cleanTarget = path.split('?')[0].split('#')[0].replace(/^\/+|\/+$/g, '');
+    const isPublicTarget =
+      !isElectron &&
+      !isCapacitor &&
+      (cleanTarget === '' ||
+        cleanTarget === 'download' ||
+        cleanTarget === 'signup' ||
+        cleanTarget === 'register' ||
+        cleanTarget === 'reset-password' ||
+        cleanTarget === 'forgot-password' ||
+        cleanTarget === 'verify-email');
+
+    const authState = useAuthStore.getState();
+    if (!authState.user && !authState.isCheckingAuth && !isPublicTarget) {
+      useAuthStore.setState({ isCheckingAuth: true });
+      authState.checkAuth();
+    }
+
     if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
       const hashPath = '#' + (path.startsWith('/') ? path : '/' + path);
       if (window.location.hash !== hashPath) {
@@ -664,9 +690,22 @@ export const App: React.FC = () => {
       }
     }
 
-    // 1. Default to /@me or /@me/friends or /@me/:roomId or /@me/group/:groupId
-    if (segments[0] === '@me') {
+    // 1. Default to /@me or auth/landing paths after login -> Home (/@me)
+    if (
+      segments.length === 0 ||
+      segments[0] === '@me' ||
+      segments[0] === 'signin' ||
+      segments[0] === 'login' ||
+      segments[0] === 'signup' ||
+      segments[0] === 'register' ||
+      segments[0] === 'download'
+    ) {
       setIsHomeActive(true);
+      if (segments[0] !== '@me') {
+        setHomeView('friends');
+        navigateTo('/@me', true);
+        return;
+      }
       if (segments.length > 1 && segments[1] && segments[1] !== 'friends') {
         if (segments[1] === 'group' && segments[2]) {
           const groupId = segments[2];
@@ -754,7 +793,13 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    checkAuth();
+    const initClean = getCurrentRoute().split('?')[0].split('#')[0].replace(/^\/+|\/+$/g, '');
+    const isPublicLanding = !isElectron && !isCapacitor && (initClean === '' || initClean === 'download');
+    if (isPublicLanding) {
+      useAuthStore.setState({ isCheckingAuth: false });
+    } else {
+      checkAuth();
+    }
     useSettingsStore.getState().applyThemeToDOM();
 
     const onRouteEvent = () => {
@@ -812,7 +857,7 @@ export const App: React.FC = () => {
       const raw = cur.split('?')[0].split('#')[0];
       const clean = raw.replace(/^\/+|\/+$/g, '');
       if (clean.startsWith('@me') || clean.startsWith('channels/')) {
-        navigateTo(isElectron ? '/signin' : '/', true);
+        navigateTo('/signin', true);
       }
     }
   }, [user, isCheckingAuth, isElectron]);
@@ -1290,7 +1335,20 @@ export const App: React.FC = () => {
           curBase !== 'forgot-password' &&
           curBase !== 'verify-email'
         ) {
-          handleRoute(cur);
+          if (
+            curBase === '' ||
+            curBase === 'signin' ||
+            curBase === 'login' ||
+            curBase === 'signup' ||
+            curBase === 'register' ||
+            curBase === 'download'
+          ) {
+            setIsHomeActive(true);
+            setHomeView('friends');
+            navigateTo('/@me', true);
+          } else {
+            handleRoute(cur);
+          }
         }
       }
 
@@ -1800,10 +1858,29 @@ export const App: React.FC = () => {
             }));
           }
 
-          // 2. Resync active guild read states & voice states
+          // 2. Resync active voice session & guild read/voice states
+          const voiceState = useVoiceStore.getState();
+          if (voiceState.isConnected && voiceState.currentChannelId) {
+            try {
+              await api.channels.joinVoice(voiceState.currentChannelId, {
+                is_muted: voiceState.isMuted,
+                is_deafened: voiceState.isDeafened,
+              });
+              if (voiceState.isScreensharing) {
+                await api.channels.updateVoiceState(voiceState.currentChannelId, {
+                  is_screensharing: true,
+                });
+              }
+            } catch {}
+          }
+
           const curActiveGuild = useGuildStore.getState().activeGuild;
           if (curActiveGuild) {
             useGuildStore.getState().syncVoiceStates(curActiveGuild.id).catch(() => {});
+            window.setTimeout(() => {
+              const g = useGuildStore.getState().activeGuild;
+              if (g) useGuildStore.getState().syncVoiceStates(g.id).catch(() => {});
+            }, 1500);
             const readStates = await api.guilds.getReadStates(curActiveGuild.id);
             if (readStates) {
               useGuildStore.setState((state) => {
@@ -1905,14 +1982,6 @@ export const App: React.FC = () => {
   }
 
   const cleanRoute = currentRoute.replace(/^\/+|\/+$/g, '').split('?')[0];
-
-  const isCapacitor =
-    typeof window !== 'undefined' &&
-    (typeof (window as any).Capacitor !== 'undefined' &&
-      ((window as any).Capacitor?.isNativePlatform?.() ||
-        (window as any).Capacitor?.getPlatform?.() === 'android' ||
-        (window as any).Capacitor?.getPlatform?.() === 'ios') ||
-      window.matchMedia?.('(display-mode: standalone)')?.matches);
 
   const isResetPassword =
     cleanRoute === 'reset-password' ||

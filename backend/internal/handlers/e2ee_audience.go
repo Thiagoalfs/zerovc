@@ -158,6 +158,7 @@ func RecomputeAudience(ctx context.Context, db *database.DB, hub *gateway.Hub, c
 
 	// 1. Fetch channel context and guild owner
 	var guildID uuid.UUID
+	var categoryID uuid.NullUUID
 	var isPrivate bool
 	var e2eeEnabled bool
 	var rotationEpoch int
@@ -166,7 +167,7 @@ func RecomputeAudience(ctx context.Context, db *database.DB, hub *gateway.Hub, c
 	var ownerID uuid.UUID
 
 	queryChannel := `
-		SELECT c.guild_id, c.is_private, COALESCE(c.e2ee_enabled, false),
+		SELECT c.guild_id, c.category_id, c.is_private, COALESCE(c.e2ee_enabled, false),
 		       COALESCE(c.rotation_epoch, 1), COALESCE(c.audience_limit, 15), c.audience_hash,
 		       g.owner_id
 		FROM channels c
@@ -174,7 +175,7 @@ func RecomputeAudience(ctx context.Context, db *database.DB, hub *gateway.Hub, c
 		WHERE c.id = $1
 	`
 	err := db.Pool.QueryRow(ctx, queryChannel, channelID).Scan(
-		&guildID, &isPrivate, &e2eeEnabled,
+		&guildID, &categoryID, &isPrivate, &e2eeEnabled,
 		&rotationEpoch, &audienceLimit, &existingAudienceHash,
 		&ownerID,
 	)
@@ -260,23 +261,12 @@ func RecomputeAudience(ctx context.Context, db *database.DB, hub *gateway.Hub, c
 		}
 	}
 
-	// 6. Query channel permission overwrites
-	type overwriteInfo struct {
-		Allow int64
-		Deny  int64
+	// 6. Query category (if present) and channel permission overwrites
+	var categoryOverwrites map[uuid.UUID]roleOverwrite
+	if categoryID.Valid {
+		categoryOverwrites, _ = loadOverwritesMap(ctx, db, categoryID.UUID)
 	}
-	channelOverwrites := make(map[uuid.UUID]overwriteInfo)
-	owRows, err := db.Pool.Query(ctx, "SELECT role_id, allow, deny FROM channel_permission_overwrites WHERE channel_id = $1", channelID)
-	if err == nil {
-		for owRows.Next() {
-			var rid uuid.UUID
-			var allow, deny int64
-			if err := owRows.Scan(&rid, &allow, &deny); err == nil {
-				channelOverwrites[rid] = overwriteInfo{Allow: allow, Deny: deny}
-			}
-		}
-		owRows.Close()
-	}
+	channelOverwrites, _ := loadOverwritesMap(ctx, db, channelID)
 
 	// 7. Evaluate PermViewChannel (1 << 14) for each candidate
 	authorizedMembers := make([]uuid.UUID, 0, len(candidates))
@@ -321,40 +311,11 @@ func RecomputeAudience(ctx context.Context, db *database.DB, hub *gateway.Hub, c
 			canView = (combinedPerms & models.PermViewChannel) != 0
 		}
 
-		// Overwrite evaluation:
-		// 1. @everyone overwrite
-		if ow, ok := channelOverwrites[everyoneRoleID]; ok {
-			if (ow.Deny & models.PermViewChannel) != 0 {
-				canView = false
-			}
-			if (ow.Allow & models.PermViewChannel) != 0 {
-				canView = true
-			}
+		// Overwrite evaluation: category overwrites first, then channel overwrites
+		if categoryID.Valid {
+			canView = evalRoleOverwrites(categoryOverwrites, everyoneRoleID, userRoles, models.PermViewChannel, canView)
 		}
-
-		// 2. Member specific role overwrites
-		roleAllow := false
-		roleDeny := false
-		for _, rid := range userRoles {
-			if rid == everyoneRoleID {
-				continue
-			}
-			if ow, ok := channelOverwrites[rid]; ok {
-				if (ow.Deny & models.PermViewChannel) != 0 {
-					roleDeny = true
-				}
-				if (ow.Allow & models.PermViewChannel) != 0 {
-					roleAllow = true
-				}
-			}
-		}
-
-		if roleDeny {
-			canView = false
-		}
-		if roleAllow {
-			canView = true
-		}
+		canView = evalRoleOverwrites(channelOverwrites, everyoneRoleID, userRoles, models.PermViewChannel, canView)
 
 		if canView {
 			authorizedMembers = append(authorizedMembers, uid)

@@ -179,6 +179,7 @@ export interface Channel {
   rotation_epoch?: number;
   audience_limit?: number;
   audience_hash?: string;
+  slowmode_seconds?: number;
   created_at: string;
 }
 

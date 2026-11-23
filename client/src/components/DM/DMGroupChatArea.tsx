@@ -21,6 +21,8 @@ import {
   Camera,
 } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
+import { CallStage } from '../Voice/CallStage';
+import { useStageFullscreen } from '../Voice/VoiceControlBar';
 import { showAlert, showConfirm } from '../../stores/confirmModalStore';
 import { useAutoClearVisibleUnread } from '../../utils/unread';
 import {
@@ -37,7 +39,6 @@ import { ChatHeader } from '../Chat/ChatHeader';
 import { MessageItem } from '../Chat/MessageItem';
 import { MessageInput } from '../Chat/MessageInput';
 import { SearchResultsPanel } from '../Chat/SearchResultsPanel';
-import { ParticipantCard } from '../Voice/ParticipantCard';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { socket } from '../../lib/socket';
@@ -188,6 +189,8 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const [isSearchAutocompleteOpen, setIsSearchAutocompleteOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const { isFullscreen: isStageFullscreen, toggleFullscreen: toggleStageFullscreen } = useStageFullscreen();
+
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   const dragCounterRef = useRef<number>(0);
@@ -197,105 +200,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const prevScrollHeightRef = useRef<number | null>(null);
   const isInitialLoadRef = useRef<boolean>(true);
   const prevGroupIdRef = useRef<string | null>(null);
-
-  // Group Voice Grid Resize Observer
-  const stageRef = useRef<HTMLDivElement>(null);
-  const [stageDimensions, setStageDimensions] = useState({ width: 0, height: 0 });
-
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-
-    const updateDim = () => {
-      const rect = el.getBoundingClientRect();
-      setStageDimensions({ width: rect.width, height: rect.height });
-    };
-
-    updateDim();
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setStageDimensions({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height,
-        });
-      }
-    });
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [isGroupVoiceActive]);
-
-  // Exact 16:9 adaptive grid layout for group voice
-  const stageLayout = useMemo(() => {
-    const count = participants.length;
-    if (count === 0 || stageDimensions.width === 0 || stageDimensions.height === 0) {
-      return { cardWidth: 0, cardHeight: 0, rows: [] };
-    }
-
-    const W = stageDimensions.width;
-    const H = stageDimensions.height;
-    const gap = count > 1 ? (W < 640 ? 8 : 12) : 0;
-    const paddingX = W < 640 ? 8 : 12;
-    const paddingY = W < 640 ? 8 : 12;
-
-    const availableW = Math.max(60, W - paddingX * 2);
-    const availableH = Math.max(60, H - paddingY * 2);
-    const targetAspect = 16 / 9;
-
-    let bestCols = 1;
-    let bestCardW = 0;
-    let bestCardH = 0;
-    let maxArea = 0;
-
-    const maxColsToTry = Math.min(count, 6);
-    for (let c = 1; c <= maxColsToTry; c++) {
-      const r = Math.ceil(count / c);
-      const slotW = (availableW - (c - 1) * gap) / c;
-      const slotH = (availableH - (r - 1) * gap) / r;
-
-      if (slotW <= 0 || slotH <= 0) continue;
-
-      let w = slotW;
-      let h = w / targetAspect;
-
-      if (h > slotH) {
-        h = slotH;
-        w = h * targetAspect;
-      }
-
-      if (count === 1) {
-        const maxW = Math.min(460, availableW);
-        const maxH = Math.min(260, availableH);
-        if (w > maxW) {
-          w = maxW;
-          h = w / targetAspect;
-        }
-        if (h > maxH) {
-          h = maxH;
-          w = h * targetAspect;
-        }
-      }
-
-      const area = w * h;
-      if (area > maxArea) {
-        maxArea = area;
-        bestCols = c;
-        bestCardW = Math.floor(w);
-        bestCardH = Math.floor(h);
-      }
-    }
-
-    const rows: (typeof participants)[] = [];
-    for (let i = 0; i < count; i += bestCols) {
-      rows.push(participants.slice(i, i + bestCols));
-    }
-
-    return {
-      cardWidth: bestCardW,
-      cardHeight: bestCardH,
-      rows,
-    };
-  }, [participants, stageDimensions]);
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -599,32 +503,19 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
         }
         subtitle={`${activeGroup.members?.length || 0} membros`}
         actions={
-          <button
-            onClick={handleToggleVoice}
-            className={`p-2 md:p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
-              isGroupVoiceActive
-                ? 'bg-dnd text-white hover:bg-rose-700 shadow-sm'
-                : isGroupVoiceConnecting
-                ? 'bg-brand-500/50 text-white animate-pulse'
-                : 'text-gray-400 hover:text-online hover:bg-white/5'
-            }`}
-            title={
-              isGroupVoiceActive
-                ? 'Desconectar da Voz'
-                : isGroupVoiceConnecting
-                ? 'Conectando à Voz...'
-                : 'Entrar na Chamada de Voz'
-            }
-          >
-            {isGroupVoiceActive ? (
-              <>
-                <PhoneOff className="w-4 h-4" />
-                <span className="hidden sm:inline">Desconectar ({participants.length})</span>
-              </>
-            ) : (
+          !isGroupVoiceActive ? (
+            <button
+              onClick={handleToggleVoice}
+              className={`p-2 md:p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
+                isGroupVoiceConnecting
+                  ? 'bg-brand-500/50 text-white animate-pulse'
+                  : 'text-gray-400 hover:text-online hover:bg-white/5'
+              }`}
+              title={isGroupVoiceConnecting ? 'Conectando à Voz...' : 'Entrar na Chamada de Voz'}
+            >
               <Phone className="w-4 h-4" />
-            )}
-          </button>
+            </button>
+          ) : null
         }
         showPinnedOnly={showPinnedOnly}
         onTogglePinned={() => setShowPinnedOnly(!showPinnedOnly)}
@@ -665,130 +556,28 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
       {/* Active Group Voice Call Stage */}
       {(isGroupVoiceActive || isGroupVoiceConnecting) && (
-        <div className="w-full bg-background-darkest border-b border-white/10 p-3 md:p-4 flex flex-col items-center justify-between transition-all select-none animate-in fade-in shadow-xl">
-          <div className="w-full max-w-5xl mx-auto flex flex-col items-center gap-3">
-            {/* Dynamic Grid of Participant Cards */}
-            <div
-              ref={stageRef}
-              className="w-full min-h-[200px] max-h-[380px] h-[45vh] bg-background-darker/60 rounded-2xl border border-white/5 p-2 flex items-center justify-center overflow-hidden relative shadow-inner group/voiceroom"
-            >
-              {isGroupVoiceConnecting ? (
-                <div className="flex flex-col items-center gap-2 text-gray-400">
-                  <div className="w-7 h-7 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-xs font-medium">Conectando à chamada do grupo...</span>
-                </div>
-              ) : participants.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 text-gray-400">
-                  <Volume2 className="w-8 h-8 text-gray-500 animate-pulse" />
-                  <span className="text-xs">Aguardando participantes...</span>
-                </div>
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center gap-2 overflow-hidden">
-                  {stageLayout.rows.map((row, rIdx) => (
-                    <div
-                      key={rIdx}
-                      className="flex items-center justify-center gap-2 flex-shrink-0"
-                      style={{
-                        height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
-                      }}
-                    >
-                      {row.map((p) => (
-                        <div
-                          key={p.sid || p.identity}
-                          className="flex items-center justify-center flex-shrink-0"
-                          style={{
-                            width: stageLayout.cardWidth > 0 ? `${stageLayout.cardWidth}px` : 'auto',
-                            height: stageLayout.cardHeight > 0 ? `${stageLayout.cardHeight}px` : 'auto',
-                          }}
-                        >
-                          <ParticipantCard
-                            participant={p}
-                            onOpenUserProfile={onOpenUserProfile}
-                            onOpenDM={onOpenDM}
-                            onOpenScreenShare={onOpenScreenShare}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Voice Controls Bar */}
-            <div className="flex items-center justify-center gap-2.5 sm:gap-3.5 pt-1 select-none">
-              <button
-                onClick={() => {
-                  hapticMedium();
-                  toggleMute();
-                }}
-                className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
-                  isMuted
-                    ? 'bg-dnd text-white hover:bg-rose-700'
-                    : 'bg-background-light hover:bg-white/15 text-white'
-                }`}
-                title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
-              >
-                {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
-              </button>
-
-              <button
-                onClick={() => {
-                  hapticMedium();
-                  toggleDeafen();
-                }}
-                className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
-                  isDeafened
-                    ? 'bg-dnd text-white hover:bg-rose-700'
-                    : 'bg-background-light hover:bg-white/15 text-white'
-                }`}
-                title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
-              >
-                {isDeafened ? (
-                  <HeadphonesOff className="w-4 h-4 sm:w-5 sm:h-5" />
-                ) : (
-                  <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
-                )}
-              </button>
-
-              <button
-                onClick={() => {
-                  hapticMedium();
-                  toggleCamera();
-                }}
-                className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
-                  isCameraOn
-                    ? 'bg-online text-white hover:bg-emerald-600'
-                    : 'bg-background-light hover:bg-white/15 text-white'
-                }`}
-                title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
-              >
-                {isCameraOn ? <Video className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
-              </button>
-
-              <button
-                onClick={handleScreenShareClick}
-                className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
-                  isScreensharing
-                    ? 'bg-online text-white hover:bg-emerald-600'
-                    : 'bg-background-light hover:bg-white/15 text-white'
-                }`}
-                title={isScreensharing ? 'Opções de Compartilhamento' : 'Compartilhar Tela'}
-              >
-                <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-
-              <button
-                onClick={() => {
-                  hapticWarning();
-                  leaveVoice();
-                }}
-                className="bg-dnd hover:bg-rose-700 text-white p-2.5 sm:p-3 rounded-full transition-all shadow-lg cursor-pointer ml-1 active:scale-95"
-                title="Desconectar da Voz"
-              >
-                <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
+        <div
+          className={
+            isStageFullscreen
+              ? 'fixed inset-0 z-[10000000] bg-background-darkest p-4 flex flex-col items-center justify-center select-none'
+              : 'w-full bg-background-darkest border-b border-white/10 p-3 md:p-4 flex flex-col items-center justify-between transition-all select-none animate-in fade-in shadow-xl'
+          }
+        >
+          <div className={isStageFullscreen ? 'w-full h-full flex flex-col' : 'w-full max-w-5xl mx-auto flex flex-col'}>
+            <CallStage
+              variant="compact"
+              controlsMode="always"
+              participants={participants}
+              isConnected={isGroupVoiceActive}
+              isConnecting={isGroupVoiceConnecting}
+              connectingLabel="Conectando à chamada do grupo..."
+              emptyTitle="Aguardando participantes..."
+              isFullscreen={isStageFullscreen}
+              onToggleFullscreen={toggleStageFullscreen}
+              onOpenScreenShare={onOpenScreenShare}
+              onOpenUserProfile={onOpenUserProfile}
+              onOpenDM={onOpenDM}
+            />
           </div>
         </div>
       )}

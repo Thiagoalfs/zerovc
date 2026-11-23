@@ -9,18 +9,87 @@ import {
   Hash,
   Volume2,
   Mic,
+  MicOff,
   Settings,
   Plus,
+  Lock,
 } from 'lucide-react';
 import { ZeroVCLogo } from '../Common/ZeroVCLogo';
+import { HeadphonesOff } from '../Common/HeadphonesOff';
 
 interface LandingPageProps {
   onNavigate: (path: string) => void;
   user?: any;
 }
 
+const MOCK_CHANNELS = {
+  geral: {
+    title: 'geral',
+    topic: 'Canal principal da comunidade',
+    messages: [
+      {
+        initial: 'A',
+        color: 'bg-indigo-500',
+        author: 'Alexandre',
+        time: 'Hoje às 11:42',
+        text: 'O ZeroVC tá rodando liso demais! A voz não tem atraso nenhum 🚀',
+      },
+      {
+        initial: 'M',
+        color: 'bg-emerald-500',
+        author: 'Marina',
+        time: 'Hoje às 11:43',
+        text: 'E o compartilhamento de tela a 60fps ficou perfeito pro gameplay!',
+      },
+    ],
+  },
+  novidades: {
+    title: 'novidades',
+    topic: 'Atualizações e notas de versão do ZeroVC',
+    messages: [
+      {
+        initial: 'Z',
+        color: 'bg-brand-600',
+        author: 'ZeroVC Bot',
+        time: 'Hoje às 09:15',
+        text: 'Captura nativa de áudio WASAPI em 60 FPS liberada no app desktop.',
+      },
+      {
+        initial: 'L',
+        color: 'bg-amber-500',
+        author: 'Lucas',
+        time: 'Hoje às 10:02',
+        text: 'Testei no Linux com AppImage e conectou instantâneo na sala!',
+      },
+    ],
+  },
+  voz: {
+    title: 'Sala Principal',
+    topic: 'Áudio 48 kHz • Baixa latência via LiveKit',
+    messages: [
+      {
+        initial: 'A',
+        color: 'bg-indigo-500',
+        author: 'Alexandre',
+        time: 'Agora',
+        text: 'Entrando na call — quem vai fechar squad?',
+      },
+      {
+        initial: 'M',
+        color: 'bg-emerald-500',
+        author: 'Marina',
+        time: 'Agora',
+        text: 'Já abri a stream da tela aqui, só colar!',
+      },
+    ],
+  },
+} as const;
+
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) => {
   const [os, setOs] = React.useState<'android' | 'windows' | 'linux' | 'ios' | 'other'>('windows');
+  const [activeMockChannel, setActiveMockChannel] = React.useState<'geral' | 'novidades' | 'voz'>('geral');
+  const [mockMuted, setMockMuted] = React.useState(false);
+  const [mockDeafened, setMockDeafened] = React.useState(false);
 
   React.useEffect(() => {
     const ua = (navigator.userAgent || '').toLowerCase();
@@ -69,9 +138,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             </span>
           </div>
 
-          {/* Nav Links (Desktop) */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-300">
-            <a href="#features" className="hover:text-white transition-colors">
+          {/* Nav Links */}
+          <nav className="flex items-center gap-4 sm:gap-8 text-sm font-medium text-gray-300">
+            <a href="#features" className="hidden sm:inline hover:text-white transition-colors">
               Recursos
             </a>
             <button
@@ -118,8 +187,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
       <section className="relative pt-20 pb-16 md:pt-28 md:pb-24 px-6 text-center max-w-5xl mx-auto flex flex-col items-center">
 
         {/* Main Headline */}
-        <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white leading-[1.15] mb-6">
-          Converse, jogue e conecte-se com latência zero.
+        <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white leading-[1.1] mb-6">
+          Voz cristalina. Latência zero.
         </h1>
 
         {/* Subtitle */}
@@ -145,7 +214,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
           </button>
 
           <button
-            onClick={() => onNavigate(user ? '/@me' : '/signin')}
+            onClick={() => onNavigate('/@me')}
             className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-100 font-semibold text-base border border-white/10 hover:border-white/20 transition-colors cursor-pointer"
           >
             <Globe className="w-5 h-5 text-gray-400" />
@@ -209,17 +278,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                             Canais de Texto
                           </div>
                           <div className="space-y-0.5 text-xs font-medium">
-                            <div className="px-2.5 py-1.5 rounded-lg bg-white/10 text-white flex items-center gap-2">
-                              <Hash className="w-4 h-4 text-gray-300" />
-                              <span className="font-semibold">geral</span>
-                            </div>
-                            <div className="px-2.5 py-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => setActiveMockChannel('geral')}
+                              className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-colors cursor-pointer ${
+                                activeMockChannel === 'geral'
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                              }`}
+                            >
+                              <Hash className={`w-4 h-4 ${activeMockChannel === 'geral' ? 'text-gray-300' : 'text-gray-500'}`} />
+                              <span className={activeMockChannel === 'geral' ? 'font-semibold' : ''}>geral</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveMockChannel('novidades')}
+                              className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
+                                activeMockChannel === 'novidades'
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                              }`}
+                            >
                               <div className="flex items-center gap-2">
-                                <Hash className="w-4 h-4 text-gray-500" />
-                                <span>novidades</span>
+                                <Hash className={`w-4 h-4 ${activeMockChannel === 'novidades' ? 'text-gray-300' : 'text-gray-500'}`} />
+                                <span className={activeMockChannel === 'novidades' ? 'font-semibold' : ''}>novidades</span>
                               </div>
-                              <span className="w-2 h-2 rounded-full bg-brand-500" />
-                            </div>
+                              {activeMockChannel !== 'novidades' && <span className="w-2 h-2 rounded-full bg-brand-500" />}
+                            </button>
                           </div>
                         </div>
 
@@ -228,13 +313,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                             Canais de Voz
                           </div>
                           <div className="space-y-0.5 text-xs">
-                            <div className="px-2.5 py-1.5 rounded-lg text-online bg-online/10 border border-online/20 font-medium flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => setActiveMockChannel('voz')}
+                              className={`w-full px-2.5 py-1.5 rounded-lg font-medium flex items-center justify-between transition-colors cursor-pointer ${
+                                activeMockChannel === 'voz'
+                                  ? 'text-online bg-online/15 border border-online/30'
+                                  : 'text-online bg-online/10 border border-online/20 hover:bg-online/15'
+                              }`}
+                            >
                               <div className="flex items-center gap-2">
                                 <Volume2 className="w-4 h-4 text-online" />
                                 <span>Sala Principal</span>
                               </div>
                               <span className="text-[10px] font-mono font-medium bg-online/20 px-1.5 py-0.5 rounded text-online">3/∞</span>
-                            </div>
+                            </button>
                             {/* Connected voice participants preview */}
                             <div className="pl-6 pt-1 space-y-1">
                               <div className="flex items-center gap-1.5 text-[11px] text-gray-300">
@@ -263,18 +356,42 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                       </div>
                       <div className="flex flex-col min-w-0 flex-1 truncate">
                         <span className="text-[13px] font-semibold text-white truncate leading-tight">Você</span>
-                        <span className="text-[11px] text-gray-400 truncate leading-tight mt-0.5">Disponível</span>
+                        <span className="text-[11px] text-gray-400 truncate leading-tight mt-0.5">
+                          {mockDeafened ? 'Áudio desativado' : mockMuted ? 'Microfone mutado' : 'Disponível'}
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-0.5 text-gray-400 flex-shrink-0">
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer">
-                        <Mic className="w-4 h-4" />
-                      </div>
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer">
-                        <Headphones className="w-4 h-4" />
-                      </div>
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/10 hover:text-gray-200 transition-colors cursor-pointer">
+                      <button
+                        type="button"
+                        onClick={() => setMockMuted((v) => !v)}
+                        aria-label={mockMuted || mockDeafened ? 'Ativar microfone na prévia' : 'Silenciar microfone na prévia'}
+                        aria-pressed={mockMuted || mockDeafened}
+                        title={mockMuted || mockDeafened ? 'Ativar microfone' : 'Silenciar microfone'}
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                          mockMuted || mockDeafened
+                            ? 'text-red-400 bg-red-500/15 hover:bg-red-500/25'
+                            : 'hover:bg-white/10 hover:text-gray-200'
+                        }`}
+                      >
+                        {mockMuted || mockDeafened ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMockDeafened((v) => !v)}
+                        aria-label={mockDeafened ? 'Reativar áudio na prévia' : 'Desativar áudio na prévia'}
+                        aria-pressed={mockDeafened}
+                        title={mockDeafened ? 'Reativar áudio' : 'Desativar áudio'}
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                          mockDeafened
+                            ? 'text-red-400 bg-red-500/15 hover:bg-red-500/25'
+                            : 'hover:bg-white/10 hover:text-gray-200'
+                        }`}
+                      >
+                        {mockDeafened ? <HeadphonesOff className="w-4 h-4" /> : <Headphones className="w-4 h-4" />}
+                      </button>
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500">
                         <Settings className="w-4 h-4" />
                       </div>
                     </div>
@@ -287,46 +404,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                 {/* Chat Header */}
                 <div className="h-12 border-b border-black/20 px-4 flex items-center justify-between flex-shrink-0">
                   <div className="flex items-center gap-2 truncate">
-                    <Hash className="w-5 h-5 text-gray-400" />
-                    <span className="font-semibold text-gray-100 text-sm">geral</span>
+                    {activeMockChannel === 'voz' ? (
+                      <Volume2 className="w-5 h-5 text-online" />
+                    ) : (
+                      <Hash className="w-5 h-5 text-gray-400" />
+                    )}
+                    <span className="font-semibold text-gray-100 text-sm">{MOCK_CHANNELS[activeMockChannel].title}</span>
                     <span className="text-gray-600 hidden sm:inline">|</span>
-                    <span className="text-xs text-gray-400 hidden sm:inline truncate">Canal principal da comunidade</span>
+                    <span className="text-xs text-gray-400 hidden sm:inline truncate">{MOCK_CHANNELS[activeMockChannel].topic}</span>
                   </div>
                 </div>
 
                 {/* Messages List */}
                 <div className="flex-1 p-4 space-y-4 overflow-hidden">
-                  {/* Message 1 */}
-                  <div className="flex gap-3 items-start">
-                    <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0">
-                      A
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-semibold text-white">Alexandre</span>
-                        <span className="text-[10px] text-gray-400">Hoje às 11:42</span>
+                  {MOCK_CHANNELS[activeMockChannel].messages.map((msg, i) => (
+                    <div key={i} className="flex gap-3 items-start">
+                      <div className={`w-9 h-9 rounded-full ${msg.color} flex items-center justify-center text-xs font-semibold text-white flex-shrink-0`}>
+                        {msg.initial}
                       </div>
-                      <div className="text-xs text-gray-200 mt-0.5 leading-relaxed">
-                        O ZeroVC tá rodando liso demais! A voz não tem atraso nenhum 🚀
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Message 2 */}
-                  <div className="flex gap-3 items-start">
-                    <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0">
-                      M
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-semibold text-white">Marina</span>
-                        <span className="text-[10px] text-gray-400">Hoje às 11:43</span>
-                      </div>
-                      <div className="text-xs text-gray-200 mt-0.5 leading-relaxed">
-                        E o compartilhamento de tela a 60fps ficou perfeito pro gameplay!
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs font-semibold text-white">{msg.author}</span>
+                          <span className="text-[10px] text-gray-400">{msg.time}</span>
+                        </div>
+                        <div className="text-xs text-gray-200 mt-0.5 leading-relaxed">
+                          {msg.text}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
 
                 {/* Chat Input Bar */}
@@ -362,51 +468,85 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
             Construído para latência zero e foco total.
           </h2>
           <p className="text-base sm:text-lg text-gray-400 leading-relaxed max-w-2xl mx-auto">
-            Uma stack moderna em Go, LiveKit WebRTC nativo e criptografia de chave ponta a ponta. Nada de lentidão, nada de rastreamento.
+            Feito para chamadas em tempo real, compartilhamento de tela e mensagens protegidas — leve no consumo e sem rastreamento.
           </p>
         </div>
 
         {/* Features Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-          {/* CARD 1 (Destaque Voz LiveKit WebRTC) */}
-          <div className="lg:col-span-2 rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 sm:p-8 flex flex-col justify-center transition-all duration-200">
-            <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">Voz cristalina com resposta instantânea</h3>
-            <p className="text-sm sm:text-base text-gray-300 leading-relaxed">
-              Diga adeus a atrasos em chamadas. Nosso pipeline WebRTC via LiveKit ajusta a taxa de bits dinamicamente em 48 kHz com cancelamento inteligente de ruído para você nunca mais falar por cima do seu amigo.
-            </p>
+          {/* CARD 1 */}
+          <div className="md:col-span-2 rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 sm:p-8 flex flex-col justify-between gap-5 transition-all duration-200">
+            <div>
+              <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">Voz cristalina com resposta instantânea</h3>
+              <p className="text-sm sm:text-base text-gray-300 leading-relaxed">
+                Áudio em 48 kHz com ajuste automático de qualidade e redução de ruído para chamadas sem cortes, atraso ou eco.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/5 text-xs font-mono text-gray-400">
+              <span className="inline-flex items-center gap-1.5 text-online">
+                <span className="w-2 h-2 rounded-full bg-online" />
+                Baixa Latência
+              </span>
+              <span>•</span>
+              <span>48 kHz Estéreo</span>
+              <span>•</span>
+              <span>Redução de Ruído</span>
+            </div>
           </div>
 
-          {/* CARD 2 (Screen Share 60 FPS com Áudio) */}
-          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-center transition-all duration-200">
-            <h3 className="text-xl font-bold text-white mb-2">Stream a 60 FPS com som do sistema</h3>
-            <p className="text-sm text-gray-300 leading-relaxed">
-              Transmita sua gameplay ou qualquer janela com som estéreo perfeito via captura WASAPI nativa no app desktop.
-            </p>
+          {/* CARD 2 */}
+          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-between gap-4 transition-all duration-200">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">Stream a 60 FPS com som do sistema</h3>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                Transmita sua tela ou jogo em até 60 FPS com o áudio do sistema em estéreo no app desktop.
+              </p>
+            </div>
+            <div className="text-xs font-mono text-brand-400 pt-2 border-t border-white/5">
+              1080p • 60 FPS • Áudio do Sistema
+            </div>
           </div>
 
-          {/* CARD 3 (Criptografia E2EE & Privacidade) */}
-          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-center transition-all duration-200">
-            <h3 className="text-xl font-bold text-white mb-2">Criptografia Ponta a Ponta</h3>
-            <p className="text-sm text-gray-300 leading-relaxed">
-              Mensagens cifradas com o protocolo Vodozemac Megolm. As chaves residem apenas nos seus dispositivos, com zero texto legível no servidor.
-            </p>
+          {/* CARD 3 */}
+          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-between gap-4 transition-all duration-200">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">Criptografia Ponta a Ponta</h3>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                Suas mensagens são cifradas antes de sair do dispositivo. Só você e quem participa da conversa têm as chaves.
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400 pt-2 border-t border-white/5">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Chaves locais • E2EE</span>
+            </div>
           </div>
 
-          {/* CARD 4 (Chat Rico & Markdown) */}
-          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-center transition-all duration-200">
-            <h3 className="text-xl font-bold text-white mb-2">Markdown, código e reações</h3>
-            <p className="text-sm text-gray-300 leading-relaxed">
-              Blocos de código com destaque, spoilers, busca de GIFs integrados e prévias instantâneas de imagens e vídeos no próprio fluxo.
-            </p>
+          {/* CARD 4 */}
+          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-between gap-4 transition-all duration-200">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">Markdown, código e reações</h3>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                Blocos de código com destaque, spoilers, busca de GIFs e prévias instantâneas de imagens e vídeos direto no chat.
+              </p>
+            </div>
+            <div className="text-xs font-mono text-gray-400 pt-2 border-t border-white/5">
+              Código • Spoiler • GIFs
+            </div>
           </div>
 
-          {/* CARD 5 (Push-to-Talk & Atalhos Globais) */}
-          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-center transition-all duration-200">
-            <h3 className="text-xl font-bold text-white mb-2">Push-to-talk global</h3>
-            <p className="text-sm text-gray-300 leading-relaxed">
-              Mute, ensurdeça ou fale usando botões laterais do mouse ou atalhos de teclado sem sair da partida e com o app minimizado.
-            </p>
+          {/* CARD 5 */}
+          <div className="rounded-2xl bg-[#22242b] border border-white/10 hover:border-white/20 p-7 flex flex-col justify-between gap-4 transition-all duration-200">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">Push-to-talk global</h3>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                Ative ou silencie o microfone e o áudio usando atalhos de teclado ou botões do mouse, mesmo com o app minimizado.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] font-mono text-gray-300 pt-2 border-t border-white/5">
+              <kbd className="px-2 py-0.5 rounded bg-white/10 border border-white/15">Mouse4</kbd>
+              <kbd className="px-2 py-0.5 rounded bg-white/10 border border-white/15">Ctrl+M</kbd>
+            </div>
           </div>
 
         </div>
@@ -422,10 +562,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
               Pronto para elevar suas conversas a outro nível?
             </h2>
             <p className="text-white/80 text-base leading-relaxed">
-              {os === 'linux' && 'Baixe o aplicativo para Linux ou entre diretamente pelo navegador em menos de 10 segundos.'}
-              {os === 'android' && 'Baixe o aplicativo para Android ou entre diretamente pelo navegador em menos de 10 segundos.'}
-              {os === 'windows' && 'Baixe o aplicativo para Windows ou entre diretamente pelo navegador em menos de 10 segundos.'}
-              {(os === 'ios' || os === 'other') && 'Baixe o aplicativo ou entre diretamente pelo navegador em menos de 10 segundos.'}
+              {os === 'linux' && 'Baixe o aplicativo para Linux ou entre direto pelo navegador sem instalar nada.'}
+              {os === 'android' && 'Baixe o aplicativo para Android ou entre direto pelo navegador sem instalar nada.'}
+              {os === 'windows' && 'Baixe o aplicativo para Windows ou entre direto pelo navegador sem instalar nada.'}
+              {(os === 'ios' || os === 'other') && 'Baixe o aplicativo ou entre direto pelo navegador sem instalar nada.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
               <button
@@ -445,7 +585,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                 onClick={() => onNavigate(user ? '/@me' : '/signup')}
                 className="px-8 py-3.5 rounded-2xl bg-brand-700/60 hover:bg-brand-700 text-white font-semibold border border-white/20 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                <span>Criar Conta Grátis</span>
+                <span>{user ? 'Abrir Chat' : 'Criar Conta Grátis'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -475,7 +615,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
               Entrar
             </button>
             <button onClick={() => onNavigate('/signup')} className="hover:text-white transition-colors cursor-pointer">
-              Cadastrar
+              Criar Conta
             </button>
           </div>
         </div>

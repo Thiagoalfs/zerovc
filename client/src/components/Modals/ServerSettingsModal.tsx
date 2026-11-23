@@ -29,8 +29,9 @@ import { DropdownSelect } from '../Common/DropdownSelect';
 import { pushBackHandler } from '../../lib/mobileBackHandler';
 import { showAlert, showConfirm } from '../../stores/confirmModalStore';
 
-import { OverviewTab } from './ServerSettings/OverviewTab';
+import { ServerProfile } from './ServerSettings/ServerProfile';
 import { RolesTab } from './ServerSettings/RolesTab';
+import { UnsavedChangesBar, useUnsavedGuard } from './UnsavedChangesBar';
 import { EmojisTab } from './ServerSettings/EmojisTab';
 import { InvitesTab } from './ServerSettings/InvitesTab';
 import { MembersTab } from './ServerSettings/MembersTab';
@@ -81,29 +82,64 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
   // Overview State
   const [guildName, setGuildName] = useState('');
   const [systemChannelId, setSystemChannelId] = useState<string>('');
+  const [pendingIcon, setPendingIcon] = useState<{ file: File; previewUrl: string } | 'remove' | null>(null);
+  const [pendingBanner, setPendingBanner] = useState<{ file: File; previewUrl: string } | 'remove' | null>(null);
   const [isSavingOverview, setIsSavingOverview] = useState(false);
   const [isUploadingIcon, setIsUploadingIcon] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [overviewMsg, setOverviewMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Roles State
+  const [draftRoles, setDraftRoles] = useState<Role[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [isCreatingRole, setIsCreatingRole] = useState(false);
   const [isReorderingRoles, setIsReorderingRoles] = useState(false);
+
+  const hasRoleChanges = (() => {
+    if (!activeGuild) return false;
+    const origRoles = activeGuild.roles || [];
+    for (const dr of draftRoles) {
+      const orig = origRoles.find((r) => r.id === dr.id);
+      if (!orig) continue;
+      if (
+        dr.name !== orig.name ||
+        (dr.color || '') !== (orig.color || '') ||
+        Boolean(dr.hoist) !== Boolean(orig.hoist) ||
+        Boolean(dr.mentionable) !== Boolean(orig.mentionable) ||
+        Number(dr.permissions || 0) !== Number(orig.permissions || 0) ||
+        Number(dr.position || 0) !== Number(orig.position || 0)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  })();
+
+  const hasUnsavedChanges = Boolean(
+    isOpen &&
+      activeGuild &&
+      (guildName.trim() !== (activeGuild.name || '').trim() ||
+        (systemChannelId || '') !== (activeGuild.system_channel_id || '') ||
+        pendingIcon !== null ||
+        pendingBanner !== null ||
+        hasRoleChanges)
+  );
+
+  const { isShaking, attemptClose } = useUnsavedGuard(hasUnsavedChanges, onClose);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        attemptClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, attemptClose]);
 
   // Emojis State
   const [emojisList, setEmojisList] = useState<GuildEmoji[]>([]);
@@ -192,7 +228,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         setMobileView('menu');
         return true;
       }
-      onClose();
+      attemptClose();
       return true;
     });
 
@@ -208,15 +244,25 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     muteModalUser,
     banModalUser,
     selectedRoleId,
-    onClose,
+    attemptClose,
   ]);
 
   useEffect(() => {
-    if (activeGuild) {
+    if (activeGuild && isOpen) {
       setGuildName(activeGuild.name || '');
       setSystemChannelId(activeGuild.system_channel_id || '');
+      setDraftRoles(activeGuild.roles || []);
+      setPendingIcon((prev) => {
+        if (prev && typeof prev === 'object') URL.revokeObjectURL(prev.previewUrl);
+        return null;
+      });
+      setPendingBanner((prev) => {
+        if (prev && typeof prev === 'object') URL.revokeObjectURL(prev.previewUrl);
+        return null;
+      });
+      setOverviewMsg(null);
     }
-  }, [activeGuild]);
+  }, [activeGuild?.id, isOpen]);
 
   // Load Emojis when tab opens
   useEffect(() => {
@@ -268,7 +314,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const hasAdmin = perms.hasAdmin;
   const canManageGuild = perms.canManageGuild;
   const canManageRoles = perms.canManageRoles;
-  const roles = activeGuild.roles || [];
+  const roles = draftRoles;
   const members = activeGuild.members || [];
   const textChannels = (activeGuild.channels || []).filter((c) => c.type === 'text');
   const voiceChannels = (activeGuild.channels || []).filter((c) => c.type === 'voice');
@@ -277,30 +323,123 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   const selectedRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
   const isRoleAdmin = selectedRole ? (Number(selectedRole.permissions || 0) & Permissions.ADMINISTRATOR) !== 0 : false;
 
-  // 1. Overview Actions
-  const handleSaveOverview = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!guildName.trim()) return;
+  const handleRevert = () => {
+    setGuildName(activeGuild.name || '');
+    setSystemChannelId(activeGuild.system_channel_id || '');
+    setDraftRoles(activeGuild.roles || []);
+    setPendingIcon((prev) => {
+      if (prev && typeof prev === 'object') URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+    setPendingBanner((prev) => {
+      if (prev && typeof prev === 'object') URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+    setOverviewMsg(null);
+  };
+
+  const handleSaveAll = async () => {
+    if (!guildName.trim()) {
+      setOverviewMsg({ text: 'O nome do servidor não pode ficar vazio.', type: 'error' });
+      return;
+    }
 
     setIsSavingOverview(true);
     setOverviewMsg(null);
     try {
-      const payload: { name: string; system_channel_id?: string; clear_system_channel?: boolean } = {
-        name: guildName.trim(),
-      };
-      if (systemChannelId) {
-        payload.system_channel_id = systemChannelId;
-      } else {
-        payload.clear_system_channel = true;
+      const overviewChanged =
+        guildName.trim() !== (activeGuild.name || '').trim() ||
+        (systemChannelId || '') !== (activeGuild.system_channel_id || '') ||
+        pendingIcon !== null ||
+        pendingBanner !== null;
+
+      if (overviewChanged) {
+        const payload: {
+          name?: string;
+          system_channel_id?: string;
+          clear_system_channel?: boolean;
+          icon_url?: string;
+          banner_url?: string;
+        } = {
+          name: guildName.trim(),
+        };
+        if (systemChannelId) {
+          payload.system_channel_id = systemChannelId;
+        } else {
+          payload.clear_system_channel = true;
+        }
+
+        if (pendingIcon === 'remove') {
+          payload.icon_url = '';
+        } else if (pendingIcon && typeof pendingIcon === 'object') {
+          setIsUploadingIcon(true);
+          const res = await api.upload.guildIcon(pendingIcon.file);
+          payload.icon_url = res.url;
+          URL.revokeObjectURL(pendingIcon.previewUrl);
+          setIsUploadingIcon(false);
+        }
+
+        if (pendingBanner === 'remove') {
+          payload.banner_url = '';
+        } else if (pendingBanner && typeof pendingBanner === 'object') {
+          setIsUploadingBanner(true);
+          const res = await api.upload.guildBanner(pendingBanner.file);
+          payload.banner_url = res.url;
+          URL.revokeObjectURL(pendingBanner.previewUrl);
+          setIsUploadingBanner(false);
+        }
+
+        await updateGuild(activeGuild.id, payload);
+        setPendingIcon(null);
+        setPendingBanner(null);
       }
 
-      await updateGuild(activeGuild.id, payload);
-      setOverviewMsg({ text: 'Configurações do servidor salvas com sucesso!', type: 'success' });
+      if (hasRoleChanges) {
+        const origRoles = activeGuild.roles || [];
+        let positionsChanged = false;
+
+        for (const dr of draftRoles) {
+          const orig = origRoles.find((r) => r.id === dr.id);
+          if (!orig) continue;
+          const updates: Partial<Role> = {};
+          if (dr.name !== orig.name) updates.name = dr.name;
+          if ((dr.color || '') !== (orig.color || '')) updates.color = dr.color;
+          if (Boolean(dr.hoist) !== Boolean(orig.hoist)) updates.hoist = Boolean(dr.hoist);
+          if (Boolean(dr.mentionable) !== Boolean(orig.mentionable)) updates.mentionable = Boolean(dr.mentionable);
+          if (Number(dr.permissions || 0) !== Number(orig.permissions || 0)) {
+            updates.permissions = Number(dr.permissions || 0);
+          }
+          if (Number(dr.position || 0) !== Number(orig.position || 0)) {
+            positionsChanged = true;
+          }
+          if (Object.keys(updates).length > 0) {
+            await updateRole(activeGuild.id, dr.id, updates);
+          }
+        }
+
+        if (positionsChanged) {
+          const sortedDraft = [...draftRoles].sort((a, b) => a.position - b.position);
+          await reorderRoles(
+            activeGuild.id,
+            sortedDraft.map((r, idx) => ({ id: r.id, position: idx }))
+          );
+        }
+      }
+
+      setOverviewMsg({ text: 'Alterações salvas com sucesso!', type: 'success' });
     } catch (err: any) {
       setOverviewMsg({ text: err.message || 'Erro ao salvar alterações', type: 'error' });
     } finally {
       setIsSavingOverview(false);
+      setIsUploadingIcon(false);
+      setIsUploadingBanner(false);
     }
+  };
+
+  // 1. Overview Actions
+  const handleSaveOverview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleSaveAll();
   };
 
   const handleIconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -312,23 +451,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     if (iconInputRef.current) iconInputRef.current.value = '';
   };
 
-  const handleRemoveIcon = async () => {
-    const ok = await showConfirm({
-      title: 'Remover ícone',
-      message: 'Deseja remover o ícone do servidor?',
-      confirmText: 'Remover',
-      variant: 'danger',
+  const handleRemoveIcon = () => {
+    setPendingIcon((prev) => {
+      if (prev && typeof prev === 'object') URL.revokeObjectURL(prev.previewUrl);
+      return 'remove';
     });
-    if (!ok) return;
-    setIsUploadingIcon(true);
-    try {
-      await updateGuild(activeGuild.id, { icon_url: '' });
-      setOverviewMsg({ text: 'Ícone do servidor removido.', type: 'success' });
-    } catch (err: any) {
-      setOverviewMsg({ text: err.message || 'Erro ao remover ícone', type: 'error' });
-    } finally {
-      setIsUploadingIcon(false);
-    }
   };
 
   const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -340,55 +467,30 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     if (bannerInputRef.current) bannerInputRef.current.value = '';
   };
 
-  const handleRemoveBanner = async () => {
-    const ok = await showConfirm({
-      title: 'Remover banner',
-      message: 'Deseja remover o banner do servidor?',
-      confirmText: 'Remover',
-      variant: 'danger',
+  const handleRemoveBanner = () => {
+    setPendingBanner((prev) => {
+      if (prev && typeof prev === 'object') URL.revokeObjectURL(prev.previewUrl);
+      return 'remove';
     });
-    if (!ok) return;
-    setIsUploadingBanner(true);
-    try {
-      await updateGuild(activeGuild.id, { banner_url: '' });
-      setOverviewMsg({ text: 'Banner do servidor removido.', type: 'success' });
-    } catch (err: any) {
-      setOverviewMsg({ text: err.message || 'Erro ao remover banner', type: 'error' });
-    } finally {
-      setIsUploadingBanner(false);
-    }
   };
 
-  const handleCropConfirmed = async (croppedFile: File) => {
+  const handleCropConfirmed = (croppedFile: File) => {
     setIsCropOpen(false);
+    const previewUrl = URL.createObjectURL(croppedFile);
     if (cropType === 'guildIcon') {
-      setIsUploadingIcon(true);
-      setOverviewMsg(null);
-      try {
-        const res = await api.upload.guildIcon(croppedFile);
-        await updateGuild(activeGuild.id, { icon_url: res.url });
-        setOverviewMsg({ text: 'Ícone do servidor alterado com sucesso!', type: 'success' });
-      } catch (err: any) {
-        setOverviewMsg({ text: err.message || 'Erro ao enviar ícone', type: 'error' });
-      } finally {
-        setIsUploadingIcon(false);
-      }
+      setPendingIcon((prev) => {
+        if (prev && typeof prev === 'object') URL.revokeObjectURL(prev.previewUrl);
+        return { file: croppedFile, previewUrl };
+      });
     } else {
-      setIsUploadingBanner(true);
-      setOverviewMsg(null);
-      try {
-        const res = await api.upload.guildBanner(croppedFile);
-        await updateGuild(activeGuild.id, { banner_url: res.url });
-        setOverviewMsg({ text: 'Banner do servidor alterado com sucesso!', type: 'success' });
-      } catch (err: any) {
-        setOverviewMsg({ text: err.message || 'Erro ao enviar banner', type: 'error' });
-      } finally {
-        setIsUploadingBanner(false);
-      }
+      setPendingBanner((prev) => {
+        if (prev && typeof prev === 'object') URL.revokeObjectURL(prev.previewUrl);
+        return { file: croppedFile, previewUrl };
+      });
     }
   };
 
-  // 2. Roles Actions
+  // 2. Roles Actions (staged locally until Save)
   const handleCreateRole = async () => {
     if (!canManageRoles) return;
 
@@ -397,6 +499,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
       const everyoneRole = roles.find((r) => r.name === '@everyone');
       const everyonePermissions = Number(everyoneRole?.permissions ?? 0);
       const created = await createRole(activeGuild.id, 'Novo cargo', '#99AAB5', everyonePermissions, false, false);
+      setDraftRoles((prev) => [...prev, created]);
       setSelectedRoleId(created.id);
     } catch (err) {
       console.error('Failed to create role:', err);
@@ -405,40 +508,28 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     }
   };
 
+  const updateDraftRole = (roleId: string, patch: Partial<Role>) => {
+    setDraftRoles((prev) => prev.map((r) => (r.id === roleId ? { ...r, ...patch } : r)));
+  };
+
   const handleUpdateRoleColor = async (color: string) => {
     if (!selectedRole || !canManageRoles) return;
-    try {
-      await updateRole(activeGuild.id, selectedRole.id, { color });
-    } catch (err) {
-      console.error('Failed to update role color:', err);
-    }
+    updateDraftRole(selectedRole.id, { color });
   };
 
   const handleUpdateRoleName = async (name: string) => {
     if (!selectedRole || !name.trim() || !canManageRoles) return;
-    try {
-      await updateRole(activeGuild.id, selectedRole.id, { name });
-    } catch (err) {
-      console.error('Failed to update role name:', err);
-    }
+    updateDraftRole(selectedRole.id, { name });
   };
 
   const handleToggleRoleHoist = async () => {
     if (!selectedRole || !canManageRoles) return;
-    try {
-      await updateRole(activeGuild.id, selectedRole.id, { hoist: !Boolean(selectedRole.hoist) });
-    } catch (err) {
-      console.error('Failed to toggle hoist:', err);
-    }
+    updateDraftRole(selectedRole.id, { hoist: !Boolean(selectedRole.hoist) });
   };
 
   const handleToggleRoleMentionable = async () => {
     if (!selectedRole || !canManageRoles) return;
-    try {
-      await updateRole(activeGuild.id, selectedRole.id, { mentionable: !Boolean(selectedRole.mentionable) });
-    } catch (err) {
-      console.error('Failed to toggle mentionable:', err);
-    }
+    updateDraftRole(selectedRole.id, { mentionable: !Boolean(selectedRole.mentionable) });
   };
 
   const handleMoveRoleHierarchy = async (roleId: string, direction: 'up' | 'down') => {
@@ -450,32 +541,15 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     if (targetIndex < 0 || targetIndex >= sortedRoles.length) return;
 
-    setIsReorderingRoles(true);
-    try {
-      const temp = sortedRoles[currentIndex];
-      sortedRoles[currentIndex] = sortedRoles[targetIndex];
-      sortedRoles[targetIndex] = temp;
-
-      const payload = sortedRoles.map((r, idx) => ({ id: r.id, position: idx }));
-      await reorderRoles(activeGuild.id, payload);
-    } catch (err) {
-      console.error('Failed to reorder roles:', err);
-    } finally {
-      setIsReorderingRoles(false);
-    }
+    const temp = sortedRoles[currentIndex];
+    sortedRoles[currentIndex] = sortedRoles[targetIndex];
+    sortedRoles[targetIndex] = temp;
+    setDraftRoles(sortedRoles.map((r, idx) => ({ ...r, position: idx })));
   };
 
   const handleReorderRoles = async (newOrderedRoles: Role[]) => {
     if (!canManageRoles || isReorderingRoles || !activeGuild) return;
-    setIsReorderingRoles(true);
-    try {
-      const payload = newOrderedRoles.map((r, idx) => ({ id: r.id, position: idx }));
-      await reorderRoles(activeGuild.id, payload);
-    } catch (err) {
-      console.error('Failed to reorder roles:', err);
-    } finally {
-      setIsReorderingRoles(false);
-    }
+    setDraftRoles(newOrderedRoles.map((r, idx) => ({ ...r, position: idx })));
   };
 
   const handleTogglePermission = async (flag: number) => {
@@ -487,25 +561,20 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     let newPermissions: number;
 
     if (flag === Permissions.ADMINISTRATOR) {
-      if (hasAdminPerm) {
-        newPermissions = currentPermissions & ~Permissions.ADMINISTRATOR;
-      } else {
-        newPermissions = currentPermissions | Permissions.ADMINISTRATOR;
-      }
+      newPermissions = hasAdminPerm
+        ? currentPermissions & ~Permissions.ADMINISTRATOR
+        : currentPermissions | Permissions.ADMINISTRATOR;
     } else {
       const hasFlag = (currentPermissions & flag) !== 0;
-      if (hasFlag) {
-        newPermissions = currentPermissions & ~flag;
-      } else {
-        newPermissions = currentPermissions | flag;
-      }
+      newPermissions = hasFlag ? currentPermissions & ~flag : currentPermissions | flag;
     }
 
-    try {
-      await updateRole(activeGuild.id, selectedRole.id, { permissions: newPermissions });
-    } catch (err) {
-      console.error('Failed to toggle permission:', err);
-    }
+    updateDraftRole(selectedRole.id, { permissions: newPermissions });
+  };
+
+  const handleClearPermissions = async () => {
+    if (!selectedRole || !canManageRoles || selectedRole.name === '@everyone') return;
+    updateDraftRole(selectedRole.id, { permissions: 0 });
   };
 
   const handleDeleteRole = async (roleId: string) => {
@@ -529,6 +598,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     if (ok) {
       try {
         await deleteRole(activeGuild.id, roleId);
+        setDraftRoles((prev) => prev.filter((r) => r.id !== roleId));
         if (selectedRoleId === roleId) {
           setSelectedRoleId(null);
         }
@@ -797,7 +867,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     shape="circle"
                     size="small"
                     svgOnly
-                    onClick={onClose}
+                    onClick={attemptClose}
                     aria-label="Fechar configurações do servidor"
                     title="Fechar"
                     className="-ml-1"
@@ -853,7 +923,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                       className="w-full flex items-center justify-between p-3.5 text-left hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
                     >
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">Visão Geral</div>
+                        <div className="text-sm font-semibold text-white">Perfil do servidor</div>
                         <div className="text-xs text-gray-400">Identidade visual, ícone, banner e boas-vindas</div>
                       </div>
                       <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
@@ -994,7 +1064,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                         : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                     }`}
                   >
-                    <span>Visão Geral</span>
+                    <span>Perfil do servidor</span>
                   </button>
 
                   <button
@@ -1109,7 +1179,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 </ModalButton>
               </div>
               <h2 className="text-sm font-bold text-white truncate max-w-[180px]">
-                {activeTab === 'overview' && 'Visão Geral'}
+                {activeTab === 'overview' && 'Perfil do servidor'}
                 {activeTab === 'roles' && 'Cargos'}
                 {activeTab === 'emojis' && 'Emojis'}
                 {activeTab === 'invites' && 'Convites'}
@@ -1121,7 +1191,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 shape="circle"
                 size="small"
                 svgOnly
-                onClick={onClose}
+                onClick={attemptClose}
                 aria-label="Fechar configurações do servidor"
                 title="Fechar"
               >
@@ -1133,7 +1203,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             <div className="hidden md:flex items-center justify-between px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
               <div>
                 <h1 id="server-settings-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
-                  {activeTab === 'overview' && 'Visão Geral do Servidor'}
+                  {activeTab === 'overview' && 'Perfil do servidor'}
                   {activeTab === 'roles' && 'Gerenciamento de Cargos e Hierarquia'}
                   {activeTab === 'emojis' && 'Emojis Customizados do Servidor'}
                   {activeTab === 'invites' && 'Links de Convite Ativos'}
@@ -1224,7 +1294,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   shape="circle"
                   size="small"
                   svgOnly
-                  onClick={onClose}
+                  onClick={attemptClose}
                   aria-label="Fechar configurações do servidor"
                   title="Fechar Configurações (ESC)"
                 >
@@ -1236,7 +1306,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
             {/* TAB CONTENTS */}
             <div className="flex-1 overflow-y-auto py-0 px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 chat-scrollbar overscroll-contain touch-pan-y min-h-0">
               {activeTab === 'overview' && (
-                <OverviewTab
+                <ServerProfile
                   activeGuild={activeGuild}
                   isOwner={isOwner}
                   canManageGuild={canManageGuild}
@@ -1260,6 +1330,20 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   handleRemoveBanner={handleRemoveBanner}
                   isUploadingIcon={isUploadingIcon}
                   isUploadingBanner={isUploadingBanner}
+                  previewIconUrl={
+                    pendingIcon === 'remove'
+                      ? ''
+                      : pendingIcon && typeof pendingIcon === 'object'
+                      ? pendingIcon.previewUrl
+                      : undefined
+                  }
+                  previewBannerUrl={
+                    pendingBanner === 'remove'
+                      ? ''
+                      : pendingBanner && typeof pendingBanner === 'object'
+                      ? pendingBanner.previewUrl
+                      : undefined
+                  }
                 />
               )}
 
@@ -1283,6 +1367,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                   handleToggleRoleHoist={handleToggleRoleHoist}
                   handleToggleRoleMentionable={handleToggleRoleMentionable}
                   handleTogglePermission={handleTogglePermission}
+                  handleClearPermissions={handleClearPermissions}
                   isRoleAdmin={isRoleAdmin}
                 />
               )}
@@ -1441,6 +1526,14 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         onConfirmDelete={handleConfirmDeleteGuild}
         membersCount={members.length}
         is2FARequired={is2FARequiredByServer}
+      />
+      <UnsavedChangesBar
+        show={hasUnsavedChanges}
+        isShaking={isShaking}
+        isSaving={isSavingOverview}
+        error={overviewMsg?.type === 'error' ? overviewMsg.text : null}
+        onSave={handleSaveAll}
+        onRevert={handleRevert}
       />
     </>
   );

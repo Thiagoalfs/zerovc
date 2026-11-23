@@ -190,7 +190,7 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 
 		chanQuery := `
-			SELECT c.id, c.guild_id, c.name, c.type, c.position, c.is_private, c.category_id, c.topic, c.created_at
+			SELECT c.id, c.guild_id, c.name, c.type, c.position, c.is_private, c.category_id, c.topic, COALESCE(c.slowmode_seconds, 0), c.created_at
 			FROM channels c
 			INNER JOIN guilds g ON g.id = c.guild_id
 			WHERE c.guild_id = ANY($1)
@@ -217,7 +217,7 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 			for chanRows.Next() {
 				var ch models.Channel
 				if err := chanRows.Scan(
-					&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.Position, &ch.IsPrivate, &ch.CategoryID, &ch.Topic, &ch.CreatedAt,
+					&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.Position, &ch.IsPrivate, &ch.CategoryID, &ch.Topic, &ch.SlowmodeSeconds, &ch.CreatedAt,
 				); err == nil {
 					if idx, ok := guildIndexMap[ch.GuildID]; ok {
 						guilds[idx].Channels = append(guilds[idx].Channels, ch)
@@ -393,13 +393,13 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5.1 Get Channels with in-memory metadata attachment
-	chanQuery := `SELECT id, guild_id, name, type, category_id, topic, position, is_private, created_at FROM channels WHERE guild_id = $1 ORDER BY position ASC, name ASC`
+	chanQuery := `SELECT id, guild_id, name, type, category_id, topic, position, is_private, COALESCE(slowmode_seconds, 0), created_at FROM channels WHERE guild_id = $1 ORDER BY position ASC, name ASC`
 	cRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildID)
 	if err == nil {
 		defer cRows.Close()
 		for cRows.Next() {
 			var ch models.Channel
-			if err := cRows.Scan(&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic, &ch.Position, &ch.IsPrivate, &ch.CreatedAt); err == nil {
+			if err := cRows.Scan(&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic, &ch.Position, &ch.IsPrivate, &ch.SlowmodeSeconds, &ch.CreatedAt); err == nil {
 				// If private, load allowed role IDs and check access
 				if ch.IsPrivate {
 					allowedRoles := roleAccessMap[ch.ID]

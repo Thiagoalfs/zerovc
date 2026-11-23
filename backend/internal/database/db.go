@@ -208,6 +208,7 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS rotation_epoch INT DEFAULT 1")
 	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS audience_limit INT DEFAULT 15")
 	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS audience_hash TEXT")
+	db.Pool.Exec(ctx, "ALTER TABLE channels ADD COLUMN IF NOT EXISTS slowmode_seconds INT DEFAULT 0")
 
 	// Ensure E2EE message ciphertext and metadata columns exist
 	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS encrypted BOOLEAN DEFAULT FALSE")

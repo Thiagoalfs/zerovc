@@ -27,6 +27,7 @@ import { useFriendStore } from '../stores/friendStore';
 import { useContextMenu, ContextMenuItem } from '../components/ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from '../components/Voice/VolumeSliders';
 import { useGuildPermissions } from './useGuildPermissions';
+import { canUserMuteVoice, canUserDeafenVoice } from '../utils/userActivity';
 import { api } from '../lib/api';
 import { showConfirm, showAlert } from '../stores/confirmModalStore';
 import { copyToClipboard } from '../utils/clipboard';
@@ -156,14 +157,22 @@ export function useUserContextMenu() {
 
       // Voice Channel Moderation
       if (options.voiceChannelId && !isMe && canModerateTarget) {
-        const canModerateVoice = perms.canMuteVoice || perms.isCurrentOwner || perms.hasAdmin;
+        const voiceChannel = activeGuild?.channels?.find((c) => c.id === options.voiceChannelId);
+        const canMuteInVoice =
+          canUserMuteVoice(voiceChannel, activeGuild, currentUser) ||
+          perms.isCurrentOwner ||
+          perms.hasAdmin;
+        const canDeafenInVoice =
+          canUserDeafenVoice(voiceChannel, activeGuild, currentUser) ||
+          perms.isCurrentOwner ||
+          perms.hasAdmin;
         const canMoveMembers = perms.canMoveMembers || perms.isCurrentOwner || perms.hasAdmin;
 
-        if (canModerateVoice || canMoveMembers) {
+        if (canMuteInVoice || canDeafenInVoice || canMoveMembers) {
           items.push({ label: '', separator: true });
         }
 
-        if (canModerateVoice) {
+        if (canMuteInVoice) {
           items.push({
             label: options.isVoiceMuted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
             icon: options.isVoiceMuted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
@@ -173,7 +182,9 @@ export function useUserContextMenu() {
               });
             },
           });
+        }
 
+        if (canDeafenInVoice) {
           items.push({
             label: 'Ensurdecer na Call',
             icon: <Headphones className="w-4 h-4 text-amber-400" />,
@@ -217,7 +228,7 @@ export function useUserContextMenu() {
           }
         }
 
-        if (canModerateVoice) {
+        if (canMoveMembers) {
           items.push({
             label: 'Desconectar da Call',
             icon: <PhoneOff className="w-4 h-4 text-dnd" />,

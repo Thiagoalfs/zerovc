@@ -920,7 +920,7 @@ function renderInlineFormatting(
               e.stopPropagation();
               onChannelClick?.(matchedChannel!, matchedGuild);
             }}
-            className="font-semibold px-1.5 py-0.5 rounded-md text-[13px] inline-flex items-center gap-1 mx-0.5 transition-all duration-150 select-none cursor-pointer active:scale-95 bg-brand-500/20 text-brand-300 hover:bg-brand-500/35 hover:text-white border border-brand-500/25 shadow-sm"
+            className="font-medium px-1 py-[1px] rounded-[4px] inline-flex items-center gap-1 align-bottom transition-colors duration-100 select-none cursor-pointer bg-brand-500/25 text-brand-200 hover:bg-brand-500 hover:text-white"
             title={isVoice ? `Canal de voz #${matchedChannel.name}` : `Canal de texto #${matchedChannel.name}`}
           >
             {isVoice ? (
@@ -964,17 +964,16 @@ function renderInlineFormatting(
         elements.push(
           <span
             key={k}
-            className="font-medium px-1.5 py-0.5 rounded-md text-[13px] inline-flex items-center gap-1 mx-0.5 cursor-pointer transition-all duration-150 select-none hover:brightness-110 active:scale-95"
+            className="font-medium px-1 py-[1px] rounded-[4px] inline-flex items-center gap-1 align-baseline cursor-pointer transition-colors duration-100 select-none hover:brightness-110"
             style={{
-              backgroundColor: `${matchedRole.color || '#5865F2'}22`,
-              color: matchedRole.color || '#8EA1E1',
-              border: `1px solid ${matchedRole.color || '#5865F2'}44`,
+              backgroundColor: `${matchedRole.color || '#5865F2'}28`,
+              color: matchedRole.color || '#c9cdfb',
             }}
             title={`Cargo @${matchedRole.name}`}
             onClick={(e) => e.stopPropagation()}
           >
             <span
-              className="w-2 h-2 rounded-full flex-shrink-0"
+              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
               style={{ backgroundColor: matchedRole.color || '#5865F2' }}
             />
             <span>{token}</span>
@@ -998,12 +997,12 @@ function renderInlineFormatting(
                 onOpenUserContextMenu(e, matchedMember);
               }
             }}
-            className={`font-semibold px-1.5 py-0.5 rounded-md text-[13px] inline-flex items-center gap-1 mx-0.5 transition-all duration-150 select-none ${
-              matchedMember ? 'cursor-pointer active:scale-95' : 'cursor-default'
+            className={`font-medium px-1 py-[1px] rounded-[4px] inline align-baseline transition-colors duration-100 select-none ${
+              matchedMember ? 'cursor-pointer' : 'cursor-default'
             } ${
               isSelfMention
-                ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 hover:text-amber-200 border border-amber-500/30'
-                : 'bg-brand-500/20 text-brand-300 hover:bg-brand-500/35 hover:text-white border border-brand-500/20'
+                ? 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/35 hover:text-amber-100'
+                : 'bg-brand-500/25 text-brand-200 hover:bg-brand-500 hover:text-white'
             }`}
             title={matchedMember ? `Ver perfil de @${matchedMember.username}` : undefined}
           >

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageSquare, Shield, ArrowLeft, KeyRound, Mail, CheckCircle, RefreshCw, Lock, AlertTriangle } from 'lucide-react';
+import { Shield, ArrowLeft, KeyRound, Mail, CheckCircle, RefreshCw, Lock, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { TurnstileWidget, TurnstileWidgetRef } from '../Common/TurnstileWidget';
@@ -612,11 +612,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
           /* 4. LOGIN & REGISTER MODES */
           /* ========================================================================= */
           <div>
-            {/* Logo and Brand */}
+            {/* Brand Header */}
             <div className="text-center mb-6">
-              <div className="w-14 h-14 bg-brand-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-500/30">
-                {requires2FA ? <KeyRound className="w-8 h-8 text-white" /> : <MessageSquare className="w-8 h-8 text-white" />}
-              </div>
+              {requires2FA && (
+                <div className="w-14 h-14 bg-brand-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-500/30">
+                  <KeyRound className="w-8 h-8 text-white" />
+                </div>
+              )}
               <h1 className="text-2xl font-bold text-white tracking-tight">
                 {requires2FA ? 'Autenticação em 2 Etapas' : 'ZeroVC'}
               </h1>

@@ -76,6 +76,18 @@
   }
 }
 
+@keyframes unsaved-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+.animate-unsaved-shake {
+  animation: unsaved-shake 0.38s ease-in-out;
+}
+
 /* Custom modern scrollbar for chat and voice grids */
 ::-webkit-scrollbar {
   width: 6px;
