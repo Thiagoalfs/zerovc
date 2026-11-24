@@ -14,21 +14,18 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/database"
 	"github.com/zerovc/zerovc/backend/internal/gateway"
 	"github.com/zerovc/zerovc/backend/internal/models"
-	"github.com/zerovc/zerovc/backend/internal/services"
 )
 
 type CommandHandler struct {
 	db        *database.DB
 	hub       *gateway.Hub
-	riot      *services.RiotService
 	uploadDir string
 }
 
-func NewCommandHandler(db *database.DB, hub *gateway.Hub, riot *services.RiotService, uploadDir string) *CommandHandler {
+func NewCommandHandler(db *database.DB, hub *gateway.Hub, uploadDir string) *CommandHandler {
 	return &CommandHandler{
 		db:        db,
 		hub:       hub,
-		riot:      riot,
 		uploadDir: uploadDir,
 	}
 }
@@ -709,12 +706,12 @@ func (h *CommandHandler) processCommand(
 		var target models.User
 		err := h.db.Pool.QueryRow(ctx, `
 			SELECT id, username, display_name, COALESCE(avatar_url, ''), COALESCE(banner_url, ''),
-			       COALESCE(bio, ''), status, created_at, is_bot, COALESCE(riot_game_name, ''), COALESCE(riot_tag_line, ''), COALESCE(riot_region, '')
+			       COALESCE(bio, ''), status, created_at, is_bot
 			FROM users
 			WHERE id = $1
 		`, targetUserID).Scan(
 			&target.ID, &target.Username, &target.DisplayName, &target.AvatarURL, &target.BannerURL,
-			&target.Bio, &target.Status, &target.CreatedAt, &target.IsBot, &target.RiotGameName, &target.RiotTagLine, &target.RiotRegion,
+			&target.Bio, &target.Status, &target.CreatedAt, &target.IsBot,
 		)
 		if err != nil {
 			return CommandResult{
@@ -762,11 +759,6 @@ func (h *CommandHandler) processCommand(
 		}
 
 		// user info
-		riotField := "Não vinculada"
-		if target.RiotGameName != "" && target.RiotTagLine != "" {
-			riotField = fmt.Sprintf("%s#%s (%s)", target.RiotGameName, target.RiotTagLine, strings.ToUpper(target.RiotRegion))
-		}
-
 		return CommandResult{
 			Embeds: []models.MessageEmbed{
 				{
@@ -781,7 +773,6 @@ func (h *CommandHandler) processCommand(
 					Fields: []models.EmbedField{
 						{Name: "🏷️ Tag de Usuário", Value: fmt.Sprintf("@%s", target.Username), Inline: true},
 						{Name: "🟢 Status", Value: strings.ToUpper(target.Status), Inline: true},
-						{Name: "🎮 Conta Riot", Value: riotField, Inline: true},
 						{Name: "📅 Conta Criada", Value: target.CreatedAt.Format("02/01/2006"), Inline: true},
 					},
 					Footer: &models.EmbedFooter{
@@ -790,233 +781,6 @@ func (h *CommandHandler) processCommand(
 					Timestamp: &now,
 				},
 			},
-		}, nil
-
-	case "league":
-		if sub == "link" {
-			riotIDRaw, _ := req.Args["riot_id"].(string)
-			regionRaw, _ := req.Args["region"].(string)
-
-			if strings.TrimSpace(riotIDRaw) == "" {
-				return CommandResult{
-					Embeds: []models.MessageEmbed{
-						{
-							Title:       "❌ Uso incorreto do comando",
-							Description: "Por favor, informe seu Riot ID no formato `Nome#Tag` (Ex: `/league link riot_id: tani otoshi#fate region: BR`).",
-							Color:       "#f43f5e",
-							Timestamp:   &now,
-						},
-					},
-				}, nil
-			}
-
-			parts := strings.Split(riotIDRaw, "#")
-			if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-				return CommandResult{
-					Embeds: []models.MessageEmbed{
-						{
-							Title:       "❌ Formato de Riot ID Inválido",
-							Description: "O Riot ID deve conter o nome e a hashtag (exemplo: `tani otoshi#fate`).",
-							Color:       "#f43f5e",
-							Timestamp:   &now,
-						},
-					},
-				}, nil
-			}
-
-			gameName := strings.TrimSpace(parts[0])
-			tagLine := strings.TrimSpace(parts[1])
-			if regionRaw == "" {
-				regionRaw = "BR"
-			}
-
-			acc, err := h.riot.GetAccount(gameName, tagLine, regionRaw)
-			if err != nil {
-				return CommandResult{
-					Embeds: []models.MessageEmbed{
-						{
-							Title:       "❌ Erro ao Vincular Conta Riot",
-							Description: fmt.Sprintf("Não foi possível validar o Riot ID **%s#%s** na região **%s**:\n%s", gameName, tagLine, strings.ToUpper(regionRaw), err.Error()),
-							Color:       "#f43f5e",
-							Timestamp:   &now,
-						},
-					},
-				}, nil
-			}
-
-			// Update user database row
-			_, err = h.db.Pool.Exec(ctx, `
-				UPDATE users
-				SET riot_game_name = $1,
-				    riot_tag_line = $2,
-				    riot_region = $3,
-				    riot_puuid = $4
-				WHERE id = $5
-			`, acc.GameName, acc.TagLine, strings.ToLower(services.NormalizeRegion(regionRaw)), acc.PUUID, invoker.ID)
-
-			if err != nil {
-				return CommandResult{}, fmt.Errorf("erro ao salvar dados no banco: %w", err)
-			}
-
-			return CommandResult{
-				Embeds: []models.MessageEmbed{
-					{
-						Title:       "✅ Conta Riot Vinculada com Sucesso!",
-						Description: fmt.Sprintf("A conta Riot **%s#%s** (%s) foi vinculada com sucesso ao seu perfil do ZeroVC!", acc.GameName, acc.TagLine, strings.ToUpper(regionRaw)),
-						Color:       "#10b981",
-						Footer: &models.EmbedFooter{
-							Text: fmt.Sprintf("Vinculado por @%s", invoker.Username),
-						},
-						Timestamp: &now,
-					},
-				},
-			}, nil
-		}
-
-		// league profile
-		var targetGameName, targetTagLine, targetRegion string
-
-		// 1. Direct riot_id argument
-		if riotVal, ok := req.Args["riot_id"].(string); ok && strings.TrimSpace(riotVal) != "" {
-			parts := strings.Split(riotVal, "#")
-			if len(parts) == 2 {
-				targetGameName = strings.TrimSpace(parts[0])
-				targetTagLine = strings.TrimSpace(parts[1])
-			}
-		}
-
-		if regVal, ok := req.Args["region"].(string); ok && regVal != "" {
-			targetRegion = regVal
-		}
-
-		// 2. Target user argument or Self
-		if targetGameName == "" {
-			lookupUserID := invoker.ID
-			if uVal, ok := req.Args["user"].(string); ok && strings.TrimSpace(uVal) != "" {
-				uClean := strings.TrimPrefix(strings.TrimSpace(uVal), "@")
-				if parsedUUID, err := uuid.Parse(uClean); err == nil {
-					lookupUserID = parsedUUID
-				} else {
-					var foundID uuid.UUID
-					if err := h.db.Pool.QueryRow(ctx, "SELECT id FROM users WHERE LOWER(username) = LOWER($1) OR LOWER(display_name) = LOWER($1)", uClean).Scan(&foundID); err == nil {
-						lookupUserID = foundID
-					} else {
-						return CommandResult{
-							Embeds: []models.MessageEmbed{
-								{
-									Title:       "❌ Usuário não encontrado",
-									Description: fmt.Sprintf("Não foi possível localizar o usuário **@%s**.", uClean),
-									Color:       "#f43f5e",
-									Timestamp:   &now,
-								},
-							},
-						}, nil
-					}
-				}
-			}
-
-			var uGameName, uTagLine, uRegion string
-			err := h.db.Pool.QueryRow(ctx, `
-				SELECT COALESCE(riot_game_name, ''), COALESCE(riot_tag_line, ''), COALESCE(riot_region, '')
-				FROM users
-				WHERE id = $1
-			`, lookupUserID).Scan(&uGameName, &uTagLine, &uRegion)
-
-			if err != nil || uGameName == "" || uTagLine == "" {
-				isSelf := lookupUserID == invoker.ID
-				msg := "Você ainda não vinculou sua conta Riot! Use `/league link` para vincular."
-				if !isSelf {
-					msg = "Este usuário ainda não vinculou uma conta Riot no ZeroVC."
-				}
-
-				return CommandResult{
-					Embeds: []models.MessageEmbed{
-						{
-							Title:       "❌ Conta Riot Não Vinculada",
-							Description: msg,
-							Color:       "#f43f5e",
-							Timestamp:   &now,
-						},
-					},
-				}, nil
-			}
-
-			targetGameName = uGameName
-			targetTagLine = uTagLine
-			if targetRegion == "" {
-				targetRegion = uRegion
-			}
-		}
-
-		if targetRegion == "" {
-			targetRegion = "br1"
-		}
-
-		prof, err := h.riot.FetchFullProfile(targetGameName, targetTagLine, targetRegion)
-		if err != nil {
-			return CommandResult{
-				Embeds: []models.MessageEmbed{
-					{
-						Title:       "❌ Erro ao Carregar Perfil do LoL",
-						Description: fmt.Sprintf("Não foi possível carregar os dados de **%s#%s** (%s):\n%s", targetGameName, targetTagLine, strings.ToUpper(targetRegion), err.Error()),
-						Color:       "#f43f5e",
-						Timestamp:   &now,
-					},
-				},
-			}, nil
-		}
-
-		// Build exact Discord-like Rich Embed matching reference
-		soloText := "Unranked"
-		if prof.SoloTier != "" {
-			soloText = fmt.Sprintf("%s %s (%d LP)", prof.SoloTier, prof.SoloRank, prof.SoloLP)
-		}
-
-		flexText := "Unranked"
-		if prof.FlexTier != "" {
-			flexText = fmt.Sprintf("%s %s (%d LP)", prof.FlexTier, prof.FlexRank, prof.FlexLP)
-		}
-
-		medals := []string{"🥇", "🥈", "🥉"}
-		var masteryLines []string
-		for i, c := range prof.TopChampions {
-			medal := medals[i]
-			masteryLines = append(masteryLines, fmt.Sprintf("%s **%s** (M%d) • `%s pts`", medal, c.ChampionName, c.Level, c.FormattedPts))
-		}
-
-		masteryContent := "Nenhum campeão registrado."
-		if len(masteryLines) > 0 {
-			masteryContent = strings.Join(masteryLines, "\n")
-		}
-
-		var thumb *models.EmbedMedia
-		if len(prof.TopChampions) > 0 && prof.TopChampions[0].SplashURL != "" {
-			thumb = &models.EmbedMedia{URL: prof.TopChampions[0].SplashURL}
-		}
-
-		embed := models.MessageEmbed{
-			Color: "#0ea5e9", // Sky blue bar
-			Author: &models.EmbedAuthor{
-				Name:    fmt.Sprintf("%s#%s (Nível %d)", prof.GameName, prof.TagLine, prof.SummonerLevel),
-				IconURL: prof.ProfileIconURL,
-				URL:     prof.OpggURL,
-			},
-			Title:     "📊 Perfil de League of Legends",
-			Thumbnail: thumb,
-			Fields: []models.EmbedField{
-				{Name: "🏆 Solo/Duo", Value: soloText, Inline: true},
-				{Name: "👥 Flex", Value: flexText, Inline: true},
-				{Name: "🔥 Top 3 Campeões Mais Jogados", Value: masteryContent, Inline: false},
-				{Name: "🔗 Links Úteis", Value: fmt.Sprintf("[Ver estatísticas no OP.GG](%s)", prof.OpggURL), Inline: false},
-			},
-			Footer: &models.EmbedFooter{
-				Text: fmt.Sprintf("Patch %s • Solicitado por %s", prof.PatchVersion, invoker.Username),
-			},
-			Timestamp: &now,
-		}
-
-		return CommandResult{
-			Embeds: []models.MessageEmbed{embed},
 		}, nil
 
 	default:

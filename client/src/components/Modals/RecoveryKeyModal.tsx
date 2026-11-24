@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  X,
   Copy,
   Download,
   Check,
@@ -12,10 +11,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 import { ModalButton } from '@/components/ui/modal-button';
 import { AppInput } from '@/components/ui/app-input';
 import { InlineAlert } from '@/components/ui/inline-alert';
-import {
-  MODAL_BACKDROP_CLASS,
-  MODAL_DIALOG_TITLE_CLASS,
-} from '../../constants/modalTypography';
+import { AppModal, AppModalHeader, AppModalBody } from '@/components/ui/app-modal';
 
 interface RecoveryKeyModalProps {
   isOpen: boolean;
@@ -158,32 +154,22 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="recovery-key-modal-title"
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="recovery-key-modal-title"
+      size="lg"
+      className="bg-background-darker rounded-2xl"
     >
-      <div className="bg-background-darker w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-background-darkest/50">
-          <h2 id="recovery-key-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>
-            {currentMode === 'setup' ? 'Chave de recuperação E2EE' : 'Restaurar chaves da nuvem'}
-          </h2>
-          <ModalButton
-            type="tertiary"
-            shape="circle"
-            size="small"
-            svgOnly
-            onClick={onClose}
-            aria-label="Fechar"
-          >
-            <X className="w-5 h-5" />
-          </ModalButton>
-        </div>
+      <AppModalHeader
+        title={currentMode === 'setup' ? 'Chave de recuperação E2EE' : 'Restaurar chaves da nuvem'}
+        titleId="recovery-key-modal-title"
+        onClose={onClose}
+        className="px-6 py-4 border-white/10 bg-background-darkest/50"
+      />
 
-        {/* Content */}
-        <div className="p-6 space-y-5 flex-1 overflow-y-auto">
+      {/* Content */}
+      <AppModalBody className="p-6 space-y-5 flex-1 overflow-y-auto">
           {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
           {successMessage && <InlineAlert variant="success">{successMessage}</InlineAlert>}
@@ -266,7 +252,7 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
               />
             </div>
           )}
-        </div>
+        </AppModalBody>
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 bg-background-darkest/40">
@@ -314,7 +300,6 @@ export const RecoveryKeyModal: React.FC<RecoveryKeyModalProps> = ({
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </AppModal>
   );
 };

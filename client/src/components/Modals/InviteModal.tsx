@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Copy, Check, Link as LinkIcon, AlertCircle, RefreshCw, Settings2 } from 'lucide-react';
+import { Copy, Check, Link as LinkIcon, AlertCircle, RefreshCw, Settings2 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { api, getApiBaseUrl } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
@@ -7,14 +7,12 @@ import { GuildInvite } from '../../types';
 import { DropdownSelect } from '../Common/DropdownSelect';
 import { useStreamerModeStore } from '../../stores/streamerModeStore';
 import { ModalButton } from '@/components/ui/modal-button';
+import { AppModal, AppModalHeader } from '@/components/ui/app-modal';
 import {
-  MODAL_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
   MODAL_SECTION_HEADER_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_BACKDROP_CLASS,
 } from '../../constants/modalTypography';
 
 interface InviteModalProps {
@@ -156,38 +154,19 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
   };
 
   return (
-    <div
-      className={MODAL_BACKDROP_CLASS}
-      onClick={onClose}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="invite-modal-title"
+      className="max-h-[92dvh] my-auto overflow-visible animate-in fade-in zoom-in-95 duration-150 relative z-50"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="invite-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-visible shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col relative z-50"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between relative flex-shrink-0`}>
-          <div>
-            <h2 id="invite-modal-title" className={MODAL_TITLE_CLASS}>
-              Convidar amigos
-            </h2>
-            <p className="text-xs text-gray-400 mt-1">
-              Convite para {activeGuild.name}
-            </p>
-          </div>
-          <ModalButton
-            type="tertiary"
-            shape="circle"
-            size="small"
-            svgOnly
-            onClick={onClose}
-            aria-label="Fechar"
-          >
-            <X className="w-5 h-5" />
-          </ModalButton>
-        </div>
+      <AppModalHeader
+        title="Convidar amigos"
+        subtitle={`Convite para ${activeGuild.name}`}
+        titleId="invite-modal-title"
+        onClose={onClose}
+        className="border-b-0"
+      />
 
         {/* Content */}
         <div className={`${MODAL_BODY_PADDING_CLASS} space-y-4 sm:space-y-5 overflow-visible flex-1`}>
@@ -358,7 +337,6 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
             </>
           )}
         </div>
-      </div>
-    </div>
+    </AppModal>
   );
 };

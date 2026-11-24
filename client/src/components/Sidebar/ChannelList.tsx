@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Hash,
   Volume2,
@@ -170,6 +170,28 @@ export const ChannelList: React.FC<ChannelListProps> = ({
       ...prev,
       [categoryId]: !prev[categoryId],
     }));
+  };
+
+  const [voiceElapsedSeconds, setVoiceElapsedSeconds] = useState(0);
+  useEffect(() => {
+    if (!isConnected || !currentChannelId) {
+      setVoiceElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setVoiceElapsedSeconds(0);
+    const interval = setInterval(() => {
+      setVoiceElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isConnected, currentChannelId]);
+
+  const formatCallDuration = (totalSeconds: number) => {
+    const hrs = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
   };
 
   const handleChannelClick = (channel: Channel) => {
@@ -844,14 +866,16 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             setDragOverTarget(null);
           }}
           onContextMenu={(e) => handleChannelContextMenu(e, channel)}
-          className={`group flex items-center justify-between px-1 py-1.5 rounded-lg text-[14.5px] transition-all relative ${
+          className={`group flex items-center justify-between px-2 py-1.5 rounded-lg text-[14px] transition-all relative ${
             canManageThisChannel ? 'cursor-grab active:cursor-grabbing' : ''
           } ${isDragging ? 'opacity-30 scale-[0.98]' : ''} ${
-            isActive
-              ? 'bg-background-light text-white font-medium shadow-sm'
+            isInThisVoice
+              ? 'bg-white/[0.07] text-white font-semibold'
+              : isActive
+              ? 'bg-white/[0.08] text-white font-medium'
               : isUnread
-              ? 'text-white font-semibold hover:bg-background-light/40'
-              : 'text-gray-400 hover:bg-background-light/40 hover:text-gray-200'
+              ? 'text-white font-semibold hover:bg-white/[0.04]'
+              : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-200'
           }`}
         >
           {/* Left white indicator dot for unread */}
@@ -872,21 +896,28 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             className="flex items-center gap-2 truncate flex-1 text-left min-w-0 cursor-pointer select-none"
           >
             {isText ? (
-              <Hash className={`w-4 h-4 flex-shrink-0 pointer-events-none ${isUnread || isActive ? 'text-white' : 'text-gray-400 group-hover:text-gray-200'}`} />
+              <Hash className={`w-[18px] h-[18px] flex-shrink-0 pointer-events-none ${isUnread || isActive ? 'text-gray-200' : 'text-gray-500 group-hover:text-gray-300'}`} />
             ) : (
               <Volume2
-                className={`w-4 h-4 flex-shrink-0 pointer-events-none ${isInThisVoice ? 'text-online' : 'text-gray-400 group-hover:text-gray-200'}`}
+                className={`w-[18px] h-[18px] flex-shrink-0 pointer-events-none ${isInThisVoice ? 'text-online' : 'text-gray-500 group-hover:text-gray-300'}`}
               />
             )}
-            <span className={`truncate pointer-events-none ${isUnread || isActive ? 'text-white font-semibold' : 'text-gray-400 group-hover:text-gray-200 font-medium'}`}>
+            <span className={`truncate pointer-events-none ${isInThisVoice || isUnread || isActive ? 'text-white font-semibold' : 'text-gray-400 group-hover:text-gray-200 font-medium'}`}>
               {channel.name}
             </span>
             {channel.is_private && (
               <span title="Canal Privado" className="pointer-events-none">
-                <Lock className="w-3 h-3 text-gray-400 flex-shrink-0 ml-0.5" />
+                <Lock className="w-3 h-3 text-gray-500 flex-shrink-0 ml-0.5" />
               </span>
             )}
           </div>
+
+          {/* Live Call Duration Timer when connected to this voice channel */}
+          {isInThisVoice && (
+            <span className="ml-1.5 text-xs font-medium text-online tabular-nums flex-shrink-0">
+              {formatCallDuration(voiceElapsedSeconds)}
+            </span>
+          )}
 
           {/* Unread Dot / Mention Badge on the Right */}
           {!isActive && (
@@ -955,7 +986,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           if (voiceSessions.length === 0) return null;
 
           return (
-            <div className="pl-6 pr-2 py-1 space-y-0.5">
+            <div className="pl-7 pr-1.5 py-1 space-y-0.5">
               {voiceSessions.map((vs) => {
                 const isSpeaking = speakingUserIds.includes(vs.user_id) && !vs.is_muted && !vs.is_deafened;
                 const guildMember = activeGuild?.members?.find((m) => m.id === vs.user_id);
@@ -976,7 +1007,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                       onSelectUser?.(targetUser, { x: e.clientX, y: e.clientY });
                     }}
                     onContextMenu={(e) => handleVoiceMemberContextMenu(e, channel, vs, targetUser)}
-                    className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-background-light/40 text-[13.5px] text-gray-300 cursor-pointer transition-colors group/voice-member"
+                    className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-white/[0.04] text-[13.5px] text-gray-400 cursor-pointer transition-colors group/voice-member"
                     title="Clique com botão esquerdo para perfil ou direito para opções"
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1002,7 +1033,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                           </span>
                         )}
                       </div>
-                      <span className={`truncate font-medium ${isSpeaking ? 'text-white font-semibold' : 'text-gray-300'}`}>
+                      <span className={`truncate font-medium ${isSpeaking ? 'text-white font-semibold' : 'text-gray-400 group-hover/voice-member:text-gray-200'}`}>
                         {getFormattedUsername(targetUser.display_name || targetUser.username || 'Usuário')}
                       </span>
                     </div>
@@ -1256,7 +1287,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         }
                       }}
                       onContextMenu={(e) => handleCategoryContextMenu(e, category)}
-                      className={`relative flex items-center justify-between px-1 py-1 group text-xs font-bold uppercase tracking-wider cursor-pointer rounded transition-colors ${
+                      className={`relative flex items-center justify-between px-2 py-1 group text-[13px] font-semibold cursor-pointer rounded-md transition-colors ${
                         isDragOverCategory
                           ? 'bg-brand-500/20 text-brand-300 ring-1 ring-brand-500/50'
                           : 'text-gray-400 hover:text-gray-200'
@@ -1271,12 +1302,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                       )}
 
                       <div className="flex items-center gap-1 truncate min-w-0 pointer-events-none">
-                        {isCollapsed ? (
-                          <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform" />
-                        ) : (
-                          <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform" />
-                        )}
                         <span className="truncate">{category.name}</span>
+                        {isCollapsed ? (
+                          <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 transition-transform" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 transition-transform" />
+                        )}
                       </div>
 
                       {canManageThisCat && (
@@ -1285,7 +1316,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                             e.stopPropagation();
                             onOpenCreateChannel('text', category.id);
                           }}
-                          className="p-1 opacity-0 group-hover:opacity-100 hover:text-white transition-opacity"
+                          className="p-1 text-gray-400 opacity-70 group-hover:opacity-100 hover:text-white transition-opacity"
                           title="Criar Canal na Categoria"
                         >
                           <Plus className="w-3.5 h-3.5" />

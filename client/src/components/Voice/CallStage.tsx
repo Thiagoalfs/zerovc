@@ -1,9 +1,32 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Participant } from 'livekit-client';
-import { ChevronDown, ChevronUp, Loader2, Users } from 'lucide-react';
+import { Participant, Track } from 'livekit-client';
+import { ChevronDown, ChevronUp, Loader2, Maximize2, Minimize2, Users } from 'lucide-react';
 import { User } from '../../types';
+import { useVoiceStore } from '../../stores/voiceStore';
 import { ParticipantCard } from './ParticipantCard';
 import { VoiceControlBar } from './VoiceControlBar';
+
+export interface CompactCallStageWrapperProps {
+  isFullscreen: boolean;
+  children: React.ReactNode;
+}
+
+export const CompactCallStageWrapper: React.FC<CompactCallStageWrapperProps> = ({
+  isFullscreen,
+  children,
+}) => (
+  <div
+    className={
+      isFullscreen
+        ? 'fixed inset-0 z-[10000000] bg-background-darkest p-4 flex flex-col items-center justify-center select-none'
+        : 'w-full bg-background-darkest border-b border-white/10 p-3 md:p-4 flex flex-col items-center justify-between transition-all select-none animate-in fade-in shadow-xl'
+    }
+  >
+    <div className={isFullscreen ? 'w-full h-full flex flex-col' : 'w-full flex flex-col'}>
+      {children}
+    </div>
+  </div>
+);
 
 export interface CallStageProps {
   participants: Participant[];
@@ -159,6 +182,27 @@ export const CallStage: React.FC<CallStageProps> = ({
   }, [participants, spotlightParticipant]);
 
   const isCompactVariant = variant === 'compact' && !isFullscreen;
+  const isLocalScreensharing = useVoiceStore((s) => s.isScreensharing);
+  const isLocalCameraOn = useVoiceStore((s) => s.isCameraOn);
+
+  const hasAnyActiveMedia = useMemo(() => {
+    if (isConnected && (isLocalScreensharing || isLocalCameraOn)) return true;
+    return participants.some((p) => {
+      const screenPub = p.getTrackPublication(Track.Source.ScreenShare);
+      const cameraPub = p.getTrackPublication(Track.Source.Camera);
+      const isScreenSharing = p.isScreenShareEnabled || !!screenPub;
+      const hasCamera = p.isCameraEnabled || (!!cameraPub?.track && !cameraPub.isMuted);
+      return isScreenSharing || hasCamera;
+    });
+  }, [participants, isConnected, isLocalScreensharing, isLocalCameraOn]);
+
+  const isAvatarOnlyMode = variant === 'compact' && !hasAnyActiveMedia;
+
+  useEffect(() => {
+    if (isAvatarOnlyMode && spotlightId) {
+      setSpotlightId(null);
+    }
+  }, [isAvatarOnlyMode, spotlightId]);
 
   const stageLayout = useMemo(
     () =>
@@ -183,7 +227,11 @@ export const CallStage: React.FC<CallStageProps> = ({
       <div
         ref={stageRef}
         className={`relative flex-1 min-h-0 flex flex-col items-center justify-center overflow-hidden ${
-          isCompactVariant ? 'h-[45vh] min-h-[200px] max-h-[380px] p-2' : 'p-4'
+          isAvatarOnlyMode && !isFullscreen
+            ? 'py-4 px-2'
+            : isCompactVariant
+            ? 'h-[45vh] min-h-[200px] max-h-[380px] p-2'
+            : 'p-4'
         }`}
       >
         {participants.length === 0 ? (
@@ -198,6 +246,21 @@ export const CallStage: React.FC<CallStageProps> = ({
               {emptyAction}
             </div>
           )
+        ) : isAvatarOnlyMode ? (
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-5 py-1 w-full">
+            {participants.map((participant) => (
+              <ParticipantCard
+                key={participant.identity}
+                participant={participant}
+                isCompact={isCompactVariant}
+                avatarOnly
+                onOpenUserProfile={onOpenUserProfile}
+                onOpenDM={onOpenDM}
+                onOpenScreenShare={onOpenScreenShare}
+                onWatchStream={onWatchStream}
+              />
+            ))}
+          </div>
         ) : spotlightParticipant ? (
           <div className="w-full h-full flex flex-col items-center justify-center gap-2 min-h-0">
             <div className="flex-1 min-h-0 w-full flex items-center justify-center">
@@ -291,19 +354,34 @@ export const CallStage: React.FC<CallStageProps> = ({
         <div
           className={
             controlsFloating
-              ? `absolute bottom-4 left-1/2 -translate-x-1/2 z-30 transition-all duration-200 ${
+              ? `absolute bottom-4 inset-x-4 flex items-center justify-center pointer-events-none z-30 transition-all duration-200 ${
                   controlsMode === 'hover' && !isHovered && !isFullscreen
                     ? 'opacity-0 translate-y-2 pointer-events-none'
                     : 'opacity-100 translate-y-0'
                 }`
-              : 'shrink-0 pt-1 pb-2 flex justify-center z-30'
+              : 'shrink-0 pt-1 pb-2 px-4 w-full relative flex items-center justify-center z-30'
           }
         >
+          <button
+            type="button"
+            onClick={onToggleFullscreen}
+            className={`absolute ${
+              controlsFloating ? 'right-0' : 'right-4'
+            } top-1/2 -translate-y-1/2 pointer-events-auto p-1.5 text-gray-300 hover:text-white transition-all cursor-pointer active:scale-95`}
+            title={isFullscreen ? 'Sair da Tela Cheia (Esc)' : 'Tela Cheia'}
+            aria-label={isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="w-5 h-5" />
+            ) : (
+              <Maximize2 className="w-5 h-5" />
+            )}
+          </button>
+
           <VoiceControlBar
+            className="pointer-events-auto"
             onOpenScreenShare={onOpenScreenShare}
             onDisconnect={onDisconnect}
-            isFullscreen={isFullscreen}
-            onToggleFullscreen={onToggleFullscreen}
           />
         </div>
       )}

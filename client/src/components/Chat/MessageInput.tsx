@@ -951,13 +951,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       }
     }
 
-    // Special LoL rule: If riot_id is provided, region is required
-    if (activeSlash.command.name === 'league' && activeSlash.args['riot_id']?.trim()) {
-      if (!activeSlash.args['region']?.trim()) {
-        activeSlash.args['region'] = 'BR';
-      }
-    }
-
     const commandName = activeSlash.command.name;
     const subcommandName = activeSlash.subcommand?.name;
     const args: Record<string, any> = {};
@@ -1113,13 +1106,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     // 4. Tab to advance between options
     if (e.key === 'Tab') {
       e.preventDefault();
-      // Special LoL rule: if editing riot_id, jump directly to region
-      if (opt.name === 'riot_id' && activeSlash?.command.name === 'league') {
-        setActiveSlash((prev) => (prev ? { ...prev, activeOptionName: 'region' } : null));
-        const rIdx = activeSlashOptions.findIndex((o) => o.name === 'region');
-        setSelectedOptionIndex(rIdx >= 0 ? rIdx : -1);
-        return;
-      }
       const otherOpts = activeSlashOptions.filter((o) => o.name !== opt.name);
       if (otherOpts.length > 0) {
         const next = otherOpts.find((o) => !activeSlash?.args[o.name]) || otherOpts[0];

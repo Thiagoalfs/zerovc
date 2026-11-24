@@ -4,6 +4,8 @@ import { SearchAutocompletePopout } from './SearchAutocompletePopout';
 import { User } from '../../types';
 
 export interface ChatHeaderProps {
+  variant?: 'chat' | 'call';
+
   // Mobile drawer
   onOpenMobileDrawer?: () => void;
 
@@ -24,10 +26,11 @@ export interface ChatHeaderProps {
   onToggleMembers?: () => void;
 
   // Search state & handlers
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  onSearchSubmit: (query: string) => void;
-  onClearSearch: () => void;
+  showSearch?: boolean;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  onSearchSubmit?: (query: string) => void;
+  onClearSearch?: () => void;
   hasAppliedSearch?: boolean;
 
   // Search Autocomplete metadata
@@ -41,6 +44,7 @@ export interface ChatHeaderProps {
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
+  variant = 'chat',
   onOpenMobileDrawer,
   icon,
   title,
@@ -50,7 +54,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onTogglePinned,
   showMembers,
   onToggleMembers,
-  searchQuery,
+  showSearch = variant === 'chat',
+  searchQuery = '',
   onSearchChange,
   onSearchSubmit,
   onClearSearch,
@@ -65,12 +70,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
+  const isCallVariant = variant === 'call';
+  const hasSearch = Boolean(showSearch && onSearchChange && onSearchSubmit && onClearSearch);
+
   return (
     <div
       onClick={() => {
         onHeaderClick?.();
       }}
-      className="h-14 md:h-12 border-b border-black/20 md:border-white/5 px-3 md:px-4 flex items-center justify-between shadow-sm select-none z-20 flex-shrink-0 bg-background-dark/95 backdrop-blur-sm sticky top-0 w-full cursor-default"
+      className={`h-14 md:h-12 px-3 md:px-4 flex items-center justify-between select-none flex-shrink-0 w-full cursor-default ${
+        isCallVariant
+          ? 'bg-transparent z-10'
+          : 'border-b border-black/20 md:border-white/5 shadow-sm z-20 bg-background-dark/95 backdrop-blur-sm sticky top-0'
+      }`}
     >
       {/* Left side: Mobile drawer toggle & identity */}
       <div className="flex items-center gap-2.5 md:gap-2 truncate flex-1 min-w-0 mr-2">
@@ -142,62 +154,66 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         )}
 
         {/* Search Input Box */}
-        <div
-          ref={searchContainerRef}
-          className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64 relative"
-        >
-          <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              onSearchChange(e.target.value);
-              if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                onSearchSubmit(searchQuery.trim());
-                setIsSearchAutocompleteOpen(false);
-              }
-            }}
-            onFocus={() => setIsSearchAutocompleteOpen(true)}
-            placeholder={searchPlaceholder}
-            className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
-          />
-          {(searchQuery || hasAppliedSearch) && (
-            <button
-              type="button"
-              onClick={() => {
-                onClearSearch();
-                setIsSearchAutocompleteOpen(false);
-              }}
-              className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
-              title="Limpar busca"
+        {hasSearch && (
+          <>
+            <div
+              ref={searchContainerRef}
+              className="flex items-center gap-1.5 bg-background-darkest/90 hover:bg-background-darkest px-2.5 py-1 md:py-1.5 rounded-lg border border-white/5 focus-within:border-brand-500/50 text-xs transition-all duration-200 w-32 sm:w-44 md:w-56 focus-within:w-44 sm:focus-within:w-56 md:focus-within:w-64 relative"
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+              <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  onSearchChange!(e.target.value);
+                  if (!isSearchAutocompleteOpen) setIsSearchAutocompleteOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onSearchSubmit!(searchQuery.trim());
+                    setIsSearchAutocompleteOpen(false);
+                  }
+                }}
+                onFocus={() => setIsSearchAutocompleteOpen(true)}
+                placeholder={searchPlaceholder}
+                className="bg-transparent text-gray-100 placeholder-gray-500 focus:outline-none w-full min-w-0 text-xs"
+              />
+              {(searchQuery || hasAppliedSearch) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClearSearch!();
+                    setIsSearchAutocompleteOpen(false);
+                  }}
+                  className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
+                  title="Limpar busca"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
-        {/* Floating Search Autocomplete Popout */}
-        <SearchAutocompletePopout
-          isOpen={isSearchAutocompleteOpen}
-          onClose={() => setIsSearchAutocompleteOpen(false)}
-          query={searchQuery}
-          onSelectFilter={(newQ) => {
-            onSearchChange(newQ);
-            searchInputRef.current?.focus();
-          }}
-          onSearchSubmit={(q) => {
-            onSearchSubmit(q.trim());
-          }}
-          anchorRef={searchContainerRef}
-          members={searchMembers}
-          channels={searchChannels}
-          contextType={searchContextType}
-        />
+            {/* Floating Search Autocomplete Popout */}
+            <SearchAutocompletePopout
+              isOpen={isSearchAutocompleteOpen}
+              onClose={() => setIsSearchAutocompleteOpen(false)}
+              query={searchQuery}
+              onSelectFilter={(newQ) => {
+                onSearchChange!(newQ);
+                searchInputRef.current?.focus();
+              }}
+              onSearchSubmit={(q) => {
+                onSearchSubmit!(q.trim());
+              }}
+              anchorRef={searchContainerRef}
+              members={searchMembers}
+              channels={searchChannels}
+              contextType={searchContextType}
+            />
+          </>
+        )}
       </div>
     </div>
   );

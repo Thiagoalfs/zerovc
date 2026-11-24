@@ -4,13 +4,13 @@ import { useGuildStore } from '../../stores/guildStore';
 import { api } from '../../lib/api';
 import { ImageCropModal } from './ImageCropModal';
 import { ModalButton } from '@/components/ui/modal-button';
+import { AppModal } from '@/components/ui/app-modal';
 import {
   MODAL_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
   MODAL_HEADER_PADDING_CLASS,
   MODAL_BODY_PADDING_CLASS,
   MODAL_DESCRIPTION_CLASS,
-  MODAL_BACKDROP_CLASS,
 } from '../../constants/modalTypography';
 
 interface CreateServerModalProps {
@@ -130,17 +130,12 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
   };
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) handleClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-server-modal-title"
-        className="bg-background-dark w-full max-w-md max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150 flex flex-col"
+    <>
+      <AppModal
+        isOpen={isOpen}
+        onClose={handleClose}
+        titleId="create-server-modal-title"
+        className="max-h-[92dvh] my-auto animate-in fade-in zoom-in-95 duration-150"
       >
         {/* Header */}
         <div className={`${MODAL_HEADER_PADDING_CLASS} text-center relative flex-shrink-0`}>
@@ -335,7 +330,7 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
             </form>
           )}
         </div>
-      </div>
+      </AppModal>
 
       {/* Image Crop & Framing Modal */}
       <ImageCropModal
@@ -345,6 +340,6 @@ export const CreateServerModal: React.FC<CreateServerModalProps> = ({ isOpen, on
         onConfirm={handleCropConfirmed}
         onCancel={() => setIsCropOpen(false)}
       />
-    </div>
+    </>
   );
 };

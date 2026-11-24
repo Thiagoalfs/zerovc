@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Check, Shield } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Shield } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
-import { formatAssetUrl } from '../../lib/api';
 import { SquishSwitch } from '../ui/squish-switch';
 import {
   AppModal,
@@ -12,10 +11,7 @@ import {
 } from '@/components/ui/app-modal';
 import { AppInput } from '@/components/ui/app-input';
 import { InlineAlert } from '@/components/ui/inline-alert';
-import {
-  MODAL_FIELD_LABEL_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-} from '../../constants/modalTypography';
+import { FriendMultiSelect } from './FriendMultiSelect';
 
 interface CreateDMGroupModalProps {
   isOpen: boolean;
@@ -126,68 +122,13 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
           </div>
 
           {/* Friends Selection */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className={MODAL_FIELD_LABEL_CLASS}>
-                Selecione Amigos
-              </label>
-              <span className={MODAL_DESCRIPTION_CLASS}>
-                {selectedFriendIds.length} / 14 selecionados
-              </span>
-            </div>
-
-            {friends.length === 0 ? (
-              <div className="p-6 text-center border border-dashed border-white/10 rounded-xl">
-                <p className="text-xs text-gray-400">Você ainda não tem amigos adicionados.</p>
-              </div>
-            ) : (
-              <div className="max-h-56 overflow-y-auto space-y-1 pr-1 no-scrollbar">
-                {friends.map((f) => {
-                  const isSelected = selectedFriendIds.includes(f.friend?.id || '');
-                  const friendUser = f.friend;
-                  if (!friendUser) return null;
-
-                  return (
-                    <div
-                      key={friendUser.id}
-                      onClick={() => toggleFriend(friendUser.id)}
-                      className={`flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer transition-colors ${
-                        isSelected
-                          ? 'bg-brand-500/20 text-white border border-brand-500/30'
-                          : 'text-gray-300 hover:bg-white/5'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 truncate">
-                        <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                          {friendUser.avatar_url ? (
-                            <img src={formatAssetUrl(friendUser.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
-                          ) : (
-                            <span>{friendUser.display_name?.[0]?.toUpperCase() || friendUser.username?.[0]?.toUpperCase()}</span>
-                          )}
-                        </div>
-                        <div className="truncate">
-                          <span className="font-semibold block truncate">
-                            {friendUser.display_name || friendUser.username}
-                          </span>
-                          <span className="text-[10px] text-gray-400">@{friendUser.username}</span>
-                        </div>
-                      </div>
-
-                      <div
-                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                          isSelected
-                            ? 'bg-brand-500 border-brand-500 text-white'
-                            : 'border-white/20 bg-background-darkest'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3.5 h-3.5" />}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <FriendMultiSelect
+            friends={friends.map((f) => f.friend).filter((u): u is NonNullable<typeof u> => Boolean(u))}
+            selectedIds={selectedFriendIds}
+            onToggle={toggleFriend}
+            counterText={`${selectedFriendIds.length} / 14 selecionados`}
+            emptyMessage="Você ainda não tem amigos adicionados."
+          />
 
           <AppModalFooter
             onCancel={onClose}

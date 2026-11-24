@@ -1607,6 +1607,7 @@ export const App: React.FC = () => {
       const handlePresenceUpdate = (event: any) => {
         if (event.data?.user_id) {
           useGuildStore.getState().handlePresenceUpdate(event.data.user_id, event.data.status, event.data.custom_status);
+          useDMGroupStore.getState().handlePresenceUpdate(event.data.user_id, event.data.status, event.data.custom_status);
         }
       };
 

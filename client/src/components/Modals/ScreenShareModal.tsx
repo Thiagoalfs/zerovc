@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Monitor, AppWindow, Volume2, Check } from 'lucide-react';
+import { Monitor, AppWindow, Volume2, Check } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
 import { matchWindowToGameFamily } from '../../utils/gameFamilyManager';
 import { SquishSwitch } from '../ui/squish-switch';
-import { ModalButton } from '@/components/ui/modal-button';
+import {
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
-  MODAL_TITLE_CLASS,
-  MODAL_HEADER_PADDING_CLASS,
-  MODAL_FOOTER_PADDING_CLASS,
-  MODAL_SWITCH_CONTAINER_CLASS,
-  MODAL_SWITCH_KNOB_CLASS,
-  MODAL_BACKDROP_CLASS,
 } from '../../constants/modalTypography';
 
 interface ScreenShareModalProps {
@@ -171,41 +170,21 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
   };
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="screen-share-modal-title"
+      size={isExternalPicker ? 'md' : 'xl'}
+      className="max-h-[92dvh] my-auto"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="screen-share-modal-title"
-        className={`bg-background-dark w-full ${
-          isExternalPicker ? 'max-w-md' : 'max-w-xl'
-        } max-h-[92dvh] my-auto rounded-xl overflow-hidden shadow-2xl border border-white/10 flex flex-col`}
-      >
-        {/* Header */}
-        <div className={`${MODAL_HEADER_PADDING_CLASS} flex items-center justify-between border-b border-white/5 flex-shrink-0`}>
-          <div className="flex items-center gap-2">
-            <h2 id="screen-share-modal-title" className={MODAL_TITLE_CLASS}>
-              {isExternalPicker ? 'Configurar transmissão' : 'Selecione janela ou tela'}
-            </h2>
-          </div>
-          <ModalButton
-            type="tertiary"
-            shape="circle"
-            size="small"
-            svgOnly
-            aria-label="Fechar"
-            onClick={onClose}
-          >
-            <X className="w-5 h-5" />
-          </ModalButton>
-        </div>
+      <AppModalHeader
+        title={isExternalPicker ? 'Configurar transmissão' : 'Selecione janela ou tela'}
+        titleId="screen-share-modal-title"
+        onClose={onClose}
+      />
 
-        {/* Source Selection Area */}
-        <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6 space-y-4 sm:space-y-5">
+      {/* Source Selection Area */}
+      <AppModalBody className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6 space-y-4 sm:space-y-5">
           {!isExternalPicker && isElectron && sources.length > 0 && (
             <div className="flex items-center gap-2 pb-1">
               <button
@@ -383,22 +362,15 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
               onClick={(e) => e.stopPropagation()}
             />
           </div>
-        </div>
+      </AppModalBody>
 
-        {/* Footer */}
-        <div className={`${MODAL_FOOTER_PADDING_CLASS} bg-background-darkest border-t border-white/5 flex justify-end items-center gap-3`}>
-          <ModalButton type="secondary" onClick={onClose}>
-            Cancelar
-          </ModalButton>
-          <ModalButton
-            type="primary"
-            onClick={handleShare}
-            disabled={!selectedSourceId}
-          >
-            {isExternalPicker ? 'Escolher tela' : 'Iniciar transmissão'}
-          </ModalButton>
-        </div>
-      </div>
-    </div>
+      <AppModalFooter
+        align="end"
+        onCancel={onClose}
+        confirmText={isExternalPicker ? 'Escolher tela' : 'Iniciar transmissão'}
+        onConfirm={handleShare}
+        disabled={!selectedSourceId}
+      />
+    </AppModal>
   );
 };

@@ -18,10 +18,6 @@ type User struct {
 	TwoFactorEnabled   bool            `json:"two_factor_enabled"`
 	EmailVerified      bool            `json:"email_verified"`
 	IsBot              bool            `json:"is_bot"`
-	RiotGameName       string          `json:"riot_game_name,omitempty"`
-	RiotTagLine        string          `json:"riot_tag_line,omitempty"`
-	RiotRegion         string          `json:"riot_region,omitempty"`
-	RiotPUUID          string          `json:"riot_puuid,omitempty"`
 	AvatarURL          string          `json:"avatar_url"`
 	BannerURL          string          `json:"banner_url"`
 	Bio                string          `json:"bio"`
@@ -53,9 +49,6 @@ type UserPublic struct {
 	TwoFactorEnabled   bool            `json:"two_factor_enabled"`
 	EmailVerified      bool            `json:"email_verified"`
 	IsBot              bool            `json:"is_bot"`
-	RiotGameName       string          `json:"riot_game_name,omitempty"`
-	RiotTagLine        string          `json:"riot_tag_line,omitempty"`
-	RiotRegion         string          `json:"riot_region,omitempty"`
 	CSRFToken          string          `json:"csrf_token,omitempty"`
 	Roles              []Role          `json:"roles,omitempty"`
 	CreatedAt          *time.Time      `json:"created_at,omitempty"`
@@ -92,9 +85,6 @@ func (u *User) ToPublic() UserPublic {
 		TwoFactorEnabled:   u.TwoFactorSecret != "",
 		EmailVerified:      u.EmailVerified,
 		IsBot:              u.IsBot,
-		RiotGameName:       u.RiotGameName,
-		RiotTagLine:        u.RiotTagLine,
-		RiotRegion:         u.RiotRegion,
 		CreatedAt:          &u.CreatedAt,
 	}
 }

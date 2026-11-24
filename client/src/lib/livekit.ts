@@ -1012,68 +1012,71 @@ class LiveKitManager {
         this.stopGameFamilyWindowWatcher();
       }
 
-      if (resolvedSourceId && (window as any).electronAPI) {
+      if (
+        resolvedSourceId &&
+        !this.currentE2EEOptions &&
+        this.currentLivekitUrl &&
+        this.currentScreenshareToken &&
+        (window as any).electronAPI?.startNativeScreenShare
+      ) {
         // Padrão: publicar áudio (fluxo DM não passa config; o modal passa true/false explícito)
         const nativeIncludeAudio = config?.includeAudio !== false;
 
         // 1. Try Native Rust Sidecar first (bypasses Chromium capture/encode lag & keeps self-audio exclusion)
         // shortcut: E2EE rooms use per-participant ratcheting keys in callKeyManager, so they keep the Chromium E2EE worker until ratcheting key export is wired to the sidecar.
-        if (
-          !this.currentE2EEOptions &&
-          this.currentLivekitUrl &&
-          this.currentScreenshareToken &&
-          (window as any).electronAPI?.startNativeScreenShare
-        ) {
-          try {
-            // Stop any active Chromium screen share tracks before starting native sidecar
-            await this.room.localParticipant.setScreenShareEnabled(false);
-            await processAudioBridge.stopCapture();
+        try {
+          // Stop any active Chromium screen share tracks before starting native sidecar
+          await this.room.localParticipant.setScreenShareEnabled(false);
+          await processAudioBridge.stopCapture();
 
-            this.nativePreviewInfo = null;
-            this.nativeScreenShareUnsubscribe?.();
-            this.nativeScreenShareUnsubscribe = (window as any).electronAPI.onNativeScreenShareEvent?.((ev: any) => {
-              if (ev?.event === 'publishing' && ev?.preview_port && ev?.preview_token) {
-                this.nativePreviewInfo = {
-                  port: Number(ev.preview_port),
-                  token: String(ev.preview_token),
-                  width: Number(ev.width) || dims.width,
-                  height: Number(ev.height) || dims.height,
-                };
-                this.onTrackUpdated?.();
-              } else if (ev?.event === 'stopped' && this.isNativeScreenSharing) {
-                this.isNativeScreenSharing = false;
-                this.nativePreviewInfo = null;
-                this.onScreenShareEnded?.();
-              }
-            });
-
-            const nativeRes = await (window as any).electronAPI.startNativeScreenShare({
-              url: this.currentLivekitUrl,
-              token: this.currentScreenshareToken,
-              sourceId: resolvedSourceId,
-              width: dims.width,
-              height: dims.height,
-              fps: frameRate,
-              bitrate: maxBitrate,
-              includeAudio: nativeIncludeAudio,
-            });
-
-            if (nativeRes?.success) {
-              this.isNativeScreenSharing = true;
+          this.nativePreviewInfo = null;
+          this.nativeScreenShareUnsubscribe?.();
+          this.nativeScreenShareUnsubscribe = (window as any).electronAPI.onNativeScreenShareEvent?.((ev: any) => {
+            if (ev?.event === 'publishing' && ev?.preview_port && ev?.preview_token) {
+              this.nativePreviewInfo = {
+                port: Number(ev.preview_port),
+                token: String(ev.preview_token),
+                width: Number(ev.width) || dims.width,
+                height: Number(ev.height) || dims.height,
+              };
               this.onTrackUpdated?.();
-              return true;
+            } else if (ev?.event === 'stopped' && this.isNativeScreenSharing) {
+              this.isNativeScreenSharing = false;
+              this.nativePreviewInfo = null;
+              this.onScreenShareEnded?.();
             }
-            this.nativePreviewInfo = null;
-            this.nativeScreenShareUnsubscribe?.();
-            this.nativeScreenShareUnsubscribe = undefined;
-            if (nativeRes?.error && /cancel/i.test(nativeRes.error)) {
-              return false;
-            }
-            console.warn('[LiveKit] Native Rust screenshare unavailable, falling back to Electron/WebRTC:', nativeRes?.error);
-          } catch (nativeErr) {
-            console.warn('[LiveKit] Native Rust screenshare failed, falling back to Electron/WebRTC:', nativeErr);
+          });
+
+          const nativeRes = await (window as any).electronAPI.startNativeScreenShare({
+            url: this.currentLivekitUrl,
+            token: this.currentScreenshareToken,
+            sourceId: resolvedSourceId,
+            width: dims.width,
+            height: dims.height,
+            fps: frameRate,
+            bitrate: maxBitrate,
+            includeAudio: nativeIncludeAudio,
+          });
+
+          if (nativeRes?.success) {
+            this.isNativeScreenSharing = true;
+            this.onTrackUpdated?.();
+            return true;
           }
+          this.nativePreviewInfo = null;
+          this.nativeScreenShareUnsubscribe?.();
+          this.nativeScreenShareUnsubscribe = undefined;
+          if (nativeRes?.error && /cancel/i.test(nativeRes.error)) {
+            return false;
+          }
+          console.warn('[LiveKit] Native Rust screenshare unavailable, falling back to Electron/WebRTC:', nativeRes?.error);
+        } catch (nativeErr) {
+          console.warn('[LiveKit] Native Rust screenshare failed, falling back to Electron/WebRTC:', nativeErr);
         }
+      }
+
+      if (resolvedSourceId && resolvedSourceId !== 'screen:wayland-portal' && (window as any).electronAPI) {
+        const nativeIncludeAudio = config?.includeAudio !== false;
 
         // Stop any previous process audio bridge capture
         await processAudioBridge.stopCapture();
@@ -1893,6 +1896,7 @@ class LiveKitManager {
     serverUrl: string;
     pingMs: number;
     iceState: string;
+    protocol: 'udp' | 'tcp' | 'unknown';
     packetLossPercent: number;
     audioBitrateKbps: number;
     videoBitrateKbps: number;
@@ -1905,6 +1909,7 @@ class LiveKitManager {
         serverUrl: '',
         pingMs: 0,
         iceState: 'disconnected',
+        protocol: 'unknown',
         packetLossPercent: 0,
         audioBitrateKbps: 0,
         videoBitrateKbps: 0,
@@ -1917,6 +1922,7 @@ class LiveKitManager {
     let audioBitrate = 0;
     let videoBitrate = 0;
     let iceState = 'connected';
+    let protocol: 'udp' | 'tcp' | 'unknown' = 'unknown';
 
     try {
       const engine = (this.room as any).engine;
@@ -1927,8 +1933,17 @@ class LiveKitManager {
       if (publisher?.pc) {
         iceState = publisher.pc.iceConnectionState || 'connected';
         const stats = await publisher.pc.getStats();
+        let activeLocalCandidateId: string | null = null;
+        const localCandidates = new Map<string, any>();
+
         stats.forEach((report: any) => {
+          if (report.type === 'local-candidate') {
+            localCandidates.set(report.id, report);
+          }
           if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+            if (report.nominated || !activeLocalCandidateId) {
+              activeLocalCandidateId = report.localCandidateId || null;
+            }
             if (report.currentRoundTripTime) {
               ping = Math.round(report.currentRoundTripTime * 1000);
             }
@@ -1939,6 +1954,14 @@ class LiveKitManager {
             }
           }
         });
+
+        if (activeLocalCandidateId) {
+          const cand = localCandidates.get(activeLocalCandidateId);
+          const proto = String(cand?.protocol || '').toLowerCase();
+          if (proto === 'udp' || proto === 'tcp') {
+            protocol = proto;
+          }
+        }
       }
     } catch {}
 
@@ -1948,6 +1971,7 @@ class LiveKitManager {
       serverUrl: (this.room as any).serverUrl || 'LiveKit Cloud / Local Gateway',
       pingMs: ping > 0 ? ping : 18,
       iceState,
+      protocol,
       packetLossPercent: packetLoss,
       audioBitrateKbps: audioBitrate > 0 ? audioBitrate : 48,
       videoBitrateKbps: videoBitrate,

@@ -12,10 +12,13 @@ import {
   Tv,
   Radio,
   Sparkles,
+  Plus,
 } from 'lucide-react';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
-import { User, Role, UserProfilePosition } from '../../types';
+import { useFriendStore } from '../../stores/friendStore';
+import { useDMStore } from '../../stores/dmStore';
+import { User, Role, UserProfilePosition, DMGroup } from '../../types';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu } from '../ContextMenu';
@@ -25,6 +28,10 @@ import { getUserActivity, getActivityColorClass } from '../../utils/userActivity
 import { getFormattedUsername, useStreamerModeStore } from '../../stores/streamerModeStore';
 
 interface MemberListProps {
+  variant?: 'guild' | 'group';
+  group?: DMGroup | null;
+  onAddGroupMembers?: () => void;
+  footer?: React.ReactNode;
   isOpen: boolean;
   onClose?: () => void;
   onSelectUser?: (user: User, position?: UserProfilePosition) => void;
@@ -37,6 +44,10 @@ interface MemberListProps {
 }
 
 export const MemberList: React.FC<MemberListProps> = ({
+  variant = 'guild',
+  group = null,
+  onAddGroupMembers,
+  footer,
   isOpen,
   onClose,
   onSelectUser,
@@ -49,11 +60,59 @@ export const MemberList: React.FC<MemberListProps> = ({
 }) => {
   const { activeGuild, activeChannel, guilds, guildVoiceStates } = useGuildStore();
   const { user: currentUser } = useAuthStore();
+  const friends = useFriendStore((s) => s.friends);
+  const dmRooms = useDMStore((s) => s.rooms);
   const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
   const memberListWidth = useSettingsStore((s) => s.memberListWidth);
   useStreamerModeStore((s) => s.enabled && s.censorUsernames);
 
-  const members = activeGuild?.members || [];
+  const isGroupVariant = variant === 'group';
+  const rawMembers = isGroupVariant ? (group?.members || []) : (activeGuild?.members || []);
+
+  // Resolve real-time status for group members (fallback to friends / DM rooms / guilds if group payload lacks live status)
+  const members = useMemo(() => {
+    if (!isGroupVariant) return rawMembers;
+
+    const liveUserMap = new Map<string, User>();
+    guilds.forEach((g) => {
+      g.members?.forEach((m) => {
+        if (m.id && m.status && m.status !== 'offline') {
+          liveUserMap.set(m.id, m);
+        }
+      });
+    });
+    dmRooms.forEach((r) => {
+      if (r.recipient?.id && r.recipient.status && r.recipient.status !== 'offline') {
+        liveUserMap.set(r.recipient.id, r.recipient);
+      }
+    });
+    friends.forEach((f) => {
+      if (f.user?.id && f.user.status && f.user.status !== 'offline') {
+        liveUserMap.set(f.user.id, f.user);
+      }
+    });
+
+    return rawMembers.map((m) => {
+      if (m.id === currentUser?.id && currentUser) {
+        return {
+          ...m,
+          status: currentUser.status,
+          custom_status: currentUser.custom_status,
+          custom_activity: currentUser.custom_activity,
+        };
+      }
+      if (m.status && m.status !== 'offline') return m;
+      const live = liveUserMap.get(m.id);
+      return live
+        ? {
+            ...m,
+            status: live.status,
+            custom_status: live.custom_status ?? m.custom_status,
+            custom_activity: live.custom_activity ?? m.custom_activity,
+          }
+        : m;
+    });
+  }, [isGroupVariant, rawMembers, guilds, dmRooms, friends, currentUser]);
   const guildRoles = useMemo(() => {
     if (!activeGuild?.roles) return [];
     const seen = new Set<string>();
@@ -130,14 +189,17 @@ export const MemberList: React.FC<MemberListProps> = ({
     };
   }, [members, guildRoles, currentUser?.id, currentUser?.status]);
 
-  if (!activeGuild) return null;
+  if (!isGroupVariant && !activeGuild) return null;
+  if (isGroupVariant && !group) return null;
   if (!isOpen && !isDragging) return null;
+
+  const ownerId = isGroupVariant ? group?.owner_id : activeGuild?.owner_id;
 
   const renderMember = (member: User) => {
     const isMe = member.id === currentUser?.id;
     const status = isMe && currentUser ? currentUser.status : member.status;
-    const isOwner = member.id === activeGuild.owner_id;
-    const liveRoles = getMemberLiveRoles(member);
+    const isOwner = member.id === ownerId;
+    const liveRoles = isGroupVariant ? [] : getMemberLiveRoles(member);
     const sortedRoles = liveRoles
       .filter((r) => r.name !== '@everyone')
       .sort((a, b) => a.position - b.position);
@@ -196,7 +258,8 @@ export const MemberList: React.FC<MemberListProps> = ({
               });
             },
             onOpenDM,
-            contextType: 'guild',
+            contextType: isGroupVariant ? 'dm_group' : 'guild',
+            groupId: isGroupVariant ? group?.id : undefined,
           });
         }}
         className={`flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-all active:scale-[0.98] ${
@@ -230,7 +293,7 @@ export const MemberList: React.FC<MemberListProps> = ({
               {getFormattedUsername(member.display_name || member.username)}
             </span>
             {isOwner && (
-              <span title="Dono do Servidor">
+              <span title={isGroupVariant ? 'Dono do Grupo' : 'Dono do Servidor'}>
                 <Crown className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
               </span>
             )}
@@ -376,14 +439,16 @@ export const MemberList: React.FC<MemberListProps> = ({
             </div>
           </div>
 
-          {/* Channel Name Header */}
+          {/* Channel / Group Name Header */}
           <div className="flex items-center gap-2">
             <Hash className="w-6 h-6 text-gray-400 flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <h2 className="text-[17px] font-bold text-white truncate leading-tight">
-                {activeChannel?.name || 'Membros do Servidor'}
+                {isGroupVariant
+                  ? group?.name || 'Membros do Grupo'
+                  : activeChannel?.name || 'Membros do Servidor'}
               </h2>
-              {activeChannel?.topic ? (
+              {!isGroupVariant && activeChannel?.topic ? (
                 <p className="text-xs text-gray-400 truncate mt-0.5">{activeChannel.topic}</p>
               ) : (
                 <p className="text-xs text-gray-400 truncate mt-0.5">Lista de Membros</p>
@@ -392,8 +457,27 @@ export const MemberList: React.FC<MemberListProps> = ({
           </div>
         </div>
 
+        {/* Group Variant Header (Add Members) */}
+        {isGroupVariant && (
+          <div className="flex items-center justify-between px-2 pb-2.5 mb-2 border-b border-white/5">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              Membros ({members.length})
+            </span>
+            {onAddGroupMembers && members.length < 15 && (
+              <button
+                type="button"
+                onClick={onAddGroupMembers}
+                className="p-1 hover:bg-white/10 rounded-md text-gray-400 hover:text-white cursor-pointer transition-colors"
+                title="Adicionar membros ao grupo"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Hoisted Role Sections */}
-        {hoistedGroups.map((group) => (
+        {!isGroupVariant && hoistedGroups.map((group) => (
           <div key={group.role.id} className="mb-4">
             <h3
               className="text-xs font-bold uppercase tracking-wider px-2 mb-2 flex items-center justify-between"
@@ -431,6 +515,12 @@ export const MemberList: React.FC<MemberListProps> = ({
             <div className="space-y-0.5 opacity-70">
               {offlineMembers.map(renderMember)}
             </div>
+          </div>
+        )}
+
+        {footer && (
+          <div className="mt-auto pt-3">
+            {footer}
           </div>
         )}
       </div>

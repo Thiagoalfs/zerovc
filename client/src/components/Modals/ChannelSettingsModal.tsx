@@ -33,7 +33,8 @@ import {
   MODAL_DESCRIPTION_CLASS,
 } from '../../constants/modalTypography';
 import { ModalButton } from '@/components/ui/modal-button';
-import { UnsavedChangesBar, useUnsavedGuard } from './UnsavedChangesBar';
+import { useUnsavedGuard } from './UnsavedChangesBar';
+import { SettingsModalLayout, SettingsModalTab } from './SettingsModalLayout';
 
 interface ChannelSettingsModalProps {
   channel: Channel | null;
@@ -166,17 +167,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
   })();
 
   const { isShaking, attemptClose } = useUnsavedGuard(hasUnsavedChanges, onClose);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        attemptClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, attemptClose]);
 
   if (!isOpen || !channel || !activeGuild || !hasChannelPermission) return null;
 
@@ -473,57 +463,50 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
     (ow) => ow.allow !== 0 || ow.deny !== 0
   ).length;
 
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="channel-settings-title"
-      className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen md:pt-8 bg-background-dark overflow-hidden text-gray-200 select-none ${
-        reducedMotion ? '' : 'animate-in fade-in duration-150'
-      }`}
-    >
-      {/* MOBILE MENU VIEW */}
-      {mobileView === 'menu' && (
-        <div className="flex md:hidden flex-col w-full h-full bg-background-dark overflow-hidden">
-          <div
-            style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
-            className="px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex items-center justify-between flex-shrink-0"
-          >
-            <div className="flex items-center gap-3">
-              <ModalButton
-                type="tertiary"
-                shape="circle"
-                size="small"
-                svgOnly
-                onClick={attemptClose}
-                aria-label="Fechar configurações do canal"
-                title="Fechar"
-                className="-ml-1"
-              >
-                <X className="w-5 h-5" />
-              </ModalButton>
-              <h2 className={MODAL_DIALOG_TITLE_CLASS}>Configurações do Canal</h2>
-            </div>
-          </div>
+  const settingsTabs: SettingsModalTab[] = [
+    {
+      id: 'overview',
+      label: 'Visão Geral',
+      mobileTitle: 'Visão Geral',
+      desktopTitle: isCategory ? 'Visão Geral da Categoria' : 'Visão Geral do Canal',
+      desktopDescription: isCategory
+        ? 'Altere o nome da categoria para organizar melhor os canais do servidor'
+        : 'Defina o nome, tópico e categoria deste canal',
+    },
+    {
+      id: 'permissions',
+      label: 'Permissões',
+      mobileTitle: 'Permissões',
+      desktopTitle: 'Permissões por Cargo',
+      desktopDescription: 'Personalize o acesso e as ações permitidas ou negadas para cada cargo',
+      badge:
+        customOverwritesCount > 0 ? (
+          <span className="text-xs bg-background-dark px-1.5 py-0.5 rounded text-gray-300 font-bold">
+            {customOverwritesCount}
+          </span>
+        ) : undefined,
+    },
+  ];
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y no-scrollbar">
-            {/* Channel Mini Card */}
-            <div
-              onClick={() => {
-                setActiveTab('overview');
-                setMobileView('content');
-              }}
-              className="p-3.5 bg-background-darker rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer active:bg-white/5 transition-colors shadow-sm"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-background-darker flex items-center justify-center text-gray-300 flex-shrink-0 border border-white/10">
-                  {isCategory ? (
-                    <Folder className="w-5 h-5 text-brand-400" />
-                  ) : isText ? (
-                    <Hash className="w-5 h-5 text-gray-400" />
-                  ) : (
-                    <Volume2 className="w-5 h-5 text-online" />
-                  )}
+  const mobileMenuContent = (
+    <>
+      {/* Channel Mini Card */}
+      <div
+        onClick={() => {
+          setActiveTab('overview');
+          setMobileView('content');
+        }}
+        className="p-3.5 bg-background-darker rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer active:bg-white/5 transition-colors shadow-sm"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-background-darker flex items-center justify-center text-gray-300 flex-shrink-0 border border-white/10">
+            {isCategory ? (
+              <Folder className="w-5 h-5 text-brand-400" />
+            ) : isText ? (
+              <Hash className="w-5 h-5 text-gray-400" />
+            ) : (
+              <Volume2 className="w-5 h-5 text-online" />
+            )}
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm font-bold text-white truncate">
@@ -607,154 +590,74 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
+    </>
+  );
 
-      {/* DESKTOP SIDEBAR TABS */}
-      <div className="hidden md:flex flex-1 max-w-[280px] lg:max-w-[320px] xl:max-w-[360px] 2xl:max-w-[400px] min-w-[220px] justify-end bg-background-darkest border-r border-white/10 shrink-0 overflow-y-auto no-scrollbar">
-        <div className="w-56 lg:w-60 flex flex-col p-4 py-6 xl:py-8 shrink-0">
-          <div className="flex flex-col items-stretch flex-1 flex-shrink-0">
-            <div className="px-3 py-2 mb-2">
-              <div className="flex items-center gap-2">
-                {isCategory ? (
-                  <Folder className="w-4 h-4 text-brand-400 flex-shrink-0" />
-                ) : isText ? (
-                  <Hash className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                ) : (
-                  <Volume2 className="w-4 h-4 text-online flex-shrink-0" />
-                )}
-                <h2 className="text-xs font-bold uppercase tracking-wider text-gray-300 truncate">
-                  {channel.name}
-                </h2>
-              </div>
-              <div className="text-[11px] text-gray-500 mt-0.5">
-                {isCategory ? 'Configurações da Categoria' : 'Configurações do Canal'}
-              </div>
-            </div>
-
-            <nav className="flex flex-col items-stretch gap-0.5 flex-1 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setActiveTab('overview')}
-                aria-current={activeTab === 'overview' ? 'page' : undefined}
-                className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                  activeTab === 'overview'
-                    ? 'bg-white/10 text-white font-medium'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                }`}
-              >
-                <span>Visão Geral</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('permissions')}
-                aria-current={activeTab === 'permissions' ? 'page' : undefined}
-                className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                  activeTab === 'permissions'
-                    ? 'bg-white/10 text-white font-medium'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                }`}
-              >
-                <span>Permissões</span>
-                {customOverwritesCount > 0 && (
-                  <span className="text-xs bg-background-dark px-1.5 py-0.5 rounded text-gray-300 font-bold">
-                    {customOverwritesCount}
-                  </span>
-                )}
-              </button>
-
-              {canManageThisChannel && (
-                <div className="pt-2 mt-2 border-t border-white/10 flex flex-col gap-0.5 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 mr-2" />
-                    <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
-                  </button>
-                </div>
+  return (
+    <>
+      <SettingsModalLayout
+        isOpen={isOpen}
+        titleId="channel-settings-title"
+        reducedMotion={reducedMotion}
+        mobileMenuTitle="Configurações do Canal"
+        closeAriaLabel="Fechar configurações do canal"
+        mobileView={mobileView}
+        onMobileViewChange={setMobileView}
+        mobileMenuContent={mobileMenuContent}
+        sidebarHeader={
+          <div className="px-3 py-2 mb-2">
+            <div className="flex items-center gap-2">
+              {isCategory ? (
+                <Folder className="w-4 h-4 text-brand-400 flex-shrink-0" />
+              ) : isText ? (
+                <Hash className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              ) : (
+                <Volume2 className="w-4 h-4 text-online flex-shrink-0" />
               )}
-            </nav>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-300 truncate">
+                {channel.name}
+              </h2>
+            </div>
+            <div className="text-[11px] text-gray-500 mt-0.5">
+              {isCategory ? 'Configurações da Categoria' : 'Configurações do Canal'}
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* MAIN CONTENT AREA */}
-      <div
-        className={`${
-          mobileView === 'content' ? 'flex' : 'hidden md:flex'
-        } flex-1 flex-col overflow-hidden bg-background-dark relative min-w-0 min-h-0`}
+        }
+        tabs={settingsTabs}
+        activeTab={activeTab}
+        onSelectTab={(id) => setActiveTab(id as 'overview' | 'permissions')}
+        sidebarFooter={
+          canManageThisChannel ? (
+            <div className="pt-2 mt-2 border-t border-white/10 flex flex-col gap-0.5 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-2" />
+                <span>{isCategory ? 'Excluir Categoria' : 'Excluir Canal'}</span>
+              </button>
+            </div>
+          ) : undefined
+        }
+        mobileBottomBar={
+          <div className="flex md:hidden p-4 bg-background-darkest border-t border-white/10 items-center justify-between flex-shrink-0">
+            <ModalButton type="secondary" onClick={attemptClose}>
+              Fechar
+            </ModalButton>
+          </div>
+        }
+        onAttemptClose={attemptClose}
+        unsavedBar={{
+          show: hasUnsavedChanges,
+          isShaking,
+          isSaving,
+          error: saveStatus?.type === 'error' ? saveStatus.text : null,
+          onSave: () => handleSave(),
+          onRevert: handleRevert,
+        }}
       >
-        {/* Mobile Drilldown Top Bar */}
-        <div
-          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
-          className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex-shrink-0"
-        >
-          <div className="flex items-center gap-2">
-            <ModalButton
-              type="tertiary"
-              size="small"
-              onClick={() => setMobileView('menu')}
-              aria-label="Voltar ao menu"
-              prefix={<ArrowLeft className="w-5 h-5" />}
-              className="-ml-1"
-            >
-              Voltar
-            </ModalButton>
-          </div>
-          <h2 className="text-sm font-bold text-white truncate max-w-[180px]">
-            {activeTab === 'overview' ? 'Visão Geral' : 'Permissões'}
-          </h2>
-          <ModalButton
-            type="tertiary"
-            shape="circle"
-            size="small"
-            svgOnly
-            onClick={attemptClose}
-            aria-label="Fechar configurações do canal"
-            title="Fechar"
-          >
-            <X className="w-5 h-5" />
-          </ModalButton>
-        </div>
-
-        {/* Desktop Top Header */}
-        <div className="hidden md:flex items-center justify-between px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
-          <div>
-            <h1 id="channel-settings-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
-              {activeTab === 'overview'
-                ? isCategory
-                  ? 'Visão Geral da Categoria'
-                  : 'Visão Geral do Canal'
-                : 'Permissões por Cargo'}
-            </h1>
-            <p className={`${MODAL_DESCRIPTION_CLASS} mt-0.5`}>
-              {activeTab === 'overview'
-                ? isCategory
-                  ? 'Altere o nome da categoria para organizar melhor os canais do servidor'
-                  : 'Defina o nome, tópico e categoria deste canal'
-                : 'Personalize o acesso e as ações permitidas ou negadas para cada cargo'}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <ModalButton
-              type="tertiary"
-              shape="circle"
-              size="small"
-              svgOnly
-              onClick={attemptClose}
-              aria-label="Fechar configurações do canal"
-              title="Fechar Configurações (ESC)"
-            >
-              <X className="w-5 h-5" />
-            </ModalButton>
-          </div>
-        </div>
-
         {/* Error Notification */}
         {saveStatus?.type === 'error' && (
           <div className="mx-4 sm:mx-8 lg:mx-12 xl:mx-16 2xl:mx-24 mt-4 p-3 rounded-xl text-xs flex items-center gap-2.5 animate-in fade-in flex-shrink-0 bg-red-500/15 text-red-300 border border-red-500/30">
@@ -1089,25 +992,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
           )}
         </div>
 
-        {/* Mobile Bottom Bar */}
-        <div className="flex md:hidden p-4 bg-background-darkest border-t border-white/10 items-center justify-between flex-shrink-0">
-          <ModalButton
-            type="secondary"
-            onClick={attemptClose}
-          >
-            Fechar
-          </ModalButton>
-        </div>
-      </div>
-
-      <UnsavedChangesBar
-        show={hasUnsavedChanges}
-        isShaking={isShaking}
-        isSaving={isSaving}
-        error={saveStatus?.type === 'error' ? saveStatus.text : null}
-        onSave={() => handleSave()}
-        onRevert={handleRevert}
-      />
+      </SettingsModalLayout>
 
       <DeleteChannelModal
         isOpen={isDeleteModalOpen}
@@ -1116,6 +1001,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
         channel={channel}
         isDeleting={isDeleting}
       />
-    </div>
+    </>
   );
 };

@@ -49,6 +49,7 @@ interface ParticipantCardProps {
   onWatchStream?: (identity: string, mode: 'exclusive' | 'additive') => void | Promise<void>;
   onClick?: () => void;
   isCompact?: boolean;
+  avatarOnly?: boolean;
 }
 
 export const ParticipantCard: React.FC<ParticipantCardProps> = ({
@@ -59,6 +60,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   onWatchStream,
   onClick,
   isCompact = false,
+  avatarOnly = false,
 }) => {
   const { user } = useAuthStore();
   const {
@@ -559,6 +561,51 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
       groupId: voiceType === 'group' ? (dmGroupId || activeGroup?.id) : undefined,
     });
   };
+
+  if (avatarOnly) {
+    return (
+      <>
+        <div
+          ref={containerRef}
+          onContextMenu={handleContextMenu}
+          title={displayName}
+          className="relative flex items-center justify-center cursor-pointer select-none group"
+        >
+          <div
+            className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden flex items-center justify-center font-bold text-2xl text-white bg-surface-700 transition-all duration-150 ${
+              isSpeaking
+                ? 'ring-[3px] ring-[#23a55a] shadow-[0_0_16px_rgba(35,165,90,0.45)]'
+                : 'ring-2 ring-white/10 group-hover:ring-white/25'
+            }`}
+          >
+            {avatarUrl ? (
+              <img
+                src={formatAssetUrl(avatarUrl)}
+                alt={displayName}
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
+                style={{ userSelect: 'none' }}
+                className="w-full h-full object-cover pointer-events-none select-none"
+              />
+            ) : (
+              <span>{displayName?.[0]?.toUpperCase() || 'U'}</span>
+            )}
+          </div>
+
+          {isMuted && (
+            <div
+              className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#111214] border-2 border-background-darkest flex items-center justify-center text-dnd shadow-md"
+              title="Microfone mutado"
+            >
+              <MicOff className="w-3.5 h-3.5" />
+            </div>
+          )}
+        </div>
+
+        <ContextMenu menu={menu} onClose={closeContextMenu} />
+      </>
+    );
+  }
 
   return (
     <>

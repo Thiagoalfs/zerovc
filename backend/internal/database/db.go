@@ -159,12 +159,13 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 		WHERE id NOT IN (SELECT DISTINCT group_id FROM dm_group_members)
 	`)
 
-	// Ensure bot, riot and embeds columns exist
+	// Ensure bot and embeds columns exist, and drop legacy LoL/Riot columns/tables
 	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE")
-	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_game_name VARCHAR(64) DEFAULT ''")
-	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_tag_line VARCHAR(16) DEFAULT ''")
-	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_region VARCHAR(16) DEFAULT 'br1'")
-	db.Pool.Exec(ctx, "ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_puuid VARCHAR(128) DEFAULT ''")
+	db.Pool.Exec(ctx, "ALTER TABLE users DROP COLUMN IF EXISTS riot_game_name")
+	db.Pool.Exec(ctx, "ALTER TABLE users DROP COLUMN IF EXISTS riot_tag_line")
+	db.Pool.Exec(ctx, "ALTER TABLE users DROP COLUMN IF EXISTS riot_region")
+	db.Pool.Exec(ctx, "ALTER TABLE users DROP COLUMN IF EXISTS riot_puuid")
+	db.Pool.Exec(ctx, "DROP TABLE IF EXISTS lol_accounts")
 
 	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb")
 	db.Pool.Exec(ctx, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL")

@@ -21,20 +21,6 @@ export interface SlashCommand {
   requiredPermission?: 'manage_messages' | 'kick_members' | 'ban_members' | 'send_tts';
 }
 
-export const LEAGUE_REGIONS: SlashOptionChoice[] = [
-  { name: 'BR (Brasil)', value: 'BR' },
-  { name: 'NA (América do Norte)', value: 'NA' },
-  { name: 'EUW (Europa Ocidental)', value: 'EUW' },
-  { name: 'EUNE (Europa Nórdica e Oriental)', value: 'EUNE' },
-  { name: 'KR (Coreia do Sul)', value: 'KR' },
-  { name: 'LAN (América Latina Norte)', value: 'LAN' },
-  { name: 'LAS (América Latina Sul)', value: 'LAS' },
-  { name: 'OCE (Oceania)', value: 'OCE' },
-  { name: 'TR (Turquia)', value: 'TR' },
-  { name: 'RU (Rússia)', value: 'RU' },
-  { name: 'JP (Japão)', value: 'JP' },
-];
-
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: 'server',
@@ -80,58 +66,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
             description: 'Usuário para ver as informações (@menção)',
             type: 'user',
             required: false,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    name: 'league',
-    description: 'Estatísticas e integração oficial com League of Legends',
-    subcommands: [
-      {
-        name: 'link',
-        description: 'Vincula sua conta Riot Games ao seu perfil ZeroVC',
-        type: 'subcommand',
-        options: [
-          {
-            name: 'riot_id',
-            description: 'Seu Riot ID completo com a tag (ex: Faker#BR1)',
-            type: 'string',
-            required: true,
-          },
-          {
-            name: 'region',
-            description: 'Região da sua conta Riot (padrão: BR)',
-            type: 'choice',
-            required: false,
-            choices: LEAGUE_REGIONS,
-          },
-        ],
-      },
-      {
-        name: 'profile',
-        description: 'Exibe o perfil rico com elos Solo/Flex, maestrias e splash art',
-        type: 'subcommand',
-        options: [
-          {
-            name: 'user',
-            description: 'Ver perfil do LoL de outro usuário (@menção)',
-            type: 'user',
-            required: false,
-          },
-          {
-            name: 'riot_id',
-            description: 'Consultar Riot ID diretamente sem vínculo (ex: Nome#TAG)',
-            type: 'string',
-            required: false,
-          },
-          {
-            name: 'region',
-            description: 'Região da conta (padrão: BR se omitido)',
-            type: 'choice',
-            required: false,
-            choices: LEAGUE_REGIONS,
           },
         ],
       },
@@ -261,69 +195,6 @@ export function parseSlashCommand(input: string): ParsedCommand | null {
       command: 'user',
       subcommand,
       args: { user: userArg },
-      raw: trimmed,
-    };
-  }
-
-  if (cmdName === 'league') {
-    if (subOrArg === 'link') {
-      const rest = tokens.slice(2);
-      if (rest.length === 0) {
-        return { command: 'league', subcommand: 'link', args: {}, raw: trimmed };
-      }
-
-      let region = 'BR';
-      let riotId = '';
-      const lastToken = rest[rest.length - 1].toUpperCase();
-      const validRegions = ['BR', 'NA', 'EUW', 'EUNE', 'KR', 'LAN', 'LAS', 'OCE', 'TR', 'RU', 'JP'];
-
-      if (validRegions.includes(lastToken) && rest.length > 1) {
-        region = lastToken;
-        riotId = rest.slice(0, -1).join(' ');
-      } else {
-        riotId = rest.join(' ');
-      }
-
-      riotId = riotId.replace(/^riot_id:\s*/i, '').replace(/^region:\s*/i, '').trim();
-
-      return {
-        command: 'league',
-        subcommand: 'link',
-        args: { riot_id: riotId, region },
-        raw: trimmed,
-      };
-    }
-
-    // Default or 'profile'
-    const subcommand = 'profile';
-    const rest = tokens.slice(subOrArg === 'profile' ? 2 : 1);
-
-    if (rest.length === 0) {
-      return { command: 'league', subcommand: 'profile', args: {}, raw: trimmed };
-    }
-
-    let userArg: string | undefined;
-    let riotId: string | undefined;
-    let region = 'BR';
-
-    if (rest[0].startsWith('@') || rest[0].startsWith('<@')) {
-      userArg = rest[0];
-    } else {
-      const lastToken = rest[rest.length - 1].toUpperCase();
-      const validRegions = ['BR', 'NA', 'EUW', 'EUNE', 'KR', 'LAN', 'LAS', 'OCE', 'TR', 'RU', 'JP'];
-      if (validRegions.includes(lastToken) && rest.length > 1) {
-        region = lastToken;
-        riotId = rest.slice(0, -1).join(' ');
-      } else {
-        riotId = rest.join(' ');
-      }
-      riotId = riotId.replace(/^riot_id:\s*/i, '').replace(/^user:\s*/i, '').replace(/^region:\s*/i, '').trim();
-    }
-
-    return {
-      command: 'league',
-      subcommand,
-      args: { user: userArg, riot_id: riotId, region },
       raw: trimmed,
     };
   }

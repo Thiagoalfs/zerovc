@@ -79,9 +79,14 @@ export const TitleBar: React.FC = () => {
       setPendingVersion(info?.version ?? null);
     });
 
+    const unsubTrayCheck = window.electronAPI?.onTrayCheckUpdates?.(() => {
+      void checkServerVersion();
+    });
+
     return () => {
       clearInterval(interval);
       unsubAvailable?.();
+      unsubTrayCheck?.();
     };
   }, [isElectron, checkServerVersion]);
 

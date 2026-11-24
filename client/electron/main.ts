@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage, screen, Notification } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -307,11 +307,6 @@ function getAppIcon() {
       path.join(__dirname, '..', 'dist', 'favicon.ico'),
       path.join(process.resourcesPath, 'icon.ico'),
     ];
-    for (const c of icoCandidates) {
-      if (require('fs').existsSync(c)) {
-        return nativeImage.createFromPath(c);
-      }
-    }
     const pngCandidates = [
       path.join(__dirname, 'icon.png'),
       path.join(__dirname, '..', 'electron', 'icon.png'),
@@ -319,9 +314,14 @@ function getAppIcon() {
       path.join(__dirname, '..', 'public', 'icon.png'),
       path.join(process.resourcesPath, 'icon.png'),
     ];
-    for (const c of pngCandidates) {
-      if (require('fs').existsSync(c)) {
-        return nativeImage.createFromPath(c);
+    const orderedCandidates =
+      process.platform === 'win32'
+        ? [...icoCandidates, ...pngCandidates]
+        : [...pngCandidates, ...icoCandidates];
+    for (const c of orderedCandidates) {
+      if (fs.existsSync(c)) {
+        const img = nativeImage.createFromPath(c);
+        if (!img.isEmpty()) return img;
       }
     }
   } catch {}
@@ -345,6 +345,12 @@ function createTray() {
             mainWindow.show();
             mainWindow.focus();
           }
+        },
+      },
+      {
+        label: 'Verificar atualizações',
+        click: () => {
+          void checkAllUpdatesFromTray();
         },
       },
       { type: 'separator' },
@@ -573,6 +579,36 @@ function createWindow(initialUrl?: string, showImmediately = true) {
 // -------------------------------------------------------------
 // Auto-Updater Configuration (background check; install triggered by user)
 // -------------------------------------------------------------
+async function checkAllUpdatesFromTray() {
+  // 1. Trigger frontend (Live Server Sync) check in renderer
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('tray-check-updates');
+  }
+
+  // 2. Check native app update via autoUpdater
+  let appUpdateVersion: string | null = null;
+  if (app.isPackaged && autoUpdater) {
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      const remoteVersion = result?.updateInfo?.version;
+      if (remoteVersion && remoteVersion !== app.getVersion()) {
+        appUpdateVersion = remoteVersion;
+      }
+    } catch (err) {
+      console.warn('[Tray] Erro ao verificar atualização do app:', err);
+    }
+  }
+
+  if (Notification.isSupported()) {
+    new Notification({
+      title: 'ZeroVC',
+      body: appUpdateVersion
+        ? `Nova versão do app (${appUpdateVersion}) disponível! Clique no ícone de atualização na barra superior.`
+        : 'Verificação de atualizações do app e do frontend concluída.',
+    }).show();
+  }
+}
+
 function setupAutoUpdater() {
   if (!autoUpdater) return;
 

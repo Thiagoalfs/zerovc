@@ -6,12 +6,36 @@ import { copyToClipboard } from '../../../utils/clipboard';
 import { OtpInput } from '../../ui/otp-input';
 import { AppInput } from '@/components/ui/app-input';
 import { ModalButton } from '@/components/ui/modal-button';
+import { AppModal, AppModalBody } from '@/components/ui/app-modal';
 import {
-  MODAL_BACKDROP_CLASS,
   MODAL_CARD_PADDING_CLASS,
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
 } from '../../../constants/modalTypography';
+
+const AccountModalShell: React.FC<{
+  titleId: string;
+  onClose: () => void;
+  onSubmit?: (e: React.FormEvent) => void;
+  maxWidth?: 'sm' | 'md';
+  className?: string;
+  children: React.ReactNode;
+}> = ({ titleId, onClose, onSubmit, maxWidth = 'sm', className = '', children }) => (
+  <AppModal
+    isOpen={true}
+    onClose={onClose}
+    titleId={titleId}
+    size={maxWidth}
+    className={`bg-background-darkest max-h-[92dvh] my-auto animate-in zoom-in-95 ${className}`}
+  >
+    <AppModalBody
+      onSubmit={onSubmit}
+      className={`${MODAL_CARD_PADDING_CLASS} space-y-4 overflow-y-auto chat-scrollbar`}
+    >
+      {children}
+    </AppModalBody>
+  </AppModal>
+);
 
 export type AccountSubModalType =
   | 'displayName'
@@ -370,19 +394,11 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
     <>
       {/* 0. Edit Display Name Modal */}
       {activeModal === 'displayName' && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-          className={MODAL_BACKDROP_CLASS}
+        <AccountModalShell
+          titleId="account-submodal-title-display-name"
+          onClose={onClose}
+          onSubmit={handleSaveDisplayName}
         >
-          <form
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="account-submodal-title-display-name"
-            onSubmit={handleSaveDisplayName}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
             <div className="flex items-center justify-between">
               <h4 id="account-submodal-title-display-name" className={MODAL_DIALOG_TITLE_CLASS}>
                 Alterar nome de exibição
@@ -420,25 +436,16 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                 {isSavingDisplayName ? 'Salvando...' : 'Salvar nome'}
               </ModalButton>
             </div>
-          </form>
-        </div>
+        </AccountModalShell>
       )}
 
       {/* 1. Edit Username Modal */}
       {activeModal === 'username' && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-          className={MODAL_BACKDROP_CLASS}
+        <AccountModalShell
+          titleId="account-submodal-title-username"
+          onClose={onClose}
+          onSubmit={handleSaveUsername}
         >
-          <form
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="account-submodal-title-username"
-            onSubmit={handleSaveUsername}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
             <div className="flex items-center justify-between">
               <h4 id="account-submodal-title-username" className={MODAL_DIALOG_TITLE_CLASS}>
                 Alterar nome de usuário
@@ -505,25 +512,16 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                 {isSavingUsername ? 'Salvando...' : 'Salvar @'}
               </ModalButton>
             </div>
-          </form>
-        </div>
+        </AccountModalShell>
       )}
 
       {/* 2. Edit Email Modal */}
       {activeModal === 'email' && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-          className={MODAL_BACKDROP_CLASS}
+        <AccountModalShell
+          titleId="account-submodal-title-email"
+          onClose={onClose}
+          onSubmit={handleSaveEmail}
         >
-          <form
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="account-submodal-title-email"
-            onSubmit={handleSaveEmail}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
             <div className="flex items-center justify-between">
               <h4 id="account-submodal-title-email" className={MODAL_DIALOG_TITLE_CLASS}>
                 Alterar E-mail
@@ -588,25 +586,16 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                 {isSavingEmail ? 'Salvando...' : 'Salvar E-mail'}
               </ModalButton>
             </div>
-          </form>
-        </div>
+        </AccountModalShell>
       )}
 
       {/* 3. Edit Phone Modal */}
       {activeModal === 'phone' && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-          className={MODAL_BACKDROP_CLASS}
+        <AccountModalShell
+          titleId="account-submodal-title-phone"
+          onClose={onClose}
+          onSubmit={handleSavePhone}
         >
-          <form
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="account-submodal-title-phone"
-            onSubmit={handleSavePhone}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
             <div className="flex items-center justify-between">
               <h4 id="account-submodal-title-phone" className={MODAL_DIALOG_TITLE_CLASS}>
                 {user.phone_number ? 'Editar Número de Telefone' : 'Adicionar Número de Telefone'}
@@ -651,25 +640,16 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                 {isSavingPhone ? 'Salvando...' : 'Salvar Telefone'}
               </ModalButton>
             </div>
-          </form>
-        </div>
+        </AccountModalShell>
       )}
 
       {/* 4. Change Password Modal */}
       {activeModal === 'password' && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-          className={MODAL_BACKDROP_CLASS}
+        <AccountModalShell
+          titleId="account-submodal-title-password"
+          onClose={onClose}
+          onSubmit={handleSavePassword}
         >
-          <form
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="account-submodal-title-password"
-            onSubmit={handleSavePassword}
-            className={`bg-background-darkest w-full max-w-sm max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
             <div className="flex items-center justify-between">
               <h4 id="account-submodal-title-password" className={MODAL_DIALOG_TITLE_CLASS}>
                 Mudar Senha
@@ -754,25 +734,17 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                 {isSavingPassword ? 'Salvando...' : 'Salvar Nova Senha'}
               </ModalButton>
             </div>
-          </form>
-        </div>
+        </AccountModalShell>
       )}
 
       {/* 5. 2FA Modal */}
       {activeModal === '2fa' && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-          className={MODAL_BACKDROP_CLASS}
+        <AccountModalShell
+          titleId="account-submodal-title-2fa"
+          onClose={onClose}
+          onSubmit={handleToggle2FA}
+          maxWidth="md"
         >
-          <form
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="account-submodal-title-2fa"
-            onSubmit={handleToggle2FA}
-            className={`bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
             <div className="flex items-center justify-between">
               <h4 id="account-submodal-title-2fa" className={MODAL_DIALOG_TITLE_CLASS}>
                 {user.two_factor_enabled
@@ -842,24 +814,16 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                     : 'Ativar 2FA'}
               </ModalButton>
             </div>
-          </form>
-        </div>
+        </AccountModalShell>
       )}
 
       {/* 6. 2FA Backup Codes Presentation Modal */}
       {activeModal === 'backupCodes' && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-          className={MODAL_BACKDROP_CLASS}
+        <AccountModalShell
+          titleId="account-submodal-title-backup-codes"
+          onClose={onClose}
+          maxWidth="md"
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="account-submodal-title-backup-codes"
-            className={`bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-white/10 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
             <div className="flex items-center justify-between">
               <h4 id="account-submodal-title-backup-codes" className={MODAL_DIALOG_TITLE_CLASS}>
                 Códigos de Backup de 2FA
@@ -936,25 +900,18 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                 Concluído
               </ModalButton>
             </div>
-          </div>
-        </div>
+        </AccountModalShell>
       )}
 
       {/* 7. Delete Account Confirmation Modal */}
       {activeModal === 'deleteAccount' && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-          className={MODAL_BACKDROP_CLASS}
+        <AccountModalShell
+          titleId="account-submodal-title-delete-account"
+          onClose={onClose}
+          onSubmit={handleDeleteAccount}
+          maxWidth="md"
+          className="border-dnd/30"
         >
-          <form
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="account-submodal-title-delete-account"
-            onSubmit={handleDeleteAccount}
-            className={`bg-background-darkest w-full max-w-md max-h-[92dvh] my-auto rounded-xl ${MODAL_CARD_PADDING_CLASS} border border-dnd/30 shadow-2xl space-y-4 overflow-y-auto chat-scrollbar animate-in zoom-in-95`}
-          >
             <div className="flex items-center justify-between">
               <h4
                 id="account-submodal-title-delete-account"
@@ -1020,8 +977,7 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                 {isDeletingAccount ? 'Excluindo...' : 'Confirmar Exclusão'}
               </ModalButton>
             </div>
-          </form>
-        </div>
+        </AccountModalShell>
       )}
     </>
   );

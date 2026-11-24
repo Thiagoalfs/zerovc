@@ -1,34 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import {
-  Users,
-  Menu,
-  Phone,
-  PhoneOff,
-  LogOut,
-  UploadCloud,
-  Search,
-  X,
-  Mic,
-  MicOff,
-  Headphones,
-  Video,
-  VideoOff,
-  Monitor,
-  MonitorOff,
-  Volume2,
-  Plus,
-  Edit3,
-  Camera,
-} from 'lucide-react';
+import { Users, Menu, Phone, LogOut, Edit3, Camera } from 'lucide-react';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
-import { CallStage } from '../Voice/CallStage';
+import { CallStage, CompactCallStageWrapper } from '../Voice/CallStage';
 import { useStageFullscreen } from '../Voice/VoiceControlBar';
 import { showAlert, showConfirm } from '../../stores/confirmModalStore';
-import { useAutoClearVisibleUnread } from '../../utils/unread';
-import {
-  saveChatScrollPosition,
-  restoreChatScrollPosition,
-} from '../../utils/chatScrollMemory';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { api, formatAssetUrl } from '../../lib/api';
@@ -36,25 +11,18 @@ import { AddDMGroupMembersModal } from '../Modals/AddDMGroupMembersModal';
 import { EditDMGroupNameModal } from '../Modals/EditDMGroupNameModal';
 import { ImageCropModal } from '../Modals/ImageCropModal';
 import { ChatHeader } from '../Chat/ChatHeader';
-import { MessageItem } from '../Chat/MessageItem';
-import { MessageInput } from '../Chat/MessageInput';
-import { SearchResultsPanel } from '../Chat/SearchResultsPanel';
-import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
-import { useUserContextMenu } from '../../hooks/useUserContextMenu';
+import { ConversationView } from '../Chat/ConversationView';
+import { MemberList } from '../Sidebar/MemberList';
 import { socket } from '../../lib/socket';
 import { useGuildStore } from '../../stores/guildStore';
-import { TypingIndicator } from '../Chat/TypingIndicator';
-import { parseSearchQuery, filterMessages } from '../../utils/searchFilters';
-import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
-import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
 import { setActiveChat, getActiveChat } from '../../utils/activeChat';
-import { User, DMGroupMessage, UserProfilePosition } from '../../types';
+import { User, UserProfilePosition } from '../../types';
 
 interface DMGroupChatAreaProps {
   onOpenMobileDrawer?: () => void;
-  onOpenUserProfile?: (user: User, position?: UserProfilePosition) => void;
+  onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   onPreviewImage?: (url: string) => void;
   onOpenScreenShare?: () => void;
   onOpenDM?: (userId: string) => void;
@@ -90,14 +58,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     firstUnreadMessageIdByGroup,
     clearUnreadDivider,
     markGroupAsRead,
-    enableE2EE,
   } = useDMGroupStore();
-  const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
-  const {
-    menu: screenShareMenu,
-    openContextMenu: openScreenShareMenu,
-    closeContextMenu: closeScreenShareMenu,
-  } = useContextMenu();
 
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
@@ -124,7 +85,11 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       const res = await api.upload.groupIcon(croppedFile);
       await updateGroup(activeGroup.id, { icon_url: res.url });
     } catch (err: any) {
-      showAlert({ title: 'Erro', message: err?.message || 'Falha ao atualizar foto do grupo', variant: 'danger' });
+      showAlert({
+        title: 'Erro',
+        message: err?.message || 'Falha ao atualizar foto do grupo',
+        variant: 'danger',
+      });
     }
   };
 
@@ -133,17 +98,9 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     dmGroupId,
     isConnected: isVoiceConnected,
     isConnecting: isVoiceConnecting,
-    isMuted,
-    isDeafened,
-    isCameraOn,
-    isScreensharing,
     participants,
     joinGroupVoice,
     leaveVoice,
-    toggleMute,
-    toggleDeafen,
-    toggleCamera,
-    stopScreenShare,
   } = useVoiceStore();
 
   const isGroupVoiceActive =
@@ -153,7 +110,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
 
   useKeepAwake(isGroupVoiceActive);
 
-  // Track active chat focus for selective TTS playback
   useEffect(() => {
     if (activeGroup?.id) {
       setActiveChat('group', activeGroup.id);
@@ -165,8 +121,11 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
     };
   }, [activeGroup?.id]);
 
-  const [replyingTo, setReplyingTo] = useState<DMGroupMessage | null>(null);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  useEffect(() => {
+    if (showPinnedOnly && activeGroup) {
+      fetchPinnedMessages(activeGroup.id);
+    }
+  }, [showPinnedOnly, activeGroup?.id]);
 
   const typingUsers = useGuildStore((s) => s.typingUsers);
   const typingUserIds = useMemo(() => {
@@ -177,189 +136,15 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   const [showMemberList, setShowMemberList] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('zerovc_group_members_open');
-      if (saved !== null) {
-        return saved === 'true';
-      }
+      if (saved !== null) return saved === 'true';
     } catch {}
     return typeof window !== 'undefined' ? window.innerWidth >= 768 : true;
   });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
-  const [isSearchAutocompleteOpen, setIsSearchAutocompleteOpen] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
-  const { isFullscreen: isStageFullscreen, toggleFullscreen: toggleStageFullscreen } = useStageFullscreen();
-
-  const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
-  const dragCounterRef = useRef<number>(0);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const prevScrollHeightRef = useRef<number | null>(null);
-  const isInitialLoadRef = useRef<boolean>(true);
-  const prevGroupIdRef = useRef<string | null>(null);
-
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounterRef.current += 1;
-    if (e.dataTransfer?.types?.includes('Files')) {
-      setIsDraggingFile(true);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounterRef.current -= 1;
-    if (dragCounterRef.current <= 0) {
-      dragCounterRef.current = 0;
-      setIsDraggingFile(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounterRef.current = 0;
-    setIsDraggingFile(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      setDroppedFiles(Array.from(files));
-    }
-  };
-
-  const scrollToBottom = (smooth = false) => {
-    if (scrollContainerRef.current) {
-      if (smooth) {
-        smoothScrollToBottomExponential(scrollContainerRef.current);
-      } else {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (activeGroup?.id !== prevGroupIdRef.current) {
-      prevGroupIdRef.current = activeGroup?.id || null;
-      isInitialLoadRef.current = true;
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    }
-  }, [activeGroup?.id]);
-
-  const firstUnreadId = activeGroup ? firstUnreadMessageIdByGroup[activeGroup.id] : null;
-  useAutoClearVisibleUnread(scrollContainerRef, firstUnreadId, messages.length, () => {
-    if (activeGroup) markGroupAsRead(activeGroup.id);
-  });
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    if (prevScrollHeightRef.current !== null) {
-      const heightDiff = container.scrollHeight - prevScrollHeightRef.current;
-      if (heightDiff > 0) {
-        container.scrollTop = heightDiff;
-      }
-      prevScrollHeightRef.current = null;
-      return;
-    }
-
-    if (isInitialLoadRef.current) {
-      if (messages.length > 0 && activeGroup) {
-        isInitialLoadRef.current = false;
-        restoreChatScrollPosition(`group:${activeGroup.id}`, container);
-      }
-      return;
-    }
-
-    const lastMessage = messages[messages.length - 1];
-    const isMyMessage = Boolean(lastMessage && user && lastMessage.author_id === user.id);
-    const isNearBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight < 350;
-
-    if (isMyMessage && activeGroup) {
-      markGroupAsRead(activeGroup.id);
-    }
-
-    if (isNearBottom || isMyMessage) {
-      scrollToBottom(true);
-      setTimeout(() => scrollToBottom(true), 100);
-      setTimeout(() => scrollToBottom(true), 300);
-    }
-  }, [activeGroup?.id, messages, user?.id, firstUnreadId]);
-
-  const handleScroll = () => {
-    const container = scrollContainerRef.current;
-    if (!container || !activeGroup) return;
-
-    if (!isInitialLoadRef.current) {
-      saveChatScrollPosition(`group:${activeGroup.id}`, container);
-    }
-
-    if (
-      container.scrollTop < 60 &&
-      !isLoadingMoreMessages &&
-      hasMoreByGroup[activeGroup.id] !== false
-    ) {
-      prevScrollHeightRef.current = container.scrollHeight;
-      loadMoreMessages(activeGroup.id);
-    }
-
-    const isNearBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight < 35;
-    if (isNearBottom && firstUnreadId) {
-      markGroupAsRead(activeGroup.id);
-    }
-  };
-
-  useEffect(() => {
-    if (showPinnedOnly && activeGroup) {
-      fetchPinnedMessages(activeGroup.id);
-    }
-  }, [showPinnedOnly, activeGroup?.id]);
-
-  const parsedSearch = useMemo(() => parseSearchQuery(appliedSearchQuery), [appliedSearchQuery]);
-  const displayedMessages = showPinnedOnly && activeGroup
-    ? pinnedMessagesByGroup?.[activeGroup.id] || []
-    : messages;
-
-  const searchResults = useMemo(() => {
-    if (!appliedSearchQuery) return [];
-    return filterMessages(messages, parsedSearch);
-  }, [messages, appliedSearchQuery, parsedSearch]);
-
-  const handleJumpToMessage = (messageId: string) => {
-    const el = document.getElementById(`msg-${messageId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('bg-brand-500/20', 'transition-colors', 'duration-500');
-      setTimeout(() => {
-        el.classList.remove('bg-brand-500/20');
-      }, 2500);
-    }
-  };
-
-  const handleEditLastMessage = () => {
-    if (!user || !displayedMessages || displayedMessages.length === 0) return;
-    for (let i = displayedMessages.length - 1; i >= 0; i--) {
-      const msg = displayedMessages[i];
-      if (msg.author_id === user.id) {
-        setEditingMessageId(msg.id);
-        break;
-      }
-    }
-  };
+  const { isFullscreen: isStageFullscreen, toggleFullscreen: toggleStageFullscreen } =
+    useStageFullscreen();
 
   const handleToggleVoice = async () => {
     if (!activeGroup) return;
@@ -371,45 +156,11 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       try {
         await joinGroupVoice(activeGroup.id, activeGroup);
       } catch (err: any) {
-        showAlert({ title: 'Falha na conexão', message: err.message || 'Falha ao conectar na chamada em grupo', variant: 'danger' });
-      }
-    }
-  };
-
-  const handleScreenShareClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isScreensharing) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const items: ContextMenuItem[] = [
-        {
-          id: 'switch-screen',
-          label: 'Trocar tela',
-          icon: <Monitor className="w-4 h-4" />,
-          onClick: () => {
-            if (onOpenScreenShare) {
-              onOpenScreenShare();
-            }
-          },
-        },
-        {
-          id: 'stop-screen',
-          label: 'Parar compartilhamento',
-          icon: <MonitorOff className="w-4 h-4" />,
+        showAlert({
+          title: 'Falha na conexão',
+          message: err.message || 'Falha ao conectar na chamada em grupo',
           variant: 'danger',
-          onClick: () => {
-            stopScreenShare();
-          },
-        },
-      ];
-      openScreenShareMenu(
-        { clientX: rect.left + rect.width / 2, clientY: rect.bottom + 10 },
-        items,
-        'Transmissão de Tela'
-      );
-    } else {
-      if (onOpenScreenShare) {
-        onOpenScreenShare();
+        });
       }
     }
   };
@@ -452,118 +203,148 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
   }
 
   return (
-    <div
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+    <ConversationView
+      conversationKey={`dm_group:${activeGroup.id}`}
+      contextType="dm_group"
       className="flex-1 flex flex-col bg-background-dark overflow-hidden relative"
-    >
-      {/* Group Header */}
-      <ChatHeader
-        onOpenMobileDrawer={onOpenMobileDrawer}
-        icon={
-          <div
-            onClick={() => groupIconInputRef.current?.click()}
-            className="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs flex-shrink-0 border border-brand-500/30 cursor-pointer relative group overflow-hidden"
-            title="Alterar foto do grupo"
-          >
-            {activeGroup.icon_url ? (
-              <img
-                src={formatAssetUrl(activeGroup.icon_url)}
-                alt=""
-                className="w-full h-full rounded-full object-cover"
-              />
-            ) : (
-              <Users className="w-4 h-4" />
-            )}
-            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-full">
-              <Camera className="w-3.5 h-3.5 text-white" />
+      messages={messages || []}
+      pinnedMessages={pinnedMessagesByGroup?.[activeGroup.id] || []}
+      firstUnreadId={firstUnreadMessageIdByGroup[activeGroup.id]}
+      hasMore={hasMoreByGroup[activeGroup.id] !== false}
+      isLoadingMessages={isLoadingMessages}
+      isLoadingMoreMessages={isLoadingMoreMessages}
+      isLoadingPinned={Boolean(isLoadingPinned?.[activeGroup.id])}
+      showPinnedOnly={showPinnedOnly}
+      onClearPinnedOnly={() => setShowPinnedOnly(false)}
+      searchQuery={searchQuery}
+      appliedSearchQuery={appliedSearchQuery}
+      onClearSearch={() => {
+        setSearchQuery('');
+        setAppliedSearchQuery('');
+      }}
+      searchContextName={groupName}
+      searchContextCategory="Grupo de DM"
+      typingUserIds={typingUserIds}
+      typingMembers={activeGroup.members || []}
+      emptyText="Nenhuma mensagem ainda. Envie um Olá!"
+      inputChannel={{ id: activeGroup.id, name: groupName }}
+      inputPlaceholder={`Conversar em ${groupName}...`}
+      customMentions={groupMemberMentions}
+      wrapInputInContainer
+      onSendMessage={async (content, replyToId, isTTS, file) => {
+        clearUnreadDivider(activeGroup.id);
+        await sendMessage(content, undefined, replyToId, isTTS, file);
+      }}
+      onTyping={() => {
+        socket.send('TYPING_START', {
+          channel_id: activeGroup.id,
+          user_ids: activeGroup.members?.map((m) => m.id),
+        });
+      }}
+      onLoadMore={() => loadMoreMessages(activeGroup.id)}
+      onMarkAsRead={() => markGroupAsRead(activeGroup.id)}
+      onClearUnreadDivider={() => clearUnreadDivider(activeGroup.id)}
+      onOpenUserProfile={onOpenUserProfile}
+      onPreviewImage={onPreviewImage}
+      onEditMessage={async (id, newContent) => {
+        await editMessage(id, newContent);
+      }}
+      onDeleteMessage={async (id) => {
+        await deleteMessage(id);
+      }}
+      onTogglePin={async (id) => {
+        await togglePin(id);
+      }}
+      onRetryMessage={async (msg) => {
+        removeMessageFromStore(msg.id, activeGroup.id);
+        await sendMessage(msg.content, undefined, msg.reply_to_id);
+      }}
+      onRemoveFailedMessage={(id) => {
+        removeMessageFromStore(id, activeGroup.id);
+      }}
+      header={
+        <ChatHeader
+          onOpenMobileDrawer={onOpenMobileDrawer}
+          icon={
+            <div
+              onClick={() => groupIconInputRef.current?.click()}
+              className="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs flex-shrink-0 border border-brand-500/30 cursor-pointer relative group overflow-hidden"
+              title="Alterar foto do grupo"
+            >
+              {activeGroup.icon_url ? (
+                <img
+                  src={formatAssetUrl(activeGroup.icon_url)}
+                  alt=""
+                  className="w-full h-full rounded-full object-cover"
+                />
+              ) : (
+                <Users className="w-4 h-4" />
+              )}
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-full">
+                <Camera className="w-3.5 h-3.5 text-white" />
+              </div>
             </div>
-          </div>
-        }
-        title={
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span
-              onClick={() => setIsEditNameOpen(true)}
-              className="font-bold text-sm text-gray-100 truncate cursor-pointer hover:underline"
-              title="Clique para mudar o nome do grupo"
-            >
-              {groupName}
-            </span>
-            <button
-              type="button"
-              onClick={() => setIsEditNameOpen(true)}
-              className="p-1 text-gray-400 hover:text-white rounded hover:bg-white/5 transition-colors cursor-pointer"
-              title="Mudar nome do grupo"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        }
-        subtitle={`${activeGroup.members?.length || 0} membros`}
-        actions={
-          !isGroupVoiceActive ? (
-            <button
-              onClick={handleToggleVoice}
-              className={`p-2 md:p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
-                isGroupVoiceConnecting
-                  ? 'bg-brand-500/50 text-white animate-pulse'
-                  : 'text-gray-400 hover:text-online hover:bg-white/5'
-              }`}
-              title={isGroupVoiceConnecting ? 'Conectando à Voz...' : 'Entrar na Chamada de Voz'}
-            >
-              <Phone className="w-4 h-4" />
-            </button>
-          ) : null
-        }
-        showPinnedOnly={showPinnedOnly}
-        onTogglePinned={() => setShowPinnedOnly(!showPinnedOnly)}
-        showMembers={showMemberList}
-        onToggleMembers={() => {
-          const next = !showMemberList;
-          setShowMemberList(next);
-          try {
-            localStorage.setItem('zerovc_group_members_open', String(next));
-          } catch {}
-        }}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onSearchSubmit={(q) => setAppliedSearchQuery(q)}
-        onClearSearch={() => {
-          setSearchQuery('');
-          setAppliedSearchQuery('');
-        }}
-        hasAppliedSearch={Boolean(appliedSearchQuery)}
-        searchMembers={activeGroup.members || []}
-        searchContextType="dm_group"
-      />
-
-      {/* Pinned Messages Active Notice Banner */}
-      {showPinnedOnly && (
-        <div className="bg-background-darkest/90 border-b border-white/5 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
-          <span>
-            Exibindo apenas mensagens fixadas ({displayedMessages.length})
-          </span>
-          <button
-            onClick={() => setShowPinnedOnly(false)}
-            className="text-brand-400 hover:underline font-semibold cursor-pointer"
-          >
-            Limpar filtro
-          </button>
-        </div>
-      )}
-
-      {/* Active Group Voice Call Stage */}
-      {(isGroupVoiceActive || isGroupVoiceConnecting) && (
-        <div
-          className={
-            isStageFullscreen
-              ? 'fixed inset-0 z-[10000000] bg-background-darkest p-4 flex flex-col items-center justify-center select-none'
-              : 'w-full bg-background-darkest border-b border-white/10 p-3 md:p-4 flex flex-col items-center justify-between transition-all select-none animate-in fade-in shadow-xl'
           }
-        >
-          <div className={isStageFullscreen ? 'w-full h-full flex flex-col' : 'w-full max-w-5xl mx-auto flex flex-col'}>
+          title={
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span
+                onClick={() => setIsEditNameOpen(true)}
+                className="font-bold text-sm text-gray-100 truncate cursor-pointer hover:underline"
+                title="Clique para mudar o nome do grupo"
+              >
+                {groupName}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsEditNameOpen(true)}
+                className="p-1 text-gray-400 hover:text-white rounded hover:bg-white/5 transition-colors cursor-pointer"
+                title="Mudar nome do grupo"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          }
+          subtitle={`${activeGroup.members?.length || 0} membros`}
+          actions={
+            !isGroupVoiceActive ? (
+              <button
+                onClick={handleToggleVoice}
+                className={`p-2 md:p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
+                  isGroupVoiceConnecting
+                    ? 'bg-brand-500/50 text-white animate-pulse'
+                    : 'text-gray-400 hover:text-online hover:bg-white/5'
+                }`}
+                title={isGroupVoiceConnecting ? 'Conectando à Voz...' : 'Entrar na Chamada de Voz'}
+              >
+                <Phone className="w-4 h-4" />
+              </button>
+            ) : null
+          }
+          showPinnedOnly={showPinnedOnly}
+          onTogglePinned={() => setShowPinnedOnly(!showPinnedOnly)}
+          showMembers={showMemberList}
+          onToggleMembers={() => {
+            const next = !showMemberList;
+            setShowMemberList(next);
+            try {
+              localStorage.setItem('zerovc_group_members_open', String(next));
+            } catch {}
+          }}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onSearchSubmit={(q) => setAppliedSearchQuery(q)}
+          onClearSearch={() => {
+            setSearchQuery('');
+            setAppliedSearchQuery('');
+          }}
+          hasAppliedSearch={Boolean(appliedSearchQuery)}
+          searchMembers={activeGroup.members || []}
+          searchContextType="dm_group"
+        />
+      }
+      topOverlay={
+        isGroupVoiceActive || isGroupVoiceConnecting ? (
+          <CompactCallStageWrapper isFullscreen={isStageFullscreen}>
             <CallStage
               variant="compact"
               controlsMode="always"
@@ -578,304 +359,46 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               onOpenUserProfile={onOpenUserProfile}
               onOpenDM={onOpenDM}
             />
-          </div>
-        </div>
-      )}
-
-      {/* Main Area (Messages + SearchResultsPanel OR Member List) */}
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Messages Scroll Area */}
-          <div
-            ref={scrollContainerRef}
-            onScroll={handleScroll}
-            className="flex-1 overflow-y-auto px-2 md:px-4 py-2 chat-scrollbar"
-          >
-            {isLoadingMoreMessages && (
-              <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
-                <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
-                <span>Carregando mensagens anteriores...</span>
-              </div>
-            )}
-
-            {/* Welcome header for Group at top */}
-            {!appliedSearchQuery && hasMoreByGroup[activeGroup.id] === false && (
-              <div className="flex flex-col items-center justify-center text-center py-8 px-4 border-b border-white/5 mb-4 select-none">
-                <div className="w-16 h-16 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-2xl mb-3 border border-brand-500/30 shadow-lg">
-                  {activeGroup.icon_url ? (
-                    <img
-                      src={formatAssetUrl(activeGroup.icon_url)}
-                      alt=""
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  ) : (
-                    <Users className="w-8 h-8" />
-                  )}
-                </div>
-                <h2 className="text-xl font-bold text-white mb-1">
-                  Bem-vindo ao {groupName}!
-                </h2>
-                <p className="text-xs text-gray-400 max-w-sm">
-                  Este é o início do grupo. Converse, compartilhe arquivos e divirta-se com seus amigos.
-                </p>
-              </div>
-            )}
-
-            {/* Messages List */}
-            {displayedMessages.map((message, index) => {
-              const prevMessage = index > 0 ? displayedMessages[index - 1] : null;
-              const isFirstUnread = Boolean(firstUnreadId && firstUnreadId === message.id);
-              const isCompact = !isFirstUnread && (() => {
-                if (!prevMessage) return false;
-                if (prevMessage.author_id !== message.author_id) return false;
-                if (message.reply_to) return false;
-                const prevTime = new Date(prevMessage.created_at).getTime();
-                const currTime = new Date(message.created_at).getTime();
-                if (isNaN(prevTime) || isNaN(currTime)) return false;
-                const diffMs = currTime - prevTime;
-                return diffMs >= 0 && diffMs <= 5 * 60 * 1000;
-              })();
-
-              return (
-                <React.Fragment key={message.id}>
-                  {isFirstUnread && (
-                    <div id="unread-divider" className="flex items-center gap-3 my-4 mx-2 select-none">
-                      <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
-                      <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        Novas Mensagens
-                      </span>
-                      <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
-                    </div>
-                  )}
-                  <MessageItem
-                    message={message}
-                    isCompact={isCompact}
-                    isEditing={editingMessageId === message.id}
-                    onStartEdit={() => setEditingMessageId(message.id)}
-                    onStopEdit={() => setEditingMessageId(null)}
-                    onOpenUserProfile={onOpenUserProfile}
-                    onPreviewImage={onPreviewImage}
-                    onReply={(msg) => setReplyingTo(msg as DMGroupMessage)}
-                    onEditMessage={async (id, newContent) => {
-                      await editMessage(id, newContent);
-                    }}
-                    onDeleteMessage={async (id) => {
-                      await deleteMessage(id);
-                    }}
-                    onTogglePin={async (id) => {
-                      await togglePin(id);
-                    }}
-                    onRetryMessage={async (msg) => {
-                      removeMessageFromStore(msg.id, activeGroup.id);
-                      await sendMessage(msg.content, undefined, msg.reply_to_id);
-                    }}
-                    onRemoveFailedMessage={(id) => {
-                      removeMessageFromStore(id, activeGroup.id);
-                    }}
-                    contextType="dm_group"
-                  />
-                </React.Fragment>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Typing Indicator */}
-          {typingUserIds.length > 0 && (
-            <div className="px-4 py-1 text-xs text-gray-400 flex items-center gap-1.5 select-none">
-              <TypingIndicator
-                typingUserIds={typingUserIds}
-                members={activeGroup.members || []}
+          </CompactCallStageWrapper>
+        ) : undefined
+      }
+      welcomeBanner={
+        <div className="flex flex-col items-center justify-center text-center py-8 px-4 border-b border-white/5 mb-4 select-none">
+          <div className="w-16 h-16 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-2xl mb-3 border border-brand-500/30 shadow-lg">
+            {activeGroup.icon_url ? (
+              <img
+                src={formatAssetUrl(activeGroup.icon_url)}
+                alt=""
+                className="w-full h-full rounded-full object-cover"
               />
-            </div>
-          )}
-
-          {/* Message Input */}
-          <div className="p-3 md:p-4 pt-1 bg-background-dark">
-            <MessageInput
-              channel={{ id: activeGroup?.id, name: groupName }}
-              placeholder={`Conversar em ${groupName}...`}
-              replyingTo={replyingTo}
-              onCancelReply={() => setReplyingTo(null)}
-              onSendMessage={async (content, replyToId, isTTS, file) => {
-                if (activeGroup) {
-                  clearUnreadDivider(activeGroup.id);
-                }
-                scrollToBottom(true);
-                await sendMessage(content, undefined, replyToId, isTTS, file);
-                setReplyingTo(null);
-                setTimeout(() => scrollToBottom(true), 60);
-                setTimeout(() => scrollToBottom(true), 200);
-              }}
-              onTyping={() => {
-                if (activeGroup) {
-                  socket.send('TYPING_START', {
-                    channel_id: activeGroup.id,
-                    user_ids: activeGroup.members?.map((m) => m.id),
-                  });
-                }
-              }}
-              onEditLastMessage={handleEditLastMessage}
-              droppedFiles={droppedFiles}
-              onClearDroppedFiles={() => setDroppedFiles(null)}
-              isDraggingFile={isDraggingFile}
-              contextType="dm_group"
-              customMentions={groupMemberMentions}
-            />
+            ) : (
+              <Users className="w-8 h-8" />
+            )}
           </div>
+          <h2 className="text-xl font-bold text-white mb-1">Bem-vindo ao {groupName}!</h2>
+          <p className="text-xs text-gray-400 max-w-sm">
+            Este é o início do grupo. Converse, compartilhe arquivos e divirta-se com seus amigos.
+          </p>
         </div>
-
-        {/* Right Search Results Panel */}
-        {appliedSearchQuery && (
-          <SearchResultsPanel
-            isOpen={Boolean(appliedSearchQuery)}
-            onClose={() => {
-              setAppliedSearchQuery('');
-              setSearchQuery('');
-            }}
-            rawQuery={appliedSearchQuery}
-            parsedQuery={parsedSearch}
-            messages={searchResults}
-            contextName={groupName}
-            contextCategory="Grupo de DM"
-            contextType="dm_group"
-            onJumpToMessage={handleJumpToMessage}
-          />
-        )}
-
-        {/* Group Member List Sidebar */}
-        {showMemberList && !appliedSearchQuery && (
-          <div
-            data-memberlist-sidebar="true"
-            className="w-60 bg-background-darker/60 border-l border-white/5 flex flex-col overflow-hidden select-none"
-          >
-            <div className="h-10 px-4 flex items-center justify-between border-b border-white/5">
-              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                Membros ({activeGroup.members?.length || 0})
-              </span>
-              {(activeGroup.members?.length || 0) < 15 && (
-                <button
-                  type="button"
-                  onClick={() => setIsAddMembersOpen(true)}
-                  className="p-1 hover:bg-white/10 rounded-md text-gray-400 hover:text-white cursor-pointer transition-colors"
-                  title="Adicionar membros ao grupo"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {(activeGroup.members || []).map((member) => (
-                <div
-                  key={member.id}
-                  onContextMenu={(e) => {
-                    const target = e.currentTarget;
-                    const rect = target.getBoundingClientRect();
-                    const sidebar = target.closest('[data-memberlist-sidebar="true"]');
-                    const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null;
-                    const sidebarLeft = sidebarRect ? sidebarRect.left : rect.left;
-                    handleUserContextMenu(e, member, {
-                      groupId: activeGroup.id,
-                      contextType: 'dm_group',
-                      onOpenUserProfile: (u) => {
-                        onOpenUserProfile?.(u, {
-                          x: sidebarLeft,
-                          y: rect.top,
-                          anchorRect: {
-                            left: sidebarLeft,
-                            top: rect.top,
-                            right: sidebarRect ? sidebarRect.right : rect.right,
-                            bottom: rect.bottom,
-                            width: rect.width,
-                            height: rect.height,
-                          },
-                          source: 'memberList',
-                        });
-                      },
-                      onOpenDM,
-                    });
-                  }}
-                  onClick={(e) => {
-                    if (onOpenUserProfile) {
-                      const target = e.currentTarget;
-                      const rect = target.getBoundingClientRect();
-                      const sidebar = target.closest('[data-memberlist-sidebar="true"]');
-                      const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null;
-                      const sidebarLeft = sidebarRect ? sidebarRect.left : rect.left;
-                      onOpenUserProfile(member, {
-                        x: sidebarLeft,
-                        y: rect.top,
-                        anchorRect: {
-                          left: sidebarLeft,
-                          top: rect.top,
-                          right: sidebarRect ? sidebarRect.right : rect.right,
-                          bottom: rect.bottom,
-                          width: rect.width,
-                          height: rect.height,
-                        },
-                        source: 'memberList',
-                      });
-                    }
-                  }}
-                  className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 text-gray-300 hover:text-white cursor-pointer group transition-colors"
-                >
-                  <div className="relative flex-shrink-0">
-                    <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center font-semibold text-xs text-white">
-                      {member.avatar_url ? (
-                        <img
-                          src={formatAssetUrl(member.avatar_url)}
-                          alt=""
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <span>
-                          {member.display_name?.[0]?.toUpperCase() ||
-                            member.username?.[0]?.toUpperCase() ||
-                            'U'}
-                        </span>
-                      )}
-                    </div>
-                    {/* Online status indicator */}
-                    <div
-                      className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background-darker ${
-                        member.status === 'online'
-                          ? 'bg-online'
-                          : member.status === 'idle'
-                          ? 'bg-idle'
-                          : member.status === 'dnd'
-                          ? 'bg-dnd'
-                          : 'bg-offline'
-                      }`}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs font-medium truncate">
-                        {member.display_name || member.username}
-                      </span>
-                      {activeGroup.owner_id === member.id && (
-                        <span className="text-[10px] text-amber-400 font-bold" title="Dono do Grupo">
-                          👑
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-gray-500 truncate block">
-                      @{member.username}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Leave Group Button in Sidebar Footer */}
-            <div className="p-2 border-t border-white/5">
+      }
+      rightSidebar={
+        <MemberList
+          variant="group"
+          group={activeGroup}
+          isOpen={showMemberList}
+          onClose={() => setShowMemberList(false)}
+          onAddGroupMembers={() => setIsAddMembersOpen(true)}
+          onSelectUser={onOpenUserProfile}
+          onOpenDM={onOpenDM}
+          footer={
+            <div className="pt-2 border-t border-white/5">
               <button
                 onClick={async () => {
                   if (activeGroup.owner_id === user?.id && (activeGroup.members?.length || 0) > 1) {
                     showAlert({
                       title: 'Transferência necessária',
-                      message: 'Você é o dono deste grupo. Transfira a posse do grupo para outro membro antes de sair (clique com botão direito em um membro).',
+                      message:
+                        'Você é o dono deste grupo. Transfira a posse do grupo para outro membro antes de sair (clique com botão direito em um membro).',
                       variant: 'warning',
                     });
                     return;
@@ -897,54 +420,46 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 <span>Sair do Grupo</span>
               </button>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Context Menus */}
-      <ContextMenu menu={menu} onClose={closeContextMenu} />
-      <ContextMenu menu={screenShareMenu} onClose={closeScreenShareMenu} />
-
-      {/* Hidden file input for Group Icon Upload */}
-      <input
-        ref={groupIconInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
-        className="hidden"
-        onChange={handleIconFileChange}
-      />
-
-      {/* Image Crop Modal for Group Icon */}
-      {isCropOpen && cropFile && (
-        <ImageCropModal
-          isOpen={isCropOpen}
-          file={cropFile}
-          cropType="groupIcon"
-          onConfirm={handleCropConfirm}
-          onCancel={() => {
-            setIsCropOpen(false);
-            setCropFile(null);
-          }}
+          }
         />
-      )}
-
-      {/* Add Members Modal */}
-      {isAddMembersOpen && (
-        <AddDMGroupMembersModal
-          isOpen={isAddMembersOpen}
-          onClose={() => setIsAddMembersOpen(false)}
-          group={activeGroup}
-        />
-      )}
-
-      {/* Edit Group Name Modal */}
-      {isEditNameOpen && (
-        <EditDMGroupNameModal
-          isOpen={isEditNameOpen}
-          onClose={() => setIsEditNameOpen(false)}
-          group={activeGroup}
-        />
-      )}
-    </div>
+      }
+      extraOverlays={
+        <>
+          <input
+            ref={groupIconInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="hidden"
+            onChange={handleIconFileChange}
+          />
+          {isCropOpen && cropFile && (
+            <ImageCropModal
+              isOpen={isCropOpen}
+              file={cropFile}
+              cropType="groupIcon"
+              onConfirm={handleCropConfirm}
+              onCancel={() => {
+                setIsCropOpen(false);
+                setCropFile(null);
+              }}
+            />
+          )}
+          {isAddMembersOpen && (
+            <AddDMGroupMembersModal
+              isOpen={isAddMembersOpen}
+              onClose={() => setIsAddMembersOpen(false)}
+              group={activeGroup}
+            />
+          )}
+          {isEditNameOpen && (
+            <EditDMGroupNameModal
+              isOpen={isEditNameOpen}
+              onClose={() => setIsEditNameOpen(false)}
+              group={activeGroup}
+            />
+          )}
+        </>
+      }
+    />
   );
 };

@@ -3,7 +3,7 @@ import { PhoneOff } from 'lucide-react';
 import { useCallStore } from '../../stores/callStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { formatAssetUrl } from '../../lib/api';
-import { CallStage } from '../Voice/CallStage';
+import { CallStage, CompactCallStageWrapper } from '../Voice/CallStage';
 import { useStageFullscreen } from '../Voice/VoiceControlBar';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticWarning } from '../../lib/haptics';
@@ -47,13 +47,7 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
   if (!isCalling && !isDMVoiceActive) return null;
 
   return (
-    <div
-      className={
-        isStageFullscreen
-          ? 'fixed inset-0 z-[10000000] bg-background-darkest p-4 flex flex-col items-center justify-center select-none'
-          : 'w-full bg-background-darkest border-b border-white/10 p-3 md:p-4 flex flex-col items-center justify-between transition-all select-none animate-in fade-in shadow-xl'
-      }
-    >
+    <CompactCallStageWrapper isFullscreen={isStageFullscreen}>
       {/* Calling State (Waiting for answer) */}
       {isCalling && (
         <div className="w-full flex items-center justify-between max-w-2xl mx-auto py-2">
@@ -97,27 +91,25 @@ export const ActiveCallOverlay: React.FC<ActiveCallOverlayProps> = ({
 
       {/* Connected State (Active Voice / Video DM Call with Participant Cards) */}
       {isDMVoiceActive && (
-        <div className={isStageFullscreen ? 'w-full h-full flex flex-col' : 'w-full max-w-5xl mx-auto flex flex-col'}>
-          <CallStage
-            variant="compact"
-            controlsMode="always"
-            participants={participants}
-            isConnected={isConnected}
-            isConnecting={isConnecting}
-            connectingLabel="Conectando áudio e vídeo..."
-            emptyTitle="Aguardando conexão..."
-            isFullscreen={isStageFullscreen}
-            onToggleFullscreen={toggleStageFullscreen}
-            onOpenScreenShare={onOpenScreenShare}
-            onDisconnect={endCall}
-            onOpenUserProfile={onOpenUserProfile}
-            onOpenDM={onOpenDM}
-            onWatchStream={handleWatchStream}
-            spotlightParticipantId={spotlightParticipantId}
-            onSpotlightChange={setSpotlightParticipantId}
-          />
-        </div>
+        <CallStage
+          variant="compact"
+          controlsMode="always"
+          participants={participants}
+          isConnected={isConnected}
+          isConnecting={isConnecting}
+          connectingLabel="Conectando áudio e vídeo..."
+          emptyTitle="Aguardando conexão..."
+          isFullscreen={isStageFullscreen}
+          onToggleFullscreen={toggleStageFullscreen}
+          onOpenScreenShare={onOpenScreenShare}
+          onDisconnect={endCall}
+          onOpenUserProfile={onOpenUserProfile}
+          onOpenDM={onOpenDM}
+          onWatchStream={handleWatchStream}
+          spotlightParticipantId={spotlightParticipantId}
+          onSpotlightChange={setSpotlightParticipantId}
+        />
       )}
-    </div>
+    </CompactCallStageWrapper>
   );
 };

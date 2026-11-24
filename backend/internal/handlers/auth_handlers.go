@@ -1489,14 +1489,12 @@ func (h *AuthHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 	queryUser := `
 		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio,
 		       status, custom_status, COALESCE(two_factor_secret, ''), email_verified,
-		       COALESCE(riot_game_name, ''), COALESCE(riot_tag_line, ''), COALESCE(riot_region, ''),
 		       created_at, updated_at
 		FROM users WHERE id = $1
 	`
 	err := h.db.Pool.QueryRow(ctx, queryUser, userID).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio,
 		&user.Status, &user.CustomStatus, &twoFactorSecret, &user.EmailVerified,
-		&user.RiotGameName, &user.RiotTagLine, &user.RiotRegion,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -1745,11 +1743,6 @@ func (h *AuthHandler) ExportData(w http.ResponseWriter, r *http.Request) {
 			"two_factor_enabled": user.TwoFactorEnabled,
 			"created_at":         user.CreatedAt,
 			"updated_at":         user.UpdatedAt,
-		},
-		"riot_integration": map[string]any{
-			"game_name": user.RiotGameName,
-			"tag_line":  user.RiotTagLine,
-			"region":    user.RiotRegion,
 		},
 		"guilds":        guilds,
 		"dm_groups":     dmGroups,

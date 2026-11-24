@@ -69,9 +69,6 @@ export interface User {
   show_activity_status?: boolean;
   auto_detect_activity?: boolean;
   is_bot?: boolean;
-  riot_game_name?: string;
-  riot_tag_line?: string;
-  riot_region?: string;
   server_folders?: ServerFolder[];
   guild_positions?: string[];
   roles?: Role[];
@@ -409,6 +406,7 @@ declare global {
       onGlobalShortcut?: (callback: (action: string) => void) => () => void;
       onRepoUpdateAvailable?: (callback: (info: any) => void) => () => void;
       onUpdateAvailable: (callback: (info: any) => void) => () => void;
+      onTrayCheckUpdates?: (callback: () => void) => () => void;
       onUpdateProgress: (callback: (progress: any) => void) => () => void;
       onUpdateDownloaded: (callback: (info: any) => void) => () => void;
       setMinimizeToTray?: (enabled: boolean) => void;

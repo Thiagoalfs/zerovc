@@ -37,6 +37,7 @@ export interface ElectronAPI {
   unregisterAllShortcuts: () => Promise<boolean>;
   onGlobalShortcut: (callback: (action: string) => void) => () => void;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
+  onTrayCheckUpdates: (callback: () => void) => () => void;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
   onRepoUpdateAvailable: (callback: (info: any) => void) => () => void;
@@ -125,6 +126,11 @@ const electronAPI: ElectronAPI = {
     const handler = (_: any, info: UpdateInfo) => callback(info);
     ipcRenderer.on('update-available', handler);
     return () => ipcRenderer.removeListener('update-available', handler);
+  },
+  onTrayCheckUpdates: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('tray-check-updates', handler);
+    return () => ipcRenderer.removeListener('tray-check-updates', handler);
   },
   onUpdateProgress: (callback) => {
     const handler = (_: any, progress: UpdateProgress) => callback(progress);

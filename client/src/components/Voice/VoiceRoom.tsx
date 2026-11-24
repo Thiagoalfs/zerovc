@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Volume2, Menu } from 'lucide-react';
+import { Volume2 } from 'lucide-react';
 import { Channel, User, VoiceSession } from '../../types';
+import { ChatHeader } from '../Chat/ChatHeader';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -293,25 +294,17 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
       onMouseLeave={() => setIsVoiceRoomHovered(false)}
       className={`${
         isRoomFullscreen ? 'fixed inset-0 z-[10000000]' : 'flex-1 w-full min-w-0 h-full relative'
-      } bg-background-dark flex flex-col overflow-hidden select-none group/voiceroom`}
+      } bg-background-darkest flex flex-col overflow-hidden select-none group/voiceroom`}
     >
       {/* Voice Room Header */}
-      <div className="h-14 md:h-12 border-b border-black/20 px-3 md:px-4 flex items-center justify-between shadow-sm z-10 flex-shrink-0">
-        <div className="flex items-center gap-2.5 md:gap-2 truncate">
-          {onOpenMobileDrawer && (
-            <button
-              onClick={onOpenMobileDrawer}
-              className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors"
-              title="Menu de Canais"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-          )}
-          <Volume2 className="w-6 h-6 text-online flex-shrink-0" />
+      <ChatHeader
+        variant="call"
+        onOpenMobileDrawer={onOpenMobileDrawer}
+        icon={<Volume2 className="w-6 h-6 text-gray-500 flex-shrink-0" />}
+        title={
           <span className="font-bold text-gray-100 truncate text-[17px] md:text-base">{channel.name}</span>
-          <span className="text-xs text-gray-400">({displayedParticipants.length})</span>
-        </div>
-      </div>
+        }
+      />
 
       {/* Main Voice / Video Dynamic Stage */}
       <CallStage

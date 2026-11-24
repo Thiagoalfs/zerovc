@@ -54,6 +54,7 @@ interface DMGroupState {
   handleGroupPinEvent: (data: { message_id: string; group_id: string; is_pinned: boolean }) => void;
   handleGroupUpdate: (group: DMGroup) => void;
   handleGroupLeave: (data: { group_id: string }) => void;
+  handlePresenceUpdate: (userId: string, status: string, customStatus?: string) => void;
 }
 
 export const useDMGroupStore = create<DMGroupState>((set, get) => ({
@@ -936,6 +937,35 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     if (wasActive && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('zerovc:nav-home', { detail: { target: 'friends' } }));
     }
+  },
+
+  handlePresenceUpdate: (userId: string, status: string, customStatus?: string) => {
+    set((state) => {
+      const updateMembers = (members: User[] = []): User[] =>
+        members.map((m) =>
+          m.id === userId
+            ? ({
+                ...m,
+                status: status as any,
+                custom_status: customStatus !== undefined ? customStatus : m.custom_status,
+                custom_activity: status === 'offline' ? null : m.custom_activity,
+              } as User)
+            : m
+        );
+
+      return {
+        groups: state.groups.map((g) => ({
+          ...g,
+          members: updateMembers(g.members),
+        })),
+        activeGroup: state.activeGroup
+          ? {
+              ...state.activeGroup,
+              members: updateMembers(state.activeGroup.members),
+            }
+          : null,
+      };
+    });
   },
 }));
 

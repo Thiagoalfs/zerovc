@@ -1,9 +1,11 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff, Video, VideoOff, Gamepad2, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
+import { livekit } from '../../lib/livekit';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
@@ -32,7 +34,10 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [showMicDropup, setShowMicDropup] = useState(false);
   const [showDeafenDropup, setShowDeafenDropup] = useState(false);
+  const [pingMs, setPingMs] = useState<number | null>(null);
+  const [signalTooltipPos, setSignalTooltipPos] = useState<{ left: number; top: number } | null>(null);
   const voiceBarRef = useRef<HTMLDivElement>(null);
+  const signalIconRef = useRef<HTMLDivElement>(null);
   const micAnchorRef = useRef<HTMLDivElement>(null);
   const deafenAnchorRef = useRef<HTMLDivElement>(null);
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
@@ -149,6 +154,49 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   }, [voiceType, activeGuild]);
 
   const isInVoice = Boolean(isConnected || isConnecting);
+
+  useEffect(() => {
+    if (!isConnected || isConnecting) {
+      setPingMs(null);
+      setSignalTooltipPos(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchPing = async () => {
+      try {
+        const stats = await livekit.getDiagnosticStats();
+        if (!cancelled && stats.isConnected) {
+          setPingMs(stats.pingMs);
+        }
+      } catch {}
+    };
+    void fetchPing();
+    const timer = setInterval(fetchPing, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [isConnected, isConnecting]);
+
+  const signalQuality = useMemo(() => {
+    if (isConnecting || pingMs === null) {
+      return {
+        bars: 2,
+        colorClass: 'text-amber-400 animate-pulse',
+        label: isConnecting ? 'Conectando...' : 'Medindo ping...',
+      };
+    }
+    if (pingMs < 60) {
+      return { bars: 4, colorClass: 'text-online', label: `${pingMs} ms` };
+    }
+    if (pingMs < 120) {
+      return { bars: 3, colorClass: 'text-online', label: `${pingMs} ms` };
+    }
+    if (pingMs < 220) {
+      return { bars: 2, colorClass: 'text-amber-400', label: `${pingMs} ms` };
+    }
+    return { bars: 1, colorClass: 'text-dnd', label: `${pingMs} ms` };
+  }, [isConnecting, pingMs]);
   const isGameActive = Boolean(
     user?.status !== 'offline' &&
     user?.custom_activity &&
@@ -459,10 +507,42 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   e.stopPropagation();
                   setShowVoicePopout(!showVoicePopout);
                 }}
-                className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden group"
-                title="Clique para ver o status da conexão (Ping / WebRTC)"
+                onMouseEnter={() => {
+                  const target = signalIconRef.current;
+                  if (!target) return;
+                  const rect = target.getBoundingClientRect();
+                  setSignalTooltipPos({ left: rect.left + rect.width / 2, top: rect.top - 8 });
+                }}
+                onMouseLeave={() => setSignalTooltipPos(null)}
+                className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden group py-1 -my-1"
+                title={signalQuality.label}
               >
-                <div className="w-2.5 h-2.5 rounded-full bg-online animate-pulse flex-shrink-0" />
+                <div
+                  ref={signalIconRef}
+                  className={`flex-shrink-0 flex items-center justify-center p-1 -m-1 ${signalQuality.colorClass}`}
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="w-4 h-4"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <rect x="1" y="11" width="2.5" height="4" rx="0.8" fill="currentColor" opacity={signalQuality.bars >= 1 ? 1 : 0.25} />
+                    <rect x="5" y="8" width="2.5" height="7" rx="0.8" fill="currentColor" opacity={signalQuality.bars >= 2 ? 1 : 0.25} />
+                    <rect x="9" y="5" width="2.5" height="10" rx="0.8" fill="currentColor" opacity={signalQuality.bars >= 3 ? 1 : 0.25} />
+                    <rect x="13" y="2" width="2.5" height="13" rx="0.8" fill="currentColor" opacity={signalQuality.bars >= 4 ? 1 : 0.25} />
+                  </svg>
+                </div>
+                {signalTooltipPos &&
+                  createPortal(
+                    <div
+                      style={{ left: signalTooltipPos.left, top: signalTooltipPos.top }}
+                      className="fixed -translate-x-1/2 -translate-y-full z-[10000] px-2 py-1 rounded-md bg-background-darkest border border-white/10 text-[11px] font-semibold text-white shadow-xl pointer-events-none whitespace-nowrap"
+                    >
+                      {signalQuality.label}
+                    </div>,
+                    document.body
+                  )}
                 <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
                   <span className="text-xs font-bold text-online leading-tight truncate group-hover:underline">
                     {isConnecting ? 'Conectando...' : 'Voz Conectada'}

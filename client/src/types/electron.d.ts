@@ -31,6 +31,7 @@ export interface ElectronAPI {
   openExternal: (url: string) => void;
   reloadApp: () => void;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
+  onTrayCheckUpdates?: (callback: () => void) => () => void;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
   onRepoUpdateAvailable?: (callback: (info: any) => void) => () => void;

@@ -13,6 +13,7 @@ import { SidebarResizer } from '../Sidebar/SidebarResizer';
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 import { useContextMenu, ContextMenuItem } from '../ContextMenu/useContextMenu';
 import { api, formatAssetUrl } from '../../lib/api';
+import { UserAvatar } from '../Common/UserAvatar';
 import { copyToClipboard } from '../../utils/clipboard';
 import { AddDMGroupMembersModal } from '../Modals/AddDMGroupMembersModal';
 import { EditDMGroupNameModal } from '../Modals/EditDMGroupNameModal';
@@ -542,14 +543,12 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                             : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                         }`}
                       >
-                        <div className="relative w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                          {recipient?.avatar_url ? (
-                            <img src={formatAssetUrl(recipient.avatar_url)} alt="" className="w-full h-full rounded-full object-cover" />
-                          ) : (
-                            <span>{recipient?.display_name?.[0]?.toUpperCase() || recipient?.username?.[0]?.toUpperCase() || 'U'}</span>
-                          )}
-                          <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-background-darker ${getStatusColor(recipient?.status)}`} />
-                        </div>
+                        <UserAvatar
+                          user={recipient}
+                          size="sm"
+                          showStatus
+                          statusBorderColor="border-background-darker"
+                        />
 
                         <div className="flex items-center text-left truncate flex-1 min-w-0 pr-6">
                           <span className={`truncate text-[14.5px] font-medium ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>

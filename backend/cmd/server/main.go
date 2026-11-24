@@ -208,8 +208,7 @@ func main() {
 	uploadDir := getEnv("UPLOAD_DIR", "./assets")
 	uploadHandler := handlers.NewUploadHandler(uploadDir)
 
-	riotService := services.NewRiotService()
-	commandHandler := handlers.NewCommandHandler(db, hub, riotService, uploadDir)
+	commandHandler := handlers.NewCommandHandler(db, hub, uploadDir)
 
 	// Temp Cleaner: auto-deletes bot temporary files after 24 hours & purges existing bot files
 	tempCleaner := services.NewTempCleaner(db, uploadDir, hub)

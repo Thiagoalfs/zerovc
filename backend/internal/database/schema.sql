@@ -439,10 +439,8 @@ CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions (token_
 
 -- 29. Bots & Slash Command Embeds & Riot Integrations
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_game_name VARCHAR(64) DEFAULT '';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_tag_line VARCHAR(16) DEFAULT '';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_region VARCHAR(16) DEFAULT 'br1';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS riot_puuid VARCHAR(128) DEFAULT '';
+-- Remove legacy LoL/Riot columns/tables if present
+DROP TABLE IF EXISTS lol_accounts;
 
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS invoker_id UUID REFERENCES users(id) ON DELETE SET NULL;

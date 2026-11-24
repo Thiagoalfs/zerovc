@@ -31,7 +31,8 @@ import { showAlert, showConfirm } from '../../stores/confirmModalStore';
 
 import { ServerProfile } from './ServerSettings/ServerProfile';
 import { RolesTab } from './ServerSettings/RolesTab';
-import { UnsavedChangesBar, useUnsavedGuard } from './UnsavedChangesBar';
+import { useUnsavedGuard } from './UnsavedChangesBar';
+import { SettingsModalLayout, SettingsModalTab } from './SettingsModalLayout';
 import { EmojisTab } from './ServerSettings/EmojisTab';
 import { InvitesTab } from './ServerSettings/InvitesTab';
 import { MembersTab } from './ServerSettings/MembersTab';
@@ -129,17 +130,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   );
 
   const { isShaking, attemptClose } = useUnsavedGuard(hasUnsavedChanges, onClose);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        attemptClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, attemptClose]);
 
   // Emojis State
   const [emojisList, setEmojisList] = useState<GuildEmoji[]>([]);
@@ -846,53 +836,67 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
     }
   };
 
-  return (
-    <>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="server-settings-title"
-        className={`fixed inset-0 z-50 flex flex-col md:flex-row w-screen h-screen md:pt-8 bg-background-dark overflow-hidden text-gray-200 select-none ${reducedMotion ? '' : 'animate-in fade-in duration-150'}`}
-      >
-        {/* MOBILE MENU VIEW */}
-          {mobileView === 'menu' && (
-            <div className="flex md:hidden flex-col w-full h-full bg-background-dark overflow-hidden">
-              <div
-                style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
-                className="px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex items-center justify-between flex-shrink-0"
-              >
-                <div className="flex items-center gap-3">
-                  <ModalButton
-                    type="tertiary"
-                    shape="circle"
-                    size="small"
-                    svgOnly
-                    onClick={attemptClose}
-                    aria-label="Fechar configurações do servidor"
-                    title="Fechar"
-                    className="-ml-1"
-                  >
-                    <X className="w-5 h-5" />
-                  </ModalButton>
-                  <h2 className={MODAL_DIALOG_TITLE_CLASS}>Configurações do Servidor</h2>
-                </div>
-              </div>
+  const serverTabs: SettingsModalTab[] = [
+    {
+      id: 'overview',
+      label: 'Perfil do servidor',
+      mobileTitle: 'Perfil do servidor',
+      desktopTitle: 'Perfil do servidor',
+      desktopDescription: 'Personalize a identidade visual, canal do sistema e veja estatísticas',
+    },
+    {
+      id: 'roles',
+      label: 'Cargos',
+      mobileTitle: 'Cargos',
+      desktopTitle: 'Gerenciamento de Cargos e Hierarquia',
+      desktopDescription: 'Defina permissões, ordem na hierarquia e exibição de membros',
+    },
+    {
+      id: 'emojis',
+      label: 'Emojis',
+      mobileTitle: 'Emojis',
+      desktopTitle: 'Emojis Customizados do Servidor',
+      desktopDescription: 'Adicione até 50 emojis exclusivos para membros usarem no chat',
+    },
+    {
+      id: 'invites',
+      label: 'Convites',
+      mobileTitle: 'Convites',
+      desktopTitle: 'Links de Convite Ativos',
+      desktopDescription: 'Monitore quem criou cada link, contagem de usos e revogue convites',
+    },
+    {
+      id: 'members',
+      label: 'Membros',
+      mobileTitle: 'Membros',
+      desktopTitle: 'Membros do Servidor e Moderação',
+      desktopDescription: 'Busque membros rapidamente, gerencie cargos, silenciamentos e expulsões',
+    },
+    {
+      id: 'audit_log',
+      label: 'Auditoria',
+      mobileTitle: 'Auditoria',
+      desktopTitle: 'Registro de Auditoria',
+      desktopDescription: 'Histórico completo de alterações e ações de moderação',
+    },
+  ];
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 overscroll-contain touch-pan-y chat-scrollbar">
-                {/* Server Mini Card */}
-                <div
-                  onClick={() => {
-                    setActiveTab('overview');
-                    setMobileView('content');
-                  }}
-                  className="p-3.5 bg-background-darker rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer active:bg-white/5 transition-colors shadow-sm"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-12 h-12 rounded-2xl bg-background-darkest border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow">
-                      {activeGuild.icon_url ? (
-                        <img src={formatAssetUrl(activeGuild.icon_url)} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <span>{activeGuild.name.slice(0, 2).toUpperCase()}</span>
+  const mobileMenuContent = (
+    <>
+      {/* Server Mini Card */}
+      <div
+        onClick={() => {
+          setActiveTab('overview');
+          setMobileView('content');
+        }}
+        className="p-3.5 bg-background-darker rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer active:bg-white/5 transition-colors shadow-sm"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-12 h-12 rounded-2xl bg-background-darkest border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow">
+            {activeGuild.icon_url ? (
+              <img src={formatAssetUrl(activeGuild.icon_url)} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span>{activeGuild.name.slice(0, 2).toUpperCase()}</span>
                       )}
                     </div>
                     <div className="min-w-0">
@@ -1039,270 +1043,136 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
+    </>
+  );
 
-          {/* DESKTOP SIDEBAR TABS */}
-          <div className="hidden md:flex flex-1 max-w-[280px] lg:max-w-[320px] xl:max-w-[360px] 2xl:max-w-[400px] min-w-[220px] justify-end bg-background-darkest border-r border-white/10 shrink-0 overflow-y-auto chat-scrollbar">
-            <div className="w-56 lg:w-60 flex flex-col p-4 py-6 xl:py-8 shrink-0 justify-between">
-              <div className="flex flex-col items-stretch flex-1 flex-shrink-0">
-                <div className="px-2.5 mb-2">
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 truncate">
-                    {activeGuild.name}
-                  </h2>
-                </div>
+  const desktopHeaderActions = (
+    <>
+      {activeTab === 'members' && (
+        <DropdownSelect
+          className="w-48 sm:w-60"
+          value={selectedRoleFilter}
+          onChange={(val) => setSelectedRoleFilter(String(val))}
+          options={[
+            { value: 'all', label: `Todos os Cargos (${members.length})` },
+            ...roles.map((r) => ({
+              value: r.id,
+              label: r.name,
+              icon: <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: r.color || '#99aab5' }} />,
+            })),
+          ]}
+          placeholder={`Todos os Cargos (${members.length})`}
+        />
+      )}
 
-                <nav className="flex flex-col items-stretch gap-0.5 flex-1 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('overview')}
-                    aria-current={activeTab === 'overview' ? 'page' : undefined}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                      activeTab === 'overview'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                    }`}
-                  >
-                    <span>Perfil do servidor</span>
-                  </button>
+      {activeTab === 'invites' && (
+        <ModalButton
+          type="primary"
+          onClick={handleGenerateNewInvite}
+          loading={isCreatingInvite}
+          prefix={<Plus className="w-4 h-4" />}
+        >
+          {isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}
+        </ModalButton>
+      )}
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('roles')}
-                    aria-current={activeTab === 'roles' ? 'page' : undefined}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                      activeTab === 'roles'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                    }`}
-                  >
-                    <span>Cargos</span>
-                  </button>
+      {activeTab === 'emojis' && (
+        <ModalButton
+          type="primary"
+          onClick={() => emojiInputRef.current?.click()}
+          disabled={!isOwner && !hasAdmin && !canManageGuild}
+          loading={isUploadingEmoji}
+          prefix={<Upload className="w-4 h-4" />}
+        >
+          {isUploadingEmoji ? 'Carregando...' : 'Carregar Emoji'}
+        </ModalButton>
+      )}
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('emojis')}
-                    aria-current={activeTab === 'emojis' ? 'page' : undefined}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                      activeTab === 'emojis'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                    }`}
-                  >
-                    <span>Emojis</span>
-                  </button>
+      {activeTab === 'audit_log' && (
+        <div className="flex items-center gap-2">
+          <DropdownSelect
+            className="w-48 sm:w-56"
+            prefixIcon={<Filter className="w-3.5 h-3.5" />}
+            value={auditFilter}
+            onChange={(val) => setAuditFilter(String(val))}
+            options={ACTION_FILTERS.map((f) => ({
+              value: f.value,
+              label: f.label,
+            }))}
+            placeholder="Filtrar ações..."
+          />
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('invites')}
-                    aria-current={activeTab === 'invites' ? 'page' : undefined}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                      activeTab === 'invites'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                    }`}
-                  >
-                    <span>Convites</span>
-                  </button>
+          <ModalButton
+            type="secondary"
+            size="small"
+            svgOnly
+            onClick={() => setAuditRefreshTrigger((prev) => prev + 1)}
+            disabled={isAuditLoading}
+            aria-label="Recarregar registro de auditoria"
+            title="Recarregar"
+          >
+            <RefreshCw className={`w-4 h-4 ${isAuditLoading ? 'animate-spin text-brand-400' : ''}`} />
+          </ModalButton>
+        </div>
+      )}
+    </>
+  );
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('members')}
-                    aria-current={activeTab === 'members' ? 'page' : undefined}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                      activeTab === 'members'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                    }`}
-                  >
-                    <span>Membros</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('audit_log')}
-                    aria-current={activeTab === 'audit_log' ? 'page' : undefined}
-                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                      activeTab === 'audit_log'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                    }`}
-                  >
-                    <span>Auditoria</span>
-                  </button>
-                </nav>
-              </div>
-
-              {isOwner && (
-                <div className="pt-2 border-t border-white/10 flex flex-col gap-0.5 flex-shrink-0 mt-auto">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2.5 my-1">
-                    Ações do Dono
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsTransferModalOpen(true)}
-                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                  >
-                    <span>Transferir Posse</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsDeleteModalOpen(true)}
-                    className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                  >
-                    <span>Excluir Servidor</span>
-                  </button>
-                </div>
-              )}
-            </div>
+  return (
+    <>
+      <SettingsModalLayout
+        isOpen={isOpen}
+        titleId="server-settings-title"
+        reducedMotion={reducedMotion}
+        mobileMenuTitle="Configurações do Servidor"
+        closeAriaLabel="Fechar configurações do servidor"
+        mobileView={mobileView}
+        onMobileViewChange={setMobileView}
+        mobileMenuContent={mobileMenuContent}
+        sidebarHeader={
+          <div className="px-2.5 mb-2">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 truncate">
+              {activeGuild.name}
+            </h2>
           </div>
-
-          {/* MAIN CONTENT AREA */}
-          <div className={`${mobileView === 'content' ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden bg-background-dark relative min-w-0 min-h-0`}>
-            
-            {/* Mobile Drilldown Top Bar */}
-            <div 
-              style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 2.75rem)' }}
-              className="flex md:hidden items-center justify-between px-4 pb-3.5 border-b border-white/10 bg-background-darkest flex-shrink-0"
-            >
-              <div className="flex items-center gap-2">
-                <ModalButton
-                  type="tertiary"
-                  size="small"
-                  onClick={() => setMobileView('menu')}
-                  aria-label="Voltar ao menu"
-                  prefix={<ArrowLeft className="w-5 h-5" />}
-                  className="-ml-1"
-                >
-                  Voltar
-                </ModalButton>
-              </div>
-              <h2 className="text-sm font-bold text-white truncate max-w-[180px]">
-                {activeTab === 'overview' && 'Perfil do servidor'}
-                {activeTab === 'roles' && 'Cargos'}
-                {activeTab === 'emojis' && 'Emojis'}
-                {activeTab === 'invites' && 'Convites'}
-                {activeTab === 'members' && 'Membros'}
-                {activeTab === 'audit_log' && 'Auditoria'}
-              </h2>
-              <ModalButton
-                type="tertiary"
-                shape="circle"
-                size="small"
-                svgOnly
-                onClick={attemptClose}
-                aria-label="Fechar configurações do servidor"
-                title="Fechar"
+        }
+        tabs={serverTabs}
+        activeTab={activeTab}
+        onSelectTab={(id) => setActiveTab(id as any)}
+        sidebarFooter={
+          isOwner ? (
+            <div className="pt-2 border-t border-white/10 flex flex-col gap-0.5 flex-shrink-0 mt-auto">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2.5 my-1">
+                Ações do Dono
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(true)}
+                className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-amber-400 hover:bg-amber-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
-                <X className="w-5 h-5" />
-              </ModalButton>
+                <span>Transferir Posse</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                <span>Excluir Servidor</span>
+              </button>
             </div>
-
-            {/* Desktop Top Header */}
-            <div className="hidden md:flex items-center justify-between px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
-              <div>
-                <h1 id="server-settings-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
-                  {activeTab === 'overview' && 'Perfil do servidor'}
-                  {activeTab === 'roles' && 'Gerenciamento de Cargos e Hierarquia'}
-                  {activeTab === 'emojis' && 'Emojis Customizados do Servidor'}
-                  {activeTab === 'invites' && 'Links de Convite Ativos'}
-                  {activeTab === 'members' && 'Membros do Servidor e Moderação'}
-                  {activeTab === 'audit_log' && 'Registro de Auditoria'}
-                </h1>
-                <p className={`${MODAL_DESCRIPTION_CLASS} mt-0.5`}>
-                  {activeTab === 'overview' && 'Personalize a identidade visual, canal do sistema e veja estatísticas'}
-                  {activeTab === 'roles' && 'Defina permissões, ordem na hierarquia e exibição de membros'}
-                  {activeTab === 'emojis' && 'Adicione até 50 emojis exclusivos para membros usarem no chat'}
-                  {activeTab === 'invites' && 'Monitore quem criou cada link, contagem de usos e revogue convites'}
-                  {activeTab === 'members' && 'Busque membros rapidamente, gerencie cargos, silenciamentos e expulsões'}
-                  {activeTab === 'audit_log' && 'Histórico completo de alterações e ações de moderação'}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {activeTab === 'members' && (
-                  <DropdownSelect
-                    className="w-48 sm:w-60"
-                    value={selectedRoleFilter}
-                    onChange={(val) => setSelectedRoleFilter(String(val))}
-                    options={[
-                      { value: 'all', label: `Todos os Cargos (${members.length})` },
-                      ...roles.map((r) => ({
-                        value: r.id,
-                        label: r.name,
-                        icon: <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: r.color || '#99aab5' }} />,
-                      })),
-                    ]}
-                    placeholder={`Todos os Cargos (${members.length})`}
-                  />
-                )}
-
-                {activeTab === 'invites' && (
-                  <ModalButton
-                    type="primary"
-                    onClick={handleGenerateNewInvite}
-                    loading={isCreatingInvite}
-                    prefix={<Plus className="w-4 h-4" />}
-                  >
-                    {isCreatingInvite ? 'Gerando...' : 'Gerar Novo Link'}
-                  </ModalButton>
-                )}
-
-                {activeTab === 'emojis' && (
-                  <ModalButton
-                    type="primary"
-                    onClick={() => emojiInputRef.current?.click()}
-                    disabled={!isOwner && !hasAdmin && !canManageGuild}
-                    loading={isUploadingEmoji}
-                    prefix={<Upload className="w-4 h-4" />}
-                  >
-                    {isUploadingEmoji ? 'Carregando...' : 'Carregar Emoji'}
-                  </ModalButton>
-                )}
-
-                {activeTab === 'audit_log' && (
-                  <div className="flex items-center gap-2">
-                    <DropdownSelect
-                      className="w-48 sm:w-56"
-                      prefixIcon={<Filter className="w-3.5 h-3.5" />}
-                      value={auditFilter}
-                      onChange={(val) => setAuditFilter(String(val))}
-                      options={ACTION_FILTERS.map((f) => ({
-                        value: f.value,
-                        label: f.label,
-                      }))}
-                      placeholder="Filtrar ações..."
-                    />
-
-                    <ModalButton
-                      type="secondary"
-                      size="small"
-                      svgOnly
-                      onClick={() => setAuditRefreshTrigger((prev) => prev + 1)}
-                      disabled={isAuditLoading}
-                      aria-label="Recarregar registro de auditoria"
-                      title="Recarregar"
-                    >
-                      <RefreshCw className={`w-4 h-4 ${isAuditLoading ? 'animate-spin text-brand-400' : ''}`} />
-                    </ModalButton>
-                  </div>
-                )}
-
-                <ModalButton
-                  type="tertiary"
-                  shape="circle"
-                  size="small"
-                  svgOnly
-                  onClick={attemptClose}
-                  aria-label="Fechar configurações do servidor"
-                  title="Fechar Configurações (ESC)"
-                >
-                  <X className="w-5 h-5" />
-                </ModalButton>
-              </div>
-            </div>
-
+          ) : undefined
+        }
+        desktopHeaderActions={desktopHeaderActions}
+        onAttemptClose={attemptClose}
+        unsavedBar={{
+          show: hasUnsavedChanges,
+          isShaking,
+          isSaving: isSavingOverview,
+          error: overviewMsg?.type === 'error' ? overviewMsg.text : null,
+          onSave: handleSaveAll,
+          onRevert: handleRevert,
+        }}
+      >
             {/* TAB CONTENTS */}
             <div className="flex-1 overflow-y-auto py-0 px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 chat-scrollbar overscroll-contain touch-pan-y min-h-0">
               {activeTab === 'overview' && (
@@ -1438,8 +1308,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 </div>
               )}
             </div>
-          </div>
-        </div>
+      </SettingsModalLayout>
 
       {/* MODAL 1: CROP IMAGE */}
       {isCropOpen && cropFile && (
@@ -1526,14 +1395,6 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
         onConfirmDelete={handleConfirmDeleteGuild}
         membersCount={members.length}
         is2FARequired={is2FARequiredByServer}
-      />
-      <UnsavedChangesBar
-        show={hasUnsavedChanges}
-        isShaking={isShaking}
-        isSaving={isSavingOverview}
-        error={overviewMsg?.type === 'error' ? overviewMsg.text : null}
-        onSave={handleSaveAll}
-        onRevert={handleRevert}
       />
     </>
   );

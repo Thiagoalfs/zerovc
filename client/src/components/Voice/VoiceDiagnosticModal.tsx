@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, X, Wifi, Server, Shield, Radio, Sparkles, RefreshCw } from 'lucide-react';
+import { Activity, Wifi, Server, Shield, Radio, Sparkles, RefreshCw } from 'lucide-react';
 import { livekit } from '../../lib/livekit';
 import { useVoiceStore } from '../../stores/voiceStore';
 import {
-  MODAL_BACKDROP_CLASS,
-  MODAL_DIALOG_TITLE_CLASS,
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_SECONDARY_BUTTON_CLASS,
-} from '../../constants/modalTypography';
+  AppModal,
+  AppModalHeader,
+  AppModalBody,
+  AppModalFooter,
+} from '@/components/ui/app-modal';
 
 interface VoiceDiagnosticModalProps {
   isOpen: boolean;
@@ -22,6 +22,7 @@ export const VoiceDiagnosticModal: React.FC<VoiceDiagnosticModalProps> = ({ isOp
     serverUrl: string;
     pingMs: number;
     iceState: string;
+    protocol: 'udp' | 'tcp' | 'unknown';
     packetLossPercent: number;
     audioBitrateKbps: number;
     videoBitrateKbps: number;
@@ -49,36 +50,28 @@ export const VoiceDiagnosticModal: React.FC<VoiceDiagnosticModalProps> = ({ isOp
   const pingBg = ping <= 50 ? 'bg-emerald-500/10 border-emerald-500/20' : ping <= 120 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20';
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="voice-diagnostic-modal-title"
-      className={MODAL_BACKDROP_CLASS}
+    <AppModal
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="voice-diagnostic-modal-title"
+      className="bg-background-darker"
     >
-      <div className="bg-background-darker border border-white/10 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-background-darkest/50">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center border border-brand-500/30">
+      <AppModalHeader
+        title={
+          <span className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center border border-brand-500/30 flex-shrink-0">
               <Activity className="w-4 h-4 animate-pulse motion-reduce:animate-none" />
-            </div>
-            <div>
-              <h3 id="voice-diagnostic-modal-title" className={MODAL_DIALOG_TITLE_CLASS}>Diagnóstico da Conexão WebRTC</h3>
-              <p className={MODAL_DESCRIPTION_CLASS}>Estatísticas de transmissão de áudio em tempo real</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+            </span>
+            <span>Diagnóstico da Conexão WebRTC</span>
+          </span>
+        }
+        subtitle="Estatísticas de transmissão de áudio em tempo real"
+        titleId="voice-diagnostic-modal-title"
+        onClose={onClose}
+        className="bg-background-darkest/50 border-white/10"
+      />
 
-        {/* Content */}
-        <div className="p-5 space-y-4">
+      <AppModalBody className="space-y-4">
           {/* Status Bar */}
           <div className={`flex items-center justify-between p-3 rounded-xl border ${pingBg}`}>
             <div className="flex items-center gap-2">
@@ -129,28 +122,36 @@ export const VoiceDiagnosticModal: React.FC<VoiceDiagnosticModalProps> = ({ isOp
 
             {/* ICE State */}
             <div className="p-3 bg-background-darkest/60 border border-white/5 rounded-xl flex flex-col gap-1 col-span-2">
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-medium">
-                <Server className="w-3.5 h-3.5 text-blue-400" />
-                <span>Estado ICE / Servidor de Voz</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-medium">
+                  <Server className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Estado ICE / Servidor de Voz</span>
+                </div>
+                {stats?.isConnected && stats.protocol !== 'unknown' && (
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                      stats.protocol === 'udp'
+                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                    }`}
+                  >
+                    {stats.protocol === 'udp' ? 'UDP' : 'TCP (Fallback)'}
+                  </span>
+                )}
               </div>
               <span className="text-xs font-mono text-gray-300 truncate">
                 {stats?.iceState === 'connected' ? '🟢 Conectado via LiveKit Gateway' : stats?.iceState || 'Desconectado'}
               </span>
             </div>
           </div>
-        </div>
+      </AppModalBody>
 
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-white/10 bg-background-darkest/40 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className={MODAL_SECONDARY_BUTTON_CLASS}
-          >
-            Fechar
-          </button>
-        </div>
-      </div>
-    </div>
+      <AppModalFooter
+        align="end"
+        cancelText="Fechar"
+        onCancel={onClose}
+        className="px-5 py-3 border-white/10 bg-background-darkest/40"
+      />
+    </AppModal>
   );
 };
