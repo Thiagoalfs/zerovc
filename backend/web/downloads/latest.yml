@@ -1,8 +1,0 @@
-version: 1.0.20
-files:
-  - url: ZeroVC-Setup.exe
-    sha512: /2i9lvRy3vY0aRrMfkOavttiNPcILSlJgffYhO3nuuU+Dx7iTo6Uz5y4lAXK3L+LubjQFVrjOKgE2i4GXRkhZw==
-    size: 75834577
-path: ZeroVC-Setup.exe
-sha512: /2i9lvRy3vY0aRrMfkOavttiNPcILSlJgffYhO3nuuU+Dx7iTo6Uz5y4lAXK3L+LubjQFVrjOKgE2i4GXRkhZw==
-releaseDate: '2026-10-19T16:27:45.718Z'

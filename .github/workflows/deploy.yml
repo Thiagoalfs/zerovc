@@ -31,7 +31,8 @@ jobs:
             git reset --hard HEAD
             git pull origin main
             LIVEKIT_CFG_CHANGED=$(git diff --name-only "$PREV_HEAD" HEAD -- deploy/livekit.yaml || true)
-            cp -u "$HOME/zerovc-downloads/"* backend/web/downloads/ 2>/dev/null || true
+            mkdir -p backend/web/downloads
+            cp -f "$HOME/zerovc-downloads/"* backend/web/downloads/ 2>/dev/null || true
             
             echo "🐳 Reconstruindo e reiniciando os containers..."
             if [ -f "deploy/docker-compose.yml" ]; then

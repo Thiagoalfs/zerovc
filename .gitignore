@@ -6,8 +6,8 @@ release/
 build/
 *.exe
 !client/electron/bin/*.exe
-!backend/web/downloads/*.exe
-!backend/web/downloads/*.blockmap
+backend/web/downloads/*
+!backend/web/downloads/.gitkeep
 *.obj
 
 # Node dependencies
