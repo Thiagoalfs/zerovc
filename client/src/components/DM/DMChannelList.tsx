@@ -511,12 +511,9 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                             <Users className="w-3.5 h-3.5" />
                           )}
                         </div>
-                        <div className="flex flex-col text-left truncate flex-1 min-w-0">
+                        <div className="flex items-center text-left truncate flex-1 min-w-0">
                           <span className={`text-[14.5px] font-medium truncate ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
                             {groupDisplayName}
-                          </span>
-                          <span className="text-[11px] text-gray-400 truncate">
-                            {group.members?.length || 0} membros
                           </span>
                         </div>
 

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Volume2, VolumeX, Monitor } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
+import { Slider } from '@/components/ui/slider';
 
 interface UserVolumeSliderProps {
   userId: string;
@@ -17,11 +18,6 @@ export const UserVolumeSlider: React.FC<UserVolumeSliderProps> = ({
 }) => {
   const volume = useVoiceStore((state) => state.userVolumes[userId] ?? 1);
   const setUserVolume = useVoiceStore((state) => state.setUserVolume);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
-    setUserVolume(userId, val);
-  };
 
   return (
     <div
@@ -47,15 +43,12 @@ export const UserVolumeSlider: React.FC<UserVolumeSliderProps> = ({
         </span>
       </div>
 
-      <input
-        type="range"
+      <Slider
         min={0}
         max={2}
         step={0.01}
-        value={volume}
-        onChange={handleChange}
-        onInput={handleChange as any}
-        className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
+        value={[volume]}
+        onValueChange={([val]) => setUserVolume(userId, val)}
       />
     </div>
   );
@@ -77,11 +70,6 @@ export const StreamVolumeSlider: React.FC<StreamVolumeSliderProps> = ({
   const volume = useVoiceStore((state) => state.streamVolumes[userId] ?? 1);
   const setStreamVolume = useVoiceStore((state) => state.setStreamVolume);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
-    setStreamVolume(userId, val);
-  };
-
   return (
     <div
       className={`px-2.5 py-1.5 flex flex-col gap-1.5 select-none ${className}`}
@@ -100,15 +88,12 @@ export const StreamVolumeSlider: React.FC<StreamVolumeSliderProps> = ({
         </span>
       </div>
 
-      <input
-        type="range"
+      <Slider
         min={0}
         max={2}
         step={0.01}
-        value={volume}
-        onChange={handleChange}
-        onInput={handleChange as any}
-        className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
+        value={[volume]}
+        onValueChange={([val]) => setStreamVolume(userId, val)}
       />
     </div>
   );

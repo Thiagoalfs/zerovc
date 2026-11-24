@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SquishSwitch } from '../ui/squish-switch';
+import { Slider } from '@/components/ui/slider';
 import {
   X,
   Sparkles,
@@ -2281,17 +2282,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                   </div>
 
                   <div className="space-y-2">
-                    <input
-                      type="range"
+                    <Slider
                       min={0}
                       max={FONT_SIZE_STEPS.length - 1}
                       step={1}
-                      value={currentFontSizeIndex}
-                      onChange={(e) => {
-                        const idx = Number(e.target.value);
-                        setChatFontSize(FONT_SIZE_STEPS[idx].value);
-                      }}
-                      className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-brand-500"
+                      value={[currentFontSizeIndex]}
+                      onValueChange={([idx]) => setChatFontSize(FONT_SIZE_STEPS[idx].value)}
                     />
                     <div className="flex justify-between text-[10px] font-medium px-1 select-none">
                       {FONT_SIZE_STEPS.map((step, idx) => {
@@ -2326,14 +2322,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                       <span className="text-xs font-bold font-mono text-brand-400">{uiZoom}%</span>
                     </div>
 
-                    <input
-                      type="range"
+                    <Slider
                       min={85}
                       max={125}
                       step={5}
-                      value={uiZoom}
-                      onChange={(e) => setUiZoom(Number(e.target.value))}
-                      className="w-full accent-brand-500 cursor-pointer h-2 bg-background-dark rounded-lg"
+                      value={[uiZoom]}
+                      onValueChange={([val]) => setUiZoom(val)}
                     />
 
                     <div className="flex items-center justify-between pt-1">
@@ -2437,14 +2431,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           <span className={`${MODAL_FIELD_LABEL_CLASS} !mb-0`}>Volume de Entrada</span>
                           <span className="font-mono font-bold text-brand-400">{inputVolume}%</span>
                         </div>
-                        <input
-                          type="range"
+                        <Slider
                           min={0}
                           max={100}
                           step={1}
-                          value={inputVolume}
-                          onChange={(e) => setInputVolume(Number(e.target.value))}
-                          className="w-full accent-brand-500 h-1.5 bg-background-darkest rounded-lg cursor-pointer"
+                          value={[inputVolume]}
+                          onValueChange={([val]) => setInputVolume(val)}
                         />
                       </div>
 
@@ -2453,14 +2445,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           <span className={`${MODAL_FIELD_LABEL_CLASS} !mb-0`}>Volume de Saída</span>
                           <span className="font-mono font-bold text-brand-400">{outputVolume}%</span>
                         </div>
-                        <input
-                          type="range"
+                        <Slider
                           min={0}
                           max={100}
                           step={1}
-                          value={outputVolume}
-                          onChange={(e) => setOutputVolume(Number(e.target.value))}
-                          className="w-full accent-brand-500 h-1.5 bg-background-darkest rounded-lg cursor-pointer"
+                          value={[outputVolume]}
+                          onValueChange={([val]) => setOutputVolume(val)}
                         />
                       </div>
                     </div>
@@ -2594,15 +2584,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
                     {/* Range input and visual thumb (only rendered when manual sensitivity is active) */}
                     <div className="relative h-4 -mt-3.5">
-                      <input
-                        type="range"
-                        min="0.05"
-                        max="0.95"
-                        step="0.01"
-                        value={vadSensitivity}
+                      <Slider
+                        min={0.05}
+                        max={0.95}
+                        step={0.01}
+                        value={[vadSensitivity]}
                         disabled={vadAutoSensitivity}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
+                        onValueChange={([val]) => {
                           setVadSensitivity(val);
                           audioProcessor.updateConfig({ vadSensitivity: val });
                         }}

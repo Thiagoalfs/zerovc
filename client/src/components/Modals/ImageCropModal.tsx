@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { isGif, cropImageToWebP } from '../../utils/image';
 import { ModalButton } from '@/components/ui/modal-button';
+import { Slider } from '@/components/ui/slider';
 import {
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_HEADER_PADDING_CLASS,
@@ -375,14 +376,13 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
                 <ZoomOut className="w-4 h-4" />
               </ModalButton>
 
-              <input
-                type="range"
+              <Slider
                 min={minZoom}
                 max={maxZoom}
-                step="0.01"
-                value={zoom}
-                onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-                className="flex-1 accent-brand-500 h-1.5 bg-background-darker rounded-lg cursor-pointer"
+                step={0.01}
+                value={[zoom]}
+                onValueChange={([val]) => handleZoomChange(val)}
+                className="flex-1"
               />
 
               <ModalButton

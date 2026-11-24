@@ -1,6 +1,7 @@
 import React from 'react';
 import { Mic, Volume2, VolumeX, Radio, Users, Check, Sliders } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { Slider } from '@/components/ui/slider';
 
 interface UserBarContextMenuControlsProps {
   onOpenSettings: () => void;
@@ -100,14 +101,12 @@ export const UserBarContextMenuControls: React.FC<UserBarContextMenuControlsProp
             </div>
             <span className="text-brand-400 font-mono text-[11px] font-bold flex-shrink-0">{inputVolume}%</span>
           </div>
-          <input
-            type="range"
+          <Slider
             min={0}
             max={100}
             step={1}
-            value={inputVolume}
-            onChange={(e) => setInputVolume(Number(e.target.value))}
-            className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer block"
+            value={[inputVolume]}
+            onValueChange={([val]) => setInputVolume(val)}
           />
         </div>
 
@@ -126,14 +125,12 @@ export const UserBarContextMenuControls: React.FC<UserBarContextMenuControlsProp
             </div>
             <span className="text-brand-400 font-mono text-[11px] font-bold flex-shrink-0">{outputVolume}%</span>
           </div>
-          <input
-            type="range"
+          <Slider
             min={0}
             max={100}
             step={1}
-            value={outputVolume}
-            onChange={(e) => setOutputVolume(Number(e.target.value))}
-            className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer block"
+            value={[outputVolume]}
+            onValueChange={([val]) => setOutputVolume(val)}
           />
         </div>
       </div>

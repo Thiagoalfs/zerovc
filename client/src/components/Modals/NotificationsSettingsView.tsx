@@ -3,6 +3,7 @@ import { Volume2, VolumeX, Play } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { SquishSwitch } from '../ui/squish-switch';
 import { ModalButton } from '@/components/ui/modal-button';
+import { Slider } from '@/components/ui/slider';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import {
   playJoinVoiceSound,
@@ -71,14 +72,13 @@ export const NotificationsSettingsView: React.FC = () => {
             <span className="text-xs font-bold font-mono text-brand-400">{soundVolume}%</span>
           </div>
 
-          <input
-            type="range"
+          <Slider
             min={0}
             max={100}
-            value={soundVolume}
+            step={1}
+            value={[soundVolume]}
             aria-labelledby="notif-sound-volume-label"
-            onChange={(e) => setSoundVolume(Number(e.target.value))}
-            className="w-full accent-brand-500 cursor-pointer h-2 bg-background-dark rounded-lg"
+            onValueChange={([val]) => setSoundVolume(val)}
           />
         </div>
       </SettingsGroup>
