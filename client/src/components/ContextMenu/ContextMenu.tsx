@@ -1,6 +1,6 @@
 import React, { useRef, useLayoutEffect, useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, Check } from 'lucide-react';
 import { ContextMenuState } from './useContextMenu';
 import { pushBackHandler } from '../../lib/mobileBackHandler';
 import { hapticLight } from '../../lib/haptics';
@@ -19,6 +19,7 @@ interface ContextMenuProps {
 const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void }> = ({ menu, onClose }) => {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const menuRef = useRef<HTMLDivElement>(null);
+  const submenuRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Mobile drag-to-dismiss state
@@ -94,6 +95,8 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
 
   const [position, setPosition] = useState<{ x: number; y: number }>(initialPosition);
   const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
+  const [submenuTopOffset, setSubmenuTopOffset] = useState<number>(0);
+  const [checkedOverrides, setCheckedOverrides] = useState<Record<string, boolean>>({});
   const [submenuSide, setSubmenuSide] = useState<'right' | 'left'>(() => {
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1920;
     return menu.x + 220 + 200 > vw - 10 ? 'left' : 'right';
@@ -127,6 +130,31 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
 
     setPosition({ x: adjustedX, y: adjustedY });
   }, [menu.x, menu.y, isMobile]);
+
+  // 3. Clamp active submenu vertically so it never clips past the bottom/top viewport edge
+  useLayoutEffect(() => {
+    if (isMobile || activeSubmenuIndex === null || !submenuRef.current) {
+      setSubmenuTopOffset(0);
+      return;
+    }
+
+    const submenuEl = submenuRef.current;
+    const parentEl = submenuEl.parentElement;
+    if (!parentEl) return;
+
+    const parentRect = parentEl.getBoundingClientRect();
+    const subRect = submenuEl.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const margin = 10;
+
+    const overflowBottom = parentRect.top + subRect.height - (viewportHeight - margin);
+    if (overflowBottom > 0) {
+      const clampedOffset = Math.max(margin - parentRect.top, -overflowBottom);
+      setSubmenuTopOffset(clampedOffset);
+    } else {
+      setSubmenuTopOffset(0);
+    }
+  }, [activeSubmenuIndex, isMobile]);
 
   // ==================== MOBILE BOTTOM SHEET ====================
   if (isMobile) {
@@ -197,8 +225,11 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
               }
 
               const isDanger = item.variant === 'danger';
-              const hasSubmenu = Boolean(item.subItems && item.subItems.length > 0);
+              const hasSubmenu = Boolean((item.subItems && item.subItems.length > 0) || item.subCustomRender);
               const isSubmenuOpen = activeSubmenuIndex === index;
+              const itemKey = String(item.id || index);
+              const isChecked =
+                typeof item.checked === 'boolean' ? (checkedOverrides[itemKey] ?? item.checked) : undefined;
 
               return (
                 <div key={item.id || index} className="flex flex-col">
@@ -211,6 +242,12 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                       hapticLight();
                       if (hasSubmenu) {
                         setActiveSubmenuIndex(isSubmenuOpen ? null : index);
+                        return;
+                      }
+                      if (typeof isChecked === 'boolean') {
+                        const nextChecked = !isChecked;
+                        setCheckedOverrides((prev) => ({ ...prev, [itemKey]: nextChecked }));
+                        item.onClick?.(nextChecked);
                         return;
                       }
                       item.onClick?.();
@@ -235,19 +272,37 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                       <span className="truncate">{item.label}</span>
                     </div>
 
-                    {hasSubmenu && (
+                    {hasSubmenu ? (
                       <ChevronDown
                         className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${
                           isSubmenuOpen ? 'rotate-180 text-white' : ''
                         }`}
                       />
-                    )}
+                    ) : typeof isChecked === 'boolean' ? (
+                      <span
+                        className={`w-4 h-4 rounded-[4px] border flex items-center justify-center flex-shrink-0 transition-colors ${
+                          isChecked
+                            ? isDanger
+                              ? 'bg-dnd border-dnd text-white'
+                              : 'bg-brand-500 border-brand-500 text-white'
+                            : isDanger
+                            ? 'border-red-400/50 bg-transparent'
+                            : 'border-white/25 bg-transparent'
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                      </span>
+                    ) : null}
                   </button>
 
                   {/* Accordion Submenu on Mobile */}
                   {hasSubmenu && isSubmenuOpen && (
                     <div className="mt-1 ml-4 pl-3.5 border-l-2 border-brand-500/40 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
-                      {item.subItems!.map((subItem, subIndex) => {
+                      {item.subCustomRender ? (
+                        item.subCustomRender
+                      ) : (
+                        item.subItems!.map((subItem, subIndex) => {
                         if (subItem.separator) {
                           return (
                             <div
@@ -289,7 +344,8 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                             </div>
                           </button>
                         );
-                      })}
+                      })
+                      )}
                     </div>
                   )}
                 </div>
@@ -352,8 +408,11 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
             }
 
             const isDanger = item.variant === 'danger';
-            const hasSubmenu = Boolean(item.subItems && item.subItems.length > 0);
+            const hasSubmenu = Boolean((item.subItems && item.subItems.length > 0) || item.subCustomRender);
             const isSubmenuOpen = activeSubmenuIndex === index;
+            const itemKey = String(item.id || index);
+            const isChecked =
+              typeof item.checked === 'boolean' ? (checkedOverrides[itemKey] ?? item.checked) : undefined;
 
             return (
               <div
@@ -378,6 +437,12 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                       setActiveSubmenuIndex(isSubmenuOpen ? null : index);
                       return;
                     }
+                    if (typeof isChecked === 'boolean') {
+                      const nextChecked = !isChecked;
+                      setCheckedOverrides((prev) => ({ ...prev, [itemKey]: nextChecked }));
+                      item.onClick?.(nextChecked);
+                      return;
+                    }
                     item.onClick?.();
                     onClose();
                   }}
@@ -400,25 +465,45 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                     <span className="truncate">{item.label}</span>
                   </div>
 
-                  {hasSubmenu && (
+                  {hasSubmenu ? (
                     <ChevronRight
                       className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${
                         submenuSide === 'left' ? 'rotate-180 text-gray-400 group-hover:text-white' : 'text-gray-400 group-hover:text-white'
                       }`}
                     />
-                  )}
+                  ) : typeof isChecked === 'boolean' ? (
+                    <span
+                      className={`w-4 h-4 rounded-[4px] border flex items-center justify-center flex-shrink-0 transition-colors ${
+                        isChecked
+                          ? isDanger
+                            ? 'bg-dnd border-dnd text-white'
+                            : 'bg-brand-500 border-brand-500 text-white'
+                          : isDanger
+                          ? 'border-red-400/50 bg-transparent'
+                          : 'border-white/25 bg-transparent'
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                  ) : null}
                 </button>
 
                 {hasSubmenu && isSubmenuOpen && (
                   <div
-                    className={`absolute top-0 min-w-[190px] max-w-[260px] max-h-[300px] overflow-y-auto no-scrollbar space-y-0.5 z-[100000001] animate-in fade-in zoom-in-95 duration-100 ${CONTEXT_MENU_PANEL_CLASS} ${
+                    ref={submenuRef}
+                    style={{ top: `${submenuTopOffset}px` }}
+                    className={`absolute min-w-[190px] max-w-[260px] max-h-[300px] overflow-y-auto no-scrollbar space-y-0.5 z-[100000001] animate-in fade-in zoom-in-95 duration-100 ${CONTEXT_MENU_PANEL_CLASS} ${
                       submenuSide === 'left'
                         ? 'right-full mr-1'
                         : 'left-full ml-1'
                     }`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {item.subItems!.map((subItem, subIndex) => {
+                    {item.subCustomRender ? (
+                      item.subCustomRender
+                    ) : (
+                      item.subItems!.map((subItem, subIndex) => {
                       if (subItem.separator) {
                         return (
                           <div
@@ -460,7 +545,8 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                           </div>
                         </button>
                       );
-                    })}
+                    })
+                    )}
                   </div>
                 )}
               </div>

@@ -1465,14 +1465,18 @@ export const App: React.FC = () => {
               useVoiceStore.getState().joinVoice(event.data.target_channel_id, event.data.guild_id);
             }
           } else if (event.data.action === 'update' && event.data.session?.user_id === currentUserId) {
-            if (event.data.session.is_muted !== undefined) {
-              livekit.setMuted(event.data.session.is_muted);
-              useVoiceStore.setState({ isMuted: event.data.session.is_muted });
-            }
-            if (event.data.session.is_deafened !== undefined) {
-              livekit.setDeafened(event.data.session.is_deafened);
-              useVoiceStore.setState({ isDeafened: event.data.session.is_deafened });
-            }
+            const sess = event.data.session;
+            const vs = useVoiceStore.getState();
+            const nextServerMuted = sess.server_muted !== undefined ? Boolean(sess.server_muted) : vs.isServerMuted;
+            const nextServerDeafened = sess.server_deafened !== undefined ? Boolean(sess.server_deafened) : vs.isServerDeafened;
+            useVoiceStore.setState({
+              isServerMuted: nextServerMuted,
+              isServerDeafened: nextServerDeafened,
+            });
+            const effectiveDeafened = vs.isDeafened || nextServerDeafened;
+            const effectiveMuted = vs.isMuted || nextServerMuted || effectiveDeafened;
+            livekit.setDeafened(effectiveDeafened);
+            livekit.setMuted(effectiveMuted);
           }
         }
       };

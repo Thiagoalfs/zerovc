@@ -370,7 +370,7 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 
 	voiceSessionsMap := make(map[uuid.UUID][]models.VoiceSession)
 	vQuery := `
-		SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, vs.is_screensharing, vs.joined_at,
+		SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, COALESCE(vs.server_muted, false), COALESCE(vs.server_deafened, false), vs.is_screensharing, vs.joined_at,
 		       u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, '')
 		FROM voice_sessions vs
 		INNER JOIN channels c ON c.id = vs.channel_id
@@ -382,7 +382,7 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		for vRows.Next() {
 			var vs models.VoiceSession
 			if scanErr := vRows.Scan(
-				&vs.ID, &vs.ChannelID, &vs.UserID, &vs.IsMuted, &vs.IsDeafened, &vs.IsScreensharing, &vs.JoinedAt,
+				&vs.ID, &vs.ChannelID, &vs.UserID, &vs.IsMuted, &vs.IsDeafened, &vs.ServerMuted, &vs.ServerDeafened, &vs.IsScreensharing, &vs.JoinedAt,
 				&vs.User.Username, &vs.User.DisplayName, &vs.User.AvatarURL, &vs.User.BannerURL, &vs.User.Bio, &vs.User.Status, &vs.User.CustomStatus,
 			); scanErr == nil {
 				vs.User.ID = vs.UserID
@@ -1745,7 +1745,7 @@ func (h *GuildHandler) GetGuildVoiceStates(w http.ResponseWriter, r *http.Reques
 	// 2. Query all active voice sessions for channels in this guild
 	voiceStates := make(map[string][]models.VoiceSession)
 	vQuery := `
-		SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, vs.is_screensharing, vs.joined_at,
+		SELECT vs.id, vs.channel_id, vs.user_id, vs.is_muted, vs.is_deafened, COALESCE(vs.server_muted, false), COALESCE(vs.server_deafened, false), vs.is_screensharing, vs.joined_at,
 		       u.username, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), COALESCE(u.banner_url, ''), COALESCE(u.bio, ''), COALESCE(u.status, 'offline'), COALESCE(u.custom_status, ''),
 		       c.is_private
 		FROM voice_sessions vs
@@ -1766,7 +1766,7 @@ func (h *GuildHandler) GetGuildVoiceStates(w http.ResponseWriter, r *http.Reques
 		var vs models.VoiceSession
 		var isPrivate bool
 		if scanErr := rows.Scan(
-			&vs.ID, &vs.ChannelID, &vs.UserID, &vs.IsMuted, &vs.IsDeafened, &vs.IsScreensharing, &vs.JoinedAt,
+			&vs.ID, &vs.ChannelID, &vs.UserID, &vs.IsMuted, &vs.IsDeafened, &vs.ServerMuted, &vs.ServerDeafened, &vs.IsScreensharing, &vs.JoinedAt,
 			&vs.User.Username, &vs.User.DisplayName, &vs.User.AvatarURL, &vs.User.BannerURL, &vs.User.Bio, &vs.User.Status, &vs.User.CustomStatus,
 			&isPrivate,
 		); scanErr == nil {

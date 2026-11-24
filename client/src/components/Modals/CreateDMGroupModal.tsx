@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Shield } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
-import { SquishSwitch } from '../ui/squish-switch';
+import { useAuthStore } from '../../stores/authStore';
+import { User } from '../../types';
 import {
   AppModal,
   AppModalHeader,
@@ -24,12 +24,23 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
   onClose,
   onGroupCreated,
 }) => {
+  const { user: currentUser } = useAuthStore();
   const { friends, fetchFriends } = useFriendStore();
   const { createGroup } = useDMGroupStore();
 
+  const friendUsers = useMemo(() => {
+    const unique = new Map<string, User>();
+    for (const f of friends) {
+      const other = currentUser?.id && f.friend?.id === currentUser.id ? f.user : (f.friend || f.user);
+      if (other && other.id !== currentUser?.id && !unique.has(other.id)) {
+        unique.set(other.id, other);
+      }
+    }
+    return Array.from(unique.values());
+  }, [friends, currentUser?.id]);
+
   const [name, setName] = useState('');
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
-  const [isE2EE, setIsE2EE] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,7 +49,6 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
       fetchFriends();
       setName('');
       setSelectedFriendIds([]);
-      setIsE2EE(true);
       setError('');
     }
   }, [isOpen]);
@@ -68,7 +78,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
     setIsLoading(true);
     setError('');
     try {
-      const group = await createGroup(name.trim() || undefined, selectedFriendIds, isE2EE);
+      const group = await createGroup(name.trim() || undefined, selectedFriendIds, true);
       onClose();
       onGroupCreated(group.id);
     } catch (err: any) {
@@ -86,6 +96,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
     >
       <AppModalHeader
         title="Criar Grupo de DM"
+        subtitle="Reúna até 15 pessoas em uma conversa privada"
         titleId="create-dm-group-modal-title"
         onClose={onClose}
       />
@@ -97,33 +108,15 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
           <AppInput
             label="Nome do Grupo (Opcional)"
             type="text"
+            autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="ex: Galera do Game"
           />
 
-          {/* E2EE Opt-in Toggle */}
-          <div className="p-3 rounded-xl bg-background-darkest border border-white/5 flex items-center justify-between gap-3">
-            <div className="flex items-start gap-2.5">
-              <Shield className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isE2EE ? 'text-emerald-400' : 'text-gray-400'}`} />
-              <div>
-                <p className="text-xs font-semibold text-white">Criptografia de Ponta a Ponta (E2EE)</p>
-                <p className="text-[11px] text-gray-400 leading-tight">
-                  Mensagens e arquivos protegidos com chaves Megolm. Máximo de 15 pessoas.
-                </p>
-              </div>
-            </div>
-            <SquishSwitch
-              size="sm"
-              checked={isE2EE}
-              onCheckedChange={setIsE2EE}
-              className={isE2EE ? 'bg-emerald-500' : 'bg-gray-700'}
-            />
-          </div>
-
           {/* Friends Selection */}
           <FriendMultiSelect
-            friends={friends.map((f) => f.friend).filter((u): u is NonNullable<typeof u> => Boolean(u))}
+            friends={friendUsers}
             selectedIds={selectedFriendIds}
             onToggle={toggleFriend}
             counterText={`${selectedFriendIds.length} / 14 selecionados`}
@@ -131,6 +124,7 @@ export const CreateDMGroupModal: React.FC<CreateDMGroupModalProps> = ({
           />
 
           <AppModalFooter
+            align="end"
             onCancel={onClose}
             confirmText={isLoading ? 'Criando...' : 'Criar Grupo'}
             confirmHtmlType="submit"

@@ -244,7 +244,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
           name: member?.display_name || vs.user?.display_name || member?.username || vs.user?.username || vs.user_id,
           isLocal,
           metadata: JSON.stringify(metaObj),
-          isMicrophoneEnabled: !vs.is_muted && !vs.is_deafened,
+          isMicrophoneEnabled: !vs.is_muted && !vs.is_deafened && !vs.server_muted && !vs.server_deafened,
           isCameraEnabled: false,
           isScreenShareEnabled: !!vs.is_screensharing,
           getTrackPublication: () => undefined,

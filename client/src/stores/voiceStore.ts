@@ -36,10 +36,13 @@ interface VoiceState {
   connectedAt: number | null;
   isMuted: boolean;
   isDeafened: boolean;
+  isServerMuted: boolean;
+  isServerDeafened: boolean;
   isScreensharing: boolean;
   isCameraOn: boolean;
   participants: Participant[];
   speakingUserIds: string[];
+  deafenedUserIds: string[];
   userVolumes: Record<string, number>;
   streamVolumes: Record<string, number>;
   participantVolumes: Record<string, number>;
@@ -251,6 +254,9 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         }
         set({ speakingUserIds: nextIds });
       },
+      onDeafenedChanged: (deafenedUserIds) => {
+        set({ deafenedUserIds });
+      },
       onTrackUpdated: () => {
         const room = livekit.getRoom();
         if (room) {
@@ -450,10 +456,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     connectedAt: null,
     isMuted: initialMuted || initialDeafened,
     isDeafened: initialDeafened,
+    isServerMuted: false,
+    isServerDeafened: false,
     isScreensharing: false,
     isCameraOn: false,
     participants: [],
     speakingUserIds: [],
+    deafenedUserIds: [],
     userVolumes: initialUserVolumes,
     streamVolumes: initialStreamVolumes,
     participantVolumes: initialUserVolumes,
@@ -811,17 +820,20 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         isConnected: false,
         isConnecting: false,
         connectedAt: null,
+        isServerMuted: false,
+        isServerDeafened: false,
         isScreensharing: false,
         isCameraOn: false,
         participants: [],
         speakingUserIds: [],
+        deafenedUserIds: [],
         watchedParticipantId: null,
         watchedParticipantIds: [],
       });
     },
 
     toggleMute: async () => {
-      const { isMuted, isDeafened, currentChannelId, voiceType } = get();
+      const { isMuted, isDeafened, isServerMuted, isServerDeafened, currentChannelId, voiceType } = get();
       const nextMuted = !isMuted;
       const nextDeafened = nextMuted ? isDeafened : false;
 
@@ -838,10 +850,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         playUnmuteSound();
       }
 
+      const effectiveDeafened = nextDeafened || isServerDeafened;
+      const effectiveMuted = nextMuted || isServerMuted || effectiveDeafened;
+
       try {
-        await livekit.setMuted(nextMuted);
+        await livekit.setMuted(effectiveMuted);
         if (!nextMuted && isDeafened) {
-          await livekit.setDeafened(false);
+          await livekit.setDeafened(effectiveDeafened);
         }
       } catch (err) {
         console.warn('[Voice] Failed to apply mute state:', err);
@@ -860,7 +875,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     },
 
     toggleDeafen: async () => {
-      const { isDeafened, currentChannelId, voiceType } = get();
+      const { isDeafened, isServerMuted, isServerDeafened, currentChannelId, voiceType } = get();
       const nextDeafened = !isDeafened;
       const nextMuted = nextDeafened ? true : get().isMuted;
 
@@ -871,7 +886,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         }
       } catch {}
 
-      await livekit.setDeafened(nextDeafened);
+      const effectiveDeafened = nextDeafened || isServerDeafened;
+      const effectiveMuted = nextMuted || isServerMuted || effectiveDeafened;
+
+      await livekit.setDeafened(effectiveDeafened);
+      if (!effectiveDeafened) {
+        await livekit.setMuted(effectiveMuted);
+      }
 
       if (nextDeafened) {
         playDeafenSound();
@@ -882,7 +903,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       set({
         isDeafened: nextDeafened,
         isMuted: nextMuted,
-        ...(nextDeafened ? { speakingUserIds: [] } : {}),
+        ...(effectiveDeafened ? { speakingUserIds: [] } : {}),
       });
 
       if (voiceType === 'guild' && currentChannelId) {

@@ -105,6 +105,8 @@ func (db *DB) AutoMigrate(ctx context.Context) error {
 
 	// Ensure performance indexes exist
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_voice_sessions_user ON voice_sessions (user_id)")
+	db.Pool.Exec(ctx, "ALTER TABLE voice_sessions ADD COLUMN IF NOT EXISTS server_muted BOOLEAN NOT NULL DEFAULT FALSE")
+	db.Pool.Exec(ctx, "ALTER TABLE voice_sessions ADD COLUMN IF NOT EXISTS server_deafened BOOLEAN NOT NULL DEFAULT FALSE")
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_guild_member_roles_lookup ON guild_member_roles (guild_id, user_id)")
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_guild_member_roles_role ON guild_member_roles (role_id)")
 	db.Pool.Exec(ctx, "CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages (reply_to_id) WHERE reply_to_id IS NOT NULL")

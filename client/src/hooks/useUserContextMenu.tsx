@@ -24,7 +24,7 @@ import { useGuildStore } from '../stores/guildStore';
 import { useDMStore } from '../stores/dmStore';
 import { useDMGroupStore } from '../stores/dmGroupStore';
 import { useFriendStore } from '../stores/friendStore';
-import { useContextMenu, ContextMenuItem } from '../components/ContextMenu';
+import { useContextMenu, ContextMenuItem, RoleSelectorMenu } from '../components/ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from '../components/Voice/VolumeSliders';
 import { useGuildPermissions } from './useGuildPermissions';
 import { canUserMuteVoice, canUserDeafenVoice } from '../utils/userActivity';
@@ -35,8 +35,10 @@ import { copyToClipboard } from '../utils/clipboard';
 export interface UserContextMenuOptions {
   onOpenUserProfile?: (user: User, position?: { x: number; y: number }) => void;
   onOpenDM?: (userId: string) => void;
+  isMe?: boolean;
   isVoiceActive?: boolean;
   isVoiceMuted?: boolean;
+  isVoiceDeafened?: boolean;
   isScreenSharing?: boolean;
   voiceChannelId?: string;
   contextType?: 'guild' | 'dm' | 'friends' | 'voice' | 'dm_group';
@@ -64,7 +66,10 @@ export function useUserContextMenu() {
       e.preventDefault();
       e.stopPropagation();
 
-      const isMe = targetUser.id === currentUser?.id;
+      const isMe =
+        Boolean(options.isMe) ||
+        (Boolean(currentUser?.id) &&
+          String(targetUser.id).toLowerCase() === String(currentUser?.id).toLowerCase());
       const isBot = Boolean(targetUser.is_bot);
       const isGuildContext = options.contextType === 'guild';
 
@@ -135,17 +140,19 @@ export function useUserContextMenu() {
           });
         }
 
-        items.push({ label: '', separator: true });
-        items.push({
-          label: 'Volume de Usuário',
-          customRender: <UserVolumeSlider userId={targetUser.id} />,
-        });
-
-        if (options.isScreenSharing) {
+        if (options.isVoiceActive) {
+          items.push({ label: '', separator: true });
           items.push({
-            label: 'Volume da Transmissão',
-            customRender: <StreamVolumeSlider userId={targetUser.id} />,
+            label: 'Volume de Usuário',
+            customRender: <UserVolumeSlider userId={targetUser.id} />,
           });
+
+          if (options.isScreenSharing) {
+            items.push({
+              label: 'Volume da Transmissão',
+              customRender: <StreamVolumeSlider userId={targetUser.id} />,
+            });
+          }
         }
       }
 
@@ -155,88 +162,58 @@ export function useUserContextMenu() {
       const mod = isGuildContext && activeGuild ? perms.canModerateMember(targetMember) : null;
       const canModerateTarget = Boolean(perms.isCurrentOwner || (mod && !mod.isTargetOwner && mod.isHierarchyAllowed));
 
-      // Voice Channel Moderation
-      if (options.voiceChannelId && !isMe && canModerateTarget) {
-        const voiceChannel = activeGuild?.channels?.find((c) => c.id === options.voiceChannelId);
-        const canMuteInVoice =
-          canUserMuteVoice(voiceChannel, activeGuild, currentUser) ||
-          perms.isCurrentOwner ||
-          perms.hasAdmin;
-        const canDeafenInVoice =
-          canUserDeafenVoice(voiceChannel, activeGuild, currentUser) ||
-          perms.isCurrentOwner ||
-          perms.hasAdmin;
-        const canMoveMembers = perms.canMoveMembers || perms.isCurrentOwner || perms.hasAdmin;
+      // Voice Channel Moderation (Move to stays above server moderation; Mute/Deafen/Disconnect are danger actions below Ban)
+      const voiceChannel = options.voiceChannelId
+        ? activeGuild?.channels?.find((c) => c.id === options.voiceChannelId)
+        : undefined;
+      const canMuteInVoice = Boolean(
+        options.voiceChannelId &&
+          !isMe &&
+          canModerateTarget &&
+          (canUserMuteVoice(voiceChannel, activeGuild, currentUser) || perms.isCurrentOwner || perms.hasAdmin)
+      );
+      const canDeafenInVoice = Boolean(
+        options.voiceChannelId &&
+          !isMe &&
+          canModerateTarget &&
+          (canUserDeafenVoice(voiceChannel, activeGuild, currentUser) || perms.isCurrentOwner || perms.hasAdmin)
+      );
+      const canMoveMembers = Boolean(
+        options.voiceChannelId &&
+          !isMe &&
+          canModerateTarget &&
+          (perms.canMoveMembers || perms.isCurrentOwner || perms.hasAdmin)
+      );
 
-        if (canMuteInVoice || canDeafenInVoice || canMoveMembers) {
-          items.push({ label: '', separator: true });
-        }
-
-        if (canMuteInVoice) {
+      if (canMoveMembers && activeGuild) {
+        items.push({ label: '', separator: true });
+        const otherVoiceChannels = (activeGuild.channels || []).filter(
+          (c) => c.type === 'voice' && c.id !== options.voiceChannelId
+        );
+        if (otherVoiceChannels.length > 0) {
           items.push({
-            label: options.isVoiceMuted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
-            icon: options.isVoiceMuted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
-            onClick: async () => {
-              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
-                is_muted: !options.isVoiceMuted,
-              });
-            },
+            label: 'Mover para',
+            icon: <PhoneForwarded className="w-4 h-4 text-indigo-400" />,
+            subItems: otherVoiceChannels.map((vc) => ({
+              label: vc.name,
+              icon: <Volume2 className="w-4 h-4 text-gray-400" />,
+              onClick: async () => {
+                try {
+                  await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+                    target_channel_id: vc.id,
+                  });
+                } catch (err: any) {
+                  console.error('Erro ao mover membro:', err);
+                }
+              },
+            })),
           });
-        }
-
-        if (canDeafenInVoice) {
+        } else {
           items.push({
-            label: 'Ensurdecer na Call',
-            icon: <Headphones className="w-4 h-4 text-amber-400" />,
-            onClick: async () => {
-              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
-                is_deafened: true,
-              });
-            },
-          });
-        }
-
-        if (canMoveMembers && activeGuild) {
-          const otherVoiceChannels = (activeGuild.channels || []).filter(
-            (c) => c.type === 'voice' && c.id !== options.voiceChannelId
-          );
-          if (otherVoiceChannels.length > 0) {
-            items.push({
-              label: 'Mover para',
-              icon: <PhoneForwarded className="w-4 h-4 text-indigo-400" />,
-              subItems: otherVoiceChannels.map((vc) => ({
-                label: vc.name,
-                icon: <Volume2 className="w-4 h-4 text-gray-400" />,
-                onClick: async () => {
-                  try {
-                    await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
-                      target_channel_id: vc.id,
-                    });
-                  } catch (err: any) {
-                    console.error('Erro ao mover membro:', err);
-                  }
-                },
-              })),
-            });
-          } else {
-            items.push({
-              label: 'Mover para',
-              icon: <PhoneForwarded className="w-4 h-4 text-gray-500" />,
-              disabled: true,
-              tooltip: 'Nenhuma outra chamada disponível',
-            });
-          }
-        }
-
-        if (canMoveMembers) {
-          items.push({
-            label: 'Desconectar da Call',
-            icon: <PhoneOff className="w-4 h-4 text-dnd" />,
-            onClick: async () => {
-              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
-                disconnect: true,
-              });
-            },
+            label: 'Mover para',
+            icon: <PhoneForwarded className="w-4 h-4 text-gray-500" />,
+            disabled: true,
+            tooltip: 'Nenhuma outra chamada disponível',
           });
         }
       }
@@ -247,37 +224,25 @@ export function useUserContextMenu() {
         const canManageTargetRoles = perms.isCurrentOwner || (!mod.isTargetOwner && (isMe ? perms.canManageRoles : mod.isHierarchyAllowed));
         if (canManageTargetRoles) {
           if (perms.canManageRoles && activeGuild.roles && activeGuild.roles.length > 0) {
-            const roleSubItems: ContextMenuItem[] = activeGuild.roles
-              .filter((role) => {
-                if (role.name === '@everyone') return false;
-                if (perms.isCurrentOwner) return true;
-                const rolePos = typeof role.position === 'number' ? role.position : 999;
-                return rolePos > perms.currentUserHighestPos;
-              })
-              .map((role) => {
-                const hasRole = (targetMember.roles || []).some((r: any) => String(r.id || r).toLowerCase() === String(role.id).toLowerCase());
-                return {
-                  label: role.name,
-                  icon: hasRole ? (
-                    <Check className="w-3.5 h-3.5 text-online" />
-                  ) : (
-                    <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
-                  ),
-                  onClick: async () => {
-                    if (hasRole) {
-                      await removeRole(activeGuild.id, targetMember.id, role.id);
-                    } else {
-                      await assignRole(activeGuild.id, targetMember.id, role.id);
-                    }
-                  },
-                };
-              });
+            const hasAssignableRoles = activeGuild.roles.some((role) => {
+              if (role.name === '@everyone') return false;
+              if (perms.isCurrentOwner) return true;
+              const rolePos = typeof role.position === 'number' ? role.position : 999;
+              return rolePos > perms.currentUserHighestPos;
+            });
 
-            if (roleSubItems.length > 0) {
+            if (hasAssignableRoles) {
               items.push({
                 label: 'Alterar Cargos',
                 icon: <Shield className="w-4 h-4 text-brand-400" />,
-                subItems: roleSubItems,
+                subCustomRender: (
+                  <RoleSelectorMenu
+                    guild={activeGuild}
+                    targetUser={targetMember}
+                    showHeader={false}
+                    maxHeightClass="max-h-[260px]"
+                  />
+                ),
               });
             }
           }
@@ -360,6 +325,50 @@ export function useUserContextMenu() {
               },
             });
           }
+        }
+      }
+
+      // Voice Channel Danger Actions (below Ban)
+      if (options.voiceChannelId && (canMuteInVoice || canDeafenInVoice || canMoveMembers)) {
+        if (canMuteInVoice) {
+          items.push({
+            label: 'Silenciar no servidor',
+            icon: <MicOff className="w-4 h-4 text-dnd" />,
+            variant: 'danger',
+            checked: Boolean(options.isVoiceMuted),
+            onClick: async (nextChecked) => {
+              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+                is_muted: nextChecked ?? !options.isVoiceMuted,
+              });
+            },
+          });
+        }
+
+        if (canDeafenInVoice) {
+          items.push({
+            label: 'Ensurdecer no servidor',
+            icon: <Headphones className="w-4 h-4 text-dnd" />,
+            variant: 'danger',
+            checked: Boolean(options.isVoiceDeafened),
+            onClick: async (nextChecked) => {
+              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+                is_deafened: nextChecked ?? !options.isVoiceDeafened,
+              });
+            },
+          });
+        }
+
+        if (canMoveMembers) {
+          items.push({
+            label: 'Desconectar da Call',
+            icon: <PhoneOff className="w-4 h-4 text-dnd" />,
+            variant: 'danger',
+            onClick: async () => {
+              await api.channels.adminUpdateVoiceState(options.voiceChannelId!, targetUser.id, {
+                disconnect: true,
+              });
+            },
+          });
         }
       }
 

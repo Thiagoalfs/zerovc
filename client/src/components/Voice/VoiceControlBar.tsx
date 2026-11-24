@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Headphones, Monitor, MonitorOff, PhoneOff, Video, VideoOff, Maximize2, Minimize2 } from 'lucide-react';
+import { Mic, MicOff, Headphones, Monitor, MonitorOff, PhoneOff, Video, VideoOff, Maximize2, Minimize2, ChevronUp, EyeOff } from 'lucide-react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
@@ -85,49 +85,58 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
     isDeafened,
     isCameraOn,
     isScreensharing,
+    watchedParticipantId,
+    watchedParticipantIds,
     toggleMute,
     toggleDeafen,
     toggleCamera,
     stopScreenShare,
+    unwatchAll,
     leaveVoice,
   } = useVoiceStore();
 
   const { callState, endCall } = useCallStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
 
-  const handleScreenShareClick = (e: React.MouseEvent) => {
+  const isWatchingAny = (watchedParticipantIds?.length ?? 0) > 0 || Boolean(watchedParticipantId);
+
+  const openScreenShareMenu = (anchorEl: HTMLElement) => {
+    const rect = anchorEl.getBoundingClientRect();
+    const items: ContextMenuItem[] = [
+      {
+        id: 'switch-screen',
+        label: 'Trocar tela',
+        icon: <Monitor className="w-4 h-4" />,
+        onClick: () => {
+          if (onOpenScreenShare) {
+            onOpenScreenShare();
+          } else {
+            window.dispatchEvent(new CustomEvent('zerovc:open-screenshare'));
+          }
+        },
+      },
+      {
+        id: 'stop-screen',
+        label: 'Parar compartilhamento',
+        icon: <MonitorOff className="w-4 h-4" />,
+        variant: 'danger',
+        onClick: () => {
+          stopScreenShare();
+        },
+      },
+    ];
+    openContextMenu(
+      { clientX: rect.left + rect.width / 2, clientY: rect.top - 10 },
+      items,
+      'Transmissão de Tela'
+    );
+  };
+
+  const handleScreenShareClick = (e: React.MouseEvent<HTMLElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (isScreensharing) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const items: ContextMenuItem[] = [
-        {
-          id: 'switch-screen',
-          label: 'Trocar tela',
-          icon: <Monitor className="w-4 h-4" />,
-          onClick: () => {
-            if (onOpenScreenShare) {
-              onOpenScreenShare();
-            } else {
-              window.dispatchEvent(new CustomEvent('zerovc:open-screenshare'));
-            }
-          },
-        },
-        {
-          id: 'stop-screen',
-          label: 'Parar compartilhamento',
-          icon: <MonitorOff className="w-4 h-4" />,
-          variant: 'danger',
-          onClick: () => {
-            stopScreenShare();
-          },
-        },
-      ];
-      openContextMenu(
-        { clientX: rect.left + rect.width / 2, clientY: rect.top - 10 },
-        items,
-        'Transmissão de Tela'
-      );
+      openScreenShareMenu(e.currentTarget);
     } else {
       if (onOpenScreenShare) {
         onOpenScreenShare();
@@ -137,7 +146,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
     }
   };
 
-  const handleDisconnect = () => {
+  const performDisconnect = () => {
     hapticWarning();
     if (callState === 'connected' || callState === 'calling') {
       endCall();
@@ -146,6 +155,47 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
     if (onDisconnect) {
       onDisconnect();
     }
+  };
+
+  const handleDisconnectClick = () => {
+    if (isWatchingAny) {
+      hapticMedium();
+      unwatchAll();
+      return;
+    }
+    performDisconnect();
+  };
+
+  const openDisconnectMenu = (e: React.MouseEvent<HTMLElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const items: ContextMenuItem[] = [
+      {
+        id: 'unwatch-all-streams',
+        label: 'Desligar transmissões',
+        icon: <EyeOff className="w-4 h-4" />,
+        disabled: !isWatchingAny,
+        onClick: () => {
+          hapticMedium();
+          unwatchAll();
+        },
+      },
+      {
+        id: 'leave-call',
+        label: 'Sair da call',
+        icon: <PhoneOff className="w-4 h-4" />,
+        variant: 'danger',
+        onClick: () => {
+          performDisconnect();
+        },
+      },
+    ];
+    openContextMenu(
+      { clientX: rect.left + rect.width / 2, clientY: rect.top - 10 },
+      items,
+      'Opções da Chamada'
+    );
   };
 
   return (
@@ -211,28 +261,67 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
         </button>
 
         {/* Screen Share */}
-        <button
-          type="button"
-          onClick={handleScreenShareClick}
-          className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
-            isScreensharing
-              ? 'bg-online text-white hover:bg-emerald-600'
-              : 'bg-background-light hover:bg-white/15 text-white'
-          }`}
-          aria-label={isScreensharing ? 'Opções de Compartilhamento' : 'Compartilhar Tela'}
-        >
-          <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
+        <div className="relative inline-flex">
+          <button
+            type="button"
+            onClick={handleScreenShareClick}
+            onContextMenu={(e) => {
+              if (!isScreensharing) return;
+              e.preventDefault();
+              e.stopPropagation();
+              openScreenShareMenu(e.currentTarget);
+            }}
+            className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
+              isScreensharing
+                ? 'bg-online text-white hover:bg-emerald-600'
+                : 'bg-background-light hover:bg-white/15 text-white'
+            }`}
+            aria-label={isScreensharing ? 'Opções de Compartilhamento' : 'Compartilhar Tela'}
+          >
+            <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+          {isScreensharing && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openScreenShareMenu(e.currentTarget);
+              }}
+              className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-online border border-black/30 text-white flex items-center justify-center shadow-md cursor-pointer z-10"
+              aria-label="Opções de transmissão"
+            >
+              <ChevronUp className="w-2.5 h-2.5" />
+            </button>
+          )}
+        </div>
 
-        {/* Disconnect */}
-        <button
-          type="button"
-          onClick={handleDisconnect}
-          className="bg-dnd hover:bg-rose-700 text-white p-2.5 sm:p-3 rounded-full transition-all shadow-lg cursor-pointer ml-1 active:scale-95"
-          aria-label="Desconectar da Voz"
-        >
-          <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
+        {/* Disconnect / Stop Watching Streams */}
+        <div className="relative inline-flex ml-1">
+          <button
+            type="button"
+            onClick={handleDisconnectClick}
+            onContextMenu={openDisconnectMenu}
+            className="bg-dnd hover:bg-rose-700 text-white p-2.5 sm:p-3 rounded-full transition-all shadow-lg cursor-pointer active:scale-95"
+            aria-label={isWatchingAny ? 'Desligar Transmissões' : 'Desconectar da Voz'}
+            title={isWatchingAny ? 'Desligar transmissões (clique direito para sair da call)' : 'Sair da call'}
+          >
+            {isWatchingAny ? (
+              <MonitorOff className="w-4 h-4 sm:w-5 sm:h-5" />
+            ) : (
+              <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
+            )}
+          </button>
+          {isWatchingAny && (
+            <button
+              type="button"
+              onClick={openDisconnectMenu}
+              className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-dnd border border-black/30 text-white flex items-center justify-center shadow-md cursor-pointer z-10"
+              aria-label="Opções de desconexão"
+            >
+              <ChevronUp className="w-2.5 h-2.5" />
+            </button>
+          )}
+        </div>
 
         {/* Optional Fullscreen Button (Server VoiceRoom) */}
         {onToggleFullscreen && (

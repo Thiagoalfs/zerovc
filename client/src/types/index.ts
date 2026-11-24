@@ -325,6 +325,8 @@ export interface VoiceSession {
   user: User;
   is_muted: boolean;
   is_deafened: boolean;
+  server_muted?: boolean;
+  server_deafened?: boolean;
   is_screensharing: boolean;
   joined_at: string;
 }

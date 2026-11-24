@@ -118,10 +118,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     return canUserUseCommands(channel as any, activeGuild, user);
   }, [contextType, channel, activeGuild, user]);
 
+  const isGuildMuted = useMemo(() => {
+    if (contextType !== 'channel' || !activeGuild || !user) return false;
+    const member = activeGuild.members?.find(
+      (m) => String(m.id).toLowerCase() === String(user.id).toLowerCase()
+    );
+    return Boolean(member?.muted_until && new Date(member.muted_until) > new Date());
+  }, [contextType, activeGuild, user]);
+
   const canSendMessages = useMemo(() => {
     if (contextType !== 'channel') return true;
+    if (isGuildMuted) return false;
     return canUserSendMessages(channel as any, activeGuild, user);
-  }, [contextType, channel, activeGuild, user]);
+  }, [contextType, isGuildMuted, channel, activeGuild, user]);
 
   const canAttachFiles = useMemo(() => {
     if (contextType !== 'channel') return true;
@@ -2489,7 +2498,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 placeholder={
-                  !canSendMessages
+                  isGuildMuted
+                    ? 'Você foi silenciado neste servidor e não pode enviar mensagens.'
+                    : !canSendMessages
                     ? 'Você não tem permissão para enviar mensagens neste canal.'
                     : replyingTo
                     ? (replyingTo.author?.display_name || replyingTo.author?.username

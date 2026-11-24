@@ -201,9 +201,11 @@ class LiveKitManager {
   }
   private onParticipantsChanged?: (participants: Participant[]) => void;
   private onSpeakingChanged?: (speakingUserIds: string[]) => void;
+  private onDeafenedChanged?: (deafenedUserIds: string[]) => void;
   private onTrackUpdated?: () => void;
   private onScreenShareEnded?: () => void;
   private onDisconnected?: (reason?: DisconnectReason) => void;
+  private deafenedParticipantIdentities: Set<string> = new Set();
   private attachedAudioElements: Map<string, HTMLMediaElement> = new Map();
   private attachedUserAudioElements: Map<string, HTMLMediaElement> = new Map();
   private attachedStreamAudioElements: Map<string, HTMLMediaElement> = new Map();
@@ -355,6 +357,7 @@ class LiveKitManager {
       screenshareToken?: string;
       onParticipantsChanged?: (participants: Participant[]) => void;
       onSpeakingChanged?: (speakingUserIds: string[]) => void;
+      onDeafenedChanged?: (deafenedUserIds: string[]) => void;
       onTrackUpdated?: () => void;
       onScreenShareEnded?: () => void;
       onDisconnected?: (reason?: DisconnectReason) => void;
@@ -372,6 +375,8 @@ class LiveKitManager {
     this.currentScreenshareToken = callbacks.screenshareToken || null;
     this.onParticipantsChanged = callbacks.onParticipantsChanged;
     this.onSpeakingChanged = callbacks.onSpeakingChanged;
+    this.onDeafenedChanged = callbacks.onDeafenedChanged;
+    this.deafenedParticipantIdentities.clear();
     this.onTrackUpdated = callbacks.onTrackUpdated;
     this.onScreenShareEnded = callbacks.onScreenShareEnded;
     this.onDisconnected = callbacks.onDisconnected;
@@ -430,6 +435,9 @@ class LiveKitManager {
         console.warn('[LiveKit] startAudio error:', err);
       }
       updateParticipants();
+      if (this.isDeafened) {
+        this.broadcastVoiceState();
+      }
     });
 
     room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
@@ -441,11 +449,32 @@ class LiveKitManager {
     room.on(RoomEvent.ParticipantConnected, (participant) => {
       callbacks.onParticipantConnected?.(participant);
       updateParticipants();
+      if (this.isDeafened && !participant.identity.startsWith('screenshare:')) {
+        this.broadcastVoiceState(participant.identity);
+      }
     });
 
     room.on(RoomEvent.ParticipantDisconnected, (participant) => {
       callbacks.onParticipantDisconnected?.(participant);
+      if (this.deafenedParticipantIdentities.delete(participant.identity)) {
+        this.onDeafenedChanged?.(Array.from(this.deafenedParticipantIdentities));
+      }
       updateParticipants();
+    });
+
+    room.on(RoomEvent.DataReceived, (payload, participant) => {
+      if (!participant) return;
+      try {
+        const msg = JSON.parse(new TextDecoder().decode(payload));
+        if (msg?.type === 'voice_state' && typeof msg.isDeafened === 'boolean') {
+          if (msg.isDeafened) {
+            this.deafenedParticipantIdentities.add(participant.identity);
+          } else {
+            this.deafenedParticipantIdentities.delete(participant.identity);
+          }
+          this.onDeafenedChanged?.(Array.from(this.deafenedParticipantIdentities));
+        }
+      } catch {}
     });
 
     room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
@@ -636,6 +665,7 @@ class LiveKitManager {
       this.attachedAudioElements.clear();
       this.attachedUserAudioElements.clear();
       this.attachedStreamAudioElements.clear();
+      this.deafenedParticipantIdentities.clear();
       this.onDisconnected?.(reason);
     });
 
@@ -782,7 +812,23 @@ class LiveKitManager {
     }
   }
 
+  private broadcastVoiceState(targetIdentity?: string) {
+    if (!this.room?.localParticipant) return;
+    try {
+      const payload = new TextEncoder().encode(
+        JSON.stringify({ type: 'voice_state', isDeafened: this.isDeafened })
+      );
+      this.room.localParticipant
+        .publishData(payload, {
+          reliable: true,
+          ...(targetIdentity ? { destinationIdentities: [targetIdentity] } : {}),
+        })
+        .catch(() => {});
+    } catch {}
+  }
+
   async setDeafened(deafened: boolean) {
+    const changed = this.isDeafened !== deafened;
     this.isDeafened = deafened;
     if (this.room) {
       // Deafen only mutes voice audio from participants; screen share audio stays audible
@@ -791,6 +837,9 @@ class LiveKitManager {
       });
       if (deafened) {
         await this.setMuted(true);
+      }
+      if (changed) {
+        this.broadcastVoiceState();
       }
     }
   }

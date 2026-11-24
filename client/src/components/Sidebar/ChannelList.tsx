@@ -47,6 +47,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { UserBar } from './UserBar';
 import { SidebarResizer } from './SidebarResizer';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
+import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import {
   canUserViewChannel,
@@ -133,6 +134,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   } | null>(null);
 
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+  const { menu: userMenu, closeContextMenu: closeUserContextMenu, handleUserContextMenu } = useUserContextMenu();
   const [channelToDelete, setChannelToDelete] = useState<Channel | null>(null);
   const [isDeletingChannel, setIsDeletingChannel] = useState(false);
 
@@ -466,325 +468,17 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     vs: any,
     targetMember: User
   ) => {
-    e.stopPropagation();
     if (!activeGuild || !user) return;
-
-    const isMe = targetMember.id === user.id;
-    const isTargetOwner = targetMember.id === activeGuild.owner_id;
-    const isCurrentOwner = perms.isCurrentOwner;
-    const hasAdmin = perms.hasAdmin;
-    const canManageRoles = perms.canManageRoles;
-    const canKick = perms.canKick;
-    const canBan = perms.canBan;
-    const canMute = perms.canMute;
-    const canMoveMembers = perms.canMoveMembers;
-    const currentUserHighestPos = perms.currentUserHighestPos;
-
-    const mod = perms.canModerateMember(targetMember);
-    const isHierarchyAllowed = mod.isHierarchyAllowed;
-    const guildRoles = activeGuild.roles || [];
-
-    const items: ContextMenuItem[] = [
-      {
-        label: 'Ver Perfil',
-        icon: <UserIcon className="w-4 h-4" />,
-        onClick: () => onSelectUser?.(targetMember, { x: e.clientX, y: e.clientY }),
-      },
-      ...(!isMe
-        ? [
-            {
-              label: 'Enviar Mensagem',
-              icon: <MessageSquare className="w-4 h-4" />,
-              onClick: async () => {
-                if (onOpenDM) {
-                  onOpenDM(targetMember.id);
-                } else {
-                  await openDMWithUser(targetMember.id);
-                }
-              },
-            },
-          ]
-        : []),
-    ];
-
-    // Voice Call Moderation
-    const canMuteInChannel = canUserMuteVoice(channel, activeGuild, user);
-    const canDeafenInChannel = canUserDeafenVoice(channel, activeGuild, user);
-    const canMuteCall = isHierarchyAllowed && (canMuteInChannel || isCurrentOwner || hasAdmin);
-    const canDeafenCall = isHierarchyAllowed && (canDeafenInChannel || isCurrentOwner || hasAdmin);
-    const canMove = isHierarchyAllowed && (canMoveMembers || isCurrentOwner || hasAdmin);
-    const canDisconnect = isHierarchyAllowed && (canMoveMembers || isCurrentOwner || hasAdmin);
-    const otherVoiceChannels = (activeGuild.channels || []).filter(
-      (c) => c.type === 'voice' && c.id !== channel.id
-    );
-
-    if (canMuteCall || canDeafenCall || canMove || canDisconnect) {
-      items.push({ label: '', separator: true });
-
-      if (canMuteCall) {
-        items.push({
-          label: vs.is_muted ? 'Desmutar Microfone na Call' : 'Mutar Microfone na Call',
-          icon: vs.is_muted ? <Mic className="w-4 h-4 text-online" /> : <MicOff className="w-4 h-4 text-amber-400" />,
-          onClick: async () => {
-            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-              is_muted: !vs.is_muted,
-            });
-          },
-        });
-      }
-
-      if (canDeafenCall) {
-        items.push({
-          label: vs.is_deafened ? 'Desativar Ensurdecimento' : 'Ensurdecer na Call',
-          icon: vs.is_deafened ? (
-            <Headphones className="w-4 h-4 text-online" />
-          ) : (
-            <HeadphonesOff className="w-4 h-4 text-amber-400" />
-          ),
-          onClick: async () => {
-            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-              is_deafened: !vs.is_deafened,
-            });
-          },
-        });
-      }
-
-      if (canMove) {
-        if (otherVoiceChannels.length > 0) {
-          items.push({
-            label: 'Mover para',
-            icon: <PhoneForwarded className="w-4 h-4 text-indigo-400" />,
-            subItems: otherVoiceChannels.map((vc) => ({
-              label: vc.name,
-              icon: <Volume2 className="w-4 h-4 text-gray-400" />,
-              onClick: async () => {
-                try {
-                  await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-                    target_channel_id: vc.id,
-                  });
-                } catch (err: any) {
-                  console.error('Erro ao mover membro:', err);
-                }
-              },
-            })),
-          });
-        } else {
-          items.push({
-            label: 'Mover para',
-            icon: <PhoneForwarded className="w-4 h-4 text-gray-500" />,
-            disabled: true,
-            tooltip: 'Nenhuma outra chamada disponível',
-          });
-        }
-      }
-
-      if (canDisconnect) {
-        items.push({
-          label: 'Desconectar da Call',
-          icon: <PhoneOff className="w-4 h-4 text-dnd" />,
-          onClick: async () => {
-            await api.channels.adminUpdateVoiceState(channel.id, targetMember.id, {
-              disconnect: true,
-            });
-          },
-        });
-      }
-    }
-
-    // User & Stream Volume Sliders (0 - 200%, default 100%, saved locally)
-    if (!isMe) {
-      items.push({ label: '', separator: true });
-      const userVol = userVolumes[targetMember.id] ?? 1;
-      items.push({
-        label: 'Volume de Usuário',
-        customRender: (
-          <div className="px-2.5 py-1.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-              <div className="flex items-center gap-1.5">
-                {userVol === 0 ? (
-                  <VolumeX className="w-3.5 h-3.5 text-dnd" />
-                ) : (
-                  <Volume2 className="w-3.5 h-3.5 text-gray-400" />
-                )}
-                <span>Volume de Usuário</span>
-              </div>
-              <span className="text-brand-400 font-mono text-[11px] font-bold">
-                {Math.round(userVol * 100)}%
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={0.01}
-              value={userVol}
-              onChange={(e) => setUserVolume(targetMember.id, parseFloat(e.target.value))}
-              className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-            />
-          </div>
-        ),
-      });
-
-      if (vs.is_screensharing) {
-        const streamVol = streamVolumes[targetMember.id] ?? 1;
-        items.push({
-          label: 'Volume da Transmissão',
-          customRender: (
-            <div className="px-2.5 py-1.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between text-xs font-semibold text-gray-300">
-                <div className="flex items-center gap-1.5">
-                  <Monitor className="w-3.5 h-3.5 text-brand-400" />
-                  <span>Volume da Transmissão</span>
-                </div>
-                <span className="text-brand-400 font-mono text-[11px] font-bold">
-                  {Math.round(streamVol * 100)}%
-                </span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={2}
-                step={0.01}
-                value={streamVol}
-                onChange={(e) => setStreamVolume(targetMember.id, parseFloat(e.target.value))}
-                className="w-full accent-brand-500 h-1.5 bg-background-light rounded-lg cursor-pointer"
-              />
-            </div>
-          ),
-        });
-      }
-    }
-
-    // Change Roles Submenu
-    if (canManageRoles && guildRoles.length > 0 && (isCurrentOwner || (!isTargetOwner && (isMe ? canManageRoles : isHierarchyAllowed)))) {
-      const roleSubItems: ContextMenuItem[] = guildRoles
-        .filter((role) => {
-          if (role.name === '@everyone') return false;
-          if (isCurrentOwner) return true;
-          const rolePos = typeof role.position === 'number' ? role.position : 999;
-          return rolePos > currentUserHighestPos;
-        })
-        .map((role) => {
-        const hasRole = (targetMember.roles || []).some((r) => r.id === role.id);
-        return {
-          label: role.name,
-          icon: hasRole ? (
-            <Check className="w-3.5 h-3.5 text-online" />
-          ) : (
-            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: role.color }} />
-          ),
-          onClick: async () => {
-            if (hasRole) {
-              await removeRole(activeGuild.id, targetMember.id, role.id);
-            } else {
-              await assignRole(activeGuild.id, targetMember.id, role.id);
-            }
-          },
-        };
-      });
-
-      items.push({
-        label: 'Alterar Cargos',
-        icon: <Shield className="w-4 h-4 text-brand-400" />,
-        subItems: roleSubItems,
-      });
-    }
-
-    // Mute/Timeout Submenu
-    if (canMute && isHierarchyAllowed) {
-      const isServerMuted = targetMember.muted_until && new Date(targetMember.muted_until) > new Date();
-
-      const muteSubItems: ContextMenuItem[] = [
-        {
-          label: '15 minutos',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 900),
-        },
-        {
-          label: '1 hora',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 3600),
-        },
-        {
-          label: '24 horas',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 86400),
-        },
-        {
-          label: '1 semana',
-          icon: <Clock className="w-3.5 h-3.5 text-gray-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, 604800),
-        },
-        {
-          label: 'Permanente',
-          icon: <VolumeX className="w-3.5 h-3.5 text-amber-400" />,
-          onClick: () => muteMember(activeGuild.id, targetMember.id, -1),
-        },
-        ...(isServerMuted
-          ? [
-              { label: '', separator: true },
-              {
-                label: 'Remover Silenciamento',
-                icon: <Volume2 className="w-3.5 h-3.5 text-online" />,
-                onClick: () => muteMember(activeGuild.id, targetMember.id, 0),
-              },
-            ]
-          : []),
-      ];
-
-      items.push({
-        label: isServerMuted ? 'Membro Silenciado' : 'Silenciar no Servidor',
-        icon: <VolumeX className={`w-4 h-4 ${isServerMuted ? 'text-dnd' : 'text-gray-400'}`} />,
-        subItems: muteSubItems,
-      });
-    }
-
-    // Kick and Ban
-    if (isHierarchyAllowed) {
-      if (canKick) {
-        items.push({
-          label: `Expulsar ${targetMember.display_name || targetMember.username}`,
-          icon: <UserMinus className="w-4 h-4" />,
-          variant: 'danger',
-          onClick: async () => {
-            const ok = await showConfirm({
-              title: 'Expulsar membro',
-              message: `Tem certeza que deseja expulsar ${targetMember.display_name || targetMember.username}?`,
-              confirmText: 'Expulsar',
-              variant: 'danger',
-            });
-            if (ok) {
-              await kickMember(activeGuild.id, targetMember.id);
-            }
-          },
-        });
-      }
-
-      if (canBan) {
-        items.push({
-          label: `Banir ${targetMember.display_name || targetMember.username}`,
-          icon: <Ban className="w-4 h-4" />,
-          variant: 'danger',
-          onClick: async () => {
-            const reason = prompt(`Motivo do banimento para ${targetMember.display_name || targetMember.username} (opcional):`);
-            if (reason !== null) {
-              await banMember(activeGuild.id, targetMember.id, reason);
-            }
-          },
-        });
-      }
-    }
-
-    items.push({ label: '', separator: true });
-    items.push({
-      label: 'Copiar ID do Usuário',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => {
-        copyToClipboard(targetMember.id);
-      },
+    handleUserContextMenu(e, targetMember, {
+      onOpenUserProfile: onSelectUser,
+      onOpenDM,
+      isVoiceActive: Boolean(isConnected && currentChannelId === channel.id),
+      isVoiceMuted: Boolean(vs.server_muted),
+      isVoiceDeafened: Boolean(vs.server_deafened),
+      isScreenSharing: Boolean(vs.is_screensharing),
+      voiceChannelId: channel.id,
+      contextType: 'guild',
     });
-
-    openContextMenu(e, items, targetMember.display_name || targetMember.username);
   };
 
   // Render a Single Channel Row (Text or Voice)
@@ -992,7 +686,9 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           return (
             <div className="pl-7 pr-1.5 py-1 space-y-0.5">
               {voiceSessions.map((vs) => {
-                const isSpeaking = speakingUserIds.includes(vs.user_id) && !vs.is_muted && !vs.is_deafened;
+                const effectiveMuted = vs.is_muted || Boolean(vs.server_muted);
+                const effectiveDeafened = vs.is_deafened || Boolean(vs.server_deafened);
+                const isSpeaking = speakingUserIds.includes(vs.user_id) && !effectiveMuted && !effectiveDeafened;
                 const guildMember = activeGuild?.members?.find((m) => m.id === vs.user_id);
                 const targetUser: User = {
                   id: vs.user_id,
@@ -1050,12 +746,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                           LIVE
                         </span>
                       )}
-                      {vs.is_muted && (
+                      {(vs.is_muted || vs.server_muted) && (
                         <span>
                           <MicOff className="w-3 h-3 text-dnd" />
                         </span>
                       )}
-                      {vs.is_deafened && (
+                      {(vs.is_deafened || vs.server_deafened) && (
                         <span>
                           <HeadphonesOff className="w-3 h-3 text-dnd" />
                         </span>
@@ -1402,6 +1098,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
       {/* Context Menu Component */}
       <ContextMenu menu={menu} onClose={closeContextMenu} />
+      <ContextMenu menu={userMenu} onClose={closeUserContextMenu} />
 
       {/* Floating Modal for Channel/Category Deletion Confirmation */}
       <DeleteChannelModal

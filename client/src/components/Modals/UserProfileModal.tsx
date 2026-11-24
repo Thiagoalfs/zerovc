@@ -261,16 +261,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   handleAvatarClick(e as unknown as React.MouseEvent);
                 }
               }}
-              className="w-16 h-16 rounded-full bg-brand-500 border-4 border-background-darkest flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden cursor-pointer relative transition-transform group-hover/avatar:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="w-16 h-16 rounded-full bg-brand-500 border-4 border-background-darkest flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden cursor-pointer relative transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               {user.avatar_url ? (
                 <img src={formatAssetUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase() || 'U'}</span>
               )}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center text-white">
-                <Maximize2 className="w-4 h-4 drop-shadow" />
-              </div>
             </div>
             <div
               className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-background-darkest shadow-md ${getStatusColor(

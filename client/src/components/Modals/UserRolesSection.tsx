@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Shield, Plus, Check, Loader2, X } from 'lucide-react';
+import { Shield, Plus, X } from 'lucide-react';
 import { User, Role, Guild } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
 import { useGuildStore } from '../../stores/guildStore';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { ModalButton } from '@/components/ui/modal-button';
+import { CONTEXT_MENU_PANEL_CLASS } from '@/components/ui/context-menu-1';
+import { RoleSelectorMenu } from '../ContextMenu/RoleSelectorMenu';
 
 export interface UserRolesSectionProps {
   user: User | null;
@@ -19,7 +21,15 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
   size = 'sm',
 }) => {
   const currentAuthUser = useAuthStore((s) => s.user);
-  const activeGuild = guild ?? null;
+  const storeActiveGuild = useGuildStore((s) => s.activeGuild);
+  const storeGuilds = useGuildStore((s) => s.guilds);
+  const activeGuild = useMemo(() => {
+    if (!guild) return null;
+    if (storeActiveGuild && storeActiveGuild.id === guild.id) {
+      return storeActiveGuild;
+    }
+    return storeGuilds.find((g) => g.id === guild.id) || guild;
+  }, [guild, storeActiveGuild, storeGuilds]);
   const assignRole = useGuildStore((s) => s.assignRole);
   const removeRole = useGuildStore((s) => s.removeRole);
   const perms = useGuildPermissions(activeGuild);
@@ -311,72 +321,17 @@ export const UserRolesSection: React.FC<UserRolesSectionProps> = ({
               createPortal(
                 <div
                   ref={dropdownRef}
+                  data-floating-overlay="true"
                   onClick={(e) => e.stopPropagation()}
                   style={{
                     position: 'fixed',
                     top: `${dropdownPos.top}px`,
                     left: `${dropdownPos.left}px`,
-                    width: '224px',
-                    zIndex: 99999,
+                    zIndex: 100000000,
                   }}
-                  className="bg-background-darkest border border-white/10 rounded-xl shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-0.5 select-none"
+                  className={`min-w-[216px] max-w-[260px] select-none animate-in fade-in zoom-in-95 duration-75 font-sans flex flex-col ${CONTEXT_MENU_PANEL_CLASS}`}
                 >
-                  <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 mb-0.5 flex items-center justify-between">
-                    <span>Cargos do Servidor</span>
-                    <span className="text-[9px] text-gray-500 font-normal">{availableRoles.length}</span>
-                  </div>
-
-                  <div className="max-h-[160px] overflow-y-auto chat-scrollbar space-y-0.5">
-                    {availableRoles.length === 0 ? (
-                      <div className="p-2.5 text-center text-xs text-gray-500">
-                        Nenhum outro cargo disponível
-                      </div>
-                    ) : (
-                      availableRoles.map((role) => {
-                        const hasRole = displayRoles.some((r) => r && r.id === role.id);
-                        const isManageable =
-                          perms.isCurrentOwner || (role.position ?? 999) > (perms.currentUserHighestPos ?? 999999);
-                        const isCurrentOperating = operatingRoleId === role.id;
-
-                        return (
-                          <button
-                            key={role.id}
-                            type="button"
-                            disabled={!isManageable || isCurrentOperating}
-                            onClick={() => handleToggleRole(role)}
-                            className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors text-left ${
-                              !isManageable
-                                ? 'opacity-40 cursor-not-allowed text-gray-500'
-                                : 'hover:bg-white/10 text-gray-200 cursor-pointer'
-                            } ${hasRole ? 'bg-brand-500/10 text-brand-300 font-medium' : ''}`}
-                          >
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <span
-                                className="w-2.5 h-2.5 rounded-full shrink-0"
-                                style={{ backgroundColor: role.color || '#99aab5' }}
-                              />
-                              <span
-                                className="truncate text-xs font-medium"
-                                style={{ color: role.color || undefined }}
-                              >
-                                {role.name}
-                              </span>
-                            </div>
-
-                            <div className="shrink-0 flex items-center">
-                              {isCurrentOperating ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400" />
-                              ) : hasRole ? (
-                                <Check className="w-3.5 h-3.5 text-online" />
-                              ) : (
-                                <div className="w-3.5 h-3.5 rounded border border-white/20" />
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
+                  <RoleSelectorMenu guild={activeGuild} targetUser={user} />
                 </div>,
                 document.body
               )}

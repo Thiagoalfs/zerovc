@@ -86,21 +86,37 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
     fetchGroups();
   }, []);
 
-  const sortedGroups = React.useMemo(() => {
-    return [...groups].sort((a, b) => {
-      const aTime = a.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : new Date(a.created_at).getTime();
-      const bTime = b.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : new Date(b.created_at).getTime();
-      return bTime - aTime;
-    });
-  }, [groups]);
+  const sortedConversations = React.useMemo(() => {
+    const getSortTime = (lastMsgCreatedAt?: string, fallbackCreatedAt?: string) => {
+      const raw = lastMsgCreatedAt || fallbackCreatedAt;
+      if (!raw) return 0;
+      const ms = new Date(raw).getTime();
+      return Number.isFinite(ms) ? ms : 0;
+    };
 
-  const sortedRooms = React.useMemo(() => {
-    return [...rooms].sort((a, b) => {
-      const aTime = a.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : new Date(a.created_at).getTime();
-      const bTime = b.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : new Date(b.created_at).getTime();
-      return bTime - aTime;
+    const items: Array<
+      | { kind: 'group'; id: string; sortTime: number; group: DMGroup }
+      | { kind: 'dm'; id: string; sortTime: number; room: DMRoom }
+    > = [
+      ...groups.map((group) => ({
+        kind: 'group' as const,
+        id: group.id,
+        sortTime: getSortTime(group.last_message?.created_at, group.created_at),
+        group,
+      })),
+      ...rooms.map((room) => ({
+        kind: 'dm' as const,
+        id: room.id,
+        sortTime: getSortTime(room.last_message?.created_at, room.created_at),
+        room,
+      })),
+    ];
+
+    return items.sort((a, b) => {
+      if (b.sortTime !== a.sortTime) return b.sortTime - a.sortTime;
+      return a.id.localeCompare(b.id);
     });
-  }, [rooms]);
+  }, [groups, rooms]);
 
   const handleSelectRoom = (room: DMRoom) => {
     selectRoom(room);
@@ -441,96 +457,87 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
           </button>
         </div>
 
-        {/* Channels & Groups Feed */}
-        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-4 no-scrollbar">
-          {/* DM Groups Section */}
+        {/* Unified DMs & Groups Feed */}
+        <div className="flex-1 overflow-y-auto px-2 py-2 no-scrollbar">
           <div>
             <div className="flex items-center justify-between px-2 py-1">
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                Grupos
+                Mensagens Diretas
               </span>
               <button
                 onClick={onOpenCreateGroup}
                 className="text-gray-400 hover:text-white p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
                 aria-label="Criar Grupo de DM"
+                title="Criar Grupo de DM"
               >
                 <Plus className="w-4 h-4" />
               </button>
             </div>
 
-            {sortedGroups.length > 0 && (
-              <div className="space-y-0.5 mt-1">
-                {sortedGroups.map((group) => {
-                  const isSelected = currentView === 'group' && activeGroup?.id === group.id;
-                  const groupDisplayName = group.name || group.members?.map((m) => m.display_name || m.username).join(', ') || 'Grupo de DM';
-                  const unreadCount = groupUnreadCounts[group.id] || (unreadGroups.has(group.id) ? 1 : 0);
-
-                  return (
-                    <button
-                      key={group.id}
-                      onClick={() => handleSelectGroup(group)}
-                      onContextMenu={(e) => handleGroupContextMenu(e, group)}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer group ${
-                        isSelected
-                          ? 'bg-white/10 text-white'
-                          : unreadCount > 0
-                          ? 'text-white font-bold hover:bg-white/5'
-                          : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                      }`}
-                    >
-                      <div className="w-7 h-7 rounded-full overflow-hidden bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                        {group.icon_url ? (
-                          <img
-                            src={formatAssetUrl(group.icon_url)}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Users className="w-3.5 h-3.5" />
-                        )}
-                      </div>
-                      <div className="flex flex-col text-left truncate flex-1 min-w-0">
-                        <span className={`text-[14.5px] font-medium truncate ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
-                          {groupDisplayName}
-                        </span>
-                        <span className="text-[11px] text-gray-400 truncate">
-                          {group.members?.length || 0} membros
-                        </span>
-                      </div>
-
-                      {unreadCount > 0 && !isSelected && (
-                        <div
-                          className="ml-auto px-1.5 min-w-[20px] h-5 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50"
-                        >
-                          {unreadCount > 99 ? '99+' : unreadCount}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* DM 1x1 Section */}
-          <div>
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 py-1 block">
-              Mensagens Diretas
-            </span>
-
-            {sortedRooms.length === 0 ? (
+            {sortedConversations.length === 0 ? (
               <div className="px-2 py-2 text-xs text-gray-500">
                 Nenhuma conversa recente.
               </div>
             ) : (
               <div className="space-y-0.5 mt-1">
-                {sortedRooms.map((room) => {
+                {sortedConversations.map((item) => {
+                  if (item.kind === 'group') {
+                    const group = item.group;
+                    const isSelected = currentView === 'group' && activeGroup?.id === group.id;
+                    const groupDisplayName = group.name || group.members?.map((m) => m.display_name || m.username).join(', ') || 'Grupo de DM';
+                    const unreadCount = groupUnreadCounts[group.id] || (unreadGroups.has(group.id) ? 1 : 0);
+
+                    return (
+                      <button
+                        key={`group-${group.id}`}
+                        onClick={() => handleSelectGroup(group)}
+                        onContextMenu={(e) => handleGroupContextMenu(e, group)}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer group ${
+                          isSelected
+                            ? 'bg-white/10 text-white'
+                            : unreadCount > 0
+                            ? 'text-white font-bold hover:bg-white/5'
+                            : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="w-7 h-7 rounded-full overflow-hidden bg-brand-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                          {group.icon_url ? (
+                            <img
+                              src={formatAssetUrl(group.icon_url)}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Users className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                        <div className="flex flex-col text-left truncate flex-1 min-w-0">
+                          <span className={`text-[14.5px] font-medium truncate ${unreadCount > 0 && !isSelected ? 'text-white font-bold' : 'text-gray-100'}`}>
+                            {groupDisplayName}
+                          </span>
+                          <span className="text-[11px] text-gray-400 truncate">
+                            {group.members?.length || 0} membros
+                          </span>
+                        </div>
+
+                        {unreadCount > 0 && !isSelected && (
+                          <div
+                            className="ml-auto px-1.5 min-w-[20px] h-5 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50"
+                          >
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  }
+
+                  const room = item.room;
                   const isSelected = currentView === 'dm' && activeRoom?.id === room.id;
                   const recipient = room.recipient;
                   const unreadCount = roomUnreadCounts[room.id] || (unreadRooms.has(room.id) ? 1 : 0);
 
                   return (
-                    <div key={room.id} className="relative group/dm">
+                    <div key={`dm-${room.id}`} className="relative group/dm">
                       <button
                         onClick={() => handleSelectRoom(room)}
                         onContextMenu={(e) => handleUserContextMenu(e, recipient, room.id)}

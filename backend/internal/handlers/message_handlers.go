@@ -130,10 +130,14 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var isMember bool
-	checkQuery := `SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)`
-	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&isMember); err != nil || !isMember {
+	var mutedUntil *time.Time
+	checkQuery := `SELECT muted_until FROM guild_members WHERE guild_id = $1 AND user_id = $2`
+	if err := h.db.Pool.QueryRow(r.Context(), checkQuery, guildID, userID).Scan(&mutedUntil); err != nil {
 		http.Error(w, `{"error":"forbidden: you must be a member of this server to post messages"}`, http.StatusForbidden)
+		return
+	}
+	if mutedUntil != nil && mutedUntil.After(time.Now().UTC()) {
+		http.Error(w, `{"error":"forbidden: você foi silenciado pela moderação deste servidor"}`, http.StatusForbidden)
 		return
 	}
 

@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { Shield } from 'lucide-react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
-import { DMGroup } from '../../types';
+import { useAuthStore } from '../../stores/authStore';
+import { DMGroup, User } from '../../types';
 import {
   AppModal,
   AppModalHeader,
@@ -24,6 +25,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
   onClose,
   group,
 }) => {
+  const { user: currentUser } = useAuthStore();
   const { friends, fetchFriends } = useFriendStore();
   const { addMembers } = useDMGroupStore();
 
@@ -34,12 +36,19 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
   const currentMembersCount = group?.members?.length || 0;
   const maxAddable = Math.max(0, 15 - currentMembersCount);
 
-  // Filter friends who are NOT already in the group
+  // Filter friends who are NOT already in the group (resolving either side of the friendship and deduplicating)
   const availableFriends = React.useMemo(() => {
     if (!group?.members) return [];
     const existingMemberIds = new Set(group.members.map((m) => m.id));
-    return friends.filter((f) => f.friend && !existingMemberIds.has(f.friend.id));
-  }, [friends, group?.members]);
+    const unique = new Map<string, User>();
+    for (const f of friends) {
+      const other = currentUser?.id && f.friend?.id === currentUser.id ? f.user : (f.friend || f.user);
+      if (other && other.id !== currentUser?.id && !existingMemberIds.has(other.id) && !unique.has(other.id)) {
+        unique.set(other.id, other);
+      }
+    }
+    return Array.from(unique.values());
+  }, [friends, group?.members, currentUser?.id]);
 
   useEffect(() => {
     if (isOpen) {
@@ -116,9 +125,7 @@ export const AddDMGroupMembersModal: React.FC<AddDMGroupMembersModalProps> = ({
 
           {/* Friends Selection */}
           <FriendMultiSelect
-            friends={availableFriends
-              .map((f) => f.friend)
-              .filter((u): u is NonNullable<typeof u> => Boolean(u))}
+            friends={availableFriends}
             selectedIds={selectedFriendIds}
             onToggle={toggleFriend}
             counterText={`${selectedFriendIds.length} / ${maxAddable} vagas restantes`}

@@ -286,6 +286,8 @@ type VoiceSession struct {
 	User            UserPublic `json:"user"`
 	IsMuted         bool       `json:"is_muted"`
 	IsDeafened      bool       `json:"is_deafened"`
+	ServerMuted     bool       `json:"server_muted"`
+	ServerDeafened  bool       `json:"server_deafened"`
 	IsScreensharing bool       `json:"is_screensharing"`
 	JoinedAt        time.Time  `json:"joined_at"`
 }

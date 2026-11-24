@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/app-modal';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
+  MODAL_FOOTER_PADDING_CLASS,
 } from '../../constants/modalTypography';
 
 interface ScreenShareModalProps {
@@ -366,6 +367,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
 
       <AppModalFooter
         align="end"
+        className={MODAL_FOOTER_PADDING_CLASS}
         onCancel={onClose}
         confirmText={isExternalPicker ? 'Escolher tela' : 'Iniciar transmissão'}
         onConfirm={handleShare}

@@ -321,17 +321,12 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
             <div className="relative inline-block group/bigavatar">
               <div
                 onClick={handleAvatarClick}
-                className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-brand-500 border-[6px] border-background-darkest flex items-center justify-center text-3xl sm:text-4xl font-bold text-white shadow-2xl overflow-hidden cursor-pointer relative transition-transform group-hover/bigavatar:scale-105 active:scale-95"
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-brand-500 border-[6px] border-background-darkest flex items-center justify-center text-3xl sm:text-4xl font-bold text-white shadow-2xl overflow-hidden cursor-pointer relative transition-transform active:scale-95"
               >
                 {user.avatar_url ? (
                   <img src={formatAssetUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase() || 'U'}</span>
-                )}
-                {user.avatar_url && (
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/bigavatar:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
-                    <ExternalLink className="w-5 h-5 drop-shadow" />
-                  </div>
                 )}
               </div>
               <div

@@ -5,12 +5,14 @@ export interface ContextMenuItem {
   label: string;
   icon?: React.ReactNode;
   variant?: 'default' | 'danger';
+  checked?: boolean;
   disabled?: boolean;
   tooltip?: string;
   separator?: boolean;
-  onClick?: () => void;
+  onClick?: (checked?: boolean) => void;
   subItems?: ContextMenuItem[];
   customRender?: React.ReactNode;
+  subCustomRender?: React.ReactNode;
 }
 
 export interface ContextMenuState {

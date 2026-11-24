@@ -167,6 +167,8 @@ CREATE TABLE IF NOT EXISTS voice_sessions (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     is_muted BOOLEAN DEFAULT FALSE,
     is_deafened BOOLEAN DEFAULT FALSE,
+    server_muted BOOLEAN DEFAULT FALSE,
+    server_deafened BOOLEAN DEFAULT FALSE,
     is_screensharing BOOLEAN DEFAULT FALSE,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_user_voice UNIQUE (user_id)

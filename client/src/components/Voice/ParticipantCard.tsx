@@ -1,5 +1,6 @@
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
+import { HeadphonesOff } from '../Common/HeadphonesOff';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Participant, Track, RemoteTrackPublication, ParticipantEvent, VideoQuality } from 'livekit-client';
@@ -10,7 +11,6 @@ import {
   Monitor,
   Maximize2,
   Minimize2,
-  Play,
   Eye,
   EyeOff,
   Radio,
@@ -78,6 +78,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     voiceType,
     dmGroupId,
     speakingUserIds,
+    deafenedUserIds,
+    isDeafened: isLocalDeafened,
     stopScreenShare,
     userVolumes,
     streamVolumes,
@@ -250,10 +252,22 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     meta?.avatar_url ||
     null;
 
-  // Check audio mute status
+  // Check audio mute & deafen status (personal + server moderation)
   const audioPub = participant.getTrackPublication(Track.Source.Microphone);
-  const isMuted = !participant.isMicrophoneEnabled && (!audioPub || audioPub.isMuted);
-  const isSpeaking = speakingUserIds.includes(participant.identity) && !isMuted;
+  const isTrackMuted = !participant.isMicrophoneEnabled && (!audioPub || audioPub.isMuted);
+  const guildVoiceSession =
+    voiceType === 'guild' && currentChannelId
+      ? activeGuild?.channels
+          ?.find((c) => c.id === currentChannelId)
+          ?.voice_sessions?.find((vs) => vs.user_id === participant.identity)
+      : undefined;
+  const isServerMuted = Boolean(guildVoiceSession?.server_muted);
+  const isServerDeafened = Boolean(guildVoiceSession?.server_deafened);
+  const isParticipantDeafened =
+    (isLocal ? isLocalDeafened : deafenedUserIds.includes(participant.identity) || Boolean(guildVoiceSession?.is_deafened)) ||
+    isServerDeafened;
+  const isMuted = isTrackMuted || isServerMuted || isServerDeafened;
+  const isSpeaking = speakingUserIds.includes(participant.identity) && !isMuted && !isParticipantDeafened;
 
   // Check video & screen share track
   const screenPub = participant.getTrackPublication(Track.Source.ScreenShare);
@@ -558,8 +572,10 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     handleUserContextMenu(e, targetMember, {
       onOpenUserProfile,
       onOpenDM,
+      isMe: isLocal,
       isVoiceActive: true,
-      isVoiceMuted: isMuted,
+      isVoiceMuted: isServerMuted,
+      isVoiceDeafened: isServerDeafened,
       isScreenSharing,
       voiceChannelId: voiceType === 'guild' ? (currentChannelId || undefined) : undefined,
       contextType: cardContextType,
@@ -596,11 +612,15 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             )}
           </div>
 
-          {isMuted && (
+          {(isMuted || isParticipantDeafened) && (
             <div
               className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#111214] border-2 border-background-darkest flex items-center justify-center text-dnd shadow-md"
             >
-              <MicOff className="w-3.5 h-3.5" />
+              {isParticipantDeafened ? (
+                <HeadphonesOff className="w-3.5 h-3.5" />
+              ) : (
+                <MicOff className="w-3.5 h-3.5" />
+              )}
             </div>
           )}
         </div>
@@ -710,24 +730,16 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           </>
         ) : isScreenSharing && !isWatching ? (
           /* 3. Screen sharing active but user is NOT watching */
-          <div className={`flex flex-col items-center justify-center text-center ${isCompact ? 'gap-1.5 p-2' : 'gap-3 p-4'}`}>
-            {!isCompact && (
-              <div>
-                <h3 className="text-sm font-bold text-white mb-0.5">{displayName}</h3>
-                <p className="text-xs text-brand-400 font-medium">está transmitindo tela</p>
-              </div>
-            )}
-
-            <div className={`${isCompact ? '' : 'mt-1'} flex items-center justify-center gap-1.5`}>
+          <div className={`flex items-center justify-center text-center ${isCompact ? 'p-2' : 'p-4'}`}>
+            <div className="flex items-center justify-center gap-1.5">
               <ModalButton
                 htmlType="button"
                 type="secondary"
-                size={isCompact ? 'tiny' : 'small'}
+                size={isCompact ? 'small' : 'large'}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleToggleWatch(true, 'exclusive');
                 }}
-                prefix={<Play className="w-3 h-3 fill-current" />}
                 title="Assistir esta transmissão"
               >
                 Assistir Transmissão
@@ -737,7 +749,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                 <ModalButton
                   htmlType="button"
                   type="secondary"
-                  size={isCompact ? 'tiny' : 'small'}
+                  size={isCompact ? 'small' : 'large'}
                   svgOnly
                   onClick={(e) => {
                     e.stopPropagation();
@@ -745,7 +757,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                   }}
                   title="Assistir junto com as outras telas"
                 >
-                  <Eye className="w-3.5 h-3.5 text-brand-400" />
+                  <Eye className="w-4 h-4 text-brand-400" />
                 </ModalButton>
               )}
             </div>
@@ -774,39 +786,9 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           </div>
         )}
 
-        {/* Top Left Indicators: Screen & Camera Tags */}
-        <div className={`absolute ${isCompact ? 'top-1.5 left-1.5' : 'top-3 left-3'} flex items-center gap-1.5 z-10`}>
-          {isScreenSharing && (
-            <span className={`bg-brand-500/90 backdrop-blur-md text-white ${isCompact ? 'text-[8px] px-1.5 py-0.2' : 'text-[10px] px-2 py-0.5'} font-bold rounded-md flex items-center gap-1 shadow-sm`}>
-              <Monitor className={isCompact ? 'w-2.5 h-2.5' : 'w-3 h-3'} /> AO VIVO
-            </span>
-          )}
-          {isScreenSharing && !isWatching && isMuted && !isCompact && (
-            <span className="bg-dnd/90 backdrop-blur-md text-white text-[10px] font-bold p-1 rounded-md flex items-center shadow-sm">
-              <MicOff className="w-3 h-3" />
-            </span>
-          )}
-        </div>
-
         {/* Top Right Unified Action Controls Bar (Hover, only for remote participants and not compact) */}
         {!isLocal && !isCompact && (
           <div className={`absolute top-3 right-3 flex items-center gap-1.5 z-30 transition-opacity bg-black/75 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 shadow-lg ${showVolumeSlider ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-            {/* Watch / Stop Live Controls */}
-            {isScreenSharing && isWatching && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggleWatch(false);
-                }}
-                className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
-                aria-label="Parar de assistir transmissão"
-              >
-                <EyeOff className="w-3.5 h-3.5" />
-                <span className="text-[11px] hidden sm:inline">Parar de Ver</span>
-              </button>
-            )}
-
             {/* Fullscreen Button for Screen Share OR Camera Stream */}
             {((isScreenSharing && isWatching) || hasCameraVideoTrack) && (
               <button
@@ -872,18 +854,20 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         )}
 
         {/* Bottom-left Name Pill */}
-        {!(isScreenSharing && !isWatching && !isCompact) && (
-          <div className={`absolute ${
-            isCompact
-              ? 'bottom-2 left-2 px-2 py-0.5 text-[11px] bg-[#111214]'
-              : 'bottom-2.5 left-2.5 px-2.5 py-1 text-xs bg-[#111214]/85 backdrop-blur-md'
-          } rounded-md flex items-center gap-1.5 font-semibold text-white shadow max-w-[85%] z-20 pointer-events-none md:group-data-[hovered=false]/voiceroom:opacity-0 transition-opacity duration-150`}>
-            <span className="truncate">{displayName}</span>
-            {isMuted && (
+        <div className={`absolute ${
+          isCompact
+            ? 'bottom-2 left-2 px-2 py-0.5 text-[11px] bg-[#111214]'
+            : 'bottom-2.5 left-2.5 px-2.5 py-1 text-xs bg-[#111214]/85 backdrop-blur-md'
+        } rounded-md flex items-center gap-1.5 font-semibold text-white shadow max-w-[85%] z-20 pointer-events-none md:group-data-[hovered=false]/voiceroom:opacity-0 transition-opacity duration-150`}>
+          <span className="truncate">{displayName}</span>
+          {(isMuted || isParticipantDeafened) && (
+            isParticipantDeafened ? (
+              <HeadphonesOff className={`${isCompact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-dnd flex-shrink-0`} />
+            ) : (
               <MicOff className={`${isCompact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-dnd flex-shrink-0`} />
-            )}
-          </div>
-        )}
+            )
+          )}
+        </div>
       </div>
 
       <ContextMenu menu={menu} onClose={closeContextMenu} />

@@ -27,7 +27,7 @@ export const FriendMultiSelect: React.FC<FriendMultiSelectProps> = ({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <label className={MODAL_FIELD_LABEL_CLASS}>{label}</label>
+        <label className={`${MODAL_FIELD_LABEL_CLASS} mb-0`}>{label}</label>
         <span className={MODAL_DESCRIPTION_CLASS}>{counterText}</span>
       </div>
 

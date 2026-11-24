@@ -57,6 +57,13 @@ interface DMGroupState {
   handlePresenceUpdate: (userId: string, status: string, customStatus?: string) => void;
 }
 
+function upsertGroup(groups: DMGroup[], group: DMGroup): DMGroup[] {
+  const exists = groups.some((g) => g.id === group.id);
+  return exists
+    ? groups.map((g) => (g.id === group.id ? { ...g, ...group } : g))
+    : [group, ...groups];
+}
+
 export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   groups: [],
   activeGroup: null,
@@ -231,7 +238,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       try {
         group = await api.dmGroups.get(id);
         if (group) {
-          set((state) => ({ groups: [group!, ...state.groups] }));
+          set((state) => ({ groups: upsertGroup(state.groups, group!) }));
         }
       } catch (err) {
         console.error('Failed to get group by id:', err);
@@ -293,7 +300,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         console.warn('Failed to ensure e2ee on new dm group:', e);
       }
     }
-    set((state) => ({ groups: [finalGroup, ...state.groups], activeGroup: finalGroup }));
+    set((state) => ({ groups: upsertGroup(state.groups, finalGroup), activeGroup: finalGroup }));
     return finalGroup;
   },
 
@@ -907,16 +914,10 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   },
 
   handleGroupUpdate: (group: DMGroup) => {
-    set((state) => {
-      const exists = state.groups.some((g) => g.id === group.id);
-      const nextGroups = exists
-        ? state.groups.map((g) => (g.id === group.id ? { ...g, ...group } : g))
-        : [group, ...state.groups];
-      return {
-        groups: nextGroups,
-        activeGroup: state.activeGroup?.id === group.id ? { ...state.activeGroup, ...group } : state.activeGroup,
-      };
-    });
+    set((state) => ({
+      groups: upsertGroup(state.groups, group),
+      activeGroup: state.activeGroup?.id === group.id ? { ...state.activeGroup, ...group } : state.activeGroup,
+    }));
   },
 
   handleGroupLeave: (data: { group_id: string }) => {

@@ -742,19 +742,21 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	voiceSessionQuery := `
-		INSERT INTO voice_sessions (channel_id, user_id, is_muted, is_deafened, is_screensharing)
-		VALUES ($1, $2, $3, $4, false)
+		INSERT INTO voice_sessions (channel_id, user_id, is_muted, is_deafened, server_muted, server_deafened, is_screensharing)
+		VALUES ($1, $2, $3, $4, false, false, false)
 		ON CONFLICT (user_id) DO UPDATE
 		SET channel_id = EXCLUDED.channel_id,
 		    is_muted = EXCLUDED.is_muted,
 		    is_deafened = EXCLUDED.is_deafened,
+		    server_muted = false,
+		    server_deafened = false,
 		    is_screensharing = false,
 		    joined_at = CURRENT_TIMESTAMP
-		RETURNING id, channel_id, user_id, is_muted, is_deafened, is_screensharing, joined_at
+		RETURNING id, channel_id, user_id, is_muted, is_deafened, COALESCE(server_muted, false), COALESCE(server_deafened, false), is_screensharing, joined_at
 	`
 	var session models.VoiceSession
 	err = h.db.Pool.QueryRow(r.Context(), voiceSessionQuery, channelID, userID, isMuted, isDeafened).Scan(
-		&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.IsScreensharing, &session.JoinedAt,
+		&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.ServerMuted, &session.ServerDeafened, &session.IsScreensharing, &session.JoinedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to save voice session"}`, http.StatusInternalServerError)
@@ -901,11 +903,11 @@ func (h *ChannelHandler) UpdateVoiceState(w http.ResponseWriter, r *http.Request
 		    is_deafened = COALESCE($2, is_deafened),
 		    is_screensharing = COALESCE($3, is_screensharing)
 		WHERE user_id = $4 AND channel_id = $5
-		RETURNING id, channel_id, user_id, is_muted, is_deafened, is_screensharing, joined_at
+		RETURNING id, channel_id, user_id, is_muted, is_deafened, COALESCE(server_muted, false), COALESCE(server_deafened, false), is_screensharing, joined_at
 	`
 	var session models.VoiceSession
 	err = h.db.Pool.QueryRow(r.Context(), query, req.IsMuted, req.IsDeafened, req.IsScreensharing, userID, channelID).Scan(
-		&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.IsScreensharing, &session.JoinedAt,
+		&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.ServerMuted, &session.ServerDeafened, &session.IsScreensharing, &session.JoinedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
@@ -1087,11 +1089,11 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 			UPDATE voice_sessions
 			SET channel_id = $1, is_screensharing = false, joined_at = CURRENT_TIMESTAMP
 			WHERE user_id = $2 AND channel_id = $3
-			RETURNING id, channel_id, user_id, is_muted, is_deafened, is_screensharing, joined_at
+			RETURNING id, channel_id, user_id, is_muted, is_deafened, COALESCE(server_muted, false), COALESCE(server_deafened, false), is_screensharing, joined_at
 		`
 		var session models.VoiceSession
 		err = h.db.Pool.QueryRow(r.Context(), updateQuery, targetChannelID, targetUserID, channelID).Scan(
-			&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.IsScreensharing, &session.JoinedAt,
+			&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.ServerMuted, &session.ServerDeafened, &session.IsScreensharing, &session.JoinedAt,
 		)
 		if err != nil {
 			http.Error(w, `{"error":"participante não está mais neste canal de voz"}`, http.StatusNotFound)
@@ -1141,14 +1143,14 @@ func (h *ChannelHandler) AdminUpdateVoiceState(w http.ResponseWriter, r *http.Re
 
 	query := `
 		UPDATE voice_sessions
-		SET is_muted = COALESCE($1, is_muted),
-		    is_deafened = COALESCE($2, is_deafened)
+		SET server_muted = COALESCE($1, server_muted),
+		    server_deafened = COALESCE($2, server_deafened)
 		WHERE user_id = $3 AND channel_id = $4
-		RETURNING id, channel_id, user_id, is_muted, is_deafened, is_screensharing, joined_at
+		RETURNING id, channel_id, user_id, is_muted, is_deafened, COALESCE(server_muted, false), COALESCE(server_deafened, false), is_screensharing, joined_at
 	`
 	var session models.VoiceSession
 	err = h.db.Pool.QueryRow(r.Context(), query, req.IsMuted, req.IsDeafened, targetUserID, channelID).Scan(
-		&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.IsScreensharing, &session.JoinedAt,
+		&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.ServerMuted, &session.ServerDeafened, &session.IsScreensharing, &session.JoinedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"participant is not in this voice channel"}`, http.StatusNotFound)
