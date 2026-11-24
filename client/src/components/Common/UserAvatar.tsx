@@ -54,7 +54,6 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
       onClick={onClick}
       onContextMenu={onContextMenu}
       className={`relative flex-shrink-0 select-none ${onClick ? 'cursor-pointer' : ''} ${className}`}
-      title={title}
     >
       <div
         className={`${cfg.container} rounded-full bg-brand-500 flex items-center justify-center font-bold text-white shadow-sm overflow-hidden`}

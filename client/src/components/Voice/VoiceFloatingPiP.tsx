@@ -672,7 +672,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                 type="button"
                 onClick={handleOpenVoiceRoom}
                 className="flex items-center gap-1.5 bg-black/70 hover:bg-black/90 active:scale-95 text-gray-200 hover:text-white px-2 py-1 rounded-lg text-xs font-semibold backdrop-blur-md border border-white/10 transition-all cursor-pointer shadow-md"
-                title="Voltar para a sala de voz"
+                aria-label="Voltar para a sala de voz"
               >
                 <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="truncate max-w-[120px]">#{channelDisplayName}</span>
@@ -689,7 +689,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                   toggleFullscreen(e);
                 }}
                 className="p-1.5 rounded-lg bg-black/60 hover:bg-white/20 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
-                title="Tela cheia do vídeo"
+                aria-label="Tela cheia do vídeo"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
               </button>
@@ -705,7 +705,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                     }
                   }}
                   className="p-1.5 rounded-lg bg-black/60 hover:bg-dnd/80 text-gray-200 hover:text-white backdrop-blur-md transition-colors cursor-pointer"
-                  title="Fechar transmissão"
+                  aria-label="Fechar transmissão"
                 >
                   <EyeOff className="w-3.5 h-3.5" />
                 </button>
@@ -717,7 +717,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
               type="button"
               onClick={handleOpenUserProfile}
               className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 bg-black/75 hover:bg-black/95 active:scale-95 border border-white/10 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white shadow transition-all cursor-pointer z-20"
-              title="Ver perfil do participante"
+              aria-label="Ver perfil do participante"
             >
               <div className="w-3.5 h-3.5 rounded-full bg-brand-500 flex items-center justify-center text-[8px] font-bold overflow-hidden">
                 {targetUser.avatar_url ? (
@@ -752,7 +752,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                 type="button"
                 onClick={handleOpenVoiceRoom}
                 className="flex items-center gap-1.5 bg-black/70 hover:bg-black/90 active:scale-95 text-gray-200 hover:text-white px-2 py-1 rounded-lg text-xs font-semibold backdrop-blur-md border border-white/10 transition-all cursor-pointer shadow-md"
-                title="Voltar para a sala de voz"
+                aria-label="Voltar para a sala de voz"
               >
                 <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="truncate max-w-[120px]">#{channelDisplayName}</span>
@@ -790,7 +790,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                 type="button"
                 onClick={handleCardClick}
                 className="bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-[11px] font-semibold px-3 py-1.5 rounded-xl backdrop-blur-md shadow-lg flex items-center gap-1.5 cursor-pointer transition-all"
-                title="Assistir Transmissão"
+                aria-label="Assistir Transmissão"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>Assistir Transmissão</span>
@@ -814,13 +814,11 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             <div
               onPointerDown={(e) => handleResizePointerDown('left', e)}
               className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize z-40 hover:bg-brand-500/20 transition-colors"
-              title="Redimensionar"
             />
             {/* Bottom-left Corner Grip */}
             <div
               onPointerDown={(e) => handleResizePointerDown('bottom-left', e)}
               className="absolute bottom-0 left-0 w-6 h-6 cursor-nesw-resize z-40 flex items-end justify-start p-1 text-white/40 hover:text-white group-hover:opacity-100 opacity-0 transition-opacity"
-              title="Redimensionar"
             >
               <svg className="w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
                 <path d="M2 2L10 10M2 6L6 10M2 10L2 10.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -833,13 +831,11 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
             <div
               onPointerDown={(e) => handleResizePointerDown('right', e)}
               className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize z-40 hover:bg-brand-500/20 transition-colors"
-              title="Redimensionar"
             />
             {/* Bottom-right Corner Grip */}
             <div
               onPointerDown={(e) => handleResizePointerDown('bottom-right', e)}
               className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-40 flex items-end justify-end p-1 text-white/40 hover:text-white group-hover:opacity-100 opacity-0 transition-opacity"
-              title="Redimensionar"
             >
               <svg className="w-3 h-3 pointer-events-none" viewBox="0 0 12 12" fill="none">
                 <path d="M10 2L2 10M10 6L6 10M10 10L10 10.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -922,7 +918,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                     }
                   }}
                   className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 text-xs flex items-center gap-1.5 font-medium transition-colors cursor-pointer"
-                  title="Parar de assistir transmissão"
+                  aria-label="Parar de assistir transmissão"
                 >
                   <EyeOff className="w-4 h-4" />
                   <span className="text-xs">Parar de Ver</span>
@@ -937,7 +933,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                   toggleFullscreen();
                 }}
                 className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center text-xs"
-                title="Sair da tela cheia (ESC)"
+                aria-label="Sair da tela cheia (ESC)"
               >
                 <Minimize2 className="w-4 h-4" />
               </button>
@@ -952,7 +948,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
                       setShowVolume(!showVolume);
                     }}
                     className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center text-xs"
-                    title="Ajustar volumes"
+                    aria-label="Ajustar volumes"
                   >
                     {currentUVol === 0 && (!hasScreenVideoTrack || currentSVol === 0) ? (
                       <VolumeX className="w-4 h-4 text-dnd" />

@@ -31,6 +31,12 @@ import {
   Copy,
 } from 'lucide-react';
 import { Channel, User, Permissions, VoiceSession } from '../../types';
+import {
+  Dropdown,
+  DropdownTrigger,
+  DropdownContent,
+  DropdownItem,
+} from '@/components/ui/r-dropdown';
 import { useGuildStore } from '../../stores/guildStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -906,7 +912,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               {channel.name}
             </span>
             {channel.is_private && (
-              <span title="Canal Privado" className="pointer-events-none">
+              <span className="pointer-events-none">
                 <Lock className="w-3 h-3 text-gray-500 flex-shrink-0 ml-0.5" />
               </span>
             )}
@@ -925,14 +931,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               {mentionCount > 0 ? (
                 <div
                   className="ml-1.5 px-1 min-w-[18px] h-[18px] bg-dnd text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50"
-                  title={`${mentionCount} menções não lidas`}
                 >
                   {mentionCount > 9 ? '9+' : mentionCount}
                 </div>
               ) : isUnread ? (
                 <div
                   className="ml-1.5 w-2 h-2 rounded-full bg-white flex-shrink-0 shadow-sm animate-in zoom-in-50"
-                  title="Mensagens não lidas"
                 />
               ) : null}
             </>
@@ -945,7 +949,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 onOpenChannelSettings(channel);
               }}
               className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white p-0.5 rounded transition-opacity ml-1"
-              title="Configurações do Canal"
+              aria-label="Configurações do Canal"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
@@ -1008,7 +1012,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     }}
                     onContextMenu={(e) => handleVoiceMemberContextMenu(e, channel, vs, targetUser)}
                     className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-white/[0.04] text-[13.5px] text-gray-400 cursor-pointer transition-colors group/voice-member"
-                    title="Clique com botão esquerdo para perfil ou direito para opções"
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <div
@@ -1043,18 +1046,17 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                       {vs.is_screensharing && (
                         <span
                           className="bg-[#f23f43] text-white text-[9px] font-black px-1.5 py-0.5 rounded flex items-center leading-none tracking-wider uppercase shadow-sm"
-                          title="Transmitindo ao vivo"
                         >
                           LIVE
                         </span>
                       )}
                       {vs.is_muted && (
-                        <span title="Microfone Mutado">
+                        <span>
                           <MicOff className="w-3 h-3 text-dnd" />
                         </span>
                       )}
                       {vs.is_deafened && (
-                        <span title="Áudio Desativado">
+                        <span>
                           <HeadphonesOff className="w-3 h-3 text-dnd" />
                         </span>
                       )}
@@ -1107,7 +1109,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     }
                   : undefined
               }
-              className={`w-full px-3 md:px-3.5 border-b border-black/20 flex items-center justify-between font-bold text-gray-100 shadow-sm relative overflow-hidden ${
+              className={`w-full px-3 md:px-3.5 border-b border-black/20 flex justify-between font-bold text-gray-100 shadow-sm relative overflow-hidden ${
                 activeGuild?.banner_url
                   ? 'h-36 pt-3 items-start'
                   : 'h-14 md:h-12 items-center'
@@ -1119,23 +1121,72 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               )}
 
               {/* Clickable Server Name + Dropdown Trigger */}
-              <button
-                type="button"
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all group cursor-pointer min-w-0 max-w-[calc(100%-36px)] text-left relative z-10 ${
-                  isDropdownOpen ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-white'
-                }`}
-                title="Opções do Servidor"
+              <Dropdown
+                variant="action"
+                open={isDropdownOpen}
+                onOpenChange={setIsDropdownOpen}
+                className="min-w-0 max-w-[calc(100%-36px)] relative z-10"
               >
-                <span className="truncate text-[17px] md:text-base font-bold text-white group-hover:text-gray-100">
-                  {activeGuild?.name || 'Servidor'}
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 text-gray-300 group-hover:text-white transition-transform duration-200 flex-shrink-0 ${
-                    isDropdownOpen ? 'rotate-180 text-brand-400' : ''
-                  }`}
-                />
-              </button>
+                <DropdownTrigger
+                  className="h-auto w-auto max-w-full border-0 bg-transparent px-2 py-1.5 shadow-none hover:bg-white/5 text-white min-w-0 data-[state=open]:bg-white/10 data-[state=open]:ring-0 focus-visible:ring-1"
+                  aria-label="Opções do Servidor"
+                >
+                  <span className="truncate text-[17px] md:text-base font-bold text-white">
+                    {activeGuild?.name || 'Servidor'}
+                  </span>
+                </DropdownTrigger>
+
+                <DropdownContent align="start" side="bottom" sideOffset={6} className="w-56 z-50">
+                  <DropdownItem
+                    onClick={onOpenInviteModal}
+                    className="text-brand-400 font-semibold"
+                  >
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span>Convidar Pessoas</span>
+                      <UserPlus className="w-4 h-4 flex-shrink-0" />
+                    </span>
+                  </DropdownItem>
+
+                  {canManageChannels && (
+                    <>
+                      <DropdownItem onClick={() => onOpenCreateChannel('text')}>
+                        <span className="flex w-full items-center justify-between gap-2">
+                          <span>Criar Canal</span>
+                          <Plus className="w-4 h-4 flex-shrink-0" />
+                        </span>
+                      </DropdownItem>
+
+                      <DropdownItem onClick={onOpenCreateCategory}>
+                        <span className="flex w-full items-center justify-between gap-2">
+                          <span>Criar Categoria</span>
+                          <FolderPlus className="w-4 h-4 flex-shrink-0" />
+                        </span>
+                      </DropdownItem>
+                    </>
+                  )}
+
+                  {canManageServer && onOpenServerSettings && (
+                    <DropdownItem onClick={onOpenServerSettings}>
+                      <span className="flex w-full items-center justify-between gap-2">
+                        <span>Configurações do Servidor</span>
+                        <Settings className="w-4 h-4 flex-shrink-0" />
+                      </span>
+                    </DropdownItem>
+                  )}
+
+                  {onOpenMemberList && (
+                    <DropdownItem
+                      onClick={onOpenMemberList}
+                      className="md:hidden"
+                    >
+                      <span className="flex w-full items-center justify-between gap-2">
+                        <span>Membros ({activeGuild?.members?.length || 0})</span>
+                        <Users className="w-4 h-4 flex-shrink-0" />
+                      </span>
+                    </DropdownItem>
+                  )}
+                </DropdownContent>
+              </Dropdown>
 
               {/* Invite People Button */}
               <button
@@ -1145,86 +1196,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   onOpenInviteModal();
                 }}
                 className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer flex-shrink-0 relative z-10"
-                title="Convidar Pessoas"
+                aria-label="Convidar Pessoas"
               >
                 <UserPlus className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Dropdown Menu */}
-            {isDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
-                <div
-                  className={`absolute left-2 right-2 z-50 bg-background-darkest rounded-xl p-1.5 shadow-2xl border border-white/10 space-y-1 origin-top animate-in fade-in zoom-in-95 duration-150 ease-out ${
-                    activeGuild?.banner_url ? 'top-38' : 'top-13'
-                  }`}
-                >
-                  <button
-                    onClick={() => {
-                      setIsDropdownOpen(false);
-                      onOpenInviteModal();
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-brand-400 hover:bg-brand-500/10 transition-colors cursor-pointer"
-                  >
-                    <span>Convidar Pessoas</span>
-                    <UserPlus className="w-4 h-4" />
-                  </button>
-
-                  {canManageChannels && (
-                    <>
-                      <button
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          onOpenCreateChannel('text');
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-300 hover:bg-white/5 transition-colors cursor-pointer"
-                      >
-                        <span>Criar Canal</span>
-                        <Plus className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          onOpenCreateCategory();
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-300 hover:bg-white/5 transition-colors cursor-pointer"
-                      >
-                        <span>Criar Categoria</span>
-                        <FolderPlus className="w-4 h-4" />
-                      </button>
-                    </>
-                  )}
-
-                  {canManageServer && onOpenServerSettings && (
-                    <button
-                      onClick={() => {
-                        setIsDropdownOpen(false);
-                        onOpenServerSettings();
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-300 hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      <span>Configurações do Servidor</span>
-                      <Settings className="w-4 h-4" />
-                    </button>
-                  )}
-
-                  {onOpenMemberList && (
-                    <button
-                      onClick={() => {
-                        setIsDropdownOpen(false);
-                        onOpenMemberList();
-                      }}
-                      className="w-full md:hidden flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-gray-300 hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      <span>Membros ({activeGuild?.members?.length || 0})</span>
-                      <Users className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
           </div>
         )}
 
@@ -1317,7 +1293,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                             onOpenCreateChannel('text', category.id);
                           }}
                           className="p-1 text-gray-400 opacity-70 group-hover:opacity-100 hover:text-white transition-opacity"
-                          title="Criar Canal na Categoria"
+                          aria-label="Criar Canal na Categoria"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>

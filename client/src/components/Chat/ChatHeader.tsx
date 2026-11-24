@@ -93,7 +93,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               onOpenMobileDrawer();
             }}
             className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0"
-            title="Abrir Menu"
+            aria-label="Abrir Menu"
           >
             <Menu className="w-5 h-5 md:w-6 md:h-6" />
           </button>
@@ -131,7 +131,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 ? 'text-amber-400 bg-amber-400/15'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
             }`}
-            title={showPinnedOnly ? 'Mostrar todas as mensagens' : 'Mensagens Fixadas'}
+            aria-label={showPinnedOnly ? 'Mostrar todas as mensagens' : 'Mensagens Fixadas'}
           >
             <Pin className="w-4 h-4 md:w-5 md:h-5" />
           </button>
@@ -147,7 +147,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 ? 'text-brand-400 bg-white/10'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
             }`}
-            title="Lista de Membros"
+            aria-label="Lista de Membros"
           >
             <Users className="w-4 h-4 md:w-5 md:h-5" />
           </button>
@@ -188,7 +188,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                     setIsSearchAutocompleteOpen(false);
                   }}
                   className="p-0.5 text-gray-400 hover:text-white flex-shrink-0 cursor-pointer"
-                  title="Limpar busca"
+                  aria-label="Limpar busca"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>

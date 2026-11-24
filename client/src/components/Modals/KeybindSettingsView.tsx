@@ -240,7 +240,7 @@ export const KeybindSettingsView: React.FC = () => {
                         type="button"
                         onClick={() => setRecordingId(sc.id)}
                         className="px-3 py-1.5 bg-background-darkest hover:bg-black/40 border border-white/10 hover:border-brand-500/50 rounded-xl text-xs text-gray-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
-                        title="Clique para gravar um novo atalho"
+                        aria-label="Clique para gravar um novo atalho"
                       >
                         {formatKeyDisplay(currentKey)}
                       </button>

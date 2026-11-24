@@ -269,7 +269,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
             <div
               onClick={() => groupIconInputRef.current?.click()}
               className="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs flex-shrink-0 border border-brand-500/30 cursor-pointer relative group overflow-hidden"
-              title="Alterar foto do grupo"
             >
               {activeGroup.icon_url ? (
                 <img
@@ -290,7 +289,6 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
               <span
                 onClick={() => setIsEditNameOpen(true)}
                 className="font-bold text-sm text-gray-100 truncate cursor-pointer hover:underline"
-                title="Clique para mudar o nome do grupo"
               >
                 {groupName}
               </span>
@@ -298,7 +296,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                 type="button"
                 onClick={() => setIsEditNameOpen(true)}
                 className="p-1 text-gray-400 hover:text-white rounded hover:bg-white/5 transition-colors cursor-pointer"
-                title="Mudar nome do grupo"
+                aria-label="Mudar nome do grupo"
               >
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
@@ -314,7 +312,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
                     ? 'bg-brand-500/50 text-white animate-pulse'
                     : 'text-gray-400 hover:text-online hover:bg-white/5'
                 }`}
-                title={isGroupVoiceConnecting ? 'Conectando à Voz...' : 'Entrar na Chamada de Voz'}
+                aria-label={isGroupVoiceConnecting ? 'Conectando à Voz...' : 'Entrar na Chamada de Voz'}
               >
                 <Phone className="w-4 h-4" />
               </button>

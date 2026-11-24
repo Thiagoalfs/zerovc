@@ -26,10 +26,32 @@ export interface PendingKeyRequest {
 
 export type RetroactiveDecryptCallback = (conversationId: string, sessionId: string) => void;
 
+function formatHumanKeyRequestError(err: any): string {
+  const raw = String(err?.message || '').toLowerCase();
+  const status = err?.status || err?.response?.status;
+  if (status === 401 || status === 403 || raw.includes('unauthorized')) {
+    return 'Sessão expirada, faça login novamente';
+  }
+  if (status === 404 || raw.includes('not found')) {
+    return 'Chave não encontrada no servidor';
+  }
+  if (status === 429 || raw.includes('rate limit') || raw.includes('too many')) {
+    return 'Muitas solicitações, aguarde um instante';
+  }
+  if (status >= 500) {
+    return 'Servidor indisponível no momento';
+  }
+  if (raw.includes('network') || raw.includes('failed to fetch') || raw.includes('timeout')) {
+    return 'Sem conexão com o servidor';
+  }
+  return 'Não foi possível solicitar a chave agora';
+}
+
 export class KeyRequestManager {
   private pendingRequests: Map<string, PendingKeyRequest> = new Map();
   private requestTimestamps: number[] = [];
   private callbacks: Set<RetroactiveDecryptCallback> = new Set();
+  private lastFailureReason: string | null = null;
 
   private readonly TTL_MS = 30_000; // 30 seconds deduplication TTL
   private readonly MAX_ATTEMPTS = 3;
@@ -43,6 +65,10 @@ export class KeyRequestManager {
   onSessionImported(cb: RetroactiveDecryptCallback): () => void {
     this.callbacks.add(cb);
     return () => this.callbacks.delete(cb);
+  }
+
+  getLastFailureReason(): string | null {
+    return this.lastFailureReason;
   }
 
   /**
@@ -60,10 +86,12 @@ export class KeyRequestManager {
   }): Promise<boolean> {
     const key = `${params.conversationId}:${params.sessionId}`;
     const now = Date.now();
+    this.lastFailureReason = null;
 
     // 1. Clean up old timestamps from global rate limit window
     this.requestTimestamps = this.requestTimestamps.filter((t) => now - t < this.RATE_LIMIT_WINDOW_MS);
     if (this.requestTimestamps.length >= this.MAX_REQUESTS_PER_MINUTE) {
+      this.lastFailureReason = 'Limite de pedidos atingido (aguarde 1 min)';
       safeCryptoLogger.warn('Key request rate limit reached (10/min), skipping', { key });
       return false;
     }
@@ -73,11 +101,13 @@ export class KeyRequestManager {
     if (existing) {
       // Within 30s TTL: deduplicate
       if (now - existing.lastRequestedAt < this.TTL_MS) {
+        this.lastFailureReason = 'Aguarde 30s para tentar novamente';
         return false;
       }
       // Reached max attempts: check if still in cooldown
       if (existing.attempts >= this.MAX_ATTEMPTS) {
         if (now - existing.lastRequestedAt < this.COOLDOWN_MS) {
+          this.lastFailureReason = 'Limite de tentativas (aguarde 5 min)';
           safeCryptoLogger.warn('Key request cooldown active, skipping', { key, attempts: existing.attempts });
           return false;
         }
@@ -149,11 +179,13 @@ export class KeyRequestManager {
         safeCryptoLogger.debug('Dispatched to-device key_request', { sessionId: params.sessionId, targets: toDeviceMessages.length });
         return true;
       } else {
+        this.lastFailureReason = 'Nenhum dispositivo com a chave disponível';
         safeCryptoLogger.warn('No valid recipient device found for key_request', { senderDeviceId: params.senderDeviceId, authorUserId: params.authorUserId });
         return false;
       }
     } catch (err: any) {
-      safeCryptoLogger.error('Failed to send key_request to-device', { error: err.message });
+      this.lastFailureReason = formatHumanKeyRequestError(err);
+      safeCryptoLogger.error('Failed to send key_request to-device', { error: err?.message });
       return false;
     }
   }

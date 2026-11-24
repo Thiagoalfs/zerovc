@@ -452,7 +452,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
               <button
                 onClick={onOpenCreateGroup}
                 className="text-gray-400 hover:text-white p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
-                title="Criar Grupo de DM"
+                aria-label="Criar Grupo de DM"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -501,7 +501,6 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                       {unreadCount > 0 && !isSelected && (
                         <div
                           className="ml-auto px-1.5 min-w-[20px] h-5 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50"
-                          title={`${unreadCount} mensagens não lidas`}
                         >
                           {unreadCount > 99 ? '99+' : unreadCount}
                         </div>
@@ -559,7 +558,6 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                         {unreadCount > 0 && !isSelected && (
                           <div
                             className="ml-auto group-hover/dm:opacity-0 px-1.5 min-w-[20px] h-5 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center shadow-sm flex-shrink-0 animate-in zoom-in-50 transition-opacity"
-                            title={`${unreadCount} mensagens não lidas`}
                           >
                             {unreadCount > 99 ? '99+' : unreadCount}
                           </div>
@@ -570,7 +568,6 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
                       <button
                         onClick={(e) => handleCloseRoom(e, room.id)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-gray-400 hover:text-gray-100 hover:bg-white/10 opacity-0 group-hover/dm:opacity-100 transition-all cursor-pointer z-10"
-                        title="Fechar DM"
                         aria-label="Fechar DM"
                       >
                         <X className="w-3.5 h-3.5" />

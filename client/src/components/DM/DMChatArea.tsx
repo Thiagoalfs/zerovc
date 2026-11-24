@@ -234,7 +234,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
               <button
                 onClick={handleStartCall}
                 className="p-2 md:p-1.5 rounded-lg text-gray-400 hover:text-online hover:bg-white/5 transition-colors cursor-pointer"
-                title="Iniciar Chamada de Voz"
+                aria-label="Iniciar Chamada de Voz"
               >
                 <Phone className="w-4 h-4 md:w-5 md:h-5" />
               </button>

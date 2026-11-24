@@ -305,14 +305,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const key = await backupManager.loadVaultKeyFromStore();
           if (key) {
             backupManager.setVaultKey(key, user.id);
-            backupManager.autoRestore(key).catch((err) => {
-              console.warn('[checkAuth] autoRestore error in background:', err);
-            });
-            if (user.e2ee_backup_enabled !== false) {
-              backupManager.ensureActiveBackup().catch((err) => {
-                console.warn('[checkAuth] ensureActiveBackup error in background:', err);
+            backupManager
+              .autoRestore(key)
+              .catch((err) => {
+                console.warn('[checkAuth] autoRestore error in background:', err);
+              })
+              .finally(() => {
+                if (user.e2ee_backup_enabled !== false) {
+                  backupManager.ensureActiveBackup().catch((err) => {
+                    console.warn('[checkAuth] ensureActiveBackup error in background:', err);
+                  });
+                }
               });
-            }
           }
         } catch (vaultErr) {
           console.warn('[checkAuth] Failed to load vault key from store:', vaultErr);

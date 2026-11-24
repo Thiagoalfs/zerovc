@@ -281,17 +281,12 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
                     {!canEditRole(role) && (
-                      <span title="Cargo igual ou superior ao seu na hierarquia">
+                      <span>
                         <Lock className="w-3 h-3 text-amber-400/80" />
                       </span>
                     )}
                     <span
                       className="text-[11px] text-gray-500 flex items-center gap-0.5 tabular-nums"
-                      title={
-                        isEveryone
-                          ? `${members.length} membro(s)`
-                          : `${memberCountByRoleId[String(role.id)] || 0} membro(s) com este cargo`
-                      }
                     >
                       <Users className="w-3 h-3" />
                       {isEveryone ? members.length : (memberCountByRoleId[String(role.id)] || 0)}
@@ -416,7 +411,6 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                     onChange={(e) => handleUpdateRoleColor(e.target.value)}
                     disabled={!canEditSelectedRole}
                     className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer disabled:opacity-50"
-                    title="Cor personalizada"
                   />
                   <span className="text-xs text-gray-400">{selectedRole.color || '#5865F2'}</span>
                 </div>

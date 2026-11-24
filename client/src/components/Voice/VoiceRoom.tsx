@@ -309,7 +309,7 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
       {/* Main Voice / Video Dynamic Stage */}
       <CallStage
         variant="full"
-        controlsMode="hover"
+        controlsMode="always"
         isHovered={isVoiceRoomHovered}
         participants={displayedParticipants}
         isConnected={isConnectedToThisChannel}

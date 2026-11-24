@@ -417,6 +417,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     if (!el || !track) return;
     try {
       track.attach(el);
+      const receiver = track?.receiver as (RTCRtpReceiver & { playoutDelayHint?: number; jitterBufferTarget?: number }) | undefined;
+      if (receiver) {
+        if ('playoutDelayHint' in receiver) receiver.playoutDelayHint = 0;
+        if ('jitterBufferTarget' in receiver) receiver.jitterBufferTarget = 0;
+      }
       el.play().catch(() => {});
     } catch (err) {
       console.warn('[ParticipantCard] Error attaching video track:', err);
@@ -568,7 +573,6 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         <div
           ref={containerRef}
           onContextMenu={handleContextMenu}
-          title={displayName}
           className="relative flex items-center justify-center cursor-pointer select-none group"
         >
           <div
@@ -595,7 +599,6 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
           {isMuted && (
             <div
               className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#111214] border-2 border-background-darkest flex items-center justify-center text-dnd shadow-md"
-              title="Microfone mutado"
             >
               <MicOff className="w-3.5 h-3.5" />
             </div>
@@ -779,7 +782,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
             </span>
           )}
           {isScreenSharing && !isWatching && isMuted && !isCompact && (
-            <span className="bg-dnd/90 backdrop-blur-md text-white text-[10px] font-bold p-1 rounded-md flex items-center shadow-sm" title="Microfone Mutado">
+            <span className="bg-dnd/90 backdrop-blur-md text-white text-[10px] font-bold p-1 rounded-md flex items-center shadow-sm">
               <MicOff className="w-3 h-3" />
             </span>
           )}
@@ -797,7 +800,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                   handleToggleWatch(false);
                 }}
                 className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer"
-                title="Parar de assistir transmissão"
+                aria-label="Parar de assistir transmissão"
               >
                 <EyeOff className="w-3.5 h-3.5" />
                 <span className="text-[11px] hidden sm:inline">Parar de Ver</span>
@@ -813,7 +816,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                   toggleFullscreen();
                 }}
                 className="p-1 text-gray-300 hover:text-white rounded hover:bg-white/10 transition-colors cursor-pointer"
-                title="Tela cheia"
+                aria-label="Tela cheia"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
               </button>
@@ -828,7 +831,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                   setShowVolumeSlider(!showVolumeSlider);
                 }}
                 className="p-1 rounded text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                title="Ajustar volumes"
+                aria-label="Ajustar volumes"
               >
                 {currentUVol === 0 && (!isScreenSharing || currentSVol === 0) ? (
                   <VolumeX className="w-3.5 h-3.5 text-dnd" />
@@ -953,7 +956,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                           handleToggleWatch(false);
                         }}
                         className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 text-xs flex items-center gap-1.5 font-medium transition-colors cursor-pointer"
-                        title="Parar de assistir transmissão"
+                        aria-label="Parar de assistir transmissão"
                       >
                         <EyeOff className="w-4 h-4" />
                         <span className="text-xs">Parar de Ver</span>
@@ -967,7 +970,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                           stopScreenShare();
                         }}
                         className="p-1.5 text-dnd hover:bg-dnd/20 rounded-lg text-xs flex items-center gap-1.5 font-medium transition-colors cursor-pointer"
-                        title="Encerrar compartilhamento"
+                        aria-label="Encerrar compartilhamento"
                       >
                         <Monitor className="w-4 h-4" />
                         <span className="text-xs">Parar Live</span>
@@ -984,7 +987,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                     toggleFullscreen();
                   }}
                   className="p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center text-xs"
-                  title="Sair da tela cheia (ESC)"
+                  aria-label="Sair da tela cheia (ESC)"
                 >
                   <Minimize2 className="w-4 h-4" />
                 </button>
@@ -999,7 +1002,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                         setShowVolumeSlider(!showVolumeSlider);
                       }}
                       className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center text-xs"
-                      title="Ajustar volumes"
+                      aria-label="Ajustar volumes"
                     >
                       {currentUVol === 0 && (!isScreenSharing || currentSVol === 0) ? (
                         <VolumeX className="w-4 h-4 text-dnd" />

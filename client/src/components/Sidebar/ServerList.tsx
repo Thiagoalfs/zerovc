@@ -494,7 +494,6 @@ export const ServerList: React.FC<ServerListProps> = ({
         {mentionCount > 0 && !isActive && (
           <div
             className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50"
-            title={`${mentionCount} menções não lidas`}
           >
             {mentionCount > 9 ? '9+' : mentionCount}
           </div>
@@ -522,7 +521,7 @@ export const ServerList: React.FC<ServerListProps> = ({
                 ? 'rounded-[16px] bg-brand-500 text-white'
                 : 'bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white'
             }`}
-            title="Amigos e Mensagens"
+            aria-label="Amigos e Mensagens"
           >
             <MessageSquare className="w-6 h-6" />
 
@@ -581,7 +580,7 @@ export const ServerList: React.FC<ServerListProps> = ({
                     className={`relative group w-12 h-12 flex items-center justify-center font-semibold text-sm transition-all duration-150 origin-center rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white shadow-md cursor-pointer ${
                       isRoomActive ? 'rounded-[16px] bg-brand-500 text-white' : ''
                     }`}
-                    title={`DM de ${recipient?.display_name || recipient?.username} (${unreadCount} mensagem${unreadCount > 1 ? 's' : ''} não lida${unreadCount > 1 ? 's' : ''})`}
+                    aria-label={`DM de ${recipient?.display_name || recipient?.username} (${unreadCount} mensagem${unreadCount > 1 ? 's' : ''} não lida${unreadCount > 1 ? 's' : ''})`}
                   >
                     {recipient?.avatar_url ? (
                       <img
@@ -598,7 +597,6 @@ export const ServerList: React.FC<ServerListProps> = ({
                   {unreadCount > 0 && !isRoomActive && (
                     <div
                       className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50"
-                      title={`${unreadCount} mensagens não lidas de ${recipient?.display_name || recipient?.username}`}
                     >
                       {unreadCount > 99 ? '99+' : unreadCount}
                     </div>
@@ -635,7 +633,7 @@ export const ServerList: React.FC<ServerListProps> = ({
                     className={`relative group w-12 h-12 flex items-center justify-center font-semibold text-sm transition-all duration-150 origin-center rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-brand-500 text-gray-200 hover:text-white shadow-md cursor-pointer ${
                       isGroupActive ? 'rounded-[16px] bg-brand-500 text-white' : ''
                     }`}
-                    title={`Grupo: ${groupDisplayName} (${unreadCount} mensagem${unreadCount > 1 ? 's' : ''} não lida${unreadCount > 1 ? 's' : ''})`}
+                    aria-label={`Grupo: ${groupDisplayName} (${unreadCount} mensagem${unreadCount > 1 ? 's' : ''} não lida${unreadCount > 1 ? 's' : ''})`}
                   >
                     {group.icon_url ? (
                       <img
@@ -654,7 +652,6 @@ export const ServerList: React.FC<ServerListProps> = ({
                   {unreadCount > 0 && !isGroupActive && (
                     <div
                       className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50"
-                      title={`${unreadCount} mensagens não lidas no grupo ${groupDisplayName}`}
                     >
                       {unreadCount > 99 ? '99+' : unreadCount}
                     </div>
@@ -698,7 +695,7 @@ export const ServerList: React.FC<ServerListProps> = ({
                       className={`relative w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 cursor-pointer shadow-md overflow-hidden ${
                         isCollapsed ? 'bg-background-dark hover:bg-brand-500/30' : 'bg-brand-500/20 text-brand-300'
                       }`}
-                      title={`${folder.name} (${folderGuilds.length} servidores)`}
+                      aria-label={`${folder.name} (${folderGuilds.length} servidores)`}
                     >
                       {isCollapsed ? (
                         <div className="grid grid-cols-2 gap-1 p-2 w-full h-full">
@@ -724,7 +721,6 @@ export const ServerList: React.FC<ServerListProps> = ({
                     {isCollapsed && folderMentions > 0 && (
                       <div
                         className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50"
-                        title={`${folderMentions} menções não lidas nesta pasta`}
                       >
                         {folderMentions > 9 ? '9+' : folderMentions}
                       </div>
@@ -748,7 +744,7 @@ export const ServerList: React.FC<ServerListProps> = ({
           <button
             onClick={onOpenCreateServer}
             className="relative group w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-background-dark hover:bg-online flex items-center justify-center text-online hover:text-white transition-all duration-200 shadow-md"
-            title="Adicionar ou Entrar em um Servidor"
+            aria-label="Adicionar ou Entrar em um Servidor"
           >
             <Plus className="w-6 h-6 transition-transform group-hover:rotate-90 duration-200" />
           </button>

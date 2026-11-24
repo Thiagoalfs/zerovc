@@ -297,11 +297,15 @@ export const CallStage: React.FC<CallStageProps> = ({
                     {otherParticipants.map((participant) => (
                       <div
                         key={participant.identity}
-                        className="shrink-0 w-[160px] h-[90px]"
+                        className={
+                          isCompactVariant
+                            ? 'shrink-0 w-[160px] h-[90px]'
+                            : 'shrink-0 w-[240px] h-[135px]'
+                        }
                       >
                         <ParticipantCard
                           participant={participant}
-                          isCompact
+                          isCompact={isCompactVariant}
                           onOpenUserProfile={onOpenUserProfile}
                           onOpenDM={onOpenDM}
                           onOpenScreenShare={onOpenScreenShare}
@@ -368,7 +372,6 @@ export const CallStage: React.FC<CallStageProps> = ({
             className={`absolute ${
               controlsFloating ? 'right-0' : 'right-4'
             } top-1/2 -translate-y-1/2 pointer-events-auto p-1.5 text-gray-300 hover:text-white transition-all cursor-pointer active:scale-95`}
-            title={isFullscreen ? 'Sair da Tela Cheia (Esc)' : 'Tela Cheia'}
             aria-label={isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
           >
             {isFullscreen ? (

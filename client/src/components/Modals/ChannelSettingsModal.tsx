@@ -696,7 +696,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                     type="text"
                     required
                     disabled={!canManageThisChannel}
-                    title={!canManageThisChannel ? 'Você precisa da permissão Gerenciar Canal para editar este campo' : undefined}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder={isCategory ? 'COMUNIDADE' : 'novo-canal'}
@@ -731,7 +730,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                   <textarea
                     rows={4}
                     disabled={!canManageThisChannel}
-                    title={!canManageThisChannel ? 'Você precisa da permissão Gerenciar Canal para editar este campo' : undefined}
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
                     placeholder="Descreva o propósito deste canal..."
@@ -779,14 +777,13 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
                         <div className="flex items-center gap-1 shrink-0 ml-1.5">
                           {isRoleLocked && (
-                            <span title="Cargo igual ou superior ao seu na hierarquia">
+                            <span>
                               <Lock className="w-3 h-3 text-amber-400/80" />
                             </span>
                           )}
                           {allowCount > 0 && (
                             <span
                               className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400"
-                              title={`${allowCount} permissão(ões) permitida(s)`}
                             >
                               +{allowCount}
                             </span>
@@ -794,7 +791,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                           {denyCount > 0 && (
                             <span
                               className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400"
-                              title={`${denyCount} permissão(ões) negada(s)`}
                             >
                               -{denyCount}
                             </span>
@@ -823,7 +819,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                       <div
                         className={overwrites[selectedRole.id] ? '' : 'invisible pointer-events-none'}
                         aria-hidden={!overwrites[selectedRole.id]}
-                        title={roleEditBlockedReason || 'Restaurar todas as permissões para o padrão do servidor'}
                       >
                         <ModalButton
                           type="secondary"
@@ -901,7 +896,6 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
 
                                   {/* 3-State Toggle: ❌ Negar | ➖ Herdar | ✅ Permitir */}
                                   <div
-                                    title={roleEditBlockedReason}
                                     className={`flex items-center bg-background-darker p-1 rounded-xl border border-white/10 shrink-0 ${
                                       !canEditSelectedRole ? 'opacity-50 cursor-not-allowed' : ''
                                     }`}
@@ -926,7 +920,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                           ? 'text-gray-400 hover:text-red-400 hover:bg-white/5'
                                           : 'text-gray-400'
                                       }`}
-                                      title={roleEditBlockedReason || 'Negar permissão neste canal'}
+                                      aria-label={roleEditBlockedReason || 'Negar permissão neste canal'}
                                     >
                                       <X className="w-3.5 h-3.5" />
                                     </button>
@@ -947,7 +941,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                           ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
                                           : 'text-gray-500'
                                       }`}
-                                      title={roleEditBlockedReason || 'Padrão / Herdar permissão do servidor'}
+                                      aria-label={roleEditBlockedReason || 'Padrão / Herdar permissão do servidor'}
                                     >
                                       <Minus className="w-3.5 h-3.5" />
                                     </button>
@@ -972,7 +966,7 @@ export const ChannelSettingsModal: React.FC<ChannelSettingsModalProps> = ({
                                           ? 'text-gray-400 hover:text-emerald-400 hover:bg-white/5'
                                           : 'text-gray-400'
                                       }`}
-                                      title={roleEditBlockedReason || 'Permitir ação neste canal'}
+                                      aria-label={roleEditBlockedReason || 'Permitir ação neste canal'}
                                     >
                                       <Check className="w-3.5 h-3.5" />
                                     </button>

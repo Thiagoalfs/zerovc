@@ -70,7 +70,6 @@ export const SidebarResizer: React.FC<SidebarResizerProps> = ({
       className={`absolute top-0 ${
         side === 'left' ? 'left-0 -ml-1.5' : 'right-0 -mr-1.5'
       } w-3 h-full cursor-col-resize z-30 select-none hidden md:block`}
-      title="Arraste para redimensionar (duplo clique para restaurar 240px)"
     />
   );
 };

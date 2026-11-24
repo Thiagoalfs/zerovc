@@ -246,7 +246,7 @@ export const AudioDeviceDropup: React.FC<AudioDeviceDropupProps> = ({
                       : 'text-gray-300 hover:bg-white/5 hover:text-white'
                   }`}
                 >
-                  <span className="truncate flex-1 pr-2 select-none" title={label}>
+                  <span className="truncate flex-1 pr-2 select-none">
                     {label}
                   </span>
                   {selected && (

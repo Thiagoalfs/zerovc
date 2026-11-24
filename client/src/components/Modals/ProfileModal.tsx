@@ -1531,7 +1531,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     className="w-full h-28 sm:h-32 bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 relative group cursor-pointer bg-cover bg-center flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                     style={{ backgroundImage: effectiveBannerSrc ? `url(${effectiveBannerSrc})` : undefined }}
                     onClick={() => bannerFileInputRef.current?.click()}
-                    title="Clique para alterar seu banner"
                   >
                     <EditPencilOverlay variant="top-right" />
                   </div>
@@ -1547,7 +1546,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') avatarFileInputRef.current?.click(); }}
                         className="w-24 h-24 rounded-full border-4 border-background-darker bg-brand-500 overflow-hidden shadow-2xl flex-shrink-0 flex items-center justify-center text-white font-bold text-3xl relative group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                         onClick={() => avatarFileInputRef.current?.click()}
-                        title="Clique para alterar seu avatar"
                       >
                         {effectiveAvatarSrc ? (
                           <img
@@ -2149,7 +2147,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           key={item.id}
                           type="button"
                           onClick={() => setTheme(item.id as ThemeMode)}
-                          title={item.name}
                           aria-label={item.name}
                           className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all cursor-pointer flex items-center justify-center relative shadow-md hover:scale-105 active:scale-95 ${
                             isSelected
@@ -2193,7 +2190,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                           key={item.id}
                           type="button"
                           onClick={() => setAccentColor(item.id as AccentColor)}
-                          title={item.name}
                           aria-label={item.name}
                           className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all cursor-pointer flex items-center justify-center relative shadow-md hover:scale-105 active:scale-95 ${
                             isSelected

@@ -253,7 +253,7 @@ const GifPickerItem: React.FC<{
             ? 'bg-amber-500 text-white'
             : 'bg-black/60 text-white/70 hover:text-white opacity-0 group-hover:opacity-100 hover:bg-black/90'
         }`}
-        title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
+        aria-label={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
       >
         <Star className={`w-3.5 h-3.5 ${favorited ? 'fill-current' : ''}`} />
       </button>
@@ -584,7 +584,6 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
         <div
           onMouseDown={handleResizeStart}
           className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-brand-500/20 active:bg-brand-500/40 z-30 transition-colors hidden sm:flex items-center justify-center group/resizer"
-          title="Arrastar para redimensionar (limitado ao espaço do chat)"
         >
           <div className="w-1 h-8 bg-white/20 group-hover/resizer:bg-brand-400 group-hover/resizer:scale-y-125 rounded-full transition-all" />
         </div>
@@ -673,7 +672,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                         <button
                           key={emoji.id}
                           type="button"
-                          title={`:${emoji.name}:`}
+                          aria-label={`:${emoji.name}:`}
                           onClick={() => {
                             onSelectEmoji(`:${emoji.name}: `);
                             onClose();
@@ -711,7 +710,7 @@ export const EmojiAndGifPicker: React.FC<EmojiAndGifPickerProps> = ({
                       <button
                         key={`${emoji.unicode}-${idx}`}
                         type="button"
-                        title={`:${emoji.shortcodes[0] || emoji.name}:`}
+                        aria-label={`:${emoji.shortcodes[0] || emoji.name}:`}
                         onClick={() => {
                           onSelectEmoji(emoji.unicode);
                         }}

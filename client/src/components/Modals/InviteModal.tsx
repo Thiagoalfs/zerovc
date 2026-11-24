@@ -200,7 +200,6 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                   <div
                     onClick={() => handleCopyCode()}
                     className="flex items-center gap-2 bg-background-darkest p-2 px-3 rounded-xl border border-white/10 hover:border-brand-500/50 transition-colors cursor-pointer group"
-                    title="Clique para copiar"
                   >
                     <span className="flex-1 font-mono text-lg font-bold text-brand-500 tracking-wider select-all">
                       {isStreamerModeHidingInvites ? '••••••••' : inviteCode}
@@ -238,7 +237,6 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose }) => 
                   <div
                     onClick={() => handleCopyLink()}
                     className="flex items-center gap-2 bg-background-darkest p-1.5 pl-3 rounded-xl border border-white/10 hover:border-brand-500/50 transition-colors cursor-pointer group"
-                    title="Clique para copiar"
                   >
                     <span className="flex-1 text-xs text-gray-300 truncate font-mono select-all">
                       {isStreamerModeHidingInvites ? `${origin}/invite/••••••••` : fullInviteUrl}

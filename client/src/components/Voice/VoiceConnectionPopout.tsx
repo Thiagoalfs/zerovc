@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Bug, Upload, Lock, Check } from 'lucide-react';
+import { Bug, Upload, Lock, Check, Wifi, ArrowLeft } from 'lucide-react';
 import { livekit } from '../../lib/livekit';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { copyToClipboard } from '../../utils/clipboard';
@@ -8,10 +8,22 @@ import { copyToClipboard } from '../../utils/clipboard';
 interface VoiceConnectionPopoutProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenDiagnostic: () => void;
   channelName?: string;
   serverName?: string;
   anchorRef?: React.RefObject<HTMLElement> | null;
+}
+
+interface DiagnosticStats {
+  isConnected: boolean;
+  roomName: string;
+  serverUrl: string;
+  pingMs: number;
+  iceState: string;
+  protocol: 'udp' | 'tcp' | 'unknown';
+  packetLossPercent: number;
+  audioBitrateKbps: number;
+  videoBitrateKbps: number;
+  codec: string;
 }
 
 interface PingSample {
@@ -22,12 +34,13 @@ interface PingSample {
 export const VoiceConnectionPopout: React.FC<VoiceConnectionPopoutProps> = ({
   isOpen,
   onClose,
-  onOpenDiagnostic,
   channelName,
   serverName,
   anchorRef,
 }) => {
   const { isConnected } = useVoiceStore();
+  const [showDebug, setShowDebug] = useState(false);
+  const [diagnosticStats, setDiagnosticStats] = useState<DiagnosticStats | null>(null);
   const [currentPing, setCurrentPing] = useState(14);
   const [avgPing, setAvgPing] = useState(14);
   const [packetLoss, setPacketLoss] = useState(0);
@@ -91,7 +104,14 @@ export const VoiceConnectionPopout: React.FC<VoiceConnectionPopoutProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, onClose, anchorRef]);
 
-  // Update ping and stats every 2 seconds
+  // Reset debug view when popout closes
+  useEffect(() => {
+    if (!isOpen) {
+      setShowDebug(false);
+    }
+  }, [isOpen]);
+
+  // Update ping and stats every 1.5s in debug mode or 2s normally
   useEffect(() => {
     if (!isOpen) return;
 
@@ -99,6 +119,7 @@ export const VoiceConnectionPopout: React.FC<VoiceConnectionPopoutProps> = ({
       try {
         const stats = await livekit.getDiagnosticStats();
         if (stats) {
+          setDiagnosticStats(stats);
           const ping = stats.pingMs > 0 ? stats.pingMs : Math.floor(Math.random() * 6) + 12;
           setCurrentPing(ping);
           setPacketLoss(stats.packetLossPercent || 0);
@@ -129,9 +150,9 @@ export const VoiceConnectionPopout: React.FC<VoiceConnectionPopoutProps> = ({
     };
 
     updateStats();
-    const interval = setInterval(updateStats, 2000);
+    const interval = setInterval(updateStats, showDebug ? 1500 : 2000);
     return () => clearInterval(interval);
-  }, [isOpen]);
+  }, [isOpen, showDebug]);
 
   const handleCopyLogs = async () => {
     try {
@@ -156,6 +177,15 @@ export const VoiceConnectionPopout: React.FC<VoiceConnectionPopoutProps> = ({
 
   // Max scale for graph (at least 50ms)
   const maxPingInHistory = Math.max(50, ...history.map((h) => h.ping));
+  const diagPing = diagnosticStats?.pingMs ?? currentPing;
+  const diagPingColor =
+    diagPing <= 50 ? 'text-emerald-400' : diagPing <= 120 ? 'text-amber-400' : 'text-red-400';
+  const diagPingBg =
+    diagPing <= 50
+      ? 'bg-emerald-500/10 border-emerald-500/20'
+      : diagPing <= 120
+        ? 'bg-amber-500/10 border-amber-500/20'
+        : 'bg-red-500/10 border-red-500/20';
 
   return createPortal(
     <>
@@ -178,113 +208,255 @@ export const VoiceConnectionPopout: React.FC<VoiceConnectionPopoutProps> = ({
         }}
         className="z-[99999] w-[290px] bg-[#111214] text-gray-200 border border-[#232428] rounded-xl shadow-2xl overflow-hidden flex flex-col font-sans select-none animate-in fade-in zoom-in-95 duration-150"
       >
-        {/* 1. Ping / Latency Graph Area */}
-        <div className="bg-[#0b0c0d] p-3 pb-2 border-b border-[#1f2023] relative">
-          <div className="h-16 w-full flex items-end justify-between gap-1 relative px-0.5">
-            {/* Subtle horizontal grid lines */}
-            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
-              <div className="border-b border-white w-full" />
-              <div className="border-b border-white w-full" />
-              <div className="border-b border-white w-full" />
+        {showDebug ? (
+          <>
+            {/* Debug Header */}
+            <div className="bg-[#0b0c0d] px-3.5 py-2.5 border-b border-[#1f2023] flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-white truncate">Diagnóstico WebRTC</h4>
+                <p className="text-[10px] text-[#949ba4] truncate">Estatísticas em tempo real</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowDebug(false)}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-[#2b2d31] hover:bg-[#35373c] text-gray-200 text-[11px] font-medium transition-colors cursor-pointer flex-shrink-0"
+              >
+                <ArrowLeft className="w-3 h-3" />
+                <span>Voltar</span>
+              </button>
             </div>
 
-            {/* Render Bars */}
-            {history.map((item, idx) => {
-              const heightPercent = Math.min(100, Math.max(8, (item.ping / maxPingInHistory) * 100));
-              const barColor = item.ping <= 50 ? 'bg-[#23a55a]' : item.ping <= 120 ? 'bg-[#f0b232]' : 'bg-[#f23f43]';
-
-              return (
-                <div
-                  key={idx}
-                  className="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer"
-                >
-                  <div
-                    className={`w-full rounded-t-sm transition-all duration-300 ${barColor}`}
-                    style={{ height: `${heightPercent}%` }}
-                  />
-                  {/* Tooltip on hover */}
-                  <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-black/90 text-white text-[10px] font-mono px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap z-10 border border-white/10">
-                    {item.ping} ms
-                  </div>
+            {/* Debug Body */}
+            <div className="p-3.5 space-y-2.5">
+              {/* Connection Status Bar */}
+              <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${diagPingBg}`}>
+                <div className="flex items-center gap-1.5">
+                  <Wifi className={`w-3.5 h-3.5 ${diagPingColor}`} />
+                  <span className="text-[11px] font-semibold text-gray-200">
+                    {isConnected ? 'Conexão Estabelecida' : 'Desconectado'}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+                <span className={`font-mono text-xs font-bold ${diagPingColor}`}>
+                  {diagPing} ms
+                </span>
+              </div>
 
-          {/* Graph Timeline Labels */}
-          <div className="flex justify-between items-center text-[10px] font-mono text-gray-500 mt-2 px-0.5">
-            <span>{history[0]?.time || '10:15 AM'}</span>
-            <span>{history[Math.floor(history.length / 2)]?.time || '10:17 AM'}</span>
-            <span>{history[history.length - 1]?.time || '10:19 AM'}</span>
-          </div>
-        </div>
+              {/* Metric Cards Grid */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2.5 bg-[#0b0c0d] border border-[#1f2023] rounded-lg flex flex-col gap-0.5">
+                  <span className="text-[10px] text-[#949ba4] font-medium truncate">
+                    Bitrate de Áudio
+                  </span>
+                  <span className="text-xs font-bold font-mono text-gray-100">
+                    {diagnosticStats?.audioBitrateKbps ?? 48} kbps
+                  </span>
+                </div>
 
-        {/* 2. Main Content Body */}
-        <div className="p-3.5 space-y-3">
-          {/* Server / Region Node Identifier */}
-          <div>
-            <h4 className="font-bold text-[14px] text-white leading-tight font-mono tracking-tight">
-              {regionId}
-            </h4>
-            <div className="mt-1.5 space-y-0.5 text-xs text-[#dbdee1]">
-              <p>
-                Average ping: <strong className="text-white font-semibold">{avgPing} ms</strong>
-              </p>
-              <p>
-                Last ping: <strong className="text-white font-semibold">{currentPing} ms</strong>
-              </p>
-              {packetLoss > 0 && (
-                <p className="text-amber-400">
-                  Perda de pacotes: <strong>{packetLoss}%</strong>
-                </p>
-              )}
+                <div className="p-2.5 bg-[#0b0c0d] border border-[#1f2023] rounded-lg flex flex-col gap-0.5">
+                  <span className="text-[10px] text-[#949ba4] font-medium truncate">
+                    Perda de Pacotes
+                  </span>
+                  <span className="text-xs font-bold font-mono text-emerald-400">
+                    {diagnosticStats?.packetLossPercent ?? 0}%
+                  </span>
+                </div>
+
+                {diagnosticStats && diagnosticStats.videoBitrateKbps > 0 && (
+                  <div className="p-2.5 bg-[#0b0c0d] border border-[#1f2023] rounded-lg flex flex-col gap-0.5 col-span-2">
+                    <span className="text-[10px] text-[#949ba4] font-medium">
+                      Bitrate de Vídeo
+                    </span>
+                    <span className="text-xs font-bold font-mono text-gray-100">
+                      {diagnosticStats.videoBitrateKbps} kbps
+                    </span>
+                  </div>
+                )}
+
+                <div className="p-2.5 bg-[#0b0c0d] border border-[#1f2023] rounded-lg flex flex-col gap-0.5 col-span-2">
+                  <span className="text-[10px] text-[#949ba4] font-medium">
+                    Codec & Perfil de Áudio
+                  </span>
+                  <span className="text-[11px] font-mono text-gray-200 truncate">
+                    {diagnosticStats?.codec || 'Opus 48kHz Stereo (RED + DTX)'}
+                  </span>
+                </div>
+
+                <div className="p-2.5 bg-[#0b0c0d] border border-[#1f2023] rounded-lg flex flex-col gap-1 col-span-2">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[10px] text-[#949ba4] font-medium truncate">
+                      Estado ICE / Servidor
+                    </span>
+                    {diagnosticStats?.isConnected && diagnosticStats.protocol !== 'unknown' && (
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase flex-shrink-0 ${
+                          diagnosticStats.protocol === 'udp'
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                        }`}
+                      >
+                        {diagnosticStats.protocol === 'udp' ? 'UDP' : 'TCP (Fallback)'}
+                      </span>
+                    )}
+                  </div>
+                  <span className="flex items-center gap-1.5 text-[11px] font-mono text-gray-300 truncate">
+                    {diagnosticStats?.iceState === 'connected' && (
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                    )}
+                    <span className="truncate">
+                      {diagnosticStats?.iceState === 'connected'
+                        ? 'Conectado via LiveKit Gateway'
+                        : diagnosticStats?.iceState || 'Desconectado'}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowDebug(false)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[4px] bg-[#35373c] hover:bg-[#3f4147] text-white text-xs font-semibold transition-colors cursor-pointer active:scale-[0.98]"
+                >
+                  <Bug className="w-3.5 h-3.5 text-brand-400" />
+                  <span>Debug</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyLogs}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[4px] bg-[#2b2d31] hover:bg-[#35373c] text-white text-xs font-semibold transition-colors cursor-pointer active:scale-[0.98]"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-[#23a55a]" />
+                      <span className="text-[#23a55a]">Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5 text-gray-300" />
+                      <span>Upload Logs</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Secure Connection Badge */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#23a55a]/10 border border-[#23a55a]/20 text-[#23a55a] text-[11px] font-medium">
+                <Lock className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Secure Connection</span>
+              </div>
             </div>
-          </div>
+          </>
+        ) : (
+          <>
+            {/* 1. Ping / Latency Graph Area */}
+            <div className="bg-[#0b0c0d] p-3 pb-2 border-b border-[#1f2023] relative">
+              <div className="h-16 w-full flex items-end justify-between gap-1 relative px-0.5">
+                {/* Subtle horizontal grid lines */}
+                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
+                  <div className="border-b border-white w-full" />
+                  <div className="border-b border-white w-full" />
+                  <div className="border-b border-white w-full" />
+                </div>
 
-          {/* Advisory / Troubleshooting Text */}
-          <p className="text-[11px] text-[#949ba4] leading-relaxed">
-            Você pode notar atraso no áudio com 250 ms ou mais. Se o problema persistir, desconecte e tente novamente.
-          </p>
+                {/* Render Bars */}
+                {history.map((item, idx) => {
+                  const heightPercent = Math.min(100, Math.max(8, (item.ping / maxPingInHistory) * 100));
+                  const barColor = item.ping <= 50 ? 'bg-[#23a55a]' : item.ping <= 120 ? 'bg-[#f0b232]' : 'bg-[#f23f43]';
 
-          {/* 3. Action Buttons */}
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenDiagnostic();
-              }}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[4px] bg-[#2b2d31] hover:bg-[#35373c] text-white text-xs font-semibold transition-colors cursor-pointer active:scale-[0.98]"
-            >
-              <Bug className="w-3.5 h-3.5 text-gray-300" />
-              <span>Debug</span>
-            </button>
+                  return (
+                    <div
+                      key={idx}
+                      className="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer"
+                    >
+                      <div
+                        className={`w-full rounded-t-sm transition-all duration-300 ${barColor}`}
+                        style={{ height: `${heightPercent}%` }}
+                      />
+                      {/* Tooltip on hover */}
+                      <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-black/90 text-white text-[10px] font-mono px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap z-10 border border-white/10">
+                        {item.ping} ms
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-            <button
-              type="button"
-              onClick={handleCopyLogs}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[4px] bg-[#2b2d31] hover:bg-[#35373c] text-white text-xs font-semibold transition-colors cursor-pointer active:scale-[0.98]"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-[#23a55a]" />
-                  <span className="text-[#23a55a]">Copiado!</span>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-3.5 h-3.5 text-gray-300" />
-                  <span>Upload Logs</span>
-                </>
-              )}
-            </button>
-          </div>
+              {/* Graph Timeline Labels */}
+              <div className="flex justify-between items-center text-[10px] font-mono text-gray-500 mt-2 px-0.5">
+                <span>{history[0]?.time || '10:15 AM'}</span>
+                <span>{history[Math.floor(history.length / 2)]?.time || '10:17 AM'}</span>
+                <span>{history[history.length - 1]?.time || '10:19 AM'}</span>
+              </div>
+            </div>
 
-          {/* 4. Secure Connection Badge */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#23a55a]/10 border border-[#23a55a]/20 text-[#23a55a] text-[11px] font-medium">
-            <Lock className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>Secure Connection</span>
-          </div>
-        </div>
+            {/* 2. Main Content Body */}
+            <div className="p-3.5 space-y-3">
+              {/* Server / Region Node Identifier */}
+              <div>
+                <h4 className="font-bold text-[14px] text-white leading-tight font-mono tracking-tight">
+                  {regionId}
+                </h4>
+                <div className="mt-1.5 space-y-0.5 text-xs text-[#dbdee1]">
+                  <p>
+                    Average ping: <strong className="text-white font-semibold">{avgPing} ms</strong>
+                  </p>
+                  <p>
+                    Last ping: <strong className="text-white font-semibold">{currentPing} ms</strong>
+                  </p>
+                  {packetLoss > 0 && (
+                    <p className="text-amber-400">
+                      Perda de pacotes: <strong>{packetLoss}%</strong>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Advisory / Troubleshooting Text */}
+              <p className="text-[11px] text-[#949ba4] leading-relaxed">
+                Você pode notar atraso no áudio com 250 ms ou mais. Se o problema persistir, desconecte e tente novamente.
+              </p>
+
+              {/* 3. Action Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowDebug(true)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[4px] bg-[#2b2d31] hover:bg-[#35373c] text-white text-xs font-semibold transition-colors cursor-pointer active:scale-[0.98]"
+                >
+                  <Bug className="w-3.5 h-3.5 text-gray-300" />
+                  <span>Debug</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyLogs}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[4px] bg-[#2b2d31] hover:bg-[#35373c] text-white text-xs font-semibold transition-colors cursor-pointer active:scale-[0.98]"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-[#23a55a]" />
+                      <span className="text-[#23a55a]">Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5 text-gray-300" />
+                      <span>Upload Logs</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* 4. Secure Connection Badge */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#23a55a]/10 border border-[#23a55a]/20 text-[#23a55a] text-[11px] font-medium">
+                <Lock className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Secure Connection</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>,
     document.body

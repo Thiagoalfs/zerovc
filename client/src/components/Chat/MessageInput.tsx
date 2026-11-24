@@ -1759,7 +1759,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     type="button"
                     onClick={() => setCommandError(null)}
                     className="text-rose-400/70 hover:text-rose-200 p-0.5 rounded transition-colors cursor-pointer"
-                    title="Fechar aviso"
+                    aria-label="Fechar aviso"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -2162,7 +2162,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             type="button"
             onClick={onCancelReply}
             className="text-gray-400 hover:text-white p-1 hover:bg-white/5 rounded-full transition-colors cursor-pointer"
-            title="Cancelar Resposta (Esc)"
+            aria-label="Cancelar Resposta (Esc)"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -2459,7 +2459,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                       type="button"
                       onClick={() => selectOptionToFocus(opt.name)}
                       className="text-[11px] text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
-                      title={opt.description}
+                      aria-label={opt.description}
                     >
                       <span className="font-semibold text-brand-300">+{opt.name}</span>
                     </button>

@@ -113,7 +113,6 @@ export const IncomingCallModal: React.FC = () => {
           onClick={rejectCall}
           aria-label="Recusar"
           className="w-10 h-10 rounded-full bg-dnd/20 text-dnd hover:bg-dnd hover:text-white flex items-center justify-center transition-all cursor-pointer shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          title="Recusar"
         >
           <PhoneOff className="w-5 h-5" />
         </button>
@@ -122,7 +121,6 @@ export const IncomingCallModal: React.FC = () => {
           onClick={acceptCall}
           aria-label="Atender"
           className="w-10 h-10 rounded-full bg-online hover:bg-emerald-600 text-white flex items-center justify-center transition-all cursor-pointer shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          title="Atender"
         >
           <Phone className="w-5 h-5" />
         </button>

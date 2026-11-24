@@ -370,7 +370,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                 <button
                   type="button"
                   disabled={item.disabled}
-                  title={item.tooltip}
+                  aria-label={item.tooltip}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (item.disabled) return;
@@ -435,7 +435,7 @@ const ContextMenuContent: React.FC<{ menu: ContextMenuState; onClose: () => void
                           key={subItem.id || subIndex}
                           type="button"
                           disabled={subItem.disabled}
-                          title={subItem.tooltip}
+                          aria-label={subItem.tooltip}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (subItem.disabled) return;

@@ -99,7 +99,7 @@ export const GifEmbed: React.FC<GifEmbedProps> = ({
             setIsPlayingManual(true);
           }}
           className="absolute top-2 left-2 z-10 bg-black/75 hover:bg-black/90 text-white border border-white/15 rounded px-1.5 py-0.5 font-bold text-[10px] tracking-wider uppercase shadow-sm cursor-pointer transition-colors"
-          title="Clique ou passe o mouse para reproduzir GIF"
+          aria-label="Clique ou passe o mouse para reproduzir GIF"
         >
           GIF
         </button>
@@ -118,7 +118,7 @@ export const GifEmbed: React.FC<GifEmbedProps> = ({
               ? 'bg-amber-500 text-white opacity-100'
               : 'bg-black/60 text-white/70 hover:text-white hover:bg-black/90 opacity-0 group-hover/gif:opacity-100'
           }`}
-          title={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
+          aria-label={favorited ? 'Remover dos favoritos' : 'Favoritar GIF'}
         >
           <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
         </button>

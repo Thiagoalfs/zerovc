@@ -283,7 +283,6 @@ export const RegisteredGamesView: React.FC = () => {
                   {currentRunningGame.isVerified && (
                     <span
                       className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#5865F2] text-white shadow-xs shrink-0"
-                      title="Jogo Verificado"
                     >
                       <Check className="w-2.5 h-2.5 stroke-[3]" />
                     </span>
@@ -432,7 +431,6 @@ export const RegisteredGamesView: React.FC = () => {
                             </span>
                             <span
                               className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#5865F2] text-white shrink-0"
-                              title="Jogo Oficial RAWG"
                             >
                               <Check className="w-2 h-2 stroke-[3]" />
                             </span>
@@ -568,7 +566,6 @@ export const RegisteredGamesView: React.FC = () => {
                       {game.isVerified && (
                         <span
                           className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#5865F2] text-white shadow-xs shrink-0"
-                          title="Jogo Verificado"
                         >
                           <Check className="w-2 h-2 stroke-[3]" />
                         </span>

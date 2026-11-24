@@ -55,7 +55,6 @@ export const StreamerModeBanner: React.FC<StreamerModeBannerProps> = ({ onOpenSe
       <span
         onClick={onOpenSettings}
         className={`text-white text-xs sm:text-sm font-medium ${onOpenSettings ? 'cursor-pointer hover:underline' : ''}`}
-        title={onOpenSettings ? 'Abrir configurações do Modo Streamer' : undefined}
       >
         Modo Streamer Ativado
       </span>

@@ -145,7 +145,6 @@ export const SmartGifEmbed: React.FC<SmartGifEmbedProps> = ({
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
         className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-gray-400 hover:text-gray-200 transition-colors px-1 py-0.5 rounded hover:bg-white/5"
-        title={`Abrir página original no ${provider.name}`}
       >
         <Film className="w-3 h-3 text-gray-400" />
         <span>Via {metadata.site_name || provider.name}</span>

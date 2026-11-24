@@ -200,7 +200,6 @@ export const TitleBar: React.FC = () => {
             type="button"
             onClick={handleDownload}
             className="flex items-center justify-center p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 active:scale-95 rounded-md transition-all cursor-pointer"
-            title={downloadTitle}
             aria-label={downloadTitle}
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" />
@@ -215,7 +214,7 @@ export const TitleBar: React.FC = () => {
                 type="button"
                 onClick={handleDirectUpdate}
                 className="flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md shadow-brand-500/25 transition-all cursor-pointer mr-1"
-                title="Nova versão disponível! Clique para atualizar agora."
+                aria-label="Nova versão disponível! Clique para atualizar agora."
               >
                 {/* FontAwesome Download Icon (SVG) */}
                 <svg
@@ -234,7 +233,7 @@ export const TitleBar: React.FC = () => {
                 type="button"
                 onClick={handleDirectUpdate}
                 className="flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md shadow-brand-500/25 transition-all cursor-pointer mr-1"
-                title={pendingVersion ? `Atualização ${pendingVersion} disponível. Clique para reiniciar e atualizar.` : 'Atualização disponível. Clique para reiniciar e atualizar.'}
+                aria-label={pendingVersion ? `Atualização ${pendingVersion} disponível. Clique para reiniciar e atualizar.` : 'Atualização disponível. Clique para reiniciar e atualizar.'}
               >
                 <Download className="w-3.5 h-3.5" />
               </button>
@@ -246,7 +245,7 @@ export const TitleBar: React.FC = () => {
                 type="button"
                 onClick={handleMinimize}
                 className="w-8 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
-                title="Minimizar"
+                aria-label="Minimizar"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -255,7 +254,7 @@ export const TitleBar: React.FC = () => {
                 type="button"
                 onClick={handleMaximize}
                 className="w-8 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
-                title={isMaximized ? 'Restaurar' : 'Maximizar'}
+                aria-label={isMaximized ? 'Restaurar' : 'Maximizar'}
               >
                 {isMaximized ? <Copy className="w-3 h-3 rotate-180" /> : <Square className="w-3 h-3" />}
               </button>
@@ -264,7 +263,7 @@ export const TitleBar: React.FC = () => {
                 type="button"
                 onClick={handleClose}
                 className="w-8 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-rose-600 rounded transition-colors cursor-pointer"
-                title="Fechar"
+                aria-label="Fechar"
               >
                 <X className="w-3.5 h-3.5" />
               </button>

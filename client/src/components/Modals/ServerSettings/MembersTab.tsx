@@ -145,7 +145,7 @@ export const MembersTab: React.FC<MembersTabProps> = ({
                       {member.display_name || member.username}
                     </span>
                     {isMemberOwner && (
-                      <span className="p-0.5 text-amber-400" title="Dono do Servidor">
+                      <span className="p-0.5 text-amber-400">
                         <Crown className="w-3.5 h-3.5" />
                       </span>
                     )}

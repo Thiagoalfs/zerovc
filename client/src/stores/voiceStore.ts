@@ -307,7 +307,16 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         callKeyManager.handleParticipantJoined(deviceId);
       },
       onParticipantDisconnected: (participant) => {
-        if (participant.identity.startsWith('screenshare:')) return;
+        if (participant.identity.startsWith('screenshare:')) {
+          const ownerIdentity = participant.identity.slice('screenshare:'.length);
+          get().unwatchParticipant(ownerIdentity);
+          return;
+        }
+        get().unwatchParticipant(participant.identity);
+        const { voiceType, currentChannelId } = get();
+        if (voiceType === 'guild' && currentChannelId) {
+          useGuildStore.getState().updateVoiceState('leave', undefined, currentChannelId, participant.identity);
+        }
         const deviceId = participantDeviceMap.get(participant.identity) || extractParticipantDeviceId(participant);
         participantDeviceMap.delete(participant.identity);
         callKeyManager.handleParticipantLeft(deviceId);
@@ -775,20 +784,21 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         useGuildStore.getState().updateVoiceState('leave', undefined, currentChannelId, currentUserId);
       }
 
-      try {
-        if (voiceType === 'guild' && currentChannelId) {
-          await api.channels.leaveVoice(currentChannelId);
-        } else if (voiceType === 'dm' && dmRoomId) {
-          await api.dms.leaveCall(dmRoomId);
+      // Stop screen share and disconnect LiveKit immediately so remote peers see exit without waiting on HTTP
+      const stopSharePromise = get().stopScreenShare().catch(() => {});
+      const apiLeavePromise = (async () => {
+        try {
+          if (voiceType === 'guild' && currentChannelId) {
+            await api.channels.leaveVoice(currentChannelId);
+          } else if (voiceType === 'dm' && dmRoomId) {
+            await api.dms.leaveCall(dmRoomId);
+          }
+        } catch (err) {
+          console.warn('[Voice] Failed to notify leave API:', err);
         }
-      } catch (err) {
-        console.warn('[Voice] Failed to notify leave API:', err);
-      }
+      })();
 
-      try {
-        await get().stopScreenShare();
-      } catch {}
-      await livekit.disconnect();
+      await Promise.allSettled([stopSharePromise, livekit.disconnect(), apiLeavePromise]);
 
       set({
         voiceType: null,

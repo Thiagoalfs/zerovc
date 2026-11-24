@@ -240,7 +240,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               handleAvatarClick(e as unknown as React.MouseEvent);
             }
           }}
-          title="Clique para abrir perfil completo no centro da tela"
         >
           <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-black/80 text-white opacity-0 group-hover/banner:opacity-100 transition-opacity">
             <Maximize2 className="w-3.5 h-3.5" />
@@ -263,7 +262,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 }
               }}
               className="w-16 h-16 rounded-full bg-brand-500 border-4 border-background-darkest flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden cursor-pointer relative transition-transform group-hover/avatar:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-              title="Clique para abrir perfil completo no centro da tela"
             >
               {user.avatar_url ? (
                 <img src={formatAssetUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
@@ -278,7 +276,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               className={`absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-2 border-background-darkest shadow-md ${getStatusColor(
                 user.status
               )}`}
-              title={getStatusLabel(user.status)}
             />
           </div>
 

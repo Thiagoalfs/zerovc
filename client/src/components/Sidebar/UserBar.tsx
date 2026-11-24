@@ -8,7 +8,6 @@ import { formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
-import { VoiceDiagnosticModal } from '../Voice/VoiceDiagnosticModal';
 import { VoiceConnectionPopout } from '../Voice/VoiceConnectionPopout';
 import { useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { getFormattedUsername, useStreamerModeStore } from '../../stores/streamerModeStore';
@@ -31,7 +30,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   const censorUsernames = useStreamerModeStore((s) => s.enabled && s.censorUsernames);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showVoicePopout, setShowVoicePopout] = useState(false);
-  const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [showMicDropup, setShowMicDropup] = useState(false);
   const [showDeafenDropup, setShowDeafenDropup] = useState(false);
   const [pingMs, setPingMs] = useState<number | null>(null);
@@ -418,12 +416,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
         </>
       )}
 
-      {/* Full WebRTC Technical Diagnostics Modal */}
-      <VoiceDiagnosticModal
-        isOpen={showDiagnostic}
-        onClose={() => setShowDiagnostic(false)}
-      />
-
       {/* Unified User, Voice & Game Container */}
       <div
         ref={voiceBarRef}
@@ -438,7 +430,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
           <VoiceConnectionPopout
             isOpen={showVoicePopout}
             onClose={() => setShowVoicePopout(false)}
-            onOpenDiagnostic={() => setShowDiagnostic(true)}
             channelName={activeVoiceChannel?.name}
             serverName={activeGuild?.name}
             anchorRef={voiceBarRef}
@@ -485,7 +476,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                     ? 'bg-brand-500 text-white shadow-brand-500/20 hover:bg-brand-600'
                     : 'bg-white/5 hover:bg-brand-500 hover:text-white text-gray-300 border border-white/5'
                 }`}
-                title={isScreensharing ? 'Opções de transmissão' : `Transmitir ${user.custom_activity.name} com som`}
+                aria-label={isScreensharing ? 'Opções de transmissão' : `Transmitir ${user.custom_activity.name} com som`}
               >
                 <Monitor className="w-4 h-4" />
               </button>
@@ -515,7 +506,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 }}
                 onMouseLeave={() => setSignalTooltipPos(null)}
                 className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1 overflow-hidden group py-1 -my-1"
-                title={signalQuality.label}
               >
                 <div
                   ref={signalIconRef}
@@ -555,7 +545,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                       }
                     }}
                     className="text-[11px] text-gray-400 hover:text-gray-200 truncate leading-tight block min-w-0 cursor-pointer"
-                    title={voiceSubtitle ? `${voiceTitle} / ${voiceSubtitle}` : voiceTitle}
                   >
                     {voiceTitle}
                   </span>
@@ -567,7 +556,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                   type="button"
                   onClick={leaveVoice}
                   className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
-                  title="Desconectar"
+                  aria-label="Desconectar"
                 >
                   <PhoneOff className="w-4 h-4" />
                 </button>
@@ -609,7 +598,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                         }
                       }}
                       className="relative group/voiceuser flex-shrink-0 cursor-pointer focus:outline-none transition-transform hover:scale-110 active:scale-95"
-                      title={displayName}
+                      aria-label={displayName}
                     >
                       <div
                         className={`w-6 h-6 rounded-full overflow-hidden flex items-center justify-center bg-brand-500 transition-all duration-150 ${
@@ -696,7 +685,6 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
               }
             }}
             className="flex items-center gap-2 p-1 -ml-1 rounded-xl hover:bg-white/5 cursor-pointer flex-1 min-w-0 transition-colors group/usercard overflow-hidden"
-            title={typeof window !== 'undefined' && window.innerWidth < 768 ? 'Abrir Configurações' : 'Definir Status'}
           >
             {/* Avatar */}
             <UserAvatar
@@ -750,7 +738,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 className={`p-1.5 rounded-md hover:bg-white/10 transition-colors cursor-pointer select-none flex items-center justify-center ${
                   isMuted ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
                 }`}
-                title={isMuted ? 'Desmutar' : 'Mutar'}
+                aria-label={isMuted ? 'Desmutar' : 'Mutar'}
               >
                 {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
               </button>
@@ -767,7 +755,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 className={`p-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer select-none flex items-center justify-center -ml-0.5 text-gray-400 hover:text-white ${
                   showMicDropup ? 'text-white bg-white/10' : ''
                 }`}
-                title="Dispositivos de Entrada de Áudio"
+                aria-label="Dispositivos de Entrada de Áudio"
               >
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${showMicDropup ? 'rotate-180' : ''}`} />
               </button>
@@ -791,7 +779,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 className={`p-1.5 rounded-md hover:bg-white/10 transition-colors cursor-pointer select-none flex items-center justify-center ${
                   isDeafened ? 'text-dnd hover:text-red-400' : 'text-gray-400 hover:text-white'
                 }`}
-                title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
+                aria-label={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
               >
                 {isDeafened ? (
                   <HeadphonesOff className="w-5 h-5" />
@@ -812,7 +800,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 className={`p-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer select-none flex items-center justify-center -ml-0.5 text-gray-400 hover:text-white ${
                   showDeafenDropup ? 'text-white bg-white/10' : ''
                 }`}
-                title="Dispositivos de Saída de Áudio"
+                aria-label="Dispositivos de Saída de Áudio"
               >
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${showDeafenDropup ? 'rotate-180' : ''}`} />
               </button>
@@ -828,7 +816,7 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 onOpenSettings();
               }}
               className="p-1.5 rounded-md hover:bg-white/10 hover:text-white text-gray-400 transition-colors cursor-pointer select-none flex items-center justify-center flex-shrink-0"
-              title="Configurações de Usuário"
+              aria-label="Configurações de Usuário"
             >
               <Settings className="w-5 h-5" />
             </button>

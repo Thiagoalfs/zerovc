@@ -162,7 +162,7 @@ export const EmojisTab: React.FC<EmojisTabProps> = ({
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-[10px] text-gray-500 truncate max-w-[80px]" title={em.creator ? `@${em.creator.username}` : ''}>
+                    <span className="text-[10px] text-gray-500 truncate max-w-[80px]">
                       {em.creator ? `@${em.creator.username}` : ''}
                     </span>
                     <div className="flex items-center gap-1">

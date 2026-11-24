@@ -368,7 +368,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                         onClick={() => setMockMuted((v) => !v)}
                         aria-label={mockMuted || mockDeafened ? 'Ativar microfone na prévia' : 'Silenciar microfone na prévia'}
                         aria-pressed={mockMuted || mockDeafened}
-                        title={mockMuted || mockDeafened ? 'Ativar microfone' : 'Silenciar microfone'}
                         className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
                           mockMuted || mockDeafened
                             ? 'text-red-400 bg-red-500/15 hover:bg-red-500/25'
@@ -382,7 +381,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, user }) =>
                         onClick={() => setMockDeafened((v) => !v)}
                         aria-label={mockDeafened ? 'Reativar áudio na prévia' : 'Desativar áudio na prévia'}
                         aria-pressed={mockDeafened}
-                        title={mockDeafened ? 'Reativar áudio' : 'Desativar áudio'}
                         className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
                           mockDeafened
                             ? 'text-red-400 bg-red-500/15 hover:bg-red-500/25'

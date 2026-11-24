@@ -142,6 +142,8 @@ export function detectGpuVendor(): Promise<GpuDetectionResult> {
 class LiveKitManager {
   private room: Room | null = null;
   private isWebRTCPrewarmed: boolean = false;
+  private prevAudioOutbound: { bytes: number; timestamp: number } | null = null;
+  private lastAudioBitrateKbps: number = 0;
 
   /**
    * Pre-warm WebRTC STUN discovery and UDP candidate pool in the background
@@ -621,6 +623,9 @@ class LiveKitManager {
         }
       });
       this.watchedParticipantIdentities.delete(ident);
+      if (ident.startsWith('screenshare:')) {
+        this.watchedParticipantIdentities.delete(ident.slice('screenshare:'.length));
+      }
       this.onTrackUpdated?.();
       updateParticipants();
     });
@@ -1920,6 +1925,9 @@ class LiveKitManager {
     let ping = 0;
     let packetLoss = 0;
     let audioBitrate = 0;
+    let hasAudioSample = false;
+    let totalAudioBytesSent = 0;
+    let audioStatsTimestamp = 0;
     let videoBitrate = 0;
     let iceState = 'connected';
     let protocol: 'udp' | 'tcp' | 'unknown' = 'unknown';
@@ -1929,39 +1937,88 @@ class LiveKitManager {
       if (engine?.client?.engine?.rtt) {
         ping = Math.round(engine.client.engine.rtt);
       }
-      const publisher = engine?.publisher;
-      if (publisher?.pc) {
-        iceState = publisher.pc.iceConnectionState || 'connected';
-        const stats = await publisher.pc.getStats();
+      const pcManager = engine?.pcManager;
+      const peerTransports = [
+        pcManager?.publisher,
+        pcManager?.subscriber,
+        engine?.publisher,
+        engine?.subscriber,
+      ].filter(Boolean);
+      for (const transport of peerTransports) {
+        const pc = transport.pc || transport;
+        if (pc?.iceConnectionState && pc.iceConnectionState !== 'new') {
+          iceState = pc.iceConnectionState;
+        }
+        const stats = typeof transport.getStats === 'function'
+          ? await transport.getStats()
+          : typeof pc?.getStats === 'function'
+          ? await pc.getStats()
+          : null;
+        if (!stats) continue;
+        let selectedPairId: string | null = null;
         let activeLocalCandidateId: string | null = null;
         const localCandidates = new Map<string, any>();
+        const candidatePairs = new Map<string, any>();
 
         stats.forEach((report: any) => {
+          if (report.type === 'transport' && report.selectedCandidatePairId) {
+            selectedPairId = report.selectedCandidatePairId;
+          }
           if (report.type === 'local-candidate') {
             localCandidates.set(report.id, report);
           }
-          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-            if (report.nominated || !activeLocalCandidateId) {
-              activeLocalCandidateId = report.localCandidateId || null;
-            }
-            if (report.currentRoundTripTime) {
-              ping = Math.round(report.currentRoundTripTime * 1000);
+          if (report.type === 'candidate-pair') {
+            candidatePairs.set(report.id, report);
+            if (report.state === 'succeeded') {
+              if (report.nominated || !activeLocalCandidateId) {
+                activeLocalCandidateId = report.localCandidateId || null;
+              }
+              if (report.currentRoundTripTime && ping === 0) {
+                ping = Math.round(report.currentRoundTripTime * 1000);
+              }
             }
           }
           if (report.type === 'outbound-rtp' && report.kind === 'audio') {
-            if (report.bytesSent) {
-              audioBitrate = Math.round((report.bytesSent * 8) / 1024 / 10);
+            if (typeof report.bytesSent === 'number') {
+              hasAudioSample = true;
+              totalAudioBytesSent += report.bytesSent;
+              if (typeof report.timestamp === 'number' && report.timestamp > audioStatsTimestamp) {
+                audioStatsTimestamp = report.timestamp;
+              }
             }
           }
         });
 
-        if (activeLocalCandidateId) {
-          const cand = localCandidates.get(activeLocalCandidateId);
+        const pair = selectedPairId ? candidatePairs.get(selectedPairId) : null;
+        const localId = pair?.localCandidateId || activeLocalCandidateId;
+        if (pair?.currentRoundTripTime) {
+          ping = Math.round(pair.currentRoundTripTime * 1000);
+        }
+        if (localId && protocol === 'unknown') {
+          const cand = localCandidates.get(localId);
           const proto = String(cand?.protocol || '').toLowerCase();
           if (proto === 'udp' || proto === 'tcp') {
             protocol = proto;
           }
         }
+      }
+      if (hasAudioSample) {
+        const ts = audioStatsTimestamp || performance.now();
+        if (
+          this.prevAudioOutbound &&
+          ts > this.prevAudioOutbound.timestamp &&
+          totalAudioBytesSent >= this.prevAudioOutbound.bytes
+        ) {
+          const deltaBytes = totalAudioBytesSent - this.prevAudioOutbound.bytes;
+          const deltaMs = ts - this.prevAudioOutbound.timestamp;
+          audioBitrate = Math.round((deltaBytes * 8) / deltaMs);
+          this.lastAudioBitrateKbps = audioBitrate;
+        } else {
+          audioBitrate = this.lastAudioBitrateKbps || 48;
+        }
+        this.prevAudioOutbound = { bytes: totalAudioBytesSent, timestamp: ts };
+      } else {
+        audioBitrate = 48;
       }
     } catch {}
 
@@ -1973,13 +2030,15 @@ class LiveKitManager {
       iceState,
       protocol,
       packetLossPercent: packetLoss,
-      audioBitrateKbps: audioBitrate > 0 ? audioBitrate : 48,
+      audioBitrateKbps: audioBitrate,
       videoBitrateKbps: videoBitrate,
       codec: 'Opus 48kHz (Stereo RED / DTX)',
     };
   }
 
   async disconnect() {
+    this.prevAudioOutbound = null;
+    this.lastAudioBitrateKbps = 0;
     this.watchedParticipantIdentities.clear();
     this.attachedAudioElements.forEach((el) => el.remove());
     this.attachedAudioElements.clear();

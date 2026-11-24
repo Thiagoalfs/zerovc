@@ -176,7 +176,6 @@ const FileAttachmentCard: React.FC<{ src: string; rawUrl: string }> = ({ src, ra
             download={name}
             target="_blank"
             rel="noopener noreferrer"
-            title={`Baixar ${name}`}
           >
             <Download />
           </a>
@@ -200,7 +199,6 @@ const SpoilerText: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           ? 'bg-white/10 text-gray-100'
           : 'bg-background-darkest text-transparent hover:bg-background-darker select-none filter blur-[4px] hover:blur-[2px]'
       }`}
-      title={revealed ? 'Clique para ocultar' : 'Clique para revelar spoiler'}
     >
       {children}
     </span>
@@ -703,7 +701,6 @@ function renderInlineFormatting(
             key={k}
             src={formatAssetUrl(emojiUrl)}
             alt={`:${emojiName}:`}
-            title={`:${emojiName}:`}
             draggable={false}
             className={`${
               isJumboji ? 'h-12 w-12 inline-block' : 'h-6 w-6 inline-block'
@@ -722,7 +719,6 @@ function renderInlineFormatting(
             key={k}
             src={formatAssetUrl(customEmoji.image_url)}
             alt={`:${customEmoji.name}:`}
-            title={`:${customEmoji.name}:`}
             draggable={false}
             className={`${
               isJumboji ? 'h-12 w-12 inline-block' : 'h-6 w-6 inline-block'
@@ -921,7 +917,6 @@ function renderInlineFormatting(
               onChannelClick?.(matchedChannel!, matchedGuild);
             }}
             className="font-medium px-1 py-[1px] rounded-[4px] inline-flex items-center gap-1 align-bottom transition-colors duration-100 select-none cursor-pointer bg-brand-500/25 text-brand-200 hover:bg-brand-500 hover:text-white"
-            title={isVoice ? `Canal de voz #${matchedChannel.name}` : `Canal de texto #${matchedChannel.name}`}
           >
             {isVoice ? (
               <Volume2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -969,7 +964,6 @@ function renderInlineFormatting(
               backgroundColor: `${matchedRole.color || '#5865F2'}28`,
               color: matchedRole.color || '#c9cdfb',
             }}
-            title={`Cargo @${matchedRole.name}`}
             onClick={(e) => e.stopPropagation()}
           >
             <span
@@ -1004,7 +998,6 @@ function renderInlineFormatting(
                 ? 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/35 hover:text-amber-100'
                 : 'bg-brand-500/25 text-brand-200 hover:bg-brand-500 hover:text-white'
             }`}
-            title={matchedMember ? `Ver perfil de @${matchedMember.username}` : undefined}
           >
             <span>{token}</span>
           </span>

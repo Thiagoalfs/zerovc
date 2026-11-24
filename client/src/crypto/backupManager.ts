@@ -281,6 +281,46 @@ export class BackupManager {
         ? keyMaterial
         : (await deriveBackupKey(keyMaterial)).key;
 
+    // Merge existing cloud backup sessions before uploading so we never overwrite older keys
+    try {
+      const existing = await api.e2ee.getBackup();
+      const existingCipher = existing?.backup?.ciphertext || existing?.backup?.backup_ciphertext || existing?.ciphertext;
+      const existingIv = existing?.backup?.iv || existing?.iv;
+      const existingSalt = existing?.backup?.salt || 'zerovc-e2ee-backup-salt-v1';
+      if (existingCipher && existingIv) {
+        const existingKey =
+          keyMaterial instanceof CryptoKey
+            ? keyMaterial
+            : (await deriveBackupKey(keyMaterial, existingSalt)).key;
+        const decryptedBytes = await decryptBackupPayload(
+          { ciphertext: existingCipher, iv: existingIv },
+          existingKey
+        );
+        const remoteSessions: BackupSessionItem[] = JSON.parse(new TextDecoder().decode(decryptedBytes));
+        if (Array.isArray(remoteSessions)) {
+          for (const s of remoteSessions) {
+            if (s && s.conversationId && s.sessionId && s.sessionKey && !seenSessionIds.has(s.sessionId)) {
+              sessions.push(s);
+              seenSessionIds.add(s.sessionId);
+            }
+          }
+        }
+      }
+    } catch {
+      // No existing backup (404) or unreadable with current key; only skip upload below if local sessions are empty
+    }
+
+    if (sessions.length === 0) {
+      return {
+        ciphertext: '',
+        backup_ciphertext: '',
+        iv: '',
+        salt: '',
+        key_count: 0,
+        version: 1,
+      };
+    }
+
     const encrypted = await encryptBackupPayload(JSON.stringify(sessions), derivedKey);
 
     await api.e2ee.uploadBackup({

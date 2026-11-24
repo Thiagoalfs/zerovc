@@ -157,7 +157,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSendVoice, onCan
         type="button"
         onClick={handleDiscard}
         className="p-2 rounded-xl text-gray-400 hover:text-red-400 hover:bg-white/5 transition-colors cursor-pointer"
-        title="Descartar Gravação"
+        aria-label="Descartar Gravação"
       >
         <Trash2 className="w-4 h-4" />
       </button>
@@ -168,7 +168,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSendVoice, onCan
         onClick={handleStopAndSend}
         disabled={isProcessing}
         className="p-2 rounded-xl bg-red-500 hover:bg-red-600 text-white shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-        title="Enviar Mensagem de Voz"
+        aria-label="Enviar Mensagem de Voz"
       >
         <SendHorizontal className="w-4 h-4" />
       </button>

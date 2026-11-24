@@ -139,8 +139,13 @@ export const VoiceDiagnosticModal: React.FC<VoiceDiagnosticModalProps> = ({ isOp
                   </span>
                 )}
               </div>
-              <span className="text-xs font-mono text-gray-300 truncate">
-                {stats?.iceState === 'connected' ? '🟢 Conectado via LiveKit Gateway' : stats?.iceState || 'Desconectado'}
+              <span className="flex items-center gap-1.5 text-xs font-mono text-gray-300 truncate">
+                {stats?.iceState === 'connected' && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                )}
+                <span className="truncate">
+                  {stats?.iceState === 'connected' ? 'Conectado via LiveKit Gateway' : stats?.iceState || 'Desconectado'}
+                </span>
               </span>
             </div>
           </div>

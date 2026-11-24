@@ -132,7 +132,6 @@ export const LinkEmbed: React.FC<LinkEmbedProps> = ({ url, onPreviewImage, class
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               className="text-gray-400 hover:text-white transition-colors flex-shrink-0 p-0.5 rounded hover:bg-white/5"
-              title="Abrir link original"
             >
               <ExternalLink className="w-3.5 h-3.5" />
             </a>

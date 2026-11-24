@@ -119,7 +119,7 @@ async fn run_wayland_portal_capture(
             "!",
             "queue",
             "leaky=downstream",
-            "max-size-buffers=2",
+            "max-size-buffers=1",
             "!",
             "videorate",
             "drop-only=true",
@@ -213,27 +213,89 @@ async fn pump_i420_stdout(
     let y_size = (width * height) as usize;
     let uv_size = ((width / 2) * (height / 2)) as usize;
     let frame_size = y_size + uv_size * 2;
-    let mut raw = vec![0u8; frame_size];
-    let start_ts = std::time::Instant::now();
 
+    // Single-slot latest-frame handoff: reader drains pipe at full speed and drops stale frames
+    // whenever the encoder is busy, preventing OS pipe buffer buildup and multi-second latency.
+    let shared_slot = Arc::new((
+        std::sync::Mutex::new((None::<Vec<u8>>, None::<Vec<u8>>)),
+        std::sync::Condvar::new(),
+    ));
+
+    let worker_slot = shared_slot.clone();
+    let worker_stop = stop.clone();
+    let worker_source = source.clone();
+    let worker_preview = preview.clone();
+
+    let worker = std::thread::spawn(move || {
+        let start_ts = std::time::Instant::now();
+        loop {
+            let frame_buf = {
+                let (lock, cvar) = &*worker_slot;
+                let mut guard = match lock.lock() {
+                    Ok(g) => g,
+                    Err(_) => break,
+                };
+                while guard.0.is_none() && !worker_stop.load(Ordering::Relaxed) {
+                    guard = match cvar.wait(guard) {
+                        Ok(g) => g,
+                        Err(_) => return,
+                    };
+                }
+                if worker_stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                guard.0.take()
+            };
+
+            let Some(raw) = frame_buf else { continue };
+            worker_preview.publish_raw(&raw);
+
+            let mut i420 = I420Buffer::new(width, height);
+            let (y_plane, u_plane, v_plane) = i420.data_mut();
+            y_plane[..y_size].copy_from_slice(&raw[..y_size]);
+            u_plane[..uv_size].copy_from_slice(&raw[y_size..y_size + uv_size]);
+            v_plane[..uv_size].copy_from_slice(&raw[y_size + uv_size..]);
+
+            worker_source.capture_frame(&VideoFrame {
+                rotation: VideoRotation::VideoRotation0,
+                timestamp_us: start_ts.elapsed().as_micros() as i64,
+                buffer: i420,
+                frame_metadata: None,
+            });
+
+            if let Ok(mut guard) = worker_slot.0.lock() {
+                if guard.1.is_none() {
+                    guard.1 = Some(raw);
+                }
+            }
+        }
+    });
+
+    let mut raw = vec![0u8; frame_size];
     while !stop.load(Ordering::Relaxed) {
         if stdout.read_exact(&mut raw).await.is_err() {
             break;
         }
-        preview.publish_raw(&raw);
-        let mut i420 = I420Buffer::new(width, height);
-        let (y_plane, u_plane, v_plane) = i420.data_mut();
-        y_plane[..y_size].copy_from_slice(&raw[..y_size]);
-        u_plane[..uv_size].copy_from_slice(&raw[y_size..y_size + uv_size]);
-        v_plane[..uv_size].copy_from_slice(&raw[y_size + uv_size..]);
-
-        source.capture_frame(&VideoFrame {
-            rotation: VideoRotation::VideoRotation0,
-            timestamp_us: start_ts.elapsed().as_micros() as i64,
-            buffer: i420,
-            frame_metadata: None,
-        });
+        let (lock, cvar) = &*shared_slot;
+        if let Ok(mut guard) = lock.lock() {
+            let recycled = guard.1.take().unwrap_or_else(|| vec![0u8; frame_size]);
+            let completed = std::mem::replace(&mut raw, recycled);
+            // Overwrite any unconsumed frame so only the newest frame is ever encoded
+            if let Some(dropped) = guard.0.replace(completed) {
+                if guard.1.is_none() {
+                    guard.1 = Some(dropped);
+                }
+            }
+            cvar.notify_one();
+        }
     }
+
+    stop.store(true, Ordering::Relaxed);
+    shared_slot.1.notify_all();
+    let _ = tokio::task::spawn_blocking(move || {
+        let _ = worker.join();
+    })
+    .await;
 
     Ok(())
 }

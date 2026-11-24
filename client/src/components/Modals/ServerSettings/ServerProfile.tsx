@@ -209,7 +209,6 @@ export const ServerProfile: React.FC<ServerProfileProps> = ({
               }`}
               style={{ backgroundImage: effectiveBannerSrc ? `url(${effectiveBannerSrc})` : undefined }}
               onClick={() => canEdit && bannerInputRef.current?.click()}
-              title={canEdit ? 'Clique para alterar o banner do servidor' : undefined}
             >
               {canEdit && <EditPencilOverlay variant="top-right" />}
             </div>
@@ -229,7 +228,6 @@ export const ServerProfile: React.FC<ServerProfileProps> = ({
                     canEdit ? 'group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400' : ''
                   }`}
                   onClick={() => canEdit && iconInputRef.current?.click()}
-                  title={canEdit ? 'Clique para alterar o ícone do servidor' : undefined}
                 >
                   {effectiveIconSrc ? (
                     <img

@@ -599,7 +599,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const handleRequestKey = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!message.e2ee_meta?.session_id) return;
+    if (!message.e2ee_meta?.session_id) {
+      setRequestKeyFeedback('Chave indisponível para esta mensagem');
+      return;
+    }
 
     const convId = (message as any).dm_room_id || (message as any).group_id || (message as any).channel_id;
     const convType = (message as any).dm_room_id ? 'dm' : ((message as any).group_id ? 'dm_group' : 'channel');
@@ -668,13 +671,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
       if (sent) {
         setRequestKeyFeedback('Chave solicitada');
+        setTimeout(() => setRequestKeyFeedback(null), 3500);
       } else {
-        setRequestKeyFeedback('Aguardando resposta...');
+        setRequestKeyFeedback(keyRequestManager.getLastFailureReason() || 'Chave não encontrada');
       }
-      setTimeout(() => setRequestKeyFeedback(null), 3500);
     } catch {
-      setRequestKeyFeedback('Erro ao solicitar');
-      setTimeout(() => setRequestKeyFeedback(null), 3000);
+      setRequestKeyFeedback('Não foi possível solicitar a chave agora');
     }
   };
 
@@ -730,7 +732,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               }
             }}
             className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-1 ml-9 md:ml-10 select-none opacity-80 hover:opacity-100 transition-all cursor-pointer group/reply"
-            title="Clique na mensagem para ir até ela"
           >
             <CornerDownRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 group-hover/reply:text-brand-400 transition-colors" />
             <div
@@ -748,7 +749,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               }}
               className={`inline-flex items-center gap-1 font-semibold cursor-pointer transition-colors group/replyauthor ${!replyRoleColor ? 'text-brand-400 hover:text-brand-300' : 'hover:opacity-80'}`}
               style={replyRoleColor ? { color: replyRoleColor } : undefined}
-              title={effectiveReplyAuthor ? `Ver perfil de @${effectiveReplyAuthor.username || 'usuário'}` : undefined}
             >
               <div className="w-4 h-4 rounded-full bg-brand-500 text-white text-[8px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm transition-transform group-hover/replyauthor:scale-105">
                 {replyAvatarUrl ? (
@@ -771,7 +771,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             </div>
             <span
               className="truncate text-gray-400 max-w-sm italic group-hover/reply:text-gray-200 group-hover/reply:underline"
-              title="Clique para ir até a mensagem respondida"
             >
               "{message.reply_to?.content || ''}"
             </span>
@@ -788,7 +787,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 <button
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                   className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  title="Adicionar Reação"
+                  aria-label="Adicionar Reação"
                 >
                   <Smile className="w-3.5 h-3.5" />
                 </button>
@@ -817,7 +816,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               <button
                 onClick={() => onReply?.(message)}
                 className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                title="Responder"
+                aria-label="Responder"
               >
                 <Reply className="w-3.5 h-3.5" />
               </button>
@@ -830,7 +829,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       ? 'text-amber-400 hover:bg-amber-400/20'
                       : 'text-gray-400 hover:text-white hover:bg-white/10'
                   }`}
-                  title={message.is_pinned ? 'Desafixar' : 'Fixar'}
+                  aria-label={message.is_pinned ? 'Desafixar' : 'Fixar'}
                 >
                   <Pin className="w-3.5 h-3.5" />
                 </button>
@@ -840,7 +839,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 <button
                   onClick={() => setIsEditing(true)}
                   className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  title="Editar Mensagem"
+                  aria-label="Editar Mensagem"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -851,7 +850,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   onClick={() => setIsDeleteModalOpen(true)}
                   disabled={isDeleting}
                   className="p-1 rounded text-gray-400 hover:text-dnd hover:bg-dnd/20 transition-colors cursor-pointer"
-                  title="Excluir Mensagem"
+                  aria-label="Excluir Mensagem"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -909,7 +908,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       }}
                       className="font-semibold text-gray-100 hover:underline mr-1.5 cursor-pointer inline items-baseline gap-1 hover:text-brand-400 select-none"
                       style={authorRoleColor ? { color: authorRoleColor } : undefined}
-                      title="Ver perfil"
+                      aria-label="Ver perfil"
                     >
                       <span>{getFormattedUsername(message.author?.display_name || message.author?.username || 'Usuário')}</span>
                       {Boolean(message.author?.is_bot) && (
@@ -923,10 +922,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     </button>
 
                     {isUndecryptable ? (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs my-0.5 select-none">
-                        <ShieldAlert className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                      <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 text-xs my-0.5 select-none">
+                        <ShieldAlert className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
                         <span>Mensagem criptografada indisponível</span>
-                        <button type="button" onClick={handleRequestKey} className="underline text-[11px] text-amber-200 hover:text-white cursor-pointer ml-1">
+                        <button type="button" onClick={handleRequestKey} className="underline text-[11px] text-red-300 hover:text-red-200 cursor-pointer">
                           {requestKeyFeedback || 'Solicitar chave'}
                         </button>
                       </span>
@@ -995,7 +994,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       type="button"
                       onClick={handleRemoveFailed}
                       className="p-0.5 hover:text-white text-red-400 cursor-pointer"
-                      title="Excluir rascunho com falha"
+                      aria-label="Excluir rascunho com falha"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1065,7 +1064,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       }}
                       className="font-semibold text-sm text-gray-100 hover:underline cursor-pointer hover:text-brand-400 transition-colors"
                       style={authorRoleColor ? { color: authorRoleColor } : undefined}
-                      title="Ver perfil"
                     >
                       {getFormattedUsername(message.author?.display_name || message.author?.username || 'Usuário')}
                     </span>
@@ -1124,13 +1122,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 ) : (
                   <>
                     {isUndecryptable ? (
-                      <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs my-1 select-none">
-                        <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                      <div className="inline-flex items-center gap-2.5 px-3 py-2 rounded-xl bg-red-500/10 text-red-400 text-xs my-1 select-none w-fit">
+                        <ShieldAlert className="w-4 h-4 text-red-400 flex-shrink-0" />
                         <span className="font-medium">Mensagem criptografada indisponível</span>
                         <button
                           type="button"
                           onClick={handleRequestKey}
-                          className="ml-auto text-[11px] underline text-amber-200 hover:text-white cursor-pointer"
+                          className="text-[11px] underline text-red-300 hover:text-red-200 cursor-pointer"
                         >
                           {requestKeyFeedback || 'Solicitar chave'}
                         </button>
@@ -1189,7 +1187,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       type="button"
                       onClick={handleRemoveFailed}
                       className="p-0.5 hover:text-white text-red-400 cursor-pointer"
-                      title="Excluir rascunho com falha"
+                      aria-label="Excluir rascunho com falha"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

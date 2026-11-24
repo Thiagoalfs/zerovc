@@ -265,7 +265,6 @@ export const MemberList: React.FC<MemberListProps> = ({
         className={`flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-background-light/40 group cursor-pointer transition-all active:scale-[0.98] ${
           isOffline ? 'opacity-55 hover:opacity-100' : ''
         }`}
-        title="Clique com botão esquerdo para ver o perfil ou direito para opções"
       >
         <UserAvatar
           user={member}
@@ -283,8 +282,6 @@ export const MemberList: React.FC<MemberListProps> = ({
               style={
                 !isOffline && roleColor
                   ? { color: roleColor }
-                  : !isOffline && isOwner
-                  ? { color: '#5865F2' }
                   : isOffline
                   ? { color: '#888888' }
                   : { color: '#E0E0E0' }
@@ -293,12 +290,12 @@ export const MemberList: React.FC<MemberListProps> = ({
               {getFormattedUsername(member.display_name || member.username)}
             </span>
             {isOwner && (
-              <span title={isGroupVariant ? 'Dono do Grupo' : 'Dono do Servidor'}>
+              <span>
                 <Crown className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
               </span>
             )}
             {isMuted && (
-              <span title="Membro Silenciado">
+              <span>
                 <VolumeX className="w-3.5 h-3.5 text-dnd flex-shrink-0" />
               </span>
             )}
@@ -412,7 +409,7 @@ export const MemberList: React.FC<MemberListProps> = ({
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-white p-1.5 -ml-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-1"
-              title="Voltar para o chat"
+              aria-label="Voltar para o chat"
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
@@ -422,7 +419,7 @@ export const MemberList: React.FC<MemberListProps> = ({
                 <button
                   onClick={onOpenSearch}
                   className="p-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/10 transition-colors cursor-pointer"
-                  title="Buscar no canal"
+                  aria-label="Buscar no canal"
                 >
                   <Search className="w-5 h-5" />
                 </button>
@@ -431,7 +428,7 @@ export const MemberList: React.FC<MemberListProps> = ({
                 <button
                   onClick={onOpenPins}
                   className="p-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/10 transition-colors cursor-pointer"
-                  title="Mensagens Fixadas"
+                  aria-label="Mensagens Fixadas"
                 >
                   <Pin className="w-5 h-5" />
                 </button>
@@ -468,7 +465,7 @@ export const MemberList: React.FC<MemberListProps> = ({
                 type="button"
                 onClick={onAddGroupMembers}
                 className="p-1 hover:bg-white/10 rounded-md text-gray-400 hover:text-white cursor-pointer transition-colors"
-                title="Adicionar membros ao grupo"
+                aria-label="Adicionar membros ao grupo"
               >
                 <Plus className="w-4 h-4" />
               </button>

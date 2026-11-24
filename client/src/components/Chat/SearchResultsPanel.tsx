@@ -188,7 +188,6 @@ export const SearchResultsPanel: React.FC<SearchResultsPanelProps> = ({
           {activeFiltersCount > 0 && (
             <div
               className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-brand-500/15 border border-brand-500/30 text-brand-300 text-xs font-semibold"
-              title="Filtros ativos"
             >
               <Filter className="w-3 h-3" />
               <span>Filtros ({activeFiltersCount})</span>
@@ -201,7 +200,7 @@ export const SearchResultsPanel: React.FC<SearchResultsPanelProps> = ({
               type="button"
               onClick={() => setIsSortMenuOpen((prev) => !prev)}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-medium border border-white/5 transition cursor-pointer"
-              title="Mudar ordenação"
+              aria-label="Mudar ordenação"
             >
               <ArrowUpDown className="w-3 h-3 text-gray-400" />
               <span>{sortLabels[sortOption]}</span>
@@ -242,7 +241,7 @@ export const SearchResultsPanel: React.FC<SearchResultsPanelProps> = ({
             type="button"
             onClick={onClose}
             className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
-            title="Fechar resultados de busca"
+            aria-label="Fechar resultados de busca"
           >
             <X className="w-4 h-4" />
           </button>
@@ -314,7 +313,7 @@ export const SearchResultsPanel: React.FC<SearchResultsPanelProps> = ({
                       {authorName}
                     </span>
                     {msg.is_pinned && (
-                      <span title="Mensagem fixada">
+                      <span>
                         <Pin className="w-3 h-3 text-amber-400 flex-shrink-0" />
                       </span>
                     )}

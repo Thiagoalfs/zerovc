@@ -279,7 +279,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
           <button
             onClick={onOpenMobileDrawer}
             className="md:hidden text-gray-400 hover:text-white p-1.5 -ml-0.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0"
-            title="Menu de Servidores"
+            aria-label="Menu de Servidores"
           >
             <Menu className="w-6 h-6" />
           </button>
@@ -415,14 +415,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                         <button
                           onClick={() => acceptRequest(req.id)}
                           className="w-8 h-8 rounded-full bg-background-light hover:bg-online hover:text-white text-gray-300 flex items-center justify-center transition-colors"
-                          title="Aceitar Pedido"
+                          aria-label="Aceitar Pedido"
                         >
                           <Check className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => removeFriend(req.id)}
                           className="w-8 h-8 rounded-full bg-background-light hover:bg-dnd hover:text-white text-gray-300 flex items-center justify-center transition-colors"
-                          title="Recusar Pedido"
+                          aria-label="Recusar Pedido"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -465,7 +465,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                       <button
                         onClick={() => removeFriend(req.id)}
                         className="w-8 h-8 rounded-full bg-background-light hover:bg-dnd hover:text-white text-gray-300 flex items-center justify-center transition-colors flex-shrink-0"
-                        title="Cancelar Pedido"
+                        aria-label="Cancelar Pedido"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -572,7 +572,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                           if (target?.id) handleStartDM(target.id);
                         }}
                         className="w-10 h-10 rounded-full bg-background-light hover:bg-brand-500 text-gray-300 hover:text-white flex items-center justify-center transition-colors shadow-sm"
-                        title="Enviar Mensagem Direta"
+                        aria-label="Enviar Mensagem Direta"
                       >
                         <MessageSquare className="w-4 h-4" />
                       </button>
@@ -583,7 +583,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({ onOpenMobileDrawer, on
                           removeFriend(f.id);
                         }}
                         className="w-10 h-10 rounded-full bg-background-light hover:bg-dnd text-gray-400 hover:text-white flex items-center justify-center transition-colors opacity-80 md:opacity-0 md:group-hover:opacity-100"
-                        title="Remover Amigo"
+                        aria-label="Remover Amigo"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

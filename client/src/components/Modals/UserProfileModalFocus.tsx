@@ -291,7 +291,6 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
             user.banner_url ? 'cursor-pointer group/banner' : ''
           }`}
           style={user.banner_url ? { backgroundImage: `url(${formatAssetUrl(user.banner_url)})` } : {}}
-          title={user.banner_url ? 'Clique para ampliar o banner' : undefined}
         >
           {user.banner_url && (
             <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/banner:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
@@ -323,7 +322,6 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
               <div
                 onClick={handleAvatarClick}
                 className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-brand-500 border-[6px] border-background-darkest flex items-center justify-center text-3xl sm:text-4xl font-bold text-white shadow-2xl overflow-hidden cursor-pointer relative transition-transform group-hover/bigavatar:scale-105 active:scale-95"
-                title={user.avatar_url ? 'Clique para ampliar foto de perfil' : 'Foto de perfil'}
               >
                 {user.avatar_url ? (
                   <img src={formatAssetUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
@@ -340,7 +338,6 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                 className={`absolute bottom-1 right-1 w-6 h-6 rounded-full border-4 border-background-darkest shadow-md ${getStatusColor(
                   user.status
                 )}`}
-                title={getStatusLabel(user.status)}
               />
             </div>
 
@@ -408,7 +405,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                 type="button"
                 onClick={handleCopyUsername}
                 className="text-xs sm:text-sm text-gray-400 hover:text-white font-medium flex items-center gap-1 transition-colors cursor-pointer group/copy rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                title="Clique para copiar username"
+                aria-label="Clique para copiar username"
               >
                 <span>@{user.username}</span>
                 {copied ? (
@@ -516,7 +513,6 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                                 key={item.id}
                                 className="w-6 h-6 rounded-full border-2 border-background-darkest bg-background-darker overflow-hidden shadow-sm relative shrink-0"
                                 style={{ zIndex: 10 - idx }}
-                                title={item.name}
                               >
                                 {item.icon_url ? (
                                   <img
@@ -535,7 +531,6 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                               <div
                                 className="w-6 h-6 rounded-full border-2 border-background-darkest bg-white/10 text-gray-300 text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm relative"
                                 style={{ zIndex: 6 }}
-                                title={`Mais ${mutualGuilds.length - 3}`}
                               >
                                 +{mutualGuilds.length - 3}
                               </div>
@@ -602,7 +597,6 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                                 key={item.id}
                                 className="w-6 h-6 rounded-full border-2 border-background-darkest bg-background-darker overflow-hidden shadow-sm relative shrink-0"
                                 style={{ zIndex: 10 - idx }}
-                                title={item.display_name || item.username}
                               >
                                 {item.avatar_url ? (
                                   <img
@@ -621,7 +615,6 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                               <div
                                 className="w-6 h-6 rounded-full border-2 border-background-darkest bg-white/10 text-gray-300 text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm relative"
                                 style={{ zIndex: 6 }}
-                                title={`Mais ${mutualFriends.length - 3}`}
                               >
                                 +{mutualFriends.length - 3}
                               </div>
@@ -676,7 +669,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                       {/* Data de criação da conta */}
                       <div className="py-1 px-1 min-w-0">
                         <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">No ZeroVC</div>
-                        <div className="text-xs font-semibold text-gray-200 truncate" title={createdDateStr}>
+                        <div className="text-xs font-semibold text-gray-200 truncate">
                           {createdDateStr || 'Desconhecido'}
                         </div>
                       </div>
@@ -696,10 +689,10 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider truncate" title={guild.name}>
+                            <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider truncate">
                               {guild.name}
                             </div>
-                            <div className="text-xs font-semibold text-gray-200 truncate" title={joinedDateStr}>
+                            <div className="text-xs font-semibold text-gray-200 truncate">
                               {joinedDateStr || (isLoadingProfile ? 'Carregando...' : 'Desconhecido')}
                             </div>
                           </div>

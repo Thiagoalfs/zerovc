@@ -167,7 +167,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
               ? 'bg-dnd text-white hover:bg-rose-700'
               : 'bg-background-light hover:bg-white/15 text-white'
           }`}
-          title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
+          aria-label={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
         >
           {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
@@ -184,7 +184,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
               ? 'bg-dnd text-white hover:bg-rose-700'
               : 'bg-background-light hover:bg-white/15 text-white'
           }`}
-          title={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
+          aria-label={isDeafened ? 'Desensurdecer' : 'Ensurdecer'}
         >
           {isDeafened ? (
             <HeadphonesOff className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -205,7 +205,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
               ? 'bg-online text-white hover:bg-emerald-600'
               : 'bg-background-light hover:bg-white/15 text-white'
           }`}
-          title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
+          aria-label={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
         >
           {isCameraOn ? <Video className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
@@ -219,7 +219,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
               ? 'bg-online text-white hover:bg-emerald-600'
               : 'bg-background-light hover:bg-white/15 text-white'
           }`}
-          title={isScreensharing ? 'Opções de Compartilhamento' : 'Compartilhar Tela'}
+          aria-label={isScreensharing ? 'Opções de Compartilhamento' : 'Compartilhar Tela'}
         >
           <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
@@ -229,7 +229,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
           type="button"
           onClick={handleDisconnect}
           className="bg-dnd hover:bg-rose-700 text-white p-2.5 sm:p-3 rounded-full transition-all shadow-lg cursor-pointer ml-1 active:scale-95"
-          title="Desconectar da Voz"
+          aria-label="Desconectar da Voz"
         >
           <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
@@ -240,7 +240,6 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
             type="button"
             onClick={onToggleFullscreen}
             className="bg-background-light hover:bg-white/15 text-white p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95"
-            title={isFullscreen ? 'Sair da Tela Cheia (Esc)' : 'Tela Cheia'}
             aria-label={isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
           >
             {isFullscreen ? (
