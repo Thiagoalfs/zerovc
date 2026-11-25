@@ -22,12 +22,20 @@ use tauri_plugin_updater::UpdaterExt;
 use url::Url;
 
 pub const REMOTE_SERVER_URL: &str = "https://zerovc.safiroko.xyz";
-pub const ALLOWED_ORIGINS: &[&str] = &["https://zerovc.safiroko.xyz", "http://localhost:5173"];
+pub const ALLOWED_ORIGINS: &[&str] = &[
+    "https://zerovc.safiroko.xyz",
+    "http://localhost:5173",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+];
 
 pub fn is_allowed_origin(raw_url: &str) -> bool {
     let Ok(parsed) = Url::parse(raw_url) else {
         return false;
     };
+    if parsed.scheme() == "tauri" && parsed.host_str() == Some("localhost") {
+        return true;
+    }
     let origin = parsed.origin().ascii_serialization();
     ALLOWED_ORIGINS.contains(&origin.as_str())
 }
