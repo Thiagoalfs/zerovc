@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { isTauri } from '../../lib/platform';
 
 declare global {
   interface Window {
@@ -38,7 +39,12 @@ interface TurnstileWidgetProps {
 export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetProps>(
   ({ siteKey: propSiteKey, onSuccess, onError, onExpire, action, className = '' }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const iframeRef = useRef<HTMLIFrameElement>(null);
     const widgetIdRef = useRef<string | null>(null);
+    const tauriMode = isTauri();
+    const remoteOrigin = (
+      ((import.meta as any).env?.VITE_API_URL as string | undefined) || 'https://zerovc.safiroko.xyz'
+    ).replace(/\/+$/, '');
 
     // Mantém referências estáveis para as callbacks para evitar recriar o widget a cada re-render do componente pai
     const onSuccessRef = useRef(onSuccess);
@@ -55,17 +61,45 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
 
     useImperativeHandle(ref, () => ({
       reset: () => {
+        if (tauriMode) {
+          iframeRef.current?.contentWindow?.postMessage(
+            { source: 'zerovc-turnstile', type: 'reset' },
+            remoteOrigin
+          );
+          return;
+        }
         if (widgetIdRef.current && window.turnstile) {
           try {
             window.turnstile.reset(widgetIdRef.current);
           } catch {}
         }
       },
-    }));
+    }), [tauriMode, remoteOrigin]);
+
+    useEffect(() => {
+      if (!siteKey || !tauriMode) return;
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.origin !== remoteOrigin) return;
+        const data = event.data;
+        if (!data || data.source !== 'zerovc-turnstile') return;
+
+        if (data.type === 'success' && typeof data.token === 'string') {
+          onSuccessRef.current(data.token);
+        } else if (data.type === 'error') {
+          onErrorRef.current?.();
+        } else if (data.type === 'expired') {
+          onExpireRef.current?.();
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }, [siteKey, tauriMode, remoteOrigin]);
 
     useEffect(() => {
       // Se não há site key configurada no .env, não inicializa o widget
-      if (!siteKey || !containerRef.current) return;
+      if (!siteKey || !containerRef.current || tauriMode) return;
 
       let isMounted = true;
 
@@ -137,10 +171,26 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
           } catch {}
         }
       };
-    }, [siteKey, action]);
+    }, [siteKey, action, tauriMode]);
 
     if (!siteKey) {
       return null;
+    }
+
+    if (tauriMode) {
+      const widgetUrl = `${remoteOrigin}/api/auth/turnstile-widget${
+        action ? `?action=${encodeURIComponent(action)}` : ''
+      }`;
+      return (
+        <div className={`flex justify-center my-3 ${className}`}>
+          <iframe
+            ref={iframeRef}
+            src={widgetUrl}
+            title="Verificação de segurança"
+            className="w-[310px] h-[72px] border-0 overflow-hidden bg-transparent"
+          />
+        </div>
+      );
     }
 
     return (

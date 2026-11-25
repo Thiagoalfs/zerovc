@@ -122,6 +122,87 @@ func (h *AuthHandler) GetTurnstileConfig(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// GetTurnstileWidget serves a minimal HTTPS page that renders Cloudflare Turnstile
+// on the official domain so desktop WebViews (e.g. tauri://localhost) can embed it
+// and receive the token via postMessage.
+func (h *AuthHandler) GetTurnstileWidget(w http.ResponseWriter, r *http.Request) {
+	siteKey := strings.TrimSpace(os.Getenv("TURNSTILE_SITE_KEY"))
+	rawAction := strings.TrimSpace(r.URL.Query().Get("action"))
+	var cleanAction strings.Builder
+	for _, ch := range rawAction {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' {
+			cleanAction.WriteRune(ch)
+			if cleanAction.Len() >= 32 {
+				break
+			}
+		}
+	}
+
+	siteKeyJSON, _ := json.Marshal(siteKey)
+	actionJSON, _ := json.Marshal(cleanAction.String())
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Security-Policy", "frame-ancestors https://zerovc.safiroko.xyz http://localhost:5173 http://tauri.localhost https://tauri.localhost tauri://localhost;")
+
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; display: flex; justify-content: center; align-items: center; min-height: 68px; }
+  </style>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+</head>
+<body>
+  <div id="cf-turnstile"></div>
+  <script>
+    (function () {
+      var siteKey = %s;
+      var action = %s;
+      var widgetId = null;
+
+      function notify(type, token) {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ source: 'zerovc-turnstile', type: type, token: token || null }, '*');
+        }
+      }
+
+      window.addEventListener('message', function (event) {
+        if (event.data && event.data.source === 'zerovc-turnstile' && event.data.type === 'reset') {
+          if (widgetId !== null && window.turnstile) {
+            try { window.turnstile.reset(widgetId); } catch (e) {}
+          }
+        }
+      });
+
+      function mount() {
+        if (!window.turnstile || !siteKey) return false;
+        var opts = {
+          sitekey: siteKey,
+          theme: 'dark',
+          callback: function (token) { notify('success', token); },
+          'error-callback': function () { notify('error'); },
+          'expired-callback': function () { notify('expired'); },
+          'timeout-callback': function () { notify('expired'); }
+        };
+        if (action) opts.action = action;
+        widgetId = window.turnstile.render('#cf-turnstile', opts);
+        return true;
+      }
+
+      if (!mount()) {
+        var timer = setInterval(function () {
+          if (mount()) clearInterval(timer);
+        }, 100);
+      }
+    })();
+  </script>
+</body>
+</html>`, string(siteKeyJSON), string(actionJSON))
+}
+
 func verifyTurnstileToken(token string, remoteIP string) bool {
 	secretKey := strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY"))
 	siteKey := strings.TrimSpace(os.Getenv("TURNSTILE_SITE_KEY"))

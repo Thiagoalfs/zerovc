@@ -290,7 +290,9 @@ func main() {
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.Header().Set("X-Frame-Options", "DENY")
+			if r.URL.Path != "/api/auth/turnstile-widget" {
+				w.Header().Set("X-Frame-Options", "DENY")
+			}
 			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 			if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") || os.Getenv("APP_ENV") == "production" {
 				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
@@ -382,8 +384,9 @@ func main() {
 	// Public E2EE Protocol Discovery & Capability Config
 	r.Get("/api/e2ee/config", e2eeHandler.GetConfig)
 
-	// Public Turnstile Config
+	// Public Turnstile Config & Embedded Widget (for Desktop Tauri WebView)
 	r.Get("/api/auth/turnstile-config", authHandler.GetTurnstileConfig)
+	r.Get("/api/auth/turnstile-widget", authHandler.GetTurnstileWidget)
 
 	// Protected API Routes
 	r.Group(func(r chi.Router) {
