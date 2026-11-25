@@ -9,6 +9,7 @@ import { Participant } from 'livekit-client';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { useKeepAwake } from '../../hooks/useKeepAwake';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
+import { getDesktopAPI } from '../../lib/desktopBridge';
 import { CallStage } from './CallStage';
 import { useStageFullscreen } from './VoiceControlBar';
 import { ModalButton } from '@/components/ui/modal-button';
@@ -160,8 +161,9 @@ export const VoiceRoom: React.FC<VoiceRoomProps> = ({
         setIsVoiceRoomHovered(false);
         return;
       }
-      if (window.electronAPI?.isCursorInWindow) {
-        const insideWin = await window.electronAPI.isCursorInWindow().catch(() => true);
+      const desktopAPI = getDesktopAPI();
+      if (desktopAPI?.isCursorInWindow) {
+        const insideWin = await desktopAPI.isCursorInWindow().catch(() => true);
         if (!cancelled && !insideWin) {
           setIsVoiceRoomHovered(false);
         }

@@ -8,6 +8,7 @@ import { useCallStore } from './stores/callStore';
 import { socket } from './lib/socket';
 import { Message, VoiceSession, Channel, DMRoom, UserProfilePosition, Guild } from './types';
 import { api } from './lib/api';
+import { isDesktop, getDesktopAPI } from './lib/platform';
 import { sendNativeNotification, requestNotificationPermission } from './lib/notifications';
 import { ServerList } from './components/Sidebar/ServerList';
 import { ChannelList } from './components/Sidebar/ChannelList';
@@ -545,9 +546,7 @@ export const App: React.FC = () => {
     setDragState(null);
   };
 
-  const isElectron =
-    typeof window !== 'undefined' &&
-    Boolean((window as any).electronAPI || (window as any).electron || navigator.userAgent.includes('Electron'));
+  const isElectron = isDesktop();
 
   const isCapacitor =
     typeof window !== 'undefined' &&
@@ -866,25 +865,27 @@ export const App: React.FC = () => {
   useEffect(() => {
     useSettingsStore.getState().applyThemeToDOM();
 
-    if (window.electronAPI) {
+    const desktopAPI = getDesktopAPI();
+    if (desktopAPI) {
       try {
         const { minimizeToTray, autoStart } = useSettingsStore.getState();
-        if (window.electronAPI.setMinimizeToTray) {
-          window.electronAPI.setMinimizeToTray(minimizeToTray);
+        if (desktopAPI.setMinimizeToTray) {
+          desktopAPI.setMinimizeToTray(minimizeToTray);
         }
-        if (window.electronAPI.setAutoStart) {
-          window.electronAPI.setAutoStart(autoStart);
+        if (desktopAPI.setAutoStart) {
+          desktopAPI.setAutoStart(autoStart);
         }
       } catch {}
     }
   }, []);
 
-  // Rich Presence & Game Activity Detection in Electron
+  // Rich Presence & Game Activity Detection in Desktop (Electron / Tauri)
   useEffect(() => {
-    if (window.electronAPI && user) {
-      // Check current activity immediately on mount in Electron
-      if (window.electronAPI.getCurrentActivity) {
-        window.electronAPI
+    const desktopAPI = getDesktopAPI();
+    if (desktopAPI && user) {
+      // Check current activity immediately on mount in Desktop
+      if (desktopAPI.getCurrentActivity) {
+        desktopAPI
           .getCurrentActivity()
           .then((currentAct: any) => {
             const currentUser = useAuthStore.getState().user;
@@ -951,8 +952,8 @@ export const App: React.FC = () => {
           .catch(() => {});
       }
 
-      if (window.electronAPI.onActivityDetected) {
-        const removeListener = window.electronAPI.onActivityDetected(async (detectedActivity: any) => {
+      if (desktopAPI.onActivityDetected) {
+        const removeListener = desktopAPI.onActivityDetected(async (detectedActivity: any) => {
           const currentUser = useAuthStore.getState().user;
           if (!currentUser || currentUser.auto_detect_activity === false) return;
 
@@ -1161,16 +1162,17 @@ export const App: React.FC = () => {
 
   // Streamer Mode Software Detection & Synchronization
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.electronAPI) {
+    const desktopAPI = getDesktopAPI();
+    if (desktopAPI) {
       // Sync initial custom processes
       const customProcs = useStreamerModeStore.getState().customProcesses;
-      if (customProcs.length > 0 && window.electronAPI.setCustomStreamerProcesses) {
-        window.electronAPI.setCustomStreamerProcesses(customProcs);
+      if (customProcs.length > 0 && desktopAPI.setCustomStreamerProcesses) {
+        desktopAPI.setCustomStreamerProcesses(customProcs);
       }
 
       // Check current initial status
-      if (window.electronAPI.getStreamerSoftwareStatus) {
-        window.electronAPI.getStreamerSoftwareStatus().then((status) => {
+      if (desktopAPI.getStreamerSoftwareStatus) {
+        desktopAPI.getStreamerSoftwareStatus().then((status) => {
           if (status?.runningApps) {
             useStreamerModeStore.getState().handleStreamAppsUpdate(status.runningApps);
           }
@@ -1178,8 +1180,8 @@ export const App: React.FC = () => {
       }
 
       // Subscribe to real-time status updates
-      if (window.electronAPI.onStreamerSoftwareStatus) {
-        const removeListener = window.electronAPI.onStreamerSoftwareStatus((status) => {
+      if (desktopAPI.onStreamerSoftwareStatus) {
+        const removeListener = desktopAPI.onStreamerSoftwareStatus((status) => {
           if (status?.runningApps) {
             useStreamerModeStore.getState().handleStreamAppsUpdate(status.runningApps);
           }
@@ -1270,10 +1272,11 @@ export const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    // Electron global shortcut event listener
+    // Desktop global shortcut event listener
     let removeShortcutListener: (() => void) | undefined;
-    if ((window as any).electronAPI?.onGlobalShortcut) {
-      removeShortcutListener = (window as any).electronAPI.onGlobalShortcut(triggerShortcutAction);
+    const desktopAPI = getDesktopAPI();
+    if (desktopAPI?.onGlobalShortcut) {
+      removeShortcutListener = desktopAPI.onGlobalShortcut(triggerShortcutAction);
     }
 
     return () => {

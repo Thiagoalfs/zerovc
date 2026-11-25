@@ -85,7 +85,7 @@ import {
 import { ModalButton } from '@/components/ui/modal-button';
 import { SettingsGroup, SettingsRow } from '../ui/settings-group';
 import { InlineAlert } from '../ui/inline-alert';
-import { isElectron } from '../../lib/platform';
+import { isDesktop } from '../../lib/platform';
 import { AccountSubModals, AccountSubModalType } from './ProfileSettings/AccountSubModals';
 import { ImageCropModal } from './ImageCropModal';
 import { EditPencilOverlay } from '../Common/EditPencilOverlay';
@@ -1356,8 +1356,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <span>Preferências</span>
               </button>
 
-              {/* Tab: Atalhos do Teclado (Apenas Electron) */}
-              {isElectron() && (
+              {/* Tab: Atalhos do Teclado (Apenas Desktop) */}
+              {isDesktop() && (
                 <button
                   type="button"
                   onClick={() => setActiveTab('keybinds')}
@@ -2789,8 +2789,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
               <PreferencesSettingsView />
             )}
 
-            {/* TAB: ATALHOS DO TECLADO (Apenas Electron) */}
-            {activeTab === 'keybinds' && isElectron() && (
+            {/* TAB: ATALHOS DO TECLADO (Apenas Desktop) */}
+            {activeTab === 'keybinds' && isDesktop() && (
               <div className="space-y-6 flex-1 overflow-y-auto chat-scrollbar pr-1">
                 <KeybindSettingsView />
               </div>

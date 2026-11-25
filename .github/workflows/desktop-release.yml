@@ -27,33 +27,51 @@ jobs:
         working-directory: client
         run: npm ci
 
+      - name: Setup MSVC Developer Environment
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Native Rust ScreenShare Sidecar (Windows)
-        working-directory: client/electron/native-screenshare
+        working-directory: client/native/native-screenshare
         run: |
           cargo build --release
+          New-Item -ItemType Directory -Force -Path ..\bin | Out-Null
           Copy-Item -Force target\release\zerovc-screenshare.exe ..\bin\zerovc-screenshare.exe
 
-      - name: Build Electron
-        working-directory: client
-        run: npm run build:electron
+      - name: Build Native Audio Capture Sidecar (Windows)
+        run: |
+          New-Item -ItemType Directory -Force -Path client\native\bin | Out-Null
+          cl.exe /nologo /EHsc /O2 /std:c++17 /Fe:client\native\bin\zerovc-audio-capture.exe client\native\process_audio_capture.cpp /link ole32.lib mmdevapi.lib runtimeobject.lib
 
-      - name: Build & Publish Windows NSIS Installer
+      - name: Build Frontend
+        working-directory: client
+        run: npm run build
+
+      - name: Build Tauri Windows NSIS Installer
         working-directory: client
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win nsis --publish always
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --bundles nsis
+
+      - name: Collect Windows Artifacts
+        run: |
+          New-Item -ItemType Directory -Force -Path release-out | Out-Null
+          $nsis = Get-ChildItem -Path client\src-tauri\target\release\bundle\nsis -Filter "*-setup.exe" | Select-Object -First 1
+          if (-not $nsis) { throw "Windows NSIS installer not found in client\src-tauri\target\release\bundle\nsis" }
+          Copy-Item -Force $nsis.FullName release-out\ZeroVC-Setup.exe
+          $sig = "$($nsis.FullName).sig"
+          if (Test-Path $sig) {
+            Copy-Item -Force $sig release-out\ZeroVC-Setup.exe.sig
+          }
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ZeroVC-windows
-          path: |
-            client/release/ZeroVC-Setup.exe
-            client/release/ZeroVC-Setup.exe.blockmap
-            client/release/latest.yml
+          path: release-out/*
 
   release-linux:
     runs-on: ubuntu-22.04
@@ -72,45 +90,76 @@ jobs:
         working-directory: client
         run: npm ci
 
-      - name: Install Linux packaging & native build tools (clang-21, rpm, bsdtar)
+      - name: Install Linux Tauri, GStreamer WebRTC & native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y lsb-release wget software-properties-common gnupg rpm libarchive-tools libssl-dev pkg-config libglib2.0-dev libva-dev
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-plugins-ugly \
+            gstreamer1.0-libav \
+            lsb-release \
+            wget \
+            software-properties-common \
+            gnupg \
+            rpm \
+            libarchive-tools \
+            libssl-dev \
+            pkg-config \
+            libglib2.0-dev \
+            libva-dev
           wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 21
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Native Rust ScreenShare Sidecar (Linux)
-        working-directory: client/electron/native-screenshare
+        working-directory: client/native/native-screenshare
         env:
           CC: clang-21
           CXX: clang++-21
         run: |
           cargo build --release
+          mkdir -p ../bin
           cp -f target/release/zerovc-screenshare ../bin/zerovc-screenshare
           chmod +x ../bin/zerovc-screenshare
 
-      - name: Build Electron
+      - name: Build Frontend
         working-directory: client
-        run: npm run build:electron
+        run: npm run build
 
-      - name: Build & Publish Linux Installers
+      - name: Build Tauri Linux Bundles (.deb, .rpm, AppImage)
         working-directory: client
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --linux --publish always
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --bundles deb,rpm,appimage
+
+      - name: Collect Linux Artifacts
+        run: |
+          mkdir -p release-out
+          DEB=$(find client/src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' | head -n 1)
+          RPM=$(find client/src-tauri/target/release/bundle/rpm -maxdepth 1 -name '*.rpm' | head -n 1)
+          APPIMAGE=$(find client/src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -n 1)
+          [ -n "$DEB" ] && cp -f "$DEB" release-out/ZeroVC.deb
+          [ -n "$RPM" ] && cp -f "$RPM" release-out/ZeroVC.rpm
+          if [ -n "$APPIMAGE" ]; then
+            cp -f "$APPIMAGE" release-out/ZeroVC.AppImage
+            [ -f "${APPIMAGE}.sig" ] && cp -f "${APPIMAGE}.sig" release-out/ZeroVC.AppImage.sig
+          fi
+          ls -la release-out
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ZeroVC-linux
-          path: |
-            client/release/ZeroVC.AppImage
-            client/release/ZeroVC.deb
-            client/release/ZeroVC.rpm
-            client/release/ZeroVC.pacman
-            client/release/latest-linux.yml
+          path: release-out/*
 
   release-android:
     runs-on: ubuntu-latest
@@ -173,12 +222,43 @@ jobs:
           path: downloads-out
           merge-multiple: true
 
-      - name: Upload ZeroVC.apk to GitHub Release
+      - name: Generate Tauri Updater latest.json
+        run: |
+          node -e '
+            const fs = require("fs");
+            const pkg = require("./client/package.json");
+            const repo = process.env.GITHUB_REPOSITORY || "safiroko/zerovc";
+            const tag = `v${pkg.version}`;
+            const platforms = {};
+            if (fs.existsSync("downloads-out/ZeroVC-Setup.exe.sig")) {
+              platforms["windows-x86_64"] = {
+                signature: fs.readFileSync("downloads-out/ZeroVC-Setup.exe.sig", "utf8").trim(),
+                url: `https://github.com/${repo}/releases/download/${tag}/ZeroVC-Setup.exe`
+              };
+            }
+            if (fs.existsSync("downloads-out/ZeroVC.AppImage.sig")) {
+              platforms["linux-x86_64"] = {
+                signature: fs.readFileSync("downloads-out/ZeroVC.AppImage.sig", "utf8").trim(),
+                url: `https://github.com/${repo}/releases/download/${tag}/ZeroVC.AppImage`
+              };
+            }
+            const manifest = {
+              version: tag,
+              notes: `ZeroVC ${tag}`,
+              pub_date: new Date().toISOString(),
+              platforms
+            };
+            fs.writeFileSync("downloads-out/latest.json", JSON.stringify(manifest, null, 2) + "\n");
+          '
+
+      - name: Upload Release Artifacts to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(node -p "require('./client/package.json').version")
-          gh release upload "v${VERSION}" downloads-out/ZeroVC.apk --clobber
+          TAG="v${VERSION}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" downloads-out/* --clobber
 
       - name: Deploy Installers & Latest Metadata to VPS
         env:

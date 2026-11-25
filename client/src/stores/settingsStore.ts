@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getDesktopAPI } from '../lib/platform';
 
 export type ThemeMode = 'dark' | 'oled' | 'light';
 export type AccentColor = 'indigo' | 'purple' | 'emerald' | 'rose' | 'cyan' | 'amber';
@@ -311,19 +312,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setMinimizeToTray: (minimizeToTray) => {
     localStorage.setItem('zerovc_minimize_to_tray', String(minimizeToTray));
     set({ minimizeToTray });
-    window.electronAPI?.setMinimizeToTray?.(minimizeToTray);
+    getDesktopAPI()?.setMinimizeToTray?.(minimizeToTray);
   },
 
   setAutoStart: (autoStart) => {
     localStorage.setItem('zerovc_auto_start', String(autoStart));
     set({ autoStart });
-    window.electronAPI?.setAutoStart?.(autoStart);
+    getDesktopAPI()?.setAutoStart?.(autoStart);
   },
 
   setHardwareAcceleration: (hardwareAcceleration) => {
     localStorage.setItem('zerovc_hardware_acceleration', String(hardwareAcceleration));
     set({ hardwareAcceleration });
-    window.electronAPI?.setHardwareAcceleration?.(hardwareAcceleration);
+    getDesktopAPI()?.setHardwareAcceleration?.(hardwareAcceleration);
   },
 
   setSoundsEnabled: (soundsEnabled) => {
@@ -546,8 +547,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     root.style.setProperty('--brand-700', brand[700]);
 
     // Persiste as cores resolvidas para o splash (outra janela) usar na próxima abertura.
-    if (typeof window !== 'undefined' && window.electronAPI?.setSplashColors) {
-      window.electronAPI
+    const desktopAPI = getDesktopAPI();
+    if (desktopAPI?.setSplashColors) {
+      desktopAPI
         .setSplashColors({
           accent: root.style.getPropertyValue('--brand-500') || '99,102,241',
           bg: root.style.getPropertyValue('--bg-darkest') || '13,17,23',
@@ -555,10 +557,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         .catch(() => {});
     }
 
-    // 4. Set Zoom Scale (native Electron webFrame for perfect viewport sizing)
+    // 4. Set Zoom Scale (native desktop zoom for perfect viewport sizing)
     const zoomLevel = uiZoom || 100;
-    if (window.electronAPI?.setZoomFactor) {
-      window.electronAPI.setZoomFactor(zoomLevel / 100);
+    if (desktopAPI?.setZoomFactor) {
+      desktopAPI.setZoomFactor(zoomLevel / 100);
       root.style.zoom = '';
     } else {
       root.style.zoom = zoomLevel === 100 ? '' : `${zoomLevel}%`;

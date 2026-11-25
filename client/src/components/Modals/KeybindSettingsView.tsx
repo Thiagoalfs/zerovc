@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Keyboard, Mic, Headphones, Monitor, Radio, RotateCcw, Check, Sparkles, X } from 'lucide-react';
-import { isElectron } from '../../lib/platform';
+import { isDesktop, getDesktopAPI } from '../../lib/platform';
 import { ModalButton } from '@/components/ui/modal-button';
 import { SettingsGroup } from '@/components/ui/settings-group';
 import {
@@ -79,9 +79,10 @@ export const eventToKeyCombo = (e: KeyboardEvent): string => {
 
 export const syncElectronShortcuts = async (bindingsOverride?: Record<string, string>) => {
   registeredGlobalActions.clear();
-  if (!isElectron() || !window.electronAPI?.registerGlobalShortcut) return;
+  const desktopAPI = getDesktopAPI();
+  if (!isDesktop() || !desktopAPI?.registerGlobalShortcut) return;
   try {
-    await window.electronAPI.unregisterAllShortcuts?.();
+    await desktopAPI.unregisterAllShortcuts?.();
   } catch {}
   for (const sc of SHORTCUTS) {
     if (sc.id === 'ptt_key') continue; // PTT is handled in renderer
@@ -89,7 +90,7 @@ export const syncElectronShortcuts = async (bindingsOverride?: Record<string, st
     if (key) {
       const accelerator = key.replace(/Control/g, 'CommandOrControl');
       try {
-        const ok = await window.electronAPI.registerGlobalShortcut(accelerator, sc.electronAction);
+        const ok = await desktopAPI.registerGlobalShortcut(accelerator, sc.electronAction);
         if (ok) registeredGlobalActions.add(sc.electronAction);
       } catch {}
     }

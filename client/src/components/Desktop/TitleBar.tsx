@@ -12,6 +12,7 @@ import { UpdateInfo } from '../../types/electron';
 import { ZeroVCLogo } from '../Common/ZeroVCLogo';
 import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
+import { isDesktop, getDesktopAPI } from '../../lib/platform';
 
 interface RepoUpdateInfo {
   latestSha: string;
@@ -23,9 +24,7 @@ interface RepoUpdateInfo {
 }
 
 export const TitleBar: React.FC = () => {
-  const isElectron =
-    typeof window !== 'undefined' &&
-    (!!window.electronAPI?.isElectron || navigator.userAgent.includes('Electron'));
+  const isElectron = isDesktop();
 
   const isCapacitor =
     typeof window !== 'undefined' &&
@@ -50,7 +49,7 @@ export const TitleBar: React.FC = () => {
           setInitialServerTime((prev) => {
             if (prev && prev !== data.server_time) {
               setWebSyncAvailable(true);
-              window.electronAPI?.checkForUpdates?.();
+              getDesktopAPI()?.checkForUpdates?.();
               return prev;
             }
             return prev || data.server_time;
@@ -65,8 +64,10 @@ export const TitleBar: React.FC = () => {
   useEffect(() => {
     if (!isElectron) return;
 
+    const desktopAPI = getDesktopAPI();
+
     // Check initial maximized state
-    window.electronAPI?.isMaximized?.().then((max) => setIsMaximized(max)).catch(() => {});
+    desktopAPI?.isMaximized?.().then((max) => setIsMaximized(max)).catch(() => {});
 
     // Live Server Sync check
     checkServerVersion();
@@ -74,12 +75,12 @@ export const TitleBar: React.FC = () => {
 
     // Update binário disponível (verificação periódica): mostra o ícone de download.
     // NÃO baixa sozinho - o usuário clica para reiniciar e atualizar pelo splash.
-    const unsubAvailable = window.electronAPI?.onUpdateAvailable?.((info: UpdateInfo) => {
+    const unsubAvailable = desktopAPI?.onUpdateAvailable?.((info: UpdateInfo) => {
       setBinaryUpdateAvailable(true);
       setPendingVersion(info?.version ?? null);
     });
 
-    const unsubTrayCheck = window.electronAPI?.onTrayCheckUpdates?.(() => {
+    const unsubTrayCheck = desktopAPI?.onTrayCheckUpdates?.(() => {
       void checkServerVersion();
     });
 
@@ -118,14 +119,15 @@ export const TitleBar: React.FC = () => {
   // Handle update action: if a new installer exists (or Linux binary changed on disk),
   // close and reopen/install the app; otherwise just reload the web bundle.
   const handleDirectUpdate = async () => {
+    const desktopAPI = getDesktopAPI();
     if (binaryUpdateAvailable) {
-      window.electronAPI?.restartToUpdate?.();
+      desktopAPI?.restartToUpdate?.();
       return;
     }
     if (webSyncAvailable) {
-      if (window.electronAPI?.applyTitlebarUpdate) {
+      if (desktopAPI?.applyTitlebarUpdate) {
         try {
-          const res = await window.electronAPI.applyTitlebarUpdate();
+          const res = await desktopAPI.applyTitlebarUpdate();
           if (res?.action === 'reload') {
             window.location.reload();
           }
@@ -139,17 +141,18 @@ export const TitleBar: React.FC = () => {
   };
 
   const handleMinimize = () => {
-    window.electronAPI?.minimize();
+    getDesktopAPI()?.minimize();
   };
 
   const handleMaximize = async () => {
-    window.electronAPI?.maximize();
-    const max = await window.electronAPI?.isMaximized();
+    const desktopAPI = getDesktopAPI();
+    desktopAPI?.maximize();
+    const max = await desktopAPI?.isMaximized();
     setIsMaximized(!!max);
   };
 
   const handleClose = () => {
-    window.electronAPI?.close();
+    getDesktopAPI()?.close();
   };
 
   const activeGuild = useGuildStore((state) => state.activeGuild);

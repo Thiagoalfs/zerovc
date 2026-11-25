@@ -46,6 +46,10 @@ class SocketClient {
       return;
     }
 
+    // Never append ?token= to WebSocket URLs:
+    // - Web / Tauri (direct origin): authenticates via httpOnly cookie
+    // - Tauri (loopback proxy): getApiBaseUrl() points to 127.0.0.1 proxy which injects Authorization
+    // - Electron: main process injects Authorization header
     const baseUrl = getApiBaseUrl().replace(/^http/, 'ws');
     const params = new URLSearchParams();
 

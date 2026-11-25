@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Participant, DisconnectReason } from 'livekit-client';
 import { api, postKeepalive } from '../lib/api';
+import { getDesktopAPI } from '../lib/platform';
 import { livekit } from '../lib/livekit';
 import { User, DMGroup } from '../types';
 import { checkCallEligibility, createE2EEOptions, livekitE2EEManager } from '../lib/livekitE2EE';
@@ -996,8 +997,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
 if (typeof window !== 'undefined') {
   let lastTrayState: 'idle' | 'in-call' | 'speaking' | 'muted' | 'deafened' = 'idle';
   useVoiceStore.subscribe((state) => {
-    const api = (window as any).electronAPI;
-    if (!api?.setTrayVoiceState) return;
+    const desktopAPI = getDesktopAPI();
+    if (!desktopAPI?.setTrayVoiceState) return;
     const localId = useAuthStore.getState().user?.id;
     const isSpeaking =
       state.isConnected &&
@@ -1015,11 +1016,11 @@ if (typeof window !== 'undefined') {
       : 'in-call';
     if (nextState !== lastTrayState) {
       lastTrayState = nextState;
-      api.setTrayVoiceState(nextState);
+      desktopAPI.setTrayVoiceState(nextState);
     }
   });
 
-  // Clean up backend voice session & Electron tray/sidecar when reloading (Ctrl+R) or closing window
+  // Clean up backend voice session & desktop tray/sidecar when reloading (Ctrl+R) or closing window
   const cleanupVoiceOnUnload = () => {
     const state = useVoiceStore.getState();
     if (state.isConnected || state.isConnecting) {
@@ -1029,8 +1030,9 @@ if (typeof window !== 'undefined') {
         postKeepalive(`/dms/${state.dmRoomId}/call/leave`);
       }
     }
-    (window as any).electronAPI?.setTrayVoiceState?.('idle');
-    (window as any).electronAPI?.stopNativeScreenShare?.();
+    const desktopAPI = getDesktopAPI();
+    desktopAPI?.setTrayVoiceState?.('idle');
+    desktopAPI?.stopNativeScreenShare?.();
   };
   window.addEventListener('beforeunload', cleanupVoiceOnUnload);
 }

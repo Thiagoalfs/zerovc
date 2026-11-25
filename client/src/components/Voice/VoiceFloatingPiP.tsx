@@ -1,5 +1,6 @@
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
+import { isDesktop } from '../../lib/desktopBridge';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Track, RemoteTrackPublication } from 'livekit-client';
@@ -67,9 +68,7 @@ export const VoiceFloatingPiP: React.FC<VoiceFloatingPiPProps> = ({
   const { openDMWithUser } = useDMStore();
   const { menu, closeContextMenu, handleUserContextMenu } = useUserContextMenu();
 
-  const isElectron =
-    typeof window !== 'undefined' &&
-    (!!window.electronAPI?.isElectron || navigator.userAgent.includes('Electron'));
+  const isElectron = isDesktop();
   const {
     currentChannelId,
     voiceType,

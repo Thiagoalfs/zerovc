@@ -13,6 +13,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { animate } from "motion/react";
+import { getDesktopAPI } from "../../lib/platform";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -153,7 +154,7 @@ const VideoPlayer = ({
       if (e.key === "Escape" && inAppFullscreen) {
         setInAppFullscreen(false);
         setPlaceholderSize(null);
-        (window as any).electronAPI?.setFullScreen?.(false);
+        getDesktopAPI()?.setFullScreen?.(false);
         restoreParentScroll();
       }
     };
@@ -240,12 +241,12 @@ const VideoPlayer = ({
   const toggleFullscreen = React.useCallback(() => {
     const root = rootRef.current;
     if (!root) return;
-    const electronAPI = (window as any).electronAPI;
+    const desktopAPI = getDesktopAPI();
 
     if (inAppFullscreen || document.fullscreenElement) {
       setInAppFullscreen(false);
       setPlaceholderSize(null);
-      electronAPI?.setFullScreen?.(false);
+      desktopAPI?.setFullScreen?.(false);
       if (document.fullscreenElement) {
         void document.exitFullscreen().catch(() => undefined);
       }
@@ -274,8 +275,8 @@ const VideoPlayer = ({
       setPlaceholderSize({ width: rect.width, height: rect.height });
     }
     setInAppFullscreen(true);
-    if (electronAPI?.setFullScreen) {
-      electronAPI.setFullScreen(true);
+    if (desktopAPI?.setFullScreen) {
+      desktopAPI.setFullScreen(true);
     } else if (typeof root.requestFullscreen === "function") {
       void root.requestFullscreen().catch(() => undefined);
     }

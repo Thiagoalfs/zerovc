@@ -8,6 +8,7 @@ import { ModalButton } from '@/components/ui/modal-button';
 import { SettingsGroup } from '@/components/ui/settings-group';
 import { AppInput } from '@/components/ui/app-input';
 import { api, formatAssetUrl } from '../../lib/api';
+import { getDesktopAPI } from '../../lib/desktopBridge';
 import { GameSearchResult } from '../../types';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
@@ -82,10 +83,11 @@ export const RegisteredGamesView: React.FC = () => {
     };
   }, [customGameName]);
 
-  // Fetch running windows in Electron if available
+  // Fetch running windows in Desktop app if available
   useEffect(() => {
-    if (isAddingGame && typeof window !== 'undefined' && window.electronAPI?.getScreenSources) {
-      window.electronAPI.getScreenSources().then((sources) => {
+    const desktopAPI = getDesktopAPI();
+    if (isAddingGame && desktopAPI?.getScreenSources) {
+      desktopAPI.getScreenSources().then((sources) => {
         const names = Array.from(
           new Set(
             sources

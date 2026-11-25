@@ -5,6 +5,7 @@ import { useCallStore } from '../../stores/callStore';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
+import { getDesktopAPI } from '../../lib/desktopBridge';
 
 /**
  * Shared fullscreen toggle state (Electron window or DOM fullscreen + ESC exit)
@@ -14,10 +15,11 @@ export function useStageFullscreen() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const toggleFullscreen = useCallback(() => {
+    const desktopAPI = getDesktopAPI();
     setIsFullscreen((prev) => {
       const next = !prev;
-      if (window.electronAPI?.setFullScreen) {
-        window.electronAPI.setFullScreen(next);
+      if (desktopAPI?.setFullScreen) {
+        desktopAPI.setFullScreen(next);
       } else if (next) {
         void document.documentElement.requestFullscreen?.().catch(() => {});
       } else if (document.fullscreenElement) {
@@ -29,18 +31,19 @@ export function useStageFullscreen() {
 
   useEffect(() => {
     if (!isFullscreen) return;
+    const desktopAPI = getDesktopAPI();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsFullscreen(false);
-        if (window.electronAPI?.setFullScreen) {
-          window.electronAPI.setFullScreen(false);
+        if (desktopAPI?.setFullScreen) {
+          desktopAPI.setFullScreen(false);
         } else if (document.fullscreenElement) {
           void document.exitFullscreen?.().catch(() => {});
         }
       }
     };
     const handleFsChange = () => {
-      if (!document.fullscreenElement && !window.electronAPI?.setFullScreen) {
+      if (!document.fullscreenElement && !desktopAPI?.setFullScreen) {
         setIsFullscreen(false);
       }
     };
@@ -54,8 +57,9 @@ export function useStageFullscreen() {
 
   useEffect(() => {
     return () => {
-      if (window.electronAPI?.setFullScreen) {
-        window.electronAPI.setFullScreen(false);
+      const desktopAPI = getDesktopAPI();
+      if (desktopAPI?.setFullScreen) {
+        desktopAPI.setFullScreen(false);
       } else if (document.fullscreenElement) {
         void document.exitFullscreen?.().catch(() => {});
       }

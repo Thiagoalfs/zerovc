@@ -4,6 +4,7 @@ import { useVoiceStore } from '../../stores/voiceStore';
 import { useCallStore } from '../../stores/callStore';
 import { matchWindowToGameFamily } from '../../utils/gameFamilyManager';
 import { SquishSwitch } from '../ui/squish-switch';
+import { getDesktopAPI } from '../../lib/desktopBridge';
 import {
   AppModal,
   AppModalHeader,
@@ -59,7 +60,8 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
   const { startScreenShare: startVoiceScreenShare } = useVoiceStore();
   const { callState, startScreenShare: startCallScreenShare } = useCallStore();
 
-  const isElectron = !!(window as any).electronAPI?.getScreenSources;
+  const desktopAPI = getDesktopAPI();
+  const isElectron = !!desktopAPI?.getScreenSources;
   const isWaylandPortal = isElectron && sources.length === 1 && sources[0].id === 'screen:wayland-portal';
   const isExternalPicker = !isElectron || isWaylandPortal;
 
@@ -68,9 +70,9 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({ isOpen, onCl
 
     const fetchSources = async () => {
       setIsLoading(true);
-      if (isElectron) {
+      if (isElectron && desktopAPI?.getScreenSources) {
         try {
-          const res = await (window as any).electronAPI.getScreenSources();
+          const res = await desktopAPI.getScreenSources();
           const validSources = Array.isArray(res) ? res.filter((s: any) => s && s.id) : [];
           setSources(validSources);
           if (validSources.length > 0) {

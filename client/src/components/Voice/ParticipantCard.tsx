@@ -1,6 +1,7 @@
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { UserAvatar } from '../Common/UserAvatar';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
+import { isDesktop } from '../../lib/desktopBridge';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Participant, Track, RemoteTrackPublication, ParticipantEvent, VideoQuality } from 'livekit-client';
@@ -130,9 +131,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     };
   }, [participant]);
 
-  const isElectron =
-    typeof window !== 'undefined' &&
-    (!!window.electronAPI?.isElectron || navigator.userAgent.includes('Electron'));
+  const isElectron = isDesktop();
 
   // Keep fullscreen state in sync with ESC key
   useEffect(() => {

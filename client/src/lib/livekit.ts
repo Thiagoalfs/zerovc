@@ -21,6 +21,7 @@ import {
   RnnoiseLevel,
 } from './audioProcessor';
 import { GameFamily, GAME_FAMILIES, matchWindowToGameFamily, findBestSourceForGameFamily } from '../utils/gameFamilyManager';
+import { isTauri, desktopBridge, getDesktopAPI } from './platform';
 
 export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
 
@@ -62,9 +63,10 @@ export function detectGpuVendor(): Promise<GpuDetectionResult> {
   let hwAcceleration = false;
 
   try {
-    // 1. Electron Native GPU Info
-    if (typeof window !== 'undefined' && window.electronAPI?.getGpuInfo) {
-      const info = await window.electronAPI.getGpuInfo();
+    // 1. Desktop Native GPU Info
+    const desktopAPI = getDesktopAPI();
+    if (desktopAPI?.getGpuInfo) {
+      const info = await desktopAPI.getGpuInfo();
       const devices = info?.basic?.gpuDevice;
       if (Array.isArray(devices) && devices.length > 0) {
         for (const dev of devices) {
@@ -1013,13 +1015,14 @@ class LiveKitManager {
       const gpu = await detectGpuVendor();
       const selectedCodec = gpu.preferredCodec;
 
-      // Fluxo sem sourceId (ex.: botão "compartilhar tela" das chamadas DM): no Electron,
+      // Fluxo sem sourceId (ex.: botão "compartilhar tela" das chamadas DM): no desktop,
       // resolver automaticamente a tela principal e usar a MESMA ponte nativa WASAPI do
       // compartilhamento por canal.
+      const desktopAPI = getDesktopAPI();
       let resolvedSourceId = sourceId;
-      if (!resolvedSourceId && (window as any).electronAPI?.getScreenSources) {
+      if (!resolvedSourceId && desktopAPI?.getScreenSources) {
         try {
-          const sources = await (window as any).electronAPI.getScreenSources();
+          const sources = await desktopAPI.getScreenSources();
           const primaryScreen = sources.find((s: any) => s.id?.startsWith('screen:')) || sources[0];
           if (primaryScreen?.id) {
             resolvedSourceId = primaryScreen.id;
@@ -1034,7 +1037,7 @@ class LiveKitManager {
       this.currentScreenShareConfig = config;
 
       // Identify Game Family for intelligent auto-switching (e.g. League of Legends Lobby <-> Match)
-      if (resolvedSourceId && resolvedSourceId !== 'screen:wayland-portal' && (window as any).electronAPI?.getScreenSources) {
+      if (resolvedSourceId && resolvedSourceId !== 'screen:wayland-portal' && desktopAPI?.getScreenSources) {
         const explicitFamily =
           typeof gameFamily === 'object'
             ? gameFamily
@@ -1046,7 +1049,7 @@ class LiveKitManager {
           this.activeGameFamily = explicitFamily;
           this.startGameFamilyWindowWatcher();
         } else {
-          (window as any).electronAPI.getScreenSources().then((sources: any[]) => {
+          desktopAPI.getScreenSources().then((sources: any[]) => {
             const curSource = sources.find((s: any) => s.id === resolvedSourceId);
             const matched = curSource ? matchWindowToGameFamily(curSource.name, sources, curSource.id) : null;
             if (matched) {
@@ -1071,7 +1074,7 @@ class LiveKitManager {
         !this.currentE2EEOptions &&
         this.currentLivekitUrl &&
         this.currentScreenshareToken &&
-        (window as any).electronAPI?.startNativeScreenShare
+        desktopAPI?.startNativeScreenShare
       ) {
         // Padrão: publicar áudio (fluxo DM não passa config; o modal passa true/false explícito)
         const nativeIncludeAudio = config?.includeAudio !== false;
@@ -1085,7 +1088,7 @@ class LiveKitManager {
 
           this.nativePreviewInfo = null;
           this.nativeScreenShareUnsubscribe?.();
-          this.nativeScreenShareUnsubscribe = (window as any).electronAPI.onNativeScreenShareEvent?.((ev: any) => {
+          this.nativeScreenShareUnsubscribe = desktopAPI.onNativeScreenShareEvent?.((ev: any) => {
             if (ev?.event === 'publishing' && ev?.preview_port && ev?.preview_token) {
               this.nativePreviewInfo = {
                 port: Number(ev.preview_port),
@@ -1101,7 +1104,7 @@ class LiveKitManager {
             }
           });
 
-          const nativeRes = await (window as any).electronAPI.startNativeScreenShare({
+          const nativeRes = await desktopAPI.startNativeScreenShare({
             url: this.currentLivekitUrl,
             token: this.currentScreenshareToken,
             sourceId: resolvedSourceId,
@@ -1123,13 +1126,13 @@ class LiveKitManager {
           if (nativeRes?.error && /cancel/i.test(nativeRes.error)) {
             return false;
           }
-          console.warn('[LiveKit] Native Rust screenshare unavailable, falling back to Electron/WebRTC:', nativeRes?.error);
+          console.warn('[LiveKit] Native Rust screenshare unavailable, falling back to WebRTC:', nativeRes?.error);
         } catch (nativeErr) {
-          console.warn('[LiveKit] Native Rust screenshare failed, falling back to Electron/WebRTC:', nativeErr);
+          console.warn('[LiveKit] Native Rust screenshare failed, falling back to WebRTC:', nativeErr);
         }
       }
 
-      if (resolvedSourceId && resolvedSourceId !== 'screen:wayland-portal' && (window as any).electronAPI) {
+      if (resolvedSourceId && resolvedSourceId !== 'screen:wayland-portal' && desktopAPI) {
         const nativeIncludeAudio = config?.includeAudio !== false;
 
         // Stop any previous process audio bridge capture
@@ -1314,7 +1317,7 @@ class LiveKitManager {
         this.nativePreviewInfo = null;
         this.nativeScreenShareUnsubscribe?.();
         this.nativeScreenShareUnsubscribe = undefined;
-        await (window as any).electronAPI?.stopNativeScreenShare?.().catch(() => {});
+        await getDesktopAPI()?.stopNativeScreenShare?.().catch(() => {});
       }
 
       await this.room.localParticipant.setScreenShareEnabled(false);
@@ -1349,14 +1352,15 @@ class LiveKitManager {
    */
   private startGameFamilyWindowWatcher() {
     this.stopGameFamilyWindowWatcher();
-    if (!this.activeGameFamily || typeof window === 'undefined' || !(window as any).electronAPI?.getScreenSources) return;
+    const desktopAPI = getDesktopAPI();
+    if (!this.activeGameFamily || !desktopAPI?.getScreenSources) return;
 
-    // Immediately react to Electron's real-time process close watcher
-    if ((window as any).electronAPI?.onActivityDetected && !this.activityListenerUnsubscribe) {
-      this.activityListenerUnsubscribe = (window as any).electronAPI.onActivityDetected((detected: any) => {
+    // Immediately react to Desktop's real-time process close watcher
+    if (desktopAPI.onActivityDetected && !this.activityListenerUnsubscribe) {
+      this.activityListenerUnsubscribe = desktopAPI.onActivityDetected((detected: any) => {
         if (!detected && this.activeGameFamily) {
-          if ((window as any).electronAPI?.isProcessRunning && this.activeGameFamily.processes?.length) {
-            (window as any).electronAPI.isProcessRunning(this.activeGameFamily.processes).then((isRunning: boolean) => {
+          if (desktopAPI.isProcessRunning && this.activeGameFamily.processes?.length) {
+            desktopAPI.isProcessRunning(this.activeGameFamily.processes).then((isRunning: boolean) => {
               if (!isRunning && this.activeGameFamily) {
                 console.log(`[LiveKit] Activity watcher detected game closed: ${this.activeGameFamily.name}. Ending screen share immediately.`);
                 void this.setScreenShareEnabled(false);
@@ -1372,7 +1376,7 @@ class LiveKitManager {
       if (!this.activeGameFamily || !this.currentScreenShareSourceId || this.isSwitchingScreenSource || this.isGameFamilyTransitioning) return;
 
       try {
-        const sources = await (window as any).electronAPI.getScreenSources({
+        const sources = await desktopAPI.getScreenSources({
           thumbnail: false,
           fetchWindowIcons: false,
         });
@@ -1396,9 +1400,9 @@ class LiveKitManager {
           }
 
           // Check if any game process is still alive (distinguish: game launching vs user exited)
-          if ((window as any).electronAPI?.isProcessRunning && this.activeGameFamily.processes?.length) {
+          if (desktopAPI.isProcessRunning && this.activeGameFamily.processes?.length) {
             try {
-              const isRunning = await (window as any).electronAPI.isProcessRunning(this.activeGameFamily.processes);
+              const isRunning = await desktopAPI.isProcessRunning(this.activeGameFamily.processes);
               if (!isRunning) {
                 console.log(`[LiveKit] User quit ${this.activeGameFamily.name} (all processes exited). Ending screen share immediately.`);
                 await this.setScreenShareEnabled(false);
@@ -1460,10 +1464,11 @@ class LiveKitManager {
         return;
       }
 
+      const desktopAPI = getDesktopAPI();
       // Verify if game processes are still running (distinguish: still booting vs user quit)
-      if ((window as any).electronAPI?.isProcessRunning && this.activeGameFamily.processes?.length) {
+      if (desktopAPI?.isProcessRunning && this.activeGameFamily.processes?.length) {
         try {
-          const isRunning = await (window as any).electronAPI.isProcessRunning(this.activeGameFamily.processes);
+          const isRunning = await desktopAPI.isProcessRunning(this.activeGameFamily.processes);
           if (!isRunning) {
             console.log(`[LiveKit] Game processes for ${this.activeGameFamily.name} exited during transition. Stopping share immediately.`);
             this.isGameFamilyTransitioning = false;
@@ -1474,10 +1479,10 @@ class LiveKitManager {
         } catch {}
       }
 
-      if (!(window as any).electronAPI?.getScreenSources) break;
+      if (!desktopAPI?.getScreenSources) break;
 
       try {
-        const sources = await (window as any).electronAPI.getScreenSources({
+        const sources = await desktopAPI.getScreenSources({
           thumbnail: false,
           fetchWindowIcons: false,
         });
@@ -1511,9 +1516,10 @@ class LiveKitManager {
   private async handleScreenShareTrackEnded() {
     if (this.isSwitchingScreenSource || this.isGameFamilyTransitioning) return;
 
-    if (this.activeGameFamily && typeof window !== 'undefined' && (window as any).electronAPI?.getScreenSources) {
+    const desktopAPI = getDesktopAPI();
+    if (this.activeGameFamily && desktopAPI?.getScreenSources) {
       try {
-        const sources = await (window as any).electronAPI.getScreenSources({
+        const sources = await desktopAPI.getScreenSources({
           thumbnail: false,
           fetchWindowIcons: false,
         });
@@ -1534,9 +1540,9 @@ class LiveKitManager {
       }
 
       // Check if any game process is still alive (distinguish: game launching vs user exited)
-      if ((window as any).electronAPI?.isProcessRunning && this.activeGameFamily.processes?.length) {
+      if (desktopAPI.isProcessRunning && this.activeGameFamily.processes?.length) {
         try {
-          const isRunning = await (window as any).electronAPI.isProcessRunning(this.activeGameFamily.processes);
+          const isRunning = await desktopAPI.isProcessRunning(this.activeGameFamily.processes);
           if (!isRunning) {
             console.log(`[LiveKit] User quit ${this.activeGameFamily.name} (all processes exited). Ending screen share immediately.`);
             await this.setScreenShareEnabled(false);
@@ -1698,7 +1704,20 @@ class LiveKitManager {
       (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
     );
     this.currentOutputDeviceId = deviceId;
-    if (!this.room || isMobile) return;
+    if (isMobile) return;
+
+    const supportsSetSinkId =
+      typeof HTMLMediaElement !== 'undefined' &&
+      'setSinkId' in HTMLMediaElement.prototype;
+
+    if (!supportsSetSinkId) {
+      if (isTauri()) {
+        await desktopBridge.setAudioOutputDevice?.(deviceId);
+      }
+      return;
+    }
+
+    if (!this.room) return;
     await this.room.switchActiveDevice('audiooutput', deviceId);
     // Se o roteamento de áudio de call estiver ativo, reavaliar: o dispositivo secundário
     // escolhido precisa continuar sendo diferente do novo dispositivo principal.
@@ -2098,7 +2117,7 @@ class LiveKitManager {
       this.nativePreviewInfo = null;
       this.nativeScreenShareUnsubscribe?.();
       this.nativeScreenShareUnsubscribe = undefined;
-      void (window as any).electronAPI?.stopNativeScreenShare?.();
+      void getDesktopAPI()?.stopNativeScreenShare?.();
     }
     this.currentLivekitUrl = null;
     this.currentScreenshareToken = null;

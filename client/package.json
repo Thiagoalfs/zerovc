@@ -1,18 +1,12 @@
 {
   "name": "zerovc-client",
-  "version": "1.0.33",
-  "description": "Ultra-fast, lightweight voice and text communication platform built with Electron and LiveKit WebRTC",
+  "version": "1.0.34",
+  "description": "ZeroVC",
   "homepage": "https://zerovc.safiroko.xyz",
   "author": "Thiago <contato@zerovc.safiroko.xyz>",
-  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && node -e \"const fs=require('fs'),path=require('path'); const copyDir=(src,dest)=>{ if(!fs.existsSync(dest)) fs.mkdirSync(dest,{recursive:true}); for(const entry of fs.readdirSync(src,{withFileTypes:true})){ const s=path.join(src,entry.name),d=path.join(dest,entry.name); if(entry.name==='downloads') continue; if(entry.isDirectory()){ copyDir(s,d); } else { fs.copyFileSync(s,d); } } }; if(fs.existsSync('../backend/web/assets')){ const cur=new Set(fs.readdirSync('dist/assets')); for(const f of fs.readdirSync('../backend/web/assets')){ if(!cur.has(f) && f!=='minecraft.webp') try { fs.unlinkSync(path.join('../backend/web/assets',f)); } catch{} } } copyDir('dist','../backend/web');\"",
-    "build:electron": "tsc -p tsconfig.electron.json && node -e \"const fs=require('fs'); ['icon.ico','icon.png','tray-icon.png'].forEach(f=>{ if(fs.existsSync('electron/'+f)) fs.copyFileSync('electron/'+f, 'dist-electron/'+f); }); if(fs.existsSync('dist-electron/bin')) fs.rmSync('dist-electron/bin', {recursive:true,force:true}); if(fs.existsSync('electron/bin')){ fs.mkdirSync('dist-electron/bin', {recursive:true}); fs.readdirSync('electron/bin').forEach(f=>{ const isWinBin=f.endsWith('.exe'); if((process.platform==='win32')===isWinBin){ fs.copyFileSync('electron/bin/'+f, 'dist-electron/bin/'+f); if(process.platform!=='win32') try{ fs.chmodSync('dist-electron/bin/'+f, 0o755); }catch{} } }); }\"",
-    "electron": "concurrently \"vite\" \"npm run build:electron && electron .\"",
-    "package": "npm run build && npm run build:electron && electron-builder --win nsis && node -e \"const fs=require('fs');const d='../backend/web/downloads/';fs.mkdirSync(d,{recursive:true});['ZeroVC-Setup.exe','ZeroVC-Setup.exe.blockmap','latest.yml'].forEach(f=>{if(fs.existsSync('release/'+f))fs.copyFileSync('release/'+f,d+f);});\"",
-    "package:linux": "npm run build && npm run build:electron && electron-builder --linux && node -e \"const fs=require('fs');const d='../backend/web/downloads/';fs.mkdirSync(d,{recursive:true});fs.readdirSync('release').forEach(f=>{if(/\\.(AppImage|deb|rpm|pacman)$/.test(f)||f==='latest-linux.yml')fs.copyFileSync('release/'+f,d+f);});\"",
-    "package:dir": "npm run build && npm run build:electron && electron-builder --win --dir",
     "build:apk": "npm run build && npx cap sync android && cd android && gradlew.bat assembleRelease",
     "test:frontend-m2": "tsx scripts/test-frontend-m2.ts",
     "test:frontend-m3": "tsx -r ./scripts/test-setup-worker.ts scripts/test-frontend-m3.ts",
@@ -23,7 +17,10 @@
     "test:callkeys-adversarial": "tsx scripts/challenger-m4-adversarial.ts",
     "test:channels-m5": "tsx -r ./scripts/test-setup-worker.ts scripts/test-channels-m5.ts",
     "test:recovery-m6": "tsx scripts/test-recovery-m6.ts",
-    "test:e2e": "tsx tests/e2e/runner.ts"
+    "test:desktop-bridge": "tsx scripts/test-desktop-bridge.ts",
+    "test:e2e": "tsx tests/e2e/runner.ts",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -37,15 +34,20 @@
     "@radix-ui/react-slider": "^1.6.1",
     "@radix-ui/react-slot": "^1.5.0",
     "@sapphi-red/web-noise-suppressor": "^0.4.1",
+    "@tauri-apps/api": "^2.12.5",
+    "@tauri-apps/plugin-autostart": "^2.7.0",
+    "@tauri-apps/plugin-deep-link": "^2.6.3",
+    "@tauri-apps/plugin-global-shortcut": "^2.4.1",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
-    "electron-updater": "^6.8.9",
     "gsap": "^3.15.1",
     "motion": "^14.14.0",
     "radix-ui": "^1.8.1"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
+    "@tauri-apps/cli": "^2.12.6",
     "@types/node": "^20.12.7",
     "@types/react": "^18.2.79",
     "@types/react-dom": "^18.2.25",
@@ -54,8 +56,6 @@
     "clsx": "^2.1.1",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "electron": "^30.0.1",
-    "electron-builder": "^24.13.3",
     "livekit-client": "^2.1.2",
     "lucide-react": "^0.372.0",
     "postcss": "^8.4.38",
@@ -68,108 +68,5 @@
     "typescript": "^5.4.5",
     "vite": "^5.2.10",
     "zustand": "^4.5.2"
-  },
-  "build": {
-    "appId": "com.zerovc.app",
-    "productName": "ZeroVC",
-    "electronLanguages": [
-      "pt-BR",
-      "en-US"
-    ],
-    "compression": "normal",
-    "asar": true,
-    "extraResources": [
-      {
-        "from": "dist-electron/bin",
-        "to": "bin"
-      }
-    ],
-    "directories": {
-      "output": "release"
-    },
-    "icon": "electron/icon.png",
-    "files": [
-      "dist-electron/**/*",
-      "!dist-electron/bin/**",
-      "package.json",
-      "!**/*.map"
-    ],
-    "publish": [
-      {
-        "provider": "generic",
-        "url": "https://zerovc.safiroko.xyz/downloads/"
-      },
-      {
-        "provider": "github",
-        "owner": "Thiagoalfs",
-        "repo": "zerovc"
-      }
-    ],
-    "win": {
-      "icon": "electron/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "linux": {
-      "icon": "electron/icons",
-      "category": "Chat",
-      "artifactName": "ZeroVC.${ext}",
-      "target": [
-        {
-          "target": "deb",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "rpm",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "pacman",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "protocols": [
-      {
-        "name": "ZeroVC",
-        "schemes": [
-          "zerovc"
-        ]
-      }
-    ],
-    "nsis": {
-      "include": "electron/installer.nsh",
-      "installerIcon": "electron/icon.ico",
-      "uninstallerIcon": "electron/icon.ico",
-      "artifactName": "ZeroVC-Setup.${ext}",
-      "oneClick": true,
-      "differentialPackage": true,
-      "perMachine": false,
-      "allowElevation": true,
-      "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "ZeroVC",
-      "uninstallDisplayName": "ZeroVC",
-      "runAfterFinish": true
-    }
   }
 }

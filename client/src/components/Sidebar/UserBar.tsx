@@ -18,6 +18,7 @@ import { UserBarContextMenuControls } from './UserBarContextMenu';
 import { AudioDeviceDropup } from './AudioDeviceDropup';
 import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { ModalButton } from '@/components/ui/modal-button';
+import { getDesktopAPI } from '../../lib/desktopBridge';
 
 interface UserBarProps {
   onOpenSettings: (tab?: string) => void;
@@ -313,11 +314,11 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     }
 
     const gameName = user?.custom_activity?.name;
-    const isElectron = Boolean(typeof window !== 'undefined' && (window as any).electronAPI?.getScreenSources);
+    const desktopAPI = getDesktopAPI();
 
-    if (isElectron && gameName) {
+    if (desktopAPI?.getScreenSources && gameName) {
       try {
-        const sources = await (window as any).electronAPI.getScreenSources({ thumbnail: false, fetchWindowIcons: false });
+        const sources = await desktopAPI.getScreenSources({ thumbnail: false, fetchWindowIcons: false });
         const windowSources = sources.filter((s: any) => s.id?.startsWith('window:'));
 
         // 1. Intelligent Game Family Priority (Partida in-game > Launcher/Lobby)

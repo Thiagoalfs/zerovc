@@ -1,3 +1,5 @@
+import { getDesktopAPI } from './desktopBridge';
+
 /**
  * ZeroVC Native Process Audio Bridge (WASAPI Loopback with ZeroVC Tree Exclusion)
  * Receives framed 48kHz Float32 stereo PCM audio chunks from Electron's native
@@ -75,8 +77,9 @@ export class ProcessAudioBridge {
   private isCapturing = false;
 
   async startCapture(sourceId?: string): Promise<MediaStreamTrack | null> {
-    if (typeof window === 'undefined' || !(window as any).electronAPI?.startProcessAudioCapture) {
-      console.warn('[ProcessAudioBridge] Electron process capture not available in this environment');
+    const desktopAPI = getDesktopAPI();
+    if (!desktopAPI?.startProcessAudioCapture) {
+      console.warn('[ProcessAudioBridge] Desktop process capture not available in this environment');
       return null;
     }
 
@@ -85,7 +88,7 @@ export class ProcessAudioBridge {
 
     try {
       const mode: 'include' | 'exclude' = sourceId?.startsWith('window:') ? 'include' : 'exclude';
-      const result = await (window as any).electronAPI.startProcessAudioCapture({
+      const result = await desktopAPI.startProcessAudioCapture({
         sourceId,
         mode,
       });
@@ -127,9 +130,9 @@ export class ProcessAudioBridge {
       this.destinationNode.channelCountMode = 'explicit';
       this.workletNode.connect(this.destinationNode);
 
-      // Subscribe to binary Float32 PCM chunks from Electron Main
-      if ((window as any).electronAPI.onProcessAudioChunk) {
-        this.unsubscribeChunk = (window as any).electronAPI.onProcessAudioChunk((chunk: Uint8Array) => {
+      // Subscribe to binary Float32 PCM chunks from desktop backend
+      if (desktopAPI.onProcessAudioChunk) {
+        this.unsubscribeChunk = desktopAPI.onProcessAudioChunk((chunk: Uint8Array) => {
           if (!this.workletNode || !chunk || chunk.byteLength < 4) return;
           try {
             let floatData: Float32Array;
@@ -153,8 +156,8 @@ export class ProcessAudioBridge {
       // Kill-switch: se o binário cair no fallback de mix completo no MEIO da sessão,
       // o main process mata o exe e nos avisa. Unsubscribimos os chunks (para de alimentar
       // o worklet) e marcamos o estado para o LiveKitManager despublicar a track.
-      if ((window as any).electronAPI.onProcessAudioFallback) {
-        this.unsubscribeFallback = (window as any).electronAPI.onProcessAudioFallback((info: { reason: string }) => {
+      if (desktopAPI.onProcessAudioFallback) {
+        this.unsubscribeFallback = desktopAPI.onProcessAudioFallback((info: { reason: string }) => {
           console.error('[ProcessAudioBridge] Native capture fell back to full-mix loopback:', info?.reason);
           this.nativeFallbackInfo = { reason: info?.reason || 'native-fallback-full-mix', at: Date.now() };
           this.isCapturing = false;
@@ -218,9 +221,10 @@ export class ProcessAudioBridge {
 
     this.destinationNode = null;
 
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.stopProcessAudioCapture) {
+    const desktopAPI = getDesktopAPI();
+    if (desktopAPI?.stopProcessAudioCapture) {
       try {
-        await (window as any).electronAPI.stopProcessAudioCapture();
+        await desktopAPI.stopProcessAudioCapture();
       } catch (err) {
         console.warn('[ProcessAudioBridge] Error stopping capture process:', err);
       }

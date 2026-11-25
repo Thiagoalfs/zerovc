@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { getDesktopAPI } from '../lib/desktopBridge';
 
 export interface StreamerModeState {
   enabled: boolean;
@@ -105,9 +106,7 @@ export const useStreamerModeStore = create<StreamerModeState>()(
         if (!current.includes(formatted)) {
           const updated = [...current, formatted];
           set({ customProcesses: updated });
-          if (typeof window !== 'undefined' && (window as any).electronAPI?.setCustomStreamerProcesses) {
-            (window as any).electronAPI.setCustomStreamerProcesses(updated);
-          }
+          getDesktopAPI()?.setCustomStreamerProcesses?.(updated);
         }
       },
 
@@ -116,9 +115,7 @@ export const useStreamerModeStore = create<StreamerModeState>()(
         const current = get().customProcesses;
         const updated = current.filter((p) => p.toLowerCase().trim() !== clean);
         set({ customProcesses: updated });
-        if (typeof window !== 'undefined' && (window as any).electronAPI?.setCustomStreamerProcesses) {
-          (window as any).electronAPI.setCustomStreamerProcesses(updated);
-        }
+        getDesktopAPI()?.setCustomStreamerProcesses?.(updated);
       },
 
       dismissForSession: () => {

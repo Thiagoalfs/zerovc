@@ -1,21 +1,21 @@
 import { create } from 'zustand';
 import { User } from '../types';
-import { api, setCsrfToken } from '../lib/api';
+import { api, setCsrfToken, initDesktopProxyUrl } from '../lib/api';
 
-async function persistElectronToken(token: string | null): Promise<void> {
+async function persistDesktopToken(token: string | null): Promise<void> {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem('token');
     localStorage.removeItem('zerovc_token');
   }
-  if (isElectron() && window.electronAPI?.setAuthToken) {
+  if (isTauri() || isElectron()) {
     try {
-      await window.electronAPI.setAuthToken(token);
+      await desktopBridge.setAuthToken(token);
     } catch {}
   }
 }
 import { socket } from '../lib/socket';
 import { livekit } from '../lib/livekit';
-import { isElectron } from '../lib/platform';
+import { isElectron, isTauri, desktopBridge } from '../lib/platform';
 import { useVoiceStore } from './voiceStore';
 import { useCallStore } from './callStore';
 import { useGuildStore } from './guildStore';
@@ -177,7 +177,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { requires_verification: true, email: res.email || email };
       }
       if (res.token && res.user) {
-        await persistElectronToken(res.token);
+        await persistDesktopToken(res.token);
         if (res.csrf_token) {
           setCsrfToken(res.csrf_token);
         } else if (res.user.csrf_token) {
@@ -218,7 +218,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { requires_verification: true, email: res.email || email };
       }
       if (res.token && res.user) {
-        await persistElectronToken(res.token);
+        await persistDesktopToken(res.token);
         if (res.csrf_token) {
           setCsrfToken(res.csrf_token);
         } else if (res.user.csrf_token) {
@@ -254,7 +254,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const res = await api.auth.verifyEmail({ email, code });
       if (res.token && res.user) {
-        await persistElectronToken(res.token);
+        await persistDesktopToken(res.token);
         if (res.csrf_token) {
           setCsrfToken(res.csrf_token);
         } else if (res.user.csrf_token) {
@@ -276,7 +276,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await api.auth.logout();
     } catch {}
-    await persistElectronToken(null);
+    await persistDesktopToken(null);
     await cleanupAllStoresAndConnections();
     set({ user: null, token: null, isCheckingAuth: false, isLoading: false });
 
@@ -296,6 +296,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   checkAuth: async () => {
     try {
+      if (isTauri()) {
+        await initDesktopProxyUrl();
+      }
       const user = await api.auth.me();
       if (user?.csrf_token) {
         setCsrfToken(user.csrf_token);
@@ -323,11 +326,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
       const legacyToken =
-        typeof localStorage !== 'undefined'
+        !isTauri() && typeof localStorage !== 'undefined'
           ? localStorage.getItem('token') || localStorage.getItem('zerovc_token')
           : null;
       if (legacyToken) {
-        await persistElectronToken(legacyToken);
+        await persistDesktopToken(legacyToken);
+      } else if (isTauri() && typeof localStorage !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('zerovc_token');
       }
       set({ user, token: 'cookie_session', isCheckingAuth: false, isLoading: false });
       megolmManager.syncAllUserRoomKeys().catch(() => {});
@@ -337,7 +343,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         backupManager.clearVaultKey();
       } catch {}
-      await persistElectronToken(null);
+      await persistDesktopToken(null);
       await cleanupAllStoresAndConnections();
       set({ user: null, token: null, isCheckingAuth: false, isLoading: false });
     }

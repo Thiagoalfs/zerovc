@@ -1,7 +1,7 @@
 import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession, VoiceSession, GameSearchResult } from '../types';
 import { convertToWebP } from '../utils/image';
 import { optimizeImageForUpload } from './imageOptimizer';
-import { isElectron } from './platform';
+import { isElectron, isTauri, getDesktopAPI } from './platform';
 import { updateServerTime } from '../utils/timeSync';
 
 const getStorageItem = (key: string): string | null => {
@@ -20,9 +20,39 @@ const setStorageItem = (key: string, value: string): void => {
   } catch {}
 };
 
+const getLegacyElectronToken = (): string | null => {
+  if (isTauri()) return null;
+  return getStorageItem('token') || getStorageItem('zerovc_token');
+};
+
 let cachedApiUrl: string | null = null;
+let tauriProxyUrl: string | null = null;
+
+export const initDesktopProxyUrl = async (): Promise<string | null> => {
+  if (!isTauri()) return null;
+  if (typeof window !== 'undefined' && window.__ZEROVC_PROXY_URL__) {
+    tauriProxyUrl = window.__ZEROVC_PROXY_URL__;
+    cachedApiUrl = null;
+    return tauriProxyUrl;
+  }
+  try {
+    const url = await getDesktopAPI()?.getProxyUrl?.();
+    if (url) {
+      tauriProxyUrl = url;
+      cachedApiUrl = null;
+      return url;
+    }
+  } catch {}
+  return null;
+};
 
 export const getApiBaseUrl = (): string => {
+  if (isTauri()) {
+    if (typeof window !== 'undefined' && window.__ZEROVC_PROXY_URL__) {
+      return window.__ZEROVC_PROXY_URL__;
+    }
+    if (tauriProxyUrl) return tauriProxyUrl;
+  }
   if (cachedApiUrl) return cachedApiUrl;
   const stored = getStorageItem('zerovc_api_url');
   if (stored) {
@@ -32,7 +62,8 @@ export const getApiBaseUrl = (): string => {
   if (
     typeof window !== 'undefined' &&
     window.location.origin &&
-    window.location.origin.startsWith('http')
+    window.location.origin.startsWith('http') &&
+    !window.location.origin.includes('tauri.localhost')
   ) {
     cachedApiUrl = window.location.origin;
     return window.location.origin;
@@ -130,7 +161,7 @@ export function postKeepalive(endpoint: string): void {
     const csrf = getCsrfToken();
     if (csrf) headers['X-CSRF-Token'] = csrf;
     if (isElectron()) {
-      const token = getStorageItem('token') || getStorageItem('zerovc_token');
+      const token = getLegacyElectronToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
     }
     void fetch(`${getApiBaseUrl()}/api${endpoint}`, {
@@ -795,7 +826,7 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getStorageItem('token') || getStorageItem('zerovc_token');
+      const token = getLegacyElectronToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
@@ -820,7 +851,7 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getStorageItem('token') || getStorageItem('zerovc_token');
+      const token = getLegacyElectronToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
@@ -845,7 +876,7 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getStorageItem('token') || getStorageItem('zerovc_token');
+      const token = getLegacyElectronToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
@@ -870,7 +901,7 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getStorageItem('token') || getStorageItem('zerovc_token');
+      const token = getLegacyElectronToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
@@ -895,7 +926,7 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getStorageItem('token') || getStorageItem('zerovc_token');
+      const token = getLegacyElectronToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
@@ -926,7 +957,7 @@ export const api = {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
-      const token = getStorageItem('token') || getStorageItem('zerovc_token');
+      const token = getLegacyElectronToken();
       const csrf = getCsrfToken();
       const params = new URLSearchParams();
       if (options?.temp) params.append('temp', 'true');
@@ -1158,7 +1189,7 @@ export const api = {
       onProgress?: (percent: number) => void
     ): Promise<{ id: string; url: string; size: number }> => {
       const baseUrl = getApiBaseUrl();
-      const token = getStorageItem('token');
+      const token = getLegacyElectronToken();
       const body = blob instanceof Blob ? blob : new Blob([blob], { type: 'application/octet-stream' });
 
       return new Promise((resolve, reject) => {

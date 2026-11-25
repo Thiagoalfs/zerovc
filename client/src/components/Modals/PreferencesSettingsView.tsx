@@ -4,6 +4,7 @@ import { SquishSwitch } from '../ui/squish-switch';
 import { ModalButton } from '@/components/ui/modal-button';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { InlineAlert } from '@/components/ui/inline-alert';
+import { getDesktopAPI } from '../../lib/platform';
 
 export const PreferencesSettingsView: React.FC = () => {
   const {
@@ -64,14 +65,14 @@ export const PreferencesSettingsView: React.FC = () => {
             />
           }
         >
-          {hasHwAccelChanged && typeof window !== 'undefined' && window.electronAPI?.relaunchApp && (
+          {hasHwAccelChanged && getDesktopAPI()?.relaunchApp && (
             <InlineAlert variant="info" className="items-center animate-in fade-in">
               <div className="flex items-center justify-between gap-3">
-                <span>A alteração da aceleração de hardware no Electron requer reiniciar o app.</span>
+                <span>A alteração da aceleração de hardware no Desktop requer reiniciar o app.</span>
                 <ModalButton
                   type="primary"
                   size="small"
-                  onClick={() => window.electronAPI?.relaunchApp?.()}
+                  onClick={() => getDesktopAPI()?.relaunchApp?.()}
                   className="shrink-0"
                 >
                   Reiniciar Agora

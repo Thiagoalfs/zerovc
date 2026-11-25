@@ -19,9 +19,13 @@ export interface UpdateProgress {
 
 export interface ElectronAPI {
   isElectron: boolean;
+  isTauri?: boolean;
   platform: string;
   setAuthToken?: (token: string | null) => Promise<void>;
-  getScreenSources: () => Promise<ScreenSource[]>;
+  getProxyUrl?: () => Promise<string | null>;
+  setAudioOutputDevice?: (deviceId: string) => Promise<void>;
+  getScreenSources: (opts?: { thumbnail?: boolean; fetchWindowIcons?: boolean }) => Promise<ScreenSource[]>;
+  isProcessRunning?: (processes: string[]) => Promise<boolean>;
   minimize: () => void;
   maximize: () => void;
   close: () => void;
@@ -31,6 +35,9 @@ export interface ElectronAPI {
   quitAndInstall: () => void;
   openExternal: (url: string) => void;
   reloadApp: () => void;
+  registerGlobalShortcut?: (shortcut: string, action: string) => Promise<boolean>;
+  unregisterAllShortcuts?: () => Promise<boolean>;
+  onGlobalShortcut?: (callback: (action: string) => void) => () => void;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
   onTrayCheckUpdates?: (callback: () => void) => () => void;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => () => void;
@@ -39,6 +46,20 @@ export interface ElectronAPI {
   startProcessAudioCapture?: (options?: { sourceId?: string; mode?: 'include' | 'exclude' }) => Promise<{ success: boolean; error?: string }>;
   stopProcessAudioCapture?: () => Promise<{ success: boolean; error?: string }>;
   onProcessAudioChunk?: (callback: (chunk: Uint8Array) => void) => () => void;
+  onProcessAudioFallback?: (callback: (info: { reason: string }) => void) => () => void;
+  startNativeScreenShare?: (options: {
+    url: string;
+    token: string;
+    sourceId: string;
+    width: number;
+    height: number;
+    fps: number;
+    bitrate: number;
+    includeAudio: boolean;
+    e2eeKey?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
+  stopNativeScreenShare?: () => Promise<{ success: boolean }>;
+  onNativeScreenShareEvent?: (callback: (ev: { event: string; message?: string; [key: string]: any }) => void) => () => void;
   setMinimizeToTray?: (enabled: boolean) => void;
   setTrayVoiceState?: (state: 'idle' | 'in-call' | 'speaking' | 'muted' | 'deafened') => void;
   isCursorInWindow?: () => Promise<boolean>;
@@ -46,6 +67,7 @@ export interface ElectronAPI {
   setAutoStart?: (enabled: boolean) => void;
   getAutoStart?: () => Promise<boolean>;
   setZoomFactor?: (factor: number) => void;
+  getZoomFactor?: () => number;
   getGpuInfo?: () => Promise<any>;
   setFullScreen?: (flag: boolean) => void;
   isFullScreen?: () => Promise<boolean>;
@@ -68,5 +90,8 @@ declare global {
   const __BUILD_DATE__: string;
   interface Window {
     electronAPI?: ElectronAPI;
+    __TAURI_INTERNALS__?: unknown;
+    __TAURI__?: unknown;
+    __ZEROVC_PROXY_URL__?: string;
   }
 }
