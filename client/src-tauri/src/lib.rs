@@ -180,11 +180,11 @@ pub fn run() {
                     *guard = loaded_settings;
                 }
                 let vault = state.auth_vault.clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Err(e) = vault.start_proxy().await {
-                        eprintln!("[AuthVault] Failed to start loopback auth proxy: {e}");
-                    }
-                });
+                if let Err(e) = tauri::async_runtime::block_on(
+                    vault.start_proxy_with_default(Some(REMOTE_SERVER_URL.to_string())),
+                ) {
+                    eprintln!("[AuthVault] Failed to start loopback auth proxy: {e}");
+                }
 
                 process_monitor::start_background_monitor(
                     handle.clone(),

@@ -1,10 +1,14 @@
+use rustls::pki_types::ServerName;
+use rustls::ClientConfig;
+use rustls_platform_verifier::BuilderVerifierExt;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
+use tokio_rustls::TlsConnector;
 
 const KEYRING_SERVICE: &str = "xyz.safiroko.zerovc";
 const KEYRING_ACCOUNT: &str = "auth-token";
@@ -13,6 +17,23 @@ const PROXY_SECRET_HEADER: &str = "x-zerovc-proxy-secret";
 const PROXY_TARGET_HEADER: &str = "x-zerovc-target";
 
 static SECRET_COUNTER: AtomicU64 = AtomicU64::new(1);
+static TLS_CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
+
+fn get_tls_config() -> Result<Arc<ClientConfig>, String> {
+    if let Some(cfg) = TLS_CONFIG.get() {
+        return Ok(Arc::clone(cfg));
+    }
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .map_err(|e| format!("TLS versions error: {e}"))?
+        .with_platform_verifier()
+        .map_err(|e| format!("TLS verifier error: {e}"))?
+        .with_no_client_auth();
+    let arc = Arc::new(config);
+    let _ = TLS_CONFIG.set(Arc::clone(&arc));
+    Ok(arc)
+}
 
 #[derive(Clone)]
 pub struct AuthVault {
@@ -171,7 +192,20 @@ struct ParsedHead {
     headers: Vec<(String, String)>,
     provided_secret: Option<String>,
     target: Option<String>,
+    origin: Option<String>,
+    is_websocket: bool,
     has_authorization: bool,
+}
+
+fn is_allowed_desktop_origin(origin: &str) -> bool {
+    matches!(
+        origin,
+        "http://tauri.localhost"
+            | "https://tauri.localhost"
+            | "tauri://localhost"
+            | "http://localhost:5173"
+            | "https://zerovc.safiroko.xyz"
+    )
 }
 
 fn parse_http_head(raw_head: &str) -> Result<ParsedHead, &'static str> {
@@ -185,6 +219,8 @@ fn parse_http_head(raw_head: &str) -> Result<ParsedHead, &'static str> {
     let mut headers = Vec::new();
     let mut provided_secret = None;
     let mut target = None;
+    let mut origin = None;
+    let mut is_websocket = false;
     let mut has_authorization = false;
 
     for line in lines {
@@ -206,6 +242,12 @@ fn parse_http_head(raw_head: &str) -> Result<ParsedHead, &'static str> {
             target = Some(trimmed_value.to_string());
             continue;
         }
+        if lower == "origin" {
+            origin = Some(trimmed_value.to_string());
+        }
+        if lower == "upgrade" && trimmed_value.eq_ignore_ascii_case("websocket") {
+            is_websocket = true;
+        }
         if lower == "authorization" {
             has_authorization = true;
         }
@@ -217,19 +259,57 @@ fn parse_http_head(raw_head: &str) -> Result<ParsedHead, &'static str> {
         headers,
         provided_secret,
         target,
+        origin,
+        is_websocket,
         has_authorization,
     })
 }
 
 fn build_forwarded_head(parsed: &ParsedHead, token: Option<&str>) -> Vec<u8> {
+    build_forwarded_head_with_upstream(parsed, token, None, false)
+}
+
+fn build_forwarded_head_with_upstream(
+    parsed: &ParsedHead,
+    token: Option<&str>,
+    upstream_host_port: Option<&str>,
+    is_tls: bool,
+) -> Vec<u8> {
     let mut out = String::with_capacity(512);
     out.push_str(&parsed.request_line);
     out.push_str("\r\n");
     for (k, v) in &parsed.headers {
+        let lower = k.to_ascii_lowercase();
+        if upstream_host_port.is_some() && lower == "host" {
+            continue;
+        }
+        if upstream_host_port.is_some() && lower == "origin" {
+            continue;
+        }
+        if !parsed.is_websocket && lower == "connection" {
+            continue;
+        }
         out.push_str(k);
         out.push_str(": ");
         out.push_str(v);
         out.push_str("\r\n");
+    }
+    if let Some(host_port) = upstream_host_port {
+        let host = host_port.split(':').next().unwrap_or(host_port);
+        out.push_str("Host: ");
+        out.push_str(host_port);
+        out.push_str("\r\n");
+        if parsed.origin.is_some() {
+            let scheme = if is_tls { "https" } else { "http" };
+            out.push_str("Origin: ");
+            out.push_str(scheme);
+            out.push_str("://");
+            out.push_str(host);
+            out.push_str("\r\n");
+        }
+    }
+    if !parsed.is_websocket {
+        out.push_str("Connection: close\r\n");
     }
     if !parsed.has_authorization {
         if let Some(jwt) = token {
@@ -242,9 +322,144 @@ fn build_forwarded_head(parsed: &ParsedHead, token: Option<&str>) -> Vec<u8> {
     out.into_bytes()
 }
 
+fn parse_upstream_target(raw: &str) -> Result<(String, u16, bool), String> {
+    if let Some(rest) = raw.strip_prefix("https://") {
+        let host_port = rest.split('/').next().unwrap_or(rest);
+        let (host, port) = if let Some((h, p)) = host_port.split_once(':') {
+            (
+                h.to_string(),
+                p.parse::<u16>().map_err(|_| "invalid upstream port".to_string())?,
+            )
+        } else {
+            (host_port.to_string(), 443)
+        };
+        return Ok((host, port, true));
+    }
+    if let Some(rest) = raw.strip_prefix("http://") {
+        let host_port = rest.split('/').next().unwrap_or(rest);
+        let (host, port) = if let Some((h, p)) = host_port.split_once(':') {
+            (
+                h.to_string(),
+                p.parse::<u16>().map_err(|_| "invalid upstream port".to_string())?,
+            )
+        } else {
+            (host_port.to_string(), 80)
+        };
+        return Ok((host, port, false));
+    }
+    if let Some((h, p)) = raw.split_once(':') {
+        let port = p.parse::<u16>().map_err(|_| "invalid upstream port".to_string())?;
+        return Ok((h.to_string(), port, false));
+    }
+    Err("missing port in upstream target".to_string())
+}
+
 fn is_allowed_proxy_target(target: &str) -> bool {
-    let host = target.split(':').next().unwrap_or("");
+    let stripped = target
+        .strip_prefix("https://")
+        .or_else(|| target.strip_prefix("http://"))
+        .unwrap_or(target);
+    let host_port = stripped.split('/').next().unwrap_or("");
+    let host = host_port.split(':').next().unwrap_or("");
     matches!(host, "127.0.0.1" | "localhost" | "zerovc.safiroko.xyz")
+}
+
+async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin>(
+    mut client: TcpStream,
+    mut upstream: S,
+    forwarded_head: &[u8],
+    body_tail: &[u8],
+    client_origin: Option<&str>,
+    is_websocket: bool,
+) -> Result<(), String> {
+    upstream
+        .write_all(forwarded_head)
+        .await
+        .map_err(|e| format!("upstream write head failed: {e}"))?;
+
+    if !body_tail.is_empty() {
+        upstream
+            .write_all(body_tail)
+            .await
+            .map_err(|e| format!("upstream write tail failed: {e}"))?;
+    }
+
+    if is_websocket || client_origin.is_none() {
+        let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
+        return Ok(());
+    }
+
+    // Rewrite response head to add Access-Control-Allow-Origin for the desktop WebView origin.
+    let origin = client_origin.unwrap_or("");
+    let mut resp_buf = Vec::with_capacity(4096);
+    let mut tmp = [0u8; 2048];
+    let resp_head_end;
+    loop {
+        let n = upstream
+            .read(&mut tmp)
+            .await
+            .map_err(|e| format!("upstream read error: {e}"))?;
+        if n == 0 {
+            if !resp_buf.is_empty() {
+                let _ = client.write_all(&resp_buf).await;
+            }
+            return Ok(());
+        }
+        resp_buf.extend_from_slice(&tmp[..n]);
+        if let Some(pos) = find_double_crlf(&resp_buf) {
+            resp_head_end = pos;
+            break;
+        }
+        if resp_buf.len() > MAX_HEADER_BYTES {
+            let _ = client.write_all(&resp_buf).await;
+            let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
+            return Ok(());
+        }
+    }
+
+    let resp_head = String::from_utf8_lossy(&resp_buf[..resp_head_end]);
+    let mut out_head = String::with_capacity(resp_head.len() + 256);
+    let mut lines = resp_head.split("\r\n");
+    if let Some(status_line) = lines.next() {
+        out_head.push_str(status_line);
+        out_head.push_str("\r\n");
+    }
+    for line in lines {
+        if line.is_empty() {
+            continue;
+        }
+        let lower = line.to_ascii_lowercase();
+        if lower.starts_with("access-control-allow-origin:")
+            || lower.starts_with("access-control-allow-credentials:")
+            || lower.starts_with("access-control-expose-headers:")
+        {
+            continue;
+        }
+        out_head.push_str(line);
+        out_head.push_str("\r\n");
+    }
+    out_head.push_str("Access-Control-Allow-Origin: ");
+    out_head.push_str(origin);
+    out_head.push_str("\r\n");
+    out_head.push_str("Access-Control-Allow-Credentials: true\r\n");
+    out_head.push_str("Access-Control-Expose-Headers: Link, X-CSRF-Token, X-Bot-ID\r\n");
+    out_head.push_str("\r\n");
+
+    client
+        .write_all(out_head.as_bytes())
+        .await
+        .map_err(|e| format!("client write head failed: {e}"))?;
+
+    let resp_tail = &resp_buf[resp_head_end + 4..];
+    if !resp_tail.is_empty() {
+        client
+            .write_all(resp_tail)
+            .await
+            .map_err(|e| format!("client write tail failed: {e}"))?;
+    }
+
+    let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
+    Ok(())
 }
 
 async fn handle_proxy_connection(
@@ -286,48 +501,101 @@ async fn handle_proxy_connection(
         .as_deref()
         .map(|s| constant_time_eq(s.as_bytes(), expected_secret.as_bytes()))
         .unwrap_or(false);
+    let valid_origin = parsed
+        .origin
+        .as_deref()
+        .map(is_allowed_desktop_origin)
+        .unwrap_or(false);
 
-    if !valid_secret {
+    if !valid_secret && !valid_origin {
         let _ = client
             .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden")
             .await;
-        return Err("invalid proxy secret".into());
+        return Err("invalid proxy secret or origin".into());
     }
 
-    let upstream_addr = parsed
+    if parsed.request_line.starts_with("OPTIONS ") {
+        let allow_origin = parsed.origin.as_deref().unwrap_or("*");
+        let resp = format!(
+            "HTTP/1.1 204 No Content\r\n\
+             Access-Control-Allow-Origin: {allow_origin}\r\n\
+             Access-Control-Allow-Credentials: true\r\n\
+             Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS\r\n\
+             Access-Control-Allow-Headers: Accept, Authorization, Content-Type, X-CSRF-Token, X-Bot-ID, X-Client-E2EE-Version\r\n\
+             Access-Control-Max-Age: 300\r\n\
+             Content-Length: 0\r\n\
+             Connection: close\r\n\r\n"
+        );
+        let _ = client.write_all(resp.as_bytes()).await;
+        return Ok(());
+    }
+
+    let upstream_raw = parsed
         .target
         .as_deref()
         .or(default_upstream)
         .ok_or_else(|| "missing upstream target".to_string())?;
 
-    if !is_allowed_proxy_target(upstream_addr) {
+    if !is_allowed_proxy_target(upstream_raw) {
         let _ = client
             .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 14\r\nConnection: close\r\n\r\nInvalid target")
             .await;
         return Err("disallowed proxy target".into());
     }
 
-    let mut upstream = TcpStream::connect(upstream_addr)
+    let (host, port, is_tls) = parse_upstream_target(upstream_raw)?;
+    let upstream_host_port = if (is_tls && port == 443) || (!is_tls && port == 80) {
+        host.clone()
+    } else {
+        format!("{host}:{port}")
+    };
+
+    let token_snapshot = token_lock.read().await.clone();
+    let forwarded_head = build_forwarded_head_with_upstream(
+        &parsed,
+        token_snapshot.as_deref(),
+        if parsed.target.is_none() {
+            Some(upstream_host_port.as_str())
+        } else {
+            None
+        },
+        is_tls,
+    );
+    let body_tail = &buf[head_end + 4..];
+
+    let tcp = TcpStream::connect((host.as_str(), port))
         .await
         .map_err(|e| format!("upstream connect failed: {e}"))?;
 
-    let token_snapshot = token_lock.read().await.clone();
-    let forwarded_head = build_forwarded_head(&parsed, token_snapshot.as_deref());
-    upstream
-        .write_all(&forwarded_head)
-        .await
-        .map_err(|e| format!("upstream write head failed: {e}"))?;
-
-    let body_tail = &buf[head_end + 4..];
-    if !body_tail.is_empty() {
-        upstream
-            .write_all(body_tail)
+    if is_tls {
+        let tls_cfg = get_tls_config()?;
+        let connector = TlsConnector::from(tls_cfg);
+        let server_name = ServerName::try_from(host)
+            .map_err(|_| "invalid TLS server name".to_string())?;
+        let tls_stream = connector
+            .connect(server_name, tcp)
             .await
-            .map_err(|e| format!("upstream write tail failed: {e}"))?;
+            .map_err(|e| format!("TLS handshake failed: {e}"))?;
+        forward_with_cors_headers(
+            client,
+            tls_stream,
+            &forwarded_head,
+            body_tail,
+            parsed.origin.as_deref(),
+            parsed.is_websocket,
+        )
+        .await
+    } else {
+        forward_with_cors_headers(
+            client,
+            tcp,
+            &forwarded_head,
+            body_tail,
+            parsed.origin.as_deref(),
+            parsed.is_websocket,
+        )
+        .await
     }
-
-    let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
-    Ok(())
 }
 
 fn find_double_crlf(buf: &[u8]) -> Option<usize> {

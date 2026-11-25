@@ -1,6 +1,6 @@
 {
   "name": "zerovc-client",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "description": "ZeroVC",
   "homepage": "https://zerovc.safiroko.xyz",
   "author": "Thiago <contato@zerovc.safiroko.xyz>",
@@ -20,7 +20,8 @@
     "test:desktop-bridge": "tsx scripts/test-desktop-bridge.ts",
     "test:e2e": "tsx tests/e2e/runner.ts",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "rust": "tauri dev"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

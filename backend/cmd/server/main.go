@@ -303,6 +303,9 @@ func main() {
 	allowedOrigins := map[string]bool{
 		"https://zerovc.safiroko.xyz": true,
 		"http://localhost:5173":       true,
+		"http://tauri.localhost":      true,
+		"https://tauri.localhost":     true,
+		"tauri://localhost":           true,
 	}
 
 	r.Use(cors.Handler(cors.Options{

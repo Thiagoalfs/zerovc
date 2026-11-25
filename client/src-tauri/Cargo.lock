@@ -5930,9 +5930,11 @@ dependencies = [
 
 [[package]]
 name = "zerovc"
-version = "1.0.33"
+version = "1.0.34"
 dependencies = [
  "keyring",
+ "rustls",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "sysinfo",
@@ -5944,6 +5946,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tokio",
+ "tokio-rustls",
  "url",
  "webkit2gtk",
 ]
