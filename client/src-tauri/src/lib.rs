@@ -206,7 +206,7 @@ pub fn run() {
             #[cfg(target_os = "linux")]
             if let Some(win) = handle.get_webview_window("main") {
                 let _ = win.with_webview(|platform_webview| {
-                    use webkit2gtk::glib::Cast;
+                    use webkit2gtk::glib::ObjectExt;
                     use webkit2gtk::{
                         DeviceInfoPermissionRequest, PermissionRequestExt, SettingsExt,
                         UserMediaPermissionRequest, WebViewExt,
