@@ -20,6 +20,7 @@ export interface UpdateProgress {
 export interface ElectronAPI {
   isElectron: boolean;
   platform: string;
+  setAuthToken?: (token: string | null) => Promise<void>;
   getScreenSources: () => Promise<ScreenSource[]>;
   minimize: () => void;
   maximize: () => void;

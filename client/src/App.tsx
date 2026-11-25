@@ -1836,6 +1836,7 @@ export const App: React.FC = () => {
       socket.on('E2EE_TO_DEVICE', handleE2EEToDevice);
       socket.on('E2EE_ROSTER_UPDATE', handleE2EERosterUpdate);
       socket.on('E2EE_ROTATION_REQUIRED', handleE2EERotationRequired);
+      socket.connect();
 
       // Drain pending offline to-device messages on initial connection
       api.e2ee.getToDevice().then(async (pending) => {
@@ -1971,7 +1972,7 @@ export const App: React.FC = () => {
         socket.off('E2EE_ROTATION_REQUIRED', handleE2EERotationRequired);
       };
     }
-  }, [token, user]);
+  }, [token, user?.id]);
 
   const isBootstrappingData = Boolean(token && user && bootstrappedUserId !== user.id);
 
@@ -2204,6 +2205,7 @@ export const App: React.FC = () => {
             {/* 1. Server List */}
             <ServerList
               isHomeActive={isHomeActive}
+              homeView={homeView}
               onSelectHome={() => {
                 setIsHomeActive(true);
                 let targetPath = '/@me';

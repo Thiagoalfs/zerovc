@@ -134,13 +134,18 @@ func (s *CSRFService) SetCookie(w http.ResponseWriter, token string, isSecure bo
 }
 
 // ClearCookie removes the csrf_token cookie from the client.
-func (s *CSRFService) ClearCookie(w http.ResponseWriter) {
+func (s *CSRFService) ClearCookie(w http.ResponseWriter, isSecure ...bool) {
+	secure := false
+	if len(isSecure) > 0 {
+		secure = isSecure[0]
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: false,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }

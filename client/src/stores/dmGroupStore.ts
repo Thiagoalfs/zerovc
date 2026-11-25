@@ -696,20 +696,16 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       }
 
       const isCurrentActive = state.activeGroup?.id === message.group_id;
-      if (isCurrentActive) {
-        const nextMsgs = mergeIncomingGroupMsg(state.messages);
+      const isViewingThisGroup = isChatActiveNow('group', message.group_id);
+      const nextMsgs = isCurrentActive ? mergeIncomingGroupMsg(state.messages) : state.messages;
 
-        const isViewingThisGroup = Boolean(
-          (state.activeGroup && state.activeGroup.id === message.group_id) ||
-          isChatActiveNow('group', message.group_id)
-        );
-
+      if (isViewingThisGroup) {
         if (message.author_id !== currentUser?.id) {
           playMessageSound(false);
         }
 
         const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled) && Boolean(message.content);
-        if (shouldPlayTTS && isViewingThisGroup) {
+        if (shouldPlayTTS) {
           speakText(message.content, message.author?.display_name || message.author?.username);
         }
 
@@ -734,6 +730,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
         return {
           groups: nextGroups,
+          messages: nextMsgs,
           unreadGroups: unread,
           groupUnreadCounts: counts,
           messagesByGroup: nextMessagesByGroup,

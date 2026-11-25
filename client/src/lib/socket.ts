@@ -1,5 +1,4 @@
 import { getApiBaseUrl } from './api';
-import { isElectron } from './platform';
 
 export interface WSEvent {
   type: string;
@@ -40,14 +39,15 @@ class SocketClient {
   }
 
   connect() {
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
+
     const baseUrl = getApiBaseUrl().replace(/^http/, 'ws');
     const params = new URLSearchParams();
-
-    if (isElectron()) {
-      const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('token') || localStorage.getItem('zerovc_token')) : null;
-      if (!token) return;
-      params.set('token', token);
-    }
 
     const deviceId = this.currentDeviceId || (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : null);
     if (deviceId) {
@@ -61,9 +61,11 @@ class SocketClient {
     this.isExplicitlyClosed = false;
 
     try {
-      this.ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl);
+      this.ws = ws;
 
-      this.ws.onopen = () => {
+      ws.onopen = () => {
+        if (this.ws !== ws) return;
         console.log('[Socket] Connected to ZeroVC Gateway');
         const isReconnection = this.hadConnectedOnce && this.reconnectAttempts > 0;
         this.hadConnectedOnce = true;
@@ -80,7 +82,8 @@ class SocketClient {
         }
       };
 
-      this.ws.onmessage = (event) => {
+      ws.onmessage = (event) => {
+        if (this.ws !== ws) return;
         try {
           const lines = event.data.split('\n');
           for (const line of lines) {
@@ -93,13 +96,16 @@ class SocketClient {
         }
       };
 
-      this.ws.onclose = () => {
+      ws.onclose = () => {
+        if (this.ws !== ws) return;
+        this.ws = null;
         if (!this.isExplicitlyClosed) {
           this.scheduleReconnect();
         }
       };
 
-      this.ws.onerror = (err) => {
+      ws.onerror = (err) => {
+        if (this.ws !== ws) return;
         console.error('[Socket] WebSocket error:', err);
       };
     } catch (err) {

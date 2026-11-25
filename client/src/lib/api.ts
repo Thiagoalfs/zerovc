@@ -173,14 +173,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
     }
   }
 
-  // Só o Electron precisa do Bearer token (ver client/src/lib/platform.ts).
-  // No navegador a sessão é 100% via cookie httpOnly enviado por credentials: 'include'.
-  if (isElectron()) {
-    const token = getStorageItem('token') || getStorageItem('zerovc_token');
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-  }
+  // Sessão web usa cookie httpOnly; no Electron o processo principal injeta Authorization via safeStorage.
 
   const response = await fetch(`${baseUrl}/api${endpoint}`, {
     credentials: 'include',

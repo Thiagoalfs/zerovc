@@ -4,6 +4,7 @@ import { Plus, MessageSquare, CheckCheck, Bell, BellOff, Copy, LogOut, Check, Fo
 import { useGuildStore } from '../../stores/guildStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useDMGroupStore } from '../../stores/dmGroupStore';
+import { useFriendStore } from '../../stores/friendStore';
 import { useAuthStore } from '../../stores/authStore';
 import { formatAssetUrl, api } from '../../lib/api';
 import { copyToClipboard } from '../../utils/clipboard';
@@ -14,6 +15,7 @@ import { showConfirm, showAlert } from '../../stores/confirmModalStore';
 
 interface ServerListProps {
   isHomeActive: boolean;
+  homeView?: 'friends' | 'dm' | 'group';
   onSelectHome: () => void;
   onSelectDM?: (room: DMRoom) => void;
   onSelectGroup?: (group: DMGroup) => void;
@@ -23,6 +25,7 @@ interface ServerListProps {
 
 export const ServerList: React.FC<ServerListProps> = ({
   isHomeActive,
+  homeView = 'friends',
   onSelectHome,
   onSelectDM,
   onSelectGroup,
@@ -36,6 +39,7 @@ export const ServerList: React.FC<ServerListProps> = ({
     selectGuild,
     unreadChannels,
     guildMentions,
+    channelMentions,
     markGuildAsRead,
     toggleMuteGuild,
     isGuildMuted,
@@ -46,6 +50,7 @@ export const ServerList: React.FC<ServerListProps> = ({
   } = useGuildStore();
   const { rooms, unreadRooms, roomUnreadCounts, selectRoom, activeRoom, fetchRooms } = useDMStore();
   const { groups, unreadGroups, groupUnreadCounts, selectGroup, activeGroup, fetchGroups } = useDMGroupStore();
+  const incomingFriendRequests = useFriendStore((s) => s.incoming);
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const [copiedGuildId, setCopiedGuildId] = useState<string | null>(null);
   const [hoveredGuild, setHoveredGuild] = useState<{ guild: (typeof guilds)[0]; rect: DOMRect } | null>(null);
@@ -106,24 +111,44 @@ export const ServerList: React.FC<ServerListProps> = ({
     }, 800);
   };
 
-  const totalUnreadDMGroups = Object.values(groupUnreadCounts).reduce((acc, count) => acc + count, 0);
-  const totalUnreadDMs = Object.values(roomUnreadCounts).reduce((acc, count) => acc + count, 0) + totalUnreadDMGroups;
+  const totalUnreadDMRooms = useMemo(() => {
+    const ids = new Set<string>([...Object.keys(roomUnreadCounts), ...unreadRooms]);
+    let total = 0;
+    ids.forEach((id) => {
+      if (isHomeActive && homeView === 'dm' && activeRoom?.id === id) return;
+      total += roomUnreadCounts[id] || (unreadRooms.has(id) ? 1 : 0);
+    });
+    return total;
+  }, [roomUnreadCounts, unreadRooms, isHomeActive, homeView, activeRoom?.id]);
+
+  const totalUnreadDMGroups = useMemo(() => {
+    const ids = new Set<string>([...Object.keys(groupUnreadCounts), ...unreadGroups]);
+    let total = 0;
+    ids.forEach((id) => {
+      if (isHomeActive && homeView === 'group' && activeGroup?.id === id) return;
+      total += groupUnreadCounts[id] || (unreadGroups.has(id) ? 1 : 0);
+    });
+    return total;
+  }, [groupUnreadCounts, unreadGroups, isHomeActive, homeView, activeGroup?.id]);
+
+  const totalUnreadDMs = totalUnreadDMRooms + totalUnreadDMGroups;
+  const totalHomeNotifications = totalUnreadDMs + incomingFriendRequests.length;
 
   const unreadDMRooms = useMemo(() => {
     return rooms.filter((r) => {
       const count = roomUnreadCounts[r.id] || (unreadRooms.has(r.id) ? 1 : 0);
-      const isCurrentActive = isHomeActive && activeRoom?.id === r.id;
+      const isCurrentActive = isHomeActive && homeView === 'dm' && activeRoom?.id === r.id;
       return count > 0 && !isCurrentActive;
     });
-  }, [rooms, roomUnreadCounts, unreadRooms, isHomeActive, activeRoom]);
+  }, [rooms, roomUnreadCounts, unreadRooms, isHomeActive, homeView, activeRoom?.id]);
 
   const unreadDMGroups = useMemo(() => {
     return groups.filter((g) => {
       const count = groupUnreadCounts[g.id] || (unreadGroups.has(g.id) ? 1 : 0);
-      const isCurrentActive = isHomeActive && activeGroup?.id === g.id;
+      const isCurrentActive = isHomeActive && homeView === 'group' && activeGroup?.id === g.id;
       return count > 0 && !isCurrentActive;
     });
-  }, [groups, groupUnreadCounts, unreadGroups, isHomeActive, activeGroup]);
+  }, [groups, groupUnreadCounts, unreadGroups, isHomeActive, homeView, activeGroup?.id]);
 
   // Map of guild ID to folder ID
   const guildToFolderMap = useMemo(() => {
@@ -413,8 +438,9 @@ export const ServerList: React.FC<ServerListProps> = ({
 
   const renderGuildIcon = (guild: (typeof guilds)[0], inFolder = false, parentFolderId?: string) => {
     const isActive = !isHomeActive && activeGuild?.id === guild.id;
-    const mentionCount = guildMentions[guild.id] || 0;
-    const hasUnread = guild.channels?.some((c) => unreadChannels.has(c.id));
+    const channelMentionSum = (guild.channels || []).reduce((sum, c) => sum + (channelMentions[c.id] || 0), 0);
+    const mentionCount = Math.max(guildMentions[guild.id] || 0, channelMentionSum);
+    const hasUnread = guild.channels?.some((c) => unreadChannels.has(c.id)) || mentionCount > 0;
     const initials = guild.name
       .split(' ')
       .map((w) => w[0])
@@ -510,7 +536,7 @@ export const ServerList: React.FC<ServerListProps> = ({
           {/* Left active pill */}
           <div
             className={`absolute -left-3 w-1 bg-white rounded-r-full transition-all duration-200 ${
-              isHomeActive ? 'h-10' : totalUnreadDMs > 0 ? 'h-2' : 'h-0 group-hover:h-5'
+              isHomeActive ? 'h-10' : totalHomeNotifications > 0 ? 'h-2' : 'h-0 group-hover:h-5'
             }`}
           />
 
@@ -525,16 +551,18 @@ export const ServerList: React.FC<ServerListProps> = ({
           >
             <MessageSquare className="w-6 h-6" />
 
-            {/* Unread DM Notification Badge (when there are unreads in total) */}
-            {totalUnreadDMs > 0 && !isHomeActive && (
+            {/* Unread DM & Incoming Friend Request Notification Badge */}
+            {totalHomeNotifications > 0 && !isHomeActive && (
               <div className="absolute -bottom-1 -right-1 min-w-[20px] h-5 px-1 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center border-2 border-background-darkest shadow-lg z-30 pointer-events-none animate-in zoom-in-50">
-                {totalUnreadDMs > 99 ? '99+' : totalUnreadDMs}
+                {totalHomeNotifications > 99 ? '99+' : totalHomeNotifications}
               </div>
             )}
           </button>
         </div>
 
-      <div className="w-8 h-[2px] bg-white/10 rounded-full my-1" />
+      {unreadDMRooms.length === 0 && unreadDMGroups.length === 0 && (
+        <div className="w-8 h-[2px] bg-white/10 rounded-full my-1" />
+      )}
 
       {/* Guilds & Folders List */}
       <div
@@ -555,7 +583,7 @@ export const ServerList: React.FC<ServerListProps> = ({
             {unreadDMRooms.map((room) => {
               const recipient = room.recipient;
               const unreadCount = roomUnreadCounts[room.id] || (unreadRooms.has(room.id) ? 1 : 0);
-              const isRoomActive = isHomeActive && activeRoom?.id === room.id;
+              const isRoomActive = isHomeActive && homeView === 'dm' && activeRoom?.id === room.id;
               const initials = (recipient?.display_name?.[0] || recipient?.username?.[0] || 'U').toUpperCase();
 
               return (
@@ -608,7 +636,7 @@ export const ServerList: React.FC<ServerListProps> = ({
             {/* DM Groups */}
             {unreadDMGroups.map((group) => {
               const unreadCount = groupUnreadCounts[group.id] || (unreadGroups.has(group.id) ? 1 : 0);
-              const isGroupActive = isHomeActive && activeGroup?.id === group.id;
+              const isGroupActive = isHomeActive && homeView === 'group' && activeGroup?.id === group.id;
               const groupDisplayName = group.name || group.members?.map((m) => m.display_name || m.username).join(', ') || 'Grupo';
 
               return (

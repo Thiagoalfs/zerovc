@@ -22,6 +22,7 @@ export interface UpdateProgress {
 export interface ElectronAPI {
   isElectron: boolean;
   platform: string;
+  setAuthToken: (token: string | null) => Promise<void>;
   getScreenSources: (opts?: { thumbnail?: boolean; fetchWindowIcons?: boolean }) => Promise<ScreenSource[]>;
   isProcessRunning: (processes: string[]) => Promise<boolean>;
   minimize: () => void;
@@ -176,6 +177,7 @@ const electronAPI: ElectronAPI = {
   restartToUpdate: () => ipcRenderer.send('restart-to-update'),
   applyTitlebarUpdate: () => ipcRenderer.invoke('apply-titlebar-update'),
   setSplashColors: (colors: { accent: string; bg: string }) => ipcRenderer.invoke('set-splash-colors', colors),
+  setAuthToken: (token: string | null) => ipcRenderer.invoke('auth-set-token', token),
   startNativeScreenShare: (options) => ipcRenderer.invoke('start-native-screenshare', options),
   stopNativeScreenShare: () => ipcRenderer.invoke('stop-native-screenshare'),
   onNativeScreenShareEvent: (callback) => {

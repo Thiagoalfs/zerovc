@@ -232,7 +232,7 @@ export const DMGroupChatArea: React.FC<DMGroupChatAreaProps> = ({
       customMentions={groupMemberMentions}
       wrapInputInContainer
       onSendMessage={async (content, replyToId, isTTS, file) => {
-        clearUnreadDivider(activeGroup.id);
+        markGroupAsRead(activeGroup.id);
         await sendMessage(content, undefined, replyToId, isTTS, file);
       }}
       onTyping={() => {

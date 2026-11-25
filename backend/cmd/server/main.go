@@ -123,6 +123,50 @@ func main() {
 		}
 		return uids, true
 	}
+	hub.DMParticipantsProvider = func(ctx context.Context, conversationID, senderID uuid.UUID) []uuid.UUID {
+		var user1ID, user2ID uuid.UUID
+		err := db.Pool.QueryRow(ctx, `
+			SELECT user1_id, user2_id
+			FROM dm_rooms
+			WHERE id = $1 AND (user1_id = $2 OR user2_id = $2)
+		`, conversationID, senderID).Scan(&user1ID, &user2ID)
+		if err == nil {
+			if user1ID == senderID {
+				return []uuid.UUID{user2ID}
+			}
+			return []uuid.UUID{user1ID}
+		}
+
+		var isMember bool
+		err = db.Pool.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM dm_group_members
+				WHERE group_id = $1 AND user_id = $2
+			)
+		`, conversationID, senderID).Scan(&isMember)
+		if err != nil || !isMember {
+			return nil
+		}
+
+		rows, err := db.Pool.Query(ctx, `
+			SELECT user_id
+			FROM dm_group_members
+			WHERE group_id = $1 AND user_id <> $2
+		`, conversationID, senderID)
+		if err != nil {
+			return nil
+		}
+		defer rows.Close()
+
+		var participants []uuid.UUID
+		for rows.Next() {
+			var uid uuid.UUID
+			if err := rows.Scan(&uid); err == nil && uid != uuid.Nil {
+				participants = append(participants, uid)
+			}
+		}
+		return participants
+	}
 
 	// On user connection: update user status to 'online' if was 'offline', and broadcast
 	hub.OnUserConnected = func(userID uuid.UUID) {
@@ -137,6 +181,16 @@ func main() {
 		db.Pool.Exec(ctx, "UPDATE users SET status = $1 WHERE id = $2", savedStatus, userID)
 
 		targetIDs := hub.GetRelatedUserIDs(userID)
+		hasSelf := false
+		for _, id := range targetIDs {
+			if id == userID {
+				hasSelf = true
+				break
+			}
+		}
+		if !hasSelf {
+			targetIDs = append(targetIDs, userID)
+		}
 		hub.BroadcastToUsers(targetIDs, models.WSEvent{
 			Type: models.EventUserUpdate,
 			Data: map[string]any{
@@ -233,6 +287,17 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
 	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("X-Frame-Options", "DENY")
+			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") || os.Getenv("APP_ENV") == "production" {
+				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 
 	// CORS Configuration
 	allowedOrigins := map[string]bool{

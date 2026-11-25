@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage, screen, Notification } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, globalShortcut, Tray, Menu, nativeImage, screen, Notification, safeStorage } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -25,6 +25,44 @@ process.on('uncaughtException', (err: any) => {
 app.name = 'ZeroVC';
 process.title = 'ZeroVC';
 app.setAppUserModelId('com.zerovc.app');
+
+let cachedAuthToken: string | null = null;
+
+function getAuthTokenFile(): string {
+  return path.join(app.getPath('userData'), 'auth-token.enc');
+}
+
+function loadSecureAuthToken(): string | null {
+  try {
+    const file = getAuthTokenFile();
+    if (!fs.existsSync(file)) return null;
+    const raw = fs.readFileSync(file);
+    if (!raw || raw.length === 0) return null;
+    if (safeStorage.isEncryptionAvailable()) {
+      return safeStorage.decryptString(raw) || null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSecureAuthToken(token: string | null): void {
+  cachedAuthToken = token && token !== 'cookie_session' ? token : null;
+  try {
+    const file = getAuthTokenFile();
+    if (!cachedAuthToken) {
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+      return;
+    }
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(cachedAuthToken);
+      fs.writeFileSync(file, encrypted);
+    }
+  } catch (err) {
+    console.warn('[Electron] Failed to persist secure auth token:', err);
+  }
+}
 
 let autoUpdater: any = null;
 try {
@@ -460,7 +498,6 @@ function createWindow(initialUrl?: string, showImmediately = true) {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     try {
       const parsedUrl = new URL(url);
-      if (parsedUrl.protocol === 'file:') return;
       if (!ALLOWED_ORIGINS.includes(parsedUrl.origin)) {
         event.preventDefault();
         console.warn(`[Electron] Blocked will-navigate to unauthorized origin: ${parsedUrl.origin}`);
@@ -488,16 +525,19 @@ function createWindow(initialUrl?: string, showImmediately = true) {
   });
 
   // Handle media permissions automatically (Microphone, Camera, Screen share)
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const allowedPermissions = ['media', 'microphone', 'camera', 'screen', 'notifications'];
-    if (allowedPermissions.includes(permission)) {
-      callback(true);
-    } else {
-      callback(false);
-    }
+    try {
+      const origin = new URL(webContents.getURL()).origin;
+      if (ALLOWED_ORIGINS.includes(origin) && allowedPermissions.includes(permission)) {
+        callback(true);
+        return;
+      }
+    } catch {}
+    callback(false);
   });
 
-  // Handle getDisplayMedia requests in Electron
+    // Handle getDisplayMedia requests in Electron
   // IMPORTANTE: NÃO entregar audio:'loopback' aqui. O loopback do Electron é o mix do PC
   // inteiro SEM exclusão de árvore de processos — publicar isso retransmite as vozes da
   // própria call como eco para os outros participantes. O áudio do compartilhamento é
@@ -518,6 +558,29 @@ function createWindow(initialUrl?: string, showImmediately = true) {
         callback({ video: undefined as any });
       });
   });
+
+  cachedAuthToken = loadSecureAuthToken();
+
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    {
+      urls: [
+        'https://zerovc.safiroko.xyz/*',
+        'http://localhost:5173/*',
+        'wss://zerovc.safiroko.xyz/*',
+        'ws://localhost:5173/*',
+      ],
+    },
+    (details, callback) => {
+      if (
+        cachedAuthToken &&
+        !details.requestHeaders['Authorization'] &&
+        !details.requestHeaders['authorization']
+      ) {
+        details.requestHeaders['Authorization'] = `Bearer ${cachedAuthToken}`;
+      }
+      callback({ requestHeaders: details.requestHeaders });
+    }
+  );
 
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -772,6 +835,10 @@ function shutdownForUpdate() {
 // -------------------------------------------------------------
 // IPC Handlers: Window Controls & Updater Actions
 // -------------------------------------------------------------
+ipcMain.handle('auth-set-token', (_event, token: string | null) => {
+  saveSecureAuthToken(typeof token === 'string' ? token : null);
+});
+
 ipcMain.on('window-minimize', () => {
   mainWindow?.minimize();
 });
@@ -1038,7 +1105,7 @@ ipcMain.on('reload-app', () => {
   if (isDev) {
     mainWindow?.loadURL('http://localhost:5173');
   } else {
-    mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow?.loadURL(REMOTE_SERVER_URL);
   }
 });
 

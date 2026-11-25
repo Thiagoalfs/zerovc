@@ -393,6 +393,7 @@ declare global {
     electronAPI?: {
       isElectron: boolean;
       platform: string;
+      setAuthToken?: (token: string | null) => Promise<void>;
       getScreenSources: () => Promise<Array<{ id: string; name: string; thumbnail: string; appIcon: string | null }>>;
       minimize: () => void;
       maximize: () => void;

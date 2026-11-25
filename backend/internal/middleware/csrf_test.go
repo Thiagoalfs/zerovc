@@ -196,18 +196,33 @@ func TestCookieHelpers(t *testing.T) {
 		t.Fatal("csrf_token cookie was not set correctly")
 	}
 
-	// Test ClearCookie
+	// Test ClearCookie (default non-secure)
 	rec2 := httptest.NewRecorder()
 	csrfSvc.ClearCookie(rec2)
 	cookies2 := rec2.Result().Cookies()
 	foundCleared := false
 	for _, c := range cookies2 {
-		if c.Name == "csrf_token" && c.MaxAge < 0 {
+		if c.Name == "csrf_token" && c.MaxAge < 0 && !c.Secure {
 			foundCleared = true
 			break
 		}
 	}
 	if !foundCleared {
 		t.Fatal("csrf_token cookie was not cleared correctly")
+	}
+
+	// Test ClearCookie with isSecure=true
+	rec3 := httptest.NewRecorder()
+	csrfSvc.ClearCookie(rec3, true)
+	cookies3 := rec3.Result().Cookies()
+	foundSecureCleared := false
+	for _, c := range cookies3 {
+		if c.Name == "csrf_token" && c.MaxAge < 0 && c.Secure {
+			foundSecureCleared = true
+			break
+		}
+	}
+	if !foundSecureCleared {
+		t.Fatal("csrf_token cookie was not cleared with Secure=true")
 	}
 }

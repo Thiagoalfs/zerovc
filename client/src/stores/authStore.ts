@@ -1,6 +1,18 @@
 import { create } from 'zustand';
 import { User } from '../types';
 import { api, setCsrfToken } from '../lib/api';
+
+async function persistElectronToken(token: string | null): Promise<void> {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('token');
+    localStorage.removeItem('zerovc_token');
+  }
+  if (isElectron() && window.electronAPI?.setAuthToken) {
+    try {
+      await window.electronAPI.setAuthToken(token);
+    } catch {}
+  }
+}
 import { socket } from '../lib/socket';
 import { livekit } from '../lib/livekit';
 import { isElectron } from '../lib/platform';
@@ -165,10 +177,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { requires_verification: true, email: res.email || email };
       }
       if (res.token && res.user) {
-        if (isElectron()) {
-          localStorage.setItem('token', res.token);
-          localStorage.setItem('zerovc_token', res.token);
-        }
+        await persistElectronToken(res.token);
         if (res.csrf_token) {
           setCsrfToken(res.csrf_token);
         } else if (res.user.csrf_token) {
@@ -189,7 +198,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           console.warn('[authStore] Failed to derive or autoRestore account vault key:', vaultErr);
         }
 
-        set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
+        set({ user: res.user, token: 'cookie_session', isLoading: false });
         megolmManager.syncAllUserRoomKeys().catch(() => {});
         megolmManager.syncAllLocalKeysToServer().catch(() => {});
         socket.connect();
@@ -209,10 +218,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { requires_verification: true, email: res.email || email };
       }
       if (res.token && res.user) {
-        if (isElectron()) {
-          localStorage.setItem('token', res.token);
-          localStorage.setItem('zerovc_token', res.token);
-        }
+        await persistElectronToken(res.token);
         if (res.csrf_token) {
           setCsrfToken(res.csrf_token);
         } else if (res.user.csrf_token) {
@@ -232,7 +238,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           console.warn('[authStore] Failed to initialize account vault key on register:', vaultErr);
         }
 
-        set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
+        set({ user: res.user, token: 'cookie_session', isLoading: false });
         megolmManager.syncAllUserRoomKeys().catch(() => {});
         megolmManager.syncAllLocalKeysToServer().catch(() => {});
         socket.connect();
@@ -248,16 +254,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const res = await api.auth.verifyEmail({ email, code });
       if (res.token && res.user) {
-        if (isElectron()) {
-          localStorage.setItem('token', res.token);
-          localStorage.setItem('zerovc_token', res.token);
-        }
+        await persistElectronToken(res.token);
         if (res.csrf_token) {
           setCsrfToken(res.csrf_token);
         } else if (res.user.csrf_token) {
           setCsrfToken(res.user.csrf_token);
         }
-        set({ user: res.user, token: isElectron() ? res.token : 'cookie_session', isLoading: false });
+        set({ user: res.user, token: 'cookie_session', isLoading: false });
         socket.connect();
       }
     } catch (err: any) {
@@ -273,10 +276,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await api.auth.logout();
     } catch {}
-    if (isElectron()) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('zerovc_token');
-    }
+    await persistElectronToken(null);
     await cleanupAllStoresAndConnections();
     set({ user: null, token: null, isCheckingAuth: false, isLoading: false });
 
@@ -322,10 +322,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           console.warn('[checkAuth] Failed to load vault key from store:', vaultErr);
         }
       }
-      const token = isElectron()
-        ? localStorage.getItem('token') || localStorage.getItem('zerovc_token') || 'cookie_session'
-        : 'cookie_session';
-      set({ user, token, isCheckingAuth: false, isLoading: false });
+      const legacyToken =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('token') || localStorage.getItem('zerovc_token')
+          : null;
+      if (legacyToken) {
+        await persistElectronToken(legacyToken);
+      }
+      set({ user, token: 'cookie_session', isCheckingAuth: false, isLoading: false });
       megolmManager.syncAllUserRoomKeys().catch(() => {});
       megolmManager.syncAllLocalKeysToServer().catch(() => {});
       socket.connect();
@@ -333,10 +337,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         backupManager.clearVaultKey();
       } catch {}
-      if (isElectron()) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('zerovc_token');
-      }
+      await persistElectronToken(null);
       await cleanupAllStoresAndConnections();
       set({ user: null, token: null, isCheckingAuth: false, isLoading: false });
     }

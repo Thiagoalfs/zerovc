@@ -65,12 +65,25 @@ export function useStageFullscreen() {
   return { isFullscreen, toggleFullscreen };
 }
 
+export interface VoiceControlBarPreviewState {
+  isMuted: boolean;
+  isDeafened: boolean;
+  isCameraOn?: boolean;
+  isScreensharing?: boolean;
+  onToggleMute: () => void;
+  onToggleDeafen: () => void;
+  onToggleCamera?: () => void;
+  onToggleScreenShare?: () => void;
+  onDisconnect: () => void;
+}
+
 export interface VoiceControlBarProps {
   className?: string;
   onOpenScreenShare?: () => void;
   onDisconnect?: () => void;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
+  previewState?: VoiceControlBarPreviewState;
 }
 
 export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
@@ -79,24 +92,22 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
   onDisconnect,
   isFullscreen = false,
   onToggleFullscreen,
+  previewState,
 }) => {
-  const {
-    isMuted,
-    isDeafened,
-    isCameraOn,
-    isScreensharing,
-    watchedParticipantId,
-    watchedParticipantIds,
-    toggleMute,
-    toggleDeafen,
-    toggleCamera,
-    stopScreenShare,
-    unwatchAll,
-    leaveVoice,
-  } = useVoiceStore();
-
+  const voiceStore = useVoiceStore();
   const { callState, endCall } = useCallStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
+
+  const isMuted = previewState ? (previewState.isMuted || previewState.isDeafened) : voiceStore.isMuted;
+  const isDeafened = previewState ? previewState.isDeafened : voiceStore.isDeafened;
+  const isCameraOn = previewState ? Boolean(previewState.isCameraOn) : voiceStore.isCameraOn;
+  const isScreensharing = previewState ? Boolean(previewState.isScreensharing) : voiceStore.isScreensharing;
+  const watchedParticipantId = previewState ? null : voiceStore.watchedParticipantId;
+  const watchedParticipantIds = previewState ? undefined : voiceStore.watchedParticipantIds;
+  const toggleMute = previewState ? previewState.onToggleMute : voiceStore.toggleMute;
+  const toggleDeafen = previewState ? previewState.onToggleDeafen : voiceStore.toggleDeafen;
+  const toggleCamera = previewState ? (previewState.onToggleCamera ?? (() => {})) : voiceStore.toggleCamera;
+  const { stopScreenShare, unwatchAll, leaveVoice } = voiceStore;
 
   const isWatchingAny = (watchedParticipantIds?.length ?? 0) > 0 || Boolean(watchedParticipantId);
 
@@ -135,6 +146,10 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
   const handleScreenShareClick = (e: React.MouseEvent<HTMLElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    if (previewState) {
+      previewState.onToggleScreenShare?.();
+      return;
+    }
     if (isScreensharing) {
       openScreenShareMenu(e.currentTarget);
     } else {
@@ -148,6 +163,10 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
 
   const performDisconnect = () => {
     hapticWarning();
+    if (previewState) {
+      previewState.onDisconnect();
+      return;
+    }
     if (callState === 'connected' || callState === 'calling') {
       endCall();
     }

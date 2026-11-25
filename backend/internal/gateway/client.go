@@ -32,7 +32,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
-		if origin == "" || origin == "null" {
+		if origin == "" {
 			return true
 		}
 		return allowedOrigins[origin]
@@ -89,10 +89,8 @@ func (c *Client) ReadPump() {
 			c.lastTyping = now
 
 			var typingData struct {
-				ChannelID   uuid.UUID   `json:"channel_id"`
-				GuildID     *uuid.UUID  `json:"guild_id,omitempty"`
-				RecipientID *uuid.UUID  `json:"recipient_id,omitempty"`
-				UserIDs     []uuid.UUID `json:"user_ids,omitempty"`
+				ChannelID uuid.UUID  `json:"channel_id"`
+				GuildID   *uuid.UUID `json:"guild_id,omitempty"`
 			}
 			if err := json.Unmarshal(incomingEvent.Data, &typingData); err == nil && typingData.ChannelID != uuid.Nil {
 				event := models.WSEvent{
@@ -124,15 +122,18 @@ func (c *Client) ReadPump() {
 						}
 						c.Hub.BroadcastToGuild(*typingData.GuildID, event)
 					}
-				} else if len(typingData.UserIDs) > 0 {
-					// Restrict to max 15 unique participants in a group DM, filter self/nil
-					validTargets := make([]uuid.UUID, 0, 15)
-					seen := make(map[uuid.UUID]bool, 15)
-					for _, uid := range typingData.UserIDs {
+				} else if typingData.GuildID == nil && c.Hub.DMParticipantsProvider != nil {
+					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+					participants := c.Hub.DMParticipantsProvider(ctx, typingData.ChannelID, c.UserID)
+					cancel()
+
+					validTargets := make([]uuid.UUID, 0, len(participants))
+					seen := make(map[uuid.UUID]bool, len(participants))
+					for _, uid := range participants {
 						if uid != uuid.Nil && uid != c.UserID && !seen[uid] {
 							seen[uid] = true
 							validTargets = append(validTargets, uid)
-							if len(validTargets) >= 15 {
+							if len(validTargets) >= 50 {
 								break
 							}
 						}
@@ -140,8 +141,6 @@ func (c *Client) ReadPump() {
 					if len(validTargets) > 0 {
 						c.Hub.BroadcastToUsers(validTargets, event)
 					}
-				} else if typingData.RecipientID != nil && *typingData.RecipientID != uuid.Nil && *typingData.RecipientID != c.UserID {
-					c.Hub.BroadcastToUsers([]uuid.UUID{*typingData.RecipientID}, event)
 				}
 			}
 

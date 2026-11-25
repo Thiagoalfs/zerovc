@@ -174,7 +174,7 @@ export const DMChatArea: React.FC<DMChatAreaProps> = ({
       inputPlaceholder={`Conversar com @${recipient.display_name || recipient.username}`}
       customMentions={mentionSuggestions}
       onSendMessage={async (content, replyToId, isTTS, file) => {
-        clearUnreadDivider(activeRoom.id);
+        markRoomAsRead(activeRoom.id);
         await sendMessage(content, undefined, replyToId, isTTS, file);
       }}
       onTyping={() => {

@@ -8,7 +8,6 @@ import { SearchResultsPanel } from './SearchResultsPanel';
 import { TypingIndicator } from './TypingIndicator';
 import { PinnedMessagesBanner } from './PinnedMessagesBanner';
 import { useFileDropOverlay } from '../../hooks/useFileDropOverlay';
-import { useAutoClearVisibleUnread } from '../../utils/unread';
 import { filterMessages, parseSearchQuery } from '../../utils/searchFilters';
 import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
 import {
@@ -22,6 +21,7 @@ export interface ConversationViewProps {
   messages: any[];
   pinnedMessages: any[];
   firstUnreadId?: string | null;
+  unreadCount?: number;
   hasMore: boolean;
   isLoadingMessages: boolean;
   isLoadingMoreMessages: boolean;
@@ -74,6 +74,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   messages,
   pinnedMessages,
   firstUnreadId,
+  unreadCount,
   hasMore,
   isLoadingMessages,
   isLoadingMoreMessages,
@@ -159,7 +160,20 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     }
   }, [conversationKey]);
 
-  useAutoClearVisibleUnread(scrollContainerRef, firstUnreadId, messages.length, onMarkAsRead);
+  const firstUnreadIdRef = useRef(firstUnreadId);
+  const onMarkAsReadRef = useRef(onMarkAsRead);
+  firstUnreadIdRef.current = firstUnreadId;
+  onMarkAsReadRef.current = onMarkAsRead;
+
+  useEffect(() => {
+    const mountedAt = Date.now();
+    return () => {
+      // Ignore React StrictMode's immediate synthetic mount/unmount cycle (<150ms)
+      if (Date.now() - mountedAt > 150 && firstUnreadIdRef.current) {
+        onMarkAsReadRef.current();
+      }
+    };
+  }, [conversationKey]);
 
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
@@ -215,11 +229,6 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     if (container.scrollTop < 60 && !isLoadingMoreMessages && hasMore) {
       prevScrollHeightRef.current = container.scrollHeight;
       onLoadMore();
-    }
-
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
-    if (isAtBottom && firstUnreadId) {
-      onMarkAsRead();
     }
   };
 
@@ -363,16 +372,25 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
                 return (
                   <React.Fragment key={msg.id}>
-                    {isFirstUnread && (
-                      <div id="unread-divider" className="flex items-center gap-3 my-4 mx-2 select-none">
-                        <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
-                        <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          Novas mensagens não lidas
-                        </span>
-                        <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
-                      </div>
-                    )}
+                    {isFirstUnread && (() => {
+                      const resolvedUnreadCount = Math.max(unreadCount || 0, displayedMessages.length - index);
+                      const unreadLabel =
+                        resolvedUnreadCount > 99
+                          ? '99+ mensagens novas não lidas'
+                          : resolvedUnreadCount === 1
+                          ? '1 mensagem nova não lida'
+                          : `${resolvedUnreadCount} mensagens novas não lidas`;
+                      return (
+                        <div id="unread-divider" className="flex items-center gap-3 my-4 mx-2 select-none">
+                          <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+                          <span className="px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 flex items-center gap-1.5 tabular-nums">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            {unreadLabel}
+                          </span>
+                          <div className="flex-1 h-[1px] bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+                        </div>
+                      );
+                    })()}
                     <MessageItem
                       message={msg}
                       isCompact={isCompact}

@@ -47,7 +47,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
   const { rooms, activeRoom, selectRoom, fetchRooms, roomUnreadCounts, unreadRooms, openDMWithUser, markRoomAsRead, closeRoom } = useDMStore();
   const { groups, activeGroup, selectGroup, fetchGroups, groupUnreadCounts, unreadGroups, markGroupAsRead, leaveGroup, updateGroup } = useDMGroupStore();
   const { guilds } = useGuildStore();
-  const { friends, fetchFriends, sendRequest, removeFriend } = useFriendStore();
+  const { friends, incoming, fetchFriends, sendRequest, removeFriend } = useFriendStore();
   const { startCall } = useCallStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
@@ -454,6 +454,11 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({
           >
             <Users className="w-5 h-5" />
             <span>Amigos</span>
+            {incoming.length > 0 && (
+              <span className="ml-auto min-w-[20px] h-5 px-1.5 bg-dnd text-white text-[11px] font-bold rounded-full flex items-center justify-center tabular-nums">
+                {incoming.length > 99 ? '99+' : incoming.length}
+              </span>
+            )}
           </button>
         </div>
 

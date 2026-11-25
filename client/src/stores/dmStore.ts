@@ -636,20 +636,17 @@ export const useDMStore = create<DMState>((set, get) => ({
         }, 50);
       }
 
-      if (state.activeRoom && state.activeRoom.id === message.dm_room_id) {
-        const nextMessages = mergeIncomingDM(state.messages);
+      const isCurrentActive = state.activeRoom?.id === message.dm_room_id;
+      const isViewingThisDM = isChatActiveNow('dm', message.dm_room_id);
+      const nextMessages = isCurrentActive ? mergeIncomingDM(state.messages) : state.messages;
 
-        const isViewingThisDM = Boolean(
-          (state.activeRoom && state.activeRoom.id === message.dm_room_id) ||
-          isChatActiveNow('dm', message.dm_room_id)
-        );
-
+      if (isViewingThisDM) {
         if (message.author_id !== currentUser?.id) {
           playMessageSound(false);
         }
 
         const shouldPlayTTS = (message.is_tts || useSettingsStore.getState().textToSpeechEnabled) && Boolean(message.content);
-        if (shouldPlayTTS && isViewingThisDM) {
+        if (shouldPlayTTS) {
           speakText(message.content, message.author?.display_name || message.author?.username);
         }
         return {
@@ -673,6 +670,7 @@ export const useDMStore = create<DMState>((set, get) => ({
 
         return {
           rooms: nextRooms,
+          messages: nextMessages,
           unreadRooms: unread,
           roomUnreadCounts: counts,
           messagesByRoom: nextMessagesByRoom,

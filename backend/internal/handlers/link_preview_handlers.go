@@ -264,8 +264,10 @@ func (h *LinkPreviewHandler) GetMetadata(w http.ResponseWriter, r *http.Request)
 			contentUrlRegex := regexp.MustCompile(`"contentUrl"\s*:\s*"([^"]+)"`)
 			for _, m := range matches {
 				if cuMatch := contentUrlRegex.FindStringSubmatch(m[1]); len(cuMatch) > 1 {
-					meta.ImageURL = resolveAbsoluteURL(parsedURL, cuMatch[1])
-					break
+					if resolved := resolveAbsoluteURL(parsedURL, cuMatch[1]); resolved != "" {
+						meta.ImageURL = resolved
+						break
+					}
 				}
 			}
 		}
@@ -330,14 +332,23 @@ func cleanMetaValue(v1, v2 string) string {
 }
 
 func resolveAbsoluteURL(baseURL *url.URL, target string) string {
-	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
-		return target
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return ""
 	}
 	parsedTarget, err := url.Parse(target)
 	if err != nil {
-		return target
+		return ""
 	}
-	return baseURL.ResolveReference(parsedTarget).String()
+	resolved := parsedTarget
+	if baseURL != nil {
+		resolved = baseURL.ResolveReference(parsedTarget)
+	}
+	scheme := strings.ToLower(resolved.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return ""
+	}
+	return resolved.String()
 }
 
 func isPrivateOrLocalHost(host string) bool {

@@ -216,8 +216,17 @@ type AuthResponse struct {
 	User                 models.UserPublic `json:"user,omitempty"`
 }
 
-func setAuthCookie(w http.ResponseWriter, token string) {
-	isSecure := os.Getenv("APP_ENV") == "production" || strings.HasPrefix(os.Getenv("APP_URL"), "https://")
+func isSecureRequest(r *http.Request) bool {
+	if r != nil {
+		if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+			return true
+		}
+	}
+	return os.Getenv("APP_ENV") == "production" || strings.HasPrefix(os.Getenv("APP_URL"), "https://")
+}
+
+func setAuthCookie(w http.ResponseWriter, r *http.Request, token string) {
+	isSecure := isSecureRequest(r)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    token,
@@ -229,13 +238,14 @@ func setAuthCookie(w http.ResponseWriter, token string) {
 	})
 }
 
-func clearAuthCookie(w http.ResponseWriter) {
+func clearAuthCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   isSecureRequest(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -426,12 +436,12 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 	h.recordSession(r.Context(), user.ID, token, r)
 
-	setAuthCookie(w, token)
+	setAuthCookie(w, r, token)
 
 	var csrfToken string
 	if h.csrf != nil {
 		csrfToken, _ = h.csrf.GenerateToken(user.ID)
-		h.csrf.SetCookie(w, csrfToken, r.TLS != nil)
+		h.csrf.SetCookie(w, csrfToken, isSecureRequest(r))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -864,12 +874,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	h.recordSession(r.Context(), user.ID, token, r)
 
 	// Set HttpOnly session cookie
-	setAuthCookie(w, token)
+	setAuthCookie(w, r, token)
 
 	var csrfToken string
 	if h.csrf != nil {
 		csrfToken, _ = h.csrf.GenerateToken(user.ID)
-		h.csrf.SetCookie(w, csrfToken, r.TLS != nil)
+		h.csrf.SetCookie(w, csrfToken, isSecureRequest(r))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -881,6 +891,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		allowed := origin == "https://zerovc.safiroko.xyz" || origin == "http://localhost:5173"
+		if appURL := strings.TrimSpace(os.Getenv("APP_URL")); appURL != "" {
+			if origin == appURL || origin == strings.TrimRight(appURL, "/") {
+				allowed = true
+			}
+		}
+		if !allowed {
+			http.Error(w, `{"error":"forbidden origin"}`, http.StatusForbidden)
+			return
+		}
+	}
+
 	currentToken := extractTokenFromRequest(r)
 	if currentToken != "" {
 		tokenHash := hashToken(currentToken)
@@ -889,9 +912,9 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 			h.auth.RevokeTokenHash(tokenHash)
 		}
 	}
-	clearAuthCookie(w)
+	clearAuthCookie(w, r)
 	if h.csrf != nil {
-		h.csrf.ClearCookie(w)
+		h.csrf.ClearCookie(w, isSecureRequest(r))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message":"logged out successfully"}`))
@@ -911,7 +934,9 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	query := `
-		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio, status, custom_status,
+		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio,
+		       COALESCE(NULLIF(NULLIF(status, 'offline'), ''), NULLIF(NULLIF(saved_status, 'offline'), ''), 'online'),
+		       custom_status,
 		       COALESCE(two_factor_secret, ''), email_verified,
 		       COALESCE(custom_activity, 'null'::jsonb), COALESCE(show_activity_status, true), COALESCE(auto_detect_activity, true),
 		       COALESCE(server_folders, '[]'::jsonb), COALESCE(guild_positions, '[]'::jsonb),
@@ -938,7 +963,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	var csrfToken string
 	if h.csrf != nil {
 		csrfToken, _ = h.csrf.GenerateToken(userID)
-		h.csrf.SetCookie(w, csrfToken, r.TLS != nil)
+		h.csrf.SetCookie(w, csrfToken, isSecureRequest(r))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1812,7 +1837,7 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clearAuthCookie(w)
+	clearAuthCookie(w, r)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
@@ -2005,7 +2030,7 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 	if h.auth != nil {
 		h.auth.RevokeAllUserTokens(userID)
 	}
-	clearAuthCookie(w)
+	clearAuthCookie(w, r)
 
 	// Generate 6-digit verification code for new email
 	codeInt, err := rand.Int(rand.Reader, big.NewInt(900000))
