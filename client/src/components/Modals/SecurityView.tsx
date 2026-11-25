@@ -225,29 +225,7 @@ export const SecurityView: React.FC = () => {
       )}
 
       <SettingsGroup title="Criptografia de Ponta a Ponta (E2EE)">
-        {/* 1. Identidade Criptográfica (Este Aparelho) */}
-        <SettingsRow
-          label="Identidade deste Aparelho"
-          badge={
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              VODOZEMAC ATIVO
-            </span>
-          }
-          description={
-            identityKeys ? (
-              <>
-                Chave pública Ed25519:{' '}
-                <span className="font-mono text-gray-300 select-all">
-                  {identityKeys.ed25519.slice(0, 10)}...{identityKeys.ed25519.slice(-10)}
-                </span>
-              </>
-            ) : (
-              'Inicializando chaves criptográficas do dispositivo...'
-            )
-          }
-        />
-
-        {/* 2. Backup Automático de Chaves na Nuvem (Opt-out) */}
+        {/* Backup Automático de Chaves na Nuvem (Opt-out) */}
         <SettingsRow
           label="Backup Automático de Chaves (Nuvem)"
           badge={

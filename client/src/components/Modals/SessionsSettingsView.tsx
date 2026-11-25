@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Smartphone,
   Globe,
-  ShieldCheck,
   Trash2,
   AlertTriangle,
   Loader2,
@@ -14,6 +13,7 @@ import {
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { UserSession } from '../../types';
+import { identityManager } from '../../crypto/identity';
 import { fetchLocationFromIP } from '../../utils/location';
 import { ModalButton } from '@/components/ui/modal-button';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
@@ -263,6 +263,8 @@ export const SessionsSettingsView: React.FC = () => {
   };
 
   const currentSession = sessions.find((s) => s.is_current);
+  const currentDevice = devices.find((d) => d.id === currentDeviceId);
+  const currentEd25519Key = currentDevice?.ed25519_key || identityManager.getIdentityKeys()?.ed25519 || '';
   const otherSessions = sessions.filter((s) => !s.is_current);
   const otherDevices = devices.filter((d) => d.id !== currentDeviceId);
 
@@ -313,18 +315,18 @@ export const SessionsSettingsView: React.FC = () => {
                     {getDeviceIcon(currentSession.device_type, currentSession.os)}
                   </div>
                   <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-baseline gap-2 flex-wrap">
                       <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
                         {currentSession.os || 'Dispositivo'} • {currentSession.browser || 'Navegador'}
                       </span>
-                      <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        Sessão Atual
-                      </span>
-                      <span className="text-xs font-semibold text-brand-400 flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5 text-brand-400" />
-                        Criptografia de Ponta a Ponta Ativa
-                      </span>
+                      {currentEd25519Key && (
+                        <span className="text-xs text-gray-400">
+                          Chave pública Ed25519:{' '}
+                          <span className="font-mono text-gray-300 select-all">
+                            {currentEd25519Key.slice(0, 10)}...{currentEd25519Key.slice(-10)}
+                          </span>
+                        </span>
+                      )}
                     </div>
 
                     <div className={`flex items-center gap-3 ${MODAL_DESCRIPTION_CLASS} flex-wrap`}>
@@ -371,10 +373,24 @@ export const SessionsSettingsView: React.FC = () => {
                       {getDeviceIcon(session.device_type, session.os)}
                     </div>
                     <div className="min-w-0 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-baseline gap-2 flex-wrap">
                         <span className={`${MODAL_TOGGLE_HEADER_CLASS} truncate`}>
                           {session.os || 'Dispositivo Remoto'} • {session.browser || 'Navegador'}
                         </span>
+                        {(() => {
+                          const key =
+                            (session as any).ed25519_key ||
+                            devices.find((d) => d.id === (session as any).device_id)?.ed25519_key;
+                          if (!key) return null;
+                          return (
+                            <span className="text-xs text-gray-400">
+                              Chave pública Ed25519:{' '}
+                              <span className="font-mono text-gray-300 select-all">
+                                {key.slice(0, 10)}...{key.slice(-10)}
+                              </span>
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       <div className={`flex items-center gap-3 ${MODAL_DESCRIPTION_CLASS} flex-wrap`}>

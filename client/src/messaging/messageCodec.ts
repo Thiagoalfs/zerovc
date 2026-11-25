@@ -29,6 +29,8 @@ export interface DecodedMessageResult {
 }
 
 export class MessageCodec {
+  private encodeQueues = new Map<string, Promise<unknown>>();
+
   /**
    * Decodes a raw message from the API or WebSocket gateway.
    * Completely resilient: NEVER throws an exception to the caller.
@@ -136,6 +138,32 @@ export class MessageCodec {
    * Encodes and encrypts an outgoing message into transport representation.
    */
   async encodeMessage(params: {
+    conversationId: string;
+    conversationType: 'dm' | 'dm_group' | 'channel';
+    currentEpoch: number;
+    envelope: EnvelopeV1;
+    senderDeviceId: string;
+    rosterDevices?: Array<{ device_id: string; user_id?: string }>;
+  }): Promise<{
+    encrypted: true;
+    e2ee_ciphertext: string;
+    e2ee_meta: E2EEMeta;
+    content: string;
+  }> {
+    const prev = this.encodeQueues.get(params.conversationId) || Promise.resolve();
+    const run = prev.then(() => this.encodeMessageInternal(params), () => this.encodeMessageInternal(params));
+    const settled = run.then(() => undefined, () => undefined);
+    this.encodeQueues.set(params.conversationId, settled);
+    try {
+      return await run;
+    } finally {
+      if (this.encodeQueues.get(params.conversationId) === settled) {
+        this.encodeQueues.delete(params.conversationId);
+      }
+    }
+  }
+
+  private async encodeMessageInternal(params: {
     conversationId: string;
     conversationType: 'dm' | 'dm_group' | 'channel';
     currentEpoch: number;

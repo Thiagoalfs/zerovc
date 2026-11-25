@@ -106,7 +106,7 @@ export class MegolmManager {
     }
 
     if (sessionKey) {
-      api.e2ee
+      await api.e2ee
         .saveRoomKey({
           conversation_type: conversationType || 'dm',
           conversation_id: conversationId,
@@ -323,9 +323,6 @@ export class MegolmManager {
     if (parsed.messageIndex !== expectedIndex) {
       throw new Error(`REPLAY_OR_INDEX_MISMATCH: expected ${expectedIndex}, received ${parsed.messageIndex}`);
     }
-
-    // Persist advanced ratchet state
-    await keyStore.encryptAndStorePickle('megolm_inbound', sessionId, inbound.pickle());
 
     // Parse and validate canonical envelope
     return parseEnvelope(parsed.plaintext);

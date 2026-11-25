@@ -562,33 +562,61 @@ export const useDMStore = create<DMState>((set, get) => ({
   addMessage: (message: DMMessage) => {
     const currentUser = useAuthStore.getState().user;
     set((state) => {
+      const mergeIncomingDM = (list: DMMessage[]) => {
+        const exactIdx = list.findIndex((m) => m.id === message.id);
+        const tempIdx = list.findIndex(
+          (m) =>
+            m.status === 'sending' &&
+            m.author_id === message.author_id &&
+            (m.content === message.content ||
+              (Boolean(message.encrypted) && Boolean(m.encrypted)) ||
+              (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
+        );
+
+        const next = [...list];
+        if (exactIdx !== -1) {
+          const existing = next[exactIdx];
+          const keepDecrypted = Boolean(message.encrypted && existing.decryption_status === 'decrypted' && existing.content);
+          next[exactIdx] = {
+            ...existing,
+            ...message,
+            content: keepDecrypted ? existing.content : message.content,
+            attachments: keepDecrypted ? existing.attachments : message.attachments,
+            decryption_status: keepDecrypted
+              ? 'decrypted'
+              : message.encrypted && !message.content
+              ? 'decrypting'
+              : message.decryption_status,
+            status: 'sent',
+          };
+        } else if (tempIdx !== -1) {
+          const existing = next[tempIdx];
+          const keepDecrypted = Boolean(message.encrypted && existing.decryption_status === 'decrypted' && existing.content);
+          next[tempIdx] = {
+            ...message,
+            content: keepDecrypted ? existing.content : message.content,
+            attachments: keepDecrypted ? existing.attachments : message.attachments,
+            decryption_status: keepDecrypted
+              ? 'decrypted'
+              : message.encrypted && !message.content
+              ? 'decrypting'
+              : message.decryption_status,
+            status: 'sent',
+            tempId: existing.tempId || existing.id,
+          };
+        } else {
+          next.push({
+            ...message,
+            decryption_status: message.encrypted && !message.content ? 'decrypting' : message.decryption_status,
+            status: 'sent',
+          });
+        }
+
+        return next.length > 200 ? next.slice(-200) : next;
+      };
+
       const roomMsgs = state.messagesByRoom[message.dm_room_id] || [];
-      const existingExactIdx = roomMsgs.findIndex((m) => m.id === message.id);
-      const tempMatchIdx = roomMsgs.findIndex(
-        (m) =>
-          m.status === 'sending' &&
-          m.author_id === message.author_id &&
-          (m.content === message.content ||
-            (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
-      );
-
-      let updatedRoomMsgs = [...roomMsgs];
-      if (existingExactIdx !== -1) {
-        updatedRoomMsgs[existingExactIdx] = { ...updatedRoomMsgs[existingExactIdx], ...message, status: 'sent' };
-      } else if (tempMatchIdx !== -1) {
-        updatedRoomMsgs[tempMatchIdx] = {
-          ...message,
-          status: 'sent',
-          tempId: updatedRoomMsgs[tempMatchIdx].tempId || updatedRoomMsgs[tempMatchIdx].id,
-        };
-      } else {
-        updatedRoomMsgs.push({ ...message, status: 'sent' });
-      }
-
-      // Cap memory at 200 messages per DM room
-      if (updatedRoomMsgs.length > 200) {
-        updatedRoomMsgs = updatedRoomMsgs.slice(-200);
-      }
+      const updatedRoomMsgs = mergeIncomingDM(roomMsgs);
 
       const nextMessagesByRoom = {
         ...state.messagesByRoom,
@@ -609,27 +637,7 @@ export const useDMStore = create<DMState>((set, get) => ({
       }
 
       if (state.activeRoom && state.activeRoom.id === message.dm_room_id) {
-        const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
-        const activeTempIdx = state.messages.findIndex(
-          (m) =>
-            m.status === 'sending' &&
-            m.author_id === message.author_id &&
-            (m.content === message.content ||
-              (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
-        );
-
-        let nextMessages = [...state.messages];
-        if (activeExactIdx !== -1) {
-          nextMessages[activeExactIdx] = { ...nextMessages[activeExactIdx], ...message, status: 'sent' };
-        } else if (activeTempIdx !== -1) {
-          nextMessages[activeTempIdx] = { ...message, status: 'sent', tempId: nextMessages[activeTempIdx].tempId || nextMessages[activeTempIdx].id };
-        } else {
-          nextMessages.push({ ...message, status: 'sent' });
-        }
-
-        if (nextMessages.length > 200) {
-          nextMessages = nextMessages.slice(-200);
-        }
+        const nextMessages = mergeIncomingDM(state.messages);
 
         const isViewingThisDM = Boolean(
           (state.activeRoom && state.activeRoom.id === message.dm_room_id) ||

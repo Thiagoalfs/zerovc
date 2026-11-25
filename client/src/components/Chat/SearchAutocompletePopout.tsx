@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   User as UserIcon,
@@ -12,8 +12,6 @@ import {
   Music,
   Link2,
   Smile,
-  Sparkles,
-  ChevronRight,
 } from 'lucide-react';
 import { User, Channel } from '../../types';
 import { UserAvatar } from '../Common/UserAvatar';
@@ -32,76 +30,62 @@ export interface SearchAutocompletePopoutProps {
 
 interface TagOption {
   tag: string;
-  label: string;
-  description: string;
-  example: string;
+  title: string;
+  hint: string;
   icon: React.ReactNode;
-  badgeColor: string;
 }
 
 const BASE_TAG_OPTIONS: TagOption[] = [
   {
     tag: 'de:',
-    label: 'de: usuário',
-    description: 'Buscar mensagens de um usuário específico',
-    example: 'de:@usuário',
-    icon: <UserIcon className="w-4 h-4 text-indigo-400" />,
-    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+    title: 'De um usuário específico',
+    hint: 'usuário',
+    icon: <UserIcon className="w-4 h-4 text-gray-400" />,
   },
   {
     tag: 'tem:',
-    label: 'tem: tipo',
-    description: 'Buscar mensagens contendo mídias ou anexos',
-    example: 'tem:imagem, vídeo, link, arquivo, áudio',
-    icon: <Paperclip className="w-4 h-4 text-emerald-400" />,
-    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    title: 'Inclui um tipo específico de dado',
+    hint: 'imagem, vídeo, link ou arquivo',
+    icon: <Paperclip className="w-4 h-4 text-gray-400" />,
   },
   {
     tag: 'menciona:',
-    label: 'menciona: usuário',
-    description: 'Buscar mensagens que mencionam alguém',
-    example: 'menciona:@usuário',
-    icon: <AtSign className="w-4 h-4 text-purple-400" />,
-    badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+    title: 'Menciona um usuário específico',
+    hint: 'usuário',
+    icon: <AtSign className="w-4 h-4 text-gray-400" />,
   },
   {
     tag: 'fixado:',
-    label: 'fixado: sim/não',
-    description: 'Buscar mensagens fixadas no chat',
-    example: 'fixado:sim',
-    icon: <Pin className="w-4 h-4 text-amber-400" />,
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    title: 'Mensagens fixadas',
+    hint: 'sim ou não',
+    icon: <Pin className="w-4 h-4 text-gray-400" />,
   },
   {
     tag: 'antes:',
-    label: 'antes: AAAA-MM-DD',
-    description: 'Mensagens anteriores a uma data',
-    example: 'antes:2026-09-18',
-    icon: <Calendar className="w-4 h-4 text-rose-400" />,
-    badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+    title: 'Antes de uma data',
+    hint: 'AAAA-MM-DD',
+    icon: <Calendar className="w-4 h-4 text-gray-400" />,
   },
   {
     tag: 'depois:',
-    label: 'depois: AAAA-MM-DD',
-    description: 'Mensagens posteriores a uma data',
-    example: 'depois:2026-09-01',
-    icon: <Calendar className="w-4 h-4 text-sky-400" />,
-    badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+    title: 'Depois de uma data',
+    hint: 'AAAA-MM-DD',
+    icon: <Calendar className="w-4 h-4 text-gray-400" />,
   },
 ];
 
 const HAS_OPTIONS = [
-  { value: 'imagem', label: 'imagem', desc: 'Fotos, GIFs e imagens', icon: <Image className="w-4 h-4 text-blue-400" /> },
-  { value: 'vídeo', label: 'vídeo', desc: 'Vídeos MP4, WebM e links de vídeo', icon: <Video className="w-4 h-4 text-red-400" /> },
-  { value: 'áudio', label: 'áudio', desc: 'Mensagens de voz e áudios', icon: <Music className="w-4 h-4 text-amber-400" /> },
-  { value: 'arquivo', label: 'arquivo', desc: 'Documentos e anexos em geral', icon: <Paperclip className="w-4 h-4 text-emerald-400" /> },
-  { value: 'link', label: 'link', desc: 'Mensagens contendo links externos', icon: <Link2 className="w-4 h-4 text-cyan-400" /> },
-  { value: 'reação', label: 'reação', desc: 'Mensagens com reações de emoji', icon: <Smile className="w-4 h-4 text-yellow-400" /> },
+  { value: 'imagem', label: 'imagem', desc: 'Fotos, GIFs e imagens', icon: <Image className="w-4 h-4 text-gray-400" /> },
+  { value: 'vídeo', label: 'vídeo', desc: 'Vídeos MP4, WebM e links de vídeo', icon: <Video className="w-4 h-4 text-gray-400" /> },
+  { value: 'áudio', label: 'áudio', desc: 'Mensagens de voz e áudios', icon: <Music className="w-4 h-4 text-gray-400" /> },
+  { value: 'arquivo', label: 'arquivo', desc: 'Documentos e anexos em geral', icon: <Paperclip className="w-4 h-4 text-gray-400" /> },
+  { value: 'link', label: 'link', desc: 'Mensagens contendo links externos', icon: <Link2 className="w-4 h-4 text-gray-400" /> },
+  { value: 'reação', label: 'reação', desc: 'Mensagens com reações de emoji', icon: <Smile className="w-4 h-4 text-gray-400" /> },
 ];
 
 const PINNED_OPTIONS = [
-  { value: 'sim', label: 'sim', desc: 'Somente mensagens fixadas', icon: <Pin className="w-4 h-4 text-amber-400" /> },
-  { value: 'não', label: 'não', desc: 'Somente mensagens não fixadas', icon: <Pin className="w-4 h-4 text-gray-400 opacity-50" /> },
+  { value: 'sim', label: 'sim', desc: 'Somente mensagens fixadas', icon: <Pin className="w-4 h-4 text-gray-400" /> },
+  { value: 'não', label: 'não', desc: 'Somente mensagens não fixadas', icon: <Pin className="w-4 h-4 text-gray-500" /> },
 ];
 
 export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> = ({
@@ -118,7 +102,7 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
   const [position, setPosition] = useState<{ top: number; right: number; width: number }>({
     top: 52,
     right: 16,
-    width: 340,
+    width: 300,
   });
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const popoutRef = useRef<HTMLDivElement>(null);
@@ -132,28 +116,35 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
     }
   }, [selectedIndex]);
 
-  // Calculate dynamic position below search input
-  useEffect(() => {
+  // Calculate fixed-width position below search input (never grows on scroll/focus transition)
+  useLayoutEffect(() => {
     if (!isOpen) return;
 
     const updatePosition = () => {
+      const fixedWidth = Math.min(300, window.innerWidth - 24);
       if (anchorRef?.current) {
         const rect = anchorRef.current.getBoundingClientRect();
-        const popoutWidth = Math.max(340, Math.min(420, rect.width + 120));
         const top = rect.bottom + 6;
         const right = Math.max(12, window.innerWidth - rect.right);
-        setPosition({ top, right, width: popoutWidth });
+        setPosition({ top, right, width: fixedWidth });
       } else {
-        setPosition({ top: 52, right: 16, width: 340 });
+        setPosition({ top: 52, right: 16, width: fixedWidth });
       }
     };
 
     updatePosition();
+    const handleScroll = (e: Event) => {
+      if (popoutRef.current && e.target instanceof Node && popoutRef.current.contains(e.target)) {
+        return;
+      }
+      updatePosition();
+    };
+
     window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('scroll', handleScroll, true);
     return () => {
       window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('scroll', handleScroll, true);
     };
   }, [isOpen, anchorRef]);
 
@@ -193,11 +184,9 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
     if (contextType === 'guild') {
       const channelOption: TagOption = {
         tag: 'em:',
-        label: 'em: canal',
-        description: 'Buscar em um canal de texto específico',
-        example: 'em:#geral',
-        icon: <Hash className="w-4 h-4 text-cyan-400" />,
-        badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+        title: 'Enviada em um canal específico',
+        hint: 'canal',
+        icon: <Hash className="w-4 h-4 text-gray-400" />,
       };
       list = [BASE_TAG_OPTIONS[0], channelOption, ...BASE_TAG_OPTIONS.slice(1)];
     }
@@ -357,33 +346,27 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
           top: `${position.top}px`,
           right: `${position.right}px`,
           width: `${position.width}px`,
-          boxShadow: '0 16px 48px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08)',
         }}
-        className="z-[99999] bg-[#111214] text-gray-200 border border-[#232428] rounded-xl overflow-hidden flex flex-col font-sans select-none animate-in fade-in zoom-in-95 duration-100 max-h-[380px]"
+        className="z-[99999] bg-[#111214] text-gray-200 border border-[#232428] rounded-xl overflow-hidden flex flex-col font-sans select-none animate-in fade-in zoom-in-95 duration-100 max-h-[380px] p-1.5"
       >
-        {/* Active Context Header */}
-        <div className="bg-[#0b0c0d] px-3.5 py-2.5 border-b border-[#1f2023] flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-300 uppercase tracking-wider font-mono">
-            <Sparkles className="w-3.5 h-3.5 text-brand-400" />
-            <span>
-              {activeMode.type === 'author'
-                ? 'Filtrar por Autor'
-                : activeMode.type === 'channel'
-                ? 'Filtrar por Canal'
-                : activeMode.type === 'has'
-                ? 'Filtrar por Tipo de Mídia'
-                : activeMode.type === 'mention'
-                ? 'Filtrar por Menção'
-                : activeMode.type === 'pinned'
-                ? 'Filtrar por Mensagens Fixadas'
-                : 'Opções de Busca'}
-            </span>
-          </div>
-          <span className="text-[10px] text-gray-500 font-mono">TAB / ENTER para aplicar</span>
+        {/* Minimal Context Label */}
+        <div className="px-2.5 py-1.5 text-xs font-semibold text-gray-400">
+          {activeMode.type === 'author'
+            ? 'De usuário'
+            : activeMode.type === 'channel'
+            ? 'No canal'
+            : activeMode.type === 'has'
+            ? 'Tipo de mídia'
+            : activeMode.type === 'mention'
+            ? 'Menciona'
+            : activeMode.type === 'pinned'
+            ? 'Mensagens fixadas'
+            : 'Filtros'}
         </div>
 
         {/* Suggestion List Scroll Area */}
-        <div ref={listRef} className="p-2 overflow-y-auto no-scrollbar space-y-1 max-h-[320px]">
+        <div ref={listRef} className="overflow-y-auto no-scrollbar space-y-0.5 max-h-[330px]">
           {/* 1. Author / Mentions Suggestions */}
           {(activeMode.type === 'author' || activeMode.type === 'mention') && (
             <>
@@ -398,19 +381,18 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
                       onClick={() => insertTagValue(member.username)}
                       onMouseEnter={() => setSelectedIndex(idx)}
                       className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
-                        isSelected ? 'bg-brand-500 text-white' : 'hover:bg-white/5 text-gray-200'
+                        isSelected ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-gray-200'
                       }`}
                     >
                       <UserAvatar user={member} size="sm" showStatus={true} />
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-xs font-bold truncate leading-tight">
+                      <div className="flex items-baseline gap-2 min-w-0 flex-1">
+                        <span className="text-xs font-medium text-white truncate">
                           {member.display_name || member.username}
                         </span>
-                        <span className={`text-[10px] truncate leading-tight ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
+                        <span className="text-xs text-gray-400 truncate">
                           @{member.username}
                         </span>
                       </div>
-                      <ChevronRight className={`w-3.5 h-3.5 opacity-60 ${isSelected ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                   );
                 })
@@ -431,22 +413,17 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
                       key={channel.id}
                       onClick={() => insertTagValue(channel.name)}
                       onMouseEnter={() => setSelectedIndex(idx)}
-                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
-                        isSelected ? 'bg-brand-500 text-white' : 'hover:bg-white/5 text-gray-200'
+                      className={`flex items-center gap-3 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
+                        isSelected ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-gray-200'
                       }`}
                     >
-                      <div className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center flex-shrink-0">
-                        <Hash className="w-3.5 h-3.5 text-cyan-400" />
-                      </div>
+                      <Hash className="w-4 h-4 text-gray-400 flex-shrink-0" />
                       <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-xs font-bold truncate leading-tight">#{channel.name}</span>
+                        <span className="text-xs font-medium text-white truncate">{channel.name}</span>
                         {channel.topic && (
-                          <span className={`text-[10px] truncate leading-tight mt-0.5 ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
-                            {channel.topic}
-                          </span>
+                          <span className="text-xs text-gray-400 truncate">{channel.topic}</span>
                         )}
                       </div>
-                      <ChevronRight className={`w-3.5 h-3.5 opacity-60 ${isSelected ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                   );
                 })
@@ -464,20 +441,15 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
                     key={opt.value}
                     onClick={() => insertTagValue(opt.value)}
                     onMouseEnter={() => setSelectedIndex(idx)}
-                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
-                      isSelected ? 'bg-brand-500 text-white' : 'hover:bg-white/5 text-gray-200'
+                    className={`flex items-center gap-3 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
+                      isSelected ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-gray-200'
                     }`}
                   >
-                    <div className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center flex-shrink-0">
-                      {opt.icon}
-                    </div>
+                    <span className="flex-shrink-0">{opt.icon}</span>
                     <div className="flex flex-col min-w-0 flex-1">
-                      <span className="text-xs font-bold leading-tight font-mono">{opt.label}</span>
-                      <span className={`text-[10px] leading-tight mt-0.5 ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
-                        {opt.desc}
-                      </span>
+                      <span className="text-xs font-medium text-white leading-tight">{opt.label}</span>
+                      <span className="text-xs text-gray-400 leading-tight mt-0.5">{opt.desc}</span>
                     </div>
-                    <ChevronRight className={`w-3.5 h-3.5 opacity-60 ${isSelected ? 'text-white' : 'text-gray-500'}`} />
                   </div>
                 );
               })}
@@ -494,32 +466,24 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
                     key={opt.value}
                     onClick={() => insertTagValue(opt.value)}
                     onMouseEnter={() => setSelectedIndex(idx)}
-                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
-                      isSelected ? 'bg-brand-500 text-white' : 'hover:bg-white/5 text-gray-200'
+                    className={`flex items-center gap-3 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
+                      isSelected ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-gray-200'
                     }`}
                   >
-                    <div className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center flex-shrink-0">
-                      {opt.icon}
-                    </div>
+                    <span className="flex-shrink-0">{opt.icon}</span>
                     <div className="flex flex-col min-w-0 flex-1">
-                      <span className="text-xs font-bold leading-tight font-mono">{opt.label}</span>
-                      <span className={`text-[10px] leading-tight mt-0.5 ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
-                        {opt.desc}
-                      </span>
+                      <span className="text-xs font-medium text-white leading-tight">{opt.label}</span>
+                      <span className="text-xs text-gray-400 leading-tight mt-0.5">{opt.desc}</span>
                     </div>
-                    <ChevronRight className={`w-3.5 h-3.5 opacity-60 ${isSelected ? 'text-white' : 'text-gray-500'}`} />
                   </div>
                 );
               })}
             </>
           )}
 
-          {/* 5. Root Mode: Available Tag Badges */}
+          {/* 5. Root Mode: Minimal Filter List */}
           {activeMode.type === 'root' && (
             <>
-              <div className="px-2 py-1 text-[11px] font-semibold text-gray-400">
-                Filtre sua busca digitando ou clicando em uma das tags:
-              </div>
               {tagOptions.map((opt, idx) => {
                 const isSelected = selectedIndex === idx;
                 return (
@@ -527,31 +491,19 @@ export const SearchAutocompletePopout: React.FC<SearchAutocompletePopoutProps> =
                     key={opt.tag}
                     onClick={() => appendTag(opt.tag)}
                     onMouseEnter={() => setSelectedIndex(idx)}
-                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors group ${
-                      isSelected ? 'bg-brand-500 text-white' : 'hover:bg-white/5 text-gray-200'
+                    className={`flex items-center gap-3 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
+                      isSelected ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-gray-200'
                     }`}
                   >
-                    <div className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center flex-shrink-0">
-                      {opt.icon}
-                    </div>
-
+                    <span className="flex-shrink-0">{opt.icon}</span>
                     <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-[11px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                            isSelected ? 'bg-white/20 text-white border-white/40' : opt.badgeColor
-                          }`}
-                        >
-                          {opt.tag}
-                        </span>
-                        <span className="text-xs font-bold truncate leading-tight">{opt.label}</span>
-                      </div>
-                      <span className={`text-[10px] truncate leading-tight mt-0.5 ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
-                        {opt.description}
+                      <span className="text-xs font-medium text-white truncate leading-tight">
+                        {opt.title}
+                      </span>
+                      <span className="text-xs text-gray-400 truncate leading-tight mt-0.5">
+                        <span className="font-medium text-gray-300">{opt.tag}</span> {opt.hint}
                       </span>
                     </div>
-
-                    <ChevronRight className={`w-3.5 h-3.5 opacity-60 ${isSelected ? 'text-white' : 'text-gray-500'}`} />
                   </div>
                 );
               })}

@@ -1338,9 +1338,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       textareaRef.current.style.height = 'auto';
     }
 
-    isSendingRef.current = true;
+    const hasFiles = filesToUpload.length > 0;
+    if (hasFiles) {
+      isSendingRef.current = true;
+    }
     try {
-      await onSendMessage(finalContent, replyId, false, filesToUpload.length > 0 ? filesToUpload : undefined);
+      await onSendMessage(finalContent, replyId, false, hasFiles ? filesToUpload : undefined);
       if (slowmodeSeconds > 0 && !isSlowmodeImmune) {
         startSlowmodeCooldown(slowmodeSeconds);
       }
@@ -1354,7 +1357,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         message: err.message || 'Não foi possível enviar a mensagem. Verifique sua conexão.',
       });
     } finally {
-      isSendingRef.current = false;
+      if (hasFiles) {
+        isSendingRef.current = false;
+      }
     }
   };
 

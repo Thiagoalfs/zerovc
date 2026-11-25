@@ -23,6 +23,7 @@ import { useDMStore } from '../../stores/dmStore';
 import { formatAssetUrl } from '../../lib/api';
 import { getUserActivity, useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
+import { MODAL_CATEGORY_SUBTITLE_CLASS } from '@/constants/modalTypography';
 
 export type { UserProfilePosition };
 
@@ -294,7 +295,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             {/* Atividade Category - Sleek Minimal Layout without box */}
             {activity && (
               <div className="space-y-1.5 animate-in fade-in">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                <span className={MODAL_CATEGORY_SUBTITLE_CLASS}>
                   {activity.header || 'Atividade'}
                 </span>
                 <div className="flex items-center gap-3 py-1">
@@ -339,7 +340,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             {/* About Me / Bio */}
             {user.bio && user.bio.trim().length > 0 ? (
               <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
+                <span className={`${MODAL_CATEGORY_SUBTITLE_CLASS} mb-0.5`}>
                   Sobre mim
                 </span>
                 <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{user.bio.trim()}</p>

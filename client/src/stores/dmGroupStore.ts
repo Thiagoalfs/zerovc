@@ -621,32 +621,61 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
   handleGroupMessageCreate: (message: DMGroupMessage) => {
     const currentUser = useAuthStore.getState().user;
     set((state) => {
+      const mergeIncomingGroupMsg = (list: DMGroupMessage[]) => {
+        const exactIdx = list.findIndex((m) => m.id === message.id);
+        const tempIdx = list.findIndex(
+          (m) =>
+            m.status === 'sending' &&
+            m.author_id === message.author_id &&
+            (m.content === message.content ||
+              (Boolean(message.encrypted) && Boolean(m.encrypted)) ||
+              (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
+        );
+
+        const next = [...list];
+        if (exactIdx !== -1) {
+          const existing = next[exactIdx];
+          const keepDecrypted = Boolean(message.encrypted && existing.decryption_status === 'decrypted' && existing.content);
+          next[exactIdx] = {
+            ...existing,
+            ...message,
+            content: keepDecrypted ? existing.content : message.content,
+            attachments: keepDecrypted ? existing.attachments : message.attachments,
+            decryption_status: keepDecrypted
+              ? 'decrypted'
+              : message.encrypted && !message.content
+              ? 'decrypting'
+              : message.decryption_status,
+            status: 'sent',
+          };
+        } else if (tempIdx !== -1) {
+          const existing = next[tempIdx];
+          const keepDecrypted = Boolean(message.encrypted && existing.decryption_status === 'decrypted' && existing.content);
+          next[tempIdx] = {
+            ...message,
+            content: keepDecrypted ? existing.content : message.content,
+            attachments: keepDecrypted ? existing.attachments : message.attachments,
+            decryption_status: keepDecrypted
+              ? 'decrypted'
+              : message.encrypted && !message.content
+              ? 'decrypting'
+              : message.decryption_status,
+            status: 'sent',
+            tempId: existing.tempId || existing.id,
+          };
+        } else {
+          next.push({
+            ...message,
+            decryption_status: message.encrypted && !message.content ? 'decrypting' : message.decryption_status,
+            status: 'sent',
+          });
+        }
+
+        return next.length > 200 ? next.slice(-200) : next;
+      };
+
       const groupMsgs = state.messagesByGroup[message.group_id] || [];
-      const existingExactIdx = groupMsgs.findIndex((m) => m.id === message.id);
-      const tempMatchIdx = groupMsgs.findIndex(
-        (m) =>
-          m.status === 'sending' &&
-          m.author_id === message.author_id &&
-          (m.content === message.content ||
-            (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
-      );
-
-      let updatedGroupMsgs = [...groupMsgs];
-      if (existingExactIdx !== -1) {
-        updatedGroupMsgs[existingExactIdx] = { ...updatedGroupMsgs[existingExactIdx], ...message, status: 'sent' };
-      } else if (tempMatchIdx !== -1) {
-        updatedGroupMsgs[tempMatchIdx] = {
-          ...message,
-          status: 'sent',
-          tempId: updatedGroupMsgs[tempMatchIdx].tempId || updatedGroupMsgs[tempMatchIdx].id,
-        };
-      } else {
-        updatedGroupMsgs.push({ ...message, status: 'sent' });
-      }
-
-      if (updatedGroupMsgs.length > 200) {
-        updatedGroupMsgs = updatedGroupMsgs.slice(-200);
-      }
+      const updatedGroupMsgs = mergeIncomingGroupMsg(groupMsgs);
 
       const nextMessagesByGroup = {
         ...state.messagesByGroup,
@@ -668,25 +697,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
 
       const isCurrentActive = state.activeGroup?.id === message.group_id;
       if (isCurrentActive) {
-        const activeExactIdx = state.messages.findIndex((m) => m.id === message.id);
-        const activeTempIdx = state.messages.findIndex(
-          (m) =>
-            m.status === 'sending' &&
-            m.author_id === message.author_id &&
-            (m.content === message.content ||
-              (m.uploadingFile && (message.content.includes(m.content) || !m.content)))
-        );
-        let nextMsgs = [...state.messages];
-        if (activeExactIdx !== -1) {
-          nextMsgs[activeExactIdx] = { ...nextMsgs[activeExactIdx], ...message, status: 'sent' };
-        } else if (activeTempIdx !== -1) {
-          nextMsgs[activeTempIdx] = { ...message, status: 'sent', tempId: nextMsgs[activeTempIdx].tempId || nextMsgs[activeTempIdx].id };
-        } else {
-          nextMsgs.push({ ...message, status: 'sent' });
-        }
-        if (nextMsgs.length > 200) {
-          nextMsgs = nextMsgs.slice(-200);
-        }
+        const nextMsgs = mergeIncomingGroupMsg(state.messages);
 
         const isViewingThisGroup = Boolean(
           (state.activeGroup && state.activeGroup.id === message.group_id) ||

@@ -71,6 +71,7 @@ import { api, formatAssetUrl } from '../../lib/api';
 import {
   MODAL_TOGGLE_HEADER_CLASS,
   MODAL_SECTION_HEADER_CLASS,
+  MODAL_CATEGORY_SUBTITLE_CLASS,
   MODAL_FIELD_LABEL_CLASS,
   MODAL_DIALOG_TITLE_CLASS,
   MODAL_TITLE_CLASS,
@@ -89,6 +90,7 @@ import { AccountSubModals, AccountSubModalType } from './ProfileSettings/Account
 import { ImageCropModal } from './ImageCropModal';
 import { EditPencilOverlay } from '../Common/EditPencilOverlay';
 import { UnsavedChangesBar, useUnsavedGuard } from './UnsavedChangesBar';
+import { ChatHeader } from '../Chat/ChatHeader';
 import { KeybindSettingsView } from './KeybindSettingsView';
 import { SessionsSettingsView } from './SessionsSettingsView';
 import { AccessibilitySettingsView } from './AccessibilitySettingsView';
@@ -1438,66 +1440,55 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
           </div>
 
           {/* Desktop Top Header */}
-          <div className="hidden md:flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
-            <div className="flex items-center gap-3">
-              {activeTab === 'profile' && (
+          <div className="hidden md:block shrink-0">
+            <ChatHeader
+              showSearch={false}
+              title={
+                <div className="flex items-center gap-3 min-w-0">
+                  {activeTab === 'profile' && (
+                    <ModalButton
+                      type="secondary"
+                      size="small"
+                      prefix={<ArrowLeft className="w-4 h-4" />}
+                      onClick={() => setActiveTab('account')}
+                      aria-label="Voltar para Minha Conta"
+                      title="Voltar para Minha Conta"
+                    >
+                      Voltar
+                    </ModalButton>
+                  )}
+                  <h1 id="profile-modal-title" className="font-bold text-gray-100 truncate text-base">
+                    {activeTab === 'account' && 'Minha Conta e Perfil'}
+                    {activeTab === 'profile' && 'Perfil de Usuário'}
+                    {activeTab === 'privacy' && 'Privacidade e Segurança'}
+                    {activeTab === 'sessions' && 'Sessões Ativas e Dispositivos'}
+                    {activeTab === 'registered_games' && 'Jogos Registrados'}
+                    {activeTab === 'activity_privacy' && 'Privacidade de Atividade'}
+                    {activeTab === 'appearance' && 'Aparência & Customização'}
+                    {activeTab === 'accessibility' && 'Central de Acessibilidade'}
+                    {activeTab === 'audio' && 'Voz & Vídeo'}
+                    {activeTab === 'notifications' && 'Notificações & Sons'}
+                    {activeTab === 'streamer_mode' && 'Modo Streamer'}
+                    {activeTab === 'preferences' && 'Preferências do Sistema'}
+                    {activeTab === 'keybinds' && 'Atalhos do Teclado'}
+                  </h1>
+                </div>
+              }
+              actions={
                 <ModalButton
-                  type="secondary"
+                  type="tertiary"
+                  shape="circle"
                   size="small"
-                  prefix={<ArrowLeft className="w-4 h-4" />}
-                  onClick={() => setActiveTab('account')}
-                  aria-label="Voltar para Minha Conta"
-                  title="Voltar para Minha Conta"
+                  svgOnly
+                  onClick={attemptClose}
+                  aria-label="Fechar configurações"
+                  className="text-gray-400 hover:text-white"
+                  title="Fechar Configurações (ESC)"
                 >
-                  Voltar
+                  <X className="w-5 h-5" />
                 </ModalButton>
-              )}
-              <div>
-                <h1 id="profile-modal-title" className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
-                  {activeTab === 'account' && 'Minha Conta e Perfil'}
-                  {activeTab === 'profile' && 'Perfil de Usuário'}
-                  {activeTab === 'privacy' && 'Privacidade e Segurança'}
-                  {activeTab === 'sessions' && 'Sessões Ativas e Dispositivos'}
-                  {activeTab === 'registered_games' && 'Jogos Registrados'}
-                  {activeTab === 'activity_privacy' && 'Privacidade de Atividade'}
-                  {activeTab === 'appearance' && 'Aparência & Customização'}
-                  {activeTab === 'accessibility' && 'Central de Acessibilidade'}
-                  {activeTab === 'audio' && 'Voz & Vídeo'}
-                  {activeTab === 'notifications' && 'Notificações & Sons'}
-                  {activeTab === 'streamer_mode' && 'Modo Streamer'}
-                  {activeTab === 'preferences' && 'Preferências do Sistema'}
-                  {activeTab === 'keybinds' && 'Atalhos do Teclado'}
-                </h1>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {activeTab === 'account' && 'Personalize seu perfil, avatar, banner, nome de exibição e recado.'}
-                  {activeTab === 'profile' && 'Personalize seu avatar, banner, nome de exibição e recado.'}
-                  {activeTab === 'privacy' && 'Gerencie credenciais de acesso, e-mail, senha, autenticação 2FA, criptografia E2EE e dados.'}
-                  {activeTab === 'sessions' && 'Visualize aparelhos conectados e encerre sessões ativas remotamente.'}
-                  {activeTab === 'registered_games' && 'Gerencie jogos detectados no seu computador, adicione jogos customizados e controle status.'}
-                  {activeTab === 'activity_privacy' && 'Configure a exibição de status de jogo e detecção automática de processos em segundo plano.'}
-                  {activeTab === 'appearance' && 'Personalize temas visuais, cores de destaque, densidade e zoom.'}
-                  {activeTab === 'accessibility' && 'Ajuste escala tipográfica do chat, alto contraste, redução de movimento, daltonismo e TTS.'}
-                  {activeTab === 'audio' && 'Ajuste dispositivos, microfone, webcam e filtros avançados de áudio WebRTC.'}
-                  {activeTab === 'notifications' && 'Configure sons do sistema, alertas sonoros e notificações na área de trabalho.'}
-                  {activeTab === 'streamer_mode' && 'Proteja suas informações pessoais, censure nomes de usuários e silencie alertas ao transmitir.'}
-                  {activeTab === 'preferences' && 'Configure o comportamento da janela, inicialização e integração com o sistema.'}
-                  {activeTab === 'keybinds' && 'Configure atalhos rápidos e Push-to-Talk globais para controle de voz.'}
-                </p>
-              </div>
-            </div>
-
-            <ModalButton
-              type="tertiary"
-              shape="circle"
-              size="small"
-              svgOnly
-              onClick={attemptClose}
-              aria-label="Fechar configurações"
-              className="text-gray-400 hover:text-white"
-              title="Fechar Configurações (ESC)"
-            >
-              <X className="w-5 h-5" />
-            </ModalButton>
+              }
+            />
           </div>
 
           {/* Hidden File Inputs for Avatar and Banner */}
@@ -1573,52 +1564,128 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     </div>
                   </div>
 
-                  {/* Group 1: Informações da Conta */}
-                  <div className="px-6 pb-5 pt-3 space-y-3.5 border-t border-white/5">
+                  {/* Group 1: Informações do Perfil */}
+                  <div className="px-6 pb-5 pt-3 space-y-4 border-t border-white/5">
                     {/* Display Name (Nome de Exibição) row */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                          Nome de Exibição
-                        </span>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className={MODAL_CATEGORY_SUBTITLE_CLASS}>
+                        Nome de Exibição
+                      </span>
+                      <div className="flex items-center gap-3 flex-wrap justify-end">
                         <span className="text-xs font-semibold text-white">
                           {user.display_name || user.username}
                         </span>
+                        <ModalButton
+                          type="secondary"
+                          size="small"
+                          aria-label="Editar nome de exibição"
+                          onClick={() => setActiveAccountModal('displayName')}
+                        >
+                          Editar
+                        </ModalButton>
                       </div>
-                      <ModalButton
-                        type="secondary"
-                        size="small"
-                        aria-label="Editar nome de exibição"
-                        onClick={() => setActiveAccountModal('displayName')}
-                      >
-                        Editar
-                      </ModalButton>
                     </div>
 
-                    {/* Username row */}
-                    <div className="flex items-center justify-between">
+                    {/* Recado / Status Personalizado & Sobre Mim (Bio) */}
+                    <form onSubmit={handleSaveBioAndStatus} className="space-y-4">
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                          Nome de Usuário
-                        </span>
-                        <span className="text-xs font-semibold text-white font-mono">@{user.username}</span>
+                        <label className={`${MODAL_CATEGORY_SUBTITLE_CLASS} mb-1.5`}>
+                          Recado / Status Personalizado
+                        </label>
+                        <input
+                          type="text"
+                          value={customStatus}
+                          onChange={(e) => setCustomStatus(e.target.value)}
+                          placeholder="Definir um status personalizado..."
+                          maxLength={128}
+                          className="w-full bg-background-darkest border border-white/10 rounded-xl px-3.5 py-2 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                        />
                       </div>
-                      <ModalButton
-                        type="secondary"
-                        size="small"
-                        aria-label="Editar nome de usuário"
-                        onClick={() => setActiveAccountModal('username')}
-                      >
-                        Editar
-                      </ModalButton>
-                    </div>
 
-                    {/* Phone row */}
-                    <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                          Número de Telefone
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className={MODAL_CATEGORY_SUBTITLE_CLASS}>
+                            Sobre Mim (Bio)
+                          </label>
+                          <span className="text-[10px] text-gray-400 font-medium">{bio.length}/255</span>
+                        </div>
+                        <textarea
+                          value={bio}
+                          onChange={(e) => setBio(e.target.value)}
+                          placeholder="Escreva algo sobre você..."
+                          rows={3}
+                          maxLength={255}
+                          className="w-full bg-background-darkest border border-white/10 rounded-xl p-3 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none leading-relaxed"
+                        />
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: PRIVACIDADE E SEGURANÇA */}
+            {activeTab === 'privacy' && (
+              <div className="space-y-6 animate-in fade-in">
+                {/* 1. Credenciais de Acesso (Usuário, E-mail, Telefone, Senha & 2FA) */}
+                <SettingsGroup title="Credenciais de Acesso" cardClassName="divide-y-0">
+                  <SettingsRow
+                    label="Nome de Usuário"
+                    control={
+                      <div className="flex items-center gap-3 flex-wrap justify-end">
+                        <span className="text-xs font-semibold text-gray-200 font-mono">
+                          @{user.username}
                         </span>
+                        <ModalButton
+                          type="secondary"
+                          size="small"
+                          aria-label="Editar nome de usuário"
+                          onClick={() => setActiveAccountModal('username')}
+                        >
+                          Editar
+                        </ModalButton>
+                      </div>
+                    }
+                  />
+
+                  <SettingsRow
+                    label="Endereço de E-mail"
+                    control={
+                      <div className="flex items-center gap-3 flex-wrap justify-end">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-200 font-mono">
+                            {getMaskedEmail(user.email)}
+                          </span>
+                          {!streamerModeActive ? (
+                            <button
+                              type="button"
+                              onClick={() => setRevealEmail(!revealEmail)}
+                              className="text-xs text-brand-400 hover:underline cursor-pointer font-medium"
+                            >
+                              {revealEmail ? 'Ocultar' : 'Revelar'}
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
+                              <EyeOff className="w-2.5 h-2.5" />
+                              <span>Oculto pelo Modo Streamer</span>
+                            </span>
+                          )}
+                        </div>
+                        <ModalButton
+                          type="secondary"
+                          size="small"
+                          onClick={() => setActiveAccountModal('email')}
+                        >
+                          Editar
+                        </ModalButton>
+                      </div>
+                    }
+                  />
+
+                  <SettingsRow
+                    label="Número de Telefone"
+                    control={
+                      <div className="flex items-center gap-3 flex-wrap justify-end">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-200 font-mono">
                             {getMaskedPhone(user.phone_number)}
@@ -1627,125 +1694,37 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                             <button
                               type="button"
                               onClick={() => setRevealPhone(!revealPhone)}
-                              className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
+                              className="text-xs text-brand-400 hover:underline cursor-pointer font-medium"
                             >
-                              {revealPhone ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                              <span>{revealPhone ? 'Ocultar' : 'Revelar número'}</span>
+                              {revealPhone ? 'Ocultar' : 'Revelar'}
                             </button>
                           )}
                         </div>
+                        <ModalButton
+                          type="secondary"
+                          size="small"
+                          aria-label={user.phone_number ? 'Editar número de telefone' : 'Adicionar número de telefone'}
+                          onClick={() => setActiveAccountModal('phone')}
+                        >
+                          {user.phone_number ? 'Editar' : 'Adicionar'}
+                        </ModalButton>
                       </div>
-                      <ModalButton
-                        type="secondary"
-                        size="small"
-                        aria-label={user.phone_number ? 'Editar número de telefone' : 'Adicionar número de telefone'}
-                        onClick={() => setActiveAccountModal('phone')}
-                      >
-                        {user.phone_number ? 'Editar' : 'Adicionar'}
-                      </ModalButton>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={MODAL_DIVIDER_CLASS} />
-
-                {/* Group 2: Personalização do Perfil (Recado & Bio) */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className={MODAL_SECTION_HEADER_CLASS}>
-                      Recado e Sobre Mim
-                    </h4>
-                  </div>
-
-                  <form onSubmit={handleSaveBioAndStatus} className="space-y-4">
-                    {/* Recado / Status Personalizado */}
-                    <div>
-                      <label className={MODAL_FIELD_LABEL_CLASS}>
-                        Recado / Status Personalizado
-                      </label>
-                      <input
-                        type="text"
-                        value={customStatus}
-                        onChange={(e) => setCustomStatus(e.target.value)}
-                        placeholder="Definir um status personalizado..."
-                        maxLength={128}
-                        className="w-full bg-background-darkest border border-white/10 rounded-xl px-3.5 py-2 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                      />
-                    </div>
-
-                    {/* Bio / Sobre Mim */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className={MODAL_FIELD_LABEL_CLASS}>
-                          Sobre Mim (Bio)
-                        </label>
-                        <span className="text-[10px] text-gray-400 font-medium">{bio.length}/255</span>
-                      </div>
-                      <textarea
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        placeholder="Escreva algo sobre você..."
-                        rows={3}
-                        maxLength={255}
-                        className="w-full bg-background-darkest border border-white/10 rounded-xl p-3 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none leading-relaxed"
-                      />
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* TAB: PRIVACIDADE E SEGURANÇA */}
-            {activeTab === 'privacy' && (
-              <div className="space-y-6 animate-in fade-in">
-                {/* 1. Credenciais de Acesso (E-mail, Senha & 2FA) */}
-                <SettingsGroup title="Credenciais de Acesso">
-                  <SettingsRow
-                    label="Endereço de E-mail"
-                    description={
-                      <span className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-xs text-gray-200 font-mono">{getMaskedEmail(user.email)}</span>
-                        {!streamerModeActive ? (
-                          <button
-                            type="button"
-                            onClick={() => setRevealEmail(!revealEmail)}
-                            className="text-[11px] text-brand-400 hover:underline cursor-pointer flex items-center gap-1"
-                          >
-                            {revealEmail ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                            <span>{revealEmail ? 'Ocultar' : 'Revelar e-mail'}</span>
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1">
-                            <EyeOff className="w-2.5 h-2.5" />
-                            <span>Oculto pelo Modo Streamer</span>
-                          </span>
-                        )}
-                      </span>
-                    }
-                    control={
-                      <ModalButton
-                        type="secondary"
-                        size="small"
-                        onClick={() => setActiveAccountModal('email')}
-                      >
-                        Editar
-                      </ModalButton>
                     }
                   />
 
                   <SettingsRow
                     label="Senha da Conta"
-                    description={
-                      <span className="text-xs text-gray-500 font-mono tracking-widest block mt-0.5">••••••••••••••••</span>
-                    }
                     control={
-                      <ModalButton
-                        type="primary"
-                        size="small"
-                        onClick={() => setActiveAccountModal('password')}
-                      >
-                        Mudar Senha
-                      </ModalButton>
+                      <div className="flex items-center gap-3 flex-wrap justify-end">
+                        <span className="text-xs text-gray-500 font-mono tracking-widest">••••••••••••••••</span>
+                        <ModalButton
+                          type="primary"
+                          size="small"
+                          onClick={() => setActiveAccountModal('password')}
+                        >
+                          Mudar Senha
+                        </ModalButton>
+                      </div>
                     }
                   />
 
@@ -1871,24 +1850,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                     </div>
 
                     {/* Delete Account (Danger Zone) */}
-                    <div>
-                      <div className="p-3.5 bg-dnd/10 rounded-2xl border border-dnd/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-0.5">
-                          <span className="text-sm font-bold text-dnd block">Excluir Conta Permanentemente</span>
-                          <p className="text-[11px] text-dnd/80 leading-relaxed max-w-md">
-                            Esta ação é irreversível. Todos os seus dados, mensagens, servidores próprios e amizades serão permanentemente apagados.
-                          </p>
-                        </div>
-                        <ModalButton
-                          type="error"
-                          size="small"
-                          prefix={<Trash2 className="w-3.5 h-3.5" />}
-                          onClick={() => setActiveAccountModal('deleteAccount')}
-                          className="self-start sm:self-auto shrink-0"
-                        >
-                          Excluir Conta
-                        </ModalButton>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <span className={`${MODAL_TOGGLE_HEADER_CLASS} block`}>Excluir Conta Permanentemente</span>
+                        <p className={`${MODAL_DESCRIPTION_CLASS} max-w-md`}>
+                          Esta ação é irreversível. Todos os seus dados, mensagens, servidores próprios e amizades serão permanentemente apagados.
+                        </p>
                       </div>
+                      <ModalButton
+                        type="error"
+                        size="small"
+                        onClick={() => setActiveAccountModal('deleteAccount')}
+                        className="self-start sm:self-auto shrink-0"
+                      >
+                        Excluir Conta
+                      </ModalButton>
                     </div>
                   </div>
                 </div>

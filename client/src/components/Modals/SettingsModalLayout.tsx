@@ -2,11 +2,8 @@ import React, { useEffect } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { ModalButton } from '@/components/ui/modal-button';
 import { UnsavedChangesBar } from './UnsavedChangesBar';
-import {
-  MODAL_DESCRIPTION_CLASS,
-  MODAL_DIALOG_TITLE_CLASS,
-  MODAL_TITLE_CLASS,
-} from '../../constants/modalTypography';
+import { ChatHeader } from '../Chat/ChatHeader';
+import { MODAL_DIALOG_TITLE_CLASS } from '../../constants/modalTypography';
 
 export interface SettingsModalTab {
   id: string;
@@ -192,31 +189,31 @@ export const SettingsModalLayout: React.FC<SettingsModalLayoutProps> = ({
         </div>
 
         {/* Desktop Top Header */}
-        <div className="hidden md:flex items-center justify-between px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-24 py-3 sm:py-5 border-b border-white/10 shrink-0 bg-background-darker/40">
-          <div>
-            <h1 id={titleId} className={`${MODAL_TITLE_CLASS} flex items-center gap-2`}>
-              {currentTab?.desktopTitle}
-            </h1>
-            {currentTab?.desktopDescription && (
-              <p className={`${MODAL_DESCRIPTION_CLASS} mt-0.5`}>
-                {currentTab.desktopDescription}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            {desktopHeaderActions}
-            <ModalButton
-              type="tertiary"
-              shape="circle"
-              size="small"
-              svgOnly
-              onClick={onAttemptClose}
-              aria-label={closeAriaLabel}
-              title="Fechar Configurações (ESC)"
-            >
-              <X className="w-5 h-5" />
-            </ModalButton>
-          </div>
+        <div className="hidden md:block shrink-0">
+          <ChatHeader
+            showSearch={false}
+            title={
+              <h1 id={titleId} className="font-bold text-gray-100 truncate text-base">
+                {currentTab?.desktopTitle}
+              </h1>
+            }
+            actions={
+              <div className="flex items-center gap-3">
+                {desktopHeaderActions}
+                <ModalButton
+                  type="tertiary"
+                  shape="circle"
+                  size="small"
+                  svgOnly
+                  onClick={onAttemptClose}
+                  aria-label={closeAriaLabel}
+                  title="Fechar Configurações (ESC)"
+                >
+                  <X className="w-5 h-5" />
+                </ModalButton>
+              </div>
+            }
+          />
         </div>
 
         {children}

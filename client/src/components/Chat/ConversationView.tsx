@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Pin, Search } from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
@@ -126,11 +126,13 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   const isAutoScrollingRef = useRef<boolean>(false);
 
   const scrollToBottom = (smooth = false) => {
-    if (!scrollContainerRef.current) return;
-    if (smooth) {
-      smoothScrollToBottomExponential(scrollContainerRef.current);
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (smooth && distanceFromBottom >= 120) {
+      smoothScrollToBottomExponential(container);
     } else {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      container.scrollTop = container.scrollHeight;
     }
   };
 
@@ -159,7 +161,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
   useAutoClearVisibleUnread(scrollContainerRef, firstUnreadId, messages.length, onMarkAsRead);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
@@ -190,8 +192,6 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
     if ((isNearBottom || isMyMessage) && !isAutoScrollingRef.current) {
       scrollToBottom(true);
-      setTimeout(() => scrollToBottom(true), 100);
-      setTimeout(() => scrollToBottom(true), 300);
     }
   }, [conversationKey, messages, user?.id, firstUnreadId]);
 
@@ -270,8 +270,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
         scrollToBottom(true);
         await onSendMessage(content, replyToId, isTTS, file);
         setReplyingTo(null);
-        setTimeout(() => scrollToBottom(true), 60);
-        setTimeout(() => scrollToBottom(true), 200);
+        requestAnimationFrame(() => scrollToBottom(false));
       }}
       onTyping={onTyping}
       onEditLastMessage={handleEditLastMessage}
@@ -302,6 +301,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
+            style={{ overflowAnchor: 'none' }}
             className="flex-1 overflow-y-auto px-2 md:px-4 py-3 chat-scrollbar"
           >
             {isLoadingMoreMessages && (
