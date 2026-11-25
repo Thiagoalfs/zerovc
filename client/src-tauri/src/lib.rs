@@ -111,7 +111,10 @@ pub fn run() {
     let nav_guard = tauri::plugin::Builder::<tauri::Wry, ()>::new("nav-guard")
         .on_navigation(|_webview, url| {
             let s = url.as_str();
-            if s == "about:blank" || s.starts_with("data:") || is_allowed_origin(s) {
+            let is_turnstile =
+                url.scheme() == "https" && url.host_str() == Some("challenges.cloudflare.com");
+            if s == "about:blank" || s.starts_with("data:") || is_allowed_origin(s) || is_turnstile
+            {
                 return true;
             }
             if matches!(url.scheme(), "http" | "https") {
