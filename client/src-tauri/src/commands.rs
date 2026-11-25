@@ -551,6 +551,43 @@ pub async fn set_splash_colors(
     Ok(())
 }
 
+#[tauri::command]
+pub fn start_turnstile_verification(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+    action: Option<String>,
+) -> Result<(), String> {
+    if let Ok(current_url) = window.url() {
+        if let Ok(mut guard) = state.turnstile_return_url.lock() {
+            *guard = Some(current_url.to_string());
+        }
+    }
+    let mut target = format!("{REMOTE_SERVER_URL}/api/auth/turnstile-widget?desktop=1");
+    if let Some(act) = action {
+        let clean: String = act
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+            .take(32)
+            .collect();
+        if !clean.is_empty() {
+            target.push_str(&format!("&action={clean}"));
+        }
+    }
+    let parsed = Url::parse(&target).map_err(|e| format!("Invalid URL: {e}"))?;
+    window
+        .navigate(parsed)
+        .map_err(|e| format!("Navigate failed: {e}"))
+}
+
+#[tauri::command]
+pub fn consume_turnstile_token(state: State<'_, AppState>) -> Option<String> {
+    state
+        .pending_turnstile_token
+        .lock()
+        .ok()
+        .and_then(|mut guard| guard.take())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -122,11 +122,12 @@ func (h *AuthHandler) GetTurnstileConfig(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// GetTurnstileWidget serves a minimal HTTPS page that renders Cloudflare Turnstile
-// on the official domain so desktop WebViews (e.g. tauri://localhost) can embed it
-// and receive the token via postMessage.
+// GetTurnstileWidget serves an HTTPS page that renders Cloudflare Turnstile
+// on the official domain. In desktop mode (?desktop=1), it renders a full-page
+// dark ZeroVC verification screen and redirects to /__turnstile_done?token=...
 func (h *AuthHandler) GetTurnstileWidget(w http.ResponseWriter, r *http.Request) {
 	siteKey := strings.TrimSpace(os.Getenv("TURNSTILE_SITE_KEY"))
+	isDesktop := r.URL.Query().Get("desktop") == "1"
 	rawAction := strings.TrimSpace(r.URL.Query().Get("action"))
 	var cleanAction strings.Builder
 	for _, ch := range rawAction {
@@ -140,30 +141,61 @@ func (h *AuthHandler) GetTurnstileWidget(w http.ResponseWriter, r *http.Request)
 
 	siteKeyJSON, _ := json.Marshal(siteKey)
 	actionJSON, _ := json.Marshal(cleanAction.String())
+	isDesktopJSON, _ := json.Marshal(isDesktop)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Security-Policy", "frame-ancestors https://zerovc.safiroko.xyz http://localhost:5173 http://tauri.localhost https://tauri.localhost tauri://localhost;")
+	if !isDesktop {
+		w.Header().Set("Content-Security-Policy", "frame-ancestors https://zerovc.safiroko.xyz http://localhost:5173 http://tauri.localhost https://tauri.localhost tauri://localhost;")
+	}
+
+	pageStyle := `html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; display: flex; justify-content: center; align-items: center; min-height: 68px; }`
+	cardStart := `<div id="cf-turnstile"></div>`
+	if isDesktop {
+		pageStyle = `
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #1e1f22; color: #f2f3f5; display: flex; align-items: center; justify-content: center; }
+    .card { width: 100%; max-width: 400px; padding: 28px 24px; border-radius: 12px; background: #2b2d31; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 16px 40px rgba(0,0,0,0.45); text-align: center; }
+    .title { font-size: 20px; font-weight: 700; margin: 0 0 6px; color: #fff; }
+    .subtitle { font-size: 13px; color: #b5bac1; margin: 0 0 20px; }
+    #cf-turnstile { display: flex; justify-content: center; min-height: 65px; }
+    .back { display: inline-block; margin-top: 18px; font-size: 13px; color: #949ba4; text-decoration: none; }
+    .back:hover { color: #dbdee1; text-decoration: underline; }
+    `
+		cardStart = `
+  <div class="card">
+    <h1 class="title">ZeroVC</h1>
+    <p class="subtitle">Confirme que você é humano para continuar</p>
+    <div id="cf-turnstile"></div>
+    <a class="back" href="/__turnstile_cancel">Voltar para o login</a>
+  </div>`
+	}
 
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; display: flex; justify-content: center; align-items: center; min-height: 68px; }
-  </style>
+  <style>%s</style>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 </head>
 <body>
-  <div id="cf-turnstile"></div>
+  %s
   <script>
     (function () {
       var siteKey = %s;
       var action = %s;
+      var isDesktop = %s;
       var widgetId = null;
 
       function notify(type, token) {
+        if (isDesktop) {
+          if (type === 'success' && token) {
+            window.location.href = '/__turnstile_done?token=' + encodeURIComponent(token);
+          }
+          return;
+        }
         if (window.parent && window.parent !== window) {
           window.parent.postMessage({ source: 'zerovc-turnstile', type: type, token: token || null }, '*');
         }
@@ -200,7 +232,7 @@ func (h *AuthHandler) GetTurnstileWidget(w http.ResponseWriter, r *http.Request)
     })();
   </script>
 </body>
-</html>`, string(siteKeyJSON), string(actionJSON))
+</html>`, pageStyle, cardStart, string(siteKeyJSON), string(actionJSON), string(isDesktopJSON))
 }
 
 func verifyTurnstileToken(token string, remoteIP string) bool {

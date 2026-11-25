@@ -11,8 +11,9 @@ import {
 import { UpdateInfo } from '../../types/electron';
 import { ZeroVCLogo } from '../Common/ZeroVCLogo';
 import { useGuildStore } from '../../stores/guildStore';
-import { formatAssetUrl } from '../../lib/api';
-import { isDesktop, getDesktopAPI } from '../../lib/platform';
+import { formatAssetUrl, getApiBaseUrl } from '../../lib/api';
+import { isDesktop, isTauri, getDesktopAPI } from '../../lib/platform';
+import pkg from '../../../package.json';
 
 interface RepoUpdateInfo {
   latestSha: string;
@@ -38,11 +39,16 @@ export const TitleBar: React.FC = () => {
   const [pendingVersion, setPendingVersion] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [initialServerTime, setInitialServerTime] = useState<string | null>(null);
+  const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string>(pkg.version);
+  const manualCheckRef = React.useRef(false);
+  const feedbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check server version for Live Sync
   const checkServerVersion = useCallback(async () => {
     try {
-      const res = await fetch('/api/version');
+      const baseUrl = getApiBaseUrl().replace(/\/+$/, '');
+      const res = await fetch(`${baseUrl}/api/version`);
       if (res.ok) {
         const data = await res.json();
         if (data.server_time) {
@@ -69,9 +75,13 @@ export const TitleBar: React.FC = () => {
     // Check initial maximized state
     desktopAPI?.isMaximized?.().then((max) => setIsMaximized(max)).catch(() => {});
 
-    // Live Server Sync check
+    // Live Server Sync check + initial binary update check
     checkServerVersion();
+    desktopAPI?.checkForUpdates?.();
     const interval = setInterval(checkServerVersion, 30000);
+    const binaryInterval = setInterval(() => {
+      desktopAPI?.checkForUpdates?.();
+    }, 30 * 60 * 1000);
 
     // Update binário disponível (verificação periódica): mostra o ícone de download.
     // NÃO baixa sozinho - o usuário clica para reiniciar e atualizar pelo splash.
@@ -80,14 +90,53 @@ export const TitleBar: React.FC = () => {
       setPendingVersion(info?.version ?? null);
     });
 
+    const showTransientFeedback = (msg: string) => {
+      setUpdateFeedback(msg);
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = setTimeout(() => setUpdateFeedback(null), 4000);
+    };
+
+    let unsubCheckResult: (() => void) | undefined;
+    if (isTauri()) {
+      void import('@tauri-apps/api/app').then(({ getVersion }) =>
+        getVersion().then((v) => {
+          if (v) setAppVersion(v);
+        })
+      ).catch(() => {});
+      void import('@tauri-apps/api/event').then(({ listen }) => {
+        listen<{ status: 'available' | 'up-to-date' | 'error'; version?: string }>(
+          'update-check-result',
+          (ev) => {
+            if (!manualCheckRef.current) return;
+            manualCheckRef.current = false;
+            if (ev.payload.status === 'available') {
+              setUpdateFeedback(null);
+            } else if (ev.payload.status === 'up-to-date') {
+              showTransientFeedback('Você está na versão mais recente');
+            } else {
+              showTransientFeedback('Falha ao verificar atualizações');
+            }
+          }
+        ).then((unsub) => {
+          unsubCheckResult = unsub;
+        });
+      });
+    }
+
     const unsubTrayCheck = desktopAPI?.onTrayCheckUpdates?.(() => {
+      manualCheckRef.current = true;
+      setUpdateFeedback('Verificando atualizações...');
+      desktopAPI?.checkForUpdates?.();
       void checkServerVersion();
     });
 
     return () => {
       clearInterval(interval);
+      clearInterval(binaryInterval);
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
       unsubAvailable?.();
       unsubTrayCheck?.();
+      unsubCheckResult?.();
     };
   }, [isElectron, checkServerVersion]);
 
@@ -170,7 +219,9 @@ export const TitleBar: React.FC = () => {
       {/* Left Branding / Title */}
       <div className="flex items-center gap-2 text-xs font-bold text-gray-300">
         <ZeroVCLogo className="w-4 h-4 shadow-sm flex-shrink-0" />
-        <span className="tracking-wide text-[11px] font-semibold text-gray-300">ZeroVC</span>
+        <span className="tracking-wide text-[11px] font-semibold text-gray-300">
+          ZeroVC <span className="text-gray-400 font-normal">(v{appVersion})</span>
+        </span>
       </div>
 
       {/* Center: Active Server Icon & Name */}
@@ -211,6 +262,12 @@ export const TitleBar: React.FC = () => {
 
         {isElectron && (
           <>
+            {updateFeedback && (
+              <span className="text-[11px] text-gray-300 bg-white/10 px-2.5 py-0.5 rounded-full mr-1.5 select-none">
+                {updateFeedback}
+              </span>
+            )}
+
             {/* Direct One-Click Update Button with FontAwesome Download Icon */}
             {webSyncAvailable && !binaryUpdateAvailable && (
               <button

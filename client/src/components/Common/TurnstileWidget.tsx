@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import { ShieldCheck, CheckCircle2, Loader2 } from 'lucide-react';
 import { isTauri } from '../../lib/platform';
 
 declare global {
@@ -39,12 +40,10 @@ interface TurnstileWidgetProps {
 export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetProps>(
   ({ siteKey: propSiteKey, onSuccess, onError, onExpire, action, className = '' }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const iframeRef = useRef<HTMLIFrameElement>(null);
     const widgetIdRef = useRef<string | null>(null);
     const tauriMode = isTauri();
-    const remoteOrigin = (
-      ((import.meta as any).env?.VITE_API_URL as string | undefined) || 'https://zerovc.safiroko.xyz'
-    ).replace(/\/+$/, '');
+    const [tauriToken, setTauriToken] = useState<string | null>(null);
+    const [tauriLaunching, setTauriLaunching] = useState(false);
 
     // Mantém referências estáveis para as callbacks para evitar recriar o widget a cada re-render do componente pai
     const onSuccessRef = useRef(onSuccess);
@@ -62,10 +61,8 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
     useImperativeHandle(ref, () => ({
       reset: () => {
         if (tauriMode) {
-          iframeRef.current?.contentWindow?.postMessage(
-            { source: 'zerovc-turnstile', type: 'reset' },
-            remoteOrigin
-          );
+          setTauriToken(null);
+          setTauriLaunching(false);
           return;
         }
         if (widgetIdRef.current && window.turnstile) {
@@ -74,31 +71,29 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
           } catch {}
         }
       },
-    }), [tauriMode, remoteOrigin]);
+    }), [tauriMode]);
 
+    // No Tauri desktop, consome o token pendente salvo pelo fluxo HTTPS ao retornar para o app local
     useEffect(() => {
       if (!siteKey || !tauriMode) return;
-
-      const handleMessage = (event: MessageEvent) => {
-        if (event.origin !== remoteOrigin) return;
-        const data = event.data;
-        if (!data || data.source !== 'zerovc-turnstile') return;
-
-        if (data.type === 'success' && typeof data.token === 'string') {
-          onSuccessRef.current(data.token);
-        } else if (data.type === 'error') {
-          onErrorRef.current?.();
-        } else if (data.type === 'expired') {
-          onExpireRef.current?.();
-        }
+      let cancelled = false;
+      (async () => {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const token = await invoke<string | null>('consume_turnstile_token');
+          if (!cancelled && token) {
+            setTauriToken(token);
+            onSuccessRef.current(token);
+          }
+        } catch {}
+      })();
+      return () => {
+        cancelled = true;
       };
-
-      window.addEventListener('message', handleMessage);
-      return () => window.removeEventListener('message', handleMessage);
-    }, [siteKey, tauriMode, remoteOrigin]);
+    }, [siteKey, tauriMode]);
 
     useEffect(() => {
-      // Se não há site key configurada no .env, não inicializa o widget
+      // Se não há site key configurada ou está no modo Tauri, não inicializa o script direto
       if (!siteKey || !containerRef.current || tauriMode) return;
 
       let isMounted = true;
@@ -178,17 +173,59 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
     }
 
     if (tauriMode) {
-      const widgetUrl = `${remoteOrigin}/api/auth/turnstile-widget${
-        action ? `?action=${encodeURIComponent(action)}` : ''
-      }`;
+      const handleVerifyClick = async () => {
+        if (tauriLaunching) return;
+        setTauriLaunching(true);
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('start_turnstile_verification', { action: action || null });
+        } catch {
+          setTauriLaunching(false);
+          onErrorRef.current?.();
+        }
+      };
+
+      if (tauriToken) {
+        return (
+          <div className={`my-3 ${className}`}>
+            <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm">
+              <span className="flex items-center gap-2 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                Verificação humana concluída
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setTauriToken(null);
+                  onExpireRef.current?.();
+                }}
+                className="text-xs text-emerald-300/80 hover:text-emerald-200 underline"
+              >
+                Refazer
+              </button>
+            </div>
+          </div>
+        );
+      }
+
       return (
-        <div className={`flex justify-center my-3 ${className}`}>
-          <iframe
-            ref={iframeRef}
-            src={widgetUrl}
-            title="Verificação de segurança"
-            className="w-[310px] h-[72px] border-0 overflow-hidden bg-transparent"
-          />
+        <div className={`my-3 ${className}`}>
+          <button
+            type="button"
+            onClick={handleVerifyClick}
+            disabled={tauriLaunching}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-[#1e1f22] border border-white/10 hover:border-indigo-500/50 hover:bg-[#232428] text-gray-200 text-sm transition-colors disabled:opacity-60"
+          >
+            <span className="flex items-center gap-2.5 font-medium">
+              {tauriLaunching ? (
+                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin shrink-0" />
+              ) : (
+                <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+              )}
+              {tauriLaunching ? 'Abrindo verificação...' : 'Verificar que você é humano'}
+            </span>
+            <span className="text-[11px] text-gray-400">Cloudflare</span>
+          </button>
         </div>
       );
     }

@@ -4,6 +4,9 @@ import { useAuthStore } from '../../stores/authStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { TurnstileWidget, TurnstileWidgetRef } from '../Common/TurnstileWidget';
 import { OtpInput } from '../ui/otp-input';
+import { isTauri } from '../../lib/platform';
+
+const AUTH_DRAFT_KEY = 'zerovc_tauri_auth_draft';
 
 type AuthMode = 'login' | 'register' | 'verify_email' | 'forgot_password' | 'reset_password';
 
@@ -13,11 +16,27 @@ interface AuthScreenProps {
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', onNavigate }) => {
-  const [mode, setMode] = useState<AuthMode>(initialMode);
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
+  const [draft] = useState<{ mode?: AuthMode; email?: string; username?: string } | null>(() => {
+    if (!isTauri()) return null;
+    try {
+      const raw = localStorage.getItem(AUTH_DRAFT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [mode, setMode] = useState<AuthMode>(draft?.mode || initialMode);
+  const [username, setUsername] = useState(draft?.username || '');
+  const [email, setEmail] = useState(draft?.email || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    try {
+      localStorage.setItem(AUTH_DRAFT_KEY, JSON.stringify({ mode, email, username }));
+    } catch {}
+  }, [mode, email, username]);
 
   // Turnstile state (lê via API /api/auth/turnstile-config com fallback para VITE_TURNSTILE_SITE_KEY)
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
@@ -262,6 +281,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         } else if (res?.requires_verification) {
           if (res.email) setEmail(res.email);
           setMode('verify_email');
+        } else {
+          try { localStorage.removeItem(AUTH_DRAFT_KEY); } catch {}
         }
       } catch {
         // Reset turnstile on failure to allow retry with fresh token
@@ -292,6 +313,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         if (res?.requires_verification) {
           if (res.email) setEmail(res.email);
           setMode('verify_email');
+        } else {
+          try { localStorage.removeItem(AUTH_DRAFT_KEY); } catch {}
         }
       } catch {
         // Reset turnstile on failure to allow retry with fresh token

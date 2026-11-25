@@ -156,6 +156,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), tauri::Error> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => restore_and_focus_main(app),
             "check-updates" => {
+                restore_and_focus_main(app);
                 let _ = app.emit("tray-check-updates", ());
             }
             "quit" => {

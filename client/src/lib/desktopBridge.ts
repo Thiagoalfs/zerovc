@@ -150,15 +150,29 @@ function createTauriBridge(): ElectronAPI {
       void import('@tauri-apps/plugin-updater')
         .then(({ check }) => check())
         .then(async (update) => {
+          const { emit } = await import('@tauri-apps/api/event');
           if (update) {
-            const { emit } = await import('@tauri-apps/api/event');
             await emit('update-available', {
               version: update.version,
               releaseNotes: update.body ?? undefined,
             } satisfies UpdateInfo);
+            await emit('update-check-result', {
+              status: 'available',
+              version: update.version,
+            });
+          } else {
+            await emit('update-check-result', {
+              status: 'up-to-date',
+            });
           }
         })
-        .catch(() => {});
+        .catch(async (err) => {
+          console.warn('[Updater] checkForUpdates failed:', err);
+          try {
+            const { emit } = await import('@tauri-apps/api/event');
+            await emit('update-check-result', { status: 'error' });
+          } catch {}
+        });
     },
 
     startDownloadUpdate: () => {

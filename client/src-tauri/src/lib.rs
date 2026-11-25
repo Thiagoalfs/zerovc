@@ -53,6 +53,8 @@ pub struct AppState {
     pub settings: Mutex<DesktopSettings>,
     pub registered_shortcuts: Mutex<HashMap<String, String>>,
     pub is_quitting: AtomicBool,
+    pub pending_turnstile_token: std::sync::Mutex<Option<String>>,
+    pub turnstile_return_url: std::sync::Mutex<Option<String>>,
 }
 
 fn settings_file_path(app: &AppHandle) -> Option<PathBuf> {
@@ -109,7 +111,47 @@ fn handle_deep_link_url(app: &AppHandle, raw_url: &str) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let nav_guard = tauri::plugin::Builder::<tauri::Wry, ()>::new("nav-guard")
-        .on_navigation(|_webview, url| {
+        .on_navigation(|webview, url| {
+            if url.scheme() == "https"
+                && url.host_str() == Some("zerovc.safiroko.xyz")
+                && (url.path() == "/__turnstile_done" || url.path() == "/__turnstile_cancel")
+            {
+                let token = if url.path() == "/__turnstile_done" {
+                    url.query_pairs()
+                        .find(|(k, _)| k == "token")
+                        .map(|(_, v)| v.into_owned())
+                        .filter(|t| !t.trim().is_empty())
+                } else {
+                    None
+                };
+                if let Some(state) = webview.app_handle().try_state::<AppState>() {
+                    if let Some(tok) = token {
+                        if let Ok(mut guard) = state.pending_turnstile_token.lock() {
+                            *guard = Some(tok);
+                        }
+                    }
+                    let fallback = if cfg!(debug_assertions) {
+                        "http://localhost:5173/"
+                    } else if cfg!(target_os = "windows") {
+                        "http://tauri.localhost/"
+                    } else {
+                        "tauri://localhost/"
+                    };
+                    let ret_str = state
+                        .turnstile_return_url
+                        .lock()
+                        .ok()
+                        .and_then(|mut g| g.take())
+                        .unwrap_or_else(|| fallback.to_string());
+                    if let Ok(ret_url) = Url::parse(&ret_str) {
+                        let wv = webview.clone();
+                        std::thread::spawn(move || {
+                            let _ = wv.navigate(ret_url);
+                        });
+                    }
+                }
+                return false;
+            }
             let s = url.as_str();
             let is_turnstile =
                 url.scheme() == "https" && url.host_str() == Some("challenges.cloudflare.com");
@@ -133,6 +175,8 @@ pub fn run() {
         settings: Mutex::new(DesktopSettings::default()),
         registered_shortcuts: Mutex::new(HashMap::new()),
         is_quitting: AtomicBool::new(false),
+        pending_turnstile_token: std::sync::Mutex::new(None),
+        turnstile_return_url: std::sync::Mutex::new(None),
     };
 
     tauri::Builder::default()
@@ -298,6 +342,8 @@ pub fn run() {
             commands::set_custom_streamer_processes,
             commands::get_streamer_software_status,
             commands::set_splash_colors,
+            commands::start_turnstile_verification,
+            commands::consume_turnstile_token,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ZeroVC Tauri application");
