@@ -43,7 +43,7 @@ jobs:
       - name: Build Native Audio Capture Sidecar (Windows)
         run: |
           New-Item -ItemType Directory -Force -Path client\native\bin | Out-Null
-          cl.exe /nologo /EHsc /O2 /std:c++17 /Fe:client\native\bin\zerovc-audio-capture.exe client\native\process_audio_capture.cpp /link ole32.lib mmdevapi.lib runtimeobject.lib
+          cl.exe /nologo /EHsc /O2 /std:c++17 /Fe:client\native\bin\zerovc-audio-capture.exe client\native\process_audio_capture.cpp /link ole32.lib mmdevapi.lib runtimeobject.lib user32.lib uuid.lib
 
       - name: Build Frontend
         working-directory: client

@@ -30,6 +30,7 @@ using namespace Microsoft::WRL;
 #define AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM 0x80000000
 #endif
 
+#if !defined(__audioclientactivationparams_h__)
 typedef enum PROCESS_LOOPBACK_MODE {
     PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE = 0,
     PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE = 1
@@ -51,6 +52,7 @@ typedef struct AUDIOCLIENT_ACTIVATION_PARAMS {
         AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS ProcessLoopbackParams;
     };
 } AUDIOCLIENT_ACTIVATION_PARAMS;
+#endif
 
 #ifndef __IActivateAudioInterfaceCompletionHandler_INTERFACE_DEFINED__
 #define __IActivateAudioInterfaceCompletionHandler_INTERFACE_DEFINED__
