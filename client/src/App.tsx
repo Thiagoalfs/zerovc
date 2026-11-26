@@ -631,7 +631,8 @@ export const App: React.FC = () => {
       segments[0] === 'download' ||
       segments[0] === 'reset-password' ||
       segments[0] === 'forgot-password' ||
-      segments[0] === 'verify-email'
+      segments[0] === 'verify-email' ||
+      segments[0] === 'desktop-auth'
     ) {
       return;
     }
@@ -1339,7 +1340,8 @@ export const App: React.FC = () => {
         if (
           curBase !== 'reset-password' &&
           curBase !== 'forgot-password' &&
-          curBase !== 'verify-email'
+          curBase !== 'verify-email' &&
+          curBase !== 'desktop-auth'
         ) {
           if (
             curBase === '' ||
