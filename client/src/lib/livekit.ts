@@ -22,6 +22,7 @@ import {
 } from './audioProcessor';
 import { GameFamily, GAME_FAMILIES, matchWindowToGameFamily, findBestSourceForGameFamily } from '../utils/gameFamilyManager';
 import { isTauri, desktopBridge, getDesktopAPI } from './platform';
+import { rustMediaAdapter } from './rustMediaAdapter';
 
 export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'unknown';
 
@@ -285,6 +286,9 @@ class LiveKitManager {
   private activityListenerUnsubscribe?: () => void;
 
   getRoom(): Room | null {
+    if (isTauri()) {
+      return rustMediaAdapter.getRoomStub() as unknown as Room | null;
+    }
     return this.room;
   }
 
@@ -292,7 +296,18 @@ class LiveKitManager {
     return this.isNativeScreenSharing ? this.nativePreviewInfo : null;
   }
 
+  getRustVideoStreamInfo(
+    identity: string,
+    source: 'camera' | 'screen_share'
+  ): { url: string } | null {
+    if (!isTauri()) return null;
+    return rustMediaAdapter.getVideoStreamInfo(identity, source);
+  }
+
   getVisibleParticipants(): Participant[] {
+    if (isTauri()) {
+      return rustMediaAdapter.getVisibleParticipants();
+    }
     if (!this.room) return [];
     const sidecarByOwner = new Map<string, Participant>();
     const visibleRemotes: Participant[] = [];
@@ -368,7 +383,7 @@ class LiveKitManager {
     },
     e2eeOptions?: E2EEOptions
   ) {
-    if (this.room) {
+    if (this.room || (isTauri() && rustMediaAdapter.isConnected())) {
       await this.disconnect();
     }
 
@@ -382,6 +397,33 @@ class LiveKitManager {
     this.onTrackUpdated = callbacks.onTrackUpdated;
     this.onScreenShareEnded = callbacks.onScreenShareEnded;
     this.onDisconnected = callbacks.onDisconnected;
+
+    if (isTauri()) {
+      const audioConfig = this.readStoredAudioConfig();
+      const inputDeviceId =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('zerovc_audio_input_device') || null
+          : null;
+      const outputDeviceId =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('zerovc_audio_output_device') || null
+          : null;
+
+      await rustMediaAdapter.connect({
+        url,
+        token,
+        autoEnableMic: callbacks.autoEnableMicrophone !== false,
+        isE2ee: Boolean(e2eeOptions),
+        audioConfig,
+        inputDeviceId,
+        outputDeviceId,
+        callbacks,
+      });
+
+      void rustMediaAdapter.setOutputVolume(Math.round(this.masterOutputVolume * 100)).catch(() => {});
+      void rustMediaAdapter.setInputVolume(Math.round(this.masterInputVolume * 100)).catch(() => {});
+      return this.getRoom() as Room;
+    }
 
     const room = new Room({
       adaptiveStream: false,
@@ -765,6 +807,14 @@ class LiveKitManager {
   }
 
   async updateMicrophoneConfig(partial: Partial<AudioProcessorConfig>) {
+    if (isTauri()) {
+      const merged: AudioProcessorConfig = {
+        ...this.readStoredAudioConfig(),
+        ...partial,
+      };
+      await rustMediaAdapter.updateMicrophoneConfig(merged);
+      return;
+    }
     this.callAudioProcessor.updateConfig(partial);
     const needsHardwareReacquire =
       partial.echoCancellation !== undefined ||
@@ -782,6 +832,10 @@ class LiveKitManager {
   }
 
   async setMicrophoneEnabled(enabled: boolean) {
+    if (isTauri()) {
+      await rustMediaAdapter.setMicrophoneEnabled(enabled);
+      return;
+    }
     if (!this.room) return;
     if (enabled) {
       await this.enableProcessedMicrophone(this.room);
@@ -801,6 +855,10 @@ class LiveKitManager {
   }
 
   async setMuted(muted: boolean) {
+    if (isTauri()) {
+      await rustMediaAdapter.setMuted(muted);
+      return;
+    }
     if (!this.room) return;
     const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
     if (micPub) {
@@ -832,6 +890,10 @@ class LiveKitManager {
   async setDeafened(deafened: boolean) {
     const changed = this.isDeafened !== deafened;
     this.isDeafened = deafened;
+    if (isTauri()) {
+      await rustMediaAdapter.setDeafened(deafened);
+      return;
+    }
     if (this.room) {
       // Deafen only mutes voice audio from participants; screen share audio stays audible
       this.attachedUserAudioElements.forEach((el) => {
@@ -991,7 +1053,7 @@ class LiveKitManager {
     config?: { resolution?: '480p' | '720p' | '1080p'; fps?: 15 | 30 | 60; includeAudio?: boolean },
     gameFamily?: GameFamily | string
   ): Promise<boolean> {
-    if (!this.room) return false;
+    if (!this.getRoom()) return false;
 
     if (enabled) {
       const res = config?.resolution || '720p';
@@ -1071,7 +1133,6 @@ class LiveKitManager {
 
       if (
         resolvedSourceId &&
-        !this.currentE2EEOptions &&
         this.currentLivekitUrl &&
         this.currentScreenshareToken &&
         desktopAPI?.startNativeScreenShare
@@ -1080,10 +1141,11 @@ class LiveKitManager {
         const nativeIncludeAudio = config?.includeAudio !== false;
 
         // 1. Try Native Rust Sidecar first (bypasses Chromium capture/encode lag & keeps self-audio exclusion)
-        // shortcut: E2EE rooms use per-participant ratcheting keys in callKeyManager, so they keep the Chromium E2EE worker until ratcheting key export is wired to the sidecar.
         try {
           // Stop any active Chromium screen share tracks before starting native sidecar
-          await this.room.localParticipant.setScreenShareEnabled(false);
+          if (this.room) {
+            await this.room.localParticipant.setScreenShareEnabled(false);
+          }
           await processAudioBridge.stopCapture();
 
           this.nativePreviewInfo = null;
@@ -1100,6 +1162,9 @@ class LiveKitManager {
             } else if (ev?.event === 'stopped' && this.isNativeScreenSharing) {
               this.isNativeScreenSharing = false;
               this.nativePreviewInfo = null;
+              if (isTauri()) {
+                rustMediaAdapter.setLocalNativeScreenSharing(false);
+              }
               this.onScreenShareEnded?.();
             }
           });
@@ -1113,10 +1178,14 @@ class LiveKitManager {
             fps: frameRate,
             bitrate: maxBitrate,
             includeAudio: nativeIncludeAudio,
+            e2ee: Boolean(this.currentE2EEOptions),
           });
 
           if (nativeRes?.success) {
             this.isNativeScreenSharing = true;
+            if (isTauri()) {
+              rustMediaAdapter.setLocalNativeScreenSharing(true);
+            }
             this.onTrackUpdated?.();
             return true;
           }
@@ -1130,6 +1199,10 @@ class LiveKitManager {
         } catch (nativeErr) {
           console.warn('[LiveKit] Native Rust screenshare failed, falling back to WebRTC:', nativeErr);
         }
+      }
+
+      if (!this.room) {
+        return false;
       }
 
       if (resolvedSourceId && resolvedSourceId !== 'screen:wayland-portal' && desktopAPI) {
@@ -1317,21 +1390,26 @@ class LiveKitManager {
         this.nativePreviewInfo = null;
         this.nativeScreenShareUnsubscribe?.();
         this.nativeScreenShareUnsubscribe = undefined;
+        if (isTauri()) {
+          rustMediaAdapter.setLocalNativeScreenSharing(false);
+        }
         await getDesktopAPI()?.stopNativeScreenShare?.().catch(() => {});
       }
 
-      await this.room.localParticipant.setScreenShareEnabled(false);
-      const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
-      if (screenPub && screenPub.track) {
-        try { screenPub.track.stop(); } catch {}
-        this.room.localParticipant.unpublishTrack(screenPub.track);
-      }
+      if (this.room) {
+        await this.room.localParticipant.setScreenShareEnabled(false);
+        const screenPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+        if (screenPub && screenPub.track) {
+          try { screenPub.track.stop(); } catch {}
+          this.room.localParticipant.unpublishTrack(screenPub.track);
+        }
 
-      // Limpa também a track de áudio do sistema, se estiver publicada.
-      const screenAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
-      if (screenAudioPub && screenAudioPub.track) {
-        try { screenAudioPub.track.stop(); } catch {}
-        this.room.localParticipant.unpublishTrack(screenAudioPub.track);
+        // Limpa também a track de áudio do sistema, se estiver publicada.
+        const screenAudioPub = this.room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+        if (screenAudioPub && screenAudioPub.track) {
+          try { screenAudioPub.track.stop(); } catch {}
+          this.room.localParticipant.unpublishTrack(screenAudioPub.track);
+        }
       }
 
       void processAudioBridge.stopCapture();
@@ -1680,8 +1758,13 @@ class LiveKitManager {
   }
 
   async setCameraEnabled(enabled: boolean) {
-    if (!this.room) return;
     const devId = typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_video_device') || undefined : undefined;
+    if (isTauri()) {
+      await rustMediaAdapter.setCameraEnabled(enabled, devId ?? null);
+      this.onTrackUpdated?.();
+      return;
+    }
+    if (!this.room) return;
     await this.room.localParticipant.setCameraEnabled(enabled, devId ? { deviceId: { exact: devId } } : undefined);
     this.onTrackUpdated?.();
   }
@@ -1691,7 +1774,12 @@ class LiveKitManager {
       /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor !== undefined))
     );
-    if (!this.room || isMobile) return;
+    if (isMobile) return;
+    if (isTauri()) {
+      await rustMediaAdapter.setAudioInputDevice(deviceId);
+      return;
+    }
+    if (!this.room) return;
     const micPub = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
     if (micPub) {
       await this.enableProcessedMicrophone(this.room, deviceId);
@@ -1706,14 +1794,16 @@ class LiveKitManager {
     this.currentOutputDeviceId = deviceId;
     if (isMobile) return;
 
+    if (isTauri()) {
+      await rustMediaAdapter.setAudioOutputDevice(deviceId);
+      return;
+    }
+
     const supportsSetSinkId =
       typeof HTMLMediaElement !== 'undefined' &&
       'setSinkId' in HTMLMediaElement.prototype;
 
     if (!supportsSetSinkId) {
-      if (isTauri()) {
-        await desktopBridge.setAudioOutputDevice?.(deviceId);
-      }
       return;
     }
 
@@ -1727,6 +1817,10 @@ class LiveKitManager {
   }
 
   async setVideoInputDevice(deviceId: string) {
+    if (isTauri()) {
+      await rustMediaAdapter.setVideoInputDevice(deviceId);
+      return;
+    }
     if (!this.room) return;
     await this.room.switchActiveDevice('videoinput', deviceId);
   }
@@ -1741,6 +1835,11 @@ class LiveKitManager {
       existing[participantIdentity] = volume;
       localStorage.setItem('zerovc_user_volumes', JSON.stringify(existing));
     } catch {}
+
+    if (isTauri()) {
+      void rustMediaAdapter.setUserVolume(participantIdentity, volume);
+      return;
+    }
 
     // Adjust user audio elements (microphone)
     this.attachedUserAudioElements.forEach((el, key) => {
@@ -1780,6 +1879,11 @@ class LiveKitManager {
       localStorage.setItem('zerovc_stream_volumes', JSON.stringify(existing));
     } catch {}
 
+    if (isTauri()) {
+      void rustMediaAdapter.setStreamVolume(participantIdentity, volume);
+      return;
+    }
+
     // Adjust screen share audio elements
     this.attachedStreamAudioElements.forEach((el, key) => {
       if (key.includes(participantIdentity) || el.id.includes(participantIdentity)) {
@@ -1813,6 +1917,10 @@ class LiveKitManager {
 
   setOutputVolume(volume: number) {
     this.masterOutputVolume = Math.max(0, Math.min(100, volume)) / 100;
+    if (isTauri()) {
+      void rustMediaAdapter.setOutputVolume(volume);
+      return;
+    }
 
     // Adjust user audio elements
     this.attachedUserAudioElements.forEach((el, key) => {
@@ -1862,6 +1970,10 @@ class LiveKitManager {
 
   setInputVolume(volume: number) {
     this.masterInputVolume = Math.max(0, Math.min(100, volume)) / 100;
+    if (isTauri()) {
+      void rustMediaAdapter.setInputVolume(volume);
+      return;
+    }
     try {
       this.callAudioProcessor.updateConfig({ volume });
       audioProcessor.updateConfig({ volume });
@@ -1875,6 +1987,16 @@ class LiveKitManager {
   setStreamSubscribed(participantIdentity: string, subscribed: boolean) {
     if (subscribed) {
       this.watchedParticipantIdentities.add(participantIdentity);
+    } else {
+      this.watchedParticipantIdentities.delete(participantIdentity);
+    }
+
+    if (isTauri()) {
+      void rustMediaAdapter.setStreamSubscribed(participantIdentity, subscribed);
+      return;
+    }
+
+    if (subscribed) {
       if (!this.isDeafened) {
         // Unlock browser WebAudio & HTML5 autoplay on the "Watch stream" user gesture
         if (this.audioContext && this.audioContext.state === 'suspended') {
@@ -1882,8 +2004,6 @@ class LiveKitManager {
         }
         void this.room?.startAudio().catch(() => {});
       }
-    } else {
-      this.watchedParticipantIdentities.delete(participantIdentity);
     }
 
     // 1. Mute or unmute all stream audio elements for this participant
@@ -1975,6 +2095,9 @@ class LiveKitManager {
     videoBitrateKbps: number;
     codec: string;
   }> {
+    if (isTauri()) {
+      return rustMediaAdapter.getDiagnosticStats();
+    }
     if (!this.room || this.room.state !== 'connected') {
       return {
         isConnected: false,
@@ -2108,6 +2231,11 @@ class LiveKitManager {
     this.prevAudioOutbound = null;
     this.lastAudioBitrateKbps = 0;
     this.watchedParticipantIdentities.clear();
+    this.stopGameFamilyWindowWatcher();
+    this.activeGameFamily = null;
+    this.currentScreenShareSourceId = null;
+    this.currentScreenShareConfig = undefined;
+    this.isGameFamilyTransitioning = false;
     this.attachedAudioElements.forEach((el) => el.remove());
     this.attachedAudioElements.clear();
     this.attachedUserAudioElements.clear();
@@ -2117,10 +2245,20 @@ class LiveKitManager {
       this.nativePreviewInfo = null;
       this.nativeScreenShareUnsubscribe?.();
       this.nativeScreenShareUnsubscribe = undefined;
+      if (isTauri()) {
+        rustMediaAdapter.setLocalNativeScreenSharing(false);
+      }
       void getDesktopAPI()?.stopNativeScreenShare?.();
     }
     this.currentLivekitUrl = null;
     this.currentScreenshareToken = null;
+    this.currentE2EEOptions = undefined;
+
+    if (isTauri()) {
+      await rustMediaAdapter.disconnect();
+      return;
+    }
+
     void processAudioBridge.stopCapture();
     void this.setCallAudioRoutingForCapture(false);
     this.callAudioProcessor.cleanup();
@@ -2147,7 +2285,6 @@ class LiveKitManager {
       } catch {}
     });
     this.activeMediaStreamTracks.clear();
-    this.currentE2EEOptions = undefined;
 
     if (oldRoom) {
       // Bound teardown so a dead/lossy previous socket never stalls joining the next call
@@ -2171,6 +2308,8 @@ export function prewarmVoiceEngine(): void {
 
   // 1. Prewarm GPU Detection in background
   void detectGpuVendor();
+
+  if (isTauri()) return;
 
   // 2. Prewarm WebRTC STUN & ICE candidate pool
   livekit.prewarmWebRTC();

@@ -95,6 +95,15 @@ pub async fn set_auth_token(
 }
 
 #[tauri::command]
+pub async fn get_proxy_url(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    Ok(state
+        .auth_vault
+        .proxy_addr()
+        .await
+        .map(|addr| format!("http://{addr}")))
+}
+
+#[tauri::command]
 pub async fn get_screen_sources(opts: Option<ScreenSourcesOptions>) -> Vec<ScreenSource> {
     ss_get_sources(opts).await
 }
@@ -405,7 +414,11 @@ pub async fn start_native_screenshare(
     state: State<'_, AppState>,
     options: NativeScreenShareOptions,
 ) -> Result<NativeScreenShareResult, String> {
-    Ok(ss_start(&app, state.screenshare_state.clone(), options).await)
+    let res = ss_start(&app, state.screenshare_state.clone(), options).await;
+    if res.success {
+        state.media_bridge.sync_e2ee_key_to_screenshare().await;
+    }
+    Ok(res)
 }
 
 #[tauri::command]
@@ -740,6 +753,206 @@ pub async fn start_desktop_browser_login(
     });
 
     open_url_with_os(target.as_str())
+}
+
+#[tauri::command]
+pub async fn set_audio_output_device(device_id: String) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        if !device_id.is_empty() && device_id != "default" {
+            let _ = crate::audio::set_default_audio_sink(&device_id).await;
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = device_id;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn log_frontend_error(tag: String, message: String) {
+    eprintln!("[Frontend:{tag}] {message}");
+}
+
+#[tauri::command]
+pub async fn media_connect(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    url: String,
+    token: String,
+    auto_enable_mic: bool,
+    is_e2ee: bool,
+    audio_config: crate::media_audio_in::AudioInputConfig,
+    input_device_id: Option<String>,
+    output_device_id: Option<String>,
+) -> Result<crate::media_bridge::BridgeConnectResult, String> {
+    state
+        .media_bridge
+        .connect(
+            app,
+            url,
+            token,
+            auto_enable_mic,
+            is_e2ee,
+            audio_config,
+            input_device_id,
+            output_device_id,
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn media_disconnect(state: State<'_, AppState>) -> Result<(), String> {
+    state.media_bridge.disconnect().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn media_set_muted(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    muted: bool,
+) -> Result<(), String> {
+    state.media_bridge.set_muted(&app, muted).await
+}
+
+#[tauri::command]
+pub async fn media_set_deafened(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    deafened: bool,
+) -> Result<(), String> {
+    state.media_bridge.set_deafened(&app, deafened).await
+}
+
+#[tauri::command]
+pub async fn media_set_camera_enabled(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+    device_id: Option<String>,
+) -> Result<(), String> {
+    state
+        .media_bridge
+        .set_camera_enabled(&app, enabled, device_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn media_set_user_volume(
+    state: State<'_, AppState>,
+    identity: String,
+    volume: f32,
+) -> Result<(), String> {
+    state.media_bridge.set_user_volume(identity, volume).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn media_set_stream_volume(
+    state: State<'_, AppState>,
+    identity: String,
+    volume: f32,
+) -> Result<(), String> {
+    state.media_bridge.set_stream_volume(identity, volume).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn media_set_output_volume(
+    state: State<'_, AppState>,
+    volume: f32,
+) -> Result<(), String> {
+    state.media_bridge.set_output_volume(volume).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn media_set_input_volume(
+    state: State<'_, AppState>,
+    volume: f32,
+) -> Result<(), String> {
+    state.media_bridge.set_input_volume(volume).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn media_set_stream_subscribed(
+    state: State<'_, AppState>,
+    identity: String,
+    subscribed: bool,
+) -> Result<(), String> {
+    state
+        .media_bridge
+        .set_stream_subscribed(identity, subscribed)
+        .await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn media_update_mic_config(
+    state: State<'_, AppState>,
+    config: crate::media_audio_in::AudioInputConfig,
+) -> Result<(), String> {
+    state.media_bridge.update_mic_config(config).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn media_set_input_device(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    device_id: String,
+) -> Result<(), String> {
+    state.media_bridge.set_input_device(&app, device_id).await
+}
+
+#[tauri::command]
+pub async fn media_set_output_device(
+    state: State<'_, AppState>,
+    device_id: String,
+) -> Result<(), String> {
+    state.media_bridge.set_output_device(device_id).await
+}
+
+#[tauri::command]
+pub async fn media_set_video_device(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    device_id: String,
+) -> Result<(), String> {
+    state.media_bridge.set_video_device(&app, device_id).await
+}
+
+#[tauri::command]
+pub fn media_list_devices() -> Vec<crate::media_audio_out::AudioDeviceInfo> {
+    crate::media_bridge::MediaBridge::list_devices()
+}
+
+#[tauri::command]
+pub async fn media_set_e2ee_key(
+    state: State<'_, AppState>,
+    key_base64: String,
+) -> Result<(), String> {
+    state.media_bridge.set_e2ee_key(key_base64).await
+}
+
+#[tauri::command]
+pub async fn media_ratchet_e2ee_key(
+    state: State<'_, AppState>,
+    identity: Option<String>,
+    key_index: Option<i32>,
+) -> Result<(), String> {
+    state
+        .media_bridge
+        .ratchet_e2ee_key(identity, key_index)
+        .await
+}
+
+#[tauri::command]
+pub async fn media_get_diagnostic_stats(
+    state: State<'_, AppState>,
+) -> Result<crate::media_bridge::BridgeDiagnosticStats, String> {
+    Ok(state.media_bridge.get_diagnostic_stats().await)
 }
 
 #[cfg(test)]

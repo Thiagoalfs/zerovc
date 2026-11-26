@@ -37,6 +37,7 @@ import { useFriendStore } from '../../stores/friendStore';
 import { User, Permissions } from '../../types';
 import { api, formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
+import { renderI420StreamToCanvas } from '../../lib/rustMediaAdapter';
 import { getDominantColorFromImage, generateColorFromName } from '../../lib/colorExtractor';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { UserVolumeSlider, StreamVolumeSlider } from './VolumeSliders';
@@ -95,6 +96,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraRef = useRef<HTMLVideoElement | null>(null);
   const localPreviewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rustScreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rustCameraCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const fullscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -102,6 +105,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [dominantBg, setDominantBg] = useState<string>('#2b2d31');
   const [hasNativePreviewFrame, setHasNativePreviewFrame] = useState(false);
+  const [hasRustScreenFrame, setHasRustScreenFrame] = useState(false);
+  const [hasRustCameraFrame, setHasRustCameraFrame] = useState(false);
   const [, setTrackUpdateTick] = useState(0);
 
   // Re-render immediately when LiveKit participant track status changes
@@ -274,8 +279,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
   const isScreenSharing = participant.isScreenShareEnabled || !!screenPub;
   const isCameraEnabled = participant.isCameraEnabled || (!!cameraPub?.track && !cameraPub.isMuted);
+  const rustScreenStream = livekit.getRustVideoStreamInfo(participant.identity, 'screen_share');
+  const rustCameraStream = livekit.getRustVideoStreamInfo(participant.identity, 'camera');
   const hasScreenVideoTrack = !!screenPub?.track && !screenPub.isMuted;
-  const hasCameraVideoTrack = !!cameraPub?.track && !cameraPub.isMuted;
+  const hasCameraVideoTrack =
+    (!!cameraPub?.track && !cameraPub.isMuted) || Boolean(rustCameraStream && isCameraEnabled);
 
   const currentUVol = userVolumes[participant.identity] ?? 1;
   const currentSVol = streamVolumes[participant.identity] ?? 1;
@@ -325,6 +333,12 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
   const isLocalPreviewPaused = isLocal && isScreenSharing && !isAppFocused;
   const nativePreview = isLocal ? livekit.getNativePreviewInfo() : null;
   const useLocalNativePreview = Boolean(nativePreview && isLocal && isScreenSharing);
+  const useRustScreenStream = Boolean(
+    rustScreenStream && isScreenSharing && isWatching && !useLocalNativePreview && !isLocalPreviewPaused
+  );
+  const useRustCameraStream = Boolean(
+    rustCameraStream && isCameraEnabled && !(isScreenSharing && isWatching)
+  );
 
   // Local OBS-style lossless I420 preview directly from the native sidecar (zero server download)
   useEffect(() => {
@@ -425,6 +439,46 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
     isLocalPreviewPaused,
   ]);
 
+  // Rust Media Bridge I420 Screen Share stream (WebGL shader with 2D VideoFrame fallback)
+  useEffect(() => {
+    if (!useRustScreenStream || !rustScreenStream?.url) {
+      setHasRustScreenFrame(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    void renderI420StreamToCanvas(
+      rustScreenStream.url,
+      () => fullscreenCanvasRef.current || rustScreenCanvasRef.current,
+      controller.signal,
+      () => setHasRustScreenFrame(true)
+    );
+
+    return () => {
+      controller.abort();
+    };
+  }, [useRustScreenStream, rustScreenStream?.url]);
+
+  // Rust Media Bridge I420 Camera stream (WebGL shader with 2D VideoFrame fallback)
+  useEffect(() => {
+    if (!useRustCameraStream || !rustCameraStream?.url) {
+      setHasRustCameraFrame(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    void renderI420StreamToCanvas(
+      rustCameraStream.url,
+      () => fullscreenCanvasRef.current || rustCameraCanvasRef.current,
+      controller.signal,
+      () => setHasRustCameraFrame(true)
+    );
+
+    return () => {
+      controller.abort();
+    };
+  }, [useRustCameraStream, rustCameraStream?.url]);
+
   // Helper to safely attach track to HTMLVideoElement
   const attachVideoTrack = (el: HTMLVideoElement | null, track: any) => {
     if (!el || !track) return;
@@ -443,8 +497,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
   // Handle Screen Share video track attachment and LiveKit subscription
   useEffect(() => {
-    if (useLocalNativePreview) {
-      if (screenPub instanceof RemoteTrackPublication) {
+    if (useLocalNativePreview || rustScreenStream) {
+      if (useLocalNativePreview && screenPub instanceof RemoteTrackPublication) {
         try {
           screenPub.setSubscribed(false);
         } catch {}
@@ -478,6 +532,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
 
   // Handle Camera track attachment
   useEffect(() => {
+    if (rustCameraStream) return;
     const el = cameraRef.current;
     if (hasCameraVideoTrack && cameraPub?.track && el) {
       attachVideoTrack(el, cameraPub.track);
@@ -687,6 +742,21 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
                     </div>
                   )}
                 </>
+              ) : rustScreenStream ? (
+                <>
+                  <canvas
+                    ref={rustScreenCanvasRef}
+                    className={`w-full h-full object-contain bg-black transition-opacity duration-200 ${
+                      hasRustScreenFrame ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'
+                    }`}
+                  />
+                  {!hasRustScreenFrame && (
+                    <div className="flex flex-col items-center justify-center gap-2.5 p-4 text-center">
+                      <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-medium text-gray-300">Carregando transmissão...</span>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <video
@@ -711,18 +781,27 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
         ) : hasCameraVideoTrack ? (
           /* 2. WebCam Video Stream */
           <>
-            <video
-              ref={(el) => {
-                cameraRef.current = el;
-                if (el && cameraPub?.track && !cameraPub.isMuted) {
-                  attachVideoTrack(el, cameraPub.track);
-                }
-              }}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover bg-black"
-            />
+            {rustCameraStream ? (
+              <canvas
+                ref={rustCameraCanvasRef}
+                className={`w-full h-full object-cover bg-black transition-opacity duration-200 ${
+                  hasRustCameraFrame ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+            ) : (
+              <video
+                ref={(el) => {
+                  cameraRef.current = el;
+                  if (el && cameraPub?.track && !cameraPub.isMuted) {
+                    attachVideoTrack(el, cameraPub.track);
+                  }
+                }}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover bg-black"
+              />
+            )}
             <div className={`absolute ${isCompact ? 'top-1 right-1' : 'top-3 right-3'} p-1 rounded-lg bg-black/60 backdrop-blur-sm text-brand-400 z-10`}>
               <Video className={isCompact ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'} />
             </div>
@@ -885,7 +964,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({
               areFullscreenControlsVisible ? 'cursor-default' : 'cursor-none'
             }`}
           >
-            {useLocalNativePreview ? (
+            {useLocalNativePreview || useRustScreenStream || useRustCameraStream ? (
               <canvas
                 ref={fullscreenCanvasRef}
                 onContextMenu={handleContextMenu}

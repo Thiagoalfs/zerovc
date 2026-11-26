@@ -16,10 +16,29 @@ use livekit::webrtc::audio_source::AudioSourceOptions;
 use livekit::webrtc::prelude::RtcAudioSource;
 use livekit::webrtc::video_source::native::NativeVideoSource;
 use livekit::webrtc::video_source::{RtcVideoSource, VideoResolution};
+use serde::Deserialize;
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum StdinCommand {
+    SetE2eeKey { key: String },
+    RatchetE2eeKey,
+    Stop,
+}
+
+fn build_key_provider_options() -> KeyProviderOptions {
+    KeyProviderOptions {
+        ratchet_salt: b"LK_RATCHET_SALT_V1".to_vec(),
+        ratchet_window_size: 16,
+        failure_tolerance: -1,
+        key_ring_size: 16,
+        ..Default::default()
+    }
+}
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "zerovc-screenshare")]
@@ -64,6 +83,10 @@ pub struct Args {
     #[arg(long)]
     pub audio_helper: Option<String>,
 
+    /// Enable E2EE on the LiveKit room (key is delivered via stdin)
+    #[arg(long, default_value_t = false)]
+    pub e2ee: bool,
+
     /// Optional base64-encoded E2EE shared key for encrypted rooms
     #[arg(long)]
     pub e2ee_key: Option<String>,
@@ -96,20 +119,29 @@ async fn main() {
     if let Some(ref b64_key) = args.e2ee_key {
         if !b64_key.trim().is_empty() {
             match base64::engine::general_purpose::STANDARD.decode(b64_key.trim()) {
-                Ok(key_bytes) if !key_bytes.is_empty() => {
-                    let kp = KeyProvider::with_shared_key(KeyProviderOptions::default(), key_bytes);
+                Ok(key_bytes) if key_bytes.len() == 32 => {
+                    let kp = KeyProvider::with_shared_key(build_key_provider_options(), key_bytes);
                     room_opts.encryption = Some(E2eeOptions {
                         encryption_type: livekit::e2ee::EncryptionType::Gcm,
                         key_provider: kp,
                     });
                 }
-                Ok(_) => {}
+                Ok(_) => {
+                    emit_event("error", json!({ "message": "Invalid E2EE key length: expected 32 bytes" }));
+                    std::process::exit(1);
+                }
                 Err(err) => {
                     emit_event("error", json!({ "message": format!("Invalid E2EE key: {}", err) }));
                     std::process::exit(1);
                 }
             }
         }
+    } else if args.e2ee {
+        let kp = KeyProvider::with_shared_key(build_key_provider_options(), Vec::new());
+        room_opts.encryption = Some(E2eeOptions {
+            encryption_type: livekit::e2ee::EncryptionType::Gcm,
+            key_provider: kp,
+        });
     }
 
     // 1. Start platform-specific video capture FIRST so OS pickers (e.g. KDE Wayland portal)
@@ -267,13 +299,61 @@ async fn main() {
         }),
     );
 
-    // 5. Listen for "stop" on stdin, EOF (parent died), Ctrl+C, or RoomDisconnected
+    // 5. Listen for stdin commands ("stop", set_e2ee_key, ratchet_e2ee_key), EOF, Ctrl+C, or RoomDisconnected
     let stdin_stop = stop_flag.clone();
+    let e2ee_manager = room.e2ee_manager().clone();
     let stdin_task = tokio::spawn(async move {
         let mut lines = BufReader::new(tokio::io::stdin()).lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            if line.trim().eq_ignore_ascii_case("stop") {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if trimmed.eq_ignore_ascii_case("stop") {
                 break;
+            }
+            match serde_json::from_str::<StdinCommand>(trimmed) {
+                Ok(StdinCommand::Stop) => break,
+                Ok(StdinCommand::SetE2eeKey { key }) => {
+                    match base64::engine::general_purpose::STANDARD.decode(key.trim()) {
+                        Ok(key_bytes) if key_bytes.len() == 32 => {
+                            if let Some(kp) = e2ee_manager.key_provider() {
+                                kp.set_shared_key(key_bytes, 0);
+                                if !e2ee_manager.enabled() {
+                                    e2ee_manager.set_enabled(true);
+                                }
+                            } else {
+                                emit_event(
+                                    "e2ee_warning",
+                                    json!({ "message": "Received E2EE key, but room was not initialized with --e2ee" }),
+                                );
+                            }
+                        }
+                        Ok(key_bytes) => {
+                            emit_event(
+                                "e2ee_warning",
+                                json!({ "message": format!("Invalid E2EE key length: expected 32 bytes, got {}", key_bytes.len()) }),
+                            );
+                        }
+                        Err(err) => {
+                            emit_event(
+                                "e2ee_warning",
+                                json!({ "message": format!("Invalid E2EE key base64: {}", err) }),
+                            );
+                        }
+                    }
+                }
+                Ok(StdinCommand::RatchetE2eeKey) => {
+                    if let Some(kp) = e2ee_manager.key_provider() {
+                        kp.ratchet_shared_key(0);
+                    } else {
+                        emit_event(
+                            "e2ee_warning",
+                            json!({ "message": "Received ratchet_e2ee_key, but room was not initialized with --e2ee" }),
+                        );
+                    }
+                }
+                Err(_) => {}
             }
         }
         stdin_stop.store(true, Ordering::Relaxed);

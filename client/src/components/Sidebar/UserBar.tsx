@@ -61,6 +61,8 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
     stopScreenShare,
     participants,
     speakingUserIds,
+    voiceError,
+    clearVoiceError,
   } = useVoiceStore();
 
   const showVoiceUsersInBar = useSettingsStore((state) => state.showVoiceUsersInBar);
@@ -418,6 +420,18 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
       )}
 
       {/* Unified User, Voice & Game Container */}
+      {voiceError && (
+        <div className="mb-1.5 px-2.5 py-1.5 rounded-lg bg-dnd/15 border border-dnd/30 text-[11px] text-dnd flex items-center justify-between gap-2">
+          <span className="truncate" title={voiceError}>{voiceError}</span>
+          <button
+            type="button"
+            onClick={clearVoiceError}
+            className="text-dnd/80 hover:text-dnd font-bold shrink-0 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div
         ref={voiceBarRef}
         className={`w-full min-w-0 max-w-full bg-background-darkest border border-white/5 rounded-2xl shadow-inner overflow-visible relative transition-all duration-200 ${

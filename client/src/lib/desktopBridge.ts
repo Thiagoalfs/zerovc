@@ -69,7 +69,7 @@ function createTauriBridge(): ElectronAPI {
     platform: detectPlatform(),
 
     setAuthToken: async (token: string | null) => {
-      await tauriInvoke<void>('auth_set_token', { token });
+      await tauriInvoke<void>('set_auth_token', { token });
     },
 
     getProxyUrl: async () => {

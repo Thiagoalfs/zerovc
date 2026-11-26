@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Participant, DisconnectReason } from 'livekit-client';
 import { api, postKeepalive } from '../lib/api';
-import { getDesktopAPI } from '../lib/platform';
+import { getDesktopAPI, isTauri } from '../lib/platform';
 import { livekit } from '../lib/livekit';
 import { User, DMGroup } from '../types';
 import { checkCallEligibility, createE2EEOptions, livekitE2EEManager } from '../lib/livekitE2EE';
@@ -49,6 +49,8 @@ interface VoiceState {
   participantVolumes: Record<string, number>;
   watchedParticipantId: string | null;
   watchedParticipantIds: string[];
+  voiceError: string | null;
+  clearVoiceError: () => void;
 
   watchParticipant: (identity: string, mode?: 'exclusive' | 'additive') => void;
   unwatchParticipant: (identity: string) => void;
@@ -446,6 +448,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
 
   return {
     voiceType: null,
+    voiceError: null,
+    clearVoiceError: () => set({ voiceError: null }),
     currentChannelId: null,
     currentGuildId: null,
     dmRoomId: null,
@@ -560,6 +564,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       set({
         voiceType: 'guild',
         isConnecting: true,
+        voiceError: null,
         currentChannelId: channelId,
         currentGuildId: guildId || null,
         dmRoomId: null,
@@ -607,15 +612,23 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             })
             .catch(() => {});
         }
-      } catch (err) {
+      } catch (err: any) {
         if (currentEpoch !== activeConnectionEpoch) return;
         callKeyManager.endCall();
         livekitE2EEManager.cleanup();
+        const errMsg = err?.message || String(err) || 'Falha ao conectar à chamada de voz';
         console.error('[Voice] Failed to join guild voice:', err);
+        if (isTauri()) {
+          const diag = `RTCPeerConnection=${typeof RTCPeerConnection}, secure=${typeof window !== 'undefined' ? window.isSecureContext : 'n/a'}, origin=${typeof window !== 'undefined' ? window.location.origin : 'n/a'}, addTransceiver=${typeof RTCPeerConnection !== 'undefined' ? typeof RTCPeerConnection.prototype?.addTransceiver : 'n/a'}, addTrack=${typeof RTCPeerConnection !== 'undefined' ? typeof RTCPeerConnection.prototype?.addTrack : 'n/a'}`;
+          void import('@tauri-apps/api/core')
+            .then(({ invoke }) => invoke('log_frontend_error', { tag: 'Voice', message: `${errMsg} | ${diag}` }))
+            .catch(() => {});
+        }
         set({
           voiceType: null,
           isConnected: false,
           isConnecting: false,
+          voiceError: errMsg,
           currentChannelId: null,
           currentGuildId: null,
         });

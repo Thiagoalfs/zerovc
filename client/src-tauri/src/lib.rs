@@ -1,6 +1,11 @@
 pub mod audio;
 pub mod auth_vault;
 pub mod commands;
+pub mod media_audio_in;
+pub mod media_audio_out;
+pub mod media_bridge;
+pub mod media_camera;
+pub mod media_video_hub;
 pub mod process_monitor;
 pub mod screenshare;
 pub mod tray;
@@ -48,6 +53,7 @@ pub struct AppState {
     pub auth_vault: AuthVault,
     pub audio_state: Arc<Mutex<AudioCaptureState>>,
     pub screenshare_state: Arc<Mutex<ScreenShareState>>,
+    pub media_bridge: Arc<media_bridge::MediaBridge>,
     pub process_monitor: Arc<ProcessMonitorState>,
     pub tray_state: Arc<TrayState>,
     pub settings: Mutex<DesktopSettings>,
@@ -186,10 +192,16 @@ pub fn run() {
         })
         .build();
 
+    let screenshare_state = Arc::new(Mutex::new(ScreenShareState::default()));
+    let media_bridge = Arc::new(media_bridge::MediaBridge::new(Arc::clone(
+        &screenshare_state,
+    )));
+
     let app_state = AppState {
         auth_vault: AuthVault::new(),
         audio_state: Arc::new(Mutex::new(AudioCaptureState::default())),
-        screenshare_state: Arc::new(Mutex::new(ScreenShareState::default())),
+        screenshare_state,
+        media_bridge,
         process_monitor: Arc::new(ProcessMonitorState::default()),
         tray_state: Arc::new(TrayState::default()),
         settings: Mutex::new(DesktopSettings::default()),
@@ -281,9 +293,18 @@ pub fn run() {
                     };
                     let wv = platform_webview.inner();
                     if let Some(settings) = wv.settings() {
+                        let was_webrtc = settings.enables_webrtc();
                         settings.set_enable_webrtc(true);
                         settings.set_enable_media_stream(true);
                         settings.set_enable_webaudio(true);
+                        eprintln!(
+                            "[WebKitGTK] WebRTC was={}, now={}",
+                            was_webrtc,
+                            settings.enables_webrtc()
+                        );
+                        if !was_webrtc {
+                            wv.reload();
+                        }
                     }
                     wv.connect_permission_request(|webview, request| {
                         let allowed = webview
@@ -325,6 +346,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::set_auth_token,
+            commands::get_proxy_url,
             commands::get_screen_sources,
             commands::is_process_running,
             commands::window_minimize,
@@ -367,6 +389,26 @@ pub fn run() {
             commands::consume_turnstile_token,
             commands::consume_desktop_auth_code,
             commands::start_desktop_browser_login,
+            commands::set_audio_output_device,
+            commands::log_frontend_error,
+            commands::media_connect,
+            commands::media_disconnect,
+            commands::media_set_muted,
+            commands::media_set_deafened,
+            commands::media_set_camera_enabled,
+            commands::media_set_user_volume,
+            commands::media_set_stream_volume,
+            commands::media_set_output_volume,
+            commands::media_set_input_volume,
+            commands::media_set_stream_subscribed,
+            commands::media_update_mic_config,
+            commands::media_set_input_device,
+            commands::media_set_output_device,
+            commands::media_set_video_device,
+            commands::media_list_devices,
+            commands::media_set_e2ee_key,
+            commands::media_ratchet_e2ee_key,
+            commands::media_get_diagnostic_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ZeroVC Tauri application");

@@ -1,6 +1,8 @@
 import { ExternalE2EEKeyProvider, isE2EESupported } from 'livekit-client';
 import E2EEWorker from '../workers/e2ee.worker?worker';
 import { safeCryptoLogger } from '../crypto/safeLogger';
+import { isTauri } from './platform';
+import { rustMediaAdapter } from './rustMediaAdapter';
 
 export interface E2EESupportCheck {
   supported: boolean;
@@ -16,6 +18,7 @@ export interface E2EESupportCheck {
  * Android WebView (Chrome < 86): Blocked.
  */
 export function isCallE2EESupported(): boolean {
+  if (isTauri()) return true;
   return isE2EESupported();
 }
 
@@ -69,6 +72,18 @@ export function createE2EEOptions(): E2EERoomSetup {
   return livekitE2EEManager.initialize();
 }
 
+function encodeKeyToBase64(callKey: string | ArrayBuffer): string {
+  const bytes =
+    typeof callKey === 'string'
+      ? new TextEncoder().encode(callKey)
+      : new Uint8Array(callKey);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 export class LiveKitE2EEManager {
   private keyProvider: ExternalE2EEKeyProvider | null = null;
   private worker: Worker | null = null;
@@ -76,6 +91,23 @@ export class LiveKitE2EEManager {
 
   initialize(): E2EERoomSetup {
     assertE2EESupported();
+    if (isTauri()) {
+      const bridgeProvider = {
+        setKey: async (key: string | ArrayBuffer) => {
+          await this.setCallKey(key);
+        },
+        ratchetKey: (participantIdentity?: string, keyIndex?: number) => {
+          this.ratchetKey(participantIdentity, keyIndex);
+        },
+      } as unknown as ExternalE2EEKeyProvider;
+      this.keyProvider = bridgeProvider;
+      this.worker = null;
+      safeCryptoLogger.info('LiveKitE2EE', 'Initialized native Rust E2EE key provider bridge');
+      return {
+        keyProvider: bridgeProvider,
+        worker: undefined as unknown as Worker,
+      };
+    }
     this.keyProvider = new ExternalE2EEKeyProvider({
       keySize: 256,
       ratchetSalt: 'LK_RATCHET_SALT_V1',
@@ -100,6 +132,12 @@ export class LiveKitE2EEManager {
   }
 
   async setCallKey(callKey: string | ArrayBuffer): Promise<void> {
+    if (isTauri()) {
+      const keyBase64 = encodeKeyToBase64(callKey);
+      await rustMediaAdapter.setE2eeKey(keyBase64);
+      safeCryptoLogger.info('LiveKitE2EE', 'Set call encryption key on Rust media bridge');
+      return;
+    }
     if (!this.keyProvider) {
       throw new Error('Key provider not initialized');
     }
@@ -108,10 +146,16 @@ export class LiveKitE2EEManager {
   }
 
   ratchetKey(participantIdentity?: string, keyIndex?: number): void {
+    const resolvedIndex = keyIndex ?? this.currentKeyIndex;
+    if (isTauri()) {
+      void rustMediaAdapter.ratchetE2eeKey(participantIdentity ?? null, resolvedIndex);
+      safeCryptoLogger.info('LiveKitE2EE', 'Triggered Rust media bridge call key ratchet request');
+      return;
+    }
     if (!this.keyProvider) {
       throw new Error('Key provider not initialized');
     }
-    this.keyProvider.ratchetKey(participantIdentity, keyIndex ?? this.currentKeyIndex);
+    this.keyProvider.ratchetKey(participantIdentity, resolvedIndex);
     safeCryptoLogger.info('LiveKitE2EE', 'Triggered call key ratchet request');
   }
 

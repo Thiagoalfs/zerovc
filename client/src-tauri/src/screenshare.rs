@@ -5,7 +5,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize)]
@@ -35,6 +35,7 @@ pub struct NativeScreenShareOptions {
     pub fps: u32,
     pub bitrate: u64,
     pub include_audio: bool,
+    pub e2ee: Option<bool>,
     pub e2ee_key: Option<String>,
 }
 
@@ -48,16 +49,25 @@ pub struct NativeScreenShareResult {
 
 pub struct ScreenShareState {
     pub active_child: Option<Child>,
+    pub child_stdin: Option<ChildStdin>,
 }
 
 impl Default for ScreenShareState {
     fn default() -> Self {
-        Self { active_child: None }
+        Self {
+            active_child: None,
+            child_stdin: None,
+        }
     }
 }
 
 impl ScreenShareState {
     pub async fn stop(&mut self) {
+        if let Some(mut stdin) = self.child_stdin.take() {
+            let _ = stdin.write_all(b"stop\n").await;
+            let _ = stdin.flush().await;
+            let _ = stdin.shutdown().await;
+        }
         if let Some(mut child) = self.active_child.take() {
             if let Some(mut stdin) = child.stdin.take() {
                 let _ = stdin.write_all(b"stop\n").await;
@@ -69,6 +79,46 @@ impl ScreenShareState {
             });
         }
     }
+
+    pub async fn write_stdin_line(&mut self, line: &str) -> Result<(), String> {
+        let Some(stdin) = self.child_stdin.as_mut() else {
+            return Err("screenshare-stdin-not-available".to_string());
+        };
+        let payload = format!("{line}\n");
+        stdin
+            .write_all(payload.as_bytes())
+            .await
+            .map_err(|e| format!("failed to write to screenshare stdin: {e}"))?;
+        stdin
+            .flush()
+            .await
+            .map_err(|e| format!("failed to flush screenshare stdin: {e}"))?;
+        Ok(())
+    }
+}
+
+pub async fn send_e2ee_key(
+    state: &Arc<Mutex<ScreenShareState>>,
+    key_base64: &str,
+) -> Result<(), String> {
+    let payload = serde_json::json!({
+        "type": "set_e2ee_key",
+        "key": key_base64,
+    })
+    .to_string();
+    let mut guard = state.lock().await;
+    guard.write_stdin_line(&payload).await
+}
+
+pub async fn send_ratchet_e2ee_key(
+    state: &Arc<Mutex<ScreenShareState>>,
+) -> Result<(), String> {
+    let payload = serde_json::json!({
+        "type": "ratchet_e2ee_key",
+    })
+    .to_string();
+    let mut guard = state.lock().await;
+    guard.write_stdin_line(&payload).await
 }
 
 pub fn resolve_screenshare_binary(app: &AppHandle) -> Option<PathBuf> {
@@ -178,9 +228,8 @@ pub async fn start_native_screenshare(
         args.push(audio_helper.to_string_lossy().to_string());
     }
 
-    if let Some(e2ee) = options.e2ee_key.filter(|k| !k.is_empty()) {
-        args.push("--e2ee-key".to_string());
-        args.push(e2ee);
+    if options.e2ee.unwrap_or(false) {
+        args.push("--e2ee".to_string());
     }
 
     let mut cmd = Command::new(&bin_path);
@@ -205,12 +254,14 @@ pub async fn start_native_screenshare(
         }
     };
 
+    let stdin = child.stdin.take();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
     {
         let mut guard = state.lock().await;
         guard.active_child = Some(child);
+        guard.child_stdin = stdin;
     }
 
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), String>>();

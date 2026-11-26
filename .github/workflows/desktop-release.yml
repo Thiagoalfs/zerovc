@@ -112,7 +112,9 @@ jobs:
             libssl-dev \
             pkg-config \
             libglib2.0-dev \
-            libva-dev
+            libva-dev \
+            libasound2-dev \
+            libv4l-dev
           wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 21
 
       - name: Setup Rust toolchain

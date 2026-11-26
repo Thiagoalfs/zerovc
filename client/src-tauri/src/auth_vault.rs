@@ -364,7 +364,7 @@ fn is_allowed_proxy_target(target: &str) -> bool {
     matches!(host, "127.0.0.1" | "localhost" | "zerovc.safiroko.xyz")
 }
 
-async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin>(
+async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
     mut client: TcpStream,
     mut upstream: S,
     forwarded_head: &[u8],
@@ -383,11 +383,36 @@ async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin>(
             .await
             .map_err(|e| format!("upstream write tail failed: {e}"))?;
     }
+    upstream
+        .flush()
+        .await
+        .map_err(|e| format!("upstream flush failed: {e}"))?;
 
     if is_websocket || client_origin.is_none() {
         let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
         return Ok(());
     }
+
+    let (mut cr, mut cw) = tokio::io::split(client);
+    let (mut ur, mut uw) = tokio::io::split(upstream);
+
+    // Forward any remaining request body chunks concurrently BEFORE waiting for
+    // the upstream response headers (prevents deadlock when POST body arrives in a second TCP packet).
+    let c2u = tokio::spawn(async move {
+        let mut cbuf = [0u8; 8192];
+        while let Ok(n) = cr.read(&mut cbuf).await {
+            if n == 0 {
+                break;
+            }
+            if uw.write_all(&cbuf[..n]).await.is_err() {
+                break;
+            }
+            if uw.flush().await.is_err() {
+                break;
+            }
+        }
+        let _ = uw.shutdown().await;
+    });
 
     // Rewrite response head to add Access-Control-Allow-Origin for the desktop WebView origin.
     let origin = client_origin.unwrap_or("");
@@ -395,14 +420,20 @@ async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin>(
     let mut tmp = [0u8; 2048];
     let resp_head_end;
     loop {
-        let n = upstream
+        let n = ur
             .read(&mut tmp)
             .await
-            .map_err(|e| format!("upstream read error: {e}"))?;
+            .map_err(|e| {
+                c2u.abort();
+                format!("upstream read error: {e}")
+            })?;
         if n == 0 {
             if !resp_buf.is_empty() {
-                let _ = client.write_all(&resp_buf).await;
+                let _ = cw.write_all(&resp_buf).await;
+                let _ = cw.flush().await;
             }
+            let _ = cw.shutdown().await;
+            c2u.abort();
             return Ok(());
         }
         resp_buf.extend_from_slice(&tmp[..n]);
@@ -411,8 +442,11 @@ async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin>(
             break;
         }
         if resp_buf.len() > MAX_HEADER_BYTES {
-            let _ = client.write_all(&resp_buf).await;
-            let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
+            let _ = cw.write_all(&resp_buf).await;
+            let _ = tokio::io::copy(&mut ur, &mut cw).await;
+            let _ = cw.flush().await;
+            let _ = cw.shutdown().await;
+            c2u.abort();
             return Ok(());
         }
     }
@@ -432,6 +466,8 @@ async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin>(
         if lower.starts_with("access-control-allow-origin:")
             || lower.starts_with("access-control-allow-credentials:")
             || lower.starts_with("access-control-expose-headers:")
+            || lower.starts_with("connection:")
+            || lower.starts_with("keep-alive:")
         {
             continue;
         }
@@ -443,22 +479,26 @@ async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin>(
     out_head.push_str("\r\n");
     out_head.push_str("Access-Control-Allow-Credentials: true\r\n");
     out_head.push_str("Access-Control-Expose-Headers: Link, X-CSRF-Token, X-Bot-ID\r\n");
+    out_head.push_str("Connection: close\r\n");
     out_head.push_str("\r\n");
 
-    client
-        .write_all(out_head.as_bytes())
-        .await
-        .map_err(|e| format!("client write head failed: {e}"))?;
+    cw.write_all(out_head.as_bytes()).await.map_err(|e| {
+        c2u.abort();
+        format!("client write head failed: {e}")
+    })?;
 
     let resp_tail = &resp_buf[resp_head_end + 4..];
     if !resp_tail.is_empty() {
-        client
-            .write_all(resp_tail)
-            .await
-            .map_err(|e| format!("client write tail failed: {e}"))?;
+        cw.write_all(resp_tail).await.map_err(|e| {
+            c2u.abort();
+            format!("client write tail failed: {e}")
+        })?;
     }
 
-    let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
+    let _ = tokio::io::copy(&mut ur, &mut cw).await;
+    let _ = cw.flush().await;
+    let _ = cw.shutdown().await;
+    c2u.abort();
     Ok(())
 }
 
@@ -563,11 +603,15 @@ async fn handle_proxy_connection(
     );
     let body_tail = &buf[head_end + 4..];
 
+    let t_start = std::time::Instant::now();
+    let req_line = parsed.request_line.clone();
+    let is_ws = parsed.is_websocket;
     let tcp = TcpStream::connect((host.as_str(), port))
         .await
         .map_err(|e| format!("upstream connect failed: {e}"))?;
+    let t_tcp = t_start.elapsed().as_millis();
 
-    if is_tls {
+    let res = if is_tls {
         let tls_cfg = get_tls_config()?;
         let connector = TlsConnector::from(tls_cfg);
         let server_name = ServerName::try_from(host)
@@ -576,7 +620,8 @@ async fn handle_proxy_connection(
             .connect(server_name, tcp)
             .await
             .map_err(|e| format!("TLS handshake failed: {e}"))?;
-        forward_with_cors_headers(
+        let t_tls = t_start.elapsed().as_millis();
+        let r = forward_with_cors_headers(
             client,
             tls_stream,
             &forwarded_head,
@@ -584,7 +629,17 @@ async fn handle_proxy_connection(
             parsed.origin.as_deref(),
             parsed.is_websocket,
         )
-        .await
+        .await;
+        if !is_ws && t_start.elapsed().as_millis() > 500 {
+            eprintln!(
+                "[AuthVaultSlow] {} | tcp={}ms tls={}ms total={}ms",
+                req_line,
+                t_tcp,
+                t_tls,
+                t_start.elapsed().as_millis()
+            );
+        }
+        r
     } else {
         forward_with_cors_headers(
             client,
@@ -595,7 +650,8 @@ async fn handle_proxy_connection(
             parsed.is_websocket,
         )
         .await
-    }
+    };
+    res
 }
 
 fn find_double_crlf(buf: &[u8]) -> Option<usize> {
@@ -683,5 +739,61 @@ mod tests {
         let mut auth_resp = String::new();
         auth.read_to_string(&mut auth_resp).await.unwrap();
         assert!(auth_resp.contains("OK_AUTH"), "got: {auth_resp}");
+    }
+
+    #[tokio::test]
+    async fn test_loopback_proxy_post_body_split_packets() {
+        let mock_upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let upstream_addr = mock_upstream.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            if let Ok((mut sock, _)) = mock_upstream.accept().await {
+                let mut acc = Vec::new();
+                let mut tmp = [0u8; 1024];
+                loop {
+                    let n = sock.read(&mut tmp).await.unwrap_or(0);
+                    if n == 0 {
+                        break;
+                    }
+                    acc.extend_from_slice(&tmp[..n]);
+                    if String::from_utf8_lossy(&acc).contains("{\"code\":\"abc\"}") {
+                        break;
+                    }
+                }
+                let resp = "HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\nPOST_OK";
+                let _ = sock.write_all(resp.as_bytes()).await;
+            }
+        });
+
+        let vault = AuthVault::new();
+        let proxy_addr = vault
+            .start_proxy_with_default(Some(upstream_addr.to_string()))
+            .await
+            .unwrap();
+
+        let mut client = TcpStream::connect(proxy_addr).await.unwrap();
+        client
+            .write_all(
+                b"POST /api/auth/desktop-exchange HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://localhost:5173\r\nContent-Type: application/json\r\nContent-Length: 14\r\n\r\n",
+            )
+            .await
+            .unwrap();
+        client.flush().await.unwrap();
+
+        // Simulate WebKitGTK sending POST body in a second TCP packet without closing write half
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        client.write_all(b"{\"code\":\"abc\"}").await.unwrap();
+        client.flush().await.unwrap();
+
+        let mut resp = String::new();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            client.read_to_string(&mut resp),
+        )
+        .await
+        .expect("POST split-packet deadlocked")
+        .unwrap();
+        assert!(resp.contains("POST_OK"), "got: {resp}");
+        assert!(resp.contains("Connection: close"), "got: {resp}");
     }
 }
