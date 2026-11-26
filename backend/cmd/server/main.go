@@ -387,6 +387,7 @@ func main() {
 	// Public Turnstile Config & Embedded Widget (for Desktop Tauri WebView)
 	r.Get("/api/auth/turnstile-config", authHandler.GetTurnstileConfig)
 	r.Get("/api/auth/turnstile-widget", authHandler.GetTurnstileWidget)
+	r.With(httprate.LimitByIP(10, time.Minute)).Post("/api/auth/desktop-exchange", authHandler.ExchangeDesktopAuthCode)
 
 	// Protected API Routes
 	r.Group(func(r chi.Router) {
@@ -417,6 +418,7 @@ func main() {
 
 		// Current User & Profile Customization
 		r.Get("/api/auth/me", authHandler.Me)
+		r.Post("/api/auth/desktop-code", authHandler.CreateDesktopAuthCode)
 		r.Get("/api/auth/sessions", authHandler.GetSessions)
 		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/sessions/{id}/revoke", authHandler.RevokeSession)
 		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/sessions/revoke-others", authHandler.RevokeOtherSessions)

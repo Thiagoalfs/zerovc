@@ -324,6 +324,15 @@ export const api = {
     me: () => request<User>('/auth/me'),
     getTurnstileConfig: () =>
       request<{ enabled: boolean; site_key: string }>('/auth/turnstile-config'),
+    createDesktopCode: () =>
+      request<{ code: string }>('/auth/desktop-code', {
+        method: 'POST',
+      }),
+    exchangeDesktopCode: (code: string) =>
+      request<{ token: string; csrf_token?: string; user: User }>('/auth/desktop-exchange', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      }),
     generate2FA: () =>
       request<{ secret: string; otpauth_uri: string }>('/auth/2fa/generate', {
         method: 'POST',

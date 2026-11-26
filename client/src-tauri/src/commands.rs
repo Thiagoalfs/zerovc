@@ -593,7 +593,7 @@ pub async fn start_turnstile_verification(
             let Ok(Ok((mut socket, _))) = accept_res else {
                 break;
             };
-            let mut buf = [0u8; 4096];
+            let mut buf = [0u8; 8192];
             let Ok(n) = socket.read(&mut buf).await else {
                 continue;
             };
@@ -648,6 +648,15 @@ pub async fn start_turnstile_verification(
 pub fn consume_turnstile_token(state: State<'_, AppState>) -> Option<String> {
     state
         .pending_turnstile_token
+        .lock()
+        .ok()
+        .and_then(|mut guard| guard.take())
+}
+
+#[tauri::command]
+pub fn consume_desktop_auth_code(state: State<'_, AppState>) -> Option<String> {
+    state
+        .pending_desktop_auth_code
         .lock()
         .ok()
         .and_then(|mut guard| guard.take())

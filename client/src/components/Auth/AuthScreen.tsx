@@ -1,5 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Shield, ArrowLeft, KeyRound, Mail, CheckCircle, RefreshCw, Lock, AlertTriangle } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import {
+  Shield,
+  ArrowLeft,
+  KeyRound,
+  MailCheck,
+  CheckCircle2,
+  RefreshCw,
+  Lock,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  Loader2,
+} from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { api, formatAssetUrl } from '../../lib/api';
 import { TurnstileWidget, TurnstileWidgetRef } from '../Common/TurnstileWidget';
@@ -11,9 +24,27 @@ const AUTH_DRAFT_KEY = 'zerovc_tauri_auth_draft';
 type AuthMode = 'login' | 'register' | 'verify_email' | 'forgot_password' | 'reset_password';
 
 interface AuthScreenProps {
-  initialMode?: 'login' | 'register' | 'verify_email' | 'forgot_password' | 'reset_password';
+  initialMode?: AuthMode;
   onNavigate?: (path: string) => void;
 }
+
+const inputClass =
+  'flex h-10 w-full rounded-md border border-white/10 bg-background-darker/90 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:border-brand-500 disabled:cursor-not-allowed disabled:opacity-50 transition-colors';
+
+const primaryBtnClass =
+  'inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white shadow-md shadow-brand-500/20 transition-all hover:bg-brand-600 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 disabled:pointer-events-none disabled:opacity-50 cursor-pointer';
+
+const labelClass = 'block text-sm font-medium leading-none text-gray-200';
+
+const AuthErrorBanner: React.FC<{ message?: string | null }> = ({ message }) => {
+  if (!message) return null;
+  return (
+    <div className="mb-6 rounded-lg border border-dnd/30 bg-dnd/10 p-3.5 text-sm text-dnd flex items-start gap-2.5">
+      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+      <span>{message}</span>
+    </div>
+  );
+};
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', onNavigate }) => {
   const [draft] = useState<{ mode?: AuthMode; email?: string; username?: string } | null>(() => {
@@ -30,6 +61,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   const [email, setEmail] = useState(draft?.email || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -96,13 +128,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
 
   const { login, register, verifyEmail, isLoading, error, clearError } = useAuthStore();
 
-  // Detect reset token or mode from URL/Hash on mount
   useEffect(() => {
-    const hash = window.location.hash || '';
-    const search = window.location.search || '';
     const fullSearch = window.location.href;
-
-    // Check if there is a token in URL (e.g. ?token=XYZ or #/reset-password?token=XYZ)
     let tokenParam = '';
     const matchToken = fullSearch.match(/[?&]token=([^&#]+)/);
     if (matchToken && matchToken[1]) {
@@ -124,13 +151,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
     }
   }, [initialMode]);
 
-  // Reset Turnstile token on mode or 2FA state switch
   useEffect(() => {
     setTurnstileToken(null);
     turnstileRef.current?.reset();
+    setShowPassword(false);
   }, [mode, requires2FA]);
 
-  // Cooldown timer for email resend
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setInterval(() => {
@@ -139,11 +165,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  // Check pending invites
   useEffect(() => {
-    const path = (window.location.protocol === 'file:' && window.location.hash)
-      ? window.location.hash.replace(/^#/, '')
-      : window.location.pathname;
+    const path =
+      window.location.protocol === 'file:' && window.location.hash
+        ? window.location.hash.replace(/^#/, '')
+        : window.location.pathname;
     let code = '';
     if (path.startsWith('/invite/')) {
       code = path.split('/invite/')[1]?.split('/')[0] || '';
@@ -240,7 +266,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
         new_password: password,
         code: twoFactorCode.trim() || undefined,
       });
-      // Clear any stale session so the user logs in fresh with the new password
       try {
         useAuthStore.getState().logout();
       } catch {}
@@ -257,10 +282,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
     setLocalError('');
     clearError();
 
-    // Mode: Verify Email
     if (mode === 'verify_email') {
       if (verificationCode.trim().length !== 6) {
-        setLocalError('O código deve ter exatamente 6 dígitos.');
+        setLocalError('Digite o código de 6 dígitos enviado para o seu e-mail.');
         return;
       }
       try {
@@ -271,7 +295,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
       return;
     }
 
-    // Mode: Login
     if (mode === 'login') {
       try {
         const codeToSend = twoFactorCode.trim() || undefined;
@@ -285,14 +308,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
           try { localStorage.removeItem(AUTH_DRAFT_KEY); } catch {}
         }
       } catch {
-        // Reset turnstile on failure to allow retry with fresh token
         turnstileRef.current?.reset();
         setTurnstileToken(null);
       }
       return;
     }
 
-    // Mode: Register
     if (mode === 'register') {
       const cleanUsername = username.trim().toLowerCase();
       if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
@@ -317,7 +338,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
           try { localStorage.removeItem(AUTH_DRAFT_KEY); } catch {}
         }
       } catch {
-        // Reset turnstile on failure to allow retry with fresh token
         turnstileRef.current?.reset();
         setTurnstileToken(null);
       }
@@ -325,574 +345,664 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
   };
 
   const activeError = localError || error;
+  const viewKey = requires2FA
+    ? 'two-factor'
+    : mode === 'forgot_password' && forgotSubmitted
+    ? 'forgot-success'
+    : mode;
 
   return (
-    <div className="w-screen h-screen flex items-center justify-center bg-background-darkest select-none p-4 relative overflow-hidden">
-      {/* Main Card */}
-      <div className="w-full max-w-md bg-background-dark rounded-3xl p-8 shadow-2xl border border-white/10 relative z-10 animate-in fade-in zoom-in-95 duration-200">
-        
-        {/* ========================================================================= */}
-        {/* 1. RESET PASSWORD MODE */}
-        {/* ========================================================================= */}
-        {mode === 'reset_password' ? (
-          <div>
-            <div className="text-center mb-6">
-              <div className="w-14 h-14 bg-brand-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-500/30">
-                <Lock className="w-8 h-8 text-white" />
-              </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Redefinir Senha</h1>
-              <p className="text-sm text-gray-400 mt-1">
-                {resetUsername ? `Escolha uma nova senha para @${resetUsername}` : 'Crie uma nova senha para sua conta'}
-              </p>
-            </div>
-
-            {resetSuccess ? (
-              <div className="text-center space-y-4">
-                <div className="p-4 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl text-emerald-400 text-sm flex items-center gap-3">
-                  <CheckCircle className="w-6 h-6 flex-shrink-0" />
-                  <div className="text-left font-medium">
-                    Sua senha foi redefinida com sucesso! Você já pode entrar com sua nova senha.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('login');
-                    onNavigate?.('/signin');
-                  }}
-                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 cursor-pointer"
+    <div className="w-screen h-full min-h-[100dvh] flex items-center justify-center bg-background-darkest select-none p-4 relative overflow-y-auto">
+      <div className="mx-auto w-full max-w-md">
+        <div className="relative overflow-hidden rounded-xl border border-white/10 bg-background-dark/85 shadow-2xl backdrop-blur-md">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-500/10 via-transparent to-brand-700/5" />
+          <div className="relative z-10">
+            <AnimatePresence mode="wait">
+              {viewKey === 'reset_password' && (
+                <motion.div
+                  key="reset_password"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -18 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  className="p-8"
                 >
-                  Ir para o Login
-                </button>
-              </div>
-            ) : resetTokenValid === false ? (
-              <div className="text-center space-y-4">
-                <div className="p-4 bg-dnd/20 border border-dnd/30 rounded-2xl text-dnd text-sm flex items-center gap-3">
-                  <AlertTriangle className="w-6 h-6 flex-shrink-0" />
-                  <div className="text-left font-medium">
-                    {localError || 'Este link de redefinição de senha é inválido ou já expirou (limite de 15 minutos).'}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setMode('forgot_password')}
-                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-xl transition-all cursor-pointer"
-                >
-                  Solicitar Novo Link
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleResetSubmit} className="space-y-4">
-                {activeError && (
-                  <div className="p-3 bg-dnd/20 border border-dnd/30 rounded-xl text-dnd text-xs text-center font-medium">
-                    {activeError}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
-                    Nova Senha
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                    className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
-                    Confirmar Nova Senha
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Digite a mesma senha"
-                    className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
-                </div>
-
-                {/* 2FA Protection Input if Account has 2FA */}
-                {resetRequires2FA && (
-                  <div className="p-4 bg-background-darker rounded-2xl border border-brand-500/30 space-y-2.5 animate-in fade-in">
-                    <div className="flex items-center gap-2 text-xs font-medium text-brand-300 uppercase">
-                      <Shield className="w-4 h-4 text-brand-400" />
-                      <span>Autenticação em 2 Etapas (Obrigatório)</span>
+                  <div className="mb-8 text-center">
+                    <div className="mb-4 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/15 border border-brand-500/25">
+                      <Lock className="h-7 w-7 text-brand-400" />
                     </div>
-                    <p className="text-[11px] text-gray-400 leading-relaxed">
-                      Esta conta está protegida por 2FA. Digite o código de 6 dígitos do seu app autenticador ou código de backup:
+                    <h1 className="text-3xl font-semibold text-white tracking-tight">Redefinir senha</h1>
+                    <p className="mt-2 text-sm text-gray-400">
+                      {resetUsername ? `Escolha uma nova senha para @${resetUsername}` : 'Crie uma nova senha para sua conta'}
                     </p>
-                    {useBackupCode ? (
-                      <input
-                        type="text"
-                        required
-                        value={twoFactorCode}
-                        onChange={(e) => setTwoFactorCode(e.target.value.trim())}
-                        placeholder="xxxx-xxxx"
-                        className="w-full bg-background-darkest border border-white/10 rounded-xl px-4 py-2.5 text-center text-lg tracking-widest font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
+                  </div>
+
+                  {resetSuccess ? (
+                    <div className="text-center space-y-5">
+                      <div className="p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-sm flex items-center gap-3 text-left">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                        <span>Sua senha foi redefinida com sucesso!</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode('login');
+                          onNavigate?.('/signin');
+                        }}
+                        className={primaryBtnClass}
+                      >
+                        Ir para o login
+                      </button>
+                    </div>
+                  ) : resetTokenValid === false ? (
+                    <div className="text-center space-y-5">
+                      <AuthErrorBanner
+                        message={localError || 'Este link de redefinição de senha é inválido ou já expirou.'}
                       />
-                    ) : (
-                      <div className="flex justify-center pt-1">
-                        <OtpInput
-                          length={6}
-                          value={twoFactorCode}
-                          onChange={setTwoFactorCode}
-                          size="sm"
-                          status={localError ? 'error' : 'idle'}
-                          slotClassName="bg-background-darkest border border-white/10"
+                      <button
+                        type="button"
+                        onClick={() => setMode('forgot_password')}
+                        className={primaryBtnClass}
+                      >
+                        Solicitar novo link
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleResetSubmit} className="space-y-5">
+                      <AuthErrorBanner message={activeError} />
+
+                      <div className="space-y-2">
+                        <label className={labelClass}>Nova senha</label>
+                        <div className="relative">
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            required
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="Mínimo 6 caracteres"
+                            disabled={localLoading}
+                            className={`${inputClass} pr-10`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((p) => !p)}
+                            disabled={localLoading}
+                            className="absolute right-0 top-0 h-full px-3 text-gray-400 hover:text-gray-200 cursor-pointer"
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className={labelClass}>Confirmar nova senha</label>
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Digite a mesma senha"
+                          disabled={localLoading}
+                          className={inputClass}
                         />
                       </div>
-                    )}
-                  </div>
-                )}
 
-                <button
-                  type="submit"
-                  disabled={localLoading}
-                  className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
-                >
-                  {localLoading ? 'Redefinindo...' : 'Salvar Nova Senha'}
-                </button>
-              </form>
-            )}
-          </div>
-        ) : mode === 'forgot_password' ? (
-          /* ========================================================================= */
-          /* 2. FORGOT PASSWORD MODE */
-          /* ========================================================================= */
-          <div>
-            <div className="text-center mb-6">
-              <div className="w-14 h-14 bg-brand-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-500/30">
-                <Mail className="w-8 h-8 text-white" />
-              </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Esqueceu sua senha?</h1>
-              <p className="text-sm text-gray-400 mt-1">
-                Informe o seu e-mail para receber as instruções de recuperação de senha.
-              </p>
-            </div>
+                      {resetRequires2FA && (
+                        <div className="p-4 rounded-lg border border-brand-500/30 bg-background-darker/70 space-y-3">
+                          <div className="flex items-center gap-2 text-xs font-medium text-brand-300">
+                            <Shield className="w-4 h-4 text-brand-400" />
+                            <span>Autenticação em 2 Etapas (2FA)</span>
+                          </div>
+                          {useBackupCode ? (
+                            <input
+                              type="text"
+                              required
+                              value={twoFactorCode}
+                              onChange={(e) => setTwoFactorCode(e.target.value.trim())}
+                              placeholder="xxxx-xxxx"
+                              className={`${inputClass} text-center font-mono tracking-widest`}
+                            />
+                          ) : (
+                            <div className="flex justify-center">
+                              <OtpInput
+                                length={6}
+                                value={twoFactorCode}
+                                onChange={setTwoFactorCode}
+                                size="sm"
+                                status={localError ? 'error' : 'idle'}
+                                slotClassName="bg-background-darkest border border-white/10"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-            {forgotSubmitted ? (
-              <div className="space-y-4 animate-in fade-in">
-                <div className="p-4 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl text-emerald-300 text-xs leading-relaxed flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-semibold text-white block mb-0.5">E-mail de recuperação enviado!</span>
-                    Se houver uma conta associada a <strong className="text-white">{email}</strong>, enviamos um link para redefinir a senha (válido por 15 minutos).
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotSubmitted(false);
-                    setMode('login');
-                    onNavigate?.('/signin');
-                  }}
-                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-xl transition-all cursor-pointer shadow-lg shadow-brand-500/20"
-                >
-                  Voltar para o Login
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleForgotSubmit} className="space-y-4">
-                {activeError && (
-                  <div className="p-3 bg-dnd/20 border border-dnd/30 rounded-xl text-dnd text-xs text-center font-medium">
-                    {activeError}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
-                    Seu E-mail
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    autoFocus
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seuemail@exemplo.com"
-                    className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={localLoading || !email.trim()}
-                  className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
-                >
-                  {localLoading ? 'Enviando...' : 'Enviar Link de Redefinição'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLocalError('');
-                    setMode('login');
-                    onNavigate?.('/signin');
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-white pt-2 transition-colors cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Voltar ao login</span>
-                </button>
-              </form>
-            )}
-          </div>
-        ) : mode === 'verify_email' ? (
-          /* ========================================================================= */
-          /* 3. EMAIL VERIFICATION MODE */
-          /* ========================================================================= */
-          <div>
-            <div className="text-center mb-6">
-              <div className="w-14 h-14 bg-brand-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-500/30">
-                <Mail className="w-8 h-8 text-white" />
-              </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Verifique seu E-mail</h1>
-              <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
-                Enviamos um código de 6 dígitos para:<br />
-                <strong className="text-white font-semibold">{email || 'seu e-mail'}</strong>
-              </p>
-            </div>
-
-            {activeError && (
-              <div className="mb-4 p-3 bg-dnd/20 border border-dnd/30 rounded-xl text-dnd text-xs text-center font-medium">
-                {activeError}
-              </div>
-            )}
-
-            {resendStatus && (
-              <div className="mb-4 p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs text-center font-medium">
-                {resendStatus}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-300 uppercase mb-2 text-center">
-                  Código de Verificação
-                </label>
-                <div className="flex justify-center">
-                  <OtpInput
-                    length={6}
-                    value={verificationCode}
-                    onChange={setVerificationCode}
-                    autoFocus
-                    size="md"
-                    status={error ? 'error' : 'idle'}
-                    slotClassName="bg-background-darker border border-white/10"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading || verificationCode.length !== 6}
-                className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
-              >
-                {isLoading ? 'Verificando...' : 'Confirmar e Entrar'}
-              </button>
-
-              {/* Resend button */}
-              <div className="pt-2 text-center">
-                <button
-                  type="button"
-                  onClick={handleResendCode}
-                  disabled={resendCooldown > 0}
-                  className="text-xs text-brand-400 hover:text-brand-300 disabled:text-gray-500 disabled:cursor-not-allowed font-medium inline-flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${resendCooldown > 0 ? 'animate-spin opacity-50' : ''}`} />
-                  <span>
-                    {resendCooldown > 0
-                      ? `Reenviar código em ${resendCooldown}s`
-                      : 'Não recebeu? Reenviar código'}
-                  </span>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setLocalError('');
-                  clearError();
-                  setMode('login');
-                  onNavigate?.('/signin');
-                }}
-                className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-white pt-2 transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Entrar com outra conta</span>
-              </button>
-            </form>
-          </div>
-        ) : (
-          /* ========================================================================= */
-          /* 4. LOGIN & REGISTER MODES */
-          /* ========================================================================= */
-          <div>
-            {/* Brand Header */}
-            <div className="text-center mb-6">
-              {requires2FA && (
-                <div className="w-14 h-14 bg-brand-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-brand-500/30">
-                  <KeyRound className="w-8 h-8 text-white" />
-                </div>
+                      <button type="submit" disabled={localLoading} className={primaryBtnClass}>
+                        {localLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Redefinindo...
+                          </>
+                        ) : (
+                          'Salvar nova senha'
+                        )}
+                      </button>
+                    </form>
+                  )}
+                </motion.div>
               )}
-              <h1 className="text-2xl font-bold text-white tracking-tight">
-                {requires2FA ? 'Autenticação em 2 Etapas' : 'ZeroVC'}
-              </h1>
-              <p className="text-sm text-gray-400 mt-1">
-                {requires2FA
-                  ? useBackupCode
-                    ? 'Digite um dos seus códigos de backup de uso único'
-                    : 'Digite o código de 6 dígitos gerado pelo seu app autenticador'
-                  : invitePreview
-                  ? `Junte-se ao servidor ${invitePreview.guild_name}`
-                  : mode === 'login'
-                  ? 'Boas-vindas de volta!'
-                  : 'Crie sua conta para começar'}
-              </p>
-            </div>
 
-            {/* Invite Preview Banner */}
-            {!requires2FA && invitePreview && (
-              <div className="mb-5 p-3.5 bg-brand-500/15 border border-brand-500/30 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
-                {invitePreview.icon_url ? (
-                  <img src={formatAssetUrl(invitePreview.icon_url)} alt="" className="w-10 h-10 rounded-full object-cover shadow" />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center font-semibold text-white shadow">
-                    {invitePreview.guild_name[0]?.toUpperCase()}
+              {viewKey === 'forgot_password' && (
+                <motion.div
+                  key="forgot_password"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -18 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  className="p-8"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocalError('');
+                      setMode('login');
+                      onNavigate?.('/signin');
+                    }}
+                    disabled={localLoading}
+                    className="absolute left-4 top-4 h-9 w-9 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="sr-only">Voltar</span>
+                  </button>
+
+                  <div className="mb-8 text-center">
+                    <h1 className="text-3xl font-semibold text-white tracking-tight">Redefinir senha</h1>
+                    <p className="mt-2 text-sm text-gray-400">
+                      Informe seu e-mail para receber o link de redefinição
+                    </p>
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs text-brand-300 font-semibold block uppercase tracking-wider">Convite Para Servidor</span>
-                  <h3 className="font-bold text-white text-sm truncate">{invitePreview.guild_name}</h3>
-                  <span className="text-[11px] text-gray-400">{invitePreview.member_count} membros</span>
-                </div>
-              </div>
-            )}
 
-            {/* Error alert */}
-            {activeError && (
-              <div className="mb-4 p-3 bg-dnd/20 border border-dnd/30 rounded-xl text-dnd text-xs text-center font-medium">
-                {activeError}
-              </div>
-            )}
+                  <AuthErrorBanner message={activeError} />
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {requires2FA ? (
-                <div className="space-y-3">
-                  <div>
-                    {useBackupCode && (
-                      <label className="block text-xs font-medium text-gray-300 uppercase mb-2 flex items-center justify-center gap-1">
-                        <KeyRound className="w-3.5 h-3.5 text-brand-400" />
-                        <span>Código de Backup (8 caracteres)</span>
+                  <form onSubmit={handleForgotSubmit} className="space-y-6">
+                    <div className="space-y-2">
+                      <label htmlFor="forgot-email" className={labelClass}>
+                        E-mail
                       </label>
-                    )}
-                    {useBackupCode ? (
                       <input
-                        type="text"
+                        id="forgot-email"
+                        type="email"
                         required
                         autoFocus
-                        maxLength={12}
-                        value={twoFactorCode}
-                        onChange={(e) => setTwoFactorCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                        placeholder="xxxx-xxxx"
-                        className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-3 text-center text-xl tracking-widest font-mono text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="nome@exemplo.com"
+                        disabled={localLoading}
+                        className={inputClass}
                       />
-                    ) : (
-                      <div className="flex justify-center">
-                        <OtpInput
-                          length={6}
-                          value={twoFactorCode}
-                          onChange={setTwoFactorCode}
-                          autoFocus
-                          size="md"
-                          status={error ? 'error' : 'idle'}
-                          slotClassName="bg-background-darker border border-white/10"
-                        />
-                      </div>
-                    )}
-                  </div>
+                    </div>
 
-                  <div className="flex justify-center">
+                    <button
+                      type="submit"
+                      disabled={localLoading || !email.trim()}
+                      className={primaryBtnClass}
+                    >
+                      {localLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        'Enviar link de redefinição'
+                      )}
+                    </button>
+                  </form>
+
+                  <p className="mt-8 text-center text-sm text-gray-400">
+                    Lembrou sua senha?{' '}
                     <button
                       type="button"
                       onClick={() => {
-                        setUseBackupCode(!useBackupCode);
-                        setTwoFactorCode('');
-                      }}
-                      className="text-xs text-brand-400 hover:text-brand-300 underline font-medium cursor-pointer"
-                    >
-                      {useBackupCode ? 'Usar código do app autenticador' : 'Perdeu o autenticador? Usar código de backup'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {mode === 'register' && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
-                        Nome de Usuário (@)
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-400 font-medium text-sm select-none">
-                          @
-                        </span>
-                        <input
-                          type="text"
-                          required
-                          maxLength={32}
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                          placeholder="usuario"
-                          className="w-full bg-background-darker border border-white/10 rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono lowercase"
-                        />
-                      </div>
-                      <span className="text-[10px] text-gray-400 mt-1 block">
-                        Apenas letras minúsculas, números e _ (sem espaços, maiúsculas ou símbolos)
-                      </span>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
-                      E-mail {mode === 'login' ? 'ou Nome de Usuário' : ''}
-                    </label>
-                    <input
-                      type={mode === 'login' ? 'text' : 'email'}
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder={mode === 'login' ? 'seuemail@exemplo.com ou @usuario' : 'seuemail@exemplo.com'}
-                      className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-medium text-gray-300 uppercase">
-                        Senha
-                      </label>
-                      {mode === 'login' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLocalError('');
-                            clearError();
-                            setMode('forgot_password');
-                            onNavigate?.('/forgot-password');
-                          }}
-                          className="text-[11px] text-brand-400 hover:text-brand-300 hover:underline cursor-pointer"
-                        >
-                          Esqueceu sua senha?
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-background-darker border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Cloudflare Turnstile Verification (ativo quando configurada no servidor ou no .env) */}
-              {!requires2FA && hasTurnstileSiteKey && (
-                <TurnstileWidget
-                  ref={turnstileRef}
-                  siteKey={activeSiteKey}
-                  action={mode}
-                  onSuccess={handleTurnstileSuccess}
-                  onExpire={handleTurnstileExpire}
-                  onError={handleTurnstileError}
-                />
-              )}
-
-              <button
-                type="submit"
-                disabled={
-                  isLoading ||
-                  (!requires2FA && hasTurnstileSiteKey && !turnstileToken) ||
-                  (requires2FA && (useBackupCode ? twoFactorCode.length < 8 : twoFactorCode.length !== 6))
-                }
-                className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 mt-2 cursor-pointer"
-              >
-                {isLoading
-                  ? 'Processando...'
-                  : requires2FA
-                  ? 'Verificar Código'
-                  : invitePreview
-                  ? mode === 'login'
-                    ? 'Entrar e Participar do Servidor'
-                    : 'Criar Conta e Participar'
-                  : mode === 'login'
-                  ? 'Entrar'
-                  : 'Criar Conta'}
-              </button>
-
-              {requires2FA && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRequires2FA(false);
-                    setTwoFactorCode('');
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-white pt-1 transition-colors cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Voltar ao login</span>
-                </button>
-              )}
-            </form>
-
-            {/* Toggle between Login and Register */}
-            {!requires2FA && (
-              <div className="mt-6 text-center text-sm text-gray-400">
-                {mode === 'login' ? (
-                  <span>
-                    Precisando de uma conta?{' '}
-                    <button
-                      onClick={() => {
                         setLocalError('');
-                        clearError();
-                        setMode('register');
-                        onNavigate?.('/signup');
-                      }}
-                      className="text-brand-500 font-semibold hover:underline cursor-pointer"
-                    >
-                      Registre-se
-                    </button>
-                  </span>
-                ) : (
-                  <span>
-                    Já tem uma conta?{' '}
-                    <button
-                      onClick={() => {
-                        setLocalError('');
-                        clearError();
                         setMode('login');
                         onNavigate?.('/signin');
                       }}
-                      className="text-brand-500 font-semibold hover:underline cursor-pointer"
+                      disabled={localLoading}
+                      className="text-brand-400 hover:underline font-medium cursor-pointer"
                     >
                       Entrar
                     </button>
-                  </span>
-                )}
-              </div>
-            )}
+                  </p>
+                </motion.div>
+              )}
+
+              {viewKey === 'forgot-success' && (
+                <motion.div
+                  key="forgot-success"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -18 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  className="flex flex-col items-center p-8 text-center"
+                >
+                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-500/15 border border-brand-500/25">
+                    <MailCheck className="h-8 w-8 text-brand-400" />
+                  </div>
+
+                  <h1 className="text-2xl font-semibold text-white">Verifique seu e-mail</h1>
+                  <p className="mt-2 text-sm text-gray-400">
+                    Enviamos um link de redefinição de senha para{' '}
+                    <span className="text-gray-200 font-medium">{email}</span>.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotSubmitted(false);
+                      setMode('login');
+                      onNavigate?.('/signin');
+                    }}
+                    className="mt-6 inline-flex h-10 w-full max-w-xs items-center justify-center rounded-md border border-white/10 bg-background-darker px-4 text-sm font-medium text-gray-100 hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    Voltar para o login
+                  </button>
+                </motion.div>
+              )}
+
+              {viewKey === 'verify_email' && (
+                <motion.div
+                  key="verify_email"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -18 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  className="p-8"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocalError('');
+                      clearError();
+                      setMode('login');
+                      onNavigate?.('/signin');
+                    }}
+                    disabled={isLoading}
+                    className="absolute left-4 top-4 h-9 w-9 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="sr-only">Voltar</span>
+                  </button>
+
+                  <div className="mb-7 text-center">
+                    <div className="mb-4 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/15 border border-brand-500/25">
+                      <MailCheck className="h-7 w-7 text-brand-400" />
+                    </div>
+                    <h1 className="text-2xl font-semibold text-white tracking-tight">Verifique seu e-mail</h1>
+                    <p className="mt-2 text-sm text-gray-400">
+                      Enviamos um código de 6 dígitos para{' '}
+                      <span className="text-gray-200 font-medium">{email || 'seu e-mail'}</span>
+                    </p>
+                  </div>
+
+                  <AuthErrorBanner message={activeError} />
+
+                  {resendStatus && (
+                    <div className="mb-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300 text-center">
+                      {resendStatus}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="flex justify-center">
+                      <OtpInput
+                        length={6}
+                        value={verificationCode}
+                        onChange={setVerificationCode}
+                        autoFocus
+                        size="md"
+                        status={error ? 'error' : 'idle'}
+                        slotClassName="bg-background-darker border border-white/10"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading || verificationCode.length !== 6}
+                      className={primaryBtnClass}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Verificando...
+                        </>
+                      ) : (
+                        'Confirmar e entrar'
+                      )}
+                    </button>
+                  </form>
+
+                  <div className="mt-6 text-center">
+                    <button
+                      type="button"
+                      onClick={handleResendCode}
+                      disabled={resendCooldown > 0}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:underline disabled:text-gray-500 disabled:no-underline disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${resendCooldown > 0 ? 'animate-spin opacity-50' : ''}`} />
+                      <span>
+                        {resendCooldown > 0
+                          ? `Reenviar código em ${resendCooldown}s`
+                          : 'Não recebeu? Reenviar código'}
+                      </span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {viewKey === 'two-factor' && (
+                <motion.div
+                  key="two-factor"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -18 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  className="p-8"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRequires2FA(false);
+                      setTwoFactorCode('');
+                      setUseBackupCode(false);
+                      setLocalError('');
+                      clearError();
+                    }}
+                    disabled={isLoading}
+                    className="absolute left-4 top-4 h-9 w-9 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="sr-only">Voltar</span>
+                  </button>
+
+                  <div className="mb-7 text-center">
+                    <div className="mb-4 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/15 border border-brand-500/25">
+                      <Shield className="h-7 w-7 text-brand-400" />
+                    </div>
+                    <h1 className="text-2xl font-semibold text-white tracking-tight">
+                      Autenticação em 2 etapas
+                    </h1>
+                    <p className="mt-2 text-sm text-gray-400">
+                      {useBackupCode
+                        ? 'Digite um dos seus códigos de backup de uso único'
+                        : 'Digite o código de 6 dígitos do seu aplicativo autenticador'}
+                    </p>
+                  </div>
+
+                  <AuthErrorBanner message={activeError} />
+
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="space-y-3">
+                      {useBackupCode ? (
+                        <div className="space-y-2">
+                          <label htmlFor="backup-code" className={`${labelClass} text-center`}>
+                            Código de backup
+                          </label>
+                          <input
+                            id="backup-code"
+                            type="text"
+                            required
+                            autoFocus
+                            maxLength={12}
+                            value={twoFactorCode}
+                            onChange={(e) => setTwoFactorCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                            placeholder="xxxx-xxxx"
+                            disabled={isLoading}
+                            className={`${inputClass} h-11 text-center text-base font-mono tracking-widest`}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex justify-center">
+                          <OtpInput
+                            length={6}
+                            value={twoFactorCode}
+                            onChange={setTwoFactorCode}
+                            autoFocus
+                            size="md"
+                            status={error ? 'error' : 'idle'}
+                            slotClassName="bg-background-darker border border-white/10"
+                          />
+                        </div>
+                      )}
+
+                      <div className="text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUseBackupCode(!useBackupCode);
+                            setTwoFactorCode('');
+                          }}
+                          disabled={isLoading}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:underline cursor-pointer"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          <span>
+                            {useBackupCode ? 'Usar código do autenticador' : 'Usar código de backup'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={
+                        isLoading ||
+                        (useBackupCode ? twoFactorCode.length < 8 : twoFactorCode.length !== 6)
+                      }
+                      className={primaryBtnClass}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Verificando...
+                        </>
+                      ) : (
+                        'Verificar código'
+                      )}
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+
+              {(viewKey === 'login' || viewKey === 'register') && (
+                <motion.div
+                  key={viewKey}
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -18 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  className="p-8"
+                >
+                  <div className="mb-8 text-center">
+                    <h1 className="text-3xl font-semibold text-white tracking-tight">
+                      {mode === 'login' ? 'Boas-vindas de volta' : 'Criar conta'}
+                    </h1>
+                    <p className="mt-2 text-sm text-gray-400">
+                      {invitePreview
+                        ? `Junte-se ao servidor ${invitePreview.guild_name}`
+                        : mode === 'login'
+                        ? 'Entre na sua conta do ZeroVC'
+                        : 'Comece agora com sua conta ZeroVC'}
+                    </p>
+                  </div>
+
+                  {invitePreview && (
+                    <div className="mb-6 p-3.5 bg-brand-500/10 border border-brand-500/25 rounded-lg flex items-center gap-3">
+                      {invitePreview.icon_url ? (
+                        <img
+                          src={formatAssetUrl(invitePreview.icon_url)}
+                          alt=""
+                          className="w-10 h-10 rounded-full object-cover shadow"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center font-semibold text-white shadow">
+                          {invitePreview.guild_name[0]?.toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[11px] text-brand-300 font-semibold block uppercase tracking-wider">
+                          Convite para servidor
+                        </span>
+                        <h3 className="font-semibold text-white text-sm truncate">
+                          {invitePreview.guild_name}
+                        </h3>
+                        <span className="text-xs text-gray-400">{invitePreview.member_count} membros</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <AuthErrorBanner message={activeError} />
+
+                  <form onSubmit={handleSubmit} className="space-y-5">
+                    {mode === 'register' && (
+                      <div className="space-y-2">
+                        <label htmlFor="auth-username" className={labelClass}>
+                          Nome de usuário
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400 font-medium text-sm select-none">
+                            @
+                          </span>
+                          <input
+                            id="auth-username"
+                            type="text"
+                            required
+                            maxLength={32}
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                            placeholder="usuario"
+                            disabled={isLoading}
+                            className={`${inputClass} pl-7 font-mono lowercase`}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <label htmlFor="auth-email" className={labelClass}>
+                        {mode === 'login' ? 'E-mail ou usuário' : 'E-mail'}
+                      </label>
+                      <input
+                        id="auth-email"
+                        type={mode === 'login' ? 'text' : 'email'}
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder={mode === 'login' ? 'nome@exemplo.com ou @usuario' : 'nome@exemplo.com'}
+                        disabled={isLoading}
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="auth-password" className={labelClass}>
+                          Senha
+                        </label>
+                        {mode === 'login' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLocalError('');
+                              clearError();
+                              setMode('forgot_password');
+                              onNavigate?.('/forgot-password');
+                            }}
+                            disabled={isLoading}
+                            className="text-xs text-brand-400 hover:underline cursor-pointer"
+                          >
+                            Esqueceu a senha?
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          id="auth-password"
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="••••••••"
+                          disabled={isLoading}
+                          className={`${inputClass} pr-10`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((p) => !p)}
+                          disabled={isLoading}
+                          className="absolute right-0 top-0 h-full px-3 text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {hasTurnstileSiteKey && (
+                      <TurnstileWidget
+                        ref={turnstileRef}
+                        siteKey={activeSiteKey}
+                        action={mode}
+                        onSuccess={handleTurnstileSuccess}
+                        onExpire={handleTurnstileExpire}
+                        onError={handleTurnstileError}
+                      />
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isLoading || (hasTurnstileSiteKey && !turnstileToken)}
+                      className={primaryBtnClass}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {mode === 'login' ? 'Entrando...' : 'Criando conta...'}
+                        </>
+                      ) : invitePreview ? (
+                        mode === 'login' ? (
+                          'Entrar e participar'
+                        ) : (
+                          'Criar conta e participar'
+                        )
+                      ) : mode === 'login' ? (
+                        'Entrar'
+                      ) : (
+                        'Criar conta'
+                      )}
+                    </button>
+                  </form>
+
+                  <p className="mt-8 text-center text-sm text-gray-400">
+                    {mode === 'login' ? 'Não tem uma conta? ' : 'Já tem uma conta? '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalError('');
+                        clearError();
+                        const next = mode === 'login' ? 'register' : 'login';
+                        setMode(next);
+                        onNavigate?.(next === 'register' ? '/signup' : '/signin');
+                      }}
+                      disabled={isLoading}
+                      className="text-brand-400 hover:underline font-medium cursor-pointer"
+                    >
+                      {mode === 'login' ? 'Criar uma' : 'Entrar'}
+                    </button>
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

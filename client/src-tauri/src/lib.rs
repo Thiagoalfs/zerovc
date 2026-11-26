@@ -55,6 +55,7 @@ pub struct AppState {
     pub is_quitting: AtomicBool,
     pub pending_turnstile_token: std::sync::Mutex<Option<String>>,
     pub turnstile_return_url: std::sync::Mutex<Option<String>>,
+    pub pending_desktop_auth_code: std::sync::Mutex<Option<String>>,
 }
 
 fn settings_file_path(app: &AppHandle) -> Option<PathBuf> {
@@ -89,6 +90,25 @@ pub fn save_settings(app: &AppHandle, settings: &DesktopSettings) {
 }
 
 fn handle_deep_link_url(app: &AppHandle, raw_url: &str) {
+    if raw_url.starts_with("zerovc://auth") {
+        if let Ok(parsed) = Url::parse(raw_url) {
+            if let Some(code) = parsed
+                .query_pairs()
+                .find(|(k, _)| k == "code")
+                .map(|(_, v)| v.into_owned())
+                .filter(|c| !c.trim().is_empty())
+            {
+                if let Some(state) = app.try_state::<AppState>() {
+                    if let Ok(mut guard) = state.pending_desktop_auth_code.lock() {
+                        *guard = Some(code.clone());
+                    }
+                }
+                let _ = app.emit("desktop-auth-code", code);
+                tray::restore_and_focus_main(app);
+            }
+        }
+        return;
+    }
     let Some(target_path) = extract_valid_deep_link_path(raw_url) else {
         return;
     };
@@ -177,6 +197,7 @@ pub fn run() {
         is_quitting: AtomicBool::new(false),
         pending_turnstile_token: std::sync::Mutex::new(None),
         turnstile_return_url: std::sync::Mutex::new(None),
+        pending_desktop_auth_code: std::sync::Mutex::new(None),
     };
 
     tauri::Builder::default()
@@ -344,6 +365,7 @@ pub fn run() {
             commands::set_splash_colors,
             commands::start_turnstile_verification,
             commands::consume_turnstile_token,
+            commands::consume_desktop_auth_code,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ZeroVC Tauri application");

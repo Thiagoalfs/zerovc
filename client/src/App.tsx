@@ -24,6 +24,9 @@ import { useDMGroupStore } from './stores/dmGroupStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useRegisteredGamesStore } from './stores/registeredGamesStore';
 import { AuthScreen } from './components/Auth/AuthScreen';
+import { DesktopAuthScreen } from './components/Auth/DesktopAuthScreen';
+import { DesktopAuthWebBridge } from './components/Auth/DesktopAuthWebBridge';
+import { isTauri } from './lib/platform';
 import { LandingPage } from './components/Landing/LandingPage';
 import { DownloadPage } from './components/Landing/DownloadPage';
 const CreateServerModal = React.lazy(() => import('./components/Modals/CreateServerModal').then(m => ({ default: m.CreateServerModal })));
@@ -2068,7 +2071,19 @@ export const App: React.FC = () => {
   }
 
   if (!user) {
-    // Native Electron or Capacitor app: Always opens directly on AuthScreen (never the landing page)
+    // Tauri desktop app: browser-based login returning via zerovc://auth?code=...
+    if (isTauri()) {
+      return (
+        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+          <TitleBar />
+          <div className="flex-1 overflow-hidden">
+            <DesktopAuthScreen />
+          </div>
+        </div>
+      );
+    }
+
+    // Legacy Electron or Capacitor app: Always opens directly on AuthScreen (never the landing page)
     if (isElectron || isCapacitor) {
       const isRegister = cleanRoute === 'signup' || cleanRoute === 'register';
       return (
@@ -2082,6 +2097,16 @@ export const App: React.FC = () => {
           <div className="flex-1 overflow-hidden">
             <AuthScreen initialMode={isRegister ? 'register' : 'login'} onNavigate={navigateTo} />
           </div>
+        </div>
+      );
+    }
+
+    if (cleanRoute === 'desktop-auth') {
+      const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const isRegister = params?.get('mode') === 'register';
+      return (
+        <div className="w-screen h-[100dvh] flex flex-col bg-background-darkest">
+          <AuthScreen initialMode={isRegister ? 'register' : 'login'} onNavigate={navigateTo} />
         </div>
       );
     }
@@ -2121,6 +2146,16 @@ export const App: React.FC = () => {
       <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
         <LandingPage onNavigate={navigateTo} user={user} />
       </div>
+    );
+  }
+
+  // Web Browser authenticated desktop handoff (/desktop-auth)
+  if (!isElectron && !isCapacitor && !isTauri() && cleanRoute === 'desktop-auth') {
+    return (
+      <DesktopAuthWebBridge
+        user={user}
+        onContinueWeb={() => navigateTo('/@me', true)}
+      />
     );
   }
 

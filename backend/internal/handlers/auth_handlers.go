@@ -1114,6 +1114,128 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+type desktopAuthEntry struct {
+	userID    uuid.UUID
+	expiresAt time.Time
+}
+
+var (
+	desktopAuthMu    sync.Mutex
+	desktopAuthCodes = make(map[string]desktopAuthEntry)
+)
+
+// CreateDesktopAuthCode issues a short-lived, single-use code for handing off an
+// authenticated browser session to the desktop client via zerovc://auth?code=...
+func (h *AuthHandler) CreateDesktopAuthCode(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		http.Error(w, `{"error":"failed to generate code"}`, http.StatusInternalServerError)
+		return
+	}
+	code := hex.EncodeToString(raw)
+
+	now := time.Now()
+	desktopAuthMu.Lock()
+	for k, v := range desktopAuthCodes {
+		if now.After(v.expiresAt) {
+			delete(desktopAuthCodes, k)
+		}
+	}
+	desktopAuthCodes[code] = desktopAuthEntry{
+		userID:    userID,
+		expiresAt: now.Add(2 * time.Minute),
+	}
+	desktopAuthMu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"code": code,
+	})
+}
+
+// ExchangeDesktopAuthCode exchanges a single-use code from zerovc://auth?code=...
+// for a desktop session JWT + CSRF token.
+func (h *AuthHandler) ExchangeDesktopAuthCode(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Code) == "" {
+		http.Error(w, `{"error":"código inválido"}`, http.StatusBadRequest)
+		return
+	}
+
+	code := strings.TrimSpace(req.Code)
+	now := time.Now()
+
+	desktopAuthMu.Lock()
+	entry, exists := desktopAuthCodes[code]
+	if exists {
+		delete(desktopAuthCodes, code)
+	}
+	desktopAuthMu.Unlock()
+
+	if !exists || now.After(entry.expiresAt) {
+		http.Error(w, `{"error":"código expirado ou inválido. Tente entrar novamente."}`, http.StatusUnauthorized)
+		return
+	}
+
+	var user models.User
+	query := `
+		SELECT id, username, email, COALESCE(phone_number, ''), display_name, avatar_url, banner_url, bio,
+		       COALESCE(NULLIF(NULLIF(status, 'offline'), ''), NULLIF(NULLIF(saved_status, 'offline'), ''), 'online'),
+		       custom_status,
+		       COALESCE(two_factor_secret, ''), email_verified,
+		       COALESCE(custom_activity, 'null'::jsonb), COALESCE(show_activity_status, true), COALESCE(auto_detect_activity, true),
+		       COALESCE(server_folders, '[]'::jsonb), COALESCE(guild_positions, '[]'::jsonb),
+		       COALESCE(e2ee_backup_enabled, true),
+		       created_at, updated_at
+		FROM users
+		WHERE id = $1
+	`
+	err := h.db.Pool.QueryRow(r.Context(), query, entry.userID).Scan(
+		&user.ID, &user.Username, &user.Email, &user.PhoneNumber, &user.DisplayName, &user.AvatarURL, &user.BannerURL, &user.Bio, &user.Status, &user.CustomStatus,
+		&user.TwoFactorSecret, &user.EmailVerified,
+		&user.CustomActivity, &user.ShowActivityStatus, &user.AutoDetectActivity,
+		&user.ServerFolders, &user.GuildPositions,
+		&user.E2EEBackupEnabled,
+		&user.CreatedAt, &user.UpdatedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"usuário não encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	user.TwoFactorEnabled = user.TwoFactorSecret != ""
+
+	token, err := h.auth.GenerateToken(user.ID, user.Username)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
+		return
+	}
+
+	h.recordSession(r.Context(), user.ID, token, r)
+	setAuthCookie(w, r, token)
+
+	var csrfToken string
+	if h.csrf != nil {
+		csrfToken, _ = h.csrf.GenerateToken(user.ID)
+		h.csrf.SetCookie(w, csrfToken, isSecureRequest(r))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AuthResponse{
+		Token:     token,
+		CSRFToken: csrfToken,
+		User:      user.ToPublic(),
+	})
+}
+
 // Session Helpers and Handlers
 
 func extractTokenFromRequest(r *http.Request) string {

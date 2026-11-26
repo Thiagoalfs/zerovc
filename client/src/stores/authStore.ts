@@ -35,6 +35,7 @@ interface AuthState {
   login: (email: string, password: string, code?: string, turnstileToken?: string) => Promise<{ requires_2fa?: boolean; requires_verification?: boolean; email?: string } | void>;
   register: (username: string, email: string, password: string, turnstileToken?: string) => Promise<{ requires_verification?: boolean; email?: string } | void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
+  loginWithDesktopCode: (code: string) => Promise<void>;
   clearError: () => void;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
@@ -265,6 +266,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     } catch (err: any) {
       set({ error: err.message || 'Código de verificação inválido ou expirado', isLoading: false });
+      throw err;
+    }
+  },
+
+  loginWithDesktopCode: async (code) => {
+    set({ isLoading: true, error: null });
+    try {
+      if (isTauri()) {
+        await initDesktopProxyUrl();
+      }
+      const res = await api.auth.exchangeDesktopCode(code);
+      if (res.token && res.user) {
+        await persistDesktopToken(res.token);
+        if (res.csrf_token) {
+          setCsrfToken(res.csrf_token);
+        } else if (res.user.csrf_token) {
+          setCsrfToken(res.user.csrf_token);
+        }
+        try {
+          const key = await backupManager.loadVaultKeyFromStore();
+          if (key) {
+            backupManager.setVaultKey(key, res.user.id);
+          }
+        } catch {}
+        set({ user: res.user, token: 'cookie_session', isCheckingAuth: false, isLoading: false });
+        megolmManager.syncAllUserRoomKeys().catch(() => {});
+        megolmManager.syncAllLocalKeysToServer().catch(() => {});
+        socket.connect();
+      }
+    } catch (err: any) {
+      set({ error: err.message || 'Falha ao autenticar com o código do navegador', isLoading: false });
       throw err;
     }
   },
