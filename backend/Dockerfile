@@ -5,7 +5,7 @@ WORKDIR /client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-COPY client/index.html client/vite.config.ts client/tsconfig.json client/tsconfig.node.json client/tailwind.config.js client/postcss.config.js ./
+COPY client/index.html client/vite.config.ts client/tsconfig.json client/tailwind.config.js client/postcss.config.js ./
 COPY client/public ./public
 COPY client/src ./src
 RUN npx tsc && npx vite build
