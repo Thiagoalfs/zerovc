@@ -41,6 +41,7 @@ import { DeleteMessageModal } from '../Modals/DeleteMessageModal';
 import { AlertCircle, RotateCcw } from 'lucide-react';
 import { hapticLight, hapticMedium, hapticSuccess } from '../../lib/haptics';
 import { UserAvatar } from '../Common/UserAvatar';
+import { AvatarImage } from '../Common/AvatarImage';
 import { useUserContextMenu } from '../../hooks/useUserContextMenu';
 import { useGuildPermissions } from '../../hooks/useGuildPermissions';
 import { canUserManageChannelMessages } from '../../utils/userActivity';
@@ -752,8 +753,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             >
               <div className="w-4 h-4 rounded-full bg-brand-500 text-white text-[8px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm transition-transform group-hover/replyauthor:scale-105">
                 {replyAvatarUrl ? (
-                  <img
+                  <AvatarImage
                     src={formatAssetUrl(replyAvatarUrl)}
+                    displaySize={20}
                     alt=""
                     className="w-full h-full object-cover"
                     loading="lazy"

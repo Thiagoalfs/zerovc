@@ -211,15 +211,7 @@ function createTauriBridge(): ElectronAPI {
     },
 
     restartToUpdate: () => {
-      void import('@tauri-apps/plugin-updater')
-        .then(({ check }) => check())
-        .then(async (update) => {
-          if (update) {
-            await update.downloadAndInstall();
-          }
-          await tauriInvoke('relaunch_app');
-        })
-        .catch(() => {});
+      return tauriInvoke<void>('restart_to_update');
     },
 
     applyTitlebarUpdate: async () => {

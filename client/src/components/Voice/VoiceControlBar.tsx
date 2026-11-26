@@ -6,6 +6,7 @@ import { HeadphonesOff } from '../Common/HeadphonesOff';
 import { ContextMenu, useContextMenu, ContextMenuItem } from '../ContextMenu';
 import { hapticMedium, hapticWarning } from '../../lib/haptics';
 import { getDesktopAPI } from '../../lib/desktopBridge';
+import { useHasCamera } from '../../hooks/useHasCamera';
 
 /**
  * Shared fullscreen toggle state (Electron window or DOM fullscreen + ESC exit)
@@ -111,6 +112,8 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
   const toggleMute = previewState ? previewState.onToggleMute : voiceStore.toggleMute;
   const toggleDeafen = previewState ? previewState.onToggleDeafen : voiceStore.toggleDeafen;
   const toggleCamera = previewState ? (previewState.onToggleCamera ?? (() => {})) : voiceStore.toggleCamera;
+  const hasCamera = useHasCamera(!previewState);
+  const canToggleCamera = Boolean(previewState) || hasCamera || isCameraOn;
   const { stopScreenShare, unwatchAll, leaveVoice } = voiceStore;
 
   const isWatchingAny = (watchedParticipantIds?.length ?? 0) > 0 || Boolean(watchedParticipantId);
@@ -269,16 +272,33 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = ({
         {/* Camera WebCam */}
         <button
           type="button"
+          disabled={!canToggleCamera}
           onClick={() => {
+            if (!canToggleCamera) return;
             hapticMedium();
             toggleCamera();
           }}
-          className={`p-2.5 sm:p-3 rounded-full transition-all cursor-pointer shadow-md active:scale-95 ${
+          className={`p-2.5 sm:p-3 rounded-full transition-all shadow-md ${
             isCameraOn
-              ? 'bg-online text-white hover:bg-emerald-600'
-              : 'bg-background-light hover:bg-white/15 text-white'
+              ? 'bg-online text-white hover:bg-emerald-600 cursor-pointer active:scale-95'
+              : !canToggleCamera
+              ? 'bg-background-light/50 text-gray-500 opacity-45 cursor-not-allowed'
+              : 'bg-background-light hover:bg-white/15 text-white cursor-pointer active:scale-95'
           }`}
-          aria-label={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
+          aria-label={
+            !canToggleCamera
+              ? 'Nenhuma câmera detectada'
+              : isCameraOn
+              ? 'Desligar Câmera'
+              : 'Ligar Câmera'
+          }
+          title={
+            !canToggleCamera
+              ? 'Nenhuma câmera detectada'
+              : isCameraOn
+              ? 'Desligar Câmera'
+              : 'Ligar Câmera'
+          }
         >
           {isCameraOn ? <Video className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>

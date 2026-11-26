@@ -115,11 +115,15 @@ pub fn resolve_audio_capture_binary(app: &AppHandle) -> Option<PathBuf> {
     let binary_name = "zerovc-audio-capture.exe";
     let mut candidates = Vec::new();
     if let Ok(res_dir) = app.path().resource_dir() {
+        candidates.push(res_dir.join("_up_").join("native").join("bin").join(binary_name));
+        candidates.push(res_dir.join("native").join("bin").join(binary_name));
         candidates.push(res_dir.join("bin").join(binary_name));
         candidates.push(res_dir.join(binary_name));
     }
     if let Ok(exe_dir) = std::env::current_exe().map(|p| p.parent().map(|d| d.to_path_buf())) {
         if let Some(dir) = exe_dir {
+            candidates.push(dir.join("_up_").join("native").join("bin").join(binary_name));
+            candidates.push(dir.join("native").join("bin").join(binary_name));
             candidates.push(dir.join("bin").join(binary_name));
             candidates.push(dir.join(binary_name));
         }

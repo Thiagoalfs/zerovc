@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Mic, MicOff, Headphones, Settings, PhoneOff, Monitor, MonitorOff, Video, VideoOff, Gamepad2, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useVoiceStore } from '../../stores/voiceStore';
+import { useHasCamera } from '../../hooks/useHasCamera';
 import { useGuildStore } from '../../stores/guildStore';
 import { formatAssetUrl } from '../../lib/api';
 import { livekit } from '../../lib/livekit';
@@ -66,6 +67,8 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
   } = useVoiceStore();
 
   const showVoiceUsersInBar = useSettingsStore((state) => state.showVoiceUsersInBar);
+  const hasCamera = useHasCamera(isConnected || isConnecting);
+  const canToggleCamera = hasCamera || isCameraOn;
 
   const { activeGuild, selectChannel } = useGuildStore();
   const activeVoiceChannel = activeGuild?.channels?.find((c) => c.id === currentChannelId);
@@ -647,13 +650,27 @@ export const UserBar: React.FC<UserBarProps> = ({ onOpenSettings, onOpenScreenSh
                 type="secondary"
                 size="small"
                 fullWidth
+                disabled={!canToggleCamera}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!canToggleCamera) return;
                   toggleCamera();
                 }}
                 prefix={isCameraOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                className={isCameraOn ? 'border-online/40 bg-online text-white hover:bg-online/90 active:bg-online/80' : undefined}
-                title={isCameraOn ? 'Desligar Câmera' : 'Ligar Câmera'}
+                className={
+                  isCameraOn
+                    ? 'border-online/40 bg-online text-white hover:bg-online/90 active:bg-online/80'
+                    : !canToggleCamera
+                    ? 'opacity-45 text-gray-500 cursor-not-allowed hover:bg-transparent'
+                    : undefined
+                }
+                title={
+                  !canToggleCamera
+                    ? 'Nenhuma câmera detectada'
+                    : isCameraOn
+                    ? 'Desligar Câmera'
+                    : 'Ligar Câmera'
+                }
               >
                 Câmera
               </ModalButton>

@@ -109,6 +109,9 @@
 
 :root {
   --chat-font-size: 14px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .chat-message-content {
@@ -376,6 +379,163 @@ html.reduced-motion .animate-screen-shake {
 html.video-fullscreen header[data-titlebar] {
   display: none;
 }
+
+/* ==============================================================
+   PUBLIC MARKETING SURFACES (LandingPage & DownloadPage)
+   Isolated obsidian + cobalt acoustic palette & motion primitives
+   ============================================================== */
+.public-surface {
+  --pub-bg: #06080d;
+  --pub-surface: #0c1018;
+  --pub-surface-elevated: #111622;
+  --pub-cobalt: #2563eb;
+  --pub-cobalt-bright: #3b82f6;
+  --pub-cobalt-deep: #1d4ed8;
+  --pub-signal: #22c55e;
+  background-color: var(--pub-bg);
+  color: #e5eaf4;
+  color-scheme: dark;
+  caret-color: var(--pub-cobalt-bright);
+}
+
+.public-surface ::selection {
+  background-color: rgba(59, 130, 246, 0.35);
+  color: #ffffff;
+}
+
+.public-surface :focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Protect public pages from in-app light-theme !important inversions */
+html[data-theme="light"] .public-surface,
+html.light .public-surface {
+  background-color: #06080d !important;
+  color: #e5eaf4 !important;
+}
+
+html[data-theme="light"] .public-surface .text-white,
+html.light .public-surface .text-white,
+html[data-theme="light"] .public-surface .hover\:text-white:hover,
+html.light .public-surface .hover\:text-white:hover {
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .public-surface .text-gray-100,
+html.light .public-surface .text-gray-100 {
+  color: #f3f4f6 !important;
+}
+
+html[data-theme="light"] .public-surface .text-gray-200,
+html.light .public-surface .text-gray-200 {
+  color: #e5e7eb !important;
+}
+
+html[data-theme="light"] .public-surface .text-gray-300,
+html.light .public-surface .text-gray-300 {
+  color: #d1d5db !important;
+}
+
+html[data-theme="light"] .public-surface .text-gray-400,
+html.light .public-surface .text-gray-400 {
+  color: #9ca3af !important;
+}
+
+html[data-theme="light"] .public-surface .text-gray-500,
+html.light .public-surface .text-gray-500 {
+  color: #6b7280 !important;
+}
+
+html[data-theme="light"] .public-surface .border-white\/10,
+html.light .public-surface .border-white\/10 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme="light"] .public-surface .bg-white\/5,
+html.light .public-surface .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+html[data-theme="light"] .public-surface .bg-white\/10,
+html.light .public-surface .bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Tactile press response (Emil Kowalski: scale 0.97, 160ms --ease-out) */
+.pub-press {
+  transition-property: transform, background-color, border-color, color, box-shadow;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.pub-press:active {
+  transform: scale(0.97);
+}
+
+/* Hover-only micro-lift gated for fine pointers (never sticks on touch) */
+@media (hover: hover) and (pointer: fine) {
+  .pub-hover-scale {
+    transition: transform 200ms var(--ease-out);
+  }
+  .pub-hover-scale:hover {
+    transform: scale(1.04);
+  }
+  .pub-hover-arrow .pub-arrow {
+    transition: transform 200ms var(--ease-out);
+  }
+  .pub-hover-arrow:hover .pub-arrow {
+    transform: translateX(3px);
+  }
+}
+
+/* Top specular hairline for elevated studio surfaces */
+.pub-specular {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.09),
+    0 32px 96px -28px rgba(0, 0, 0, 0.88);
+}
+
+/* Animated clip-path tab overlay (Emil Kowalski duplicate-tablist technique) */
+.pub-tab-clip-layer {
+  transition: clip-path 240ms var(--ease-out);
+  will-change: clip-path;
+}
+
+/* Subtle live voice-activity pulse bar (compositor-only scaleY) */
+@keyframes pub-eq-bar {
+  0%, 100% {
+    transform: scaleY(0.28);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.pub-eq-bar {
+  transform-origin: bottom center;
+  animation: pub-eq-bar 720ms var(--ease-in-out) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pub-tab-clip-layer {
+    transition-duration: 140ms !important;
+  }
+  .pub-eq-bar {
+    animation: none !important;
+    transform: scaleY(0.6) !important;
+  }
+}
+
+html.reduced-motion .pub-tab-clip-layer {
+  transition-duration: 140ms !important;
+}
+
+html.reduced-motion .pub-eq-bar {
+  animation: none !important;
+  transform: scaleY(0.6) !important;
+}
+
 
 
 

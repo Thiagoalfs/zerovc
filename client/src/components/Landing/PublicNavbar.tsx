@@ -16,7 +16,7 @@ export const PublicNavbar: React.FC<PublicNavbarProps> = ({
   transparentAtTop = false,
 }) => {
   const headerRef = useRef<HTMLElement>(null);
-  const [isScrolled, setIsScrolled] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(!transparentAtTop);
 
   useEffect(() => {
     if (!transparentAtTop) {
@@ -40,7 +40,7 @@ export const PublicNavbar: React.FC<PublicNavbarProps> = ({
     const readScrollTop = () =>
       target === window ? window.scrollY : (target as HTMLElement).scrollTop;
 
-    const handleScroll = () => setIsScrolled(readScrollTop() > 12);
+    const handleScroll = () => setIsScrolled(readScrollTop() > 14);
     handleScroll();
 
     target.addEventListener('scroll', handleScroll, { passive: true });
@@ -48,85 +48,110 @@ export const PublicNavbar: React.FC<PublicNavbarProps> = ({
   }, [transparentAtTop]);
 
   const showSurface = !transparentAtTop || isScrolled;
+  const isLanding = activePage === 'landing';
 
   return (
     <header
       ref={headerRef}
-      className={`sticky top-0 z-50 px-4 sm:px-6 py-3.5 transition-[background-color,border-color,backdrop-filter] duration-200 flex-shrink-0 ${
-        showSurface
-          ? 'bg-background-darkest/85 backdrop-blur-md border-b border-white/[0.06]'
-          : 'bg-transparent border-b border-transparent'
-      }`}
+      className="sticky top-0 z-50 px-5 sm:px-6 h-16 flex items-center flex-shrink-0"
     >
-      <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+      {/* Compositor-only opacity surface layer (avoids animating backdrop-filter) */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[#06080D]/82 backdrop-blur-md border-b border-white/[0.08] transition-opacity duration-200"
+        style={{
+          opacity: showSurface ? 1 : 0,
+          transitionTimingFunction: 'var(--ease-out)',
+        }}
+      />
+
+      <div className="relative z-10 max-w-6xl mx-auto w-full flex items-center justify-between gap-4">
         <button
           type="button"
           onClick={() => onNavigate('/')}
-          className="flex items-center gap-2.5 cursor-pointer group select-none text-left flex-shrink-0"
+          className="flex items-center gap-2.5 cursor-pointer group select-none text-left flex-shrink-0 pub-press"
         >
-          <ZeroVCLogo className="w-9 h-9 transition-transform duration-200 ease-out group-hover:scale-105" />
-          <span className="text-[22px] font-extrabold tracking-[-0.03em] text-white">
+          <span className="pub-hover-scale inline-flex">
+            <ZeroVCLogo className="w-8 h-8 sm:w-9 sm:h-9" />
+          </span>
+          <span
+            className={`text-[21px] font-extrabold tracking-[-0.03em] text-white ${
+              isLanding ? 'font-display' : 'font-sans'
+            }`}
+          >
             ZeroVC
           </span>
         </button>
 
-        <nav className="flex items-center gap-4 sm:gap-7 text-sm font-medium text-gray-300">
-          {activePage === 'landing' ? (
+        <nav
+          aria-label="Navegação principal"
+          className="flex items-center gap-1 sm:gap-2 text-sm font-medium"
+        >
+          {isLanding ? (
             <>
               <a
-                href="#recursos"
+                href="#arquitetura"
                 onClick={(e) => {
                   e.preventDefault();
-                  document.getElementById('recursos')?.scrollIntoView({ behavior: 'smooth' });
+                  document.getElementById('arquitetura')?.scrollIntoView({ behavior: 'smooth' });
                 }}
-                className="hidden sm:inline hover:text-white transition-colors duration-150"
+                className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/[0.05] transition-colors duration-150 pub-press"
               >
-                Recursos
+                Arquitetura
               </a>
               <button
                 type="button"
                 onClick={() => onNavigate('/download')}
-                className="hover:text-white transition-colors duration-150 cursor-pointer"
+                className="inline-flex items-center px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer pub-press"
               >
                 Download
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={() => onNavigate('/')}
-              className="hover:text-white transition-colors duration-150 cursor-pointer"
-            >
-              Início
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => onNavigate('/')}
+                className="inline-flex items-center px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer pub-press"
+              >
+                Início
+              </button>
+              <span
+                aria-current="page"
+                className="inline-flex items-center px-3 py-1.5 rounded-lg text-white bg-white/[0.07] font-semibold select-none"
+              >
+                Download
+              </span>
+            </>
           )}
         </nav>
 
-        <div className="flex items-center gap-4 flex-shrink-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
           {user ? (
             <button
               type="button"
               onClick={() => onNavigate('/@me')}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-sm transition-colors duration-150 cursor-pointer"
+              className="pub-press pub-hover-arrow flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2563EB] hover:bg-[#3B82F6] text-white font-semibold text-sm cursor-pointer shadow-[0_8px_24px_-8px_rgba(37,99,235,0.65)]"
             >
-              <span>{activePage === 'landing' ? `Abrir chat (@${user.username})` : 'Abrir chat'}</span>
-              <ArrowRight className="w-4 h-4" />
+              <span>{isLanding ? `Abrir chat (@${user.username})` : 'Abrir chat'}</span>
+              <ArrowRight className="w-4 h-4 pub-arrow" />
             </button>
           ) : (
             <>
               <button
                 type="button"
                 onClick={() => onNavigate('/signin')}
-                className="hidden sm:inline text-sm font-medium text-gray-300 hover:text-white transition-colors duration-150 cursor-pointer"
+                className="hidden sm:inline-flex items-center px-3.5 py-2 rounded-xl text-sm font-medium text-gray-300 hover:text-white hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer pub-press"
               >
                 Entrar
               </button>
               <button
                 type="button"
                 onClick={() => onNavigate('/signup')}
-                className="px-4 py-2 rounded-xl text-sm font-semibold bg-brand-600 hover:bg-brand-500 text-white transition-colors duration-150 cursor-pointer"
+                className="pub-press pub-hover-arrow inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-[#2563EB] hover:bg-[#3B82F6] text-white cursor-pointer shadow-[0_8px_24px_-8px_rgba(37,99,235,0.65)]"
               >
-                Criar conta
+                <span>Criar conta</span>
+                <ArrowRight className="w-3.5 h-3.5 pub-arrow hidden sm:inline" />
               </button>
             </>
           )}

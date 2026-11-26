@@ -181,7 +181,7 @@ export async function cropImageToWebP(
         resolve(croppedFile);
       },
       'image/webp',
-      0.92
+      0.94
     );
   });
 }

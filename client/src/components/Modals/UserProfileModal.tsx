@@ -24,6 +24,7 @@ import { formatAssetUrl } from '../../lib/api';
 import { getUserActivity, useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
 import { MODAL_CATEGORY_SUBTITLE_CLASS } from '@/constants/modalTypography';
+import { AvatarImage } from '../Common/AvatarImage';
 
 export type { UserProfilePosition };
 
@@ -265,7 +266,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               className="w-16 h-16 rounded-full bg-brand-500 border-4 border-background-darkest flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden cursor-pointer relative transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               {user.avatar_url ? (
-                <img src={formatAssetUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
+                <AvatarImage src={formatAssetUrl(user.avatar_url)} displaySize={64} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase() || 'U'}</span>
               )}

@@ -90,6 +90,15 @@ export const TitleBar: React.FC = () => {
       setPendingVersion(info?.version ?? null);
     });
 
+    const unsubProgress = desktopAPI?.onUpdateProgress?.((progress: any) => {
+      if (progress?.installing) {
+        setUpdateFeedback('Instalando atualização...');
+        return;
+      }
+      const pct = Math.round(progress?.percent ?? 0);
+      setUpdateFeedback(pct > 0 ? `Baixando atualização (${pct}%)...` : 'Baixando atualização...');
+    });
+
     const showTransientFeedback = (msg: string) => {
       setUpdateFeedback(msg);
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
@@ -135,6 +144,7 @@ export const TitleBar: React.FC = () => {
       clearInterval(binaryInterval);
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
       unsubAvailable?.();
+      unsubProgress?.();
       unsubTrayCheck?.();
       unsubCheckResult?.();
     };
@@ -170,14 +180,34 @@ export const TitleBar: React.FC = () => {
   const handleDirectUpdate = async () => {
     const desktopAPI = getDesktopAPI();
     if (binaryUpdateAvailable) {
-      desktopAPI?.restartToUpdate?.();
+      setUpdateFeedback('Baixando atualização...');
+      try {
+        await Promise.resolve(desktopAPI?.restartToUpdate?.());
+      } catch (err: any) {
+        const msg = String(err?.message || err || '');
+        if (msg.includes('update-auth-cancelled')) {
+          setUpdateFeedback('Atualização cancelada');
+        } else if (msg.includes('linux-package-manual-update')) {
+          setUpdateFeedback('Atualize pelo pacote (.deb/.rpm) na página de download');
+        } else {
+          setUpdateFeedback('Falha ao baixar atualização');
+        }
+        if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+        feedbackTimerRef.current = setTimeout(() => setUpdateFeedback(null), 5000);
+      }
       return;
     }
     if (webSyncAvailable) {
       if (desktopAPI?.applyTitlebarUpdate) {
         try {
           const res = await desktopAPI.applyTitlebarUpdate();
-          if (res?.action === 'reload') {
+          if (res?.action === 'downloading') {
+            setUpdateFeedback('Baixando atualização...');
+          } else if ((res as any)?.action === 'manual') {
+            setUpdateFeedback('Atualize pelo pacote (.deb/.rpm) na página de download');
+            if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+            feedbackTimerRef.current = setTimeout(() => setUpdateFeedback(null), 5000);
+          } else if (res?.action === 'reload') {
             window.location.reload();
           }
           return;

@@ -200,16 +200,243 @@ pub fn is_cursor_in_window(app: AppHandle) -> bool {
         && cursor.y <= (pos.y as f64 + size.height as f64)
 }
 
+fn is_linux_non_appimage() -> bool {
+    cfg!(target_os = "linux") && std::env::var_os("APPIMAGE").is_none()
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Clone, Copy)]
+enum LinuxPkgKind {
+    Deb,
+    Rpm,
+    Pacman,
+}
+
+#[cfg(target_os = "linux")]
+fn command_exists(bin: &str) -> bool {
+    std::env::var_os("PATH")
+        .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(bin).is_file()))
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+fn detect_linux_pkg_kind() -> Option<LinuxPkgKind> {
+    let os_release = std::fs::read_to_string("/etc/os-release")
+        .unwrap_or_default()
+        .to_lowercase();
+
+    if (os_release.contains("arch")
+        || os_release.contains("manjaro")
+        || os_release.contains("endeavouros")
+        || os_release.contains("cachyos")
+        || os_release.contains("garuda")
+        || std::path::Path::new("/etc/arch-release").exists())
+        && command_exists("pacman")
+    {
+        return Some(LinuxPkgKind::Pacman);
+    }
+
+    if (os_release.contains("fedora")
+        || os_release.contains("rhel")
+        || os_release.contains("centos")
+        || os_release.contains("rocky")
+        || os_release.contains("alma")
+        || os_release.contains("suse"))
+        && (command_exists("dnf") || command_exists("zypper") || command_exists("rpm"))
+    {
+        return Some(LinuxPkgKind::Rpm);
+    }
+
+    if (os_release.contains("ubuntu")
+        || os_release.contains("debian")
+        || os_release.contains("mint")
+        || os_release.contains("pop"))
+        && (command_exists("apt-get") || command_exists("dpkg"))
+    {
+        return Some(LinuxPkgKind::Deb);
+    }
+
+    if command_exists("apt-get") || command_exists("dpkg") {
+        Some(LinuxPkgKind::Deb)
+    } else if command_exists("dnf") || command_exists("zypper") || command_exists("rpm") {
+        Some(LinuxPkgKind::Rpm)
+    } else if command_exists("pacman") {
+        Some(LinuxPkgKind::Pacman)
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn download_and_install_linux_package(app: &AppHandle, version: &str) -> Result<(), String> {
+    let Some(pkg_kind) = detect_linux_pkg_kind() else {
+        let _ = open_url_with_os("https://zerovc.safiroko.xyz/download");
+        return Err("linux-package-manual-update".to_string());
+    };
+
+    if !command_exists("pkexec") {
+        let _ = open_url_with_os("https://zerovc.safiroko.xyz/download");
+        return Err("linux-package-manual-update".to_string());
+    }
+
+    let file_name = match pkg_kind {
+        LinuxPkgKind::Deb => "ZeroVC.deb",
+        LinuxPkgKind::Rpm => "ZeroVC.rpm",
+        LinuxPkgKind::Pacman => "ZeroVC.pacman",
+    };
+
+    let tag = if version.starts_with('v') {
+        version.to_string()
+    } else {
+        format!("v{version}")
+    };
+    let download_url =
+        format!("https://github.com/Thiagoalfs/zerovc/releases/download/{tag}/{file_name}");
+
+    let cache_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("Diretório de cache indisponível: {e}"))?;
+    let updates_dir = cache_dir.join("updates");
+    tokio::fs::create_dir_all(&updates_dir)
+        .await
+        .map_err(|e| format!("Falha ao preparar pasta de atualização: {e}"))?;
+    let dest_path = updates_dir.join(file_name);
+    let _ = tokio::fs::remove_file(&dest_path).await;
+
+    let _ = app.emit(
+        "update-progress",
+        serde_json::json!({
+            "percent": 15.0,
+            "bytesPerSecond": 0,
+            "transferred": 0,
+            "total": 0,
+        }),
+    );
+
+    let dest_str = dest_path.to_string_lossy().to_string();
+    let dl_status = if command_exists("curl") {
+        tokio::process::Command::new("curl")
+            .args(["-fSL", "--retry", "2", "-o", &dest_str, &download_url])
+            .status()
+            .await
+            .map_err(|e| format!("Falha ao executar curl: {e}"))?
+    } else if command_exists("wget") {
+        tokio::process::Command::new("wget")
+            .args(["-q", "-O", &dest_str, &download_url])
+            .status()
+            .await
+            .map_err(|e| format!("Falha ao executar wget: {e}"))?
+    } else {
+        let _ = open_url_with_os("https://zerovc.safiroko.xyz/download");
+        return Err("linux-package-manual-update".to_string());
+    };
+
+    if !dl_status.success() {
+        let _ = tokio::fs::remove_file(&dest_path).await;
+        return Err(format!("Falha ao baixar {file_name} ({tag})"));
+    }
+
+    let _ = app.emit(
+        "update-progress",
+        serde_json::json!({
+            "percent": 100.0,
+            "bytesPerSecond": 0,
+            "transferred": 1,
+            "total": 1,
+            "installing": true,
+        }),
+    );
+
+    let mut cmd = tokio::process::Command::new("pkexec");
+    match pkg_kind {
+        LinuxPkgKind::Deb => {
+            if command_exists("apt-get") {
+                cmd.args(["apt-get", "install", "-y", &dest_str]);
+            } else {
+                cmd.args(["dpkg", "-i", &dest_str]);
+            }
+        }
+        LinuxPkgKind::Rpm => {
+            if command_exists("dnf") {
+                cmd.args(["dnf", "install", "-y", &dest_str]);
+            } else if command_exists("zypper") {
+                cmd.args([
+                    "zypper",
+                    "--non-interactive",
+                    "install",
+                    "--allow-unsigned-rpm",
+                    &dest_str,
+                ]);
+            } else {
+                cmd.args(["rpm", "-Uvh", "--replacepkgs", &dest_str]);
+            }
+        }
+        LinuxPkgKind::Pacman => {
+            cmd.args(["pacman", "-U", "--noconfirm", &dest_str]);
+        }
+    }
+
+    let install_out = cmd
+        .output()
+        .await
+        .map_err(|e| format!("Falha ao iniciar instalador do sistema: {e}"))?;
+    let _ = tokio::fs::remove_file(&dest_path).await;
+
+    if !install_out.status.success() {
+        let code = install_out.status.code().unwrap_or(-1);
+        if code == 126 || code == 127 {
+            return Err("update-auth-cancelled".to_string());
+        }
+        let stderr = String::from_utf8_lossy(&install_out.stderr);
+        return Err(format!(
+            "Falha ao instalar {file_name}: {}",
+            stderr.trim()
+        ));
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn check_for_updates(app: AppHandle) {
-    if let Ok(updater) = app.updater() {
-        if let Ok(Some(update)) = updater.check().await {
+    match app.updater() {
+        Ok(updater) => match updater.check().await {
+            Ok(Some(update)) => {
+                let _ = app.emit(
+                    "update-available",
+                    serde_json::json!({
+                        "version": update.version,
+                        "releaseNotes": update.body,
+                    }),
+                );
+                let _ = app.emit(
+                    "update-check-result",
+                    serde_json::json!({
+                        "status": "available",
+                        "version": update.version,
+                    }),
+                );
+            }
+            Ok(None) => {
+                let _ = app.emit(
+                    "update-check-result",
+                    serde_json::json!({ "status": "up-to-date" }),
+                );
+            }
+            Err(err) => {
+                eprintln!("[Updater] check_for_updates failed: {err}");
+                let _ = app.emit(
+                    "update-check-result",
+                    serde_json::json!({ "status": "error", "message": err.to_string() }),
+                );
+            }
+        },
+        Err(err) => {
+            eprintln!("[Updater] updater unavailable: {err}");
             let _ = app.emit(
-                "update-available",
-                serde_json::json!({
-                    "version": update.version,
-                    "releaseNotes": update.body,
-                }),
+                "update-check-result",
+                serde_json::json!({ "status": "error", "message": err.to_string() }),
             );
         }
     }
@@ -262,14 +489,60 @@ pub fn quit_and_install(app: AppHandle, state: State<'_, AppState>) {
 
 #[tauri::command]
 pub async fn restart_to_update(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    state.is_quitting.store(true, Ordering::SeqCst);
-    if let Ok(updater) = app.updater() {
-        if let Ok(Some(update)) = updater.check().await {
-            if update.download_and_install(|_, _| {}, || {}).await.is_ok() {
-                app.restart();
-            }
-        }
+    let updater = app
+        .updater()
+        .map_err(|e| format!("Updater indisponível: {e}"))?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("Falha ao verificar atualização: {e}"))?
+        .ok_or_else(|| "Nenhuma atualização pendente encontrada".to_string())?;
+
+    let version = update.version.clone();
+
+    #[cfg(target_os = "linux")]
+    if is_linux_non_appimage() {
+        download_and_install_linux_package(&app, &version).await?;
+        let _ = app.emit(
+            "update-downloaded",
+            serde_json::json!({ "version": version }),
+        );
+        state.is_quitting.store(true, Ordering::SeqCst);
+        app.restart();
     }
+
+    let app_clone = app.clone();
+    let mut downloaded: usize = 0;
+    update
+        .download_and_install(
+            move |chunk_len, content_len| {
+                downloaded += chunk_len;
+                let total = content_len.unwrap_or(0);
+                let percent = if total > 0 {
+                    ((downloaded as f64 / total as f64) * 100.0).min(100.0)
+                } else {
+                    0.0
+                };
+                let _ = app_clone.emit(
+                    "update-progress",
+                    serde_json::json!({
+                        "percent": percent,
+                        "bytesPerSecond": 0,
+                        "transferred": downloaded,
+                        "total": total,
+                    }),
+                );
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| format!("Falha ao baixar/instalar atualização: {e}"))?;
+
+    let _ = app.emit(
+        "update-downloaded",
+        serde_json::json!({ "version": version }),
+    );
+    state.is_quitting.store(true, Ordering::SeqCst);
     app.restart();
 }
 
@@ -277,10 +550,68 @@ pub async fn restart_to_update(app: AppHandle, state: State<'_, AppState>) -> Re
 pub async fn apply_titlebar_update(app: AppHandle) -> TitlebarUpdateAction {
     if let Ok(updater) = app.updater() {
         if let Ok(Some(update)) = updater.check().await {
+            let version = update.version.clone();
             let app_clone = app.clone();
             tauri::async_runtime::spawn(async move {
-                if update.download_and_install(|_, _| {}, || {}).await.is_ok() {
-                    app_clone.restart();
+                #[cfg(target_os = "linux")]
+                if is_linux_non_appimage() {
+                    match download_and_install_linux_package(&app_clone, &version).await {
+                        Ok(()) => {
+                            if let Some(state) = app_clone.try_state::<AppState>() {
+                                state.is_quitting.store(true, Ordering::SeqCst);
+                            }
+                            app_clone.restart();
+                        }
+                        Err(err) => {
+                            eprintln!("[Updater] linux package update failed: {err}");
+                            let _ = app_clone.emit(
+                                "update-check-result",
+                                serde_json::json!({ "status": "error", "message": err }),
+                            );
+                        }
+                    }
+                    return;
+                }
+
+                let progress_app = app_clone.clone();
+                let mut downloaded: usize = 0;
+                match update
+                    .download_and_install(
+                        move |chunk_len, content_len| {
+                            downloaded += chunk_len;
+                            let total = content_len.unwrap_or(0);
+                            let percent = if total > 0 {
+                                ((downloaded as f64 / total as f64) * 100.0).min(100.0)
+                            } else {
+                                0.0
+                            };
+                            let _ = progress_app.emit(
+                                "update-progress",
+                                serde_json::json!({
+                                    "percent": percent,
+                                    "bytesPerSecond": 0,
+                                    "transferred": downloaded,
+                                    "total": total,
+                                }),
+                            );
+                        },
+                        || {},
+                    )
+                    .await
+                {
+                    Ok(()) => {
+                        if let Some(state) = app_clone.try_state::<AppState>() {
+                            state.is_quitting.store(true, Ordering::SeqCst);
+                        }
+                        app_clone.restart();
+                    }
+                    Err(err) => {
+                        eprintln!("[Updater] apply_titlebar_update failed: {err}");
+                        let _ = app_clone.emit(
+                            "update-check-result",
+                            serde_json::json!({ "status": "error", "message": err.to_string() }),
+                        );
+                    }
                 }
             });
             return TitlebarUpdateAction {

@@ -256,13 +256,12 @@ class RustMediaAdapter {
 
     this.visibleParticipants = mainList.map((p) => {
       const sidecar = sidecarByOwner.get(p.identity);
-      const forceLocalShare = p.isLocal && this.isLocalNativeScreenSharing;
-      const mergedScreenShare = Boolean(
-        p.isScreenShareEnabled || sidecar?.isScreenShareEnabled || forceLocalShare
-      );
-      const mergedScreenShareAudio = Boolean(
-        p.hasScreenShareAudio || sidecar?.hasScreenShareAudio
-      );
+      const mergedScreenShare = p.isLocal
+        ? Boolean(p.isScreenShareEnabled || this.isLocalNativeScreenSharing)
+        : Boolean(p.isScreenShareEnabled || sidecar?.isScreenShareEnabled);
+      const mergedScreenShareAudio = p.isLocal
+        ? Boolean(p.hasScreenShareAudio || (this.isLocalNativeScreenSharing && sidecar?.hasScreenShareAudio))
+        : Boolean(p.hasScreenShareAudio || sidecar?.hasScreenShareAudio);
       return createParticipantStub(p, mergedScreenShare, mergedScreenShareAudio);
     });
   }

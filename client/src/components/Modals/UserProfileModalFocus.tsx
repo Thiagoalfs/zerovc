@@ -26,6 +26,7 @@ import { useFriendStore } from '../../stores/friendStore';
 import { showAlert } from '../../stores/confirmModalStore';
 import { copyToClipboard } from '../../utils/clipboard';
 import { api, formatAssetUrl } from '../../lib/api';
+import { AvatarImage } from '../Common/AvatarImage';
 import { getUserActivity, useActivityElapsedTime, getActivityColorClass } from '../../utils/userActivity';
 import { UserRolesSection } from './UserRolesSection';
 import { ModalButton } from '@/components/ui/modal-button';
@@ -324,7 +325,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                 className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-brand-500 border-[6px] border-background-darkest flex items-center justify-center text-3xl sm:text-4xl font-bold text-white shadow-2xl overflow-hidden cursor-pointer relative transition-transform active:scale-95"
               >
                 {user.avatar_url ? (
-                  <img src={formatAssetUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
+                  <AvatarImage src={formatAssetUrl(user.avatar_url)} displaySize={112} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <span>{user.display_name?.[0]?.toUpperCase() || user.username[0]?.toUpperCase() || 'U'}</span>
                 )}
@@ -633,7 +634,7 @@ export const UserProfileModalFocus: React.FC<UserProfileModalFocusProps> = ({
                             >
                               <div className="w-7 h-7 rounded-full overflow-hidden bg-background-darker border border-white/10 shrink-0">
                                 {f.avatar_url ? (
-                                  <img src={formatAssetUrl(f.avatar_url)} alt="" className="w-full h-full object-cover" />
+                                  <AvatarImage src={formatAssetUrl(f.avatar_url)} displaySize={32} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                   <div className="w-full h-full bg-brand-500/20 text-brand-300 text-xs font-bold flex items-center justify-center">
                                     {(f.display_name || f.username || '?').charAt(0).toUpperCase()}

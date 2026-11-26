@@ -64,18 +64,25 @@ impl Default for ScreenShareState {
 impl ScreenShareState {
     pub async fn stop(&mut self) {
         if let Some(mut stdin) = self.child_stdin.take() {
-            let _ = stdin.write_all(b"stop\n").await;
+            let _ = stdin.write_all(b"{\"type\":\"stop\"}\n").await;
             let _ = stdin.flush().await;
             let _ = stdin.shutdown().await;
         }
         if let Some(mut child) = self.active_child.take() {
             if let Some(mut stdin) = child.stdin.take() {
-                let _ = stdin.write_all(b"stop\n").await;
+                let _ = stdin.write_all(b"{\"type\":\"stop\"}\n").await;
+                let _ = stdin.flush().await;
                 let _ = stdin.shutdown().await;
             }
             tokio::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                let _ = child.kill().await;
+                let wait_res = tokio::time::timeout(
+                    std::time::Duration::from_millis(1500),
+                    child.wait(),
+                )
+                .await;
+                if wait_res.is_err() {
+                    let _ = child.kill().await;
+                }
             });
         }
     }
@@ -129,10 +136,14 @@ pub fn resolve_screenshare_binary(app: &AppHandle) -> Option<PathBuf> {
 
     let mut candidates = Vec::new();
     if let Ok(res_dir) = app.path().resource_dir() {
+        candidates.push(res_dir.join("_up_").join("native").join("bin").join(binary_name));
+        candidates.push(res_dir.join("native").join("bin").join(binary_name));
         candidates.push(res_dir.join("bin").join(binary_name));
         candidates.push(res_dir.join(binary_name));
     }
     if let Ok(Some(dir)) = std::env::current_exe().map(|p| p.parent().map(|d| d.to_path_buf())) {
+        candidates.push(dir.join("_up_").join("native").join("bin").join(binary_name));
+        candidates.push(dir.join("native").join("bin").join(binary_name));
         candidates.push(dir.join("bin").join(binary_name));
         candidates.push(dir.join(binary_name));
     }
@@ -140,6 +151,9 @@ pub fn resolve_screenshare_binary(app: &AppHandle) -> Option<PathBuf> {
     candidates.push(PathBuf::from("../native/bin").join(binary_name));
     candidates.push(
         PathBuf::from("../native/native-screenshare/target/release").join(binary_name),
+    );
+    candidates.push(
+        PathBuf::from("../native/native-screenshare/target/debug").join(binary_name),
     );
 
     candidates.into_iter().find(|p| p.exists())

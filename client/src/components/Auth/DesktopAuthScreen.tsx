@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ExternalLink, Loader2, UserPlus, AlertTriangle } from 'lucide-react';
+import { ExternalLink, Loader2, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { getDesktopAPI } from '../../lib/platform';
 
@@ -145,9 +145,8 @@ export const DesktopAuthScreen: React.FC = () => {
                   type="button"
                   onClick={() => openBrowserLogin('register')}
                   disabled={isLoading}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-background-darker/90 px-4 text-sm font-medium text-gray-200 hover:border-brand-500/40 hover:bg-white/5 hover:text-white transition-all cursor-pointer"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-md border border-white/10 bg-background-darker/90 px-4 text-sm font-medium text-gray-200 hover:border-brand-500/40 hover:bg-white/5 hover:text-white transition-all cursor-pointer"
                 >
-                  <UserPlus className="w-4 h-4 text-brand-400" />
                   Criar uma conta
                 </button>
               )}
