@@ -213,11 +213,12 @@ export const TitleBar: React.FC = () => {
   return (
     <header
       data-titlebar=""
+      data-tauri-drag-region
       className="h-8 bg-background-darkest border-b border-white/5 flex items-center justify-between px-3 select-none flex-shrink-0 z-[9999999] relative"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* Left Branding / Title */}
-      <div className="flex items-center gap-2 text-xs font-bold text-gray-300">
+      <div className="flex items-center gap-2 text-xs font-bold text-gray-300 pointer-events-none">
         <ZeroVCLogo className="w-4 h-4 shadow-sm flex-shrink-0" />
         <span className="tracking-wide text-[11px] font-semibold text-gray-300">
           ZeroVC <span className="text-gray-400 font-normal">(v{appVersion})</span>

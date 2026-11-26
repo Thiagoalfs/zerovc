@@ -128,6 +128,16 @@ func (h *AuthHandler) GetTurnstileConfig(w http.ResponseWriter, r *http.Request)
 func (h *AuthHandler) GetTurnstileWidget(w http.ResponseWriter, r *http.Request) {
 	siteKey := strings.TrimSpace(os.Getenv("TURNSTILE_SITE_KEY"))
 	isDesktop := r.URL.Query().Get("desktop") == "1"
+	rawCallback := strings.TrimSpace(r.URL.Query().Get("callback"))
+	safeCallback := ""
+	if rawCallback != "" {
+		if cbURL, err := url.Parse(rawCallback); err == nil && cbURL.Scheme == "http" {
+			host := cbURL.Hostname()
+			if host == "127.0.0.1" || host == "localhost" {
+				safeCallback = cbURL.String()
+			}
+		}
+	}
 	rawAction := strings.TrimSpace(r.URL.Query().Get("action"))
 	var cleanAction strings.Builder
 	for _, ch := range rawAction {
@@ -142,6 +152,7 @@ func (h *AuthHandler) GetTurnstileWidget(w http.ResponseWriter, r *http.Request)
 	siteKeyJSON, _ := json.Marshal(siteKey)
 	actionJSON, _ := json.Marshal(cleanAction.String())
 	isDesktopJSON, _ := json.Marshal(isDesktop)
+	callbackJSON, _ := json.Marshal(safeCallback)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -163,13 +174,17 @@ func (h *AuthHandler) GetTurnstileWidget(w http.ResponseWriter, r *http.Request)
     .back { display: inline-block; margin-top: 18px; font-size: 13px; color: #949ba4; text-decoration: none; }
     .back:hover { color: #dbdee1; text-decoration: underline; }
     `
-		cardStart = `
+		backLink := `<a class="back" href="/__turnstile_cancel">Voltar para o login</a>`
+		if safeCallback != "" {
+			backLink = ""
+		}
+		cardStart = fmt.Sprintf(`
   <div class="card">
     <h1 class="title">ZeroVC</h1>
     <p class="subtitle">Confirme que você é humano para continuar</p>
     <div id="cf-turnstile"></div>
-    <a class="back" href="/__turnstile_cancel">Voltar para o login</a>
-  </div>`
+    %s
+  </div>`, backLink)
 	}
 
 	fmt.Fprintf(w, `<!DOCTYPE html>
@@ -187,12 +202,18 @@ func (h *AuthHandler) GetTurnstileWidget(w http.ResponseWriter, r *http.Request)
       var siteKey = %s;
       var action = %s;
       var isDesktop = %s;
+      var callbackUrl = %s;
       var widgetId = null;
 
       function notify(type, token) {
         if (isDesktop) {
           if (type === 'success' && token) {
-            window.location.href = '/__turnstile_done?token=' + encodeURIComponent(token);
+            if (callbackUrl) {
+              var sep = callbackUrl.indexOf('?') >= 0 ? '&' : '?';
+              window.location.href = callbackUrl + sep + 'token=' + encodeURIComponent(token);
+            } else {
+              window.location.href = '/__turnstile_done?token=' + encodeURIComponent(token);
+            }
           }
           return;
         }
@@ -232,7 +253,7 @@ func (h *AuthHandler) GetTurnstileWidget(w http.ResponseWriter, r *http.Request)
     })();
   </script>
 </body>
-</html>`, pageStyle, cardStart, string(siteKeyJSON), string(actionJSON), string(isDesktopJSON))
+</html>`, pageStyle, cardStart, string(siteKeyJSON), string(actionJSON), string(isDesktopJSON), string(callbackJSON))
 }
 
 func verifyTurnstileToken(token string, remoteIP string) bool {

@@ -73,22 +73,41 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
       },
     }), [tauriMode]);
 
-    // No Tauri desktop, consome o token pendente salvo pelo fluxo HTTPS ao retornar para o app local
+    // No Tauri desktop, escuta o token recebido pelo callback do navegador e consome eventual token pendente
     useEffect(() => {
       if (!siteKey || !tauriMode) return;
       let cancelled = false;
+      let unlisten: (() => void) | undefined;
+
       (async () => {
+        try {
+          const { listen } = await import('@tauri-apps/api/event');
+          const unsub = await listen<string>('turnstile-token-received', (ev) => {
+            if (cancelled || !ev.payload) return;
+            setTauriToken(ev.payload);
+            setTauriLaunching(false);
+            onSuccessRef.current(ev.payload);
+          });
+          if (cancelled) {
+            unsub();
+          } else {
+            unlisten = unsub;
+          }
+        } catch {}
+
         try {
           const { invoke } = await import('@tauri-apps/api/core');
           const token = await invoke<string | null>('consume_turnstile_token');
           if (!cancelled && token) {
             setTauriToken(token);
+            setTauriLaunching(false);
             onSuccessRef.current(token);
           }
         } catch {}
       })();
       return () => {
         cancelled = true;
+        unlisten?.();
       };
     }, [siteKey, tauriMode]);
 
@@ -222,7 +241,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
               ) : (
                 <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
               )}
-              {tauriLaunching ? 'Abrindo verificação...' : 'Verificar que você é humano'}
+              {tauriLaunching ? 'Aguardando verificação no navegador...' : 'Verificar que você é humano'}
             </span>
             <span className="text-[11px] text-gray-400">Cloudflare</span>
           </button>

@@ -125,7 +125,7 @@ fn default_idle_icon() -> Result<Image<'static>, tauri::Error> {
     Image::from_bytes(EMBEDDED_TRAY_PNG)
 }
 
-fn restore_and_focus_main(app: &AppHandle) {
+pub fn restore_and_focus_main(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.unminimize();
         let _ = win.show();
